@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  Card, Button, Tag, Modal, Form, Input, Select, DatePicker, message, Empty, Typography, Space, Popconfirm, Badge, Alert, Calendar, TimePicker,
+  Card, Button, Tag, Modal, Form, Input, Select, DatePicker, Empty, Typography, Popconfirm, Badge, Alert, Calendar, App,
 } from 'antd';
 import {
   PlusOutlined, DeleteOutlined, EditOutlined, CalendarOutlined,
@@ -65,6 +65,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
   const api = useMemo(() => apiHook.api, [apiHook.api]);
   const { isSuperAdmin, userRole } = useAuth();
   const isAdminOrAbove = isSuperAdmin || userRole === 'admin' || userRole === 'comptable';
+  const { message, modal } = App.useApp();
 
   const [events, setEvents] = useState<ChantierEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -185,11 +186,11 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
     } finally {
       setSaving(false);
     }
-  }, [api, chantierId, editingEvent, form, fetchEvents, linkMode, chantierAddress, chantierLabel]);
+  }, [api, chantierId, editingEvent, form, fetchEvents, linkMode, chantierAddress, chantierLabel, message]);
 
   const handleValidate = useCallback((eventId: string) => {
     let subAmount = '';
-    Modal.confirm({
+    modal.confirm({
       title: 'Valider cet événement',
       icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
       content: (
@@ -223,11 +224,11 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
         }
       },
     });
-  }, [api, fetchEvents]);
+  }, [api, fetchEvents, modal, message]);
 
   const handleReportProblem = useCallback((eventId: string) => {
     let problemText = '';
-    Modal.confirm({
+    modal.confirm({
       title: 'Signaler un problème',
       icon: <WarningOutlined style={{ color: '#ff4d4f' }} />,
       content: (
@@ -255,7 +256,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
         }
       },
     });
-  }, [api, fetchEvents]);
+  }, [api, fetchEvents, modal, message]);
 
   const handleLockSubcontract = useCallback(async (eventId: string) => {
     try {
@@ -265,7 +266,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
     } catch {
       message.error('Erreur verrouillage');
     }
-  }, [api, fetchEvents]);
+  }, [api, fetchEvents, message]);
 
   const handleDelete = useCallback(async (eventId: string) => {
     try {
@@ -275,7 +276,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
     } catch {
       message.error('Erreur suppression');
     }
-  }, [api, fetchEvents]);
+  }, [api, fetchEvents, message]);
 
   return (
     <div style={{ padding: '16px 0' }}>
