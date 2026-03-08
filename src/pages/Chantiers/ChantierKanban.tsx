@@ -1125,13 +1125,16 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
           <Dropdown
             trigger={['click']}
             placement="bottomRight"
+            autoAdjustOverflow
             dropdownRender={() => (
               <div style={{
                 background: '#fff',
                 borderRadius: 8,
                 boxShadow: '0 6px 16px rgba(0,0,0,0.12)',
                 padding: 12,
-                minWidth: 280,
+                width: 'min(calc(100vw - 24px), 320px)',
+                maxHeight: 'calc(100vh - 120px)',
+                overflowY: 'auto',
               }}>
                 {/* Sélecteur du type de date */}
                 <div style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sur quelle date ?</div>
