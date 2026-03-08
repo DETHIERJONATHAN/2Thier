@@ -162,7 +162,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
         status: values.status,
         problemNote: values.problemNote,
         notes: values.notes,
-        calendarEventId,
+        ...(calendarEventId ? { calendarEventId } : {}),
       };
 
       // Sous-traitance uniquement en édition (pas en création)
@@ -187,14 +187,42 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
     }
   }, [api, chantierId, editingEvent, form, fetchEvents, linkMode, chantierAddress, chantierLabel]);
 
-  const handleValidate = useCallback(async (eventId: string) => {
-    try {
-      await api.put(`/api/chantier-workflow/events/${eventId}`, { status: 'COMPLETED' });
-      message.success('Événement validé');
-      fetchEvents();
-    } catch {
-      message.error('Erreur validation');
-    }
+  const handleValidate = useCallback((eventId: string) => {
+    let subAmount = '';
+    Modal.confirm({
+      title: 'Valider cet événement',
+      icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+      content: (
+        <div>
+          <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+            Si un sous-traitant a été utilisé, indiquez le montant. Sinon, laissez vide.
+          </Text>
+          <Input
+            type="number"
+            min={0}
+            step="0.01"
+            placeholder="Montant sous-traitance (€) — optionnel"
+            onChange={e => { subAmount = e.target.value; }}
+            prefix="€"
+          />
+        </div>
+      ),
+      okText: 'Valider',
+      cancelText: 'Annuler',
+      async onOk() {
+        try {
+          const payload: Record<string, any> = { status: 'COMPLETED' };
+          if (subAmount.trim()) {
+            payload.subcontractAmount = Number(subAmount);
+          }
+          await api.put(`/api/chantier-workflow/events/${eventId}`, payload);
+          message.success('Événement validé');
+          fetchEvents();
+        } catch {
+          message.error('Erreur validation');
+        }
+      },
+    });
   }, [api, fetchEvents]);
 
   const handleReportProblem = useCallback((eventId: string) => {
@@ -275,66 +303,65 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                   borderLeft: `3px solid ${typeInfo?.color || '#d9d9d9'}`,
                   background: event.status === 'PROBLEM' ? '#fff2f0' : undefined,
                 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                        <Tag color={typeInfo?.color}>{typeInfo?.label || event.type}</Tag>
-                        <Badge status={statusInfo?.badgeStatus as any || 'default'} text={statusInfo?.label || event.status} />
-                      </div>
-
-                      {/* Infos calendrier */}
-                      {event.CalendarEvent && (
-                        <div style={{ marginBottom: 4 }}>
-                          <Text strong>{event.CalendarEvent.title}</Text>
-                          <div>
-                            <Text type="secondary" style={{ fontSize: 12 }}>
-                              📅 {dayjs(event.CalendarEvent.startDate).format('DD/MM/YYYY HH:mm')}
-                              {event.CalendarEvent.endDate && ` — ${dayjs(event.CalendarEvent.endDate).format('HH:mm')}`}
-                            </Text>
-                            {event.CalendarEvent.location && (
-                              <div>
-                                <Text type="secondary" style={{ fontSize: 12 }}>
-                                  📍 {event.CalendarEvent.location}
-                                </Text>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Notes */}
-                      {event.notes && <div><Text type="secondary" style={{ fontSize: 12 }}>{event.notes}</Text></div>}
-
-                      {/* Problème */}
-                      {event.status === 'PROBLEM' && event.problemNote && (
-                        <Alert type="error" message={event.problemNote} style={{ marginTop: 4 }} showIcon />
-                      )}
-
-                      {/* Sous-traitance */}
-                      {event.subcontractAmount != null && (
-                        <div style={{ marginTop: 4 }}>
-                          <Text type="secondary">Sous-traitance: </Text>
-                          <Text strong>{event.subcontractAmount.toLocaleString('fr-BE', { minimumFractionDigits: 2 })} €</Text>
-                          {event.subcontractLocked && <Tag color="red" style={{ marginLeft: 4 }}><LockOutlined /> Verrouillé</Tag>}
-                        </div>
-                      )}
-
-                      {/* Validation */}
-                      {event.validatedAt && event.ValidatedBy && (
-                        <div style={{ marginTop: 4 }}>
-                          <Text type="secondary" style={{ fontSize: 11 }}>
-                            ✓ Validé par {event.ValidatedBy.firstName} {event.ValidatedBy.lastName} le {dayjs(event.validatedAt).format('DD/MM/YYYY HH:mm')}
-                          </Text>
-                        </div>
-                      )}
-
-                      <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
-                        Créé le {dayjs(event.createdAt).format('DD/MM/YYYY')}
-                      </Text>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {/* En-tête : type + statut */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <Tag color={typeInfo?.color}>{typeInfo?.label || event.type}</Tag>
+                      <Badge status={statusInfo?.badgeStatus as any || 'default'} text={statusInfo?.label || event.status} />
                     </div>
 
-                    {/* Actions */}
-                    <Space wrap size="small" style={{ flexShrink: 0 }}>
+                    {/* Infos calendrier */}
+                    {event.CalendarEvent && (
+                      <div>
+                        <Text strong style={{ wordBreak: 'break-word' }}>{event.CalendarEvent.title}</Text>
+                        <div>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            📅 {dayjs(event.CalendarEvent.startDate).format('DD/MM/YYYY HH:mm')}
+                            {event.CalendarEvent.endDate && ` — ${dayjs(event.CalendarEvent.endDate).format('HH:mm')}`}
+                          </Text>
+                          {event.CalendarEvent.location && (
+                            <div>
+                              <Text type="secondary" style={{ fontSize: 12, wordBreak: 'break-word' }}>
+                                📍 {event.CalendarEvent.location}
+                              </Text>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Notes */}
+                    {event.notes && <div><Text type="secondary" style={{ fontSize: 12, wordBreak: 'break-word' }}>{event.notes}</Text></div>}
+
+                    {/* Problème */}
+                    {event.status === 'PROBLEM' && event.problemNote && (
+                      <Alert type="error" message={event.problemNote} style={{ marginTop: 0 }} showIcon />
+                    )}
+
+                    {/* Sous-traitance */}
+                    {event.subcontractAmount != null && (
+                      <div>
+                        <Text type="secondary">Sous-traitance: </Text>
+                        <Text strong>{event.subcontractAmount.toLocaleString('fr-BE', { minimumFractionDigits: 2 })} €</Text>
+                        {event.subcontractLocked && <Tag color="red" style={{ marginLeft: 4 }}><LockOutlined /> Verrouillé</Tag>}
+                      </div>
+                    )}
+
+                    {/* Validation */}
+                    {event.validatedAt && event.ValidatedBy && (
+                      <div>
+                        <Text type="secondary" style={{ fontSize: 11, wordBreak: 'break-word' }}>
+                          ✓ Validé par {event.ValidatedBy.firstName} {event.ValidatedBy.lastName} le {dayjs(event.validatedAt).format('DD/MM/YYYY HH:mm')}
+                        </Text>
+                      </div>
+                    )}
+
+                    <Text type="secondary" style={{ fontSize: 11 }}>
+                      Créé le {dayjs(event.createdAt).format('DD/MM/YYYY')}
+                    </Text>
+
+                    {/* Actions — toujours en dessous sur mobile */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, borderTop: '1px solid #f0f0f0', paddingTop: 8 }}>
                       {event.status === 'PLANNED' && (
                         <>
                           <Button size="small" type="primary" icon={<CheckCircleOutlined />} onClick={() => handleValidate(event.id)}>
@@ -356,7 +383,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                           <Button size="small" danger icon={<DeleteOutlined />} />
                         </Popconfirm>
                       )}
-                    </Space>
+                    </div>
                   </div>
                 </Card>
               );

@@ -1001,12 +1001,12 @@ router.delete('/invoices/:id', authenticateToken, isAdmin, async (req, res) => {
 // ═══════════════════════════════════════════════════════
 
 const eventSchema = z.object({
-  calendarEventId: z.string().optional(),
+  calendarEventId: z.string().nullable().optional(),
   type: z.enum(['VISITE_TECHNIQUE', 'CHANTIER', 'RECEPTION', 'CUSTOM']).default('CUSTOM'),
   status: z.enum(['PLANNED', 'COMPLETED', 'CANCELLED', 'PROBLEM']).default('PLANNED'),
-  problemNote: z.string().optional(),
+  problemNote: z.string().nullable().optional(),
   subcontractAmount: z.number().min(0).nullable().optional(),
-  notes: z.string().optional(),
+  notes: z.string().nullable().optional(),
 });
 
 /**

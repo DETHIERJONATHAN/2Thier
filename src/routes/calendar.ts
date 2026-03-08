@@ -73,7 +73,7 @@ router.get('/stream', (req: AuthenticatedRequest, res) => {
 // ─────────────────────────────────────────────────────────────
 async function hasGoogleCalendarAccess(userId: string, organizationId: string): Promise<boolean> {
   const googleToken = await db.googleToken.findFirst({
-    where: { userId, organizationId, isValid: true },
+    where: { userId, organizationId },
     select: { id: true }
   });
   return !!googleToken;
@@ -94,7 +94,6 @@ async function pushToCompanyCalendar(
     const adminToken = await db.googleToken.findFirst({
       where: {
         organizationId,
-        isValid: true,
         User: {
           UserOrganization: {
             some: {
@@ -466,7 +465,7 @@ router.post('/events', async (req: AuthenticatedRequest, res) => {
     console.log('[CALENDAR ROUTES] eventData BRUT:', eventData);
     
     // 🔧 Préparation des données pour Prisma (validation des champs)
-    const prismaData = {
+    const prismaData: Record<string, any> = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       title: eventData.title,
       description: eventData.description || null,
@@ -481,6 +480,11 @@ router.post('/events', async (req: AuthenticatedRequest, res) => {
       organizationId,
       updatedAt: new Date(),
     };
+
+    // Lier au chantier si spécifié
+    if (eventData.linkedChantierId) {
+      prismaData.linkedChantierId = eventData.linkedChantierId;
+    }
     
     console.log('[CALENDAR ROUTES] Données préparées pour Prisma:', prismaData);
     console.log('[CALENDAR ROUTES] Champs mappés correctement:', {
@@ -521,10 +525,6 @@ router.post('/events', async (req: AuthenticatedRequest, res) => {
         const updatedEvent = await prisma.calendarEvent.update({
           where: { id: event.id },
           data: { externalCalendarId },
-          include: {
-            project: { select: { id: true, name: true, clientName: true } },
-            lead: { select: { id: true, firstName: true, lastName: true, email: true } }
-          }
         });
         broadcast(organizationId, 'event.created', updatedEvent);
         return res.status(201).json(updatedEvent);
@@ -564,9 +564,13 @@ router.post('/events', async (req: AuthenticatedRequest, res) => {
     
     broadcast(organizationId, 'event.created', event);
     res.status(201).json(event);
-  } catch (error) {
-    console.error('Erreur création événement:', error);
-    res.status(500).json({ error: 'Erreur lors de la création de l\'événement' });
+  } catch (error: any) {
+    console.error('Erreur création événement:', error?.message || error);
+    console.error('Erreur détails:', error?.stack);
+    res.status(500).json({ 
+      error: 'Erreur lors de la création de l\'événement',
+      details: error?.message || String(error),
+    });
   }
 });
 
