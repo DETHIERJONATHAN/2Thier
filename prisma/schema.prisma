@@ -1792,6 +1792,7 @@ model TreeBranchLeafNode {
   product_options             Json?                       @db.Json
   product_sourceNodeId        String?
   product_visibleFor          Json?                       @db.Json
+  technicianVisible           Boolean                     @default(false)
   ProductDocument             ProductDocument[]
   TreeBranchLeafTree          TreeBranchLeafTree          @relation(fields: [treeId], references: [id], onDelete: Cascade)
   TreeBranchLeafNodeTable     TreeBranchLeafNodeTable[]
@@ -2213,6 +2214,7 @@ model User {
   ChantierEventValidations                            ChantierEvent[]                          @relation("ChantierEventValidator")
   ChantierValidations                                 Chantier[]                               @relation("ChantierValidator")
   ChantierHistoryEntries                              ChantierHistory[]                        @relation("ChantierHistoryUser")
+  TechnicianFieldReviews                              TechnicianFieldReview[]                  @relation("TechnicianReviewer")
   Notification                                        Notification[]
   MeasurementReferenceConfig                          OrganizationMeasurementReferenceConfig[] @relation("MeasurementConfigCreator")
   ProductDocumentsUploaded                            ProductDocument[]                        @relation("ProductDocumentsUploaded")
@@ -3003,6 +3005,7 @@ model Chantier {
   ChantierBillingPlanItem ChantierBillingPlanItem[]
   ChantierAssignments      ChantierAssignment[]
   TimeEntries              TimeEntry[]
+  ChantierReception        ChantierReception?
 
   @@index([organizationId, createdAt])
   @@index([leadId])
@@ -3196,12 +3199,15 @@ model ChantierEvent {
   subcontractAmount Float?   // montant sous-traitance fixé après validation
   subcontractLocked Boolean  @default(false) // verrouillé après validation
   notes            String?
+  reviewStatus     String?   // PENDING | CONFIRMED | CHANGES_DETECTED
+  reviewData       Json?     // snapshot des données de revue
   createdAt        DateTime  @default(now())
   updatedAt        DateTime
 
   Chantier         Chantier       @relation(fields: [chantierId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   CalendarEvent    CalendarEvent? @relation(fields: [calendarEventId], references: [id], onDelete: SetNull, onUpdate: NoAction)
   ValidatedBy      User?          @relation("ChantierEventValidator", fields: [validatedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  TechnicianFieldReviews TechnicianFieldReview[]
 
   @@index([chantierId])
   @@index([calendarEventId])
@@ -3389,6 +3395,88 @@ model TeamMember {
 
   @@unique([teamId, technicianId])
   @@index([technicianId])
+}
+
+// ═══════════════════════════════════════════════════
+// REVUE TECHNIQUE — Données de validation par le technicien
+// ═══════════════════════════════════════════════════
+model TechnicianFieldReview {
+  id                String    @id @default(cuid())
+  chantierEventId   String
+  nodeId            String    // champ TBL concerné
+  fieldLabel        String    // snapshot du label
+  originalValue     String?   // valeur du commercial (gelée)
+  reviewedValue     String?   // valeur du technicien
+  isModified        Boolean   @default(false)
+  modificationNote  String?   // raison si modifié (obligatoire)
+  reviewType        String    @default("TECHNICAL") // TECHNICAL | RECEPTION
+  reviewedById      String
+  reviewedAt        DateTime  @default(now())
+
+  ChantierEvent     ChantierEvent @relation(fields: [chantierEventId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  ReviewedBy        User          @relation("TechnicianReviewer", fields: [reviewedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([chantierEventId, nodeId, reviewType])
+  @@index([chantierEventId])
+  @@index([reviewedById])
+}
+
+// ═══════════════════════════════════════════════════
+// RÉCEPTION CHANTIER — PV de réception client (juridique)
+// ═══════════════════════════════════════════════════
+model ChantierReception {
+  id                    String    @id @default(cuid())
+  chantierId            String    @unique // 1 réception par chantier
+  chantierEventId       String?   // lié à l'événement RECEPTION
+
+  // État du PV
+  status                String    @default("DRAFT")
+  // DRAFT | PENDING_CLIENT | ACCEPTED | ACCEPTED_WITH_RESERVES | REFUSED
+
+  // Données du chantier (snapshot gelé)
+  workSummary           Json?     // résumé des travaux réalisés
+  checklist             Json?     // [{label, checked, note?}] points de contrôle
+
+  // Satisfaction client (questions)
+  satisfactionRating    Int?      // 1-5 étoiles
+  satisfactionAnswers   Json?     // [{question, answer, rating}]
+
+  // Signature client (juridiquement fort)
+  clientName            String?   // nom du signataire
+  clientEmail           String?   // email pour envoi du PV
+  clientPhone           String?   // téléphone
+  clientSignature       String?   // base64 de la signature manuscrite
+  clientSignedAt        DateTime?
+  clientIpAddress       String?   // IP au moment de la signature
+  clientUserAgent       String?   // navigateur utilisé
+  clientAccessToken     String?   @unique // lien sécurisé sans login
+  clientTokenExpiresAt  DateTime? // expiration du lien
+
+  // Clause légale acceptée
+  legalText             String?   // texte contractuel affiché au client
+  legalAccepted         Boolean   @default(false)
+  legalAcceptedAt       DateTime?
+
+  // Réserves
+  hasReserves           Boolean   @default(false)
+  reserves              Json?     // [{description, photo?, severity, deadline?}]
+  reservesResolvedAt    DateTime?
+  reservesResolvedById  String?
+
+  // Montants
+  totalAmount           Float?    // montant TTC devis
+  subcontractTotal      Float?    // somme sous-traitance
+
+  // Traçabilité
+  preparedById          String?   // technicien qui prépare
+  preparedAt            DateTime  @default(now())
+  updatedAt             DateTime
+
+  Chantier              Chantier  @relation(fields: [chantierId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([clientAccessToken])
+  @@index([chantierId])
+  @@index([status])
 }
 
 enum ChantierAssignmentRole {

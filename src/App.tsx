@@ -34,6 +34,9 @@ const PublicFormRenderer = lazy(() => import('./components/PublicForm/PublicForm
 const EffyFormRenderer = lazy(() => import('./components/PublicForm/EffyFormRenderer'));
 const MyCommercialLinks = lazy(() => import('./pages/MyCommercialLinks'));
 
+// Page publique réception chantier
+const ReceptionPage = lazy(() => import('./pages/ReceptionPage'));
+
 
 // Composant Loading
 const LoadingSpinner = () => (
@@ -216,6 +219,16 @@ const App: React.FC = () => {
         element={
           <Suspense fallback={<LoadingSpinner />}>
             <ThankYouPage />
+          </Suspense>
+        } 
+      />
+
+      {/* Route publique réception chantier (PV client) */}
+      <Route 
+        path="/reception/:token" 
+        element={
+          <Suspense fallback={<LoadingSpinner />}>
+            <ReceptionPage />
           </Suspense>
         } 
       />

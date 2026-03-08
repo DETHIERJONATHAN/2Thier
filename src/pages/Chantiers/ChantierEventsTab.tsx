@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Card, Button, Tag, Modal, Form, Input, Select, DatePicker, Empty, Typography, Popconfirm, Badge, Alert, Calendar, App, Spin,
+  Divider,
 } from 'antd';
 import {
   PlusOutlined, DeleteOutlined, EditOutlined, CalendarOutlined,
   CheckCircleOutlined, WarningOutlined, LockOutlined,
+  ExclamationCircleOutlined, FileProtectOutlined,
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
@@ -33,11 +35,37 @@ interface ChantierEvent {
   validatedById?: string | null;
   subcontractAmount?: number | null;
   subcontractLocked: boolean;
+  reviewStatus?: string | null;
+  reviewData?: any;
   notes?: string | null;
   createdAt: string;
   updatedAt: string;
   CalendarEvent?: CalendarEventInfo | null;
   ValidatedBy?: { id: string; firstName: string; lastName: string } | null;
+  TechnicianFieldReviews?: TechFieldReview[];
+}
+
+interface ReviewField {
+  nodeId: string;
+  label: string;
+  fieldType?: string;
+  unit?: string;
+  originalValue: string | null;
+  fieldLabel: string;
+  options?: any;
+}
+
+interface TechFieldReview {
+  id: string;
+  nodeId: string;
+  fieldLabel: string;
+  originalValue: string | null;
+  reviewedValue: string | null;
+  isModified: boolean;
+  modificationNote: string | null;
+  reviewType: string;
+  ReviewedBy?: { id: string; firstName: string; lastName: string };
+  reviewedAt: string;
 }
 
 interface Props {
@@ -77,6 +105,17 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
   // Calendrier existants pour lier un événement
   const [existingCalendarEvents, setExistingCalendarEvents] = useState<CalendarEventInfo[]>([]);
   const [linkMode, setLinkMode] = useState<'new' | 'existing'>('new');
+
+  // Revue technique
+  const [reviewModalVisible, setReviewModalVisible] = useState(false);
+  const [reviewEventId, setReviewEventId] = useState<string | null>(null);
+  const [reviewFields, setReviewFields] = useState<ReviewField[]>([]);
+  const [reviewChantierAmount, setReviewChantierAmount] = useState<number | null>(null);
+  const [reviewEdits, setReviewEdits] = useState<Record<string, { value: string; note: string; modified: boolean }>>({});
+  const [reviewSubAmount, setReviewSubAmount] = useState('');
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [_existingReviews, setExistingReviews] = useState<TechFieldReview[]>([]);
 
   const fetchEvents = useCallback(async () => {
     try {
@@ -188,7 +227,89 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
     }
   }, [api, chantierId, editingEvent, form, fetchEvents, linkMode, chantierAddress, chantierLabel, message]);
 
-  const handleValidate = useCallback((eventId: string) => {
+  // === REVUE TECHNIQUE ===
+  const openReviewModal = useCallback(async (eventId: string) => {
+    setReviewEventId(eventId);
+    setReviewModalVisible(true);
+    setReviewLoading(true);
+    setReviewEdits({});
+    setReviewSubAmount('');
+    setExistingReviews([]);
+    try {
+      const res = await api.get(`/api/chantier-workflow/events/${eventId}/review-fields`);
+      const data = res.data || res;
+      setReviewFields(data.fields || []);
+      setReviewChantierAmount(data.chantierAmount || null);
+      setExistingReviews(data.reviews || []);
+      // Pré-remplir les edits avec les valeurs originales
+      const edits: Record<string, { value: string; note: string; modified: boolean }> = {};
+      for (const f of (data.fields || [])) {
+        const existingReview = (data.reviews || []).find((r: TechFieldReview) => r.nodeId === f.nodeId);
+        edits[f.nodeId] = {
+          value: existingReview ? (existingReview.reviewedValue || '') : (f.originalValue || ''),
+          note: existingReview?.modificationNote || '',
+          modified: existingReview?.isModified || false,
+        };
+      }
+      setReviewEdits(edits);
+    } catch {
+      message.error('Erreur chargement des champs à vérifier');
+      setReviewModalVisible(false);
+    } finally {
+      setReviewLoading(false);
+    }
+  }, [api, message]);
+
+  const handleReviewFieldChange = useCallback((nodeId: string, newValue: string) => {
+    setReviewEdits(prev => {
+      const field = reviewFields.find(f => f.nodeId === nodeId);
+      const originalValue = field?.originalValue || '';
+      const isModified = newValue !== originalValue;
+      return { ...prev, [nodeId]: { ...prev[nodeId], value: newValue, modified: isModified } };
+    });
+  }, [reviewFields]);
+
+  const handleReviewNoteChange = useCallback((nodeId: string, note: string) => {
+    setReviewEdits(prev => ({ ...prev, [nodeId]: { ...prev[nodeId], note } }));
+  }, []);
+
+  const handleSubmitReview = useCallback(async () => {
+    if (!reviewEventId) return;
+
+    // Vérifier que tous les champs modifiés ont une note
+    const modifiedWithoutNote = Object.entries(reviewEdits).filter(([_, edit]) => edit.modified && !edit.note.trim());
+    if (modifiedWithoutNote.length > 0) {
+      message.warning('Veuillez expliquer chaque modification (note obligatoire pour les champs modifiés)');
+      return;
+    }
+
+    setReviewSubmitting(true);
+    try {
+      const reviews = reviewFields.map(f => ({
+        nodeId: f.nodeId,
+        reviewedValue: reviewEdits[f.nodeId]?.value || f.originalValue || null,
+        isModified: reviewEdits[f.nodeId]?.modified || false,
+        modificationNote: reviewEdits[f.nodeId]?.modified ? reviewEdits[f.nodeId]?.note : null,
+      }));
+
+      const payload: any = { reviews, reviewType: 'TECHNICAL' };
+      if (reviewSubAmount.trim()) {
+        payload.subcontractAmount = Number(reviewSubAmount);
+      }
+
+      const res = await api.post(`/api/chantier-workflow/events/${reviewEventId}/submit-review`, payload);
+      message.success(res.message || 'Revue soumise');
+      setReviewModalVisible(false);
+      fetchEvents();
+    } catch (err: any) {
+      message.error(err?.message || 'Erreur soumission revue');
+    } finally {
+      setReviewSubmitting(false);
+    }
+  }, [reviewEventId, reviewEdits, reviewFields, reviewSubAmount, api, fetchEvents, message]);
+
+  // Fallback: validation simple pour événements CUSTOM
+  const handleValidateSimple = useCallback((eventId: string) => {
     let subAmount = '';
     modal.confirm({
       title: 'Valider cet événement',
@@ -225,6 +346,15 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
       },
     });
   }, [api, fetchEvents, modal, message]);
+
+  const handleValidate = useCallback((eventId: string, eventType: string) => {
+    // Pour les événements avec revue technique (visite technique, chantier, réception)
+    if (['VISITE_TECHNIQUE', 'CHANTIER', 'RECEPTION'].includes(eventType)) {
+      openReviewModal(eventId);
+    } else {
+      handleValidateSimple(eventId);
+    }
+  }, [openReviewModal, handleValidateSimple]);
 
   const handleReportProblem = useCallback((eventId: string) => {
     let problemText = '';
@@ -348,6 +478,24 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                       </div>
                     )}
 
+                    {/* Revue technique */}
+                    {event.reviewStatus && (
+                      <div style={{
+                        padding: '6px 10px',
+                        borderRadius: 6,
+                        background: event.reviewStatus === 'CONFIRMED' ? '#f6ffed' : '#fff7e6',
+                        border: `1px solid ${event.reviewStatus === 'CONFIRMED' ? '#b7eb8f' : '#ffd591'}`,
+                      }}>
+                        {event.reviewStatus === 'CONFIRMED' ? (
+                          <Text style={{ color: '#52c41a', fontSize: 12 }}>✅ Revue technique : toutes les données confirmées</Text>
+                        ) : (
+                          <Text style={{ color: '#fa8c16', fontSize: 12 }}>
+                            ⚠️ Revue technique : {(event.reviewData as any)?.modifiedFields || '?'} modification(s) détectée(s)
+                          </Text>
+                        )}
+                      </div>
+                    )}
+
                     {/* Validation */}
                     {event.validatedAt && event.ValidatedBy && (
                       <div>
@@ -365,7 +513,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, borderTop: '1px solid #f0f0f0', paddingTop: 8 }}>
                       {event.status === 'PLANNED' && (
                         <>
-                          <Button size="small" type="primary" icon={<CheckCircleOutlined />} onClick={() => handleValidate(event.id)} style={{ minHeight: 36 }}>
+                          <Button size="small" type="primary" icon={<CheckCircleOutlined />} onClick={() => handleValidate(event.id, event.type)} style={{ minHeight: 36 }}>
                             Valider
                           </Button>
                           <Button size="small" danger icon={<WarningOutlined />} onClick={() => handleReportProblem(event.id)} style={{ minHeight: 36 }}>
@@ -538,6 +686,154 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
             </Form.Item>
           )}
         </Form>
+      </Modal>
+
+      {/* Modal Revue Technique */}
+      <Modal
+        title={<span><FileProtectOutlined /> Revue technique — Vérification des données du devis</span>}
+        open={reviewModalVisible}
+        onCancel={() => setReviewModalVisible(false)}
+        width="95vw"
+        style={{ maxWidth: 640, top: 20 }}
+        styles={{ body: { maxHeight: 'calc(100vh - 180px)', overflowY: 'auto' } }}
+        footer={[
+          <Button key="cancel" onClick={() => setReviewModalVisible(false)}>Annuler</Button>,
+          <Button
+            key="submit"
+            type="primary"
+            loading={reviewSubmitting}
+            onClick={handleSubmitReview}
+            icon={<CheckCircleOutlined />}
+            disabled={reviewLoading || reviewFields.length === 0}
+          >
+            Valider la revue
+          </Button>,
+        ]}
+      >
+        {reviewLoading ? (
+          <div style={{ textAlign: 'center', padding: 40 }}><Spin tip="Chargement des données du devis..." /></div>
+        ) : reviewFields.length === 0 ? (
+          <Alert
+            type="info"
+            showIcon
+            message="Aucun champ configuré pour la revue technique"
+            description="L'administrateur doit d'abord marquer des champs TBL comme 'Visible technicien' dans le configurateur de formulaires."
+            style={{ marginBottom: 16 }}
+          />
+        ) : (
+          <>
+            <Alert
+              type="info"
+              showIcon
+              message="Vérifiez chaque champ du devis"
+              description="Si une donnée ne correspond pas au terrain, modifiez-la et expliquez la raison. L'ancienne valeur sera conservée."
+              style={{ marginBottom: 16 }}
+            />
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {reviewFields.map(field => {
+                const edit = reviewEdits[field.nodeId];
+                const isModified = edit?.modified || false;
+
+                return (
+                  <Card
+                    key={field.nodeId}
+                    size="small"
+                    style={{
+                      borderLeft: `3px solid ${isModified ? '#fa8c16' : '#52c41a'}`,
+                      background: isModified ? '#fffbe6' : '#f6ffed',
+                    }}
+                  >
+                    <div style={{ marginBottom: 4 }}>
+                      <Text strong style={{ fontSize: 13 }}>{field.label}</Text>
+                      {field.unit && <Text type="secondary" style={{ fontSize: 11, marginLeft: 4 }}>({field.unit})</Text>}
+                    </div>
+
+                    {/* Valeur originale (devis) */}
+                    <div style={{ marginBottom: 6 }}>
+                      <Text type="secondary" style={{ fontSize: 11 }}>Valeur devis : </Text>
+                      <Text style={{
+                        textDecoration: isModified ? 'line-through' : 'none',
+                        color: isModified ? '#8c8c8c' : '#262626',
+                        fontWeight: isModified ? 'normal' : 'bold',
+                      }}>
+                        {field.originalValue || '—'}
+                      </Text>
+                    </div>
+
+                    {/* Champ éditable */}
+                    <Input
+                      size="small"
+                      value={edit?.value || ''}
+                      onChange={e => handleReviewFieldChange(field.nodeId, e.target.value)}
+                      style={{
+                        borderColor: isModified ? '#fa8c16' : '#b7eb8f',
+                        background: isModified ? '#fff7e6' : '#fff',
+                      }}
+                      suffix={isModified ? <ExclamationCircleOutlined style={{ color: '#fa8c16' }} /> : <CheckCircleOutlined style={{ color: '#52c41a' }} />}
+                    />
+
+                    {/* Note si modifié (obligatoire) */}
+                    {isModified && (
+                      <div style={{ marginTop: 6 }}>
+                        <Text type="danger" style={{ fontSize: 11 }}>⚠️ Raison de la modification (obligatoire) :</Text>
+                        <Input.TextArea
+                          size="small"
+                          rows={2}
+                          placeholder="Expliquez pourquoi la valeur a changé..."
+                          value={edit?.note || ''}
+                          onChange={e => handleReviewNoteChange(field.nodeId, e.target.value)}
+                          style={{ borderColor: '#fa8c16', marginTop: 2 }}
+                        />
+                      </div>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
+
+            {/* Sous-traitance */}
+            <Divider style={{ margin: '16px 0 12px' }}>💰 Sous-traitance</Divider>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                value={reviewSubAmount}
+                onChange={e => setReviewSubAmount(e.target.value)}
+                placeholder="Montant sous-traitance (€)"
+                prefix="€"
+                style={{ maxWidth: 300 }}
+              />
+              {reviewChantierAmount && (
+                <div>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    Montant devis TTC : <Text strong>{reviewChantierAmount.toLocaleString('fr-BE', { minimumFractionDigits: 2 })} €</Text>
+                  </Text>
+                  {reviewSubAmount && Number(reviewSubAmount) > 0 && (
+                    <div>
+                      <Text style={{
+                        fontSize: 12,
+                        color: Number(reviewSubAmount) > reviewChantierAmount * 0.5 ? '#ff4d4f' : Number(reviewSubAmount) > reviewChantierAmount * 0.3 ? '#fa8c16' : '#52c41a',
+                        fontWeight: 'bold',
+                      }}>
+                        {(Number(reviewSubAmount) / reviewChantierAmount * 100).toFixed(1)}% du devis
+                        {Number(reviewSubAmount) > reviewChantierAmount * 0.5 && ' ⚠️ Attention: plus de 50% du devis !'}
+                      </Text>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Résumé */}
+            <Divider style={{ margin: '16px 0 8px' }} />
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <Tag color="green">{Object.values(reviewEdits).filter(e => !e.modified).length} confirmé(s)</Tag>
+              <Tag color="orange">{Object.values(reviewEdits).filter(e => e.modified).length} modifié(s)</Tag>
+            </div>
+          </>
+        )}
       </Modal>
     </div>
   );

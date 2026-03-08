@@ -1722,6 +1722,1094 @@ async function notifyProblem(
 }
 
 // ═══════════════════════════════════════════════════════
+// REVUE TECHNIQUE — Validation des champs TBL par le technicien
+// ═══════════════════════════════════════════════════════
+
+/**
+ * GET /api/chantier-workflow/events/:id/review-fields
+ * Charge les champs TBL marqués technicianVisible pour un événement de chantier.
+ * Retourne les valeurs du devis (commercial) + les reviews existantes si déjà fait.
+ */
+router.get('/events/:id/review-fields', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    // Charger l'événement avec le chantier et sa soumission TBL
+    const event = await db.chantierEvent.findFirst({
+      where: { id },
+      include: {
+        Chantier: {
+          select: {
+            id: true,
+            organizationId: true,
+            submissionId: true,
+            amount: true,
+            clientName: true,
+            siteAddress: true,
+            productLabel: true,
+            GeneratedDocument: {
+              select: { dataSnapshot: true, paymentAmount: true }
+            },
+            TreeBranchLeafSubmission: {
+              select: { id: true, treeId: true, status: true }
+            }
+          }
+        },
+        TechnicianFieldReviews: {
+          include: {
+            ReviewedBy: { select: { id: true, firstName: true, lastName: true } }
+          }
+        }
+      }
+    });
+
+    if (!event || event.Chantier.organizationId !== organizationId) {
+      return res.status(404).json({ success: false, message: 'Événement non trouvé' });
+    }
+
+    const submission = event.Chantier.TreeBranchLeafSubmission;
+    if (!submission) {
+      return res.json({
+        success: true,
+        data: { fields: [], reviews: event.TechnicianFieldReviews, chantierAmount: event.Chantier.amount }
+      });
+    }
+
+    // 1. Récupérer les nodes TBL marqués technicianVisible
+    const visibleNodes = await db.treeBranchLeafNode.findMany({
+      where: {
+        treeId: submission.treeId,
+        technicianVisible: true,
+        isVisible: true,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        label: true,
+        fieldType: true,
+        type: true,
+        subType: true,
+        order: true,
+        parentId: true,
+        number_unit: true,
+        number_suffix: true,
+        select_options: true,
+      },
+      orderBy: { order: 'asc' },
+    });
+
+    const nodeIds = visibleNodes.map(n => n.id);
+
+    // 2. Récupérer les valeurs de la soumission pour ces nodes
+    const submissionData = nodeIds.length > 0 ? await db.treeBranchLeafSubmissionData.findMany({
+      where: {
+        submissionId: submission.id,
+        nodeId: { in: nodeIds },
+      },
+    }) : [];
+
+    // Map les valeurs par nodeId
+    const valueMap = new Map(submissionData.map(d => [d.nodeId, d]));
+
+    // Construire les champs avec leurs valeurs
+    const fields = visibleNodes.map(node => {
+      const data = valueMap.get(node.id);
+      return {
+        nodeId: node.id,
+        label: node.label,
+        fieldType: node.fieldType,
+        type: node.type,
+        subType: node.subType,
+        unit: node.number_unit || node.number_suffix || null,
+        options: node.select_options,
+        originalValue: data?.value || null,
+        fieldLabel: data?.fieldLabel || node.label,
+        variableKey: data?.variableKey || null,
+        variableUnit: data?.variableUnit || null,
+      };
+    });
+
+    // Extraire le montant devis
+    const snapshot = (event.Chantier.GeneratedDocument?.dataSnapshot as any) || {};
+    const quoteData = snapshot?.quote || {};
+    const chantierAmount = event.Chantier.amount
+      || (quoteData.totalTTC ? Number(quoteData.totalTTC) : null)
+      || (event.Chantier.GeneratedDocument?.paymentAmount ? Number(event.Chantier.GeneratedDocument.paymentAmount) : null)
+      || null;
+
+    res.json({
+      success: true,
+      data: {
+        fields,
+        reviews: event.TechnicianFieldReviews,
+        chantierAmount,
+        reviewStatus: event.reviewStatus,
+        clientName: event.Chantier.clientName,
+        siteAddress: event.Chantier.siteAddress,
+        productLabel: event.Chantier.productLabel,
+      }
+    });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur GET /events/:id/review-fields:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+/**
+ * POST /api/chantier-workflow/events/:id/submit-review
+ * Soumet la revue technique (technicien confirme/modifie les champs)
+ * Body: { reviews: [{nodeId, reviewedValue, isModified, modificationNote}], subcontractAmount?: number }
+ */
+const reviewItemSchema = z.object({
+  nodeId: z.string().min(1),
+  reviewedValue: z.string().nullable().optional(),
+  isModified: z.boolean(),
+  modificationNote: z.string().nullable().optional(),
+});
+
+const submitReviewSchema = z.object({
+  reviews: z.array(reviewItemSchema).min(1),
+  subcontractAmount: z.number().optional(),
+  reviewType: z.enum(['TECHNICAL', 'RECEPTION']).default('TECHNICAL'),
+});
+
+router.post('/events/:id/submit-review', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = (req as any).user;
+    const organizationId = req.headers['x-organization-id'] as string;
+    const userId = user?.userId || user?.id;
+
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const validation = submitReviewSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({ success: false, message: 'Données invalides', errors: validation.error.errors });
+    }
+
+    const { reviews, subcontractAmount, reviewType } = validation.data;
+
+    // Charger l'événement
+    const event = await db.chantierEvent.findFirst({
+      where: { id },
+      include: {
+        Chantier: {
+          select: {
+            id: true,
+            organizationId: true,
+            submissionId: true,
+            amount: true,
+            commercialId: true,
+            TreeBranchLeafSubmission: { select: { id: true, treeId: true } }
+          }
+        }
+      }
+    });
+
+    if (!event || event.Chantier.organizationId !== organizationId) {
+      return res.status(404).json({ success: false, message: 'Événement non trouvé' });
+    }
+
+    const submission = event.Chantier.TreeBranchLeafSubmission;
+
+    // Récupérer les labels des nodes
+    const nodeIds = reviews.map(r => r.nodeId);
+    const nodes = submission ? await db.treeBranchLeafNode.findMany({
+      where: { id: { in: nodeIds }, treeId: submission.treeId },
+      select: { id: true, label: true },
+    }) : [];
+    const nodeLabels = new Map(nodes.map(n => [n.id, n.label]));
+
+    // Récupérer les valeurs originales
+    const originalData = submission ? await db.treeBranchLeafSubmissionData.findMany({
+      where: { submissionId: submission.id, nodeId: { in: nodeIds } },
+    }) : [];
+    const originalValues = new Map(originalData.map(d => [d.nodeId, d.value]));
+
+    // Vérifier que tous les champs modifiés ont une note
+    const invalidReviews = reviews.filter(r => r.isModified && (!r.modificationNote || !r.modificationNote.trim()));
+    if (invalidReviews.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Une note explicative est obligatoire pour chaque champ modifié',
+        fields: invalidReviews.map(r => r.nodeId),
+      });
+    }
+
+    // Transaction : créer toutes les reviews + mettre à jour l'événement
+    const hasModifications = reviews.some(r => r.isModified);
+    const reviewStatus = hasModifications ? 'CHANGES_DETECTED' : 'CONFIRMED';
+
+    await db.$transaction(async (tx) => {
+      // Supprimer les reviews existantes pour cet événement + type
+      await tx.technicianFieldReview.deleteMany({
+        where: { chantierEventId: id, reviewType },
+      });
+
+      // Créer les nouvelles reviews
+      for (const review of reviews) {
+        await tx.technicianFieldReview.create({
+          data: {
+            chantierEventId: id,
+            nodeId: review.nodeId,
+            fieldLabel: nodeLabels.get(review.nodeId) || 'Champ inconnu',
+            originalValue: originalValues.get(review.nodeId) || null,
+            reviewedValue: review.isModified ? (review.reviewedValue || null) : (originalValues.get(review.nodeId) || null),
+            isModified: review.isModified,
+            modificationNote: review.isModified ? review.modificationNote : null,
+            reviewType,
+            reviewedById: userId,
+          }
+        });
+      }
+
+      // Mettre à jour l'événement
+      const eventUpdate: any = {
+        status: 'COMPLETED',
+        reviewStatus,
+        reviewData: {
+          totalFields: reviews.length,
+          modifiedFields: reviews.filter(r => r.isModified).length,
+          confirmedFields: reviews.filter(r => !r.isModified).length,
+          reviewType,
+          reviewedAt: new Date().toISOString(),
+        },
+        validatedAt: new Date(),
+        validatedById: userId,
+        updatedAt: new Date(),
+      };
+
+      if (subcontractAmount !== undefined) {
+        eventUpdate.subcontractAmount = subcontractAmount;
+      }
+
+      await tx.chantierEvent.update({ where: { id }, data: eventUpdate });
+
+      // Historique
+      await tx.chantierHistory.create({
+        data: {
+          id: crypto.randomUUID(),
+          chantierId: event.Chantier.id,
+          action: reviewType === 'TECHNICAL' ? 'TECHNICAL_REVIEW_SUBMITTED' : 'RECEPTION_REVIEW_SUBMITTED',
+          fromValue: event.status,
+          toValue: 'COMPLETED',
+          userId,
+          data: {
+            eventId: id,
+            eventType: event.type,
+            reviewStatus,
+            totalFields: reviews.length,
+            modifiedFields: reviews.filter(r => r.isModified).length,
+            subcontractAmount,
+          },
+        }
+      });
+    });
+
+    // Notifications si modifications détectées
+    if (hasModifications) {
+      try {
+        // Notifier les admins
+        const admins = await db.userOrganization.findMany({
+          where: { organizationId, role: { in: ['admin', 'super_admin'] } },
+          select: { userId: true },
+        });
+
+        const modifiedLabels = reviews.filter(r => r.isModified).map(r => nodeLabels.get(r.nodeId) || r.nodeId);
+        const notifMessage = `⚠️ Revue technique: ${reviews.filter(r => r.isModified).length} modifications détectées (${modifiedLabels.join(', ')})`;
+
+        for (const admin of admins) {
+          await db.notification.create({
+            data: {
+              id: crypto.randomUUID(),
+              userId: admin.userId,
+              organizationId,
+              title: '⚠️ Modifications terrain détectées',
+              message: notifMessage,
+              type: 'warning',
+              link: `/chantiers/${event.Chantier.id}?tab=events`,
+              isRead: false,
+              createdAt: new Date(),
+            }
+          });
+        }
+
+        // Notifier le commercial assigné
+        if (event.Chantier.commercialId) {
+          await db.notification.create({
+            data: {
+              id: crypto.randomUUID(),
+              userId: event.Chantier.commercialId,
+              organizationId,
+              title: '⚠️ Modifications terrain sur votre chantier',
+              message: notifMessage,
+              type: 'warning',
+              link: `/chantiers/${event.Chantier.id}?tab=events`,
+              isRead: false,
+              createdAt: new Date(),
+            }
+          });
+        }
+      } catch (notifError) {
+        console.error('[ChantierWorkflow] Erreur envoi notifications review:', notifError);
+      }
+    }
+
+    // Auto-transition si visite technique
+    if (event.type === 'VISITE_TECHNIQUE') {
+      await checkAutoTransitions(event.Chantier.id, organizationId, 'AUTO_VISIT_VALIDATED', user);
+    }
+
+    res.json({
+      success: true,
+      data: { reviewStatus, modifiedCount: reviews.filter(r => r.isModified).length },
+      message: hasModifications
+        ? `Revue soumise avec ${reviews.filter(r => r.isModified).length} modification(s) — Admin notifié`
+        : 'Revue soumise — Toutes les données confirmées ✅'
+    });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur POST /events/:id/submit-review:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+/**
+ * GET /api/chantier-workflow/chantiers/:chantierId/review-summary
+ * Résumé de toutes les revues techniques d'un chantier (pour affichage admin)
+ */
+router.get('/chantiers/:chantierId/review-summary', authenticateToken, async (req, res) => {
+  try {
+    const { chantierId } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const chantier = await db.chantier.findFirst({
+      where: { id: chantierId, organizationId },
+      select: { id: true, amount: true },
+    });
+    if (!chantier) {
+      return res.status(404).json({ success: false, message: 'Chantier non trouvé' });
+    }
+
+    // Toutes les reviews de tous les événements du chantier
+    const events = await db.chantierEvent.findMany({
+      where: { chantierId },
+      include: {
+        TechnicianFieldReviews: {
+          include: {
+            ReviewedBy: { select: { id: true, firstName: true, lastName: true } }
+          },
+          orderBy: { reviewedAt: 'desc' },
+        },
+        CalendarEvent: {
+          select: { title: true, startDate: true }
+        },
+        ValidatedBy: {
+          select: { id: true, firstName: true, lastName: true }
+        }
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // Résumer
+    const summary = events
+      .filter(e => e.TechnicianFieldReviews.length > 0)
+      .map(e => ({
+        eventId: e.id,
+        eventType: e.type,
+        eventTitle: e.CalendarEvent?.title,
+        eventDate: e.CalendarEvent?.startDate,
+        reviewStatus: e.reviewStatus,
+        subcontractAmount: e.subcontractAmount,
+        validatedBy: e.ValidatedBy,
+        validatedAt: e.validatedAt,
+        reviews: e.TechnicianFieldReviews.map(r => ({
+          nodeId: r.nodeId,
+          fieldLabel: r.fieldLabel,
+          originalValue: r.originalValue,
+          reviewedValue: r.reviewedValue,
+          isModified: r.isModified,
+          modificationNote: r.modificationNote,
+          reviewType: r.reviewType,
+          reviewedBy: r.ReviewedBy,
+          reviewedAt: r.reviewedAt,
+        })),
+        totalFields: e.TechnicianFieldReviews.length,
+        modifiedFields: e.TechnicianFieldReviews.filter(r => r.isModified).length,
+      }));
+
+    const totalSubcontract = events.reduce((sum, e) => sum + (e.subcontractAmount || 0), 0);
+
+    res.json({
+      success: true,
+      data: {
+        summary,
+        totalSubcontract,
+        chantierAmount: chantier.amount,
+        marginAmount: chantier.amount ? chantier.amount - totalSubcontract : null,
+        marginPercent: chantier.amount ? ((chantier.amount - totalSubcontract) / chantier.amount * 100) : null,
+        hasModifications: summary.some(s => s.modifiedFields > 0),
+      }
+    });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur GET review-summary:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+/**
+ * POST /api/chantier-workflow/chantiers/:chantierId/reject-to-lead
+ * Admin rejette le chantier après revue technique → retour en lead
+ * Désactive le chantier, réouvre le lead avec note explicative
+ */
+router.post('/chantiers/:chantierId/reject-to-lead', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { chantierId } = req.params;
+    const user = (req as any).user;
+    const organizationId = req.headers['x-organization-id'] as string;
+    const userId = user?.userId || user?.id;
+
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const rejectSchema = z.object({
+      reason: z.string().min(1, 'La raison est obligatoire'),
+      notifyCommercial: z.boolean().default(true),
+    });
+
+    const validation = rejectSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({ success: false, message: 'Données invalides', errors: validation.error.errors });
+    }
+
+    const { reason, notifyCommercial } = validation.data;
+
+    const chantier = await db.chantier.findFirst({
+      where: { id: chantierId, organizationId },
+      select: {
+        id: true,
+        leadId: true,
+        commercialId: true,
+        clientName: true,
+        statusId: true,
+        submissionId: true,
+        notes: true,
+      }
+    });
+
+    if (!chantier) {
+      return res.status(404).json({ success: false, message: 'Chantier non trouvé' });
+    }
+
+    if (!chantier.leadId) {
+      return res.status(400).json({ success: false, message: 'Ce chantier n\'a pas de lead associé, impossible de le renvoyer' });
+    }
+
+    // Trouver le statut "Annulé" ou un statut "À revoir" pour le chantier
+    const cancelStatus = await db.chantierStatus.findFirst({
+      where: { organizationId, name: { in: ['Annulé', 'À revoir', 'Rejeté'] } },
+      orderBy: { order: 'desc' },
+    });
+
+    await db.$transaction(async (tx) => {
+      // 1. Déplacer le chantier en statut "Annulé" / "À revoir"
+      if (cancelStatus) {
+        await tx.chantier.update({
+          where: { id: chantierId },
+          data: {
+            statusId: cancelStatus.id,
+            notes: `${chantier.notes ? chantier.notes + '\n\n' : ''}--- REJETÉ PAR ADMIN ---\n${reason}\n(${new Date().toLocaleDateString('fr-BE')})`,
+            isValidated: false,
+            validatedAt: null,
+            validatedById: null,
+            updatedAt: new Date(),
+          }
+        });
+      }
+
+      // 2. Réouvrir le lead — remettre en statut "à modifier"
+      // Chercher un statut lead approprié ou utiliser le premier statut
+      const leadStatus = await tx.leadStatus.findFirst({
+        where: { organizationId },
+        orderBy: { order: 'asc' },
+      });
+
+      await tx.lead.update({
+        where: { id: chantier.leadId! },
+        data: {
+          status: 'à_revoir_technique',
+          statusId: leadStatus?.id || undefined,
+          notes: `⚠️ RETOUR TECHNIQUE — Chantier rejeté par l'admin.\nRaison: ${reason}\nDate: ${new Date().toLocaleDateString('fr-BE')} ${new Date().toLocaleTimeString('fr-BE')}\n\nLe commercial doit corriger le TBL et regénérer un nouveau devis.`,
+          updatedAt: new Date(),
+        }
+      });
+
+      // 3. Historique
+      await tx.chantierHistory.create({
+        data: {
+          id: crypto.randomUUID(),
+          chantierId,
+          action: 'REJECTED_TO_LEAD',
+          fromValue: chantier.statusId || 'unknown',
+          toValue: 'LEAD',
+          userId,
+          data: {
+            reason,
+            leadId: chantier.leadId,
+            previousStatus: chantier.statusId,
+          },
+        }
+      });
+    });
+
+    // 4. Notification au commercial
+    if (notifyCommercial && chantier.commercialId) {
+      try {
+        await db.notification.create({
+          data: {
+            id: crypto.randomUUID(),
+            userId: chantier.commercialId,
+            organizationId,
+            title: '↩️ Chantier renvoyé — Correction requise',
+            message: `Le chantier "${chantier.clientName}" a été renvoyé après la revue technique.\nRaison: ${reason}\n\nVeuillez corriger le TBL et regénérer le devis.`,
+            type: 'warning',
+            link: `/leads?id=${chantier.leadId}`,
+            isRead: false,
+            createdAt: new Date(),
+          }
+        });
+      } catch (notifError) {
+        console.error('[ChantierWorkflow] Erreur notification reject-to-lead:', notifError);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Chantier renvoyé au commercial — Lead réouvert pour correction',
+      data: { leadId: chantier.leadId },
+    });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur POST reject-to-lead:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// RÉCEPTION CHANTIER — PV de réception client (juridique)
+// ═══════════════════════════════════════════════════════
+
+const RECEPTION_LEGAL_TEXT = `Je soussigné(e) déclare avoir réceptionné les travaux décrits ci-dessus. Je confirme que les travaux ont été réalisés conformément au devis accepté et que l'installation est fonctionnelle. Je reconnais avoir vérifié chaque point mentionné dans cette fiche de réception et confirme l'état décrit pour chacun. En cas de réserves, celles-ci sont mentionnées ci-dessus et devront être levées dans le délai convenu. Cette réception vaut acceptation définitive des travaux, sous réserve des points mentionnés ci-dessus.`;
+
+const DEFAULT_SATISFACTION_QUESTIONS = [
+  { id: 'quality', question: 'Qualité générale des travaux réalisés', type: 'rating' },
+  { id: 'cleanliness', question: 'Propreté du chantier après intervention', type: 'rating' },
+  { id: 'punctuality', question: 'Respect des délais et de la ponctualité', type: 'rating' },
+  { id: 'communication', question: 'Communication et suivi du chantier', type: 'rating' },
+  { id: 'recommendation', question: 'Recommanderiez-vous notre entreprise ?', type: 'boolean' },
+  { id: 'comments', question: 'Commentaires ou suggestions', type: 'text' },
+];
+
+/**
+ * POST /api/chantier-workflow/chantiers/:chantierId/reception/prepare
+ * Prépare le PV de réception (technicien initie)
+ */
+router.post('/chantiers/:chantierId/reception/prepare', authenticateToken, async (req, res) => {
+  try {
+    const { chantierId } = req.params;
+    const user = (req as any).user;
+    const organizationId = req.headers['x-organization-id'] as string;
+    const userId = user?.userId || user?.id;
+
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const chantier = await db.chantier.findFirst({
+      where: { id: chantierId, organizationId },
+      select: {
+        id: true,
+        clientName: true,
+        siteAddress: true,
+        amount: true,
+        productLabel: true,
+        submissionId: true,
+        Lead: { select: { email: true, phone: true, firstName: true, lastName: true } },
+        GeneratedDocument: { select: { dataSnapshot: true } },
+        ChantierEvent: {
+          where: { status: 'COMPLETED' },
+          select: { subcontractAmount: true },
+        },
+      }
+    });
+
+    if (!chantier) {
+      return res.status(404).json({ success: false, message: 'Chantier non trouvé' });
+    }
+
+    // Vérifier qu'il n'y a pas déjà une réception
+    const existingReception = await db.chantierReception.findUnique({
+      where: { chantierId },
+    });
+    if (existingReception && existingReception.status !== 'DRAFT') {
+      return res.status(409).json({ success: false, message: 'Une réception existe déjà pour ce chantier' });
+    }
+
+    // Calculer somme sous-traitance
+    const subcontractTotal = chantier.ChantierEvent.reduce((sum, e) => sum + (e.subcontractAmount || 0), 0);
+
+    // Construire la checklist depuis les champs TBL technicianVisible
+    let checklist: any[] = [];
+    if (chantier.submissionId) {
+      const submission = await db.treeBranchLeafSubmission.findUnique({
+        where: { id: chantier.submissionId },
+        select: { treeId: true },
+      });
+      if (submission) {
+        const nodes = await db.treeBranchLeafNode.findMany({
+          where: { treeId: submission.treeId, technicianVisible: true, isVisible: true, isActive: true },
+          select: { id: true, label: true },
+          orderBy: { order: 'asc' },
+        });
+        const subData = await db.treeBranchLeafSubmissionData.findMany({
+          where: { submissionId: chantier.submissionId, nodeId: { in: nodes.map(n => n.id) } },
+        });
+        const valueMap = new Map(subData.map(d => [d.nodeId, d.value]));
+        checklist = nodes.map(n => ({
+          nodeId: n.id,
+          label: n.label,
+          expectedValue: valueMap.get(n.id) || null,
+          checked: false,
+          note: null,
+        }));
+      }
+    }
+
+    // Générer token d'accès client
+    const clientAccessToken = crypto.randomUUID();
+    const clientTokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 jours
+
+    const reception = existingReception
+      ? await db.chantierReception.update({
+          where: { chantierId },
+          data: {
+            checklist,
+            workSummary: { product: chantier.productLabel, address: chantier.siteAddress },
+            totalAmount: chantier.amount,
+            subcontractTotal,
+            clientName: chantier.Lead ? `${chantier.Lead.firstName || ''} ${chantier.Lead.lastName || ''}`.trim() : chantier.clientName,
+            clientEmail: chantier.Lead?.email,
+            clientPhone: chantier.Lead?.phone,
+            clientAccessToken,
+            clientTokenExpiresAt,
+            legalText: RECEPTION_LEGAL_TEXT,
+            satisfactionAnswers: DEFAULT_SATISFACTION_QUESTIONS,
+            preparedById: userId,
+            updatedAt: new Date(),
+          }
+        })
+      : await db.chantierReception.create({
+          data: {
+            chantierId,
+            status: 'DRAFT',
+            checklist,
+            workSummary: { product: chantier.productLabel, address: chantier.siteAddress },
+            totalAmount: chantier.amount,
+            subcontractTotal,
+            clientName: chantier.Lead ? `${chantier.Lead.firstName || ''} ${chantier.Lead.lastName || ''}`.trim() : chantier.clientName,
+            clientEmail: chantier.Lead?.email,
+            clientPhone: chantier.Lead?.phone,
+            clientAccessToken,
+            clientTokenExpiresAt,
+            legalText: RECEPTION_LEGAL_TEXT,
+            satisfactionAnswers: DEFAULT_SATISFACTION_QUESTIONS,
+            preparedById: userId,
+            updatedAt: new Date(),
+          }
+        });
+
+    // Historique
+    await db.chantierHistory.create({
+      data: {
+        id: crypto.randomUUID(),
+        chantierId,
+        action: 'RECEPTION_PREPARED',
+        userId,
+        data: { receptionId: reception.id, checklistItems: checklist.length },
+      }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        reception,
+        clientLink: `/reception/${clientAccessToken}`,
+        satisfactionQuestions: DEFAULT_SATISFACTION_QUESTIONS,
+      },
+      message: 'PV de réception préparé — Lien client généré'
+    });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur POST reception/prepare:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+/**
+ * GET /api/chantier-workflow/reception/:token
+ * Accès public (client) via token — charge le PV de réception à signer
+ */
+router.get('/reception/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    const reception = await db.chantierReception.findUnique({
+      where: { clientAccessToken: token },
+      include: {
+        Chantier: {
+          select: {
+            clientName: true,
+            siteAddress: true,
+            productLabel: true,
+            amount: true,
+            Organization: { select: { name: true } },
+          }
+        }
+      }
+    });
+
+    if (!reception) {
+      return res.status(404).json({ success: false, message: 'Lien de réception invalide ou expiré' });
+    }
+
+    if (reception.clientTokenExpiresAt && reception.clientTokenExpiresAt < new Date()) {
+      return res.status(410).json({ success: false, message: 'Ce lien de réception a expiré' });
+    }
+
+    if (reception.status === 'ACCEPTED' || reception.status === 'ACCEPTED_WITH_RESERVES') {
+      return res.json({
+        success: true,
+        data: { ...reception, alreadySigned: true },
+        message: 'Ce PV de réception a déjà été signé'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        id: reception.id,
+        status: reception.status,
+        checklist: reception.checklist,
+        workSummary: reception.workSummary,
+        satisfactionQuestions: DEFAULT_SATISFACTION_QUESTIONS,
+        legalText: reception.legalText,
+        clientName: reception.clientName,
+        totalAmount: reception.totalAmount,
+        organizationName: reception.Chantier.Organization?.name,
+        productLabel: reception.Chantier.productLabel,
+        siteAddress: reception.Chantier.siteAddress,
+      }
+    });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur GET /reception/:token:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+/**
+ * POST /api/chantier-workflow/reception/:token/sign
+ * Client signe le PV de réception (juridiquement fort)
+ */
+const signReceptionSchema = z.object({
+  clientName: z.string().min(1, 'Le nom est obligatoire'),
+  clientSignature: z.string().min(1, 'La signature est obligatoire'),
+  checklist: z.array(z.object({
+    nodeId: z.string().optional(),
+    label: z.string(),
+    checked: z.boolean(),
+    note: z.string().nullable().optional(),
+  })),
+  satisfactionAnswers: z.array(z.object({
+    id: z.string(),
+    question: z.string(),
+    answer: z.any(),
+    rating: z.number().min(1).max(5).optional(),
+  })).optional(),
+  reserves: z.array(z.object({
+    description: z.string().min(1),
+    severity: z.enum(['minor', 'major', 'critical']).default('minor'),
+  })).optional(),
+  legalAccepted: z.boolean(),
+});
+
+router.post('/reception/:token/sign', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const ip = req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || 'unknown';
+    const userAgent = req.headers['user-agent'] || 'unknown';
+
+    const validation = signReceptionSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({ success: false, message: 'Données invalides', errors: validation.error.errors });
+    }
+
+    const data = validation.data;
+
+    if (!data.legalAccepted) {
+      return res.status(400).json({ success: false, message: 'Vous devez accepter les conditions pour signer le PV de réception' });
+    }
+
+    const reception = await db.chantierReception.findUnique({
+      where: { clientAccessToken: token },
+    });
+
+    if (!reception) {
+      return res.status(404).json({ success: false, message: 'Lien de réception invalide' });
+    }
+
+    if (reception.clientTokenExpiresAt && reception.clientTokenExpiresAt < new Date()) {
+      return res.status(410).json({ success: false, message: 'Ce lien a expiré' });
+    }
+
+    if (reception.clientSignedAt) {
+      return res.status(409).json({ success: false, message: 'Ce PV a déjà été signé' });
+    }
+
+    const hasReserves = data.reserves && data.reserves.length > 0;
+    const avgRating = data.satisfactionAnswers
+      ? data.satisfactionAnswers.filter(a => a.rating).reduce((sum, a) => sum + (a.rating || 0), 0) / (data.satisfactionAnswers.filter(a => a.rating).length || 1)
+      : null;
+
+    await db.$transaction(async (tx) => {
+      await tx.chantierReception.update({
+        where: { id: reception.id },
+        data: {
+          status: hasReserves ? 'ACCEPTED_WITH_RESERVES' : 'ACCEPTED',
+          clientName: data.clientName,
+          clientSignature: data.clientSignature,
+          clientSignedAt: new Date(),
+          clientIpAddress: ip,
+          clientUserAgent: userAgent,
+          checklist: data.checklist as any,
+          satisfactionRating: avgRating ? Math.round(avgRating) : null,
+          satisfactionAnswers: data.satisfactionAnswers as any,
+          legalAccepted: true,
+          legalAcceptedAt: new Date(),
+          hasReserves,
+          reserves: hasReserves ? data.reserves as any : null,
+          updatedAt: new Date(),
+        }
+      });
+
+      // Historique
+      await tx.chantierHistory.create({
+        data: {
+          id: crypto.randomUUID(),
+          chantierId: reception.chantierId,
+          action: 'RECEPTION_SIGNED',
+          toValue: hasReserves ? 'ACCEPTED_WITH_RESERVES' : 'ACCEPTED',
+          data: {
+            receptionId: reception.id,
+            clientName: data.clientName,
+            signedAt: new Date().toISOString(),
+            ip,
+            hasReserves,
+            reserveCount: data.reserves?.length || 0,
+            satisfactionRating: avgRating,
+          },
+        }
+      });
+    });
+
+    // Notifier les admins
+    try {
+      const chantier = await db.chantier.findUnique({
+        where: { id: reception.chantierId },
+        select: { organizationId: true, clientName: true },
+      });
+      if (chantier) {
+        const admins = await db.userOrganization.findMany({
+          where: { organizationId: chantier.organizationId, role: { in: ['admin', 'super_admin'] } },
+          select: { userId: true },
+        });
+        for (const admin of admins) {
+          await db.notification.create({
+            data: {
+              id: crypto.randomUUID(),
+              userId: admin.userId,
+              organizationId: chantier.organizationId,
+              title: hasReserves ? '⚠️ PV signé avec réserves' : '✅ PV de réception signé',
+              message: `${data.clientName} a signé le PV de réception pour "${chantier.clientName}"${hasReserves ? ` avec ${data.reserves!.length} réserve(s)` : ''}`,
+              type: hasReserves ? 'warning' : 'success',
+              link: `/chantiers/${reception.chantierId}?tab=reception`,
+              isRead: false,
+              createdAt: new Date(),
+            }
+          });
+        }
+      }
+    } catch (notifError) {
+      console.error('[ChantierWorkflow] Erreur notification reception sign:', notifError);
+    }
+
+    res.json({
+      success: true,
+      message: hasReserves
+        ? 'PV de réception signé avec réserves — L\'entreprise a été notifiée'
+        : 'PV de réception signé ✅ — Merci pour votre confiance',
+      data: { status: hasReserves ? 'ACCEPTED_WITH_RESERVES' : 'ACCEPTED' }
+    });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur POST /reception/:token/sign:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+/**
+ * GET /api/chantier-workflow/chantiers/:chantierId/reception
+ * Récupère la réception d'un chantier (pour l'admin/tech)
+ */
+router.get('/chantiers/:chantierId/reception', authenticateToken, async (req, res) => {
+  try {
+    const { chantierId } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const chantier = await db.chantier.findFirst({
+      where: { id: chantierId, organizationId },
+    });
+    if (!chantier) {
+      return res.status(404).json({ success: false, message: 'Chantier non trouvé' });
+    }
+
+    const reception = await db.chantierReception.findUnique({
+      where: { chantierId },
+    });
+
+    res.json({ success: true, data: reception });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur GET reception:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+/**
+ * POST /api/chantier-workflow/chantiers/:chantierId/reception/send-to-client
+ * Envoie le lien de réception au client par email
+ */
+router.post('/chantiers/:chantierId/reception/send-to-client', authenticateToken, async (req, res) => {
+  try {
+    const { chantierId } = req.params;
+    const user = (req as any).user;
+    const organizationId = req.headers['x-organization-id'] as string;
+
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const reception = await db.chantierReception.findUnique({
+      where: { chantierId },
+    });
+
+    if (!reception) {
+      return res.status(404).json({ success: false, message: 'Réception non trouvée — veuillez d\'abord la préparer' });
+    }
+
+    if (!reception.clientEmail) {
+      return res.status(400).json({ success: false, message: 'Email client manquant' });
+    }
+
+    // Mettre à jour le statut
+    await db.chantierReception.update({
+      where: { id: reception.id },
+      data: { status: 'PENDING_CLIENT', updatedAt: new Date() },
+    });
+
+    // Récupérer les infos pour l'email
+    const chantier = await db.chantier.findFirst({
+      where: { id: chantierId },
+      select: {
+        clientName: true,
+        siteAddress: true,
+        Organization: { select: { name: true } },
+      }
+    });
+
+    // Envoyer l'email (réutiliser le pattern existant)
+    try {
+      const orgSettings = await db.organizationSettings.findFirst({
+        where: { organizationId },
+      });
+      const smtpConfig = orgSettings?.smtpConfig as any;
+
+      if (smtpConfig?.host) {
+        const decryptedPassword = smtpConfig.password ? decrypt(smtpConfig.password) : '';
+        const transporter = nodemailer.createTransport({
+          host: smtpConfig.host,
+          port: smtpConfig.port || 587,
+          secure: smtpConfig.secure || false,
+          auth: { user: smtpConfig.user, pass: decryptedPassword },
+        });
+
+        const receptionUrl = `${req.headers.origin || 'https://app.2thier.be'}/reception/${reception.clientAccessToken}`;
+
+        await transporter.sendMail({
+          from: smtpConfig.from || smtpConfig.user,
+          to: reception.clientEmail,
+          subject: `Réception de vos travaux — ${chantier?.Organization?.name || '2Thier'}`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2>Bonjour ${reception.clientName},</h2>
+              <p>Les travaux réalisés à l'adresse <strong>${chantier?.siteAddress || 'votre domicile'}</strong> sont terminés.</p>
+              <p>Nous vous invitons à consulter et signer le procès-verbal de réception en cliquant sur le button ci-dessous :</p>
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${receptionUrl}" style="background-color: #52c41a; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: bold;">
+                  📝 Signer le PV de réception
+                </a>
+              </div>
+              <p style="color: #666; font-size: 13px;">Ce lien est valide pendant 30 jours. Si vous rencontrez des problèmes, contactez-nous.</p>
+              <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+              <p style="color: #999; font-size: 12px;">${chantier?.Organization?.name || '2Thier'}</p>
+            </div>
+          `,
+        });
+      }
+    } catch (emailError) {
+      console.error('[ChantierWorkflow] Erreur envoi email reception:', emailError);
+      // Ne pas bloquer — l'email est optionnel
+    }
+
+    // Historique
+    await db.chantierHistory.create({
+      data: {
+        id: crypto.randomUUID(),
+        chantierId,
+        action: 'RECEPTION_SENT_TO_CLIENT',
+        userId: user?.userId || user?.id,
+        data: { email: reception.clientEmail },
+      }
+    });
+
+    res.json({
+      success: true,
+      message: `Lien de réception envoyé à ${reception.clientEmail}`,
+    });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur POST send-to-client:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════
 // SEED — Initialiser les transitions et templates par défaut
 // Réutilise le même pattern que POST /api/chantier-statuses/seed
 // ═══════════════════════════════════════════════════════
