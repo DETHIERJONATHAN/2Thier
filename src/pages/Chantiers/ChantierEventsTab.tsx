@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  Card, Button, Tag, Modal, Form, Input, Select, DatePicker, message, Empty, Typography, Space, Popconfirm, Badge, Alert,
+  Card, Button, Tag, Modal, Form, Input, Select, DatePicker, message, Empty, Typography, Space, Popconfirm, Badge, Alert, Calendar, TimePicker,
 } from 'antd';
 import {
   PlusOutlined, DeleteOutlined, EditOutlined, CalendarOutlined,
@@ -8,7 +8,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
-import dayjs from 'dayjs';
+import dayjs, { Dayjs } from 'dayjs';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -157,14 +157,18 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
         }
       }
 
-      const payload = {
+      const payload: Record<string, any> = {
         type: values.type,
         status: values.status,
         problemNote: values.problemNote,
-        subcontractAmount: values.subcontractAmount ? Number(values.subcontractAmount) : null,
         notes: values.notes,
         calendarEventId,
       };
+
+      // Sous-traitance uniquement en édition (pas en création)
+      if (editingEvent && values.subcontractAmount !== undefined) {
+        payload.subcontractAmount = values.subcontractAmount ? Number(values.subcontractAmount) : null;
+      }
 
       if (editingEvent) {
         await api.put(`/api/chantier-workflow/events/${editingEvent.id}`, payload);
@@ -371,6 +375,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
         confirmLoading={saving}
         width="95vw"
         style={{ maxWidth: 520, top: 20 }}
+        styles={{ body: { maxHeight: 'calc(100vh - 160px)', overflowY: 'auto' } }}
       >
         <Form form={form} layout="vertical">
           <Form.Item name="type" label="Type d'événement" rules={[{ required: true }]} initialValue="CUSTOM">
@@ -393,18 +398,75 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
               </Form.Item>
 
               {linkMode === 'new' && (
-                <Form.Item
-                  name="dateRange"
-                  label="Dates (début — fin)"
-                  rules={[{ required: true, message: 'Sélectionnez les dates' }]}
-                >
-                  <RangePicker
-                    showTime={{ format: 'HH:mm' }}
-                    format="DD/MM/YYYY HH:mm"
-                    style={{ width: '100%' }}
-                    placeholder={['Date début', 'Date fin']}
-                  />
-                </Form.Item>
+                <>
+                  {/* Mini-calendrier visuel des événements existants */}
+                  <div style={{ marginBottom: 12 }}>
+                    <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>
+                      📅 Vos événements existants sont marqués en bleu. Cliquez sur un jour pour le sélectionner.
+                    </Text>
+                    <div style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflow: 'hidden' }}>
+                      <style>{`
+                        .event-mini-calendar .ant-picker-calendar-header { padding: 4px 8px !important; }
+                        .event-mini-calendar .ant-picker-cell { padding: 2px 0 !important; }
+                        .event-mini-calendar .ant-picker-cell-inner { height: 28px !important; line-height: 28px !important; width: 28px !important; }
+                        .event-mini-calendar .ant-picker-content th { padding: 4px 0 !important; font-size: 11px !important; }
+                        .event-mini-calendar .ant-picker-body { padding: 4px 8px !important; }
+                      `}</style>
+                      <Calendar
+                        fullscreen={false}
+                        className="event-mini-calendar"
+                        onSelect={(date: Dayjs) => {
+                          const current = form.getFieldValue('dateRange');
+                          const startTime = current?.[0] ? dayjs(current[0]).format('HH:mm') : '09:00';
+                          const endTime = current?.[1] ? dayjs(current[1]).format('HH:mm') : '10:00';
+                          const [sh, sm] = startTime.split(':').map(Number);
+                          const [eh, em] = endTime.split(':').map(Number);
+                          form.setFieldsValue({
+                            dateRange: [
+                              date.hour(sh).minute(sm).second(0),
+                              date.hour(eh).minute(em).second(0),
+                            ],
+                          });
+                        }}
+                        cellRender={(current: Dayjs) => {
+                          const dateStr = current.format('YYYY-MM-DD');
+                          const hasEvent = existingCalendarEvents.some(
+                            ce => dayjs(ce.startDate).format('YYYY-MM-DD') === dateStr
+                          );
+                          const hasChantierEvent = events.some(
+                            e => e.CalendarEvent && dayjs(e.CalendarEvent.startDate).format('YYYY-MM-DD') === dateStr
+                          );
+                          if (hasChantierEvent) {
+                            return <div style={{ position: 'absolute', bottom: 1, left: '50%', transform: 'translateX(-50%)', width: 5, height: 5, borderRadius: '50%', background: '#faad14' }} />;
+                          }
+                          if (hasEvent) {
+                            return <div style={{ position: 'absolute', bottom: 1, left: '50%', transform: 'translateX(-50%)', width: 5, height: 5, borderRadius: '50%', background: '#1890ff' }} />;
+                          }
+                          return null;
+                        }}
+                      />
+                    </div>
+                    {/* Légende */}
+                    <div style={{ display: 'flex', gap: 12, marginTop: 4, fontSize: 10, color: '#8c8c8c' }}>
+                      <span><span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#1890ff', marginRight: 3 }} />Calendrier</span>
+                      <span><span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#faad14', marginRight: 3 }} />Ce chantier</span>
+                    </div>
+                  </div>
+
+                  {/* Heures début/fin */}
+                  <Form.Item
+                    name="dateRange"
+                    label="Date et heures"
+                    rules={[{ required: true, message: 'Sélectionnez la date et les heures' }]}
+                  >
+                    <RangePicker
+                      showTime={{ format: 'HH:mm' }}
+                      format="DD/MM/YYYY HH:mm"
+                      style={{ width: '100%' }}
+                      placeholder={['Début', 'Fin']}
+                    />
+                  </Form.Item>
+                </>
               )}
 
               {linkMode === 'existing' && (
@@ -430,15 +492,21 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
               <Select options={Object.entries(EVENT_STATUSES).map(([k, v]) => ({ value: k, label: v.label }))} />
             </Form.Item>
           )}
-          <Form.Item name="subcontractAmount" label="Montant sous-traitance (€)">
-            <Input type="number" min={0} placeholder="Montant..." />
-          </Form.Item>
+
           <Form.Item name="notes" label="Notes">
             <Input.TextArea rows={2} placeholder="Détails de l'événement..." />
           </Form.Item>
+
           {editingEvent?.status === 'PROBLEM' && (
             <Form.Item name="problemNote" label="Note problème">
               <Input.TextArea rows={2} />
+            </Form.Item>
+          )}
+
+          {/* Sous-traitance uniquement en mode édition si admin */}
+          {editingEvent && isAdminOrAbove && (
+            <Form.Item name="subcontractAmount" label="Montant sous-traitance (€)">
+              <Input type="number" min={0} placeholder="Montant..." />
             </Form.Item>
           )}
         </Form>
