@@ -803,6 +803,38 @@ router.post('/time-entries', authenticateToken, async (req, res) => {
     // 📱 Capture IP address
     const ipAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || null;
 
+    // ⏱️ Calcul automatique de la durée de travail
+    // Les types "fin de période" ferment un intervalle de travail ouvert par un type "début"
+    const WORK_END_TYPES = ['FIN', 'DEPART_PAUSE', 'DEPART_MIDI', 'DEPART_DEPLACEMENT'];
+    const WORK_START_TYPES = ['ARRIVEE', 'RETOUR_PAUSE', 'RETOUR_MIDI', 'RETOUR_DEPLACEMENT'];
+
+    if (WORK_END_TYPES.includes(type) && !endTime) {
+      // Chercher le dernier pointage "début" pour ce technicien ce jour-là (même chantier si fourni)
+      const dateStart = new Date(date);
+      dateStart.setHours(0, 0, 0, 0);
+      const dateEnd = new Date(date);
+      dateEnd.setHours(23, 59, 59, 999);
+
+      const prevWhere: any = {
+        organizationId,
+        technicianId,
+        date: { gte: dateStart, lte: dateEnd },
+        type: { in: WORK_START_TYPES },
+      };
+      if (chantierId) prevWhere.chantierId = chantierId;
+
+      const prevEntry = await db.timeEntry.findFirst({
+        where: prevWhere,
+        orderBy: { startTime: 'desc' },
+      });
+
+      if (prevEntry) {
+        const start = new Date(prevEntry.startTime).getTime();
+        const end = new Date(startTime).getTime();
+        durationMinutes = Math.max(0, Math.round((end - start) / 60000));
+      }
+    }
+
     const entry = await db.timeEntry.create({
       data: {
         organizationId,

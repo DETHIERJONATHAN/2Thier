@@ -211,6 +211,19 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, c
       },
     },
     {
+      title: 'Durée',
+      key: 'duration',
+      width: 70,
+      render: (_: any, r: TimeEntry) => {
+        if (!r.durationMinutes || r.durationMinutes <= 0) return <span style={{ fontSize: 11, color: '#bfbfbf' }}>-</span>;
+        return (
+          <Text strong style={{ fontSize: 12, color: '#262626' }}>
+            {formatDuration(r.durationMinutes)}
+          </Text>
+        );
+      },
+    },
+    {
       title: '📍',
       key: 'geo',
       width: 55,
