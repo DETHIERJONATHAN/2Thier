@@ -6012,14 +6012,6 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                       key={field.id}
                       {...defaultFormColProps}
                       className="mb-2 tbl-form-col"
-                      style={isTechField ? {
-                        borderLeft: `3px solid ${isFieldChecked ? '#52c41a' : '#1890ff'}`,
-                        borderRadius: 6,
-                        background: isFieldChecked ? '#f6ffed' : '#e6f7ff22',
-                        paddingLeft: 8,
-                        position: 'relative',
-                        transition: 'all 0.2s ease',
-                      } : undefined}
                     >
                       {/* 🔍 REVIEW MODE: Checkbox de validation terrain */}
                       {isTechField && (
