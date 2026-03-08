@@ -19097,7 +19097,7 @@ router22.post("/events/:id/submit-review", authenticateToken, async (req2, res) 
         console.error("[ChantierWorkflow] Erreur auto-return lead:", leadErr);
       }
     }
-    if (event.type === "VISITE_TECHNIQUE") {
+    if (event.type === "VISITE_TECHNIQUE" && !hasModifications) {
       await checkAutoTransitions(event.Chantier.id, organizationId, "AUTO_VISIT_VALIDATED", user);
     }
     res.json({

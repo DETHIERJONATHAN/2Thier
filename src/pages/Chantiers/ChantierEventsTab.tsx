@@ -6,8 +6,9 @@ import {
 import {
   PlusOutlined, DeleteOutlined, EditOutlined, CalendarOutlined,
   CheckCircleOutlined, WarningOutlined, LockOutlined,
-  ExclamationCircleOutlined, FileProtectOutlined,
+  ExclamationCircleOutlined, FileProtectOutlined, SearchOutlined,
 } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
 import dayjs, { Dayjs } from 'dayjs';
@@ -72,6 +73,8 @@ interface Props {
   chantierId: string;
   chantierAddress?: string;
   chantierLabel?: string;
+  leadId?: string;
+  submissionId?: string;
 }
 
 const EVENT_TYPES = [
@@ -88,12 +91,13 @@ const EVENT_STATUSES: Record<string, { label: string; color: string; badgeStatus
   PROBLEM: { label: 'Problème', color: 'error', badgeStatus: 'error' },
 };
 
-const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chantierLabel }) => {
+const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chantierLabel, leadId, submissionId }) => {
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, [apiHook.api]);
   const { isSuperAdmin, userRole } = useAuth();
   const isAdminOrAbove = isSuperAdmin || userRole === 'admin' || userRole === 'comptable';
   const { message, modal } = App.useApp();
+  const navigate = useNavigate();
 
   const [events, setEvents] = useState<ChantierEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -511,9 +515,23 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
 
                     {/* Actions — toujours en dessous sur mobile */}
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, borderTop: '1px solid #f0f0f0', paddingTop: 8 }}>
-                      {event.status === 'PLANNED' && (
+                      {event.status === 'PLANNED' && ['VISITE_TECHNIQUE', 'CHANTIER', 'RECEPTION'].includes(event.type) && leadId && (
+                        <Button
+                          size="small"
+                          type="primary"
+                          icon={<SearchOutlined />}
+                          onClick={() => {
+                            const url = `/tbl/${leadId}${submissionId ? `?devisId=${submissionId}&mode=review` : '?mode=review'}&eventId=${event.id}`;
+                            navigate(url);
+                          }}
+                          style={{ minHeight: 36, background: '#1890ff', fontWeight: 600 }}
+                        >
+                          Analyser
+                        </Button>
+                      )}
+                      {event.status === 'PLANNED' && !['VISITE_TECHNIQUE', 'CHANTIER', 'RECEPTION'].includes(event.type) && (
                         <>
-                          <Button size="small" type="primary" icon={<CheckCircleOutlined />} onClick={() => handleValidate(event.id, event.type)} style={{ minHeight: 36 }}>
+                          <Button size="small" type="primary" icon={<CheckCircleOutlined />} onClick={() => handleValidateSimple(event.id)} style={{ minHeight: 36 }}>
                             Valider
                           </Button>
                           <Button size="small" danger icon={<WarningOutlined />} onClick={() => handleReportProblem(event.id)} style={{ minHeight: 36 }}>

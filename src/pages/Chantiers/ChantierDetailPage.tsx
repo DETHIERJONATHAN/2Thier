@@ -1209,6 +1209,8 @@ const ChantierDetailPage: React.FC = () => {
             chantierId={chantier.id}
             chantierAddress={displayAddress}
             chantierLabel={chantier.customLabel || chantier.clientName || chantier.productLabel || ''}
+            leadId={chantier.leadId || undefined}
+            submissionId={chantier.submissionId || undefined}
           />
         ), },
         { key: 'pointage', label: <span><ClockCircleOutlined /> Pointage</span>, children: (

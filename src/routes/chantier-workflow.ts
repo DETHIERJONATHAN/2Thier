@@ -2125,8 +2125,8 @@ router.post('/events/:id/submit-review', authenticateToken, async (req, res) => 
       }
     }
 
-    // Auto-transition si visite technique
-    if (event.type === 'VISITE_TECHNIQUE') {
+    // Auto-transition si visite technique ET validée (pas de problèmes)
+    if (event.type === 'VISITE_TECHNIQUE' && !hasModifications) {
       await checkAutoTransitions(event.Chantier.id, organizationId, 'AUTO_VISIT_VALIDATED', user);
     }
 
