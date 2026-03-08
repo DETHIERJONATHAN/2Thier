@@ -68,8 +68,9 @@ const SortableStatusRow: React.FC<{
       style={{
         ...style,
         display: 'flex',
+        flexWrap: 'wrap',
         alignItems: 'center',
-        gap: 12,
+        gap: 8,
         padding: '10px 12px',
         backgroundColor: '#fff',
         borderRadius: 6,
@@ -77,72 +78,78 @@ const SortableStatusRow: React.FC<{
         marginBottom: 6,
       }}
     >
-      <span
-        {...attributes}
-        {...listeners}
-        style={{ cursor: 'grab', display: 'flex', alignItems: 'center', color: '#bbb' }}
-      >
-        <HolderOutlined />
-      </span>
+      {/* Row 1: grip + color + name (takes full remaining width) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 0', minWidth: 0 }}>
+        <span
+          {...attributes}
+          {...listeners}
+          style={{ cursor: 'grab', display: 'flex', alignItems: 'center', color: '#bbb', flexShrink: 0 }}
+        >
+          <HolderOutlined />
+        </span>
 
-      <div
-        style={{
-          width: 18,
-          height: 18,
-          borderRadius: 4,
-          backgroundColor: status.color,
-          flexShrink: 0,
-        }}
-      />
-
-      {isEditing ? (
-        <Input
-          size="small"
-          value={editName}
-          onChange={e => setEditName(e.target.value)}
-          onBlur={commitEdit}
-          onPressEnter={commitEdit}
-          autoFocus
-          style={{ flex: 1 }}
+        <div
+          style={{
+            width: 16,
+            height: 16,
+            borderRadius: 4,
+            backgroundColor: status.color,
+            flexShrink: 0,
+          }}
         />
-      ) : (
-        <Text strong style={{ flex: 1, fontSize: 14 }}>
-          {status.name}
-        </Text>
-      )}
 
-      <Tag>{status._count?.Chantier || 0} chantier(s)</Tag>
+        {isEditing ? (
+          <Input
+            size="small"
+            value={editName}
+            onChange={e => setEditName(e.target.value)}
+            onBlur={commitEdit}
+            onPressEnter={commitEdit}
+            autoFocus
+            style={{ flex: 1, minWidth: 0 }}
+          />
+        ) : (
+          <Text strong style={{ flex: 1, fontSize: 14, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {status.name}
+          </Text>
+        )}
+      </div>
 
-      <ColorPicker
-        value={status.color}
-        size="small"
-        disabledAlpha
-        onChange={(val) => {
-          const hex = typeof val === 'string' ? val : (val?.toHexString?.() || '#1677ff');
-          onEdit(status.id, { color: hex.slice(0, 7) });
-        }}
-        presets={[{
-          label: 'Couleurs',
-          colors: ['#1677ff', '#52c41a', '#faad14', '#ff4d4f', '#722ed1', '#13c2c2', '#eb2f96', '#fa8c16'],
-        }]}
-      />
+      {/* Row 2: tag + actions (wrap below on narrow screens) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+        <Tag style={{ margin: 0, fontSize: 11 }}>{status._count?.Chantier || 0} chantier(s)</Tag>
 
-      <Button
-        size="small"
-        icon={<EditOutlined />}
-        onClick={() => { setEditName(status.name); setIsEditing(true); }}
-      />
+        <ColorPicker
+          value={status.color}
+          size="small"
+          disabledAlpha
+          onChange={(val) => {
+            const hex = typeof val === 'string' ? val : (val?.toHexString?.() || '#1677ff');
+            onEdit(status.id, { color: hex.slice(0, 7) });
+          }}
+          presets={[{
+            label: 'Couleurs',
+            colors: ['#1677ff', '#52c41a', '#faad14', '#ff4d4f', '#722ed1', '#13c2c2', '#eb2f96', '#fa8c16'],
+          }]}
+        />
 
-      <Popconfirm
-        title="Supprimer ce statut ?"
-        description={status._count?.Chantier ? 'Des chantiers utilisent ce statut !' : undefined}
-        onConfirm={() => onDelete(status.id)}
-        okText="Supprimer"
-        cancelText="Annuler"
-        okButtonProps={{ danger: true }}
-      >
-        <Button size="small" danger icon={<DeleteOutlined />} />
-      </Popconfirm>
+        <Button
+          size="small"
+          icon={<EditOutlined />}
+          onClick={() => { setEditName(status.name); setIsEditing(true); }}
+        />
+
+        <Popconfirm
+          title="Supprimer ce statut ?"
+          description={status._count?.Chantier ? 'Des chantiers utilisent ce statut !' : undefined}
+          onConfirm={() => onDelete(status.id)}
+          okText="Supprimer"
+          cancelText="Annuler"
+          okButtonProps={{ danger: true }}
+        >
+          <Button size="small" danger icon={<DeleteOutlined />} />
+        </Popconfirm>
+      </div>
     </div>
   );
 };
@@ -225,12 +232,12 @@ const ChantierSettingsPage: React.FC = () => {
   }, [api, orderedStatuses, refetch]);
 
   return (
-    <div style={{ maxWidth: 700, margin: '0 auto', padding: 24 }}>
-      <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/chantiers')}>
+    <div style={{ maxWidth: 700, margin: '0 auto', padding: 'clamp(10px, 3vw, 24px)' }}>
+      <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/chantiers')} size="middle">
           Retour
         </Button>
-        <Title level={4} style={{ margin: 0 }}>⚙️ Paramètres Chantiers</Title>
+        <Title level={4} style={{ margin: 0, fontSize: 'clamp(16px, 4vw, 22px)' }}>⚙️ Paramètres Chantiers</Title>
       </div>
 
       <Card title="Pipeline — Statuts de chantier" size="small">
@@ -255,41 +262,43 @@ const ChantierSettingsPage: React.FC = () => {
           <Empty description="Aucun statut. Ajoutez-en ci-dessous." />
         )}
 
-        <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <Input
             placeholder="Nouveau statut..."
             value={newName}
             onChange={e => setNewName(e.target.value)}
             onPressEnter={handleAdd}
-            style={{ flex: 1 }}
+            style={{ flex: '1 1 120px', minWidth: 0 }}
           />
-          <ColorPicker
-            value={newColor}
-            disabledAlpha
-            onChange={(val) => {
-              const hex = typeof val === 'string' ? val : (val?.toHexString?.() || '#1677ff');
-              setNewColor(hex.slice(0, 7));
-            }}
-            presets={[{
-              label: 'Couleurs',
-              colors: ['#1677ff', '#52c41a', '#faad14', '#ff4d4f', '#722ed1', '#13c2c2', '#eb2f96', '#fa8c16'],
-            }]}
-          />
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleAdd}
-            disabled={!newName.trim()}
-          >
-            Ajouter
-          </Button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <ColorPicker
+              value={newColor}
+              disabledAlpha
+              onChange={(val) => {
+                const hex = typeof val === 'string' ? val : (val?.toHexString?.() || '#1677ff');
+                setNewColor(hex.slice(0, 7));
+              }}
+              presets={[{
+                label: 'Couleurs',
+                colors: ['#1677ff', '#52c41a', '#faad14', '#ff4d4f', '#722ed1', '#13c2c2', '#eb2f96', '#fa8c16'],
+              }]}
+            />
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={handleAdd}
+              disabled={!newName.trim()}
+            >
+              Ajouter
+            </Button>
+          </div>
         </div>
       </Card>
 
       {/* Lien vers les paramètres workflow */}
       <Card size="small" style={{ marginTop: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ minWidth: 0, flex: '1 1 200px' }}>
             <Text strong><ThunderboltOutlined /> Workflow & Facturation</Text>
             <div><Text type="secondary" style={{ fontSize: 12 }}>Transitions, déclencheurs automatiques, templates de factures</Text></div>
           </div>

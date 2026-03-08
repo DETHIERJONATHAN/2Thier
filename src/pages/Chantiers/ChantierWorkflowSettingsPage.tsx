@@ -360,24 +360,24 @@ const ChantierWorkflowSettingsPage: React.FC = () => {
   }, [api, fetchTransitions, fetchTemplates]);
 
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto', padding: 24 }}>
-      <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/chantiers/settings')}>
+    <div style={{ maxWidth: 900, margin: '0 auto', padding: 'clamp(10px, 3vw, 24px)' }}>
+      <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/chantiers/settings')} size="middle">
           Retour aux paramètres
         </Button>
-        <Title level={4} style={{ margin: 0 }}>⚙️ Workflow Chantiers</Title>
+        <Title level={4} style={{ margin: 0, fontSize: 'clamp(16px, 4vw, 22px)' }}>⚙️ Workflow Chantiers</Title>
       </div>
 
       {/* Bouton seed si workflow vide */}
       {isEmpty && (
         <Card size="small" style={{ marginBottom: 24, borderColor: '#1677ff', background: '#f0f5ff' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+            <div style={{ minWidth: 0, flex: '1 1 200px' }}>
               <Text strong>🚀 Aucune configuration détectée</Text>
-              <div><Text type="secondary">Initialisez le workflow avec les transitions et factures par défaut en un clic.</Text></div>
+              <div><Text type="secondary" style={{ fontSize: 12 }}>Initialisez le workflow avec les transitions et factures par défaut en un clic.</Text></div>
             </div>
             <Button type="primary" loading={seeding} onClick={() => handleSeedWorkflow(false)}>
-              Initialiser le workflow par défaut
+              Initialiser le workflow
             </Button>
           </div>
         </Card>
@@ -386,10 +386,10 @@ const ChantierWorkflowSettingsPage: React.FC = () => {
       {/* Bouton réinitialiser si des données existent */}
       {hasData && (
         <Card size="small" style={{ marginBottom: 24, borderColor: '#faad14', background: '#fffbe6' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+            <div style={{ minWidth: 0, flex: '1 1 200px' }}>
               <Text strong><ExclamationCircleOutlined style={{ color: '#faad14', marginRight: 8 }} />Réinitialiser le workflow</Text>
-              <div><Text type="secondary">Supprime toutes les transitions et templates actuels, puis recrée les valeurs par défaut.</Text></div>
+              <div><Text type="secondary" style={{ fontSize: 12 }}>Supprime toutes les transitions et templates actuels, puis recrée les valeurs par défaut.</Text></div>
             </div>
             <Button
               danger
@@ -441,6 +441,7 @@ const ChantierWorkflowSettingsPage: React.FC = () => {
           loading={transLoading}
           size="small"
           pagination={false}
+          scroll={{ x: 'max-content' }}
           locale={{ emptyText: <Empty description="Aucune transition configurée — les déplacements sont libres" /> }}
         />
       </Card>
@@ -466,6 +467,7 @@ const ChantierWorkflowSettingsPage: React.FC = () => {
           loading={templLoading}
           size="small"
           pagination={false}
+          scroll={{ x: 'max-content' }}
           locale={{ emptyText: <Empty description="Aucun template — les factures seront créées manuellement" /> }}
         />
       </Card>
@@ -478,13 +480,14 @@ const ChantierWorkflowSettingsPage: React.FC = () => {
         onCancel={() => setTransModalVisible(false)}
         okText={editingTrans ? 'Modifier' : 'Créer'}
         width={560}
+        styles={{ body: { maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' } }}
       >
         <Form form={transForm} layout="vertical">
-          <div style={{ display: 'flex', gap: 12 }}>
-            <Form.Item name="fromStatusId" label="De (statut source)" rules={[{ required: true }]} style={{ flex: 1 }}>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <Form.Item name="fromStatusId" label="De (statut source)" rules={[{ required: true }]} style={{ flex: '1 1 180px', minWidth: 0 }}>
               <Select options={statusOptions} placeholder="Sélectionner..." />
             </Form.Item>
-            <Form.Item name="toStatusId" label="Vers (statut cible)" rules={[{ required: true }]} style={{ flex: 1 }}>
+            <Form.Item name="toStatusId" label="Vers (statut cible)" rules={[{ required: true }]} style={{ flex: '1 1 180px', minWidth: 0 }}>
               <Select options={statusOptions} placeholder="Sélectionner..." />
             </Form.Item>
           </div>
@@ -519,6 +522,7 @@ const ChantierWorkflowSettingsPage: React.FC = () => {
         onCancel={() => setTemplModalVisible(false)}
         okText={editingTempl ? 'Modifier' : 'Créer'}
         width={500}
+        styles={{ body: { maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' } }}
       >
         <Form form={templForm} layout="vertical">
           <Form.Item name="type" label="Type" rules={[{ required: true }]}>
@@ -534,11 +538,11 @@ const ChantierWorkflowSettingsPage: React.FC = () => {
               placeholder="Sélectionner..."
             />
           </Form.Item>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <Form.Item name="percentage" label="Pourcentage" style={{ flex: 1 }}>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <Form.Item name="percentage" label="Pourcentage" style={{ flex: '1 1 120px', minWidth: 0 }}>
               <InputNumber min={0} max={100} suffix="%" style={{ width: '100%' }} />
             </Form.Item>
-            <Form.Item name="fixedAmount" label="Montant fixe" style={{ flex: 1 }}>
+            <Form.Item name="fixedAmount" label="Montant fixe" style={{ flex: '1 1 120px', minWidth: 0 }}>
               <InputNumber min={0} suffix="€" style={{ width: '100%' }} />
             </Form.Item>
           </div>
