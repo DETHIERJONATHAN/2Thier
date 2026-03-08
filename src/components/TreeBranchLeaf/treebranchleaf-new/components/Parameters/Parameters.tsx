@@ -1857,8 +1857,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                 )}
 
                 {/* Bouton Visible pour technicien (revue terrain) */}
-                {selectedNode?.type === 'leaf' && (
-                  <Tooltip title={technicianVisible ? "Visible pour le technicien (actif)" : "Rendre visible pour le technicien"}>
+                <Tooltip title={technicianVisible ? "Visible pour le technicien (actif)" : "Rendre visible pour le technicien"}>
                     <Button
                       type={technicianVisible ? "primary" : "default"}
                       size="small"
@@ -1871,8 +1870,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                     >
                       🔧
                     </Button>
-                  </Tooltip>
-                )}
+                </Tooltip>
               </div>
             </div>
             

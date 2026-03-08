@@ -1792,7 +1792,7 @@ model TreeBranchLeafNode {
   product_options             Json?                       @db.Json
   product_sourceNodeId        String?
   product_visibleFor          Json?                       @db.Json
-  technicianVisible           Boolean                     @default(false)
+  technicianVisible           Boolean                     @default(true)
   ProductDocument             ProductDocument[]
   TreeBranchLeafTree          TreeBranchLeafTree          @relation(fields: [treeId], references: [id], onDelete: Cascade)
   TreeBranchLeafNodeTable     TreeBranchLeafNodeTable[]
