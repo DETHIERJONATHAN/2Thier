@@ -132,6 +132,9 @@ const TBL: React.FC<TBLProps> = ({
   const [reviewComments, setReviewComments] = useState<Record<string, string>>({});
   const [submittingReview, setSubmittingReview] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<{ status: 'validated' | 'to_rectify'; modifiedCount: number; message: string } | null>(null);
+  const [reviewSubcontractAmount, setReviewSubcontractAmount] = useState<string>('');
+  const [reviewHasSubcontractors, setReviewHasSubcontractors] = useState(false);
+  const [reviewSubcontractorNames, setReviewSubcontractorNames] = useState<string[]>([]);
   // 🔍 REVIEW MODE: Snapshot des valeurs originales du devis (capturé au premier chargement)
   const originalFormDataRef = useRef<Record<string, any> | null>(null);
   const [originalFormData, setOriginalFormData] = useState<Record<string, any>>({});
@@ -778,6 +781,10 @@ const TBL: React.FC<TBLProps> = ({
       message.warning('Ajoutez un commentaire pour chaque problème signalé');
       return;
     }
+    if (reviewHasSubcontractors && (!reviewSubcontractAmount || Number(reviewSubcontractAmount) <= 0)) {
+      message.error('Ce chantier a des sous-traitants — Le coût sous-traitant est obligatoire !');
+      return;
+    }
     if (!reviewEventId) {
       message.error('Pas d\'événement lié — Impossible de lancer l\'analyse');
       return;
@@ -796,6 +803,7 @@ const TBL: React.FC<TBLProps> = ({
       const response = await api.post(`/api/chantier-workflow/events/${reviewEventId}/submit-review`, {
         reviews,
         reviewType: 'TECHNICAL',
+        ...(reviewSubcontractAmount ? { subcontractAmount: Number(reviewSubcontractAmount) } : {}),
       });
       const data = response?.data || response;
       const hasProblems = checkedFields.length > 0;
@@ -812,7 +820,7 @@ const TBL: React.FC<TBLProps> = ({
     } finally {
       setSubmittingReview(false);
     }
-  }, [reviewChecked, reviewComments, reviewEventId, rawNodes, formData, api]);
+  }, [reviewChecked, reviewComments, reviewEventId, rawNodes, formData, api, reviewSubcontractAmount, reviewHasSubcontractors]);
 
   // 🔍 REVIEW MODE: Capturer un snapshot des valeurs originales du devis
   // Ce snapshot est pris UNE SEULE FOIS quand formData est chargé en mode review
@@ -828,6 +836,23 @@ const TBL: React.FC<TBLProps> = ({
     setOriginalFormData(snapshot);
     console.log(`📸 [TBL Review] Snapshot valeurs originales capturé: ${meaningfulKeys.length} champs`);
   }, [reviewMode, formData]);
+
+  // 🔍 REVIEW MODE: Charger si le chantier a des sous-traitants
+  useEffect(() => {
+    if (!reviewMode || !reviewEventId) return;
+    (async () => {
+      try {
+        const res = await api.get(`/api/chantier-workflow/events/${reviewEventId}/has-subcontractors`) as any;
+        const data = res?.data || res;
+        if (data?.hasSubcontractors) {
+          setReviewHasSubcontractors(true);
+          setReviewSubcontractorNames((data.subcontractors || []).map((s: any) => s.company || s.name));
+        }
+      } catch (err) {
+        console.warn('[TBL Review] Impossible de vérifier sous-traitants:', err);
+      }
+    })();
+  }, [reviewMode, reviewEventId, api]);
 
   // ⚡ OPTIMISATION: Index O(1) pour résolution des alias sharedRef (remplace boucle O(n²))
   const sharedRefAliasMap = useMemo(() => {
@@ -4353,6 +4378,10 @@ const TBL: React.FC<TBLProps> = ({
                         submittingReview={submittingReview}
                         onSubmitReview={onSubmitReview}
                         originalFormData={originalFormData}
+                        reviewSubcontractAmount={reviewSubcontractAmount}
+                        onReviewSubcontractAmountChange={setReviewSubcontractAmount}
+                        reviewHasSubcontractors={reviewHasSubcontractors}
+                        reviewSubcontractorNames={reviewSubcontractorNames}
                       />
                     </div>
                   )
@@ -5219,6 +5248,10 @@ interface TBLTabContentWithSectionsProps {
   submittingReview?: boolean;
   onSubmitReview?: () => void;
   originalFormData?: Record<string, any>;
+  reviewSubcontractAmount?: string;
+  onReviewSubcontractAmountChange?: (value: string) => void;
+  reviewHasSubcontractors?: boolean;
+  reviewSubcontractorNames?: string[];
 }
 
 const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = React.memo(({
@@ -5249,6 +5282,10 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
   submittingReview = false,
   onSubmitReview,
   originalFormData: originalFormDataProp,
+  reviewSubcontractAmount = '',
+  onReviewSubcontractAmountChange,
+  reviewHasSubcontractors = false,
+  reviewSubcontractorNames = [],
 }) => {
   const stats = useMemo(() => {
     let total = 0;
@@ -5725,23 +5762,59 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
               );
             })()}
           </div>
-          <Button
-            type="primary"
-            size="large"
-            icon={<SearchOutlined />}
-            loading={submittingReview}
-            onClick={onSubmitReview}
-            style={{
-              height: 48,
-              fontSize: 16,
-              fontWeight: 700,
-              borderRadius: 8,
-              background: '#1890ff',
-              minWidth: 160,
-            }}
-          >
-            Analyse
-          </Button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontWeight: 600, whiteSpace: 'nowrap', color: reviewHasSubcontractors ? '#ff4d4f' : undefined }}>
+                  💰 Coût sous-traitant (€){reviewHasSubcontractors ? ' *' : ''} :
+                </Text>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={reviewSubcontractAmount}
+                  onChange={e => onReviewSubcontractAmountChange?.(e.target.value)}
+                  placeholder="0.00"
+                  style={{
+                    width: 140,
+                    height: 40,
+                    padding: '4px 12px',
+                    border: reviewHasSubcontractors && (!reviewSubcontractAmount || Number(reviewSubcontractAmount) <= 0)
+                      ? '2px solid #ff4d4f'
+                      : '1px solid #d9d9d9',
+                    borderRadius: 6,
+                    fontSize: 15,
+                    fontWeight: 600,
+                    outline: 'none',
+                    background: reviewHasSubcontractors && (!reviewSubcontractAmount || Number(reviewSubcontractAmount) <= 0)
+                      ? '#fff2f0' : '#fff',
+                  }}
+                />
+              </div>
+              {reviewHasSubcontractors && (
+                <Text style={{ fontSize: 11, color: '#ff4d4f' }}>
+                  ⚠️ Sous-traitant{reviewSubcontractorNames.length > 1 ? 's' : ''} : {reviewSubcontractorNames.join(', ') || 'assigné(s)'} — montant obligatoire
+                </Text>
+              )}
+            </div>
+            <Button
+              type="primary"
+              size="large"
+              icon={<SearchOutlined />}
+              loading={submittingReview}
+              onClick={onSubmitReview}
+              style={{
+                height: 48,
+                fontSize: 16,
+                fontWeight: 700,
+                borderRadius: 8,
+                background: '#1890ff',
+                minWidth: 160,
+              }}
+            >
+              Analyse
+            </Button>
+          </div>
         </div>
       )}
       <div className="mt-6 text-xs text-gray-400 text-right">

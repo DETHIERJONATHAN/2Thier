@@ -18835,11 +18835,11 @@ router22.get("/events/:id/review-fields", authenticateToken, async (req2, res) =
       },
       orderBy: { order: "asc" }
     });
-    const nodeIds = visibleNodes.map((n) => n.id);
-    const submissionData = nodeIds.length > 0 ? await db.treeBranchLeafSubmissionData.findMany({
+    const nodeIds2 = visibleNodes.map((n) => n.id);
+    const submissionData = nodeIds2.length > 0 ? await db.treeBranchLeafSubmissionData.findMany({
       where: {
         submissionId: submission.id,
-        nodeId: { in: nodeIds }
+        nodeId: { in: nodeIds2 }
       }
     }) : [];
     const valueMap = new Map(submissionData.map((d) => [d.nodeId, d]));
@@ -18876,6 +18876,43 @@ router22.get("/events/:id/review-fields", authenticateToken, async (req2, res) =
     });
   } catch (error) {
     console.error("[ChantierWorkflow] Erreur GET /events/:id/review-fields:", error);
+    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+  }
+});
+router22.get("/events/:id/has-subcontractors", authenticateToken, async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const organizationId = req2.headers["x-organization-id"];
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "ID d'organisation requis" });
+    }
+    const event = await db.chantierEvent.findFirst({
+      where: { id },
+      select: { Chantier: { select: { id: true, organizationId: true } } }
+    });
+    if (!event || event.Chantier.organizationId !== organizationId) {
+      return res.status(404).json({ success: false, message: "\xC9v\xE9nement non trouv\xE9" });
+    }
+    const subcontractorAssignments = await db.chantierAssignment.findMany({
+      where: {
+        chantierId: event.Chantier.id,
+        Technician: { type: "SUBCONTRACTOR" }
+      },
+      include: {
+        Technician: { select: { firstName: true, lastName: true, company: true, billingMode: true } }
+      }
+    });
+    res.json({
+      success: true,
+      hasSubcontractors: subcontractorAssignments.length > 0,
+      subcontractors: subcontractorAssignments.map((a) => ({
+        name: `${a.Technician.firstName} ${a.Technician.lastName}`,
+        company: a.Technician.company,
+        billingMode: a.Technician.billingMode
+      }))
+    });
+  } catch (error) {
+    console.error("[ChantierWorkflow] Erreur GET /events/:id/has-subcontractors:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -18923,8 +18960,21 @@ router22.post("/events/:id/submit-review", authenticateToken, async (req2, res) 
     if (!event || event.Chantier.organizationId !== organizationId) {
       return res.status(404).json({ success: false, message: "\xC9v\xE9nement non trouv\xE9" });
     }
+    const subcontractorCount = await db.chantierAssignment.count({
+      where: {
+        chantierId: event.Chantier.id,
+        Technician: { type: "SUBCONTRACTOR" }
+      }
+    });
+    const hasSubcontractors = subcontractorCount > 0;
+    if (hasSubcontractors && (subcontractAmount === void 0 || subcontractAmount === null || subcontractAmount <= 0)) {
+      return res.status(400).json({
+        success: false,
+        message: "Ce chantier a des sous-traitants assign\xE9s. Le co\xFBt sous-traitant est obligatoire et doit \xEAtre sup\xE9rieur \xE0 0.",
+        requiresSubcontractAmount: true
+      });
+    }
     const submission = event.Chantier.TreeBranchLeafSubmission;
-    const nodeIds = reviews.map((r) => r.nodeId);
     const nodes = submission ? await db.treeBranchLeafNode.findMany({
       where: { id: { in: nodeIds }, treeId: submission.treeId },
       select: { id: true, label: true }
@@ -37283,17 +37333,17 @@ function extractNodeIdsFromCondition(conditionSet) {
   return ids;
 }
 function extractNodeAndCapacityRefsFromCondition(conditionSet) {
-  const nodeIds = /* @__PURE__ */ new Set();
+  const nodeIds2 = /* @__PURE__ */ new Set();
   const capacityRefs = /* @__PURE__ */ new Set();
-  if (!conditionSet || typeof conditionSet !== "object") return { nodeIds, capacityRefs };
+  if (!conditionSet || typeof conditionSet !== "object") return { nodeIds: nodeIds2, capacityRefs };
   const str = JSON.stringify(conditionSet);
   const uuidRegex = /@(?:value|calculated|select)\.([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?)/gi;
   let match;
-  while ((match = uuidRegex.exec(str)) !== null) nodeIds.add(match[1]);
+  while ((match = uuidRegex.exec(str)) !== null) nodeIds2.add(match[1]);
   const nodeRegex = /@(?:value|calculated|select)\.(node_[a-z0-9_-]+(?:-\d+)?)/gi;
-  while ((match = nodeRegex.exec(str)) !== null) nodeIds.add(match[1]);
+  while ((match = nodeRegex.exec(str)) !== null) nodeIds2.add(match[1]);
   const sharedRefRegex = /@(?:value|calculated|select)\.(shared-ref-[a-z0-9-]+(?:-\d+)?)/gi;
-  while ((match = sharedRefRegex.exec(str)) !== null) nodeIds.add(match[1]);
+  while ((match = sharedRefRegex.exec(str)) !== null) nodeIds2.add(match[1]);
   const obj = conditionSet;
   const extractFromActions = (actions) => {
     if (!Array.isArray(actions)) return;
@@ -37303,7 +37353,7 @@ function extractNodeAndCapacityRefsFromCondition(conditionSet) {
           if (typeof nodeId !== "string") continue;
           const normalized = normalizeCapacityRef(nodeId);
           if (normalized.type === "unknown") {
-            nodeIds.add(nodeId);
+            nodeIds2.add(nodeId);
           } else {
             capacityRefs.add(normalized.canonical);
           }
@@ -37320,13 +37370,13 @@ function extractNodeAndCapacityRefsFromCondition(conditionSet) {
     extractFromActions(obj.fallback.actions);
   }
   const genericUuid = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?)/gi;
-  while ((match = genericUuid.exec(str)) !== null) nodeIds.add(match[1]);
+  while ((match = genericUuid.exec(str)) !== null) nodeIds2.add(match[1]);
   const genericNode = /(node_[a-z0-9_-]+(?:-\d+)?)/gi;
-  while ((match = genericNode.exec(str)) !== null) nodeIds.add(match[1]);
+  while ((match = genericNode.exec(str)) !== null) nodeIds2.add(match[1]);
   const genericShared = /(shared-ref-[a-z0-9-]+(?:-\d+)?)/gi;
-  while ((match = genericShared.exec(str)) !== null) nodeIds.add(match[1]);
+  while ((match = genericShared.exec(str)) !== null) nodeIds2.add(match[1]);
   for (const ref of extractCapacityRefsFromString(str)) capacityRefs.add(ref);
-  return { nodeIds, capacityRefs };
+  return { nodeIds: nodeIds2, capacityRefs };
 }
 function extractNodeIdsFromFormula(tokens2) {
   const ids = /* @__PURE__ */ new Set();
@@ -37370,40 +37420,40 @@ function extractNodeIdsFromFormula(tokens2) {
   return ids;
 }
 function extractNodeAndCapacityRefsFromFormula(tokens2) {
-  const nodeIds = /* @__PURE__ */ new Set();
+  const nodeIds2 = /* @__PURE__ */ new Set();
   const capacityRefs = /* @__PURE__ */ new Set();
-  if (!tokens2) return { nodeIds, capacityRefs };
+  if (!tokens2) return { nodeIds: nodeIds2, capacityRefs };
   let tokensArray;
   if (typeof tokens2 === "string") {
     try {
       tokensArray = JSON.parse(tokens2);
     } catch {
-      return { nodeIds, capacityRefs };
+      return { nodeIds: nodeIds2, capacityRefs };
     }
   } else if (Array.isArray(tokens2)) {
     tokensArray = tokens2;
   } else {
-    return { nodeIds, capacityRefs };
+    return { nodeIds: nodeIds2, capacityRefs };
   }
   for (const token of tokensArray) {
     if (!token || typeof token !== "object") continue;
-    if (token.type === "field" && token.fieldId) nodeIds.add(token.fieldId);
-    if (token.type === "nodeValue" && token.nodeId) nodeIds.add(token.nodeId);
+    if (token.type === "field" && token.fieldId) nodeIds2.add(token.fieldId);
+    if (token.type === "nodeValue" && token.nodeId) nodeIds2.add(token.nodeId);
     if (token.ref && typeof token.ref === "string") {
       const m2 = token.ref.match(/@value\.([a-f0-9-]+)/);
-      if (m2) nodeIds.add(m2[1]);
+      if (m2) nodeIds2.add(m2[1]);
     }
   }
   const str = JSON.stringify(tokensArray);
   let m;
   const uuidRegex = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?)/gi;
-  while ((m = uuidRegex.exec(str)) !== null) nodeIds.add(m[1]);
+  while ((m = uuidRegex.exec(str)) !== null) nodeIds2.add(m[1]);
   const nodeRegex = /(node_[a-z0-9_-]+(?:-\d+)?)/gi;
-  while ((m = nodeRegex.exec(str)) !== null) nodeIds.add(m[1]);
+  while ((m = nodeRegex.exec(str)) !== null) nodeIds2.add(m[1]);
   const sharedRegex = /(shared-ref-[a-z0-9-]+(?:-\d+)?)/gi;
-  while ((m = sharedRegex.exec(str)) !== null) nodeIds.add(m[1]);
+  while ((m = sharedRegex.exec(str)) !== null) nodeIds2.add(m[1]);
   for (const ref of extractCapacityRefsFromString(str)) capacityRefs.add(ref);
-  return { nodeIds, capacityRefs };
+  return { nodeIds: nodeIds2, capacityRefs };
 }
 function extractNodeIdsFromTable(tableData) {
   const ids = /* @__PURE__ */ new Set();
@@ -37415,19 +37465,19 @@ function extractNodeIdsFromTable(tableData) {
   return ids;
 }
 function extractNodeAndCapacityRefsFromTable(tableData) {
-  const nodeIds = /* @__PURE__ */ new Set();
+  const nodeIds2 = /* @__PURE__ */ new Set();
   const capacityRefs = /* @__PURE__ */ new Set();
-  if (!tableData || typeof tableData !== "object") return { nodeIds, capacityRefs };
+  if (!tableData || typeof tableData !== "object") return { nodeIds: nodeIds2, capacityRefs };
   const str = JSON.stringify(tableData);
   let match;
   const uuidRegex = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:-\d+)?)/gi;
-  while ((match = uuidRegex.exec(str)) !== null) nodeIds.add(match[1]);
+  while ((match = uuidRegex.exec(str)) !== null) nodeIds2.add(match[1]);
   const nodeRegex = /(node_[a-z0-9_-]+(?:-\d+)?)/gi;
-  while ((match = nodeRegex.exec(str)) !== null) nodeIds.add(match[1]);
+  while ((match = nodeRegex.exec(str)) !== null) nodeIds2.add(match[1]);
   const sharedRefRegex = /(shared-ref-[a-z0-9-]+(?:-\d+)?)/gi;
-  while ((match = sharedRefRegex.exec(str)) !== null) nodeIds.add(match[1]);
+  while ((match = sharedRefRegex.exec(str)) !== null) nodeIds2.add(match[1]);
   for (const ref of extractCapacityRefsFromString(str)) capacityRefs.add(ref);
-  return { nodeIds, capacityRefs };
+  return { nodeIds: nodeIds2, capacityRefs };
 }
 async function gatherNodeIdsRecursively(client, sourceRef, visited = /* @__PURE__ */ new Set()) {
   const aggregated = /* @__PURE__ */ new Set();
@@ -37447,8 +37497,8 @@ async function gatherNodeIdsRecursively(client, sourceRef, visited = /* @__PURE_
       select: { conditionSet: true }
     });
     if (condition) {
-      const { nodeIds, capacityRefs } = extractNodeAndCapacityRefsFromCondition(condition.conditionSet);
-      for (const id of nodeIds) aggregated.add(id);
+      const { nodeIds: nodeIds2, capacityRefs } = extractNodeAndCapacityRefsFromCondition(condition.conditionSet);
+      for (const id of nodeIds2) aggregated.add(id);
       for (const capRef of capacityRefs) {
         const rec = await gatherNodeIdsRecursively(client, capRef, visited);
         for (const id of rec) aggregated.add(id);
@@ -37462,8 +37512,8 @@ async function gatherNodeIdsRecursively(client, sourceRef, visited = /* @__PURE_
       select: { tokens: true }
     });
     if (formula) {
-      const { nodeIds, capacityRefs } = extractNodeAndCapacityRefsFromFormula(formula.tokens);
-      for (const id of nodeIds) aggregated.add(id);
+      const { nodeIds: nodeIds2, capacityRefs } = extractNodeAndCapacityRefsFromFormula(formula.tokens);
+      for (const id of nodeIds2) aggregated.add(id);
       for (const capRef of capacityRefs) {
         const rec = await gatherNodeIdsRecursively(client, capRef, visited);
         for (const id of rec) aggregated.add(id);
@@ -37477,12 +37527,12 @@ async function gatherNodeIdsRecursively(client, sourceRef, visited = /* @__PURE_
       select: { meta: true, tableRows: true, tableColumns: true }
     });
     if (table) {
-      const { nodeIds, capacityRefs } = extractNodeAndCapacityRefsFromTable({
+      const { nodeIds: nodeIds2, capacityRefs } = extractNodeAndCapacityRefsFromTable({
         meta: table.meta,
         rows: table.tableRows,
         columns: table.tableColumns
       });
-      for (const id of nodeIds) aggregated.add(id);
+      for (const id of nodeIds2) aggregated.add(id);
       for (const capRef of capacityRefs) {
         const rec = await gatherNodeIdsRecursively(client, capRef, visited);
         for (const id of rec) aggregated.add(id);
@@ -37506,10 +37556,10 @@ async function addToNodeLinkedField(client, nodeId, field, idsToAdd) {
   }
 }
 async function linkConditionToAllNodes(client, conditionId, conditionSet) {
-  const nodeIds = extractNodeIdsFromCondition(conditionSet);
+  const nodeIds2 = extractNodeIdsFromCondition(conditionSet);
   let successCount = 0;
   let errorCount = 0;
-  for (const nodeId of nodeIds) {
+  for (const nodeId of nodeIds2) {
     try {
       await addToNodeLinkedField(client, nodeId, "linkedConditionIds", [conditionId]);
       successCount++;
@@ -37520,10 +37570,10 @@ async function linkConditionToAllNodes(client, conditionId, conditionSet) {
   }
 }
 async function linkFormulaToAllNodes(client, formulaId, tokens2) {
-  const nodeIds = extractNodeIdsFromFormula(tokens2);
+  const nodeIds2 = extractNodeIdsFromFormula(tokens2);
   let successCount = 0;
   let errorCount = 0;
-  for (const nodeId of nodeIds) {
+  for (const nodeId of nodeIds2) {
     try {
       await addToNodeLinkedField(client, nodeId, "linkedFormulaIds", [formulaId]);
       successCount++;
@@ -37534,10 +37584,10 @@ async function linkFormulaToAllNodes(client, formulaId, tokens2) {
   }
 }
 async function linkTableToAllNodes(client, tableId, tableData) {
-  const nodeIds = extractNodeIdsFromTable(tableData);
+  const nodeIds2 = extractNodeIdsFromTable(tableData);
   let successCount = 0;
   let errorCount = 0;
-  for (const nodeId of nodeIds) {
+  for (const nodeId of nodeIds2) {
     try {
       const node = await client.treeBranchLeafNode.findUnique({
         where: { id: nodeId },
@@ -37557,10 +37607,10 @@ async function linkTableToAllNodes(client, tableId, tableData) {
 }
 async function linkVariableToAllCapacityNodes(client, variableId, sourceRef) {
   try {
-    const nodeIds = await gatherNodeIdsRecursively(client, sourceRef);
+    const nodeIds2 = await gatherNodeIdsRecursively(client, sourceRef);
     let successCount = 0;
     let errorCount = 0;
-    for (const nodeId of nodeIds) {
+    for (const nodeId of nodeIds2) {
       try {
         await addToNodeLinkedField(client, nodeId, "linkedVariableIds", [variableId]);
         successCount++;
@@ -41206,9 +41256,9 @@ function extractNodeIdsFromConditionSet(conditionSet) {
       if (Array.isArray(actions)) {
         for (const a of actions) {
           const aa = a;
-          const nodeIds = aa.nodeIds;
-          if (Array.isArray(nodeIds)) {
-            for (const nid of nodeIds) ids.add(normalizeRefId(nid));
+          const nodeIds2 = aa.nodeIds;
+          if (Array.isArray(nodeIds2)) {
+            for (const nid of nodeIds2) ids.add(normalizeRefId(nid));
           }
         }
       }
@@ -41220,9 +41270,9 @@ function extractNodeIdsFromConditionSet(conditionSet) {
     if (Array.isArray(actions)) {
       for (const a of actions) {
         const aa = a;
-        const nodeIds = aa.nodeIds;
-        if (Array.isArray(nodeIds)) {
-          for (const nid of nodeIds) ids.add(normalizeRefId(nid));
+        const nodeIds2 = aa.nodeIds;
+        if (Array.isArray(nodeIds2)) {
+          for (const nid of nodeIds2) ids.add(normalizeRefId(nid));
         }
       }
     }
@@ -43427,8 +43477,8 @@ async function resolveSharedReferenceAliases(sharedRefs, treeId) {
   }
   return map;
 }
-async function resolveAliasToSharedReferenceId(nodeIds, treeId) {
-  const ids = (nodeIds || []).filter((id) => typeof id === "string" && id.trim());
+async function resolveAliasToSharedReferenceId(nodeIds2, treeId) {
+  const ids = (nodeIds2 || []).filter((id) => typeof id === "string" && id.trim());
   if (!ids.length) return /* @__PURE__ */ new Map();
   const rows = await prisma30.treeBranchLeafNode.findMany({
     where: {
@@ -44252,9 +44302,9 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
         }
       }
       if (allTreeNodeIds.length > 0) {
-        const nodeIds = allTreeNodeIds.map((n) => n.id);
+        const nodeIds2 = allTreeNodeIds.map((n) => n.id);
         const allConditions = await prisma30.treeBranchLeafNodeCondition.findMany({
-          where: { nodeId: { in: nodeIds } },
+          where: { nodeId: { in: nodeIds2 } },
           select: { id: true, nodeId: true, conditionSet: true, name: true }
         });
         if (allConditions.length > 0) {
@@ -45794,9 +45844,9 @@ router60.post("/submissions/preview-evaluate", async (req2, res) => {
       }
     }
     try {
-      const nodeIds = results.map((r) => r.nodeId);
+      const nodeIds2 = results.map((r) => r.nodeId);
       const nodesInfo = await prisma30.treeBranchLeafNode.findMany({
-        where: { id: { in: nodeIds } },
+        where: { id: { in: nodeIds2 } },
         select: { id: true, fieldType: true, type: true }
       });
       const displayFieldIds = new Set(
@@ -47290,9 +47340,9 @@ function extractNodeIdsFromConditionSet2(conditionSet) {
       if (Array.isArray(actions)) {
         for (const a of actions) {
           const aa = a;
-          const nodeIds = aa.nodeIds;
-          if (Array.isArray(nodeIds)) {
-            for (const nid of nodeIds) ids.add(normalizeRefId2(nid));
+          const nodeIds2 = aa.nodeIds;
+          if (Array.isArray(nodeIds2)) {
+            for (const nid of nodeIds2) ids.add(normalizeRefId2(nid));
           }
         }
       }
@@ -47304,9 +47354,9 @@ function extractNodeIdsFromConditionSet2(conditionSet) {
     if (Array.isArray(actions)) {
       for (const a of actions) {
         const aa = a;
-        const nodeIds = aa.nodeIds;
-        if (Array.isArray(nodeIds)) {
-          for (const nid of nodeIds) ids.add(normalizeRefId2(nid));
+        const nodeIds2 = aa.nodeIds;
+        if (Array.isArray(nodeIds2)) {
+          for (const nid of nodeIds2) ids.add(normalizeRefId2(nid));
         }
       }
     }
@@ -47339,8 +47389,8 @@ function extractNodeIdsFromTokens2(tokens2) {
   }
   return ids;
 }
-function buildResolvedRefs(nodeIds, labels, values) {
-  return Array.from(nodeIds).map((nodeId) => ({
+function buildResolvedRefs(nodeIds2, labels, values) {
+  return Array.from(nodeIds2).map((nodeId) => ({
     nodeId,
     label: labels.get(nodeId) ?? null,
     value: values.get(nodeId) ?? null
@@ -47350,11 +47400,11 @@ function resolveActionsLabels(actions, labels) {
   if (!Array.isArray(actions)) return [];
   return actions.map((a) => {
     const aa = a;
-    const nodeIds = Array.isArray(aa.nodeIds) ? aa.nodeIds.map(normalizeRefId2) : [];
+    const nodeIds2 = Array.isArray(aa.nodeIds) ? aa.nodeIds.map(normalizeRefId2) : [];
     return {
       type: aa.type || null,
-      nodeIds,
-      labels: nodeIds.map((nid) => ({ nodeId: nid, label: labels.get(nid) ?? null }))
+      nodeIds: nodeIds2,
+      labels: nodeIds2.map((nid) => ({ nodeId: nid, label: labels.get(nid) ?? null }))
     };
   });
 }
@@ -51175,9 +51225,9 @@ router62.get("/reusables/formulas", async (req2, res) => {
       where: whereFilter,
       orderBy: { createdAt: "desc" }
     });
-    const nodeIds = [...new Set(allFormulas.map((f) => f.nodeId))];
+    const nodeIds2 = [...new Set(allFormulas.map((f) => f.nodeId))];
     const nodes = await prisma32.treeBranchLeafNode.findMany({
-      where: { id: { in: nodeIds } },
+      where: { id: { in: nodeIds2 } },
       select: { id: true, label: true, treeId: true }
     });
     const nodeMap = new Map(nodes.map((n) => [n.id, n]));
@@ -51238,9 +51288,9 @@ router62.get("/reusables/conditions", async (req2, res) => {
       where: whereFilter,
       orderBy: { createdAt: "desc" }
     });
-    const nodeIds = [...new Set(allConditions.map((c) => c.nodeId))];
+    const nodeIds2 = [...new Set(allConditions.map((c) => c.nodeId))];
     const nodes = await prisma32.treeBranchLeafNode.findMany({
-      where: { id: { in: nodeIds } },
+      where: { id: { in: nodeIds2 } },
       select: { id: true, label: true, treeId: true }
     });
     const nodeMap = new Map(nodes.map((n) => [n.id, n]));
@@ -51302,9 +51352,9 @@ router62.get("/reusables/tables", async (req2, res) => {
       where: whereFilter,
       orderBy: { createdAt: "desc" }
     });
-    const nodeIds = [...new Set(allTables.map((t) => t.nodeId))];
+    const nodeIds2 = [...new Set(allTables.map((t) => t.nodeId))];
     const nodes = await prisma32.treeBranchLeafNode.findMany({
-      where: { id: { in: nodeIds } },
+      where: { id: { in: nodeIds2 } },
       select: { id: true, label: true, treeId: true }
     });
     const nodeMap = new Map(nodes.map((n) => [n.id, n]));
@@ -53121,13 +53171,13 @@ router62.post("/evaluate/formula/:formulaId", async (req2, res) => {
 });
 router62.post("/evaluate/batch", async (req2, res) => {
   try {
-    const { requests = [], nodeIds = [], fieldValues = {} } = req2.body;
+    const { requests = [], nodeIds: nodeIds2 = [], fieldValues = {} } = req2.body;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     let finalRequests = [];
     if (Array.isArray(requests) && requests.length > 0) {
       finalRequests = requests;
-    } else if (Array.isArray(nodeIds) && nodeIds.length > 0) {
-      for (const nodeId of nodeIds) {
+    } else if (Array.isArray(nodeIds2) && nodeIds2.length > 0) {
+      for (const nodeId of nodeIds2) {
         const nodeFormulas = await prisma32.treeBranchLeafNodeFormula.findMany({
           where: { nodeId },
           select: { id: true, name: true }
@@ -53662,14 +53712,14 @@ router62.get("/submissions/:id/fields", async (req2, res) => {
       console.warn("[TBL-FIELDS] \u26A0\uFE0F findMany submissionData \xE9chou\xE9:", e instanceof Error ? e.message : String(e));
       dataRows = [];
     }
-    const nodeIds = [...new Set(
+    const nodeIds2 = [...new Set(
       dataRows.map((r) => r?.nodeId).filter((nid) => typeof nid === "string" && nid.length > 0)
     )];
     let nodes = [];
-    if (nodeIds.length > 0) {
+    if (nodeIds2.length > 0) {
       try {
         nodes = await prisma32.treeBranchLeafNode.findMany({
-          where: { id: { in: nodeIds } },
+          where: { id: { in: nodeIds2 } },
           select: { id: true, type: true, label: true, fieldType: true, fieldSubType: true }
         });
       } catch (e) {
@@ -53750,9 +53800,9 @@ router62.get("/submissions/:id", async (req2, res) => {
     const submissionData = await prisma32.treeBranchLeafSubmissionData.findMany({
       where: { submissionId: id }
     });
-    const nodeIds = [...new Set(submissionData.map((d) => d.nodeId))];
-    const nodes = nodeIds.length > 0 ? await prisma32.treeBranchLeafNode.findMany({
-      where: { id: { in: nodeIds } },
+    const nodeIds2 = [...new Set(submissionData.map((d) => d.nodeId))];
+    const nodes = nodeIds2.length > 0 ? await prisma32.treeBranchLeafNode.findMany({
+      where: { id: { in: nodeIds2 } },
       select: { id: true, label: true, type: true, calculatedValue: true }
     }) : [];
     const nodesMap = new Map(nodes.map((n) => [n.id, n]));
@@ -72224,20 +72274,20 @@ router81.post("/upload", async (req2, res) => {
       category = "fiche_technique",
       storageType
     } = req2.body;
-    let nodeIds = [];
+    let nodeIds2 = [];
     if (nodeIdsRaw) {
       if (Array.isArray(nodeIdsRaw)) {
-        nodeIds = nodeIdsRaw;
+        nodeIds2 = nodeIdsRaw;
       } else if (typeof nodeIdsRaw === "string") {
         try {
           const parsed = JSON.parse(nodeIdsRaw);
-          nodeIds = Array.isArray(parsed) ? parsed : [nodeIdsRaw];
+          nodeIds2 = Array.isArray(parsed) ? parsed : [nodeIdsRaw];
         } catch {
-          nodeIds = [nodeIdsRaw];
+          nodeIds2 = [nodeIdsRaw];
         }
       }
     } else if (nodeId) {
-      nodeIds = [nodeId];
+      nodeIds2 = [nodeId];
     }
     let tableRowIds = [];
     if (tableRowIdsRaw) {
@@ -72252,7 +72302,7 @@ router81.post("/upload", async (req2, res) => {
         }
       }
     }
-    if (nodeIds.length === 0 && tableRowIds.length === 0) {
+    if (nodeIds2.length === 0 && tableRowIds.length === 0) {
       return res.status(400).json({ error: "Au moins un nodeId ou tableRowId est requis" });
     }
     const files = req2.files;
@@ -72318,9 +72368,9 @@ router81.post("/upload", async (req2, res) => {
       localPath = `/uploads/product-documents/${organizationId}/${uniqueName}`;
     }
     const documents = [];
-    if (nodeIds.length > 0) {
+    if (nodeIds2.length > 0) {
       const nodes = await db.treeBranchLeafNode.findMany({
-        where: { id: { in: nodeIds } },
+        where: { id: { in: nodeIds2 } },
         select: { id: true, label: true }
       });
       for (const nd of nodes) {
@@ -72414,23 +72464,23 @@ router81.post("/upload-url", async (req2, res) => {
     if (!url) {
       return res.status(400).json({ error: "url est requis" });
     }
-    let nodeIds = [];
+    let nodeIds2 = [];
     if (nodeIdsRaw) {
-      nodeIds = Array.isArray(nodeIdsRaw) ? nodeIdsRaw : JSON.parse(nodeIdsRaw);
+      nodeIds2 = Array.isArray(nodeIdsRaw) ? nodeIdsRaw : JSON.parse(nodeIdsRaw);
     } else if (nodeId) {
-      nodeIds = [nodeId];
+      nodeIds2 = [nodeId];
     }
     let tableRowIds = [];
     if (tableRowIdsRaw) {
       tableRowIds = Array.isArray(tableRowIdsRaw) ? tableRowIdsRaw : JSON.parse(tableRowIdsRaw);
     }
-    if (nodeIds.length === 0 && tableRowIds.length === 0) {
+    if (nodeIds2.length === 0 && tableRowIds.length === 0) {
       return res.status(400).json({ error: "Au moins un nodeId ou tableRowId est requis" });
     }
     const documents = [];
-    if (nodeIds.length > 0) {
+    if (nodeIds2.length > 0) {
       const nodes = await db.treeBranchLeafNode.findMany({
-        where: { id: { in: nodeIds } },
+        where: { id: { in: nodeIds2 } },
         select: { id: true, label: true }
       });
       for (const nd of nodes) {
@@ -72542,9 +72592,9 @@ router81.get("/nodes/with-documents", async (req2, res) => {
       where,
       _count: { id: true }
     });
-    const nodeIds = docs.map((d) => d.nodeId);
+    const nodeIds2 = docs.map((d) => d.nodeId);
     const nodes = await db.treeBranchLeafNode.findMany({
-      where: { id: { in: nodeIds } },
+      where: { id: { in: nodeIds2 } },
       select: { id: true, label: true, parentId: true }
     });
     const result = docs.map((d) => ({
@@ -72596,13 +72646,13 @@ router81.delete("/:id", async (req2, res) => {
 router81.post("/for-devis", async (req2, res) => {
   try {
     const organizationId = getOrgId3(req2);
-    const { nodeIds } = req2.body;
-    if (!Array.isArray(nodeIds) || nodeIds.length === 0) {
+    const { nodeIds: nodeIds2 } = req2.body;
+    if (!Array.isArray(nodeIds2) || nodeIds2.length === 0) {
       return res.json({ documents: [] });
     }
     const documents = await db.productDocument.findMany({
       where: {
-        nodeId: { in: nodeIds },
+        nodeId: { in: nodeIds2 },
         organizationId
       },
       include: {
@@ -73706,11 +73756,11 @@ router85.get("/:nodeId/calculated-value", async (req2, res) => {
 });
 router85.post("/batch-calculated-values", async (req2, res) => {
   try {
-    const { nodeIds, submissionId } = req2.body;
-    if (!Array.isArray(nodeIds) || nodeIds.length === 0) {
+    const { nodeIds: nodeIds2, submissionId } = req2.body;
+    if (!Array.isArray(nodeIds2) || nodeIds2.length === 0) {
       return res.status(400).json({ error: "nodeIds doit \xEAtre un tableau non-vide" });
     }
-    const ids = nodeIds.slice(0, 200);
+    const ids = nodeIds2.slice(0, 200);
     const nodes = await prisma44.treeBranchLeafNode.findMany({
       where: { id: { in: ids } },
       select: {
@@ -73859,9 +73909,9 @@ router86.get("/trees/:treeId/formulas", async (req2, res) => {
       where: { treeId },
       select: { id: true }
     });
-    const nodeIds = nodes.map((n) => n.id);
+    const nodeIds2 = nodes.map((n) => n.id);
     const allFormulas = await db.treeBranchLeafNodeFormula.findMany({
-      where: { nodeId: { in: nodeIds } },
+      where: { nodeId: { in: nodeIds2 } },
       orderBy: { createdAt: "asc" }
     });
     const formulasByNode = {};
@@ -74048,12 +74098,12 @@ router86.get("/trees/:treeId/all", async (req2, res) => {
         }
       }
     });
-    const nodeIds = nodes.map((n) => n.id);
+    const nodeIds2 = nodes.map((n) => n.id);
     const [allFormulas, submission] = await Promise.all([
       // Toutes les formules (en utilisant nodeId: { in: nodeIds })
       db.treeBranchLeafNodeFormula.findMany({
         where: {
-          nodeId: { in: nodeIds }
+          nodeId: { in: nodeIds2 }
         },
         orderBy: { createdAt: "asc" }
       }),
@@ -74226,9 +74276,9 @@ router86.get("/trees/:treeId/conditions", async (req2, res) => {
       where: { treeId },
       select: { id: true, condition_activeId: true, linkedConditionIds: true }
     });
-    const nodeIds = nodes.map((n) => n.id);
+    const nodeIds2 = nodes.map((n) => n.id);
     const allConditions = await db.treeBranchLeafNodeCondition.findMany({
-      where: { nodeId: { in: nodeIds } },
+      where: { nodeId: { in: nodeIds2 } },
       orderBy: { createdAt: "asc" }
     });
     const conditionsByNode = {};
@@ -79414,9 +79464,9 @@ async function recalculateAllCopiedNodesWithOperationInterpreter(prisma51, repea
     errors: []
   };
   try {
-    let nodeIds;
+    let nodeIds2;
     if (precomputedNodeIds && precomputedNodeIds.length > 0) {
-      nodeIds = precomputedNodeIds;
+      nodeIds2 = precomputedNodeIds;
     } else {
       const repeaterChildren = await prisma51.treeBranchLeafNode.findMany({
         where: { parentId: repeaterNodeId },
@@ -79434,12 +79484,12 @@ async function recalculateAllCopiedNodesWithOperationInterpreter(prisma51, repea
         });
         queue.push(...children);
       }
-      nodeIds = allDescendants.filter((node) => node.id.includes(suffixMarker)).map((n) => n.id);
+      nodeIds2 = allDescendants.filter((node) => node.id.includes(suffixMarker)).map((n) => n.id);
     }
-    report.totalNodes = nodeIds.length;
-    if (nodeIds.length === 0) return report;
+    report.totalNodes = nodeIds2.length;
+    if (nodeIds2.length === 0) return report;
     const allNodes = await prisma51.treeBranchLeafNode.findMany({
-      where: { id: { in: nodeIds } },
+      where: { id: { in: nodeIds2 } },
       select: {
         id: true,
         field_label: true,

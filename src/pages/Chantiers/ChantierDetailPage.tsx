@@ -74,12 +74,6 @@ const ChantierDetailPage: React.FC = () => {
   // Mini-agenda : prochains événements
   const [upcomingEvents, setUpcomingEvents] = useState<any[]>([]);
 
-  // Revue technique summary
-  const [reviewSummary, setReviewSummary] = useState<any>(null);
-  const [rejectModalVisible, setRejectModalVisible] = useState(false);
-  const [rejectReason, setRejectReason] = useState('');
-  const [rejecting, setRejecting] = useState(false);
-
   // Réception client
   const [receptionData, setReceptionData] = useState<any>(null);
   const [preparingReception, setPreparingReception] = useState(false);
@@ -99,14 +93,6 @@ const ChantierDetailPage: React.FC = () => {
     } catch { /* silencieux */ }
   }, [api, id]);
 
-  const fetchReviewSummary = useCallback(async () => {
-    if (!id) return;
-    try {
-      const res = await api.get(`/api/chantier-workflow/chantiers/${id}/review-summary`) as any;
-      setReviewSummary(res.data || null);
-    } catch { /* silencieux — pas de review = pas d'affichage */ }
-  }, [api, id]);
-
   const fetchChantier = useCallback(async () => {
     if (!id) return;
     try {
@@ -120,28 +106,6 @@ const ChantierDetailPage: React.FC = () => {
       setLoading(false);
     }
   }, [api, id, message]);
-
-  const handleRejectToLead = useCallback(async () => {
-    if (!id || !rejectReason.trim()) {
-      message.warning('Veuillez indiquer la raison du rejet');
-      return;
-    }
-    setRejecting(true);
-    try {
-      const res = await api.post(`/api/chantier-workflow/chantiers/${id}/reject-to-lead`, {
-        reason: rejectReason.trim(),
-        notifyCommercial: true,
-      }) as any;
-      message.success(res.message || 'Chantier renvoyé au commercial');
-      setRejectModalVisible(false);
-      setRejectReason('');
-      fetchChantier();
-    } catch (err: any) {
-      message.error(err?.message || 'Erreur lors du rejet');
-    } finally {
-      setRejecting(false);
-    }
-  }, [api, id, rejectReason, fetchChantier, message]);
 
   const fetchReception = useCallback(async () => {
     if (!id) return;
@@ -182,9 +146,8 @@ const ChantierDetailPage: React.FC = () => {
   useEffect(() => {
     fetchChantier();
     fetchUpcomingEvents();
-    fetchReviewSummary();
     fetchReception();
-  }, [fetchChantier, fetchUpcomingEvents, fetchReviewSummary, fetchReception]);
+  }, [fetchChantier, fetchUpcomingEvents, fetchReception]);
 
   const startEditing = useCallback(() => {
     if (!chantier) return;
@@ -427,129 +390,6 @@ const ChantierDetailPage: React.FC = () => {
           style={{ marginBottom: 16 }}
         />
       )}
-
-      {/* ── Revue Technique Summary (admin) ── */}
-      {reviewSummary && reviewSummary.summary && reviewSummary.summary.length > 0 && isAdminOrAbove && (
-        <Card
-          size="small"
-          title={<span>📋 Revue Technique</span>}
-          style={{
-            marginBottom: 16,
-            borderLeft: `4px solid ${reviewSummary.hasModifications ? '#fa8c16' : '#52c41a'}`,
-          }}
-          extra={
-            !chantier.isValidated && isAdminOrAbove && reviewSummary.hasModifications ? (
-              <Button size="small" danger onClick={() => setRejectModalVisible(true)}>
-                ↩️ Renvoyer au commercial
-              </Button>
-            ) : null
-          }
-        >
-          {reviewSummary.summary.map((s: any) => (
-            <div key={s.eventId} style={{ marginBottom: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                <Tag color={s.reviewStatus === 'CONFIRMED' ? 'green' : 'orange'}>
-                  {s.eventType === 'VISITE_TECHNIQUE' ? '🔍 Visite technique' : s.eventType === 'CHANTIER' ? '🏗️ Chantier' : '✅ Réception'}
-                </Tag>
-                <Text type="secondary" style={{ fontSize: 11 }}>
-                  {s.eventDate ? dayjs(s.eventDate).format('DD/MM/YYYY') : ''}
-                </Text>
-                {s.subcontractAmount != null && (
-                  <Tag>Sous-trait: {s.subcontractAmount.toLocaleString('fr-BE', { minimumFractionDigits: 2 })} €</Tag>
-                )}
-              </div>
-
-              {/* Tableau comparatif */}
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                  <thead>
-                    <tr style={{ background: '#fafafa' }}>
-                      <th style={{ padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #f0f0f0' }}>Champ</th>
-                      <th style={{ padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #f0f0f0' }}>Devis</th>
-                      <th style={{ padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #f0f0f0' }}>Terrain</th>
-                      <th style={{ padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #f0f0f0' }}>Note</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(s.reviews || []).map((r: any) => (
-                      <tr key={r.nodeId} style={{
-                        background: r.isModified ? '#fffbe6' : '#f6ffed',
-                      }}>
-                        <td style={{ padding: '4px 8px', fontWeight: 600, borderBottom: '1px solid #f0f0f0' }}>
-                          {r.fieldLabel}
-                        </td>
-                        <td style={{
-                          padding: '4px 8px',
-                          textDecoration: r.isModified ? 'line-through' : 'none',
-                          color: r.isModified ? '#8c8c8c' : '#262626',
-                          borderBottom: '1px solid #f0f0f0',
-                        }}>
-                          {r.originalValue || '—'}
-                        </td>
-                        <td style={{
-                          padding: '4px 8px',
-                          color: r.isModified ? '#fa8c16' : '#52c41a',
-                          fontWeight: r.isModified ? 'bold' : 'normal',
-                          borderBottom: '1px solid #f0f0f0',
-                        }}>
-                          {r.isModified ? `🟠 ${r.reviewedValue || '—'}` : `✅ ${r.reviewedValue || r.originalValue || '—'}`}
-                        </td>
-                        <td style={{ padding: '4px 8px', fontStyle: 'italic', color: '#8c8c8c', borderBottom: '1px solid #f0f0f0', maxWidth: 200, wordBreak: 'break-word' }}>
-                          {r.modificationNote || ''}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ))}
-
-          {/* Résumé financier */}
-          {reviewSummary.chantierAmount && (
-            <div style={{ marginTop: 8, padding: '8px 12px', background: '#fafafa', borderRadius: 6 }}>
-              <Text type="secondary">Montant devis: </Text>
-              <Text strong>{reviewSummary.chantierAmount.toLocaleString('fr-BE', { minimumFractionDigits: 2 })} €</Text>
-              {reviewSummary.totalSubcontract > 0 && (
-                <>
-                  <Text type="secondary"> | Sous-traitance totale: </Text>
-                  <Text strong>{reviewSummary.totalSubcontract.toLocaleString('fr-BE', { minimumFractionDigits: 2 })} €</Text>
-                  <Text type="secondary"> | Marge: </Text>
-                  <Text strong style={{ color: (reviewSummary.marginPercent || 0) < 20 ? '#ff4d4f' : '#52c41a' }}>
-                    {reviewSummary.marginAmount?.toLocaleString('fr-BE', { minimumFractionDigits: 2 })} € ({reviewSummary.marginPercent?.toFixed(1)}%)
-                  </Text>
-                </>
-              )}
-            </div>
-          )}
-        </Card>
-      )}
-
-      {/* Modal rejet → retour au lead */}
-      <Modal
-        title="↩️ Renvoyer le chantier au commercial"
-        open={rejectModalVisible}
-        onCancel={() => { setRejectModalVisible(false); setRejectReason(''); }}
-        onOk={handleRejectToLead}
-        okText="Confirmer le rejet"
-        okButtonProps={{ danger: true, loading: rejecting }}
-        cancelText="Annuler"
-        width="95vw"
-        style={{ maxWidth: 500 }}
-      >
-        <Alert
-          type="warning"
-          showIcon
-          message="Le chantier sera déplacé en statut 'Annulé/À revoir' et le lead sera réouvert pour que le commercial puisse corriger le TBL et regénérer un devis."
-          style={{ marginBottom: 12 }}
-        />
-        <Input.TextArea
-          rows={4}
-          value={rejectReason}
-          onChange={e => setRejectReason(e.target.value)}
-          placeholder="Expliquez au commercial ce qui doit être corrigé (raison obligatoire)..."
-        />
-      </Modal>
 
       {/* Section Réception Client (admin) */}
       {isAdminOrAbove && (

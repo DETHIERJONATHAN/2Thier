@@ -1860,6 +1860,52 @@ router.get('/events/:id/review-fields', authenticateToken, async (req, res) => {
 });
 
 /**
+ * GET /api/chantier-workflow/events/:id/has-subcontractors
+ * Vérifie si le chantier lié à cet événement a des sous-traitants assignés
+ */
+router.get('/events/:id/has-subcontractors', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const event = await db.chantierEvent.findFirst({
+      where: { id },
+      select: { Chantier: { select: { id: true, organizationId: true } } },
+    });
+
+    if (!event || event.Chantier.organizationId !== organizationId) {
+      return res.status(404).json({ success: false, message: 'Événement non trouvé' });
+    }
+
+    const subcontractorAssignments = await db.chantierAssignment.findMany({
+      where: {
+        chantierId: event.Chantier.id,
+        Technician: { type: 'SUBCONTRACTOR' },
+      },
+      include: {
+        Technician: { select: { firstName: true, lastName: true, company: true, billingMode: true } },
+      },
+    });
+
+    res.json({
+      success: true,
+      hasSubcontractors: subcontractorAssignments.length > 0,
+      subcontractors: subcontractorAssignments.map(a => ({
+        name: `${a.Technician.firstName} ${a.Technician.lastName}`,
+        company: a.Technician.company,
+        billingMode: a.Technician.billingMode,
+      })),
+    });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur GET /events/:id/has-subcontractors:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+/**
  * POST /api/chantier-workflow/events/:id/submit-review
  * Soumet la revue technique (technicien confirme/modifie les champs)
  * Body: { reviews: [{nodeId, reviewedValue, isModified, modificationNote}], subcontractAmount?: number }
@@ -1917,10 +1963,24 @@ router.post('/events/:id/submit-review', authenticateToken, async (req, res) => 
       return res.status(404).json({ success: false, message: 'Événement non trouvé' });
     }
 
-    const submission = event.Chantier.TreeBranchLeafSubmission;
+    // 🔍 Vérifier si le chantier a des sous-traitants assignés
+    const subcontractorCount = await db.chantierAssignment.count({
+      where: {
+        chantierId: event.Chantier.id,
+        Technician: { type: 'SUBCONTRACTOR' },
+      },
+    });
+    const hasSubcontractors = subcontractorCount > 0;
 
-    // Récupérer les labels des nodes
-    const nodeIds = reviews.map(r => r.nodeId);
+    if (hasSubcontractors && (subcontractAmount === undefined || subcontractAmount === null || subcontractAmount <= 0)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Ce chantier a des sous-traitants assignés. Le coût sous-traitant est obligatoire et doit être supérieur à 0.',
+        requiresSubcontractAmount: true,
+      });
+    }
+
+    const submission = event.Chantier.TreeBranchLeafSubmission;
     const nodes = submission ? await db.treeBranchLeafNode.findMany({
       where: { id: { in: nodeIds }, treeId: submission.treeId },
       select: { id: true, label: true },
