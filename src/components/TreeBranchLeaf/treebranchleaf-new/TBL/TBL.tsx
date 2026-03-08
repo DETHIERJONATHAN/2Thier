@@ -123,7 +123,20 @@ const TBL: React.FC<TBLProps> = ({
   const [searchParams] = useSearchParams();
   const requestedDevisId = searchParams.get('devisId');
   const reviewMode = searchParams.get('mode') === 'review';
+  const reviewEventId = searchParams.get('eventId');
   const { api } = useAuthenticatedApi();
+
+  // 🔍 REVIEW MODE: État centralisé des erreurs signalées + commentaires
+  const [reviewChecked, setReviewChecked] = useState<Record<string, boolean>>({});
+  const [reviewComments, setReviewComments] = useState<Record<string, string>>({});
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const onReviewCheck = useCallback((fieldId: string, checked: boolean) => {
+    setReviewChecked(prev => ({ ...prev, [fieldId]: checked }));
+    if (!checked) setReviewComments(prev => { const n = { ...prev }; delete n[fieldId]; return n; });
+  }, []);
+  const onReviewComment = useCallback((fieldId: string, comment: string) => {
+    setReviewComments(prev => ({ ...prev, [fieldId]: comment }));
+  }, []);
   const screens = useBreakpoint();
   const isMobile = !screens.lg;
   const isTablet = !screens.xl && screens.lg;
@@ -4269,6 +4282,10 @@ const TBL: React.FC<TBLProps> = ({
                         onSubTabChange={isMobile ? (subTabKey) => handleSwipeSubTabChange(tab.id, subTabKey) : undefined}
                         onSubTabsComputed={isMobile ? (subTabs) => handleSubTabsComputed(tab.id, subTabs) : undefined}
                         reviewMode={reviewMode}
+                        reviewChecked={reviewChecked}
+                        reviewComments={reviewComments}
+                        onReviewCheck={onReviewCheck}
+                        onReviewComment={onReviewComment}
                       />
                     </div>
                   )
@@ -5088,6 +5105,10 @@ interface TBLTabContentWithSectionsProps {
   onSubTabChange?: (subTabKey: string | undefined) => void;
   onSubTabsComputed?: (subTabs: { key: string; label: string }[]) => void;
   reviewMode?: boolean;
+  reviewChecked?: Record<string, boolean>;
+  reviewComments?: Record<string, string>;
+  onReviewCheck?: (fieldId: string, checked: boolean) => void;
+  onReviewComment?: (fieldId: string, comment: string) => void;
 }
 
 const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = React.memo(({
@@ -5110,7 +5131,11 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
   controlledActiveSubTab,
   onSubTabChange,
   onSubTabsComputed,
-  reviewMode = false
+  reviewMode = false,
+  reviewChecked,
+  reviewComments,
+  onReviewCheck,
+  onReviewComment,
 }) => {
   const stats = useMemo(() => {
     let total = 0;
@@ -5442,6 +5467,10 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
               activeSubTab={activeSubTab}
               allSubTabs={allSubTabs}
               reviewMode={reviewMode}
+              reviewChecked={reviewChecked}
+              reviewComments={reviewComments}
+              onReviewCheck={onReviewCheck}
+              onReviewComment={onReviewComment}
             />
           ))}
         </div>
@@ -5523,6 +5552,10 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
             activeSubTab={activeSubTab}
             allSubTabs={allSubTabs}
             reviewMode={reviewMode}
+            reviewChecked={reviewChecked}
+            reviewComments={reviewComments}
+            onReviewCheck={onReviewCheck}
+            onReviewComment={onReviewComment}
           />
         </div>
       );
@@ -5536,8 +5569,8 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
         <div style={{
           padding: '10px 16px',
           marginBottom: 12,
-          background: 'linear-gradient(135deg, #e6f7ff 0%, #f0f5ff 100%)',
-          border: '1px solid #91d5ff',
+          background: 'linear-gradient(135deg, #fff7e6 0%, #fffbe6 100%)',
+          border: '1px solid #ffd591',
           borderRadius: 8,
           display: 'flex',
           alignItems: 'center',
@@ -5545,15 +5578,94 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
         }}>
           <span style={{ fontSize: 20 }}>🔍</span>
           <div>
-            <div style={{ fontWeight: 600, color: '#1890ff', fontSize: 14 }}>Mode Revue Technique</div>
+            <div style={{ fontWeight: 600, color: '#fa8c16', fontSize: 14 }}>Mode Revue Technique</div>
             <div style={{ fontSize: 12, color: '#595959' }}>
-              Les champs encadrés en <span style={{ color: '#1890ff', fontWeight: 600 }}>bleu</span> doivent être vérifiés sur le terrain.
-              Cochez chaque champ une fois validé.
+              Tous les champs sont <strong>OK par défaut</strong>. Cochez <strong>uniquement</strong> ceux qui posent problème et ajoutez un commentaire.
             </div>
           </div>
         </div>
       )}
       {renderContent()}
+      {reviewMode && (
+        <div style={{
+          marginTop: 24,
+          padding: '16px 20px',
+          background: '#fafafa',
+          borderRadius: 8,
+          border: '1px solid #d9d9d9',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 12,
+        }}>
+          <div>
+            {(() => {
+              const errorCount = Object.values(reviewChecked).filter(Boolean).length;
+              return errorCount > 0 ? (
+                <Text style={{ color: '#ff4d4f', fontWeight: 600 }}>
+                  ⚠️ {errorCount} problème{errorCount > 1 ? 's' : ''} signalé{errorCount > 1 ? 's' : ''}
+                </Text>
+              ) : (
+                <Text style={{ color: '#52c41a', fontWeight: 600 }}>
+                  ✅ Aucun problème — Tout est conforme
+                </Text>
+              );
+            })()}
+          </div>
+          <Button
+            type="primary"
+            size="large"
+            icon={<SendOutlined />}
+            loading={submittingReview}
+            onClick={async () => {
+              // Vérifier que chaque champ coché a un commentaire
+              const checkedFields = Object.entries(reviewChecked).filter(([, v]) => v);
+              const missingComments = checkedFields.filter(([id]) => !reviewComments[id]?.trim());
+              if (missingComments.length > 0) {
+                message.warning('Ajoutez un commentaire pour chaque problème signalé');
+                return;
+              }
+              if (!reviewEventId) {
+                message.error('Pas d\'événement lié — Impossible d\'envoyer la revue');
+                return;
+              }
+              setSubmittingReview(true);
+              try {
+                // Construire les reviews à partir du techVisibleSet
+                // Tous les champs technicianVisible sont envoyés : non-cochés = confirmés, cochés = modifiés
+                const allTechNodes = (rawNodes || []).filter((n: any) => n.technicianVisible === true);
+                const reviews = allTechNodes.map((node: any) => ({
+                  nodeId: node.id,
+                  reviewedValue: formData[node.id] != null ? String(formData[node.id]) : null,
+                  isModified: reviewChecked[node.id] === true,
+                  modificationNote: reviewChecked[node.id] ? (reviewComments[node.id] || null) : null,
+                }));
+                await api.post(`/api/chantier-workflow/events/${reviewEventId}/submit-review`, {
+                  reviews,
+                  reviewType: 'TECHNICAL',
+                });
+                message.success('Revue technique envoyée avec succès !');
+                // Retour à la page chantier
+                window.history.back();
+              } catch (err: any) {
+                console.error('[TBL Review] Erreur submit:', err);
+                message.error(err?.message || 'Erreur lors de l\'envoi de la revue');
+              } finally {
+                setSubmittingReview(false);
+              }
+            }}
+            style={{
+              height: 44,
+              fontSize: 15,
+              fontWeight: 600,
+              borderRadius: 8,
+            }}
+          >
+            Envoyer la revue technique
+          </Button>
+        </div>
+      )}
       <div className="mt-6 text-xs text-gray-400 text-right">
         {stats.completed}/{stats.required} requis complétés
       </div>

@@ -29,6 +29,7 @@ import {
   Form,
   Tooltip,
   Checkbox,
+  Input,
 } from 'antd';
 import { 
   BranchesOutlined,
@@ -1013,6 +1014,10 @@ interface TBLSectionRendererProps {
   activeSubTab?: string; // 🔧 FIX: Sous-onglet actif pour filtrer les champs conditionnels
   allSubTabs?: Array<{ key: string; label: string }>; // 🔧 FIX: Liste des sous-onglets reconnus pour filtrage cohérent
   reviewMode?: boolean; // 🔍 Mode revue technique: affiche checkboxes sur les champs technicianVisible
+  reviewChecked?: Record<string, boolean>;
+  reviewComments?: Record<string, string>;
+  onReviewCheck?: (fieldId: string, checked: boolean) => void;
+  onReviewComment?: (fieldId: string, comment: string) => void;
 }
 
 const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
@@ -1030,6 +1035,10 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   activeSubTab,
   allSubTabs = [],
   reviewMode = false,
+  reviewChecked: reviewCheckedProp,
+  reviewComments: reviewCommentsProp,
+  onReviewCheck,
+  onReviewComment,
 }) => {
   // ✅ CRITIQUE: Stabiliser l'API pour éviter les re-rendus à chaque frappe
   const apiHook = useAuthenticatedApi();
@@ -1052,7 +1061,10 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         .map((n: any) => n.id)
     );
   }, [reviewMode, allNodes]);
-  const [reviewChecked, setReviewChecked] = useState<Record<string, boolean>>({});
+  // Use passed review state from TBL if available, otherwise local fallback
+  const [localReviewChecked, setLocalReviewChecked] = useState<Record<string, boolean>>({});
+  const reviewChecked = reviewCheckedProp || localReviewChecked;
+  const reviewComments = reviewCommentsProp || {};
 
   const resolveEventTreeId = useCallback(() => {
     if (treeId && String(treeId).length > 0) {
@@ -6016,28 +6028,46 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                       {/* � REVIEW MODE: Cocher uniquement si erreur/problème */}
                       {isTechField && (
                         <div style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 6,
                           marginBottom: 4,
-                          padding: '2px 0',
+                          padding: '4px 0',
                         }}>
-                          <Checkbox
-                            checked={isFieldChecked}
-                            onChange={e => setReviewChecked(prev => ({ ...prev, [field.id]: e.target.checked }))}
-                            style={{ transform: 'scale(1.15)' }}
-                          />
-                          <Text style={{
-                            fontSize: 11,
-                            color: isFieldChecked ? '#ff4d4f' : '#8c8c8c',
-                            fontWeight: isFieldChecked ? 600 : 400,
-                          }}>
-                            {isFieldChecked ? (
-                              <><span style={{ color: '#ff4d4f' }}>⚠️ Problème signalé</span></>
-                            ) : (
-                              '✓ OK'
-                            )}
-                          </Text>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <Checkbox
+                              checked={isFieldChecked}
+                              onChange={e => {
+                                if (onReviewCheck) onReviewCheck(field.id, e.target.checked);
+                                else setLocalReviewChecked(prev => ({ ...prev, [field.id]: e.target.checked }));
+                              }}
+                              style={{ transform: 'scale(1.15)' }}
+                            />
+                            <Text style={{
+                              fontSize: 11,
+                              color: isFieldChecked ? '#ff4d4f' : '#8c8c8c',
+                              fontWeight: isFieldChecked ? 600 : 400,
+                            }}>
+                              {isFieldChecked ? (
+                                <span style={{ color: '#ff4d4f' }}>⚠️ Problème signalé</span>
+                              ) : (
+                                '✓ OK'
+                              )}
+                            </Text>
+                          </div>
+                          {isFieldChecked && (
+                            <Input.TextArea
+                              placeholder="Décrivez le problème..."
+                              value={reviewComments[field.id] || ''}
+                              onChange={e => {
+                                if (onReviewComment) onReviewComment(field.id, e.target.value);
+                              }}
+                              autoSize={{ minRows: 1, maxRows: 3 }}
+                              style={{
+                                marginTop: 4,
+                                fontSize: 12,
+                                borderColor: '#ff4d4f',
+                                background: '#fff2f0',
+                              }}
+                            />
+                          )}
                         </div>
                       )}
                       {/* Contrôles de copies: on garde seulement ➕ (sur le dernier champ du groupe) et un bouton 🗑️ pour supprimer TOUTE la copie (sur le dernier champ du groupe) */}
@@ -6164,6 +6194,10 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                     parentConditions={parentConditions}
                     submissionId={submissionId}
                     reviewMode={reviewMode}
+                    reviewChecked={reviewCheckedProp}
+                    reviewComments={reviewCommentsProp}
+                    onReviewCheck={onReviewCheck}
+                    onReviewComment={onReviewComment}
                   />
                 ))}
               </>
@@ -6195,6 +6229,10 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                       parentConditions={parentConditions}
                       submissionId={submissionId}
                       reviewMode={reviewMode}
+                      reviewChecked={reviewCheckedProp}
+                      reviewComments={reviewCommentsProp}
+                      onReviewCheck={onReviewCheck}
+                      onReviewComment={onReviewComment}
                     />
                   </Panel>
                 ))}

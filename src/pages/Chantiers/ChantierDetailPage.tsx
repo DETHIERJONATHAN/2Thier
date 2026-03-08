@@ -284,8 +284,16 @@ const ChantierDetailPage: React.FC = () => {
   const statusName = chantier.ChantierStatus?.name || 'Non défini';
 
   // URL TBL avec le devisId lié — mode=review pour la version technique
+  // Trouver le dernier événement pertinent (VISITE_TECHNIQUE ou CHANTIER non complété) pour lier la revue
+  const reviewEventId = (() => {
+    if (!upcomingEvents?.length) return null;
+    const relevant = upcomingEvents.find((e: any) =>
+      ['VISITE_TECHNIQUE', 'CHANTIER'].includes(e.type) && e.status !== 'COMPLETED'
+    );
+    return relevant?.id || upcomingEvents[0]?.id || null;
+  })();
   const tblUrl = chantier.leadId
-    ? `/tbl/${chantier.leadId}${chantier.submissionId ? `?devisId=${chantier.submissionId}&mode=review` : '?mode=review'}`
+    ? `/tbl/${chantier.leadId}${chantier.submissionId ? `?devisId=${chantier.submissionId}&mode=review` : '?mode=review'}${reviewEventId ? `&eventId=${reviewEventId}` : ''}`
     : null;
 
   // Données du devis lié (GeneratedDocument + dataSnapshot)
