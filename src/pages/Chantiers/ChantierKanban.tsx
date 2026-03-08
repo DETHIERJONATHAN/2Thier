@@ -1182,6 +1182,37 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
         {/* ─── Date filter panel (fixed overlay) ─── */}
         {dateDropdownOpen && (
           <>
+            {/* CSS pour forcer le calendrier en colonne sur mobile */}
+            <style>{`
+              .kanban-range-popup .ant-picker-panels {
+                flex-direction: column !important;
+              }
+              .kanban-range-popup .ant-picker-panel-container {
+                max-width: calc(100vw - 16px) !important;
+                overflow-x: auto !important;
+              }
+              .kanban-range-popup {
+                max-width: calc(100vw - 8px) !important;
+                inset: auto !important;
+                left: 4px !important;
+                right: 4px !important;
+                top: 50% !important;
+                transform: translateY(-50%) !important;
+                position: fixed !important;
+              }
+              @media (min-width: 600px) {
+                .kanban-range-popup .ant-picker-panels {
+                  flex-direction: row !important;
+                }
+                .kanban-range-popup {
+                  position: absolute !important;
+                  transform: none !important;
+                  top: auto !important;
+                  left: auto !important;
+                  right: auto !important;
+                }
+              }
+            `}</style>
             {/* Backdrop */}
             <div
               onClick={() => setDateDropdownOpen(false)}
@@ -1190,33 +1221,34 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
             {/* Panel */}
             <div style={{
               position: 'fixed',
-              top: '50%',
+              top: 12,
               left: '50%',
-              transform: 'translate(-50%, -50%)',
+              transform: 'translateX(-50%)',
               zIndex: 1001,
               background: '#fff',
               borderRadius: 12,
               boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
               padding: 16,
-              width: 'min(calc(100vw - 32px), 340px)',
-              maxHeight: 'calc(100vh - 80px)',
+              width: 'min(calc(100vw - 24px), 340px)',
+              maxHeight: 'calc(100vh - 24px)',
               overflowY: 'auto',
+              overflowX: 'hidden',
             }}>
               {/* Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                 <span style={{ fontSize: 14, fontWeight: 600, color: '#262626' }}>📅 Filtre par date</span>
                 <Button icon={<CloseOutlined />} size="small" type="text" onClick={() => setDateDropdownOpen(false)} style={{ color: '#8c8c8c' }} />
               </div>
 
               {/* Sélecteur du type de date */}
-              <div style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sur quelle date ?</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sur quelle date ?</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>
                 {DATE_FIELDS.map(df => (
                   <button
                     key={df.key}
                     onClick={() => setDateField(df.key)}
                     style={{
-                      padding: '4px 10px',
+                      padding: '3px 8px',
                       borderRadius: 12,
                       border: dateField === df.key ? `2px solid ${df.color}` : '1px solid #e8e8e8',
                       background: dateField === df.key ? `${df.color}12` : '#fafafa',
@@ -1234,15 +1266,15 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
               </div>
 
               {/* Présets de période */}
-              <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 10, marginBottom: 10 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Période</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 8, marginBottom: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Période</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                   {DATE_PRESETS.map(preset => (
                     <button
                       key={preset.key}
                       onClick={() => { handlePresetClick(preset.key); setDateDropdownOpen(false); }}
                       style={{
-                        padding: '5px 12px',
+                        padding: '4px 10px',
                         borderRadius: 14,
                         border: activePreset === preset.key ? '2px solid #1677ff' : '1px solid #d9d9d9',
                         background: activePreset === preset.key ? '#e6f4ff' : '#fff',
@@ -1261,7 +1293,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
               </div>
 
               {/* Plage personnalisée */}
-              <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 10 }}>
+              <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 8 }}>
                 <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 4 }}>Plage personnalisée</div>
                 <RangePicker
                   size="small"
@@ -1271,13 +1303,15 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                   style={{ width: '100%' }}
                   allowClear
                   placeholder={['Début', 'Fin']}
-                  getPopupContainer={(trigger) => trigger.parentElement || document.body}
+                  popupClassName="kanban-range-popup"
+                  popupStyle={{ zIndex: 1100 }}
+                  getPopupContainer={() => document.body}
                 />
               </div>
 
               {/* Résumé actif + effacer */}
               {(dateField !== 'createdAt' || dateRange) && (
-                <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 10, marginTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 8, marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: 11, color: '#595959' }}>
                     {DATE_FIELDS.find(f => f.key === dateField)?.icon} {DATE_FIELDS.find(f => f.key === dateField)?.label}
                     {dateRange && <>: {dateRange[0].format('DD MMM')} → {dateRange[1].format('DD MMM YYYY')}</>}
