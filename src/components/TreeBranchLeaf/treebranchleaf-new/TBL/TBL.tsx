@@ -5542,89 +5542,88 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
       );
     }
     // When no explicit sections, build a synthetic one and respect subTabs
-      const synthetic: TBLSection = {
-        id: '__synthetic__',
-        title: 'Champs',
-        name: 'Champs',
-        fields: fields,
-        subsections: []
-      } as unknown as TBLSection;
-      const explicitTabSubTabs = Array.isArray(tabSubTabs) && tabSubTabs.length > 0;
-      const showSubTabs = explicitTabSubTabs || visibleSubTabs.length > 1;
+    const synthetic: TBLSection = {
+      id: '__synthetic__',
+      title: 'Champs',
+      name: 'Champs',
+      fields: fields,
+      subsections: []
+    } as unknown as TBLSection;
+    const explicitTabSubTabs = Array.isArray(tabSubTabs) && tabSubTabs.length > 0;
+    const showSubTabs = explicitTabSubTabs || visibleSubTabs.length > 1;
+    
+    // 🔧 FIX: Créer un Set des sous-onglets reconnus pour vérification rapide
+    const recognizedSubTabKeys = new Set(allSubTabs.map(st => st.key));
+    
+    const filteredSyntheticFields = synthetic.fields.filter(f => {
+      const meta = (f as any).metadata || {};
+      const fieldAlwaysVisible = (meta.displayAlways === true || String(meta.displayAlways) === 'true');
+      if (!activeSubTab) return true;
+      if (fieldAlwaysVisible) return true;
+      const assignedTabs = getFieldSubTabs(f);
       
-      // 🔧 FIX: Créer un Set des sous-onglets reconnus pour vérification rapide
-      const recognizedSubTabKeys = new Set(allSubTabs.map(st => st.key));
+      // Champ sans sous-onglet assigné → afficher dans "Général" (__default__)
+      if (assignedTabs.length === 0) {
+        return activeSubTab === '__default__';
+      }
       
-      const filteredSyntheticFields = synthetic.fields.filter(f => {
-        const meta = (f as any).metadata || {};
-        const fieldAlwaysVisible = (meta.displayAlways === true || String(meta.displayAlways) === 'true');
-        if (!activeSubTab) return true;
-        if (fieldAlwaysVisible) return true;
-        const assignedTabs = getFieldSubTabs(f);
-        
-        // Champ sans sous-onglet assigné → afficher dans "Général" (__default__)
-        if (assignedTabs.length === 0) {
-          return activeSubTab === '__default__';
-        }
-        
-        // 🔧 FIX CRITIQUE: Si le champ a un sous-onglet qui n'est PAS reconnu,
-        // traiter ce champ comme s'il n'avait pas de sous-onglet = afficher dans "Général"
-        const hasRecognizedSubTab = assignedTabs.some(tab => recognizedSubTabKeys.has(tab));
-        if (!hasRecognizedSubTab) {
-          return activeSubTab === '__default__';
-        }
-        
-        return assignedTabs.includes(activeSubTab);
-      });
-      const filteredSynthetic: TBLSection = { ...synthetic, fields: filteredSyntheticFields };
-      return (
-        <div>
-          {showSubTabs && (
-            <div style={{ 
-              display: 'flex', 
-              gap: 8, 
-              marginBottom: 8,
-              overflowX: 'auto',
-              overflowY: 'hidden',
-              WebkitOverflowScrolling: 'touch',
-              scrollbarWidth: 'none',
-              msOverflowStyle: 'none',
-              paddingBottom: 4
-            }} className="hide-scrollbar">
-              {(visibleSubTabs || []).map(st => (
-                <Button
-                  key={st.key}
-                  size="small"
-                  type={st.key === activeSubTab ? 'primary' : 'default'}
-                  onClick={() => setActiveSubTab(st.key)}
-                  style={{ flexShrink: 0 }}
-                >
-                  {st.label}
-                </Button>
-              ))}
-            </div>
-          )}
-          <TBLSectionRenderer
-            section={filteredSynthetic}
-            formData={formData}
-            onChange={stableOnChange}
-            treeId={treeId}
-            allNodes={rawNodes}
-            allSections={sections}
-            disabled={disabled}
-            submissionId={submissionId}
-            activeSubTab={activeSubTab}
-            allSubTabs={allSubTabs}
-            reviewMode={reviewMode}
-            reviewChecked={reviewChecked}
-            reviewComments={reviewComments}
-            onReviewCheck={onReviewCheck}
-            onReviewComment={onReviewComment}
-            originalFormData={originalFormDataProp}
-          />
-        </div>
-      );
-    return <div className="text-sm text-gray-400">Aucun champ.</div>;
+      // 🔧 FIX CRITIQUE: Si le champ a un sous-onglet qui n'est PAS reconnu,
+      // traiter ce champ comme s'il n'avait pas de sous-onglet = afficher dans "Général"
+      const hasRecognizedSubTab = assignedTabs.some(tab => recognizedSubTabKeys.has(tab));
+      if (!hasRecognizedSubTab) {
+        return activeSubTab === '__default__';
+      }
+      
+      return assignedTabs.includes(activeSubTab);
+    });
+    const filteredSynthetic: TBLSection = { ...synthetic, fields: filteredSyntheticFields };
+    return (
+      <div>
+        {showSubTabs && (
+          <div style={{ 
+            display: 'flex', 
+            gap: 8, 
+            marginBottom: 8,
+            overflowX: 'auto',
+            overflowY: 'hidden',
+            WebkitOverflowScrolling: 'touch',
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+            paddingBottom: 4
+          }} className="hide-scrollbar">
+            {(visibleSubTabs || []).map(st => (
+              <Button
+                key={st.key}
+                size="small"
+                type={st.key === activeSubTab ? 'primary' : 'default'}
+                onClick={() => setActiveSubTab(st.key)}
+                style={{ flexShrink: 0 }}
+              >
+                {st.label}
+              </Button>
+            ))}
+          </div>
+        )}
+        <TBLSectionRenderer
+          section={filteredSynthetic}
+          formData={formData}
+          onChange={stableOnChange}
+          treeId={treeId}
+          allNodes={rawNodes}
+          allSections={sections}
+          disabled={disabled}
+          submissionId={submissionId}
+          activeSubTab={activeSubTab}
+          allSubTabs={allSubTabs}
+          reviewMode={reviewMode}
+          reviewChecked={reviewChecked}
+          reviewComments={reviewComments}
+          onReviewCheck={onReviewCheck}
+          onReviewComment={onReviewComment}
+          originalFormData={originalFormDataProp}
+        />
+      </div>
+    );
   };
 
   return (
