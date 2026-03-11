@@ -1,4 +1,4 @@
-import { Router, Request, Response } from "express";
+import { Router, Request, Response, NextFunction } from "express";
 import { authMiddleware, AuthenticatedRequest } from "../middlewares/auth";
 import { impersonationMiddleware } from "../middlewares/impersonation";
 import { requireRole } from "../middlewares/requireRole";
@@ -12,14 +12,23 @@ import { GoogleWorkspaceIntegrationService } from "../services/GoogleWorkspaceIn
 
 const router = Router();
 
-router.use(authMiddleware, impersonationMiddleware);
+// Routes publiques (/verify, /accept) : pas d'auth requise
+// Toutes les autres routes : auth + impersonation obligatoires
+const publicPaths = ['/verify', '/accept'];
+router.use((req: Request, res: Response, next: NextFunction) => {
+    if (publicPaths.includes(req.path)) return next();
+    authMiddleware(req as AuthenticatedRequest, res, (err?: any) => {
+        if (err) return next(err);
+        impersonationMiddleware(req as AuthenticatedRequest, res, next);
+    });
+});
 
 // Schéma de validation pour la création d'invitation
 const createInvitationSchema = z.object({
   email: z.string().email("L'adresse e-mail est invalide."),
   roleName: z.string().min(1, "Le nom du rôle est requis."),
-  organizationId: z.string().uuid("L'ID de l'organisation est requis et doit être un UUID valide."),
-  createWorkspaceAccount: z.boolean().optional().default(false), // ✅ NOUVEAU
+  organizationId: z.string().min(1, "L'ID de l'organisation est requis."),
+  createWorkspaceAccount: z.boolean().optional().default(false),
 });
 
 // Route pour créer une nouvelle invitation
@@ -80,16 +89,18 @@ router.post('/', authMiddleware, requireRole(['admin', 'super_admin']), async (r
 
     // IMPORTANT: Utiliser les noms de relations EXACTS définis dans Prisma (voir schema.prisma)
     const invitationData: Prisma.InvitationCreateInput = {
+      id: uuidv4(),
       email,
       token,
       expiresAt,
+      updatedAt: new Date(),
       Organization: { connect: { id: organizationId } },
       Role: { connect: { id: role.id } },
       // Relation "Invitation_invitedByIdToUser" côté Invitation est exposée comme
       // User_Invitation_invitedByIdToUser dans le client Prisma
       User_Invitation_invitedByIdToUser: { connect: { id: inviterId } },
       status: 'PENDING',
-      createWorkspaceAccount: createWorkspaceAccount || false, // ✅ NOUVEAU
+      createWorkspaceAccount: createWorkspaceAccount || false,
     };
 
     // Si un utilisateur existe (quel que soit son statut ou ses organisations), on lie l'invitation
@@ -114,6 +125,8 @@ router.post('/', authMiddleware, requireRole(['admin', 'super_admin']), async (r
         isExistingUser: !!targetUser,
         organizationName: newInvitation.Organization.name,
         roleName: newInvitation.Role.label || newInvitation.Role.name,
+        inviterId: inviterId,
+        organizationId: organizationId,
       });
     } catch (emailError) {
         console.error("Échec de l'envoi de l'e-mail d'invitation:", emailError);
@@ -352,10 +365,12 @@ router.post('/accept', async (req: Request, res: Response): Promise<void> => {
                 // Ajouter l'utilisateur à la nouvelle organisation
                 await tx.userOrganization.create({
                     data: {
+                        id: uuidv4(),
                         userId: user.id,
                         organizationId: invitation.organizationId,
                         roleId: invitation.roleId,
-                        status: 'ACTIVE'
+                        status: 'ACTIVE',
+                        updatedAt: new Date(),
                     }
                 });
 
@@ -438,6 +453,7 @@ router.post('/accept', async (req: Request, res: Response): Promise<void> => {
         const newUser = await prisma.$transaction(async (tx) => {
             const createdUser = await tx.user.create({
                 data: {
+                    id: uuidv4(),
                     firstName: firstName,
                     lastName: lastName,
                     email: invitation.email,
@@ -445,15 +461,18 @@ router.post('/accept', async (req: Request, res: Response): Promise<void> => {
                     status: 'active',
                     role: 'user',
                     organizationId: invitation.organizationId,
-                    commercialSlug: commercialSlug,  // 🎯 Slug commercial automatique
+                    commercialSlug: commercialSlug,
+                    updatedAt: new Date(),
                 }
             });
 
             await tx.userOrganization.create({
                 data: {
+                    id: uuidv4(),
                     userId: createdUser.id,
                     organizationId: invitation.organizationId,
                     roleId: invitation.roleId,
+                    updatedAt: new Date(),
                 }
             });
 
@@ -576,21 +595,24 @@ router.post('/:id/force-accept', requireRole(['super_admin']), async (req: Authe
         const newUser = await prisma.$transaction(async (tx) => {
             const createdUser = await tx.user.create({
                 data: {
+                    id: uuidv4(),
                     email: invitation.email,
                     passwordHash: passwordHash,
                     status: 'active',
-                    role: 'user', // Rôle global par défaut
-                    // Le prénom/nom peuvent être vides, l'utilisateur les mettra à jour
+                    role: 'user',
+                    updatedAt: new Date(),
                 }
             });
 
             if (invitation.organizationId) {
                 await tx.userOrganization.create({
                     data: {
+                        id: uuidv4(),
                         userId: createdUser.id,
                         organizationId: invitation.organizationId,
                         roleId: invitation.roleId,
-                        status: 'ACTIVE'
+                        status: 'ACTIVE',
+                        updatedAt: new Date(),
                     }
                 });
             }

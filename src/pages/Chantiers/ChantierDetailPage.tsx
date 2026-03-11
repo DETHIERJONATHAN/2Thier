@@ -50,9 +50,13 @@ const ChantierDetailPage: React.FC = () => {
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, [apiHook.api]);
   const { statuses: chantierStatuses } = useChantierStatuses();
-  const { isSuperAdmin, userRole } = useAuth();
+  const { isSuperAdmin, userRole, canDo } = useAuth();
   const isAdminOrAbove = isSuperAdmin || userRole === 'admin';
-  const canSeeCompta = isAdminOrAbove || userRole === 'comptable';
+  const canSeeCompta = isAdminOrAbove || userRole === 'comptable' || canDo('chantiers', 'finances');
+  const canEdit = isAdminOrAbove || canDo('chantiers', 'edit');
+  const canValidate = isAdminOrAbove || canDo('chantiers', 'validate');
+  const canSeePointage = isAdminOrAbove || canDo('chantiers', 'pointage');
+  const canSeeEvents = canDo('chantiers', 'view') || isAdminOrAbove;
   const { message } = App.useApp();
 
   const [chantier, setChantier] = useState<Chantier | null>(null);
@@ -344,11 +348,11 @@ const ChantierDetailPage: React.FC = () => {
               </Button>
             </Tooltip>
           )}
-          {isAdminOrAbove && !editing ? (
+          {canEdit && !editing ? (
             <Button icon={<EditOutlined />} onClick={startEditing}>
               Modifier
             </Button>
-          ) : isAdminOrAbove && editing ? (
+          ) : canEdit && editing ? (
             <>
               <Button icon={<CloseOutlined />} onClick={cancelEditing}>
                 Annuler
@@ -362,7 +366,7 @@ const ChantierDetailPage: React.FC = () => {
       </div>
 
       {/* ── Bandeau validation admin ── */}
-      {!chantier.isValidated && isAdminOrAbove && (
+      {!chantier.isValidated && canValidate && (
         <Alert
           type="warning"
           banner
@@ -1059,7 +1063,7 @@ const ChantierDetailPage: React.FC = () => {
             onValidationChanged={fetchChantier}
           />
         ), }] : []),
-        { key: 'events', label: <span><CalendarOutlined /> Événements</span>, children: (
+        ...(canSeeEvents ? [{ key: 'events', label: <span><CalendarOutlined /> Événements</span>, children: (
           <ChantierEventsTab
             chantierId={chantier.id}
             chantierAddress={displayAddress}
@@ -1067,8 +1071,8 @@ const ChantierDetailPage: React.FC = () => {
             leadId={chantier.leadId || undefined}
             submissionId={chantier.submissionId || undefined}
           />
-        ), },
-        { key: 'pointage', label: <span><ClockCircleOutlined /> Pointage</span>, children: (
+        ), }] : []),
+        ...(canSeePointage ? [{ key: 'pointage', label: <span><ClockCircleOutlined /> Pointage</span>, children: (
           <ChantierPointageTab
             chantierId={chantier.id}
             chantierName={chantier.clientName || chantier.customLabel || chantier.productLabel}
@@ -1076,7 +1080,7 @@ const ChantierDetailPage: React.FC = () => {
             chantierLongitude={chantier.longitude}
             geoFenceRadius={chantier.geoFenceRadius}
           />
-        ), },
+        ), }] : []),
       ]} />
     </div>
   );

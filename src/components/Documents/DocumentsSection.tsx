@@ -15,7 +15,8 @@ import {
   Row,
   Col,
   List,
-  Divider
+  Divider,
+  Checkbox
 } from 'antd';
 import { 
   DownloadOutlined, 
@@ -78,6 +79,7 @@ const DocumentsSection = ({ submissionId, leadId, treeId, onLoadDevis, onDeleteD
   const [previewLoading, setPreviewLoading] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<GeneratedDocument | null>(null);
   const [emailTo, setEmailTo] = useState('');
+  const [selectedDevisIds, setSelectedDevisIds] = useState<Set<string>>(new Set());
 
   // Charger les documents
   const loadDocuments = async () => {
@@ -311,11 +313,57 @@ const DocumentsSection = ({ submissionId, leadId, treeId, onLoadDevis, onDeleteD
       <Spin spinning={loadingSubmissions}>
         {tblSubmissions.length > 0 && (
           <>
-            <div style={{ marginBottom: 16 }}>
-              <Text strong style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <FolderOpenOutlined />
-                Devis enregistrés ({tblSubmissions.length})
-              </Text>
+            <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <Space size={12}>
+                <Text strong style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <FolderOpenOutlined />
+                  Devis enregistrés ({tblSubmissions.length})
+                </Text>
+                <Checkbox
+                  checked={selectedDevisIds.size === tblSubmissions.length && tblSubmissions.length > 0}
+                  indeterminate={selectedDevisIds.size > 0 && selectedDevisIds.size < tblSubmissions.length}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedDevisIds(new Set(tblSubmissions.map(d => d.id)));
+                    } else {
+                      setSelectedDevisIds(new Set());
+                    }
+                  }}
+                >
+                  <span style={{ fontSize: 12 }}>Tout</span>
+                </Checkbox>
+              </Space>
+              {selectedDevisIds.size > 0 && onDeleteDevis && (
+                <Button
+                  danger
+                  size="small"
+                  icon={<DeleteOutlined />}
+                  onClick={async () => {
+                    const count = selectedDevisIds.size;
+                    const confirmed = window.confirm(
+                      `Supprimer ${count} devis sélectionné${count > 1 ? 's' : ''} ?\n\nCette action est irréversible.`
+                    );
+                    if (!confirmed) return;
+                    
+                    const ids = [...selectedDevisIds];
+                    let deleted = 0;
+                    for (const id of ids) {
+                      try {
+                        const devis = tblSubmissions.find(d => d.id === id);
+                        await onDeleteDevis(id, devis?.name || 'Devis');
+                        deleted++;
+                      } catch (err) {
+                        console.error('❌ Erreur suppression devis:', id, err);
+                      }
+                    }
+                    setSelectedDevisIds(new Set());
+                    message.success(`${deleted} devis supprimé${deleted > 1 ? 's' : ''}`);
+                    loadTblSubmissions();
+                  }}
+                >
+                  Supprimer ({selectedDevisIds.size})
+                </Button>
+              )}
             </div>
             <List
               size="small"
@@ -342,23 +390,12 @@ const DocumentsSection = ({ submissionId, leadId, treeId, onLoadDevis, onDeleteD
                         size="small"
                         icon={<DeleteOutlined />}
                         onClick={async () => {
-                          console.log('🗑️ [DocumentsSection] Clic bouton supprimer pour devis:', devis.id);
-                          
-                          // Utiliser window.confirm au lieu de Modal.confirm (incompatible React 19)
                           const confirmed = window.confirm(
                             `Supprimer le devis "${devis.name || 'Devis'}" ?\n\nCette action est irréversible.`
                           );
-                          
-                          if (!confirmed) {
-                            console.log('🚫 [DocumentsSection] Suppression annulée');
-                            return;
-                          }
-                          
-                          console.log('🗑️ [DocumentsSection] Confirmation suppression:', devis.id);
+                          if (!confirmed) return;
                           try {
                             await onDeleteDevis(devis.id, devis.name || 'Devis');
-                            console.log('✅ [DocumentsSection] Suppression réussie, rechargement liste');
-                            // Rafraîchir la liste après suppression
                             loadTblSubmissions();
                           } catch (err) {
                             console.error('❌ [DocumentsSection] Erreur suppression:', err);
@@ -369,7 +406,22 @@ const DocumentsSection = ({ submissionId, leadId, treeId, onLoadDevis, onDeleteD
                   ].filter(Boolean)}
                 >
                   <List.Item.Meta
-                    avatar={<FileTextOutlined style={{ fontSize: 20, color: '#1890ff' }} />}
+                    avatar={
+                      <Space size={8}>
+                        <Checkbox
+                          checked={selectedDevisIds.has(devis.id)}
+                          onChange={(e) => {
+                            setSelectedDevisIds(prev => {
+                              const next = new Set(prev);
+                              if (e.target.checked) next.add(devis.id);
+                              else next.delete(devis.id);
+                              return next;
+                            });
+                          }}
+                        />
+                        <FileTextOutlined style={{ fontSize: 20, color: '#1890ff' }} />
+                      </Space>
+                    }
                     title={
                       <Space>
                         <span>{devis.name || `Devis ${new Date(devis.createdAt).toLocaleDateString('fr-FR')}`}</span>

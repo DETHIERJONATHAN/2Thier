@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Card, Descriptions, Tag, Avatar, Space, Button, Timeline, Spin, Row, Col, Tabs, Upload, message, Tooltip, Grid, Popconfirm } from 'antd';
+import { Card, Descriptions, Tag, Avatar, Space, Button, Timeline, Spin, Row, Col, Tabs, Upload, message, Tooltip, Grid, Popconfirm, Alert, Modal } from 'antd';
 import { 
   UserOutlined, 
   MailOutlined, 
@@ -17,7 +17,11 @@ import {
   EyeOutlined,
   FolderOpenOutlined,
   DeleteOutlined,
-  TrophyOutlined
+  TrophyOutlined,
+  WarningOutlined,
+  CheckCircleOutlined,
+  ToolOutlined,
+  SendOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import type { Lead } from '../../types/leads';
@@ -61,6 +65,33 @@ export default function LeadDetail({ leadId, onEdit, onDelete, onCall, onEmail, 
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [tblSubmissions, setTblSubmissions] = useState<TblSubmission[]>([]);
   const [loadingTblSubmissions, setLoadingTblSubmissions] = useState(false);
+
+  // État pour le workflow "À rectifier"
+  type RectificationModification = {
+    fieldLabel: string;
+    originalValue: string | null;
+    reviewedValue: string | null;
+    note: string | null;
+    reviewedBy: string | null;
+  };
+  type RectificationContext = {
+    chantierId: string;
+    submissionId: string | null;
+    chantierName: string | null;
+    clientName: string | null;
+    siteAddress: string | null;
+    productLabel: string;
+    responsable: string | null;
+    reviewEventId: string | null;
+    reviewDate: string | null;
+    reviewedBy: string | null;
+    problemNote: string | null;
+    modifications: RectificationModification[];
+    totalModifications: number;
+  };
+  const [rectificationCtx, setRectificationCtx] = useState<RectificationContext | null>(null);
+  const [loadingRectification, setLoadingRectification] = useState(false);
+  const [resubmitting, setResubmitting] = useState(false);
   
   const { api } = useAuthenticatedApi();
   const navigate = useNavigate();
@@ -138,6 +169,65 @@ export default function LeadDetail({ leadId, onEdit, onDelete, onCall, onEmail, 
     };
     fetchTblSubmissions();
   }, [leadId, api, lead?.data?.treeId]);
+
+  // Charger le contexte de rectification si le lead est "À rectifier"
+  useEffect(() => {
+    const isRectifier = lead?.status === 'à_rectifier' ||
+      lead?.leadStatus?.name?.toLowerCase()?.includes('rectifier');
+    if (!isRectifier || !leadId) {
+      setRectificationCtx(null);
+      return;
+    }
+    const fetchRectificationContext = async () => {
+      try {
+        setLoadingRectification(true);
+        const res = await api.get<{ success: boolean; data: RectificationContext }>(
+          `/api/chantiers/rectification-context/${leadId}`
+        );
+        if (res?.success && res.data) {
+          setRectificationCtx(res.data);
+        }
+      } catch (err) {
+        console.error('[LeadDetail] Erreur chargement contexte rectification:', err);
+      } finally {
+        setLoadingRectification(false);
+      }
+    };
+    fetchRectificationContext();
+  }, [leadId, lead?.status, lead?.leadStatus?.name, api]);
+
+  // Re-soumettre le lead au chantier après corrections
+  const handleResubmitToChantier = async () => {
+    Modal.confirm({
+      title: 'Re-soumettre au chantier',
+      content: 'Confirmez-vous que les corrections ont été effectuées et que le devis est prêt à retourner en chantier ?',
+      okText: 'Oui, re-soumettre',
+      cancelText: 'Annuler',
+      okType: 'primary',
+      onOk: async () => {
+        try {
+          setResubmitting(true);
+          const res = await api.post<{ success: boolean; message: string }>(
+            `/api/chantiers/resubmit-to-chantier/${leadId}`
+          );
+          if (res?.success) {
+            message.success('✅ Lead re-soumis au chantier avec succès !');
+            // Recharger le lead pour mettre à jour le statut
+            const leadData = await api.get<Lead>(`/api/leads/${leadId}`);
+            setLead(leadData);
+            setRectificationCtx(null);
+          } else {
+            message.error(res?.message || 'Erreur lors de la re-soumission');
+          }
+        } catch (err) {
+          console.error('[LeadDetail] Erreur re-soumission chantier:', err);
+          message.error('Erreur lors de la re-soumission au chantier');
+        } finally {
+          setResubmitting(false);
+        }
+      },
+    });
+  };
 
   // Générer le PDF du formulaire
   const handleGeneratePdf = async () => {
@@ -313,9 +403,146 @@ export default function LeadDetail({ leadId, onEdit, onDelete, onCall, onEmail, 
         </Row>
       </Card>
 
+      {/* 🔶 Bandeau "À rectifier" — affiché si le lead nécessite des corrections */}
+      {(lead.status === 'à_rectifier' || lead.leadStatus?.name?.toLowerCase()?.includes('rectifier')) && (
+        <Card
+          size="small"
+          style={{
+            border: '2px solid #fa8c16',
+            background: 'linear-gradient(135deg, #fff7e6 0%, #fff1d4 100%)',
+          }}
+          styles={{ body: { padding: '12px 16px' } }}
+        >
+          <div className="flex items-start gap-3">
+            <WarningOutlined style={{ fontSize: 24, color: '#fa8c16', marginTop: 2 }} />
+            <div className="flex-1">
+              <h3 className="text-base font-bold mb-1" style={{ color: '#d46b08' }}>
+                🔧 Devis à rectifier
+              </h3>
+              {loadingRectification ? (
+                <Spin size="small" />
+              ) : rectificationCtx ? (
+                <>
+                  <p className="text-sm text-gray-700 mb-2">
+                    Le technicien a identifié <strong>{rectificationCtx.totalModifications} modification(s)</strong> à apporter au devis
+                    {rectificationCtx.chantierName ? ` pour le chantier "${rectificationCtx.chantierName}"` : ''}.
+                    {rectificationCtx.reviewedBy && (
+                      <span> Revu par <strong>{rectificationCtx.reviewedBy}</strong>.</span>
+                    )}
+                  </p>
+
+                  {rectificationCtx.problemNote && (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      icon={<ToolOutlined />}
+                      message="Note du technicien"
+                      description={rectificationCtx.problemNote}
+                      style={{ marginBottom: 8 }}
+                    />
+                  )}
+
+                  {rectificationCtx.modifications.length > 0 && (
+                    <div
+                      style={{
+                        border: '1px solid #ffd591',
+                        borderRadius: 6,
+                        overflow: 'hidden',
+                        marginBottom: 10,
+                        maxHeight: 200,
+                        overflowY: 'auto',
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          background: '#fff1b8',
+                          padding: '6px 10px',
+                          fontWeight: 600,
+                          fontSize: 12,
+                          borderBottom: '1px solid #ffd591',
+                        }}
+                      >
+                        <div style={{ flex: 2 }}>Champ</div>
+                        <div style={{ flex: 2 }}>Avant → Après</div>
+                        <div style={{ flex: 2 }}>Remarque</div>
+                      </div>
+                      {rectificationCtx.modifications.map((mod, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            display: 'flex',
+                            padding: '5px 10px',
+                            fontSize: 12,
+                            borderBottom: '1px solid #ffecd2',
+                            background: i % 2 === 0 ? '#fffbe6' : '#fff',
+                          }}
+                        >
+                          <div style={{ flex: 2, fontWeight: 500 }}>{mod.fieldLabel}</div>
+                          <div style={{ flex: 2 }}>
+                            <span style={{ textDecoration: 'line-through', color: '#cf1322' }}>
+                              {mod.originalValue || '—'}
+                            </span>
+                            {' → '}
+                            <span style={{ color: '#389e0d', fontWeight: 500 }}>
+                              {mod.reviewedValue || '—'}
+                            </span>
+                          </div>
+                          <div style={{ flex: 2, color: '#8c8c8c', fontStyle: 'italic' }}>
+                            {mod.note || '—'}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <Space wrap>
+                    {rectificationCtx.submissionId && (
+                      <Button
+                        type="primary"
+                        icon={<FolderOpenOutlined />}
+                        style={{ background: '#fa8c16', borderColor: '#fa8c16' }}
+                        onClick={() => {
+                          let url = `/tbl/${lead.id}?devisId=${encodeURIComponent(rectificationCtx.submissionId!)}`;
+                          // Ajouter mode rectification + eventId pour traçabilité 3 couches
+                          if (rectificationCtx.reviewEventId) {
+                            url += `&mode=rectification&eventId=${encodeURIComponent(rectificationCtx.reviewEventId)}`;
+                          }
+                          navigate(url);
+                        }}
+                      >
+                        Ouvrir le devis à corriger
+                      </Button>
+                    )}
+                    <Button
+                      type="primary"
+                      icon={<SendOutlined />}
+                      loading={resubmitting}
+                      onClick={handleResubmitToChantier}
+                    >
+                      Re-soumettre au chantier
+                    </Button>
+                  </Space>
+                </>
+              ) : (
+                <p className="text-sm text-gray-500">
+                  Ce lead est marqué "À rectifier" mais aucun contexte de chantier n'a été trouvé.
+                </p>
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Onglets */}
       <Tabs
-        defaultActiveKey={lead.status === 'won' || lead.leadStatus?.name?.toLowerCase()?.includes('gagn') ? 'gagne' : 'info'}
+        defaultActiveKey={
+          lead.status === 'à_rectifier' || lead.leadStatus?.name?.toLowerCase()?.includes('rectifier')
+            ? 'tbl'
+            : lead.status === 'won' || lead.leadStatus?.name?.toLowerCase()?.includes('gagn')
+              ? 'gagne'
+              : 'info'
+        }
         size="small"
         items={[
           {

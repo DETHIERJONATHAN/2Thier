@@ -1551,6 +1551,7 @@ async function sendTransitionNotifications(
             message: `${fromStatus?.name || '?'} → ${toStatus?.name || '?'}`,
           },
           status: 'PENDING',
+          updatedAt: new Date(),
         }
       });
     }
@@ -1675,6 +1676,7 @@ async function notifyProblem(
             message: `${reporterName}: ${problemNote}`,
           },
           status: 'PENDING',
+          updatedAt: new Date(),
         }
       });
     }
@@ -1713,6 +1715,7 @@ async function notifyProblem(
             message: `${reporterName}: ${problemNote}`,
           },
           status: 'PENDING',
+          updatedAt: new Date(),
         }
       });
     }
@@ -2080,11 +2083,20 @@ router.post('/events/:id/submit-review', authenticateToken, async (req, res) => 
     // Notifications si modifications détectées
     if (hasModifications) {
       try {
-        // Notifier les admins
-        const admins = await db.userOrganization.findMany({
-          where: { organizationId, role: { in: ['admin', 'super_admin'] } },
-          select: { userId: true },
+        // Notifier les admins (via Role relation, pas de champ 'role' sur UserOrganization)
+        const adminsRaw = await db.userOrganization.findMany({
+          where: { organizationId, status: 'ACTIVE' },
+          include: {
+            User: { select: { id: true } },
+            Role: { select: { name: true } },
+          },
         });
+        const admins = adminsRaw
+          .filter(u => {
+            const roleName = u.Role?.name?.toLowerCase() || '';
+            return roleName.includes('admin') || roleName.includes('super');
+          })
+          .map(u => ({ userId: u.User.id }));
 
         const modifiedLabels = reviews.filter(r => r.isModified).map(r => nodeLabels.get(r.nodeId) || r.nodeId);
         const notifMessage = `⚠️ Revue technique: ${reviews.filter(r => r.isModified).length} modifications détectées (${modifiedLabels.join(', ')})`;
@@ -2095,12 +2107,14 @@ router.post('/events/:id/submit-review', authenticateToken, async (req, res) => 
               id: crypto.randomUUID(),
               userId: admin.userId,
               organizationId,
-              title: '⚠️ Modifications terrain détectées',
-              message: notifMessage,
-              type: 'warning',
-              link: `/chantiers/${event.Chantier.id}?tab=events`,
-              isRead: false,
-              createdAt: new Date(),
+              type: 'CHANTIER_PROBLEM_REPORTED',
+              data: {
+                title: '⚠️ Modifications terrain détectées',
+                message: notifMessage,
+                link: `/chantiers/${event.Chantier.id}?tab=events`,
+              },
+              status: 'PENDING',
+              updatedAt: new Date(),
             }
           });
         }
@@ -2112,12 +2126,14 @@ router.post('/events/:id/submit-review', authenticateToken, async (req, res) => 
               id: crypto.randomUUID(),
               userId: event.Chantier.commercialId,
               organizationId,
-              title: '⚠️ Modifications terrain sur votre chantier',
-              message: notifMessage,
-              type: 'warning',
-              link: `/chantiers/${event.Chantier.id}?tab=events`,
-              isRead: false,
-              createdAt: new Date(),
+              type: 'CHANTIER_PROBLEM_REPORTED',
+              data: {
+                title: '⚠️ Modifications terrain sur votre chantier',
+                message: notifMessage,
+                link: `/chantiers/${event.Chantier.id}?tab=events`,
+              },
+              status: 'PENDING',
+              updatedAt: new Date(),
             }
           });
         }
@@ -2175,12 +2191,14 @@ router.post('/events/:id/submit-review', authenticateToken, async (req, res) => 
               id: crypto.randomUUID(),
               userId: lead.assignedToId,
               organizationId,
-              title: '🔄 Lead à rectifier',
-              message: `Le lead ${lead.firstName || ''} ${lead.lastName || ''} nécessite des corrections suite à la vérification terrain.`,
-              type: 'warning',
-              link: `/leads`,
-              isRead: false,
-              createdAt: new Date(),
+              type: 'CHANTIER_STATUS_CHANGED',
+              data: {
+                title: '🔄 Lead à rectifier',
+                message: `Le lead ${lead.firstName || ''} ${lead.lastName || ''} nécessite des corrections suite à la vérification terrain.`,
+                link: `/leads?openLead=${event.Chantier.leadId}`,
+              },
+              status: 'PENDING',
+              updatedAt: new Date(),
             }
           });
         }
@@ -2411,12 +2429,14 @@ router.post('/chantiers/:chantierId/reject-to-lead', authenticateToken, isAdmin,
             id: crypto.randomUUID(),
             userId: chantier.commercialId,
             organizationId,
-            title: '↩️ Chantier renvoyé — Correction requise',
-            message: `Le chantier "${chantier.clientName}" a été renvoyé après la revue technique.\nRaison: ${reason}\n\nVeuillez corriger le TBL et regénérer le devis.`,
-            type: 'warning',
-            link: `/leads?id=${chantier.leadId}`,
-            isRead: false,
-            createdAt: new Date(),
+            type: 'CHANTIER_STATUS_CHANGED',
+            data: {
+              title: '↩️ Chantier renvoyé — Correction requise',
+              message: `Le chantier "${chantier.clientName}" a été renvoyé après la revue technique.\nRaison: ${reason}\n\nVeuillez corriger le TBL et regénérer le devis.`,
+              link: `/leads?id=${chantier.leadId}`,
+            },
+            status: 'PENDING',
+            updatedAt: new Date(),
           }
         });
       } catch (notifError) {
@@ -2767,22 +2787,33 @@ router.post('/reception/:token/sign', async (req, res) => {
         select: { organizationId: true, clientName: true },
       });
       if (chantier) {
-        const admins = await db.userOrganization.findMany({
-          where: { organizationId: chantier.organizationId, role: { in: ['admin', 'super_admin'] } },
-          select: { userId: true },
+        const adminsRaw2 = await db.userOrganization.findMany({
+          where: { organizationId: chantier.organizationId, status: 'ACTIVE' },
+          include: {
+            User: { select: { id: true } },
+            Role: { select: { name: true } },
+          },
         });
-        for (const admin of admins) {
+        const receptionAdmins = adminsRaw2
+          .filter(u => {
+            const roleName = u.Role?.name?.toLowerCase() || '';
+            return roleName.includes('admin') || roleName.includes('super');
+          })
+          .map(u => ({ userId: u.User.id }));
+        for (const admin of receptionAdmins) {
           await db.notification.create({
             data: {
               id: crypto.randomUUID(),
               userId: admin.userId,
               organizationId: chantier.organizationId,
-              title: hasReserves ? '⚠️ PV signé avec réserves' : '✅ PV de réception signé',
-              message: `${data.clientName} a signé le PV de réception pour "${chantier.clientName}"${hasReserves ? ` avec ${data.reserves!.length} réserve(s)` : ''}`,
-              type: hasReserves ? 'warning' : 'success',
-              link: `/chantiers/${reception.chantierId}?tab=reception`,
-              isRead: false,
-              createdAt: new Date(),
+              type: hasReserves ? 'CHANTIER_PROBLEM_REPORTED' : 'CHANTIER_VISIT_VALIDATED',
+              data: {
+                title: hasReserves ? '⚠️ PV signé avec réserves' : '✅ PV de réception signé',
+                message: `${data.clientName} a signé le PV de réception pour "${chantier.clientName}"${hasReserves ? ` avec ${data.reserves!.length} réserve(s)` : ''}`,
+                link: `/chantiers/${reception.chantierId}?tab=reception`,
+              },
+              status: 'PENDING',
+              updatedAt: new Date(),
             }
           });
         }
@@ -3115,4 +3146,142 @@ router.post('/seed', authenticateToken, isAdmin, async (req, res) => {
 });
 
 export { sendTransitionNotifications };
+
+// ═══════════════════════════════════════════════════
+// ═══ COMMERCIAL CORRECTION TRACKING ═══════════════
+// ═══════════════════════════════════════════════════
+
+/**
+ * POST /api/chantier-workflow/events/:id/submit-commercial-correction
+ * Enregistre les corrections effectuées par le commercial sur un devis "À rectifier".
+ * Crée des TechnicianFieldReview avec reviewType='COMMERCIAL_CORRECTION'
+ * pour garder la trace complète : original → technicien → commercial.
+ */
+router.post('/events/:id/submit-commercial-correction', authenticateToken, async (req, res) => {
+  try {
+    const { id: eventId } = req.params;
+    const user = (req as any).user;
+    const organizationId = req.headers['x-organization-id'] as string;
+    const userId = user?.userId || user?.id;
+
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const { corrections } = req.body as {
+      corrections: Array<{
+        nodeId: string;
+        correctedValue: string | null;
+        correctionNote?: string;
+      }>;
+    };
+
+    if (!corrections || !Array.isArray(corrections) || corrections.length === 0) {
+      return res.status(400).json({ success: false, message: 'Aucune correction fournie' });
+    }
+
+    // Charger l'événement avec les reviews technicien existantes
+    const event = await db.chantierEvent.findFirst({
+      where: { id: eventId },
+      include: {
+        Chantier: {
+          select: {
+            id: true,
+            organizationId: true,
+            leadId: true,
+            submissionId: true,
+            TreeBranchLeafSubmission: { select: { id: true, treeId: true } },
+          },
+        },
+        TechnicianFieldReviews: {
+          where: { reviewType: 'TECHNICAL', isModified: true },
+        },
+      },
+    });
+
+    if (!event || event.Chantier.organizationId !== organizationId) {
+      return res.status(404).json({ success: false, message: 'Événement non trouvé' });
+    }
+
+    // Map des modifications technicien pour référence
+    const techReviewMap = new Map(
+      event.TechnicianFieldReviews.map((r) => [r.nodeId, r])
+    );
+
+    // Récupérer les labels des nodes
+    const nodeIds = corrections.map((c) => c.nodeId);
+    const submission = event.Chantier.TreeBranchLeafSubmission;
+    const nodes = submission
+      ? await db.treeBranchLeafNode.findMany({
+          where: { id: { in: nodeIds }, treeId: submission.treeId },
+          select: { id: true, label: true },
+        })
+      : [];
+    const nodeLabels = new Map(nodes.map((n) => [n.id, n.label]));
+
+    // Transaction : sauvegarder les corrections commerciales
+    await db.$transaction(async (tx) => {
+      // Supprimer les corrections commerciales précédentes (si re-correction)
+      await tx.technicianFieldReview.deleteMany({
+        where: { chantierEventId: eventId, reviewType: 'COMMERCIAL_CORRECTION' },
+      });
+
+      for (const correction of corrections) {
+        const techReview = techReviewMap.get(correction.nodeId);
+        await tx.technicianFieldReview.create({
+          data: {
+            chantierEventId: eventId,
+            nodeId: correction.nodeId,
+            fieldLabel: nodeLabels.get(correction.nodeId) || techReview?.fieldLabel || 'Champ inconnu',
+            originalValue: techReview?.originalValue || null, // Valeur initiale du devis
+            reviewedValue: correction.correctedValue, // Nouvelle valeur du commercial
+            isModified: true,
+            modificationNote: correction.correctionNote || 'Correction commerciale',
+            reviewType: 'COMMERCIAL_CORRECTION',
+            reviewedById: userId,
+          },
+        });
+      }
+
+      // Historique chantier
+      await tx.chantierHistory.create({
+        data: {
+          id: crypto.randomUUID(),
+          chantierId: event.Chantier.id,
+          action: 'COMMERCIAL_CORRECTION_SUBMITTED',
+          fromValue: 'À rectifier',
+          toValue: 'Corrections soumises',
+          userId,
+          data: {
+            eventId,
+            totalCorrections: corrections.length,
+            correctedFields: corrections.map((c) => ({
+              nodeId: c.nodeId,
+              fieldLabel: nodeLabels.get(c.nodeId),
+              correctedValue: c.correctedValue,
+              note: c.correctionNote,
+              technicianValue: techReviewMap.get(c.nodeId)?.reviewedValue,
+              originalValue: techReviewMap.get(c.nodeId)?.originalValue,
+            })),
+            submittedAt: new Date().toISOString(),
+          },
+        },
+      });
+    });
+
+    console.log(
+      `[ChantierWorkflow] ${corrections.length} corrections commerciales enregistrées pour event ${eventId}`
+    );
+
+    res.json({
+      success: true,
+      message: `${corrections.length} correction(s) enregistrée(s)`,
+      data: { totalCorrections: corrections.length },
+    });
+  } catch (error) {
+    console.error('[ChantierWorkflow] Erreur POST /events/:id/submit-commercial-correction:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
 export default router;

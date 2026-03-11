@@ -144,6 +144,10 @@ router.post('/bulk', async (req: AuthenticatedRequest, res: Response): Promise<v
 
     // Determine which actions are being updated to only delete those, preserve others
     const actionsBeingUpdated = [...new Set((permissions as MinimalPermissionInput[]).map(p => p.action))];
+    // Si aucune permission envoyée, on supprime quand même les "access" (cas "Tout désactiver")
+    if (actionsBeingUpdated.length === 0) {
+      actionsBeingUpdated.push('access');
+    }
     console.log(`[API][permissions/bulk] Updating ${permissions.length} permissions for role ${roleId}, actions: ${actionsBeingUpdated.join(', ')}`);
 
     await prisma.$transaction([

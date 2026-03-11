@@ -97,6 +97,13 @@ interface QuoteData {
   reference?: string;
 }
 
+interface ElectronicSignatureData {
+  signerName: string;
+  signerRole: string;
+  signatureData: string; // base64 PNG
+  signedAt: Date;
+}
+
 interface RenderContext {
   template: {
     id: string;
@@ -111,6 +118,8 @@ interface RenderContext {
   tblData: Record<string, any>;
   /** Map optionId → label pour résoudre les valeurs SELECT (UUID → texte lisible) */
   selectOptionsMap?: Record<string, string>;
+  /** Signatures électroniques à intégrer dans le bloc signature du PDF */
+  electronicSignatures?: ElectronicSignatureData[];
   language: string;
   documentNumber?: string;
 }
@@ -2484,11 +2493,19 @@ export class DocumentPdfRenderer {
     this.doc.save();
     this.doc.rect(x, y, width, clipH).clip();
 
-    const renderBox = (label: string, boxX: number, boxY: number) => {
+    const renderBox = (label: string, boxX: number, boxY: number, signerRole: string) => {
+      // Chercher une signature électronique réelle pour ce rôle
+      const eSigs = this.ctx.electronicSignatures || [];
+      const eSig = signerRole === 'CLIENT'
+        ? eSigs.find(s => s.signerRole === 'CLIENT')
+        : eSigs.find(s => s.signerRole !== 'CLIENT');
+
+      console.log(`📄 [PDF] SIGNATURE_BLOCK renderBox: role=${signerRole}, eSigs=${eSigs.length}, found=${!!eSig}${eSig ? `, signerName=${eSig.signerName}, hasData=${!!eSig.signatureData}, dataLen=${eSig.signatureData?.length || 0}` : ''}`);
+
       // Bordure
       this.doc
         .roundedRect(boxX, boxY, boxWidth, boxHeight, 6)
-        .stroke('#e8e8e8');
+        .stroke(eSig ? '#52c41a' : '#e8e8e8');
 
       const padding = 16;
       const innerW = boxWidth - padding * 2;
@@ -2501,55 +2518,80 @@ export class DocumentPdfRenderer {
         .fillColor('#333333')
         .text(label, boxX + padding, labelY, { width: innerW, continued: false, lineBreak: false });
 
-      const showMention = config.showMention !== false;
-      if (showMention) {
-        const mention = config.mention || 'Lu et approuvé, bon pour accord';
-        this.doc
-          .font('Helvetica-Oblique')
-          .fontSize(this.scaleFontSize(9))
-          .fillColor('#999999')
-          .text(`"${mention}"`, boxX + padding, labelY + 1, { width: innerW, align: 'right', lineBreak: false });
-      }
-
-      let currentY = labelY + 14; // juste après la ligne label+mention
-
-      // ─── Ligne 2 : Date ───
-      const showDate = config.showDate !== false;
-      if (showDate) {
+      if (eSig) {
+        // Signature électronique réelle
+        const signedDate = new Date(eSig.signedAt).toLocaleDateString('fr-BE');
+        let currentY = labelY + 14;
         this.doc
           .font('Helvetica')
-          .fontSize(this.scaleFontSize(10))
-          .fillColor('#666666')
-          .text('Date: ____/____/________', boxX + padding, currentY, { width: innerW });
+          .fontSize(this.scaleFontSize(9))
+          .fillColor('#52c41a')
+          .text(`Signé électroniquement le ${signedDate} par ${eSig.signerName}`, boxX + padding, currentY, { width: innerW });
         currentY += 14;
+
+        // Dessiner l'image de signature
+        try {
+          const sigData = eSig.signatureData;
+          if (sigData && sigData.startsWith('data:image')) {
+            const base64Data = sigData.split(',')[1];
+            const imgBuffer = Buffer.from(base64Data, 'base64');
+            const imgH = Math.min(boxHeight - currentY + boxY - padding - 4, 50);
+            this.doc.image(imgBuffer, boxX + padding, currentY + 2, { width: innerW - 10, height: imgH, fit: [innerW - 10, imgH] });
+          }
+        } catch (imgErr) {
+          console.warn('[PDF] Erreur image signature module:', imgErr);
+        }
+      } else {
+        const showMention = config.showMention !== false;
+        if (showMention) {
+          const mention = config.mention || 'Lu et approuvé, bon pour accord';
+          this.doc
+            .font('Helvetica-Oblique')
+            .fontSize(this.scaleFontSize(9))
+            .fillColor('#999999')
+            .text(`"${mention}"`, boxX + padding, labelY + 1, { width: innerW, align: 'right', lineBreak: false });
+        }
+
+        let currentY = labelY + 14; // juste après la ligne label+mention
+
+        // ─── Ligne 2 : Date ───
+        const showDate = config.showDate !== false;
+        if (showDate) {
+          this.doc
+            .font('Helvetica')
+            .fontSize(this.scaleFontSize(10))
+            .fillColor('#666666')
+            .text('Date: ____/____/________', boxX + padding, currentY, { width: innerW });
+          currentY += 14;
+        }
+
+        // ─── Zone signature (compacte) ───
+        const signatureAreaTop = currentY + 8;
+        const signatureLineY = Math.min(signatureAreaTop + 50, boxY + boxHeight - padding - 4);
+
+        this.doc
+          .font('Helvetica')
+          .fontSize(this.scaleFontSize(11))
+          .fillColor('#999999')
+          .text('Signature', boxX + padding, signatureAreaTop + 2, { width: innerW });
+
+        this.doc
+          .moveTo(boxX + padding, signatureLineY)
+          .lineTo(boxX + boxWidth - padding, signatureLineY)
+          .dash(3, { space: 3 })
+          .stroke('#cccccc')
+          .undash();
       }
-
-      // ─── Zone signature (compacte) ───
-      const signatureAreaTop = currentY + 8;
-      const signatureLineY = Math.min(signatureAreaTop + 50, boxY + boxHeight - padding - 4);
-
-      this.doc
-        .font('Helvetica')
-        .fontSize(this.scaleFontSize(11))
-        .fillColor('#999999')
-        .text('Signature', boxX + padding, signatureAreaTop + 2, { width: innerW });
-
-      this.doc
-        .moveTo(boxX + padding, signatureLineY)
-        .lineTo(boxX + boxWidth - padding, signatureLineY)
-        .dash(3, { space: 3 })
-        .stroke('#cccccc')
-        .undash();
 
       return true;
     };
     
     if (isStacked) {
-      renderBox(clientLabel, x, y);
-      renderBox(companyLabel, x, y + boxHeight + 16);
+      renderBox(clientLabel, x, y, 'CLIENT');
+      renderBox(companyLabel, x, y + boxHeight + 16, 'COMPANY');
     } else {
-      renderBox(clientLabel, x, y);
-      renderBox(companyLabel, x + boxWidth + 24, y);
+      renderBox(clientLabel, x, y, 'CLIENT');
+      renderBox(companyLabel, x + boxWidth + 24, y, 'COMPANY');
     }
 
     this.doc.restore();
@@ -3829,6 +3871,11 @@ export class DocumentPdfRenderer {
       this.currentY = this.doc.y + 20;
     }
 
+    // Chercher les signatures électroniques réelles
+    const eSigs = this.ctx.electronicSignatures || [];
+    const clientSig = eSigs.find(s => s.signerRole === 'CLIENT');
+    const companySig = eSigs.find(s => s.signerRole !== 'CLIENT');
+
     // Deux colonnes pour signatures
     const colWidth = (this.contentWidth - 40) / 2;
     const leftX = this.margin;
@@ -3841,19 +3888,49 @@ export class DocumentPdfRenderer {
       .font('Helvetica-Bold')
       .fillColor(this.theme.textColor || '#333333')
       .text('Le Client', leftX, signatureY);
-    
-    this.doc
-      .fontSize(9)
-      .font('Helvetica')
-      .fillColor('#666666')
-      .text('Date: ____/____/________', leftX, signatureY + 20)
-      .text('Signature précédée de la mention', leftX, signatureY + 40)
-      .text('"Lu et approuvé":', leftX, signatureY + 52);
 
-    // Zone de signature (rectangle)
-    this.doc
-      .rect(leftX, signatureY + 70, colWidth, 60)
-      .stroke('#cccccc');
+    if (clientSig) {
+      // Signature électronique réelle
+      const signedDate = new Date(clientSig.signedAt).toLocaleDateString('fr-BE');
+      this.doc
+        .fontSize(9)
+        .font('Helvetica')
+        .fillColor('#666666')
+        .text(`Signé électroniquement le ${signedDate}`, leftX, signatureY + 18)
+        .text(`par ${clientSig.signerName}`, leftX, signatureY + 30);
+
+      // Dessiner l'image de signature
+      try {
+        const sigData = clientSig.signatureData;
+        if (sigData && sigData.startsWith('data:image')) {
+          const base64Data = sigData.split(',')[1];
+          const imgBuffer = Buffer.from(base64Data, 'base64');
+          this.doc.image(imgBuffer, leftX, signatureY + 45, { width: colWidth - 10, height: 55, fit: [colWidth - 10, 55] });
+        }
+      } catch (imgErr) {
+        console.warn('[PDF] Erreur image signature client:', imgErr);
+        this.doc.rect(leftX, signatureY + 45, colWidth, 55).stroke('#52c41a');
+      }
+
+      // Badge "Signé ✅"
+      this.doc
+        .fontSize(8)
+        .font('Helvetica-Bold')
+        .fillColor('#52c41a')
+        .text('Signé électroniquement', leftX, signatureY + 105);
+    } else {
+      this.doc
+        .fontSize(9)
+        .font('Helvetica')
+        .fillColor('#666666')
+        .text('Date: ____/____/________', leftX, signatureY + 20)
+        .text('Signature précédée de la mention', leftX, signatureY + 40)
+        .text('"Lu et approuvé":', leftX, signatureY + 52);
+
+      this.doc
+        .rect(leftX, signatureY + 70, colWidth, 60)
+        .stroke('#cccccc');
+    }
 
     // Colonne droite - L'entreprise
     this.doc
@@ -3862,17 +3939,44 @@ export class DocumentPdfRenderer {
       .fillColor(this.theme.textColor || '#333333')
       .text('Pour l\'entreprise', rightX, signatureY);
 
-    this.doc
-      .fontSize(9)
-      .font('Helvetica')
-      .fillColor('#666666')
-      .text('Date: ____/____/________', rightX, signatureY + 20)
-      .text(this.ctx.organization?.name || '', rightX, signatureY + 40);
+    if (companySig) {
+      const signedDate = new Date(companySig.signedAt).toLocaleDateString('fr-BE');
+      this.doc
+        .fontSize(9)
+        .font('Helvetica')
+        .fillColor('#666666')
+        .text(`Signé le ${signedDate}`, rightX, signatureY + 18)
+        .text(`par ${companySig.signerName}`, rightX, signatureY + 30);
 
-    // Zone de signature
-    this.doc
-      .rect(rightX, signatureY + 70, colWidth, 60)
-      .stroke('#cccccc');
+      try {
+        const sigData = companySig.signatureData;
+        if (sigData && sigData.startsWith('data:image')) {
+          const base64Data = sigData.split(',')[1];
+          const imgBuffer = Buffer.from(base64Data, 'base64');
+          this.doc.image(imgBuffer, rightX, signatureY + 45, { width: colWidth - 10, height: 55, fit: [colWidth - 10, 55] });
+        }
+      } catch (imgErr) {
+        console.warn('[PDF] Erreur image signature entreprise:', imgErr);
+        this.doc.rect(rightX, signatureY + 45, colWidth, 55).stroke('#52c41a');
+      }
+
+      this.doc
+        .fontSize(8)
+        .font('Helvetica-Bold')
+        .fillColor('#52c41a')
+        .text('Signé électroniquement', rightX, signatureY + 105);
+    } else {
+      this.doc
+        .fontSize(9)
+        .font('Helvetica')
+        .fillColor('#666666')
+        .text('Date: ____/____/________', rightX, signatureY + 20)
+        .text(this.ctx.organization?.name || '', rightX, signatureY + 40);
+
+      this.doc
+        .rect(rightX, signatureY + 70, colWidth, 60)
+        .stroke('#cccccc');
+    }
 
     this.currentY = signatureY + 150;
   }
@@ -4179,8 +4283,17 @@ export class DocumentPdfRenderer {
     // Couvre TOUS les types: node-formula:, condition:, @calculated., @value., @table., etc.
     const formulaResultsMap = (this.ctx as any).formulaResultsMap || {};
     if (formulaResultsMap[ref] !== undefined) {
-      console.log(`📄 [PDF] ✅ Résolu via formulaResultsMap: "${ref}" → ${formulaResultsMap[ref]}`);
-      return this.formatValue(formulaResultsMap[ref]);
+      const rawVal = formulaResultsMap[ref];
+      console.log(`📄 [PDF] ✅ Résolu via formulaResultsMap: "${ref}" → ${rawVal}`);
+      // Si la valeur ressemble à un UUID, chercher dans selectOptionsMap (ex: optimiseur -> label produit)
+      if (this.ctx.selectOptionsMap && typeof rawVal === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(rawVal)) {
+        const label = this.ctx.selectOptionsMap[rawVal];
+        if (label) {
+          console.log(`📄 [PDF] 🔄 SELECT résolu via formulaResultsMap: "${rawVal}" → "${label}"`);
+          return label;
+        }
+      }
+      return this.formatValue(rawVal);
     }
 
     // Variables lead.xxx

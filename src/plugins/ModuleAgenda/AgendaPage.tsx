@@ -36,7 +36,7 @@ interface CalendarEvent {
   linkedLeadId?: string;
   linkedClientId?: string;
   linkedProjectId?: string;
-  // ... autres champs
+  linkedChantierId?: string;
 }
 
 interface EventType {
@@ -188,16 +188,24 @@ export default function AgendaPage() {
     loadCrmData();
   }, [api]);
 
-  const fullCalendarEvents = events.map(event => ({
-    id: event.id,
-    title: event.title,
-    start: event.startDate,
-    end: event.endDate,
-    allDay: event.allDay,
-    backgroundColor: '#10b981', // Vert pour les événements CRM
-    borderColor: '#059669',
-    extendedProps: { ...event }
-  }));
+  const fullCalendarEvents = events.map(event => {
+    const hasLink = !!(event.linkedChantierId || event.linkedLeadId || event.linkedClientId);
+    // 🔗 Couleurs différentes pour les événements liés (bleu) vs normaux (vert)
+    const bgColor = hasLink ? '#3b82f6' : '#10b981';
+    const borderColor = hasLink ? '#2563eb' : '#059669';
+    const title = hasLink ? `🔗 ${event.title}` : event.title;
+    return {
+      id: event.id,
+      title,
+      start: event.startDate,
+      end: event.endDate,
+      allDay: event.allDay,
+      backgroundColor: bgColor,
+      borderColor,
+      classNames: hasLink ? ['cursor-pointer', 'event-linked'] : [],
+      extendedProps: { ...event }
+    };
+  });
 
   const handleEventSubmit = async (values: EventFormValues) => {
     try {

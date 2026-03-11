@@ -63,6 +63,7 @@ import { MultiBackend, TouchTransition, MouseTransition } from 'react-dnd-multi-
 import { useChantiers } from '../../hooks/useChantiers';
 import { useChantierStatuses } from '../../hooks/useChantierStatuses';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { useAuth } from '../../auth/useAuth';
 import { useTeams } from '../../hooks/useTeams';
 import type { Chantier, ChantierStatus, Team, Technician } from '../../types/chantier';
 
@@ -109,9 +110,12 @@ interface ChantierCardProps {
   onDragEnd?: () => void;
   onTechDrop?: (chantierId: string, technicianId: string, role: 'CHEF_EQUIPE' | 'TECHNICIEN') => void;
   onTeamDrop?: (chantierId: string, teamId: string) => void;
+  canEdit?: boolean;
+  canFinances?: boolean;
+  canValidate?: boolean;
 }
 
-const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCompta, onDragStart, onDragEnd, onTechDrop, onTeamDrop }) => {
+const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCompta, onDragStart, onDragEnd, onTechDrop, onTeamDrop, canEdit = true, canFinances = true, canValidate = true }) => {
   const touchStartTime = useRef(0);
   const touchStartPos = useRef({ x: 0, y: 0 });
   const hasMoved = useRef(false);
@@ -144,6 +148,7 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCom
     end: () => {
       onDragEnd?.();
     },
+    canDrag: () => !!canEdit,
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
     }),
@@ -235,7 +240,7 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCom
             {chantier.productLabel}
             {chantier.customLabel && ` — ${chantier.customLabel}`}
           </Tag>
-          {!chantier.isValidated && (
+          {!chantier.isValidated && canValidate && (
             <Tooltip title="Non validé — cliquez pour valider">
               <Tag
                 color="warning"
@@ -250,7 +255,7 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCom
             </Tooltip>
           )}
           {/* Mini indicateur facturation en haut à droite */}
-          {chantier._invoiceSummary && (
+          {canFinances && chantier._invoiceSummary && (
             <Tooltip title={`Factures: ${chantier._invoiceSummary.paid}/${chantier._invoiceSummary.total} payées${chantier._invoiceSummary.overdue > 0 ? ` — ${chantier._invoiceSummary.overdue} en retard !` : ''}${chantier._invoiceSummary.totalAmount > 0 ? `\n${chantier._invoiceSummary.paidAmount.toLocaleString('fr-BE')} / ${chantier._invoiceSummary.totalAmount.toLocaleString('fr-BE')} €` : ''}`}>
               <div
                 style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 3, cursor: 'pointer' }}
@@ -291,7 +296,7 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCom
             </Tooltip>
           )}
 
-          {chantier.amount != null && chantier.amount > 0 && (
+          {canFinances && chantier.amount != null && chantier.amount > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 10, color: '#52c41a' }}>
               <DollarOutlined style={{ fontSize: 9 }} />
               <span>{chantier.amount.toLocaleString('fr-BE')} €</span>
@@ -370,9 +375,12 @@ interface KanbanColumnProps {
   onDragEnd?: () => void;
   onTechDrop?: (chantierId: string, technicianId: string, role: 'CHEF_EQUIPE' | 'TECHNICIEN') => void;
   onTeamDrop?: (chantierId: string, teamId: string) => void;
+  canEdit?: boolean;
+  canFinances?: boolean;
+  canValidate?: boolean;
 }
 
-const KanbanColumn: React.FC<KanbanColumnProps> = ({ status, chantiers, onDrop, onViewChantier, onViewChantierCompta, dropState = 'none', onDragStart, onDragEnd, onTechDrop, onTeamDrop }) => {
+const KanbanColumn: React.FC<KanbanColumnProps> = ({ status, chantiers, onDrop, onViewChantier, onViewChantierCompta, dropState = 'none', onDragStart, onDragEnd, onTechDrop, onTeamDrop, canEdit = true, canFinances = true, canValidate = true }) => {
   const [{ isOver, canDrop }, drop] = useDrop({
     accept: ITEM_TYPE,
     drop: (item: DragItem) => {
@@ -505,6 +513,9 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({ status, chantiers, onDrop, 
             onDragEnd={onDragEnd}
             onTechDrop={onTechDrop}
             onTeamDrop={onTeamDrop}
+            canEdit={canEdit}
+            canFinances={canFinances}
+            canValidate={canValidate}
           />
         ))}
         {chantiers.length === 0 && (
@@ -774,7 +785,13 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
     company: string;
     specialties: string[];
     color: string;
-  }>({ type: 'INTERNAL', billingMode: '', firstName: '', lastName: '', email: '', phone: '', company: '', specialties: [], color: '#1677ff' });
+    vatNumber: string;
+    address: string;
+    postalCode: string;
+    city: string;
+    country: string;
+    iban: string;
+  }>({ type: 'INTERNAL', billingMode: '', firstName: '', lastName: '', email: '', phone: '', company: '', specialties: [], color: '#1677ff', vatNumber: '', address: '', postalCode: '', city: '', country: 'Belgique', iban: '' });
   const [unavailModalOpen, setUnavailModalOpen] = useState(false);
   const [unavailTechId, setUnavailTechId] = useState<string>('');
   const [unavailData, setUnavailData] = useState<{ startDate: string; endDate: string; type: string; note: string }>({ startDate: '', endDate: '', type: 'CONGE', note: '' });
@@ -790,6 +807,13 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
 
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, [apiHook.api]);
+  const { canDo } = useAuth();
+  const canSeeTeamPanel = canDo('chantiers', 'team_panel');
+  const canSeeSettings = canDo('chantiers', 'settings');
+  const canAssign = canDo('chantiers', 'assign');
+  const canEdit = canDo('chantiers', 'edit');
+  const canFinances = canDo('chantiers', 'finances');
+  const canValidate = canDo('chantiers', 'validate');
 
   // Charger les transitions autorisées au montage
   useEffect(() => {
@@ -919,6 +943,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
 
   // ── Handlers assignation tech ──
   const handleTechDrop = useCallback(async (chantierId: string, technicianId: string, role: 'CHEF_EQUIPE' | 'TECHNICIEN') => {
+    if (!canAssign) { message.warning('🔒 Vous n\'avez pas la permission d\'assigner des techniciens'); return; }
     try {
       await assignToChantier(chantierId, technicianId, role);
       message.success('Technicien assigné !');
@@ -930,9 +955,10 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
         message.error(err?.message || 'Erreur lors de l\'assignation');
       }
     }
-  }, [assignToChantier, refetch]);
+  }, [assignToChantier, refetch, canAssign]);
 
   const handleTeamDrop = useCallback(async (chantierId: string, teamId: string) => {
+    if (!canAssign) { message.warning('🔒 Vous n\'avez pas la permission d\'assigner des équipes'); return; }
     try {
       const result = await assignTeamToChantier(chantierId, teamId);
       message.success(result.message || 'Équipe assignée !');
@@ -940,7 +966,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
     } catch (err: any) {
       message.error(err?.message || 'Erreur lors de l\'assignation de l\'équipe');
     }
-  }, [assignTeamToChantier, refetch]);
+  }, [assignTeamToChantier, refetch, canAssign]);
 
   const handleCreateTeam = useCallback(async () => {
     if (!newTeamName.trim()) return;
@@ -976,6 +1002,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
   }, [addTeamMember, addMemberTeamId, addMemberTechId]);
 
   const handleDrop = useCallback(async (chantierId: string, statusId: string) => {
+    if (!canEdit) { message.warning('🔒 Vous n\'avez pas la permission de modifier le statut'); return; }
     try {
       await updateChantierStatus(chantierId, statusId);
       message.success('Statut mis à jour');
@@ -1011,7 +1038,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
       setDraggingFromStatusId(null);
       refetch();
     }
-  }, [updateChantierStatus, refetch]);
+  }, [updateChantierStatus, refetch, canEdit]);
 
   // Handler pour forcer le déplacement malgré le blocage facturation
   const handleForceMove = useCallback(async () => {
@@ -1398,6 +1425,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
 
         <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
           {/* Toggle panel techniciens */}
+          {canSeeTeamPanel && (
           <Tooltip title={techPanelOpen ? 'Masquer le panel techniciens' : 'Afficher le panel techniciens'}>
             <Button
               icon={techPanelOpen ? <MenuFoldOutlined /> : <MenuUnfoldOutlined />}
@@ -1409,6 +1437,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
               <TeamOutlined /> {technicians.length}
             </Button>
           </Tooltip>
+          )}
           {/* Filtre technicien actif */}
           {selectedTechFilter && (
             <Tag
@@ -1425,7 +1454,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
               }
             </Tag>
           )}
-          {onSettings && (
+          {onSettings && canSeeSettings && (
             <Button icon={<SettingOutlined />} size="small" onClick={onSettings}>
               Paramètres
             </Button>
@@ -1437,7 +1466,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
       <DndProvider backend={MultiBackend} options={HTML5toTouch}>
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative', minHeight: 0 }}>
           {/* ═══ Backdrop overlay (mobile) ═══ */}
-          {techPanelOpen && (
+          {canSeeTeamPanel && techPanelOpen && (
             <div
               onClick={() => setTechPanelOpen(false)}
               style={{
@@ -1451,6 +1480,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
           )}
 
           {/* ═══ Panel Techniciens (gauche) — Sliding drawer ═══ */}
+          {canSeeTeamPanel && (
           <div style={{
             position: 'absolute',
             top: 0,
@@ -1497,7 +1527,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                     🔄 Sync
                   </button>
                   <button
-                    onClick={() => { setTechFormData({ type: 'SUBCONTRACTOR', billingMode: 'FORFAIT', firstName: '', lastName: '', email: '', phone: '', company: '', specialties: [], color: '#8c8c8c' }); setTechFormOpen(true); }}
+                    onClick={() => { setTechFormData({ type: 'SUBCONTRACTOR', billingMode: 'FORFAIT', firstName: '', lastName: '', email: '', phone: '', company: '', specialties: [], color: '#8c8c8c', vatNumber: '', address: '', postalCode: '', city: '', country: 'Belgique', iban: '' }); setTechFormOpen(true); }}
                     style={{ flex: 1, padding: '6px 8px', borderRadius: 4, border: '1px dashed #8c8c8c', background: '#fff', cursor: 'pointer', fontSize: 11, color: '#8c8c8c', minHeight: 36 }}
                     title="Ajouter un sous-traitant"
                   >
@@ -1639,9 +1669,10 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                 )}
               </div>
           </div>
+          )}
 
           {/* ═══ Toggle tab on left edge (visible when panel closed) ═══ */}
-          {!techPanelOpen && (
+          {canSeeTeamPanel && !techPanelOpen && (
             <div
               onClick={() => setTechPanelOpen(true)}
               style={{
@@ -1697,6 +1728,9 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                 onDragEnd={handleCardDragEnd}
                 onTechDrop={handleTechDrop}
                 onTeamDrop={handleTeamDrop}
+                canEdit={canEdit}
+                canFinances={canFinances}
+                canValidate={canValidate}
               />
             ))}
           </div>
@@ -1717,7 +1751,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
           <Button key="cancel" onClick={() => setBillingBlock(null)}>
             Annuler
           </Button>,
-          <Button
+          ...(canFinances ? [<Button
             key="force"
             danger
             type="primary"
@@ -1725,7 +1759,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
             onClick={handleForceMove}
           >
             ⚡ Forcer le déplacement
-          </Button>,
+          </Button>] : []),
         ]}
       >
         <p style={{ marginBottom: 12 }}>Ce chantier a des factures requises non payées :</p>
@@ -1818,12 +1852,19 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
             message.warning('Prénom et nom requis');
             return;
           }
+          if (techFormData.type === 'SUBCONTRACTOR') {
+            if (!techFormData.company?.trim()) { message.warning('Entreprise requise pour un sous-traitant'); return; }
+            if (!techFormData.vatNumber?.trim()) { message.warning('N° TVA requis pour un sous-traitant'); return; }
+            if (!techFormData.address?.trim()) { message.warning('Adresse requise pour un sous-traitant'); return; }
+            if (!techFormData.postalCode?.trim() || !techFormData.city?.trim()) { message.warning('Code postal et ville requis'); return; }
+            if (!techFormData.iban?.trim()) { message.warning('IBAN requis pour un sous-traitant'); return; }
+          }
           try {
             const payload = { ...techFormData, billingMode: techFormData.billingMode || null };
             await createTechnician(payload);
             message.success('Technicien créé !');
             setTechFormOpen(false);
-            setTechFormData({ type: 'INTERNAL', billingMode: '', firstName: '', lastName: '', email: '', phone: '', company: '', specialties: [], color: '#1677ff' });
+            setTechFormData({ type: 'INTERNAL', billingMode: '', firstName: '', lastName: '', email: '', phone: '', company: '', specialties: [], color: '#1677ff', vatNumber: '', address: '', postalCode: '', city: '', country: 'Belgique', iban: '' });
           } catch (err: any) {
             message.error(err?.message || 'Erreur création');
           }
@@ -1873,6 +1914,36 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                 ]}
               />
             </div>
+          )}
+          {techFormData.type === 'SUBCONTRACTOR' && (
+            <>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 500 }}>N° TVA <span style={{ color: '#ff4d4f' }}>*</span></label>
+                <Input value={techFormData.vatNumber} onChange={e => setTechFormData(d => ({ ...d, vatNumber: e.target.value }))} placeholder="BE0123.456.789" />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 500 }}>Adresse <span style={{ color: '#ff4d4f' }}>*</span></label>
+                <Input value={techFormData.address} onChange={e => setTechFormData(d => ({ ...d, address: e.target.value }))} placeholder="Rue et numéro" />
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 12, fontWeight: 500 }}>Code postal <span style={{ color: '#ff4d4f' }}>*</span></label>
+                  <Input value={techFormData.postalCode} onChange={e => setTechFormData(d => ({ ...d, postalCode: e.target.value }))} placeholder="1000" />
+                </div>
+                <div style={{ flex: 2 }}>
+                  <label style={{ fontSize: 12, fontWeight: 500 }}>Ville <span style={{ color: '#ff4d4f' }}>*</span></label>
+                  <Input value={techFormData.city} onChange={e => setTechFormData(d => ({ ...d, city: e.target.value }))} placeholder="Bruxelles" />
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 500 }}>Pays</label>
+                <Input value={techFormData.country} onChange={e => setTechFormData(d => ({ ...d, country: e.target.value }))} placeholder="Belgique" />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 500 }}>IBAN <span style={{ color: '#ff4d4f' }}>*</span></label>
+                <Input value={techFormData.iban} onChange={e => setTechFormData(d => ({ ...d, iban: e.target.value }))} placeholder="BE68 5390 0754 7034" />
+              </div>
+            </>
           )}
           <div style={{ display: 'flex', gap: 8 }}>
             <div style={{ flex: 1 }}>

@@ -322,6 +322,7 @@ export async function copyMissingCapacities(
         
         // 🛑 FIX: NE PAS suffixer comparisonColumn, displayRow, displayColumn
         // Ce sont des noms de colonnes Excel, PAS des IDs de nœuds.
+      }
 
       updatedMetadata = metaObj as Prisma.InputJsonValue;
     } catch (error) {

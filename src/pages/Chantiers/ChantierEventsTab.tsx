@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Card, Button, Tag, Modal, Form, Input, Select, DatePicker, Empty, Typography, Popconfirm, Badge, Alert, Calendar, App, Spin,
-  Divider,
+  Divider, Segmented,
 } from 'antd';
 import {
   PlusOutlined, DeleteOutlined, EditOutlined, CalendarOutlined,
   CheckCircleOutlined, WarningOutlined, LockOutlined,
   ExclamationCircleOutlined, FileProtectOutlined, SearchOutlined,
+  LeftOutlined, RightOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
@@ -109,6 +110,8 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
   // Calendrier existants pour lier un événement
   const [existingCalendarEvents, setExistingCalendarEvents] = useState<CalendarEventInfo[]>([]);
   const [linkMode, setLinkMode] = useState<'new' | 'existing'>('new');
+  const [agendaView, setAgendaView] = useState<'month' | 'day' | 'week'>('month');
+  const [agendaDate, setAgendaDate] = useState<Dayjs>(dayjs());
 
   // Revue technique
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
@@ -593,57 +596,250 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
 
               {linkMode === 'new' && (
                 <>
-                  {/* Mini-calendrier visuel des événements existants */}
+                  {/* Vue agenda avec onglets Mois / Jour / Semaine */}
                   <div style={{ marginBottom: 12 }}>
-                    <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>
-                      📅 Vos événements existants sont marqués en bleu. Cliquez sur un jour pour le sélectionner.
-                    </Text>
-                    <div style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflow: 'hidden' }}>
-                      <style>{`
-                        .event-mini-calendar .ant-picker-calendar-header { padding: 4px 8px !important; }
-                        .event-mini-calendar .ant-picker-cell { padding: 2px 0 !important; }
-                        .event-mini-calendar .ant-picker-cell-inner { height: 28px !important; line-height: 28px !important; width: 28px !important; }
-                        .event-mini-calendar .ant-picker-content th { padding: 4px 0 !important; font-size: 11px !important; }
-                        .event-mini-calendar .ant-picker-body { padding: 4px 8px !important; }
-                      `}</style>
-                      <Calendar
-                        fullscreen={false}
-                        className="event-mini-calendar"
-                        onSelect={(date: Dayjs) => {
-                          const current = form.getFieldValue('dateRange');
-                          const startTime = current?.[0] ? dayjs(current[0]).format('HH:mm') : '09:00';
-                          const endTime = current?.[1] ? dayjs(current[1]).format('HH:mm') : '10:00';
-                          const [sh, sm] = startTime.split(':').map(Number);
-                          const [eh, em] = endTime.split(':').map(Number);
-                          form.setFieldsValue({
-                            dateRange: [
-                              date.hour(sh).minute(sm).second(0),
-                              date.hour(eh).minute(em).second(0),
-                            ],
-                          });
-                        }}
-                        cellRender={(current: Dayjs) => {
-                          const dateStr = current.format('YYYY-MM-DD');
-                          const hasEvent = existingCalendarEvents.some(
-                            ce => dayjs(ce.startDate).format('YYYY-MM-DD') === dateStr
-                          );
-                          const hasChantierEvent = events.some(
-                            e => e.CalendarEvent && dayjs(e.CalendarEvent.startDate).format('YYYY-MM-DD') === dateStr
-                          );
-                          if (hasChantierEvent) {
-                            return <div style={{ position: 'absolute', bottom: 1, left: '50%', transform: 'translateX(-50%)', width: 5, height: 5, borderRadius: '50%', background: '#faad14' }} />;
-                          }
-                          if (hasEvent) {
-                            return <div style={{ position: 'absolute', bottom: 1, left: '50%', transform: 'translateX(-50%)', width: 5, height: 5, borderRadius: '50%', background: '#1890ff' }} />;
-                          }
-                          return null;
-                        }}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <Segmented
+                        size="small"
+                        value={agendaView}
+                        onChange={(v) => setAgendaView(v as 'month' | 'day' | 'week')}
+                        options={[
+                          { label: 'Mois', value: 'month' },
+                          { label: 'Jour', value: 'day' },
+                          { label: 'Semaine', value: 'week' },
+                        ]}
                       />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <Button size="small" icon={<LeftOutlined />} onClick={() => {
+                          setAgendaDate(prev => agendaView === 'month' ? prev.subtract(1, 'month') : agendaView === 'week' ? prev.subtract(1, 'week') : prev.subtract(1, 'day'));
+                        }} />
+                        <Button size="small" onClick={() => setAgendaDate(dayjs())} style={{ fontSize: 11, padding: '0 6px' }}>
+                          Aujourd'hui
+                        </Button>
+                        <Button size="small" icon={<RightOutlined />} onClick={() => {
+                          setAgendaDate(prev => agendaView === 'month' ? prev.add(1, 'month') : agendaView === 'week' ? prev.add(1, 'week') : prev.add(1, 'day'));
+                        }} />
+                      </div>
                     </div>
+
+                    {/* Titre de la période */}
+                    <div style={{ textAlign: 'center', fontWeight: 600, fontSize: 13, marginBottom: 6, color: '#333' }}>
+                      {agendaView === 'month' && agendaDate.format('MMMM YYYY')}
+                      {agendaView === 'day' && agendaDate.format('dddd D MMMM YYYY')}
+                      {agendaView === 'week' && `${agendaDate.startOf('week').format('D MMM')} — ${agendaDate.endOf('week').format('D MMM YYYY')}`}
+                    </div>
+
+                    {/* VUE MOIS */}
+                    {agendaView === 'month' && (
+                      <div style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflow: 'hidden' }}>
+                        <style>{`
+                          .event-mini-calendar .ant-picker-calendar-header { display: none !important; }
+                          .event-mini-calendar .ant-picker-cell { padding: 2px 0 !important; }
+                          .event-mini-calendar .ant-picker-cell-inner { height: 28px !important; line-height: 28px !important; width: 28px !important; }
+                          .event-mini-calendar .ant-picker-content th { padding: 4px 0 !important; font-size: 11px !important; }
+                          .event-mini-calendar .ant-picker-body { padding: 4px 8px !important; }
+                        `}</style>
+                        <Calendar
+                          fullscreen={false}
+                          className="event-mini-calendar"
+                          value={agendaDate}
+                          onSelect={(date: Dayjs) => {
+                            setAgendaDate(date);
+                            setAgendaView('day');
+                            const current = form.getFieldValue('dateRange');
+                            const startTime = current?.[0] ? dayjs(current[0]).format('HH:mm') : '09:00';
+                            const endTime = current?.[1] ? dayjs(current[1]).format('HH:mm') : '10:00';
+                            const [sh, sm] = startTime.split(':').map(Number);
+                            const [eh, em] = endTime.split(':').map(Number);
+                            form.setFieldsValue({
+                              dateRange: [
+                                date.hour(sh).minute(sm).second(0),
+                                date.hour(eh).minute(em).second(0),
+                              ],
+                            });
+                          }}
+                          cellRender={(current: Dayjs) => {
+                            const dateStr = current.format('YYYY-MM-DD');
+                            const hasEvent = existingCalendarEvents.some(
+                              ce => dayjs(ce.startDate).format('YYYY-MM-DD') === dateStr
+                            );
+                            const hasChantierEvent = events.some(
+                              e => e.CalendarEvent && dayjs(e.CalendarEvent.startDate).format('YYYY-MM-DD') === dateStr
+                            );
+                            if (hasChantierEvent) {
+                              return <div style={{ position: 'absolute', bottom: 1, left: '50%', transform: 'translateX(-50%)', width: 5, height: 5, borderRadius: '50%', background: '#faad14' }} />;
+                            }
+                            if (hasEvent) {
+                              return <div style={{ position: 'absolute', bottom: 1, left: '50%', transform: 'translateX(-50%)', width: 5, height: 5, borderRadius: '50%', background: '#1890ff' }} />;
+                            }
+                            return null;
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {/* VUE JOUR — grille horaire */}
+                    {agendaView === 'day' && (() => {
+                      const HOURS = Array.from({ length: 14 }, (_, i) => i + 7); // 7h-20h
+                      const dayStr = agendaDate.format('YYYY-MM-DD');
+                      const dayEvents = existingCalendarEvents.filter(
+                        ce => dayjs(ce.startDate).format('YYYY-MM-DD') === dayStr
+                      );
+                      const dayChantierEvents = events.filter(
+                        e => e.CalendarEvent && dayjs(e.CalendarEvent.startDate).format('YYYY-MM-DD') === dayStr
+                      );
+                      return (
+                        <div style={{ border: '1px solid #f0f0f0', borderRadius: 8, maxHeight: 320, overflowY: 'auto' }}>
+                          {HOURS.map(hour => {
+                            const eventsThisHour = dayEvents.filter(ce => {
+                              const h = dayjs(ce.startDate).hour();
+                              return h === hour;
+                            });
+                            const chantierThisHour = dayChantierEvents.filter(e => {
+                              const h = dayjs(e.CalendarEvent!.startDate).hour();
+                              return h === hour;
+                            });
+                            const hasAny = eventsThisHour.length > 0 || chantierThisHour.length > 0;
+                            return (
+                              <div
+                                key={hour}
+                                onClick={() => {
+                                  const date = agendaDate.hour(hour).minute(0).second(0);
+                                  form.setFieldsValue({
+                                    dateRange: [date, date.add(1, 'hour')],
+                                  });
+                                }}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'stretch',
+                                  borderBottom: '1px solid #f5f5f5',
+                                  cursor: 'pointer',
+                                  background: hasAny ? '#fafafa' : 'white',
+                                  minHeight: 36,
+                                  transition: 'background 0.15s',
+                                }}
+                                onMouseEnter={(e) => { if (!hasAny) e.currentTarget.style.background = '#e6f7ff'; }}
+                                onMouseLeave={(e) => { if (!hasAny) e.currentTarget.style.background = 'white'; }}
+                              >
+                                <div style={{ width: 44, flexShrink: 0, padding: '6px 4px', textAlign: 'right', fontSize: 11, color: '#8c8c8c', borderRight: '1px solid #f0f0f0' }}>
+                                  {String(hour).padStart(2, '0')}:00
+                                </div>
+                                <div style={{ flex: 1, padding: '3px 6px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                  {chantierThisHour.map(e => (
+                                    <div key={e.id} style={{
+                                      fontSize: 10, padding: '2px 6px', borderRadius: 4,
+                                      background: '#fff7e6', border: '1px solid #ffd591', color: '#d48806',
+                                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                                    }}>
+                                      🏗️ {e.CalendarEvent?.title || 'Chantier'}
+                                      <span style={{ marginLeft: 4, opacity: 0.7 }}>
+                                        {dayjs(e.CalendarEvent!.startDate).format('HH:mm')}-{dayjs(e.CalendarEvent!.endDate).format('HH:mm')}
+                                      </span>
+                                    </div>
+                                  ))}
+                                  {eventsThisHour.map(ce => (
+                                    <div key={ce.id} style={{
+                                      fontSize: 10, padding: '2px 6px', borderRadius: 4,
+                                      background: '#e6f7ff', border: '1px solid #91d5ff', color: '#0050b3',
+                                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                                    }}>
+                                      📅 {ce.title}
+                                      <span style={{ marginLeft: 4, opacity: 0.7 }}>
+                                        {dayjs(ce.startDate).format('HH:mm')}-{dayjs(ce.endDate).format('HH:mm')}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+
+                    {/* VUE SEMAINE — 7 colonnes avec heures */}
+                    {agendaView === 'week' && (() => {
+                      const startOfWeek = agendaDate.startOf('week');
+                      const DAYS = Array.from({ length: 7 }, (_, i) => startOfWeek.add(i, 'day'));
+                      const HOURS = Array.from({ length: 14 }, (_, i) => i + 7);
+                      return (
+                        <div style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflowX: 'auto' }}>
+                          {/* En-têtes jours */}
+                          <div style={{ display: 'flex', borderBottom: '1px solid #e8e8e8', position: 'sticky', top: 0, background: 'white', zIndex: 1 }}>
+                            <div style={{ width: 36, flexShrink: 0 }} />
+                            {DAYS.map(d => {
+                              const isToday = d.isSame(dayjs(), 'day');
+                              return (
+                                <div
+                                  key={d.format('YYYY-MM-DD')}
+                                  onClick={() => { setAgendaDate(d); setAgendaView('day'); }}
+                                  style={{
+                                    flex: 1, textAlign: 'center', padding: '4px 2px', fontSize: 10, cursor: 'pointer',
+                                    fontWeight: isToday ? 700 : 400,
+                                    color: isToday ? '#1890ff' : d.day() === 0 ? '#ff4d4f' : '#333',
+                                    background: isToday ? '#e6f7ff' : 'transparent',
+                                    borderLeft: '1px solid #f0f0f0',
+                                  }}
+                                >
+                                  <div>{d.format('dd')}</div>
+                                  <div style={{ fontSize: 12 }}>{d.format('D')}</div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          {/* Grille horaire */}
+                          <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+                            {HOURS.map(hour => (
+                              <div key={hour} style={{ display: 'flex', borderBottom: '1px solid #f5f5f5', minHeight: 28 }}>
+                                <div style={{ width: 36, flexShrink: 0, fontSize: 9, color: '#8c8c8c', textAlign: 'right', padding: '2px 3px 0 0', borderRight: '1px solid #f0f0f0' }}>
+                                  {String(hour).padStart(2, '0')}h
+                                </div>
+                                {DAYS.map(d => {
+                                  const dayStr = d.format('YYYY-MM-DD');
+                                  const evts = existingCalendarEvents.filter(
+                                    ce => dayjs(ce.startDate).format('YYYY-MM-DD') === dayStr && dayjs(ce.startDate).hour() === hour
+                                  );
+                                  const chEvts = events.filter(
+                                    e => e.CalendarEvent && dayjs(e.CalendarEvent.startDate).format('YYYY-MM-DD') === dayStr && dayjs(e.CalendarEvent.startDate).hour() === hour
+                                  );
+                                  const hasAny = evts.length > 0 || chEvts.length > 0;
+                                  return (
+                                    <div
+                                      key={dayStr}
+                                      onClick={() => {
+                                        const date = d.hour(hour).minute(0).second(0);
+                                        form.setFieldsValue({ dateRange: [date, date.add(1, 'hour')] });
+                                        setAgendaDate(d);
+                                      }}
+                                      style={{
+                                        flex: 1, borderLeft: '1px solid #f0f0f0', padding: '1px 2px', cursor: 'pointer',
+                                        background: hasAny ? (chEvts.length > 0 ? '#fff7e6' : '#e6f7ff') : 'white',
+                                        transition: 'background 0.15s',
+                                      }}
+                                      onMouseEnter={(e) => { if (!hasAny) e.currentTarget.style.background = '#f0f5ff'; }}
+                                      onMouseLeave={(e) => { if (!hasAny) e.currentTarget.style.background = 'white'; }}
+                                      title={[
+                                        ...chEvts.map(e => `🏗️ ${e.CalendarEvent?.title || ''}`),
+                                        ...evts.map(ce => `📅 ${ce.title}`),
+                                      ].join('\n') || `${d.format('DD/MM')} ${hour}h — Cliquer pour réserver`}
+                                    >
+                                      {chEvts.length > 0 && <div style={{ width: '100%', height: 4, borderRadius: 2, background: '#faad14', marginBottom: 1 }} />}
+                                      {evts.length > 0 && <div style={{ width: '100%', height: 4, borderRadius: 2, background: '#1890ff' }} />}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     {/* Légende */}
                     <div style={{ display: 'flex', gap: 12, marginTop: 4, fontSize: 10, color: '#8c8c8c' }}>
                       <span><span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#1890ff', marginRight: 3 }} />Calendrier</span>
                       <span><span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#faad14', marginRight: 3 }} />Ce chantier</span>
+                      <span style={{ marginLeft: 'auto' }}>Cliquez pour sélectionner un créneau</span>
                     </div>
                   </div>
 
@@ -654,7 +850,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                     rules={[{ required: true, message: 'Sélectionnez la date et les heures' }]}
                   >
                     <RangePicker
-                      showTime={{ format: 'HH:mm' }}
+                      showTime={{ format: 'HH:mm', minuteStep: 15 }}
                       format="DD/MM/YYYY HH:mm"
                       style={{ width: '100%' }}
                       placeholder={['Début', 'Fin']}

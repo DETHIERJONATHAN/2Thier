@@ -62,6 +62,50 @@ router.get('/', authenticateToken, async (req, res) => {
     const where: any = {};
     if (!isSuperAdmin) {
       where.organizationId = organizationId;
+
+      // ── Filtrage par scope (permissions fines) ──
+      // Chercher la permission 'view' du module chantiers pour le rôle de l'utilisateur
+      if (user?.id) {
+        const userOrg = await db.userOrganization.findFirst({
+          where: { userId: user.id, organizationId },
+          select: { roleId: true },
+        });
+        if (userOrg?.roleId) {
+          const viewPerm = await db.permission.findFirst({
+            where: {
+              roleId: userOrg.roleId,
+              action: 'view',
+              Module: { key: 'chantiers' },
+              allowed: true,
+            },
+            select: { resource: true },
+          });
+          const scope = viewPerm?.resource || 'all';
+          if (scope === 'own') {
+            // Seulement les chantiers où l'utilisateur est assigné ou responsable
+            where.OR = [
+              { responsableId: user.id },
+              { commercialId: user.id },
+              { ChantierAssignments: { some: { Technician: { userId: user.id } } } },
+            ];
+          } else if (scope === 'team') {
+            // Chantiers assignés à un membre de la même équipe
+            const userTeams = await db.chantierAssignment.findMany({
+              where: { Technician: { userId: user.id }, teamId: { not: null } },
+              select: { teamId: true },
+              distinct: ['teamId'],
+            });
+            const teamIds = userTeams.map(t => t.teamId).filter(Boolean) as string[];
+            where.OR = [
+              { responsableId: user.id },
+              { commercialId: user.id },
+              { ChantierAssignments: { some: { Technician: { userId: user.id } } } },
+              ...(teamIds.length > 0 ? [{ ChantierAssignments: { some: { teamId: { in: teamIds } } } }] : []),
+            ];
+          }
+          // scope === 'all' or '*' → pas de filtre supplémentaire
+        }
+      }
     }
     if (statusId) where.statusId = statusId as string;
     if (productValue) where.productValue = productValue as string;
@@ -1264,6 +1308,216 @@ router.delete('/:id', authenticateToken, isAdmin, async (req, res) => {
       success: false,
       message: 'Erreur interne du serveur'
     });
+  }
+});
+
+// ═══════════════════════════════════════════════════
+// ═══ RECTIFICATION WORKFLOW ═══════════════════════
+// ═══════════════════════════════════════════════════
+
+/**
+ * GET /api/chantiers/rectification-context/:leadId
+ * Retourne le contexte de rectification pour un lead "À rectifier" :
+ * - chantierId, submissionId (= devisId à corriger)
+ * - remarques technicien (TechnicianFieldReview modifiés)
+ * - infos chantier (client, produit)
+ */
+router.get('/rectification-context/:leadId', authenticateToken, async (req, res) => {
+  try {
+    const { leadId } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    // Trouver le chantier lié au lead (le plus récent)
+    const chantier = await db.chantier.findFirst({
+      where: { leadId, organizationId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        ChantierStatus: { select: { id: true, name: true } },
+        Responsable: { select: { id: true, firstName: true, lastName: true } },
+        Commercial: { select: { id: true, firstName: true, lastName: true } },
+        ChantierEvent: {
+          where: { reviewStatus: 'CHANGES_DETECTED' },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          include: {
+            TechnicianFieldReviews: {
+              where: { isModified: true },
+              select: {
+                id: true,
+                nodeId: true,
+                fieldLabel: true,
+                originalValue: true,
+                reviewedValue: true,
+                modificationNote: true,
+                reviewType: true,
+                ReviewedBy: { select: { firstName: true, lastName: true } },
+              },
+            },
+            ValidatedBy: { select: { firstName: true, lastName: true } },
+          },
+        },
+      },
+    });
+
+    if (!chantier) {
+      return res.status(404).json({ success: false, message: 'Aucun chantier trouvé pour ce lead' });
+    }
+
+    const reviewEvent = chantier.ChantierEvent[0] || null;
+    const modifications = reviewEvent?.TechnicianFieldReviews || [];
+
+    res.json({
+      success: true,
+      data: {
+        chantierId: chantier.id,
+        submissionId: chantier.submissionId, // = devisId pour TBL
+        chantierName: chantier.customLabel || chantier.productLabel,
+        clientName: chantier.clientName,
+        siteAddress: chantier.siteAddress,
+        productLabel: chantier.productLabel,
+        chantierStatusName: chantier.ChantierStatus?.name,
+        responsable: chantier.Responsable
+          ? `${chantier.Responsable.firstName} ${chantier.Responsable.lastName}`
+          : null,
+        // Contexte de revue
+        reviewEventId: reviewEvent?.id || null,
+        reviewDate: reviewEvent?.createdAt || null,
+        reviewedBy: reviewEvent?.ValidatedBy
+          ? `${reviewEvent.ValidatedBy.firstName} ${reviewEvent.ValidatedBy.lastName}`
+          : null,
+        problemNote: reviewEvent?.problemNote || null,
+        // Modifications détaillées du technicien
+        modifications: modifications.map((m) => ({
+          fieldLabel: m.fieldLabel,
+          originalValue: m.originalValue,
+          reviewedValue: m.reviewedValue,
+          note: m.modificationNote,
+          reviewedBy: m.ReviewedBy
+            ? `${m.ReviewedBy.firstName} ${m.ReviewedBy.lastName}`
+            : null,
+        })),
+        totalModifications: modifications.length,
+      },
+    });
+  } catch (error) {
+    console.error('[Chantiers] Erreur GET /rectification-context/:leadId:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+/**
+ * POST /api/chantiers/resubmit-to-chantier/:leadId
+ * Après correction par le commercial, remet le lead en statut "Gagné"
+ * et réactive le chantier.
+ */
+router.post('/resubmit-to-chantier/:leadId', authenticateToken, async (req, res) => {
+  try {
+    const { leadId } = req.params;
+    const organizationId = req.headers['x-organization-id'] as string;
+    const userId = (req as any).user?.id;
+
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    // Vérifier que le lead est bien en "À rectifier"
+    const lead = await db.lead.findFirst({
+      where: { id: leadId, organizationId },
+      select: { id: true, status: true, statusId: true, firstName: true, lastName: true, assignedToId: true },
+    });
+
+    if (!lead) {
+      return res.status(404).json({ success: false, message: 'Lead non trouvé' });
+    }
+
+    if (lead.status !== 'à_rectifier') {
+      return res.status(400).json({
+        success: false,
+        message: `Le lead n'est pas en statut "À rectifier" (statut actuel: ${lead.status})`,
+      });
+    }
+
+    // Trouver le chantier
+    const chantier = await db.chantier.findFirst({
+      where: { leadId, organizationId },
+      orderBy: { createdAt: 'desc' },
+      include: { Responsable: { select: { id: true, firstName: true, lastName: true } } },
+    });
+
+    if (!chantier) {
+      return res.status(404).json({ success: false, message: 'Aucun chantier trouvé pour ce lead' });
+    }
+
+    // Remettre le lead en "won"
+    const wonStatus = await db.leadStatus.findFirst({
+      where: {
+        organizationId,
+        OR: [
+          { name: { contains: 'gagn', mode: 'insensitive' as const } },
+          { name: { contains: 'won', mode: 'insensitive' as const } },
+        ],
+      },
+    });
+
+    await db.lead.update({
+      where: { id: leadId },
+      data: {
+        status: 'won',
+        statusId: wonStatus?.id || lead.statusId,
+        updatedAt: new Date(),
+      },
+    });
+
+    // Ajouter un historique chantier
+    await db.chantierHistory.create({
+      data: {
+        id: crypto.randomUUID(),
+        chantierId: chantier.id,
+        action: 'RECTIFICATION_COMPLETED',
+        fromValue: 'À rectifier',
+        toValue: 'Actif',
+        userId: userId || null,
+        data: {
+          message: 'Corrections effectuées par le commercial, lead re-soumis au chantier',
+          resubmittedAt: new Date().toISOString(),
+        },
+        createdAt: new Date(),
+      },
+    });
+
+    // Notifier le responsable chantier
+    if (chantier.Responsable) {
+      await db.notification.create({
+        data: {
+          id: crypto.randomUUID(),
+          userId: chantier.Responsable.id,
+          organizationId,
+          type: 'CHANTIER_STATUS_CHANGED',
+          data: {
+            title: '✅ Corrections effectuées',
+            message: `Le commercial a corrigé le devis pour ${lead.firstName || ''} ${lead.lastName || ''}. Le chantier peut reprendre.`,
+            link: `/chantiers`,
+          },
+          status: 'PENDING',
+          updatedAt: new Date(),
+        },
+      });
+    }
+
+    console.log(`[Chantiers] Lead ${leadId} re-soumis au chantier ${chantier.id} après rectification`);
+
+    res.json({
+      success: true,
+      message: 'Lead re-soumis au chantier avec succès',
+      data: { chantierId: chantier.id, leadStatus: 'won' },
+    });
+  } catch (error) {
+    console.error('[Chantiers] Erreur POST /resubmit-to-chantier/:leadId:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
 

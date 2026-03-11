@@ -23,6 +23,7 @@ import leadsRoutes from './leadsRoutes'; // ✅ Routes leads corrigées
 import chantiersRoutes from './chantiersRoutes'; // 🏗️ Routes chantiers
 import chantierStatusesRoutes from './chantier-statuses'; // 🏗️ Routes statuts chantiers
 import chantierWorkflowRoutes from './chantier-workflow'; // 🏗️ Routes workflow chantiers (transitions, factures, événements, historique)
+import eSignatureRoutes from './e-signature'; // ✍️ Signature électronique avancée + PDF TBL
 import teamsRoutes from './teams'; // 👥 Routes équipes & techniciens
 import rolesRoutes from './rolesRoutes';
 import usersRoutes from './usersRoutes';
@@ -187,6 +188,9 @@ apiRouter.use('/chantier-statuses', chantierStatusesRoutes);
 
 // Routes workflow chantier (transitions, factures, événements, historique) 🏗️
 apiRouter.use('/chantier-workflow', chantierWorkflowRoutes);
+
+// Routes signature électronique avancée + PDF TBL ✍️
+apiRouter.use('/e-signature', eSignatureRoutes);
 
 // Routes équipes & techniciens 👥
 apiRouter.use('/teams', teamsRoutes);

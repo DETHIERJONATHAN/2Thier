@@ -139,7 +139,7 @@
  *         <h1>Votre Document</h1>
  *       </header>
  *       <main>
- *         {/* Contenu du document */}
+ *         {"Contenu du document"}
  *       </main>
  *       <footer style={styles.footerStyle}>
  *         © 2026 - Tous droits réservés
@@ -165,7 +165,7 @@
  *     }
  *   }, [themeId, applyThemeToElement]);
  * 
- *   return <div ref={containerRef}>{/* Contenu */}</div>;
+ *   return <div ref={containerRef}>{"Contenu"}</div>;
  * };
  * ```
  * 

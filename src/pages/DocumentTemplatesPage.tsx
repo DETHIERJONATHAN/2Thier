@@ -44,6 +44,8 @@ interface DocumentTemplate {
   description?: string;
   treeId?: string;
   tree?: { id: string; name: string };
+  productValue?: string | null;
+  isDefault?: boolean;
   isActive: boolean;
   createdAt: string;
   _count: {
@@ -71,6 +73,7 @@ const DocumentTemplatesPage = () => {
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
   const [themes, setThemes] = useState<DocumentTheme[]>([]);
   const [trees, setTrees] = useState<TBLTree[]>([]);
+  const [productOptions, setProductOptions] = useState<Array<{value: string, label: string, icon?: string, color?: string}>>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [themeModalVisible, setThemeModalVisible] = useState(false);
@@ -133,11 +136,32 @@ const DocumentTemplatesPage = () => {
     if (template) {
       setEditingTemplate(template);
       form.setFieldsValue(template);
+      // Charger les produits si un arbre est lié
+      if (template.treeId) {
+        loadProductOptions(template.treeId);
+      } else {
+        setProductOptions([]);
+      }
     } else {
       setEditingTemplate(null);
       form.resetFields();
+      // Valeurs par défaut pour nouveau template
+      form.setFieldsValue({ isDefault: false, isActive: true, defaultLanguage: 'fr' });
+      setProductOptions([]);
     }
     setModalVisible(true);
+  };
+
+  // Charger les options produit pour un arbre
+  const loadProductOptions = async (treeId: string) => {
+    try {
+      const response = await api.get(`/api/documents/product-options/${treeId}`);
+      const opts = Array.isArray(response) ? response : (response?.data || []);
+      setProductOptions(opts);
+    } catch (error) {
+      console.error('Erreur chargement options produit:', error);
+      setProductOptions([]);
+    }
   };
 
   // Sauvegarder template
@@ -395,6 +419,21 @@ const DocumentTemplatesPage = () => {
       )
     },
     {
+      title: '🏷️ Liaison',
+      key: 'productLink',
+      width: 120,
+      responsive: ['md'] as ('md')[],
+      render: (_: any, record: DocumentTemplate) => (
+        record.isDefault ? (
+          <Tag color="blue">📌 Par défaut</Tag>
+        ) : record.productValue ? (
+          <Tag color="purple">🏷️ {record.productValue}</Tag>
+        ) : (
+          <Tag color="default">Libre</Tag>
+        )
+      )
+    },
+    {
       title: 'Description',
       dataIndex: 'description',
       key: 'description',
@@ -601,6 +640,14 @@ const DocumentTemplatesPage = () => {
               allowClear
               showSearch
               optionFilterProp="children"
+              onChange={(value) => {
+                if (value) {
+                  loadProductOptions(value);
+                } else {
+                  setProductOptions([]);
+                  form.setFieldValue('productValue', null);
+                }
+              }}
             >
               {trees.map(tree => (
                 <Select.Option key={tree.id} value={tree.id}>
@@ -609,6 +656,36 @@ const DocumentTemplatesPage = () => {
               ))}
             </Select>
           </Form.Item>
+
+          <Form.Item
+            name="isDefault"
+            label="📌 Document par défaut"
+            tooltip="Les documents par défaut (page d'entrée, conditions générales, etc.) sont toujours proposés lors de la génération du PDF, indépendamment des produits sélectionnés."
+          >
+            <Select placeholder="Sélectionner">
+              <Select.Option value={true}>✅ Oui — Document indépendant (page d'entrée, conditions, etc.)</Select.Option>
+              <Select.Option value={false}>❌ Non</Select.Option>
+            </Select>
+          </Form.Item>
+
+          {productOptions.length > 0 && (
+            <Form.Item
+              name="productValue"
+              label="🏷️ Lié à un produit"
+              tooltip="Si ce template est spécifique à un produit (ex: template PV, template ISO), sélectionnez le produit. Laissez vide pour un document générique."
+            >
+              <Select 
+                placeholder="Aucun produit (document générique)"
+                allowClear
+              >
+                {productOptions.map(opt => (
+                  <Select.Option key={opt.value} value={opt.value}>
+                    <Tag color={opt.color || '#722ed1'} style={{ marginRight: 4 }}>{opt.label}</Tag>
+                  </Select.Option>
+                ))}
+              </Select>
+            </Form.Item>
+          )}
 
           <Form.Item
             name="description"
@@ -636,12 +713,10 @@ const DocumentTemplatesPage = () => {
           <Form.Item
             name="isActive"
             label="Statut"
-            initialValue={true}
-            valuePropName="checked"
           >
-            <Select>
-              <Select.Option value={true}>Actif</Select.Option>
-              <Select.Option value={false}>Inactif</Select.Option>
+            <Select placeholder="Sélectionner">
+              <Select.Option value={true}>✅ Actif</Select.Option>
+              <Select.Option value={false}>❌ Inactif</Select.Option>
             </Select>
           </Form.Item>
         </Form>

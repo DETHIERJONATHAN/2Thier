@@ -109,6 +109,8 @@ export default defineConfig({
         target: 'http://localhost:4000',
         changeOrigin: true,
         secure: false,
+        // ⏱️ Timeout long pour éviter les 502 sur génération PDF (~3s)
+        timeout: 120000,
         // 🍪 CRITIQUE: Forward les cookies Set-Cookie du backend
         cookieDomainRewrite: '',
         cookiePathRewrite: '/',
