@@ -58,6 +58,7 @@ const ChantierDetailPage: React.FC = () => {
   const canSeePointage = isAdminOrAbove || canDo('chantiers', 'pointage');
   const canAssign = isAdminOrAbove || canDo('chantiers', 'assign');
   const canSeeEvents = isAdminOrAbove || canDo('chantiers', 'edit');
+  const canSeePrices = isAdminOrAbove || userRole === 'comptable';
   const { message } = App.useApp();
 
   const [chantier, setChantier] = useState<Chantier | null>(null);
@@ -553,18 +554,22 @@ const ChantierDetailPage: React.FC = () => {
                   )}
                 </Descriptions.Item>
                 <Descriptions.Item label="Montant">
-                  {editing ? (
-                    <Input
-                      type="number"
-                      value={editForm.amount ?? ''}
-                      onChange={e => setEditForm(f => ({ ...f, amount: e.target.value ? Number(e.target.value) : null }))}
-                      suffix="€"
-                      size="small"
-                    />
+                  {canSeePrices ? (
+                    editing ? (
+                      <Input
+                        type="number"
+                        value={editForm.amount ?? ''}
+                        onChange={e => setEditForm(f => ({ ...f, amount: e.target.value ? Number(e.target.value) : null }))}
+                        suffix="€"
+                        size="small"
+                      />
+                    ) : (
+                      displayAmount
+                        ? <Text strong style={{ color: '#52c41a' }}>{displayAmount.toLocaleString('fr-BE', { minimumFractionDigits: 2 })} €</Text>
+                        : <Text type="secondary">—</Text>
+                    )
                   ) : (
-                    displayAmount
-                      ? <Text strong style={{ color: '#52c41a' }}>{displayAmount.toLocaleString('fr-BE', { minimumFractionDigits: 2 })} €</Text>
-                      : <Text type="secondary">—</Text>
+                    <Text type="secondary">🔒 Réservé</Text>
                   )}
                 </Descriptions.Item>
                 <Descriptions.Item label="Adresse chantier">
@@ -717,7 +722,7 @@ const ChantierDetailPage: React.FC = () => {
                     {genDoc.title && (
                       <Descriptions.Item label="Titre">{genDoc.title}</Descriptions.Item>
                     )}
-                    {(quoteData.totalHT || quoteData.totalTTC) && (
+                    {canSeePrices && (quoteData.totalHT || quoteData.totalTTC) && (
                       <>
                         {quoteData.totalHT ? (
                           <Descriptions.Item label="Total HT">
@@ -919,7 +924,7 @@ const ChantierDetailPage: React.FC = () => {
             )}
           </Card>
         </>), },
-        { key: 'document', label: <span><FileTextOutlined /> Document</span>, children: (
+        ...(canEdit ? [{ key: 'document', label: <span><FileTextOutlined /> Document</span>, children: (
           <div style={{ padding: '24px 0', display: 'flex', flexDirection: 'column', gap: 16 }}>
             {/* Document signé (uploadé) */}
             {chantier.documentUrl ? (
@@ -971,7 +976,7 @@ const ChantierDetailPage: React.FC = () => {
                         <Text type="secondary" style={{ fontSize: '12px' }}>
                           {genDoc.createdAt ? `Généré le ${new Date(genDoc.createdAt).toLocaleDateString('fr-FR')}` : 'Document TBL'}
                         </Text>
-                        {quoteData.totalTTC && (
+                        {quoteData.totalTTC && canSeePrices && (
                           <Text strong style={{ marginLeft: 12, color: '#52c41a' }}>
                             {Number(quoteData.totalTTC).toLocaleString('fr-BE', { minimumFractionDigits: 2 })} € TTC
                           </Text>
@@ -992,7 +997,7 @@ const ChantierDetailPage: React.FC = () => {
               </Card>
             )}
           </div>
-        ), },
+        ), }] : []),
         { key: 'tbl', label: <span><PartitionOutlined /> TBL</span>, children: (
           <div style={{ padding: '24px 0' }}>
             <Card>
@@ -1028,10 +1033,13 @@ const ChantierDetailPage: React.FC = () => {
                 </Descriptions.Item>
                 <Descriptions.Item label="Client">{clientName}</Descriptions.Item>
                 <Descriptions.Item label="Montant">
-                  {displayAmount
-                    ? <Text strong style={{ color: '#52c41a' }}>{displayAmount.toLocaleString('fr-BE', { minimumFractionDigits: 2 })} €</Text>
-                    : <Text type="secondary">—</Text>
-                  }
+                  {canSeePrices ? (
+                    displayAmount
+                      ? <Text strong style={{ color: '#52c41a' }}>{displayAmount.toLocaleString('fr-BE', { minimumFractionDigits: 2 })} €</Text>
+                      : <Text type="secondary">—</Text>
+                  ) : (
+                    <Text type="secondary">🔒 Réservé</Text>
+                  )}
                 </Descriptions.Item>
                 <Descriptions.Item label="Adresse">
                   {displayAddress || <Text type="secondary">—</Text>}
@@ -1054,9 +1062,9 @@ const ChantierDetailPage: React.FC = () => {
             )}
           </div>
         ), },
-        { key: 'history', label: <span><HistoryOutlined /> Historique</span>, children: (
+        ...(canEdit ? [{ key: 'history', label: <span><HistoryOutlined /> Historique</span>, children: (
           <ChantierHistoryTab chantierId={chantier.id} statusesMap={statusesMap} />
-        ), },
+        ), }] : []),
         ...(canSeeCompta ? [{ key: 'compta', label: <span><DollarOutlined /> Comptabilité</span>, children: (
           <ChantierInvoicesTab
             chantierId={chantier.id}
