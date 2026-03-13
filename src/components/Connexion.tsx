@@ -17,7 +17,7 @@ export default function Connexion() {
     try {
       console.log(`[Connexion] 🔐 Tentative de login avec email="${email}", password.length=${password?.length || 0}`);
       console.log(`[Connexion] 🔐 __authLoginInFlight=`, window.__authLoginInFlight);
-      await login(email, password);
+      await login(email.trim(), password.trim());
       console.log('[Connexion] Appel à login terminé avec succès.');
       navigate('/dashboard'); // Redirection vers le tableau de bord
     } catch (err) {
