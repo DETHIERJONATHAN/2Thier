@@ -26,7 +26,7 @@ export function useTeams() {
   // ── Charger techniciens (enrichis) ──
   const fetchTechnicians = useCallback(async () => {
     try {
-      const response = await api.get('/api/teams/technicians') as { success: boolean; data: Technician[] };
+      const response = await api.get('/api/teams/technicians?scopeAction=view') as { success: boolean; data: Technician[] };
       setTechnicians(response.data || []);
     } catch (err) {
       console.error('[useTeams] Erreur chargement techniciens:', err);

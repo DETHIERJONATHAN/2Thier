@@ -15,9 +15,15 @@ export default function Connexion() {
     setLoading(true);
     setError('');
     try {
-      console.log(`[Connexion] 🔐 Tentative de login avec email="${email}", password.length=${password?.length || 0}`);
+      // Nettoyage agressif : trim + suppression des caractères invisibles Unicode
+      const cleanEmail = email.trim().replace(/[\u200B-\u200D\uFEFF\u00A0\u2060]/g, '');
+      const cleanPassword = password.trim().replace(/[\u200B-\u200D\uFEFF\u00A0\u2060]/g, '');
+      console.log(`[Connexion] 🔐 Tentative de login avec email="${cleanEmail}", password.length=${cleanPassword.length} (raw=${password.length})`);
+      if (cleanPassword.length !== password.length) {
+        console.warn(`[Connexion] ⚠️ ${password.length - cleanPassword.length} caractère(s) invisible(s) supprimé(s) du mot de passe`);
+      }
       console.log(`[Connexion] 🔐 __authLoginInFlight=`, window.__authLoginInFlight);
-      await login(email.trim(), password.trim());
+      await login(cleanEmail, cleanPassword);
       console.log('[Connexion] Appel à login terminé avec succès.');
       navigate('/dashboard'); // Redirection vers le tableau de bord
     } catch (err) {

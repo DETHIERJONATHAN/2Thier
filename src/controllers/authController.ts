@@ -37,12 +37,16 @@ const getJWTSecret = (): string => {
 export const login = async (req: Request, res: Response) => {
   try {
     const { email: rawEmail, password: rawPassword } = req.body;
-    const email = typeof rawEmail === 'string' ? rawEmail.trim() : rawEmail;
-    const password = typeof rawPassword === 'string' ? rawPassword.trim() : rawPassword;
+    // Nettoyage : trim + suppression des caractères invisibles Unicode
+    const stripInvisible = (s: string) => s.trim().replace(/[\u200B-\u200D\uFEFF\u00A0\u2060]/g, '');
+    const email = typeof rawEmail === 'string' ? stripInvisible(rawEmail) : rawEmail;
+    const password = typeof rawPassword === 'string' ? stripInvisible(rawPassword) : rawPassword;
 
     console.log('[AUTH] 🔐 Tentative de connexion', {
       email,
       hasPassword: typeof password === 'string' && password.length > 0,
+      rawPasswordLength: typeof rawPassword === 'string' ? rawPassword.length : 0,
+      cleanPasswordLength: typeof password === 'string' ? password.length : 0,
       contentType: req.headers['content-type']
     });
 

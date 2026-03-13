@@ -193,11 +193,12 @@ export default function DashboardPageUnified() {
     try {
       setLoading(true);
 
-      // Récupérer TOUTES les données
+      // Récupérer les données (users/clients uniquement pour admin/super_admin)
+      const isAdmin = isSuperAdmin || user?.role === 'admin' || user?.role === 'super_admin';
       const [leadsResponse, usersResponse, clientsResponse] = await Promise.all([
         api.get('/api/leads').catch(() => ({ data: [] })),
-        api.get('/api/users').catch(() => ({ data: [] })),
-        api.get('/api/users?role=CLIENT').catch(() => ({ data: [] }))
+        isAdmin ? api.get('/api/users').catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
+        isAdmin ? api.get('/api/users?role=CLIENT').catch(() => ({ data: [] })) : Promise.resolve({ data: [] })
       ]);
 
       const leads = Array.isArray(leadsResponse) ? leadsResponse : (leadsResponse?.data || []);

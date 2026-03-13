@@ -768,6 +768,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
   const [techPanelOpen, setTechPanelOpen] = useState(true);
   const [selectedTechFilter, setSelectedTechFilter] = useState<string | null>(null); // technicianId or 'unassigned' or team:teamId
   const [teamModalOpen, setTeamModalOpen] = useState(false);
+  const [creatingTeam, setCreatingTeam] = useState(false);
   const [newTeamName, setNewTeamName] = useState('');
   const [newTeamColor, setNewTeamColor] = useState('#1677ff');
   const [addMemberTeamId, setAddMemberTeamId] = useState<string | null>(null);
@@ -970,7 +971,8 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
 
   const handleCreateTeam = useCallback(async () => {
     if (!canSeeTeamPanel) { message.warning('🔒 Permission requise'); return; }
-    if (!newTeamName.trim()) return;
+    if (!newTeamName.trim() || creatingTeam) return;
+    setCreatingTeam(true);
     try {
       await createTeam({ name: newTeamName.trim(), color: newTeamColor });
       message.success('Équipe créée !');
@@ -978,8 +980,10 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
       setTeamModalOpen(false);
     } catch (err: any) {
       message.error(err?.message || 'Erreur création équipe');
+    } finally {
+      setCreatingTeam(false);
     }
-  }, [createTeam, newTeamName, newTeamColor, canSeeTeamPanel]);
+  }, [createTeam, newTeamName, newTeamColor, canSeeTeamPanel, creatingTeam]);
 
   const handleDeleteTeam = useCallback(async (teamId: string) => {
     if (!canSeeTeamPanel) { message.warning('🔒 Permission requise'); return; }
@@ -1787,6 +1791,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
         title={<span><TeamOutlined style={{ marginRight: 8 }} />Nouvelle équipe</span>}
         onCancel={() => setTeamModalOpen(false)}
         onOk={handleCreateTeam}
+        confirmLoading={creatingTeam}
         okText="Créer"
         cancelText="Annuler"
       >

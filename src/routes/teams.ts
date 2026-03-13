@@ -491,8 +491,19 @@ router.get('/', authenticateToken, async (req, res) => {
     const organizationId = getOrgId(req);
     if (!organizationId) return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
 
+    // Résolution scope: filtrer les équipes visibles
+    const user = (req as any).user;
+    const resolved = await resolveChantierScope(user, organizationId, 'view');
+    const allowedTechIds = resolved.technicianIds;
+
+    const where: any = { organizationId };
+    // Si scope restreint, ne montrer que les équipes contenant au moins un tech autorisé
+    if (allowedTechIds) {
+      where.Members = { some: { technicianId: { in: allowedTechIds } } };
+    }
+
     const teams = await db.team.findMany({
-      where: { organizationId },
+      where,
       include: {
         Members: {
           include: { Technician: { select: techSelect } },
