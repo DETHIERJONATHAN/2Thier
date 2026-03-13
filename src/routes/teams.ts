@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Response, NextFunction } from 'express';
 import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
 import { z } from 'zod';
@@ -6,6 +6,62 @@ import fs from 'fs';
 import path from 'path';
 
 const router = Router();
+
+// ═══ PERMISSION MIDDLEWARE pour Chantiers ═══
+const CHANTIERS_MODULE_ID = 'module-chantiers-87ba0db4-2eb9-4096-8bbb-2259da444c2e';
+
+/**
+ * Middleware qui vérifie qu'un utilisateur a une permission spécifique sur le module chantiers.
+ * Les super_admin passent toujours. Pour les autres, on cherche la permission dans la table Permission
+ * via leur rôle dans l'organisation.
+ */
+function requireChantierAction(...actions: string[]) {
+  return async (req: any, res: Response, next: NextFunction) => {
+    try {
+      const user = req.user;
+      if (!user) return res.status(401).json({ success: false, message: 'Non authentifié' });
+
+      // Super admin passe toujours
+      if (user.isSuperAdmin || user.role === 'super_admin') return next();
+
+      // Admin passe pour la gestion d'équipe
+      if (user.role === 'admin') return next();
+
+      const organizationId = (req.headers['x-organization-id'] as string) || user.organizationId;
+      if (!organizationId) return res.status(403).json({ success: false, message: 'Organisation requise' });
+
+      // Trouver le rôle du user dans l'organisation
+      const userOrg = await db.userOrganization.findFirst({
+        where: { userId: user.id || user.userId, organizationId },
+        select: { roleId: true }
+      });
+
+      if (!userOrg?.roleId) {
+        return res.status(403).json({ success: false, message: 'Aucun rôle trouvé pour cet utilisateur' });
+      }
+
+      // Vérifier si le rôle a au moins une des actions demandées sur le module chantiers
+      const perm = await db.permission.findFirst({
+        where: {
+          roleId: userOrg.roleId,
+          moduleId: CHANTIERS_MODULE_ID,
+          action: { in: actions },
+          allowed: true
+        }
+      });
+
+      if (!perm) {
+        console.log(`[Teams] 🔒 Permission refusée: user=${user.id}, actions=${actions.join(',')}, role=${userOrg.roleId}`);
+        return res.status(403).json({ success: false, message: `Permission refusée: action ${actions.join('/')} requise` });
+      }
+
+      next();
+    } catch (error: any) {
+      console.error('[Teams] Erreur vérification permission:', error);
+      return res.status(500).json({ success: false, message: 'Erreur vérification permission' });
+    }
+  };
+}
 
 // ═══ Helpers ═══
 function getOrgId(req: any): string | null {
@@ -232,7 +288,7 @@ router.get('/technicians', authenticateToken, async (req, res) => {
 });
 
 // ── POST /api/teams/technicians ── Créer un technicien
-router.post('/technicians', authenticateToken, async (req, res) => {
+router.post('/technicians', authenticateToken, requireChantierAction('team_panel'), async (req, res) => {
   try {
     const organizationId = getOrgId(req);
     if (!organizationId) return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
@@ -278,7 +334,7 @@ router.post('/technicians', authenticateToken, async (req, res) => {
 });
 
 // ── PUT /api/teams/technicians/:id ──
-router.put('/technicians/:id', authenticateToken, async (req, res) => {
+router.put('/technicians/:id', authenticateToken, requireChantierAction('team_panel'), async (req, res) => {
   try {
     const organizationId = getOrgId(req);
     const parsed = updateTechnicianSchema.safeParse(req.body);
@@ -297,7 +353,7 @@ router.put('/technicians/:id', authenticateToken, async (req, res) => {
 });
 
 // ── DELETE /api/teams/technicians/:id ── Soft delete
-router.delete('/technicians/:id', authenticateToken, async (req, res) => {
+router.delete('/technicians/:id', authenticateToken, requireChantierAction('team_panel'), async (req, res) => {
   try {
     const organizationId = getOrgId(req);
     await db.technician.update({ where: { id: req.params.id, organizationId }, data: { isActive: false } });
@@ -309,7 +365,7 @@ router.delete('/technicians/:id', authenticateToken, async (req, res) => {
 });
 
 // ── POST /api/teams/technicians/sync ── Importer les users internes comme techniciens
-router.post('/technicians/sync', authenticateToken, async (req, res) => {
+router.post('/technicians/sync', authenticateToken, requireChantierAction('team_panel'), async (req, res) => {
   try {
     const organizationId = getOrgId(req);
     if (!organizationId) return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
@@ -423,7 +479,7 @@ router.get('/unavailabilities', authenticateToken, async (req, res) => {
 });
 
 // ── POST /api/teams/unavailabilities ──
-router.post('/unavailabilities', authenticateToken, async (req, res) => {
+router.post('/unavailabilities', authenticateToken, requireChantierAction('team_panel', 'assign'), async (req, res) => {
   try {
     const parsed = unavailabilitySchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ success: false, errors: parsed.error.flatten() });
@@ -448,7 +504,7 @@ router.post('/unavailabilities', authenticateToken, async (req, res) => {
 });
 
 // ── DELETE /api/teams/unavailabilities/:id ──
-router.delete('/unavailabilities/:id', authenticateToken, async (req, res) => {
+router.delete('/unavailabilities/:id', authenticateToken, requireChantierAction('team_panel', 'assign'), async (req, res) => {
   try {
     await db.technicianUnavailability.delete({ where: { id: req.params.id } });
     return res.json({ success: true, message: 'Indisponibilité supprimée' });
@@ -496,7 +552,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // ── POST /api/teams ──
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', authenticateToken, requireChantierAction('team_panel'), async (req, res) => {
   try {
     const organizationId = getOrgId(req);
     if (!organizationId) return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
@@ -518,7 +574,7 @@ router.post('/', authenticateToken, async (req, res) => {
 });
 
 // ── PUT /api/teams/:id ──
-router.put('/:id', authenticateToken, async (req, res) => {
+router.put('/:id', authenticateToken, requireChantierAction('team_panel'), async (req, res) => {
   try {
     const organizationId = getOrgId(req);
     const parsed = updateTeamSchema.safeParse(req.body);
@@ -538,7 +594,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 });
 
 // ── DELETE /api/teams/:id ──
-router.delete('/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', authenticateToken, requireChantierAction('team_panel'), async (req, res) => {
   try {
     const organizationId = getOrgId(req);
     await db.team.delete({ where: { id: req.params.id, organizationId } });
@@ -559,7 +615,7 @@ const teamMemberSchema = z.object({
 });
 
 // ── POST /api/teams/:teamId/members ──
-router.post('/:teamId/members', authenticateToken, async (req, res) => {
+router.post('/:teamId/members', authenticateToken, requireChantierAction('team_panel'), async (req, res) => {
   try {
     const organizationId = getOrgId(req);
     const { teamId } = req.params;
@@ -583,7 +639,7 @@ router.post('/:teamId/members', authenticateToken, async (req, res) => {
 });
 
 // ── PUT /api/teams/:teamId/members/:memberId ──
-router.put('/:teamId/members/:memberId', authenticateToken, async (req, res) => {
+router.put('/:teamId/members/:memberId', authenticateToken, requireChantierAction('team_panel'), async (req, res) => {
   try {
     const { role } = req.body;
     if (!['LEADER', 'MEMBER'].includes(role)) return res.status(400).json({ success: false, message: 'Rôle invalide' });
@@ -602,7 +658,7 @@ router.put('/:teamId/members/:memberId', authenticateToken, async (req, res) => 
 });
 
 // ── DELETE /api/teams/:teamId/members/:memberId ──
-router.delete('/:teamId/members/:memberId', authenticateToken, async (req, res) => {
+router.delete('/:teamId/members/:memberId', authenticateToken, requireChantierAction('team_panel'), async (req, res) => {
   try {
     await db.teamMember.delete({ where: { id: req.params.memberId } });
     return res.json({ success: true, message: 'Membre retiré' });
@@ -641,7 +697,7 @@ router.get('/assignments/by-chantier/:chantierId', authenticateToken, async (req
 });
 
 // ── POST /api/teams/assignments/:chantierId ── Assigner un technicien
-router.post('/assignments/:chantierId', authenticateToken, async (req, res) => {
+router.post('/assignments/:chantierId', authenticateToken, requireChantierAction('assign'), async (req, res) => {
   try {
     const parsed = assignmentSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ success: false, errors: parsed.error.flatten() });
@@ -668,7 +724,7 @@ router.post('/assignments/:chantierId', authenticateToken, async (req, res) => {
 });
 
 // ── POST /api/teams/assignments/:chantierId/team ── Assigner toute une équipe
-router.post('/assignments/:chantierId/team', authenticateToken, async (req, res) => {
+router.post('/assignments/:chantierId/team', authenticateToken, requireChantierAction('assign'), async (req, res) => {
   try {
     const { teamId } = req.body;
     if (!teamId) return res.status(400).json({ success: false, message: 'teamId requis' });
@@ -713,7 +769,7 @@ router.post('/assignments/:chantierId/team', authenticateToken, async (req, res)
 });
 
 // ── DELETE /api/teams/assignments/:assignmentId ──
-router.delete('/assignments/:assignmentId', authenticateToken, async (req, res) => {
+router.delete('/assignments/:assignmentId', authenticateToken, requireChantierAction('assign'), async (req, res) => {
   try {
     await db.chantierAssignment.delete({ where: { id: req.params.assignmentId } });
     return res.json({ success: true, message: 'Assignation supprimée' });
@@ -762,7 +818,7 @@ router.get('/time-entries', authenticateToken, async (req, res) => {
 });
 
 // ── POST /api/teams/time-entries ──
-router.post('/time-entries', authenticateToken, async (req, res) => {
+router.post('/time-entries', authenticateToken, requireChantierAction('pointage'), async (req, res) => {
   try {
     const organizationId = getOrgId(req);
     if (!organizationId) return res.status(400).json({ error: 'Organization ID required' });
@@ -929,7 +985,7 @@ router.get('/time-entries/summary', authenticateToken, async (req, res) => {
 });
 
 // ── PUT /api/teams/time-entries/:id ──
-router.put('/time-entries/:id', authenticateToken, async (req, res) => {
+router.put('/time-entries/:id', authenticateToken, requireChantierAction('pointage'), async (req, res) => {
   try {
     const organizationId = getOrgId(req);
     if (!organizationId) return res.status(400).json({ error: 'Organization ID required' });
@@ -973,7 +1029,7 @@ router.put('/time-entries/:id', authenticateToken, async (req, res) => {
 });
 
 // ── PUT /api/teams/time-entries/:id/clock-out ── (Pointer la sortie)
-router.put('/time-entries/:id/clock-out', authenticateToken, async (req, res) => {
+router.put('/time-entries/:id/clock-out', authenticateToken, requireChantierAction('pointage'), async (req, res) => {
   try {
     const organizationId = getOrgId(req);
     if (!organizationId) return res.status(400).json({ error: 'Organization ID required' });
@@ -1039,7 +1095,7 @@ router.put('/time-entries/:id/clock-out', authenticateToken, async (req, res) =>
 });
 
 // ── DELETE /api/teams/time-entries/:id ──
-router.delete('/time-entries/:id', authenticateToken, async (req, res) => {
+router.delete('/time-entries/:id', authenticateToken, requireChantierAction('pointage'), async (req, res) => {
   try {
     const organizationId = getOrgId(req);
     if (!organizationId) return res.status(400).json({ error: 'Organization ID required' });

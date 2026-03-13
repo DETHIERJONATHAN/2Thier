@@ -969,6 +969,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
   }, [assignTeamToChantier, refetch, canAssign]);
 
   const handleCreateTeam = useCallback(async () => {
+    if (!canSeeTeamPanel) { message.warning('🔒 Permission requise'); return; }
     if (!newTeamName.trim()) return;
     try {
       await createTeam({ name: newTeamName.trim(), color: newTeamColor });
@@ -978,18 +979,20 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
     } catch (err: any) {
       message.error(err?.message || 'Erreur création équipe');
     }
-  }, [createTeam, newTeamName, newTeamColor]);
+  }, [createTeam, newTeamName, newTeamColor, canSeeTeamPanel]);
 
   const handleDeleteTeam = useCallback(async (teamId: string) => {
+    if (!canSeeTeamPanel) { message.warning('🔒 Permission requise'); return; }
     try {
       await deleteTeam(teamId);
       message.success('Équipe supprimée');
     } catch (err: any) {
       message.error(err?.message || 'Erreur suppression équipe');
     }
-  }, [deleteTeam]);
+  }, [deleteTeam, canSeeTeamPanel]);
 
   const handleAddMember = useCallback(async () => {
+    if (!canSeeTeamPanel) { message.warning('🔒 Permission requise'); return; }
     if (!addMemberTeamId || !addMemberTechId) return;
     try {
       await addTeamMember(addMemberTeamId, addMemberTechId);
@@ -999,7 +1002,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
     } catch (err: any) {
       message.error(err?.message || 'Erreur ajout membre');
     }
-  }, [addTeamMember, addMemberTeamId, addMemberTechId]);
+  }, [addTeamMember, addMemberTeamId, addMemberTechId, canSeeTeamPanel]);
 
   const handleDrop = useCallback(async (chantierId: string, statusId: string) => {
     if (!canEdit) { message.warning('🔒 Vous n\'avez pas la permission de modifier le statut'); return; }
@@ -1526,13 +1529,15 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                   >
                     🔄 Sync
                   </button>
-                  <button
-                    onClick={() => { setTechFormData({ type: 'SUBCONTRACTOR', billingMode: 'FORFAIT', firstName: '', lastName: '', email: '', phone: '', company: '', specialties: [], color: '#8c8c8c', vatNumber: '', address: '', postalCode: '', city: '', country: 'Belgique', iban: '' }); setTechFormOpen(true); }}
-                    style={{ flex: 1, padding: '6px 8px', borderRadius: 4, border: '1px dashed #8c8c8c', background: '#fff', cursor: 'pointer', fontSize: 11, color: '#8c8c8c', minHeight: 36 }}
-                    title="Ajouter un sous-traitant"
-                  >
-                    🏢 + Sous-traitant
-                  </button>
+                  {canSeeTeamPanel && (
+                    <button
+                      onClick={() => { setTechFormData({ type: 'SUBCONTRACTOR', billingMode: 'FORFAIT', firstName: '', lastName: '', email: '', phone: '', company: '', specialties: [], color: '#8c8c8c', vatNumber: '', address: '', postalCode: '', city: '', country: 'Belgique', iban: '' }); setTechFormOpen(true); }}
+                      style={{ flex: 1, padding: '6px 8px', borderRadius: 4, border: '1px dashed #8c8c8c', background: '#fff', cursor: 'pointer', fontSize: 11, color: '#8c8c8c', minHeight: 36 }}
+                      title="Ajouter un sous-traitant"
+                    >
+                      🏢 + Sous-traitant
+                    </button>
+                  )}
                 </div>
 
                 {/* Filtre rapide - Sans technicien */}
@@ -1639,13 +1644,15 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                 {panelTab === 'teams' && (
                   <>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 4, padding: '0 4px' }}>
-                      <button
-                        onClick={() => setTeamModalOpen(true)}
-                        style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#1677ff', fontSize: 12, padding: 0, lineHeight: 1 }}
-                        title="Créer une équipe"
-                      >
-                        <PlusOutlined /> Nouvelle
-                      </button>
+                      {canSeeTeamPanel && (
+                        <button
+                          onClick={() => setTeamModalOpen(true)}
+                          style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#1677ff', fontSize: 12, padding: 0, lineHeight: 1 }}
+                          title="Créer une équipe"
+                        >
+                          <PlusOutlined /> Nouvelle
+                        </button>
+                      )}
                     </div>
                     {teams.map(team => (
                       <TeamDragItem
@@ -1653,10 +1660,10 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                         team={team}
                         isSelected={selectedTechFilter === `team:${team.id}`}
                         onClick={() => setSelectedTechFilter(selectedTechFilter === `team:${team.id}` ? null : `team:${team.id}`)}
-                        onDelete={() => handleDeleteTeam(team.id)}
-                        onAddMember={() => setAddMemberTeamId(team.id)}
-                        onToggleLeader={(memberId, currentRole) => updateMemberRole(team.id, memberId, currentRole === 'LEADER' ? 'MEMBER' : 'LEADER')}
-                        onRemoveMember={(memberId) => removeTeamMember(team.id, memberId)}
+                        onDelete={canSeeTeamPanel ? () => handleDeleteTeam(team.id) : () => message.warning('🔒 Permission requise')}
+                        onAddMember={canSeeTeamPanel ? () => setAddMemberTeamId(team.id) : () => message.warning('🔒 Permission requise')}
+                        onToggleLeader={canSeeTeamPanel ? (memberId, currentRole) => updateMemberRole(team.id, memberId, currentRole === 'LEADER' ? 'MEMBER' : 'LEADER') : () => message.warning('🔒 Permission requise')}
+                        onRemoveMember={canSeeTeamPanel ? (memberId) => removeTeamMember(team.id, memberId) : () => message.warning('🔒 Permission requise')}
                         onDragStart={() => setTechPanelOpen(false)}
                       />
                     ))}

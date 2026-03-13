@@ -56,6 +56,7 @@ const ChantierDetailPage: React.FC = () => {
   const canEdit = isAdminOrAbove || canDo('chantiers', 'edit');
   const canValidate = isAdminOrAbove || canDo('chantiers', 'validate');
   const canSeePointage = isAdminOrAbove || canDo('chantiers', 'pointage');
+  const canAssign = isAdminOrAbove || canDo('chantiers', 'assign');
   const canSeeEvents = canDo('chantiers', 'view') || isAdminOrAbove;
   const { message } = App.useApp();
 
@@ -823,24 +824,26 @@ const ChantierDetailPage: React.FC = () => {
                                   {a.Team && <Tag style={{ fontSize: 9, lineHeight: '14px', padding: '0 3px', margin: 0 }} color={a.Team.color}>👥 {a.Team.name}</Tag>}
                                 </div>
                               </div>
-                              <Tooltip title="Retirer du chantier">
-                                <Button
-                                  type="text"
-                                  size="small"
-                                  danger
-                                  icon={<CloseOutlined />}
-                                  onClick={async () => {
-                                    try {
-                                      await api.delete(`/api/teams/assignments/${a.id}`);
-                                      message.success('Technicien retiré');
-                                      fetchChantier();
-                                    } catch (err: any) {
-                                      message.error(err?.message || 'Erreur lors du retrait');
-                                    }
-                                  }}
-                                  style={{ fontSize: 10 }}
-                                />
-                              </Tooltip>
+                              {canAssign && (
+                                <Tooltip title="Retirer du chantier">
+                                  <Button
+                                    type="text"
+                                    size="small"
+                                    danger
+                                    icon={<CloseOutlined />}
+                                    onClick={async () => {
+                                      try {
+                                        await api.delete(`/api/teams/assignments/${a.id}`);
+                                        message.success('Technicien retiré');
+                                        fetchChantier();
+                                      } catch (err: any) {
+                                        message.error(err?.message || 'Erreur lors du retrait');
+                                      }
+                                    }}
+                                    style={{ fontSize: 10 }}
+                                  />
+                                </Tooltip>
+                              )}
                             </div>
                           ))}
                         </div>
