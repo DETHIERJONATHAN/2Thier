@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import {
@@ -135,6 +136,7 @@ type IncomingAgendaPayload = Partial<CalendarEvent> & { id: string };
 const GoogleAgendaPage: React.FC = () => {
   const { user } = useAuth();
   const { api } = useAuthenticatedApi();
+  const navigate = useNavigate();
   const { token } = theme.useToken();
   const calendarRef = useRef<FullCalendar>(null);
   const screens = Grid.useBreakpoint();
@@ -1099,6 +1101,28 @@ const GoogleAgendaPage: React.FC = () => {
             <Divider />
             {selectedEvent.event.extendedProps.leadId && <p><strong>💼 Lead lié :</strong> {leads.find(l => l.id === selectedEvent?.event.extendedProps.leadId)?.name || 'Inconnu'}</p>}
             {selectedEvent.event.extendedProps.meetingUrl && <p><a href={selectedEvent.event.extendedProps.meetingUrl} target="_blank" rel="noopener noreferrer">Rejoindre la réunion</a></p>}
+            {/* 🔗 Bouton de redirection vers l'entité liée */}
+            {(selectedEvent.event.extendedProps.linkedChantierId || selectedEvent.event.extendedProps.linkedLeadId || selectedEvent.event.extendedProps.linkedClientId) && (
+              <div style={{ marginTop: 16 }}>
+                <Divider />
+                <Button
+                  type="primary"
+                  icon={<LinkOutlined />}
+                  block
+                  onClick={() => {
+                    const props = selectedEvent!.event.extendedProps;
+                    if (props.linkedChantierId) navigate(`/chantiers/${props.linkedChantierId}`);
+                    else if (props.linkedLeadId) navigate(`/leads/details/${props.linkedLeadId}`);
+                    else if (props.linkedClientId) navigate(`/clients`);
+                    setIsDetailsDrawerVisible(false);
+                  }}
+                >
+                  {selectedEvent.event.extendedProps.linkedChantierId ? '🏗️ Voir le chantier'
+                    : selectedEvent.event.extendedProps.linkedLeadId ? '👤 Voir le lead'
+                    : '👥 Voir le client'}
+                </Button>
+              </div>
+            )}
             {selectedEvent.event.extendedProps.isNote && selectedEvent.event.extendedProps.dueDate && (
               <p><strong>🗓️ Échéance :</strong> {dayjs(selectedEvent.event.extendedProps.dueDate).format('DD/MM/YYYY')} {dayjs(selectedEvent.event.extendedProps.dueDate).isBefore(dayjs(), 'day') && selectedEvent.event.extendedProps.status !== 'done' && <span style={{color:'#ff4d4f'}}> (En retard)</span>}</p>
             )}

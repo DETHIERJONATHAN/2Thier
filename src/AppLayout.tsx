@@ -212,21 +212,21 @@ export default function AppLayout() {
             {/* Routes modules métier - CORRESPONDANT EXACTEMENT AUX ROUTES DE LA DB */}
             {hasFeature('facture') && <Route path="/facture" element={<FacturePage />} />}
             {hasFeature('Technique') && <Route path="/technique" element={<TechniquePage />} />}
-            <Route path="/tableaux" element={<GestionTableauxPage />} />
-            <Route path="/gestion-tableaux" element={<GestionTableauxPage />} />
+            {(hasFeature('Technique') || hasFeature('tableaux') || isSuperAdmin) && <Route path="/tableaux" element={<GestionTableauxPage />} />}
+            {(hasFeature('Technique') || hasFeature('tableaux') || isSuperAdmin) && <Route path="/gestion-tableaux" element={<GestionTableauxPage />} />}
             {hasFeature('formulaire') && <Route path="/formulaire" element={<FormulairePage />} />}
             {/* TBL - Nouveau système de formulaires connectés */}
-            <Route path="/tbl" element={<TBLPage />} />
-            <Route path="/tbl/:leadId" element={<TBLPage />} />
-            <Route path="/test-tooltips" element={<TestTBLTooltips />} />
+            {(hasFeature('tbl') || hasFeature('TBL') || isSuperAdmin) && <Route path="/tbl" element={<TBLPage />} />}
+            {(hasFeature('tbl') || hasFeature('TBL') || isSuperAdmin) && <Route path="/tbl/:leadId" element={<TBLPage />} />}
+            {isSuperAdmin && <Route path="/test-tooltips" element={<TestTBLTooltips />} />}
             {/* Alias pour le module TBL (route définie en BDD: /module-tbl) */}
-            <Route path="/module-tbl" element={<TBLPage />} />
-            <Route path="/module-tbl/:leadId" element={<TBLPage />} />
+            {(hasFeature('tbl') || hasFeature('TBL') || isSuperAdmin) && <Route path="/module-tbl" element={<TBLPage />} />}
+            {(hasFeature('tbl') || hasFeature('TBL') || isSuperAdmin) && <Route path="/module-tbl/:leadId" element={<TBLPage />} />}
             
             {/* 🌟 TreeBranchLeaf Wrapper - Interface complète 3 colonnes */}
-            <Route path="/formulaire/treebranchleaf" element={<TreeBranchLeafWrapper />} />
-            <Route path="/formulaire/treebranchleaf/:id" element={<TreeBranchLeafWrapper />} />
-            <Route path="/formulaire/treebranchleaf/:id/:leadId" element={<TreeBranchLeafWrapper />} />
+            {(hasFeature('formulaire') || hasFeature('tbl') || isSuperAdmin) && <Route path="/formulaire/treebranchleaf" element={<TreeBranchLeafWrapper />} />}
+            {(hasFeature('formulaire') || hasFeature('tbl') || isSuperAdmin) && <Route path="/formulaire/treebranchleaf/:id" element={<TreeBranchLeafWrapper />} />}
+            {(hasFeature('formulaire') || hasFeature('tbl') || isSuperAdmin) && <Route path="/formulaire/treebranchleaf/:id/:leadId" element={<TreeBranchLeafWrapper />} />}
             {/* TBL routes supprimées - utiliser /demo/tbl-new */}
             
             
@@ -245,28 +245,28 @@ export default function AppLayout() {
             {(hasFeature('fiches_techniques') || isSuperAdmin) && <Route path="/fiches-techniques" element={<ProductDocumentsPage />} />}
 
             {/* Routes Devis1Minute - Lead Generation Marketplace */}
-            <Route path="/marketplace" element={<MarketplacePage />} />
+            {(hasFeature('marketplace') || isSuperAdmin) && <Route path="/marketplace" element={<MarketplacePage />} />}
             
             {/* ESPACE PROFESSIONNEL DEVIS1MINUTE - DANS LE CRM AUTHENTIFIÉ */}
-            <Route path="/espace-pro" element={<EspaceProPage />} />
+            {(hasFeature('marketplace') || hasFeature('partner_portal') || isSuperAdmin) && <Route path="/espace-pro" element={<EspaceProPage />} />}
             
             {(hasFeature('partner_portal') || isSuperAdmin) && <Route path="/partner/portal" element={<PartnerPortalPage />} />}
             {(hasFeature('partner_portal') || isSuperAdmin) && <Route path="/partner/leads" element={<PartnerLeadsPage />} />}
             {(hasFeature('partner_portal') || isSuperAdmin) && <Route path="/partner/billing" element={<PartnerBillingPage />} />}
             
             {/* Routes principales */}
-            <Route path="/lead-generation" element={<LeadGenerationPage />} />
-            <Route path="/campaign-analytics" element={<CampaignAnalyticsPage />} />
+            {(hasFeature('lead_generation') || isSuperAdmin) && <Route path="/lead-generation" element={<LeadGenerationPage />} />}
+            {(hasFeature('analytics_campagnes') || hasFeature('campaign_analytics') || isSuperAdmin) && <Route path="/campaign-analytics" element={<CampaignAnalyticsPage />} />}
             {(hasFeature('public_forms') || isSuperAdmin) && <Route path="/public-forms" element={<PublicFormsPage />} />}
             {(hasFeature('public_forms') || isSuperAdmin) && <Route path="/forms" element={<PublicFormsPage />} />}
             {(hasFeature('public_forms') || isSuperAdmin) && <Route path="/public-forms-management" element={<PublicFormsManagementPage />} />}
-            <Route path="/landing-pages" element={<LandingPagesPage />} />
+            {(hasFeature('landing_pages') || isSuperAdmin) && <Route path="/landing-pages" element={<LandingPagesPage />} />}
             
             {/* Routes Devis1Minute avec préfixe */}
-            <Route path="/devis1minute/marketplace" element={<MarketplacePage />} />
-            <Route path="/devis1minute/partner" element={<LeadGenerationPage />} />
-            <Route path="/devis1minute/leads" element={<CampaignAnalyticsPage />} />
-            <Route path="/devis1minute/billing" element={<LandingPagesPage />} />
+            {(hasFeature('marketplace') || isSuperAdmin) && <Route path="/devis1minute/marketplace" element={<MarketplacePage />} />}
+            {(hasFeature('partner_portal') || isSuperAdmin) && <Route path="/devis1minute/partner" element={<LeadGenerationPage />} />}
+            {(hasFeature('partner_portal') || isSuperAdmin) && <Route path="/devis1minute/leads" element={<CampaignAnalyticsPage />} />}
+            {(hasFeature('partner_portal') || isSuperAdmin) && <Route path="/devis1minute/billing" element={<LandingPagesPage />} />}
 
             {/* Routes Google Workspace - CORRESPONDANT EXACTEMENT AUX ROUTES DE LA DB */}
             {(hasFeature('google_gmail_access') || hasFeature('google_gmail')) && <Route path="/google-gmail" element={<GoogleGmailPageV2 />} />}
@@ -317,7 +317,7 @@ export default function AppLayout() {
             {isSuperAdmin && <Route path="/admin/diagnostics/advanced-select" element={<AdvancedSelectTestPage />} />}
 
             {/* Route pour l'éditeur de formulaire */}
-            <Route path="/admin/formulaire/:blockId" element={<FormulaireLayout />} />
+            {(hasFeature('formulaire') || isSuperAdmin) && <Route path="/admin/formulaire/:blockId" element={<FormulaireLayout />} />}
 
             {/* Routes Paramètres */}
             <Route path="/settings" element={<SettingsPage />}>

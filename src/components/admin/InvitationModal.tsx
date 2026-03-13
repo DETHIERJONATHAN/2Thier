@@ -50,7 +50,13 @@ const InvitationModal: React.FC<InvitationModalProps> = ({ visible, onCancel, on
         message.error(response.message || "Une erreur est survenue.");
       }
     } catch (error: any) {
-      // L'erreur est déjà gérée par le hook `useAuthenticatedApi` qui affiche une notification
+      const status = error?.status;
+      const serverMessage = error?.data?.message;
+      if (status === 409) {
+        message.warning(serverMessage || "Une invitation active existe déjà pour cet e-mail dans cette organisation.");
+      } else {
+        message.error(serverMessage || "Une erreur est survenue lors de l'envoi de l'invitation.");
+      }
     } finally {
       setLoading(false);
     }

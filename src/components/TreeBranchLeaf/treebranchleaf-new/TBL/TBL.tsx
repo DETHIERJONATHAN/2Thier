@@ -42,9 +42,10 @@ import {
   Tooltip,
   Tag,
   Switch,
-  Result
+  Result,
+  Checkbox
 } from 'antd';
-import { FileTextOutlined, DownloadOutlined, ClockCircleOutlined, FolderOpenOutlined, PlusOutlined, UserOutlined, FileAddOutlined, SearchOutlined, MailOutlined, PhoneOutlined, HomeOutlined, SwapOutlined, LeftOutlined, RightOutlined, SaveOutlined, SendOutlined, PaperClipOutlined, ToolOutlined, CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { FileTextOutlined, DownloadOutlined, ClockCircleOutlined, FolderOpenOutlined, PlusOutlined, UserOutlined, FileAddOutlined, SearchOutlined, MailOutlined, PhoneOutlined, HomeOutlined, SwapOutlined, LeftOutlined, RightOutlined, SaveOutlined, SendOutlined, PaperClipOutlined, ToolOutlined, CheckCircleOutlined, ExclamationCircleOutlined, EditOutlined, ShoppingOutlined } from '@ant-design/icons';
 import { useAuth } from '../../../../auth/useAuth';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useTreeBranchLeafConfig } from '../../hooks/useTreeBranchLeafConfig';
@@ -69,6 +70,8 @@ const TBLDevCapabilitiesPanel = lazy(() => import('./components/Dev/TBLDevCapabi
 const LeadSelectorModal = lazy(() => import('../../lead-integration/LeadSelectorModal'));
 const LeadCreatorModalAdvanced = lazy(() => import('../../lead-integration/LeadCreatorModalAdvanced'));
 const GestionnairePanel = lazy(() => import('./GestionnairePanel'));
+const SignatureModal = lazy(() => import('../../../../components/signature/SignatureModal'));
+const SignedPdfPreviewModal = lazy(() => import('../../../../components/signature/SignedPdfPreviewModal'));
 
 // Déclaration étendue pour éviter usage de any lors de l'injection diag
 declare global { interface Window { TBL_DEP_GRAPH?: Map<string, Set<string>>; TBL_FORM_DATA?: Record<string, unknown>; } }
@@ -123,6 +126,7 @@ const TBL: React.FC<TBLProps> = ({
   const [searchParams] = useSearchParams();
   const requestedDevisId = searchParams.get('devisId');
   const reviewMode = searchParams.get('mode') === 'review';
+  const rectificationMode = searchParams.get('mode') === 'rectification';
   const reviewEventId = searchParams.get('eventId');
   const { api } = useAuthenticatedApi();
 
@@ -144,6 +148,23 @@ const TBL: React.FC<TBLProps> = ({
   const onReviewComment = useCallback((fieldId: string, comment: string) => {
     setReviewComments(prev => ({ ...prev, [fieldId]: comment }));
   }, []);
+
+  // 🔶 RECTIFICATION MODE: Données des modifications technicien pour le commercial
+  type RectificationFieldData = {
+    nodeId: string;
+    fieldLabel: string;
+    originalValue: string | null;  // Valeur initiale du devis
+    technicianValue: string | null; // Valeur corrigée par le technicien
+    modificationNote: string | null; // Note du technicien
+    technicianName: string | null;
+  };
+  const [rectificationFields, setRectificationFields] = useState<RectificationFieldData[]>([]);
+  const [rectificationFieldMap, setRectificationFieldMap] = useState<Record<string, RectificationFieldData>>({});
+  const [submittingCorrection, setSubmittingCorrection] = useState(false);
+  const [correctionSubmitted, setCorrectionSubmitted] = useState(false);
+  // Track quels champs le commercial a modifié par rapport à la valeur technicien
+  const rectificationInitialValues = useRef<Record<string, any>>({});
+
   const screens = useBreakpoint();
   const isMobile = !screens.lg;
   const isTablet = !screens.xl && screens.lg;
@@ -184,9 +205,16 @@ const TBL: React.FC<TBLProps> = ({
   const [devisSearchTerm, setDevisSearchTerm] = useState('');
 
   const [pdfModalVisible, setPdfModalVisible] = useState(false);
-  const [availableTemplates, setAvailableTemplates] = useState<Array<{id: string, name: string, type: string, description?: string}>>([]);
+  const [availableTemplates, setAvailableTemplates] = useState<Array<{id: string, name: string, type: string, description?: string, productValue?: string | null, isDefault?: boolean}>>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]); // 🏗️ Templates sélectionnés
+
+  // ✍️ Signature électronique
+  const [signatureModalVisible, setSignatureModalVisible] = useState(false);
+  const [signatureStatus, setSignatureStatus] = useState<{ totalSigned: number; totalPending: number; signatures: any[] } | null>(null);
+  const [signedPdfPreviewOpen, setSignedPdfPreviewOpen] = useState(false);
+  const [signedPdfPreviewId, setSignedPdfPreviewId] = useState<string | null>(null);
 
   const [devisCreatorVisible, setDevisCreatorVisible] = useState(false);
   const [devisName, setDevisName] = useState('');
@@ -239,6 +267,8 @@ const TBL: React.FC<TBLProps> = ({
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailForm] = Form.useForm();
   const [includeProductDocs, setIncludeProductDocs] = useState(true); // 📎 Joindre les fiches techniques par défaut
+  const [includeSignatureLink, setIncludeSignatureLink] = useState(true); // ✍️ Inclure un lien de signature par défaut
+  const [selectedPdfProducts, setSelectedPdfProducts] = useState<string[]>([]); // 🏗️ Produits sélectionnés pour la génération PDF
 
   // 📧 États pour l'envoi depuis la liste des devis
   const [devisPdfSelectorVisible, setDevisPdfSelectorVisible] = useState(false);
@@ -560,6 +590,21 @@ const TBL: React.FC<TBLProps> = ({
   }, []);
 
   // Diagnostic en développement - PREMIER hook pour éviter violation des règles
+  // ✍️ Vérifier le statut de signature du devis courant
+  useEffect(() => {
+    if (!submissionId || !api) return;
+    (async () => {
+      try {
+        const res = await api.get(`/api/e-signature/submission/${submissionId}/status`);
+        if (res?.success) {
+          setSignatureStatus({ totalSigned: res.totalSigned, totalPending: res.totalPending, signatures: res.signatures });
+        }
+      } catch {
+        // Pas de signature pour ce devis — normal
+      }
+    })();
+  }, [submissionId, api]);
+
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
       const runDiagnostic = () => {
@@ -772,6 +817,23 @@ const TBL: React.FC<TBLProps> = ({
   const rawNodes = useMemo(() => (useFixed ? (newData.rawNodes || []) : (oldData.rawNodes || [])), [useFixed, newData.rawNodes, oldData.rawNodes]); // 🔥 NOUVEAU: Nœuds bruts pour Cascader
   const effectiveTreeId = tree?.id || requestedTreeId;
 
+  // 🏗️ Options produit extraites des nœuds TBL (pour le modal génération PDF)
+  const pdfProductOptions = useMemo(() => {
+    const opts: Array<{value: string, label: string, icon?: string, color?: string}> = [];
+    const seenValues = new Set<string>();
+    for (const node of (rawNodes as any[])) {
+      if (node.hasProduct && node.product_sourceNodeId === node.id && Array.isArray(node.product_options) && node.product_options.length > 0) {
+        for (const opt of node.product_options) {
+          if (opt.value !== 'all' && !seenValues.has(opt.value)) {
+            seenValues.add(opt.value);
+            opts.push({ value: opt.value, label: opt.label, icon: opt.icon, color: opt.color });
+          }
+        }
+      }
+    }
+    return opts;
+  }, [rawNodes]);
+
   // 🔍 REVIEW MODE: Callback "Analyse" (après rawNodes + formData)
   const onSubmitReview = useCallback(async () => {
     const checkedFields = Object.entries(reviewChecked).filter(([, v]) => v);
@@ -852,6 +914,161 @@ const TBL: React.FC<TBLProps> = ({
       }
     })();
   }, [reviewMode, reviewEventId, api]);
+
+  // 🔶 RECTIFICATION MODE: Charger les modifications technicien pour affichage
+  useEffect(() => {
+    if (!rectificationMode || !reviewEventId) return;
+    (async () => {
+      try {
+        console.log('🔶 [TBL Rectification] Chargement modifications technicien pour event:', reviewEventId);
+        const res = await api.get(`/api/chantier-workflow/events/${reviewEventId}/review-fields`) as any;
+        const data = res?.data || res;
+        const reviews: any[] = data?.reviews || [];
+        
+        // Ne garder que les champs modifiés par le technicien
+        const modifiedReviews = reviews.filter((r: any) => r.isModified && r.reviewType === 'TECHNICAL');
+        
+        const fields: RectificationFieldData[] = modifiedReviews.map((r: any) => ({
+          nodeId: r.nodeId,
+          fieldLabel: r.fieldLabel,
+          originalValue: r.originalValue || null,
+          technicianValue: r.reviewedValue || null,
+          modificationNote: r.modificationNote || null,
+          technicianName: r.ReviewedBy
+            ? `${r.ReviewedBy.firstName || ''} ${r.ReviewedBy.lastName || ''}`.trim()
+            : null,
+        }));
+
+        setRectificationFields(fields);
+        const fieldMap: Record<string, RectificationFieldData> = {};
+        for (const f of fields) {
+          fieldMap[f.nodeId] = f;
+        }
+        setRectificationFieldMap(fieldMap);
+
+        console.log(`🔶 [TBL Rectification] ${fields.length} champs modifiés par technicien chargés`);
+      } catch (err) {
+        console.error('[TBL Rectification] Erreur chargement review-fields:', err);
+      }
+    })();
+  }, [rectificationMode, reviewEventId, api]);
+
+  // 🔶 RECTIFICATION MODE: Capturer les valeurs initiales ET injecter les valeurs technicien
+  const rectificationInjectedRef = useRef(false);
+  useEffect(() => {
+    if (!rectificationMode || Object.keys(rectificationFieldMap).length === 0) return;
+    if (rectificationInjectedRef.current) return; // Déjà injecté
+    
+    // Attendre que formData soit suffisamment chargé
+    const meaningfulKeys = Object.keys(formData).filter(k => formData[k] != null && formData[k] !== '');
+    if (meaningfulKeys.length < 5) return;
+    
+    // 1. Capturer les valeurs initiales (AVANT injection technicien)
+    const snapshot: Record<string, any> = {};
+    for (const nodeId of Object.keys(rectificationFieldMap)) {
+      snapshot[nodeId] = formData[nodeId] ?? null;
+    }
+    rectificationInitialValues.current = snapshot;
+    
+    // 2. Injecter les valeurs du technicien dans formData
+    //    → Le champ affichera la valeur technicien 
+    //    → Les formules recalculeront dessus
+    const techUpdates: Record<string, any> = {};
+    for (const field of rectificationFields) {
+      if (field.technicianValue != null && field.technicianValue !== '') {
+        techUpdates[field.nodeId] = field.technicianValue;
+      }
+    }
+    
+    if (Object.keys(techUpdates).length > 0) {
+      setFormData(prev => ({ ...prev, ...techUpdates }));
+      console.log(`🔶 [TBL Rectification] ${Object.keys(techUpdates).length} valeurs technicien injectées dans formData`);
+      
+      // Mettre à jour TBL_FORM_DATA global aussi
+      if ((window as any).TBL_FORM_DATA) {
+        Object.assign((window as any).TBL_FORM_DATA, techUpdates);
+      }
+      
+      // 3. Déclencher un recalcul des formules avec les nouvelles valeurs technicien
+      //    Petit délai pour laisser le setFormData se propager dans le cycle React
+      setTimeout(() => {
+        if (immediateEvaluateRef.current) {
+          const updatedFormData = { ...formData, ...techUpdates };
+          const changedIds = Object.keys(techUpdates).join(',');
+          immediateEvaluateRef.current(updatedFormData, changedIds);
+          console.log(`🔶 [TBL Rectification] Recalcul formules déclenché pour ${Object.keys(techUpdates).length} champs`);
+        }
+      }, 500);
+    }
+    
+    rectificationInjectedRef.current = true;
+    console.log(`📸 [TBL Rectification] Snapshot valeurs originales capturé + technicien injecté pour ${Object.keys(snapshot).length} champs`);
+  }, [rectificationMode, rectificationFieldMap, rectificationFields, formData]);
+
+  // 🔶 RECTIFICATION MODE: Soumettre les corrections commerciales
+  const onSubmitCommercialCorrection = useCallback(async () => {
+    if (!reviewEventId || !rectificationMode) return;
+    
+    // Identifier les champs que le commercial a modifiés vs la valeur technicien
+    const corrections: Array<{ nodeId: string; correctedValue: string | null; correctionNote: string }> = [];
+    
+    for (const field of rectificationFields) {
+      const currentValue = formData[field.nodeId];
+      const techValue = field.technicianValue;
+      const originalValue = rectificationInitialValues.current[field.nodeId];
+      
+      // Comparer la valeur actuelle vs la valeur technicien injectée
+      const currentStr = currentValue != null ? String(currentValue) : '';
+      const techStr = techValue != null ? String(techValue) : '';
+      const originalStr = originalValue != null ? String(originalValue) : '';
+      
+      if (currentStr !== techStr) {
+        // Le commercial a modifié la valeur par rapport à ce que le technicien a recommandé
+        corrections.push({
+          nodeId: field.nodeId,
+          correctedValue: currentStr || null,
+          correctionNote: `Traçabilité 3 couches — Original: ${originalStr || '(vide)'} → Technicien: ${techStr || '(vide)'} → Commercial: ${currentStr || '(vide)'}`,
+        });
+      }
+    }
+
+    if (corrections.length === 0) {
+      // Même si pas de corrections, on le signal
+      Modal.info({
+        title: 'Aucune modification détectée',
+        content: 'Vous n\'avez modifié aucun des champs signalés par le technicien. Si les valeurs sont correctes, vous pouvez re-soumettre le lead au chantier depuis la fiche lead.',
+      });
+      return;
+    }
+
+    try {
+      setSubmittingCorrection(true);
+      const res = await api.post(`/api/chantier-workflow/events/${reviewEventId}/submit-commercial-correction`, {
+        corrections,
+      }) as any;
+
+      if (res?.success) {
+        setCorrectionSubmitted(true);
+        Modal.success({
+          title: '✅ Corrections enregistrées',
+          content: (
+            <div>
+              <p><strong>{corrections.length} correction(s)</strong> ont été sauvegardées avec traçabilité complète.</p>
+              <p>Vous pouvez maintenant retourner à la fiche lead pour re-soumettre au chantier.</p>
+            </div>
+          ),
+        });
+      }
+    } catch (err) {
+      console.error('[TBL Rectification] Erreur soumission corrections:', err);
+      Modal.error({
+        title: 'Erreur',
+        content: 'Impossible d\'enregistrer les corrections. Veuillez réessayer.',
+      });
+    } finally {
+      setSubmittingCorrection(false);
+    }
+  }, [reviewEventId, rectificationMode, rectificationFields, formData, api]);
 
   // ⚡ OPTIMISATION: Index O(1) pour résolution des alias sharedRef (remplace boucle O(n²))
   const sharedRefAliasMap = useMemo(() => {
@@ -1261,6 +1478,20 @@ const TBL: React.FC<TBLProps> = ({
           console.warn('⚠️ [TBL] Impossible de charger le lead (header):', e);
         }
 
+        // 🚀 FIX PERF-CHANTIER: Si un devisId est demandé via l'URL (?devisId=xxx),
+        // ne PAS créer/chercher de brouillon ici — handleSelectDevis s'en charge.
+        // Cela évite un appel create-and-evaluate INUTILE (~6s gaspillées).
+        if (requestedDevisId) {
+          console.log('🚀 [TBL] requestedDevisId détecté → skip draft creation, handleSelectDevis prendra le relais');
+          setLeadId(effectiveLeadId);
+          setIsDefaultDraft(false);
+          // 🚀 FIX PERF-CHANTIER: Pré-initialiser lastClientIdRef pour éviter
+          // qu'un handleFieldChange post-load ne détecte un faux "clientId changé"
+          // et ne force un create-and-evaluate supplémentaire en mode 'open'
+          lastClientIdRef.current = effectiveLeadId;
+          return; // finally { setIsLoadingLead(false) } s'exécutera quand même
+        }
+
         // 2) Récupérer/créer le brouillon du lead
         let leadDraftId: string | null = null;
         try {
@@ -1330,7 +1561,7 @@ const TBL: React.FC<TBLProps> = ({
     };
 
     initLeadDraftFromUrl();
-  }, [api, effectiveTreeId, urlLeadId, isLoadingLead]);
+  }, [api, effectiveTreeId, urlLeadId, isLoadingLead, requestedDevisId]);
 
   // SYNCHRONISATION: Initialiser formData avec les mirrors créés par useTBLDataPrismaComplete
   useEffect(() => {
@@ -1732,6 +1963,9 @@ const TBL: React.FC<TBLProps> = ({
               broadcastCalculatedRefresh({
                 reason: 'create-and-evaluate',
                 evaluatedSubmissionId: createdOrReusedId,
+                // 🔥 FIX REVISION-BROADCAST 09/03/2026: Override le submissionId de la closure
+                // pour que useNodeCalculatedValue ne filtre pas le broadcast (submissionId mismatch)
+                submissionId: createdOrReusedId,
                 recalcCount: evaluationResponse?.submission?.TreeBranchLeafSubmissionData?.length,
                 // 🎯 FIX: Passer les valeurs calculées pour éviter le refetch race condition
                 submissionData: evaluationResponse?.submission?.TreeBranchLeafSubmissionData,
@@ -1751,6 +1985,23 @@ const TBL: React.FC<TBLProps> = ({
                     const opRes = entry.operationResult;
                     const displayVal = typeof opRes === 'string' ? opRes : (opRes as Record<string, unknown>)?.humanText as string ?? null;
                     if (displayVal) accumulatedDisplayValuesRef.current[entry.nodeId] = displayVal;
+                  }
+                }
+                // 🔥 FIX CORRECTION-PRIORITY 09/03/2026: Injecter dans TBL_FORM_DATA MÊME quand le broadcast est sauté
+                // AVANT: Quand hasPendingRequest=true, les valeurs n'étaient accumulées que dans
+                // accumulatedDisplayValuesRef (en mémoire) SANS mise à jour de window.TBL_FORM_DATA.
+                // CONSÉQUENCE: Les lookups et displays lisaient les ANCIENNES valeurs dans TBL_FORM_DATA
+                // car le broadcast (qui injecte dans TBL_FORM_DATA) était sauté.
+                // Quand l'utilisateur corrigeait un champ (ex: Orientation Est→Nord), le backend recalculait
+                // correctement mais le frontend ne VOYAIT PAS le résultat (affichait encore "Est").
+                // FIX: Injecter les valeurs calculées dans TBL_FORM_DATA immédiatement, même sans broadcast.
+                // Cela ne déclenche PAS de re-render React (pas de dispatchEvent), mais les prochains
+                // lookups/displays qui lisent TBL_FORM_DATA verront les données corrigées.
+                if (typeof window !== 'undefined' && window.TBL_FORM_DATA) {
+                  for (const entry of sdArray) {
+                    if (entry?.nodeId && entry?.value !== undefined && entry?.value !== null) {
+                      window.TBL_FORM_DATA[entry.nodeId] = entry.value;
+                    }
                   }
                 }
               }
@@ -1787,6 +2038,8 @@ const TBL: React.FC<TBLProps> = ({
               broadcastCalculatedRefresh({
                 reason: 'create-and-evaluate',
                 evaluatedSubmissionId: createdOrReusedId,
+                // 🔥 FIX REVISION-BROADCAST 09/03/2026: Override le submissionId de la closure
+                submissionId: createdOrReusedId,
                 recalcCount: evaluationResponse?.submission?.TreeBranchLeafSubmissionData?.length,
                 submissionData: evaluationResponse?.submission?.TreeBranchLeafSubmissionData,
                 // 🔥 FIX BROADCAST-NULL: nodeIds freshement calculés (incluant ceux avec value=null/∅)
@@ -1804,6 +2057,14 @@ const TBL: React.FC<TBLProps> = ({
                     const opRes = entry.operationResult;
                     const displayVal = typeof opRes === 'string' ? opRes : (opRes as Record<string, unknown>)?.humanText as string ?? null;
                     if (displayVal) accumulatedDisplayValuesRef.current[entry.nodeId] = displayVal;
+                  }
+                }
+                // 🔥 FIX CORRECTION-PRIORITY 09/03/2026: Injecter dans TBL_FORM_DATA même quand le broadcast est sauté
+                if (typeof window !== 'undefined' && window.TBL_FORM_DATA) {
+                  for (const entry of sdArray) {
+                    if (entry?.nodeId && entry?.value !== undefined && entry?.value !== null) {
+                      window.TBL_FORM_DATA[entry.nodeId] = entry.value;
+                    }
                   }
                 }
               }
@@ -1899,6 +2160,13 @@ const TBL: React.FC<TBLProps> = ({
           broadcastCalculatedRefresh({
             reason: 'create-and-evaluate',
             evaluatedSubmissionId: effectiveSubmissionId,
+            // 🔥 FIX REVISION-BROADCAST 09/03/2026: Override le submissionId de la closure
+            // Quand le backend crée une révision (nouveau submissionId), la closure de
+            // broadcastCalculatedRefresh contient encore l'ancien ID. Les hooks filtrent
+            // par submissionId et rejettent le broadcast → display fields non mis à jour.
+            // En passant le submissionId effectif dans le detail, le spread ...(detail||{})
+            // écrase la valeur de closure dans l'event CustomEvent.
+            submissionId: effectiveSubmissionId,
             recalcCount: evaluationResponse?.submission?.TreeBranchLeafSubmissionData?.length,
             // 🎯 FIX: Passer les valeurs calculées pour éviter le refetch race condition
             submissionData: evaluationResponse?.submission?.TreeBranchLeafSubmissionData,
@@ -1917,6 +2185,14 @@ const TBL: React.FC<TBLProps> = ({
                 const opRes = entry.operationResult;
                 const displayVal = typeof opRes === 'string' ? opRes : (opRes as Record<string, unknown>)?.humanText as string ?? null;
                 if (displayVal) accumulatedDisplayValuesRef.current[entry.nodeId] = displayVal;
+              }
+            }
+            // 🔥 FIX CORRECTION-PRIORITY 09/03/2026: Injecter dans TBL_FORM_DATA même quand le broadcast est sauté
+            if (typeof window !== 'undefined' && window.TBL_FORM_DATA) {
+              for (const entry of sdArray) {
+                if (entry?.nodeId && entry?.value !== undefined && entry?.value !== null) {
+                  window.TBL_FORM_DATA[entry.nodeId] = entry.value;
+                }
               }
             }
           }
@@ -2832,12 +3108,41 @@ const TBL: React.FC<TBLProps> = ({
     try {
       setLoadingTemplates(true);
       setPdfModalVisible(true);
+
+      // 🏗️ Pré-sélectionner les produits depuis le formulaire TBL
+      if (pdfProductOptions.length > 0) {
+        const productSourceNode = (rawNodes as any[]).find((n: any) => n.hasProduct && n.product_sourceNodeId === n.id);
+        if (productSourceNode) {
+          const mergedData = (typeof window !== 'undefined' && window.TBL_FORM_DATA) ? { ...formData, ...window.TBL_FORM_DATA } : formData;
+          const sourceValue = mergedData[productSourceNode.id];
+          let vals: string[];
+          if (Array.isArray(sourceValue)) vals = sourceValue.map(String);
+          else if (typeof sourceValue === 'string' && sourceValue.includes(',')) vals = sourceValue.split(',').map((v: string) => v.trim()).filter(Boolean);
+          else if (sourceValue) vals = [String(sourceValue)];
+          else vals = [];
+          // "all" = tout cocher
+          if (vals.includes('all')) {
+            setSelectedPdfProducts(pdfProductOptions.map(o => o.value));
+          } else {
+            const matching = pdfProductOptions.filter(o => vals.includes(o.value));
+            setSelectedPdfProducts(matching.length > 0 ? matching.map(o => o.value) : []);
+          }
+        } else {
+          setSelectedPdfProducts([]);
+        }
+      }
       
       const effectiveTreeId = treeId || 'cmf1mwoz10005gooked1j6orn';
       const response = await api.get(`/api/documents/templates?treeId=${effectiveTreeId}&isActive=true`);
       
       const templates = Array.isArray(response) ? response : (response?.data || []);
       setAvailableTemplates(templates);
+      // Pré-sélectionner : documents par défaut + documents liés aux produits sélectionnés
+      const autoSelected = templates
+        .filter((t: any) => t.isDefault || (t.productValue && selectedPdfProducts.includes(t.productValue)))
+        .map((t: any) => t.id);
+      // Si aucun critère, sélectionner tous
+      setSelectedTemplateIds(autoSelected.length > 0 ? autoSelected : templates.map((t: any) => t.id));
       
       if (templates.length === 0) {
         message.info('Aucun template de document disponible pour cet arbre');
@@ -2863,6 +3168,11 @@ const TBL: React.FC<TBLProps> = ({
       const mergedTblData = (typeof window !== 'undefined' && window.TBL_FORM_DATA)
         ? { ...formData, ...window.TBL_FORM_DATA }
         : formData;
+
+      // 🏗️ Produits choisis par le commercial dans le modal de génération
+      const productsForDoc = selectedPdfProducts
+        .map(val => pdfProductOptions.find(o => o.value === val))
+        .filter(Boolean) as Array<{value: string, label: string, icon?: string, color?: string}>;
       
       const documentData = {
         templateId,
@@ -2879,6 +3189,8 @@ const TBL: React.FC<TBLProps> = ({
           address: clientData.address,
           company: clientData.name,
         },
+        // 🏗️ Produits sélectionnés par le commercial (pour auto-création chantiers après signature)
+        selectedProducts: productsForDoc.length > 0 ? productsForDoc : undefined,
       };
       
       console.log('📄 [TBL] Génération PDF avec:', documentData);
@@ -3040,21 +3352,30 @@ const TBL: React.FC<TBLProps> = ({
         cc: values.cc || undefined,
         bcc: values.bcc || undefined,
         includeProductDocs,
+        includeSignatureLink,
         tblData: includeProductDocs ? formData : undefined,
       });
       const fichesMsg = result?.productDocsAttached > 0
         ? ` (+ ${result.productDocsAttached} fiche(s) technique(s))`
         : '';
-      message.success(`Email envoyé avec succès !${fichesMsg}`);
+      const signMsg = result?.signatureLinkIncluded ? ' ✍️ Lien de signature inclus.' : '';
+      message.success(`Email envoyé avec succès !${fichesMsg}${signMsg}`);
       setEmailModalVisible(false);
       emailForm.resetFields();
+      // Rafraîchir le statut de signature si un lien a été inclus
+      if (result?.signatureLinkIncluded && submissionId) {
+        try {
+          const sigRes = await api.get(`/api/e-signature/submission/${submissionId}/status`);
+          if (sigRes?.success) setSignatureStatus({ totalSigned: sigRes.totalSigned, totalPending: sigRes.totalPending, signatures: sigRes.signatures });
+        } catch { /* noop */ }
+      }
     } catch (error: any) {
       console.error('❌ Erreur envoi email:', error);
       message.error(error?.response?.data?.error || error?.message || 'Erreur lors de l\'envoi de l\'email');
     } finally {
       setSendingEmail(false);
     }
-  }, [emailForm, lastGeneratedDocId, api, includeProductDocs, formData]);
+  }, [emailForm, lastGeneratedDocId, api, includeProductDocs, includeSignatureLink, formData, submissionId]);
 
   // Charger un devis existant
   const handleLoadDevis = useCallback(async () => {
@@ -3604,8 +3925,13 @@ const TBL: React.FC<TBLProps> = ({
       let formattedData: TBLFormData = {};
       let skippedCalculated = 0;
       const sourceStats: Record<string, number> = {};
+      // 🚀 FIX PERF-CHANTIER-DEFINITIF: Collecter les valeurs calculées/DISPLAY
+      // stockées en DB pour les broadcaster SANS appeler create-and-evaluate (~6s)
+      const storedComputedData: Array<{nodeId: string; value: unknown; operationResult?: unknown}> = [];
+      let hasSubmissionDataArray = false;
 
       if (Array.isArray(submissionDataArray)) {
+        hasSubmissionDataArray = true;
         // console.log('🔍 [TBL] Données de submission trouvées:', submission.TreeBranchLeafSubmissionData.length, 'éléments');
         
         // ✅ Filtrer pour recharger les entrées utilisateur.
@@ -3617,6 +3943,14 @@ const TBL: React.FC<TBLProps> = ({
           const isUserInput = !src || src === 'neutral' || src === 'field' || src === 'fixed';
           if (!isUserInput) {
             skippedCalculated++;
+            // 🚀 FIX PERF-CHANTIER-DEFINITIF: Collecter les valeurs calculées pour broadcast direct
+            if (item.value !== undefined && item.value !== null) {
+              storedComputedData.push({
+                nodeId: item.nodeId,
+                value: item.value,
+                operationResult: item.value
+              });
+            }
             return;
           }
           if (item.value !== undefined && item.value !== null && item.value !== '') {
@@ -3750,89 +4084,118 @@ const TBL: React.FC<TBLProps> = ({
           setDevisCreatedAt(new Date((submissionObj as any).createdAt));
         }
 
-        // 🔥 FIX 14/02/2026: Recalculer TOUS les champs DISPLAY après chargement d'un devis.
-        // On suspend l'autosave pendant le recalcul pour éviter que l'auto-select
-        // (qui se déclenche sur les champs SELECT avec table lookup) ne provoque
-        // des sauvegardes intermédiaires avec des données incorrectes.
+        // � FIX PERF-CHANTIER-DEFINITIF: Au lieu de recalculer les DISPLAY via create-and-evaluate (~6s),
+        // utiliser les valeurs calculées DÉJÀ STOCKÉES dans TreeBranchLeafSubmissionData.
+        // Cela rend le chargement instantané comme en mode TBL normal.
         autosaveSuspendedRef.current = true;
         try {
           const effectiveClientId = hydratedLeadId || (submissionObj as any)?.leadId || null;
-          console.log(`🔄 [TBL LOAD] Recalcul des DISPLAY fields pour devis ${devisId} (mode 'open')...`);
-          const evaluationResponse = await api.post('/api/tbl/submissions/create-and-evaluate', {
-            treeId: effectiveTreeId || (submissionObj as any)?.treeId,
-            submissionId: devisId,
-            formData: normalizePayload(formattedData),
-            clientId: effectiveClientId,
-            status: loadedStatus === 'default-draft' ? 'default-draft' : 'completed',
-            changedFieldId: 'NULL',
-            evaluationMode: 'open'  // 🎯 Forcer recalcul complet des DISPLAY
-          });
+          if (effectiveClientId) {
+            lastClientIdRef.current = effectiveClientId;
+          }
 
-          // Mettre à jour la signature pour éviter un autosave immédiat
-          try {
-            const normalized = normalizePayload(formattedData);
-            const sig = computeSignature(normalized);
-            lastSavedSignatureRef.current = sig;
-          } catch { /* noop */ }
+          if (hasSubmissionDataArray && storedComputedData.length > 0) {
+            // ======== CHEMIN RAPIDE: Valeurs DISPLAY stockées en DB ========
+            // Pas besoin de create-and-evaluate ! Les valeurs sont déjà là.
+            console.log(`⚡ [TBL LOAD] ${storedComputedData.length} valeurs DISPLAY chargées depuis DB (SANS create-and-evaluate)`);
 
-          // 🔥 FIX: Broadcaster les valeurs calculées avec replaceAll=true.
-          // Cela REMPLACE entièrement broadcastedCalcValues dans useTBLTableLookup
-          // au lieu de MERGER avec les anciennes valeurs du devis précédent.
-          //
-          // 🔥🔥 FIX CRITIQUE: Passer submissionId: devisId dans le detail !
-          // broadcastCalculatedRefresh est un useCallback qui capture le submissionId de la closure.
-          // Après setSubmissionId(devisId) + await, React a re-rendu les hooks avec le NOUVEAU submissionId,
-          // mais handleSelectDevis tourne toujours dans l'ANCIENNE closure.
-          // Sans ce fix, l'event avait submissionId=ANCIEN_ID, et useNodeCalculatedValue
-          // (re-rendu avec submissionId=devisId) REJETAIT l'event car ANCIEN_ID !== devisId.
-          // Le spread ...(detail||{}) dans broadcastCalculatedRefresh écrase le submissionId de la closure.
-          broadcastCalculatedRefresh({
-            reason: 'load-devis-recalcul',
-            replaceAll: true,
-            submissionId: devisId,  // 🔥 Forcer le bon submissionId (écrase la closure périmée)
-            evaluatedSubmissionId: devisId,
-            recalcCount: evaluationResponse?.submission?.TreeBranchLeafSubmissionData?.length,
-            submissionData: evaluationResponse?.submission?.TreeBranchLeafSubmissionData
-          });
+            // Broadcaster les valeurs calculées stockées avec replaceAll=true
+            broadcastCalculatedRefresh({
+              reason: 'load-devis-stored',
+              replaceAll: true,
+              submissionId: devisId,
+              evaluatedSubmissionId: devisId,
+              recalcCount: storedComputedData.length,
+              submissionData: storedComputedData
+            });
 
-          // 🔥🔥 FIX CRITIQUE: Injecter les valeurs calculées dans le state React formData.
-          // Sans cela, les champs DISPLAY rendus comme LINK (qui lisent formData[field.id])
-          // ne trouvent pas leur valeur car setFormData() plus haut ne charge que les inputs
-          // utilisateur (operationSource = neutral/field/fixed).
-          // Le broadcast met les valeurs dans window.TBL_FORM_DATA (mutation directe),
-          // mais le React state formData n'est PAS mis à jour → les LINK fields affichent "---".
-          const submDataForFormData = evaluationResponse?.submission?.TreeBranchLeafSubmissionData;
-          if (Array.isArray(submDataForFormData) && submDataForFormData.length > 0) {
+            // Injecter les valeurs calculées dans formData pour les LINK fields
             setFormData(prev => {
               const next = { ...prev };
-              for (const item of submDataForFormData) {
+              for (const item of storedComputedData) {
                 if (item?.nodeId && item?.value !== undefined && item?.value !== null) {
-                  next[item.nodeId] = item.value;
+                  next[item.nodeId] = item.value as string;
                 }
               }
               return next;
             });
-            // Mettre à jour la signature avec les valeurs calculées incluses
-            // pour éviter un autosave parasite qui détecterait un changement
+
+            // Signature avec toutes les valeurs (user + computed) pour éviter un autosave parasite
             try {
               const allData: Record<string, unknown> = { ...formattedData };
-              for (const item of submDataForFormData) {
+              for (const item of storedComputedData) {
                 if (item?.nodeId && item?.value !== undefined && item?.value !== null) {
                   allData[item.nodeId] = item.value;
                 }
               }
               lastSavedSignatureRef.current = computeSignature(normalizePayload(allData));
             } catch { /* noop */ }
-          }
 
-          console.log(`✅ [TBL LOAD] Recalcul DISPLAY terminé pour devis ${devisId}, ${submDataForFormData?.length || 0} valeurs injectées dans formData`);
+          } else {
+            // ======== CHEMIN FALLBACK: Pas de données stockées → recalculer ========
+            console.log(`🔄 [TBL LOAD] Fallback: recalcul DISPLAY via create-and-evaluate pour devis ${devisId}...`);
+            const evaluationResponse = await api.post('/api/tbl/submissions/create-and-evaluate', {
+              treeId: effectiveTreeId || (submissionObj as any)?.treeId,
+              submissionId: devisId,
+              formData: normalizePayload(formattedData),
+              clientId: effectiveClientId,
+              status: loadedStatus === 'default-draft' ? 'default-draft' : 'completed',
+              changedFieldId: 'NULL',
+              evaluationMode: 'open'
+            });
+
+            try {
+              const normalized = normalizePayload(formattedData);
+              lastSavedSignatureRef.current = computeSignature(normalized);
+            } catch { /* noop */ }
+
+            broadcastCalculatedRefresh({
+              reason: 'load-devis-recalcul',
+              replaceAll: true,
+              submissionId: devisId,
+              evaluatedSubmissionId: devisId,
+              recalcCount: evaluationResponse?.submission?.TreeBranchLeafSubmissionData?.length,
+              submissionData: evaluationResponse?.submission?.TreeBranchLeafSubmissionData
+            });
+
+            const submDataForFormData = evaluationResponse?.submission?.TreeBranchLeafSubmissionData;
+            if (Array.isArray(submDataForFormData) && submDataForFormData.length > 0) {
+              setFormData(prev => {
+                const next = { ...prev };
+                for (const item of submDataForFormData) {
+                  if (item?.nodeId && item?.value !== undefined && item?.value !== null) {
+                    next[item.nodeId] = item.value;
+                  }
+                }
+                return next;
+              });
+              try {
+                const allData: Record<string, unknown> = { ...formattedData };
+                for (const item of submDataForFormData) {
+                  if (item?.nodeId && item?.value !== undefined && item?.value !== null) {
+                    allData[item.nodeId] = item.value;
+                  }
+                }
+                lastSavedSignatureRef.current = computeSignature(normalizePayload(allData));
+              } catch { /* noop */ }
+            }
+            console.log(`✅ [TBL LOAD] Fallback recalcul DISPLAY terminé pour devis ${devisId}`);
+          }
         } catch (recalcErr) {
-          console.warn('⚠️ [TBL LOAD] Recalcul DISPLAY échoué (les champs calculés peuvent être vides):', recalcErr);
+          console.warn('⚠️ [TBL LOAD] Chargement DISPLAY échoué (les champs calculés peuvent être vides):', recalcErr);
         } finally {
-          // Réactiver l'autosave après le recalcul
+          // Réactiver l'autosave après un délai pour absorber les changements post-chargement
+          // (table lookups, auto-select, etc.)
           setTimeout(() => {
+            try {
+              const currentFormData = formDataRef.current;
+              if (currentFormData && Object.keys(currentFormData).length > 0) {
+                const sig = computeSignature(normalizePayload(currentFormData));
+                lastSavedSignatureRef.current = sig;
+              }
+            } catch { /* noop */ }
             autosaveSuspendedRef.current = false;
-          }, 500); // Délai court pour laisser React re-render avec les nouvelles valeurs
+          }, 2000);
         }
 
         message.success(`${loadedStatus === 'default-draft' ? 'Brouillon' : `Devis "${loadedDevisName}"`} chargé avec succès (${loadedCount} champs)`);
@@ -4069,7 +4432,7 @@ const TBL: React.FC<TBLProps> = ({
                       block={actionButtonBlock}
                     />
                   </Tooltip>
-                  <Tooltip title={lastGeneratedDocId ? "Envoyer le PDF par email" : "Générez d'abord un PDF"} placement="bottom">
+                  <Tooltip title={lastGeneratedDocId ? "Envoyer l'offre" : "Générez d'abord un PDF"} placement="bottom">
                     <Button 
                       icon={<MailOutlined />}
                       onClick={handleOpenEmailModal}
@@ -4078,6 +4441,22 @@ const TBL: React.FC<TBLProps> = ({
                       style={lastGeneratedDocId ? { backgroundColor: '#1890ff', borderColor: '#1890ff', color: '#fff' } : undefined}
                     />
                   </Tooltip>
+                  {signatureStatus?.totalSigned ? (
+                    <Tooltip title="Offre signée" placement="bottom">
+                      <Button
+                        icon={<DownloadOutlined />}
+                        block={actionButtonBlock}
+                        style={{ backgroundColor: '#52c41a', borderColor: '#52c41a', color: '#fff' }}
+                        onClick={() => {
+                          const signedSig = signatureStatus.signatures.find((s: any) => s.status === 'SIGNED');
+                          if (signedSig) {
+                            setSignedPdfPreviewId(signedSig.id);
+                            setSignedPdfPreviewOpen(true);
+                          }
+                        }}
+                      />
+                    </Tooltip>
+                  ) : null}
                   <Tooltip title="Gestionnaire" placement="bottom">
                     <Button 
                       icon={<ToolOutlined />}
@@ -4381,6 +4760,12 @@ const TBL: React.FC<TBLProps> = ({
                         onReviewSubcontractAmountChange={setReviewSubcontractAmount}
                         reviewHasSubcontractors={reviewHasSubcontractors}
                         reviewSubcontractorNames={reviewSubcontractorNames}
+                        rectificationMode={rectificationMode}
+                        rectificationFieldMap={rectificationFieldMap}
+                        rectificationFields={rectificationFields}
+                        submittingCorrection={submittingCorrection}
+                        correctionSubmitted={correctionSubmitted}
+                        onSubmitCommercialCorrection={onSubmitCommercialCorrection}
                       />
                     </div>
                   )
@@ -4897,7 +5282,7 @@ const TBL: React.FC<TBLProps> = ({
         open={pdfModalVisible}
         onCancel={() => setPdfModalVisible(false)}
         footer={null}
-        width={isMobile ? 360 : 600}
+        width={isMobile ? 360 : 640}
       >
         <div className="space-y-4">
           {/* Info client */}
@@ -4912,60 +5297,173 @@ const TBL: React.FC<TBLProps> = ({
             </div>
           </div>
           
-          {/* Liste des templates */}
-          {loadingTemplates ? (
-            <div className="text-center py-8">
-              <Spin tip="Chargement des templates..." />
-            </div>
-          ) : availableTemplates.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <FileTextOutlined style={{ fontSize: '48px', marginBottom: '16px', display: 'block' }} />
-              <p>Aucun template disponible pour cet arbre</p>
-              <p className="text-sm">Contactez l'administrateur pour en ajouter</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <p className="text-sm text-gray-600 mb-3">
-                Sélectionnez le type de document à générer :
-              </p>
-              {availableTemplates.map((template) => (
-                <Card
-                  key={template.id}
-                  hoverable
-                  className="cursor-pointer border-2 hover:border-blue-400 transition-colors"
-                  onClick={() => !generatingPdf && handleGeneratePDFWithTemplate(template.id)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="text-2xl">
-                        {template.type === 'QUOTE' && '📋'}
-                        {template.type === 'INVOICE' && '🧾'}
-                        {template.type === 'CONTRACT' && '📝'}
-                        {template.type === 'ORDER' && '📦'}
-                        {template.type === 'PRESENTATION' && '📊'}
-                      </div>
-                      <div>
-                        <div className="font-medium text-gray-900">{template.name}</div>
-                        {template.description && (
-                          <div className="text-sm text-gray-500">{template.description}</div>
-                        )}
-                      </div>
-                    </div>
-                    <Button 
-                      type="primary" 
-                      loading={generatingPdf}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleGeneratePDFWithTemplate(template.id);
-                      }}
-                    >
-                      Générer
-                    </Button>
-                  </div>
-                </Card>
-              ))}
+          {/* 🏗️ Sélection des produits */}
+          {pdfProductOptions.length > 0 && (
+            <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
+              <div className="flex items-center gap-2 mb-2">
+                <ShoppingOutlined style={{ color: '#722ed1' }} />
+                <span className="font-medium text-purple-900">Produits inclus dans ce devis :</span>
+              </div>
+              <Checkbox.Group
+                value={selectedPdfProducts}
+                onChange={(checkedValues) => {
+                  const newProducts = checkedValues as string[];
+                  setSelectedPdfProducts(newProducts);
+                  // Auto-sélectionner/désélectionner les templates liés aux produits
+                  const productTemplateIds = availableTemplates
+                    .filter(t => t.productValue && newProducts.includes(t.productValue))
+                    .map(t => t.id);
+                  const defaultTemplateIds = availableTemplates
+                    .filter(t => t.isDefault)
+                    .map(t => t.id);
+                  const nonProductSelected = selectedTemplateIds.filter(
+                    id => !availableTemplates.find(t => t.id === id && t.productValue)
+                  );
+                  setSelectedTemplateIds([...new Set([...defaultTemplateIds, ...productTemplateIds, ...nonProductSelected])]);
+                }}
+              >
+                <div className="flex flex-wrap gap-2">
+                  {pdfProductOptions.map(opt => (
+                    <Checkbox key={opt.value} value={opt.value}>
+                      <Tag color={opt.color || '#722ed1'}>{opt.label}</Tag>
+                    </Checkbox>
+                  ))}
+                </div>
+              </Checkbox.Group>
+              {selectedPdfProducts.length === 0 && (
+                <div className="text-xs text-orange-600 mt-1">⚠️ Sélectionnez au moins un produit</div>
+              )}
             </div>
           )}
+          
+          {/* 📄 Documents à inclure */}
+          {loadingTemplates ? (
+            <div className="text-center py-4">
+              <Spin tip="Chargement..." />
+            </div>
+          ) : availableTemplates.length === 0 ? (
+            <div className="text-center py-4 text-gray-500">
+              <FileTextOutlined style={{ fontSize: '32px', marginBottom: '8px', display: 'block' }} />
+              <p className="text-sm">Aucun template disponible</p>
+            </div>
+          ) : (() => {
+            const defaultTemplates = availableTemplates.filter(t => t.isDefault);
+            const productTemplates = availableTemplates.filter(t => !t.isDefault && t.productValue);
+            const freeTemplates = availableTemplates.filter(t => !t.isDefault && !t.productValue);
+            return (
+              <div className="space-y-3">
+                {/* Documents par défaut */}
+                {defaultTemplates.length > 0 && (
+                  <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <FileTextOutlined style={{ color: '#1890ff' }} />
+                      <span className="font-medium text-blue-900">📌 Documents par défaut :</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {defaultTemplates.map(tmpl => (
+                        <Checkbox
+                          key={tmpl.id}
+                          checked={selectedTemplateIds.includes(tmpl.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedTemplateIds(prev => [...prev, tmpl.id]);
+                            } else {
+                              setSelectedTemplateIds(prev => prev.filter(id => id !== tmpl.id));
+                            }
+                          }}
+                        >
+                          <span className="text-sm">📄 {tmpl.name}</span>
+                        </Checkbox>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Documents liés aux produits */}
+                {productTemplates.length > 0 && (
+                  <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <ShoppingOutlined style={{ color: '#52c41a' }} />
+                      <span className="font-medium text-green-900">🏷️ Documents produit :</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {productTemplates.map(tmpl => {
+                        const productOpt = pdfProductOptions.find(p => p.value === tmpl.productValue);
+                        const isProductSelected = selectedPdfProducts.includes(tmpl.productValue || '');
+                        return (
+                          <Checkbox
+                            key={tmpl.id}
+                            checked={selectedTemplateIds.includes(tmpl.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedTemplateIds(prev => [...prev, tmpl.id]);
+                              } else {
+                                setSelectedTemplateIds(prev => prev.filter(id => id !== tmpl.id));
+                              }
+                            }}
+                          >
+                            <span className={`text-sm ${!isProductSelected ? 'opacity-50' : ''}`}>
+                              <Tag color={productOpt?.color || '#52c41a'} style={{ marginRight: 4 }}>
+                                {productOpt?.label || tmpl.productValue}
+                              </Tag>
+                              {tmpl.name}
+                            </span>
+                          </Checkbox>
+                        );
+                      })}
+                    </div>
+                    {selectedPdfProducts.length === 0 && (
+                      <div className="text-xs text-gray-500 mt-1">Sélectionnez des produits ci-dessus pour activer ces documents</div>
+                    )}
+                  </div>
+                )}
+
+                {/* Documents complémentaires (libres) */}
+                {freeTemplates.length > 0 && (
+                  <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <FileTextOutlined style={{ color: '#8c8c8c' }} />
+                      <span className="font-medium text-gray-700">📎 Documents complémentaires :</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {freeTemplates.map(tmpl => (
+                        <Checkbox
+                          key={tmpl.id}
+                          checked={selectedTemplateIds.includes(tmpl.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedTemplateIds(prev => [...prev, tmpl.id]);
+                            } else {
+                              setSelectedTemplateIds(prev => prev.filter(id => id !== tmpl.id));
+                            }
+                          }}
+                        >
+                          <span className="text-sm">📄 {tmpl.name}</span>
+                        </Checkbox>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Bouton Générer unique */}
+          <Button
+            type="primary"
+            size="large"
+            block
+            loading={generatingPdf}
+            disabled={selectedTemplateIds.length === 0}
+            onClick={() => {
+              const templateId = selectedTemplateIds[0] || availableTemplates[0]?.id;
+              if (templateId) handleGeneratePDFWithTemplate(templateId);
+              else message.warning('Aucun template disponible');
+            }}
+            icon={<FileTextOutlined />}
+          >
+            Générer le PDF ({selectedTemplateIds.length} document{selectedTemplateIds.length > 1 ? 's' : ''}{selectedPdfProducts.length > 0 ? `, ${selectedPdfProducts.length} produit${selectedPdfProducts.length > 1 ? 's' : ''}` : ''})
+          </Button>
         </div>
       </Modal>
 
@@ -5030,6 +5528,23 @@ const TBL: React.FC<TBLProps> = ({
             <Switch
               checked={includeProductDocs}
               onChange={setIncludeProductDocs}
+              checkedChildren="Oui"
+              unCheckedChildren="Non"
+            />
+          </div>
+        </div>
+        <div className="mt-2 p-3 bg-green-50 rounded-lg border border-green-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span style={{ fontSize: 16 }}>✍️</span>
+              <div>
+                <div className="font-medium text-sm text-gray-800">Inclure un lien de signature</div>
+                <div className="text-xs text-gray-500">Le client pourra signer le devis directement depuis l'email</div>
+              </div>
+            </div>
+            <Switch
+              checked={includeSignatureLink}
+              onChange={setIncludeSignatureLink}
               checkedChildren="Oui"
               unCheckedChildren="Non"
             />
@@ -5170,6 +5685,38 @@ const TBL: React.FC<TBLProps> = ({
         />
       </Suspense>
 
+      {/* ✍️ Modal Signature Électronique */}
+      {submissionId && (
+        <Suspense fallback={null}>
+          <SignatureModal
+            open={signatureModalVisible}
+            onClose={() => setSignatureModalVisible(false)}
+            submissionId={submissionId}
+            leadId={leadId || undefined}
+            signatureType={rectificationMode ? 'RECTIFICATION' : 'DEVIS'}
+            signerRole="CLIENT"
+            signerName={clientData.name || ''}
+            signerEmail={clientData.email || ''}
+            signerPhone={clientData.phone || ''}
+            onSigned={(result) => {
+              console.log('[TBL] ✅ Document signé:', result);
+              message.success('Signature enregistrée avec traçabilité complète');
+            }}
+          />
+        </Suspense>
+      )}
+
+      {/* 📄 Modal Preview PDF signé */}
+      {signedPdfPreviewId && (
+        <Suspense fallback={null}>
+          <SignedPdfPreviewModal
+            open={signedPdfPreviewOpen}
+            onClose={() => setSignedPdfPreviewOpen(false)}
+            signatureId={signedPdfPreviewId}
+          />
+        </Suspense>
+      )}
+
       {/* 🔍 MODAL RÉSULTAT ANALYSE (dans TBL principal pour accès au state) */}
       <Modal
         open={!!analysisResult}
@@ -5251,6 +5798,13 @@ interface TBLTabContentWithSectionsProps {
   onReviewSubcontractAmountChange?: (value: string) => void;
   reviewHasSubcontractors?: boolean;
   reviewSubcontractorNames?: string[];
+  // 🔶 RECTIFICATION MODE
+  rectificationMode?: boolean;
+  rectificationFieldMap?: Record<string, { nodeId: string; fieldLabel: string; originalValue: string | null; technicianValue: string | null; modificationNote: string | null; technicianName: string | null }>;
+  rectificationFields?: Array<{ nodeId: string; fieldLabel: string; originalValue: string | null; technicianValue: string | null; modificationNote: string | null; technicianName: string | null }>;
+  submittingCorrection?: boolean;
+  correctionSubmitted?: boolean;
+  onSubmitCommercialCorrection?: () => void;
 }
 
 const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = React.memo(({
@@ -5285,6 +5839,12 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
   onReviewSubcontractAmountChange,
   reviewHasSubcontractors = false,
   reviewSubcontractorNames = [],
+  rectificationMode = false,
+  rectificationFieldMap = {},
+  rectificationFields = [],
+  submittingCorrection = false,
+  correctionSubmitted = false,
+  onSubmitCommercialCorrection,
 }) => {
   const stats = useMemo(() => {
     let total = 0;
@@ -5616,6 +6176,8 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
               onReviewCheck={onReviewCheck}
               onReviewComment={onReviewComment}
               originalFormData={originalFormDataProp}
+              rectificationMode={rectificationMode}
+              rectificationFieldMap={rectificationFieldMap}
             />
           ))}
         </div>
@@ -5701,6 +6263,8 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
           onReviewCheck={onReviewCheck}
           onReviewComment={onReviewComment}
           originalFormData={originalFormDataProp}
+          rectificationMode={rectificationMode}
+          rectificationFieldMap={rectificationFieldMap}
         />
       </div>
     );
@@ -5728,7 +6292,83 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
           </div>
         </div>
       )}
+      {/* 🔶 RECTIFICATION MODE: Bannière commercial */}
+      {rectificationMode && rectificationFields.length > 0 && (
+        <div style={{
+          padding: '10px 12px',
+          marginBottom: 12,
+          background: 'linear-gradient(135deg, #fff7e6 0%, #fff1d4 100%)',
+          border: '2px solid #fa8c16',
+          borderRadius: 8,
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 8,
+        }}>
+          <span style={{ fontSize: 20, lineHeight: '24px', flexShrink: 0 }}>🔶</span>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 600, color: '#d46b08', fontSize: 13 }}>Mode Rectification — Corrections commerciales</div>
+            <div style={{ fontSize: 11, color: '#595959', lineHeight: 1.4 }}>
+              Le technicien a modifié <strong>{rectificationFields.length} champ(s)</strong>.
+              Les champs concernés sont marqués en <span style={{ color: '#fa8c16', fontWeight: 600 }}>orange</span>.
+              {' '}Corrigez les valeurs nécessaires puis cliquez <strong>Valider les corrections</strong>.
+            </div>
+            <div style={{ marginTop: 6, fontSize: 11, color: '#8c8c8c' }}>
+              ⚠️ Toutes les modifications sont tracées (valeur initiale → technicien → votre correction).
+            </div>
+          </div>
+        </div>
+      )}
       {renderContent()}
+      {/* 🔶 RECTIFICATION MODE: Footer avec bouton validation corrections */}
+      {rectificationMode && rectificationFields.length > 0 && (
+        <div style={{
+          marginTop: 16,
+          padding: '12px',
+          background: '#fffbe6',
+          borderRadius: 8,
+          border: '1px solid #ffe58f',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 10,
+        }}>
+          <div>
+            <Text style={{ fontWeight: 600, fontSize: 13, color: '#d46b08' }}>
+              🔶 {rectificationFields.length} champ(s) signalé(s) par le technicien
+            </Text>
+          </div>
+          {correctionSubmitted ? (
+            <div style={{
+              padding: '10px',
+              background: '#f6ffed',
+              borderRadius: 6,
+              border: '1px solid #b7eb8f',
+              textAlign: 'center',
+            }}>
+              <Text style={{ color: '#52c41a', fontWeight: 600, fontSize: 14 }}>
+                ✅ Corrections enregistrées — Retournez à la fiche lead pour re-soumettre au chantier.
+              </Text>
+            </div>
+          ) : (
+            <Button
+              type="primary"
+              size="large"
+              loading={submittingCorrection}
+              onClick={onSubmitCommercialCorrection}
+              style={{
+                width: '100%',
+                height: 48,
+                fontSize: 16,
+                fontWeight: 700,
+                borderRadius: 8,
+                background: '#fa8c16',
+                borderColor: '#fa8c16',
+              }}
+            >
+              Valider les corrections
+            </Button>
+          )}
+        </div>
+      )}
       {reviewMode && (
         <div style={{
           marginTop: 16,

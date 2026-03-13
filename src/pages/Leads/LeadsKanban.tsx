@@ -4,7 +4,6 @@ import { renderProductIcon } from '../../components/TreeBranchLeaf/treebranchlea
 import * as XLSX from 'xlsx';
 import { 
   ClockCircleOutlined,
-  MoreOutlined,
   PlusOutlined,
   GlobalOutlined,
   UserOutlined,
@@ -547,35 +546,57 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({
     <div 
       ref={drop}
       style={{
-        backgroundColor: '#EBECF0',
-        borderRadius: '12px',
+        backgroundColor: isOver ? hexToRgba(column.color, 0.08) : '#F4F5F7',
+        borderRadius: '8px',
         display: 'flex',
         flexDirection: 'column',
-        maxHeight: 'calc(100vh - 100px)',
-        transition: 'background-color 0.2s ease',
+        flex: 1,
+        transition: 'background-color 0.2s ease, border-color 0.2s ease',
         width: '100%',
         maxWidth: '100%',
         boxSizing: 'border-box',
-        border: isMobile ? '2px solid #DFE1E6' : 'none',
-        ...(isOver && { backgroundColor: '#E1E4E9' }),
+        border: isOver ? `2px dashed ${column.color}` : '2px solid transparent',
       }}
     >
       {/* Header de la colonne */}
-      <div style={{ padding: '10px 12px 8px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{
+        padding: '8px 10px 6px',
+        borderBottom: `2px solid ${column.color}`,
+        background: getColumnHeaderBackground(column.color),
+        borderRadius: '8px 8px 0 0',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+          <div style={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            backgroundColor: column.color,
+            flexShrink: 0,
+          }} />
           <span style={{ 
-            fontSize: '14px', 
+            fontSize: '12px', 
             fontWeight: 600, 
             color: '#172B4D',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
           }}>
             {column.name}
           </span>
-          <Button
-            size="small"
-            type="text"
-            icon={<MoreOutlined />}
-            style={{ color: '#6B778C' }}
-          />
+          <span style={{
+            fontSize: 10,
+            color: '#5E6C84',
+            backgroundColor: hexToRgba(column.color, 0.2),
+            borderRadius: 8,
+            padding: '1px 6px',
+            fontWeight: 500,
+            flexShrink: 0,
+          }}>
+            {leads.length}
+          </span>
         </div>
       </div>
 
@@ -584,7 +605,7 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({
         style={{ 
           flex: 1,
           overflowY: 'auto',
-          padding: '0 8px 8px',
+          padding: '4px 5px',
           minHeight: '50px',
         }}
       >
@@ -611,32 +632,15 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({
           <div style={{ 
             textAlign: 'center', 
             padding: '20px 8px',
-            color: '#5E6C84',
-            fontSize: '13px',
+            color: '#b3bac5',
+            fontSize: '12px',
           }}>
-            —
+            Aucun lead
           </div>
         )}
       </div>
 
-      {/* Footer - Ajouter une carte */}
-      <div style={{ padding: '8px' }}>
-        <Button
-          type="text"
-          icon={<PlusOutlined />}
-          style={{
-            width: '100%',
-            textAlign: 'left',
-            color: '#5E6C84',
-            fontSize: '14px',
-            height: '32px',
-            borderRadius: '8px',
-          }}
-          className="hover:bg-[#DFE1E6]"
-        >
-          Add a card
-        </Button>
-      </div>
+
 
       {/* Zone de drop visuelle */}
       {isOver && (
@@ -1225,12 +1229,15 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
       <CustomDragLayer />
       {/* 🎯 Auto-scroll pendant le drag */}
       <AutoScrollDragTracker boardRef={boardRef} />
-      {/* Container principal - FOND BLANC */}
+      {/* Container principal */}
       <div 
         style={{
           backgroundColor: '#FFFFFF',
-          minHeight: '100vh',
+          height: '100dvh',
           width: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
         }}
       >
         {/* Header */}
@@ -1370,7 +1377,8 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
             padding: boardPadding,
             overflowX: 'auto',
             overflowY: 'hidden',
-            height: boardHeight,
+            flex: 1,
+            minHeight: 0,
             WebkitOverflowScrolling: 'touch',
             scrollSnapType: isMobile && !isBoardDragging ? 'x mandatory' : undefined,
           }}
@@ -1380,8 +1388,8 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
             style={{
               display: 'flex',
               flexDirection: 'row',
-              alignItems: 'flex-start',
-              gap: isMobile ? '12px' : '12px',
+              alignItems: 'stretch',
+              gap: '8px',
               height: '100%',
               paddingBottom: '12px',
             }}
@@ -1405,6 +1413,9 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
                     minWidth: columnWidth,
                     maxWidth: columnWidth,
                     scrollSnapAlign: isMobile ? 'start' : undefined,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    height: '100%',
                   }}
                 >
                   <KanbanColumn

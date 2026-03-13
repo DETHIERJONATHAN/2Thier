@@ -1019,6 +1019,16 @@ interface TBLSectionRendererProps {
   onReviewCheck?: (fieldId: string, checked: boolean) => void;
   onReviewComment?: (fieldId: string, comment: string) => void;
   originalFormData?: Record<string, any>; // 📸 Snapshot des valeurs originales (devis) pour traçabilité
+  // 🔶 RECTIFICATION MODE: données des modifications technicien pour suivi 3 couches
+  rectificationMode?: boolean;
+  rectificationFieldMap?: Record<string, {
+    nodeId: string;
+    fieldLabel: string;
+    originalValue: string | null;
+    technicianValue: string | null;
+    modificationNote: string | null;
+    technicianName: string | null;
+  }>;
 }
 
 const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
@@ -1041,6 +1051,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   onReviewCheck,
   onReviewComment,
   originalFormData: originalFormDataProp,
+  rectificationMode = false,
+  rectificationFieldMap = {},
 }) => {
   // ✅ CRITIQUE: Stabiliser l'API pour éviter les re-rendus à chaque frappe
   const apiHook = useAuthenticatedApi();
@@ -6098,6 +6110,96 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                 📋 <strong>Valeur devis :</strong> {String(originalFormDataProp[field.id])}
                               </div>
                             )}
+                            {/* 🔶 RECTIFICATION: Afficher l'historique 3 couches (original → technicien → correction) */}
+                            {rectificationMode && rectificationFieldMap[field.id] && (
+                              <div style={{
+                                marginTop: 6,
+                                border: '2px solid #fa8c16',
+                                borderRadius: 6,
+                                overflow: 'hidden',
+                                fontSize: 11,
+                              }}>
+                                {/* Header */}
+                                <div style={{
+                                  background: '#fa8c16',
+                                  color: '#fff',
+                                  padding: '3px 8px',
+                                  fontWeight: 600,
+                                  fontSize: 10,
+                                  letterSpacing: 0.5,
+                                }}>
+                                  🔶 TRAÇABILITÉ — {rectificationFieldMap[field.id].fieldLabel}
+                                </div>
+                                {/* Ligne 1: Valeur initiale du devis */}
+                                <div style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  padding: '4px 8px',
+                                  background: '#f0f5ff',
+                                  borderBottom: '1px solid #ffd591',
+                                }}>
+                                  <span style={{ color: '#1677ff', fontWeight: 600, minWidth: 90 }}>📋 Devis initial :</span>
+                                  <span style={{ color: '#1677ff' }}>
+                                    {rectificationFieldMap[field.id].originalValue || '(vide)'}
+                                  </span>
+                                </div>
+                                {/* Ligne 2: Valeur modifiée par le technicien */}
+                                <div style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  padding: '4px 8px',
+                                  background: '#fff2f0',
+                                  borderBottom: '1px solid #ffd591',
+                                }}>
+                                  <span style={{ color: '#cf1322', fontWeight: 600, minWidth: 90 }}>🔧 Technicien :</span>
+                                  <span style={{ color: '#cf1322', fontWeight: 500 }}>
+                                    {rectificationFieldMap[field.id].technicianValue || '(vide)'}
+                                  </span>
+                                  {rectificationFieldMap[field.id].technicianName && (
+                                    <span style={{ color: '#8c8c8c', fontStyle: 'italic', marginLeft: 4 }}>
+                                      ({rectificationFieldMap[field.id].technicianName})
+                                    </span>
+                                  )}
+                                </div>
+                                {/* Ligne 3: Note du technicien */}
+                                {rectificationFieldMap[field.id].modificationNote && (
+                                  <div style={{
+                                    padding: '3px 8px',
+                                    background: '#fffbe6',
+                                    fontSize: 10,
+                                    color: '#d46b08',
+                                    fontStyle: 'italic',
+                                  }}>
+                                    💬 <strong>Raison :</strong> {rectificationFieldMap[field.id].modificationNote}
+                                  </div>
+                                )}
+                                {/* Ligne 4: Correction commerciale (3ème couche) - affichée si le commercial a changé la valeur */}
+                                {(() => {
+                                  const currentVal = formData[field.id] != null ? String(formData[field.id]) : '';
+                                  const techVal = rectificationFieldMap[field.id].technicianValue != null ? String(rectificationFieldMap[field.id].technicianValue) : '';
+                                  if (currentVal !== techVal) {
+                                    return (
+                                      <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        padding: '4px 8px',
+                                        background: '#f6ffed',
+                                        borderTop: '1px solid #ffd591',
+                                      }}>
+                                        <span style={{ color: '#389e0d', fontWeight: 600, minWidth: 90 }}>✏️ Commercial :</span>
+                                        <span style={{ color: '#389e0d', fontWeight: 500 }}>
+                                          {currentVal || '(vide)'}
+                                        </span>
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                })()}
+                              </div>
+                            )}
                           </div>
                           
                           {/* BOUTONS D'ACTION (par groupe de copie) */}
@@ -6181,6 +6283,92 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                               📋 <strong>Valeur devis :</strong> {String(originalFormDataProp[field.id])}
                             </div>
                           )}
+                          {/* 🔶 RECTIFICATION: Afficher l'historique 3 couches (original → technicien → correction) */}
+                          {rectificationMode && rectificationFieldMap[field.id] && (
+                            <div style={{
+                              marginTop: 6,
+                              border: '2px solid #fa8c16',
+                              borderRadius: 6,
+                              overflow: 'hidden',
+                              fontSize: 11,
+                            }}>
+                              <div style={{
+                                background: '#fa8c16',
+                                color: '#fff',
+                                padding: '3px 8px',
+                                fontWeight: 600,
+                                fontSize: 10,
+                                letterSpacing: 0.5,
+                              }}>
+                                🔶 TRAÇABILITÉ — {rectificationFieldMap[field.id].fieldLabel}
+                              </div>
+                              <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                padding: '4px 8px',
+                                background: '#f0f5ff',
+                                borderBottom: '1px solid #ffd591',
+                              }}>
+                                <span style={{ color: '#1677ff', fontWeight: 600, minWidth: 90 }}>📋 Devis initial :</span>
+                                <span style={{ color: '#1677ff' }}>
+                                  {rectificationFieldMap[field.id].originalValue || '(vide)'}
+                                </span>
+                              </div>
+                              <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                padding: '4px 8px',
+                                background: '#fff2f0',
+                                borderBottom: '1px solid #ffd591',
+                              }}>
+                                <span style={{ color: '#cf1322', fontWeight: 600, minWidth: 90 }}>🔧 Technicien :</span>
+                                <span style={{ color: '#cf1322', fontWeight: 500 }}>
+                                  {rectificationFieldMap[field.id].technicianValue || '(vide)'}
+                                </span>
+                                {rectificationFieldMap[field.id].technicianName && (
+                                  <span style={{ color: '#8c8c8c', fontStyle: 'italic', marginLeft: 4 }}>
+                                    ({rectificationFieldMap[field.id].technicianName})
+                                  </span>
+                                )}
+                              </div>
+                              {rectificationFieldMap[field.id].modificationNote && (
+                                <div style={{
+                                  padding: '3px 8px',
+                                  background: '#fffbe6',
+                                  fontSize: 10,
+                                  color: '#d46b08',
+                                  fontStyle: 'italic',
+                                }}>
+                                  💬 <strong>Raison :</strong> {rectificationFieldMap[field.id].modificationNote}
+                                </div>
+                              )}
+                              {/* Ligne 4: Correction commerciale (3ème couche) */}
+                              {(() => {
+                                const currentVal = formData[field.id] != null ? String(formData[field.id]) : '';
+                                const techVal = rectificationFieldMap[field.id].technicianValue != null ? String(rectificationFieldMap[field.id].technicianValue) : '';
+                                if (currentVal !== techVal) {
+                                  return (
+                                    <div style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 6,
+                                      padding: '4px 8px',
+                                      background: '#f6ffed',
+                                      borderTop: '1px solid #ffd591',
+                                    }}>
+                                      <span style={{ color: '#389e0d', fontWeight: 600, minWidth: 90 }}>✏️ Commercial :</span>
+                                      <span style={{ color: '#389e0d', fontWeight: 500 }}>
+                                        {currentVal || '(vide)'}
+                                      </span>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              })()}
+                            </div>
+                          )}
                         </>
                       )}
                     </Col>
@@ -6222,6 +6410,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                     onReviewCheck={onReviewCheck}
                     onReviewComment={onReviewComment}
                     originalFormData={originalFormDataProp}
+                    rectificationMode={rectificationMode}
+                    rectificationFieldMap={rectificationFieldMap}
                   />
                 ))}
               </>
@@ -6258,6 +6448,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                       onReviewCheck={onReviewCheck}
                       onReviewComment={onReviewComment}
                       originalFormData={originalFormDataProp}
+                      rectificationMode={rectificationMode}
+                      rectificationFieldMap={rectificationFieldMap}
                     />
                   </Panel>
                 ))}

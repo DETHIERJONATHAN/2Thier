@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { db } from '../lib/database';
 import { nanoid } from 'nanoid';
+import crypto from 'crypto';
 import { renderDocumentPdf } from '../services/documentPdfRenderer';
 import type { AuthenticatedRequest } from '../middlewares/auth';
 import { GoogleGmailService } from '../google-auth/services/GoogleGmailService';
@@ -269,6 +270,43 @@ function parseAddress(address: string): {
 // ROUTES DOCUMENT TEMPLATES (ADMIN ONLY)
 // ==========================================
 
+// GET /api/documents/product-options/:treeId - Récupérer les options produit d'un arbre TBL
+router.get('/product-options/:treeId', async (req: Request, res: Response) => {
+  try {
+    const { treeId } = req.params;
+    const productSourceNode = await prisma.treeBranchLeafNode.findFirst({
+      where: {
+        treeId,
+        hasProduct: true,
+        product_options: { not: null as any },
+      },
+      select: {
+        id: true,
+        product_options: true,
+      },
+    });
+
+    let productOptions: Array<{ value: string; label: string; icon?: string; color?: string }> = [];
+    if (productSourceNode?.product_options) {
+      try {
+        const raw = typeof productSourceNode.product_options === 'string'
+          ? JSON.parse(productSourceNode.product_options as string)
+          : productSourceNode.product_options;
+        if (Array.isArray(raw)) {
+          productOptions = raw.filter((o: any) => o.value !== 'all');
+        }
+      } catch (e) {
+        console.warn('[DOCS] Erreur parsing product_options:', e);
+      }
+    }
+
+    res.json(productOptions);
+  } catch (error) {
+    console.error('Erreur récupération product options:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // GET /api/documents/templates - Liste tous les templates
 // Query params: treeId, isActive, type
 router.get('/templates', async (req: Request, res: Response) => {
@@ -387,6 +425,8 @@ router.post('/templates', async (req: Request, res: Response) => {
       defaultLanguage,
       themeId,
       treeId,
+      productValue,
+      isDefault,
       sections
     } = req.body;
 
@@ -405,6 +445,8 @@ router.post('/templates', async (req: Request, res: Response) => {
         defaultLanguage: defaultLanguage || 'fr',
         themeId,
         treeId: treeId || null,
+        productValue: productValue || null,
+        isDefault: isDefault ?? false,
         createdBy: userId,
         updatedAt: new Date(),
         DocumentSection: {
@@ -450,10 +492,12 @@ router.put('/templates/:id', async (req: Request, res: Response) => {
       defaultLanguage,
       themeId,
       isActive,
+      productValue,
+      isDefault,
       sections
     } = req.body;
 
-    console.log('📝 [TEMPLATE UPDATE] Mise à jour template:', { id, name, treeId, type });
+    console.log('📝 [TEMPLATE UPDATE] Mise à jour template:', { id, name, treeId, type, productValue, isDefault });
 
     // Vérifier que le template existe et appartient à l'organisation
     const whereClause: any = { id };
@@ -482,7 +526,9 @@ router.put('/templates/:id', async (req: Request, res: Response) => {
         name,
         type,
         description,
-        treeId: treeId || null, // Permet de mettre à null pour revenir à générique
+        treeId: treeId || null,
+        productValue: productValue !== undefined ? (productValue || null) : undefined,
+        isDefault: isDefault !== undefined ? isDefault : undefined,
         translations,
         defaultLanguage,
         themeId,
@@ -980,7 +1026,8 @@ router.post('/generated/generate', async (req: AuthenticatedRequest, res: Respon
       submissionId,
       tblData,
       lead: leadData,
-      language
+      language,
+      selectedProducts
     } = req.body;
 
     console.log('📄 [GENERATE DOC] Demande de génération:', { templateId, leadId, submissionId, organizationId, userId });
@@ -1063,6 +1110,7 @@ router.post('/generated/generate', async (req: AuthenticatedRequest, res: Respon
         dataSnapshot: {
           tblData: tblDataSafe,
           lead: leadDataSafe,
+          selectedProducts: Array.isArray(selectedProducts) ? selectedProducts : undefined,
           generatedAt: new Date().toISOString(),
           generatedBy: userId
         },
@@ -1166,6 +1214,140 @@ router.delete('/generated/:id', async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
+
+/**
+ * Génère le buffer PDF client à partir d'un documentId.
+ * Fonction utilitaire réutilisable (download, signed-pdf, etc.)
+ */
+export async function generateClientPdfBuffer(documentId: string, options?: {
+  electronicSignatures?: Array<{ signerName: string; signerRole: string; signatureData: string; signedAt: Date }>;
+}): Promise<{ buffer: Buffer; filename: string; documentNumber: string | null }> {
+  const document = await prisma.generatedDocument.findFirst({
+    where: { id: documentId },
+    include: {
+      DocumentTemplate: {
+        include: {
+          DocumentSection: { orderBy: { order: 'asc' } },
+          DocumentTheme: true
+        }
+      },
+      Lead: true
+    }
+  });
+
+  if (!document) throw new Error('Document non trouvé');
+
+  const organizationId = document.organizationId;
+  const defaultTheme = await prisma.documentTheme.findFirst({ where: { organizationId, isDefault: true } });
+  const organization = await prisma.organization.findFirst({ where: { id: organizationId } });
+
+  const tblRawData = ((document.dataSnapshot || {}) as Record<string, any>).tblData || (document.dataSnapshot || {});
+  const selectOptionsMap = await buildSelectOptionsMap(organizationId, tblRawData);
+
+  let formulaResultsMap: Record<string, string> = {};
+  const docSubmissionId = document.submissionId;
+  try {
+    const isTblRef = (val: unknown): val is string => {
+      if (typeof val !== 'string' || !val) return false;
+      return val.startsWith('node-formula:') || val.startsWith('formula:') || val.startsWith('condition:') ||
+        val.startsWith('@calculated.') || val.startsWith('calculatedValue:') || val.startsWith('@value.') ||
+        val.startsWith('@select.') || val.startsWith('@table.') || val.startsWith('@repeat.');
+    };
+
+    const collectRefsDeep = (obj: unknown, refs: string[]): void => {
+      if (!obj) return;
+      if (typeof obj === 'string') { if (isTblRef(obj) && !refs.includes(obj)) refs.push(obj); return; }
+      if (Array.isArray(obj)) { for (const item of obj) collectRefsDeep(item, refs); return; }
+      if (typeof obj === 'object') { for (const val of Object.values(obj as Record<string, unknown>)) collectRefsDeep(val, refs); }
+    };
+
+    const allRefs: string[] = [];
+    const sections = document.DocumentTemplate?.DocumentSection || [];
+    for (const sec of sections) collectRefsDeep((sec.config || {}) as Record<string, any>, allRefs);
+
+    if (allRefs.length > 0 && docSubmissionId) {
+      const { interpretReference } = await import('../components/TreeBranchLeaf/treebranchleaf-new/api/operation-interpreter.js');
+      for (const ref of allRefs) {
+        try {
+          let evalRef = ref;
+          if (ref.startsWith('node-formula:')) evalRef = ref.replace('node-formula:', 'formula:');
+          else if (ref.startsWith('@value.')) evalRef = ref.replace('@value.', '');
+          else if (ref.startsWith('@calculated.')) evalRef = ref.replace('@calculated.', '');
+          else if (ref.startsWith('@select.')) evalRef = ref.replace('@select.', '');
+
+          const evalResult = await interpretReference(evalRef, docSubmissionId, prisma);
+          const resultValue = evalResult?.result;
+          const formulaTokens = evalResult?.details?.tokens;
+          const isEmptyFormula = ref.startsWith('node-formula:') && Array.isArray(formulaTokens) && formulaTokens.length === 0 && String(resultValue) === '0';
+          if (isEmptyFormula) continue;
+          if (resultValue !== null && resultValue !== undefined && resultValue !== '∅' && !String(resultValue).includes('Variable manquante')) {
+            formulaResultsMap[ref] = String(resultValue);
+          }
+        } catch { /* non bloquant */ }
+      }
+    }
+  } catch { /* non bloquant */ }
+
+  const dataSnapshot = (document.dataSnapshot || {}) as Record<string, any>;
+  const templateTheme = document.DocumentTemplate?.DocumentTheme;
+  const themeSource = templateTheme || defaultTheme;
+  const theme = themeSource ? {
+    primaryColor: themeSource.primaryColor || '#1890ff', secondaryColor: themeSource.secondaryColor || '#52c41a',
+    accentColor: themeSource.accentColor || '#faad14', textColor: themeSource.textColor || '#333333',
+    backgroundColor: themeSource.backgroundColor || '#ffffff', fontFamily: themeSource.fontFamily || 'Helvetica',
+    fontSize: themeSource.fontSize || 12, logoUrl: themeSource.logoUrl || ''
+  } : { primaryColor: '#1890ff', secondaryColor: '#52c41a', accentColor: '#faad14', textColor: '#333333', backgroundColor: '#ffffff', fontFamily: 'Helvetica', fontSize: 12, logoUrl: '' };
+
+  const mappedSections = (document.DocumentTemplate?.DocumentSection || []).map((s: any) => ({
+    id: s.id, type: s.type, name: (s as any).name || s.type, config: (s.config || {}) as Record<string, any>,
+    translations: (s.translations || {}) as Record<string, any>, linkedNodeIds: (s.linkedNodeIds || []) as string[],
+    order: s.order, isActive: (s as any).isActive !== false
+  }));
+
+  const renderContext: any = {
+    template: document.DocumentTemplate ? {
+      id: document.DocumentTemplate.id, name: document.DocumentTemplate.name, type: document.DocumentTemplate.type,
+      theme, sections: mappedSections
+    } : { id: 'default', name: 'Document', type: 'QUOTE', theme, sections: [] },
+    lead: (() => {
+      const dbLead = document.Lead || {} as any;
+      const snapshotLead = dataSnapshot.lead || {};
+      const mergedLead = { ...snapshotLead, ...dbLead, address: (dbLead as any).address || snapshotLead.address || '', data: (dbLead as any).data || {} };
+      const addressComponents = extractAddressComponents(mergedLead);
+      return {
+        id: (dbLead as any).id || snapshotLead.id || '',
+        firstName: (dbLead as any).firstName || snapshotLead.firstName || '', lastName: (dbLead as any).lastName || snapshotLead.lastName || '',
+        fullName: [(dbLead as any).firstName || snapshotLead.firstName, (dbLead as any).lastName || snapshotLead.lastName].filter(Boolean).join(' '),
+        email: (dbLead as any).email || snapshotLead.email || '', phone: (dbLead as any).phone || snapshotLead.phone || '',
+        company: (dbLead as any).company || snapshotLead.company || '',
+        address: addressComponents.address, street: addressComponents.street, number: addressComponents.number,
+        box: addressComponents.box, postalCode: addressComponents.postalCode, city: addressComponents.city, country: addressComponents.country,
+      };
+    })(),
+    organization: organization ? {
+      name: organization.name || '', email: (organization as any).email || '', phone: (organization as any).phone || '',
+      address: (organization as any).address || '', vatNumber: (organization as any).vatNumber || '', logo: (organization as any).logo || ''
+    } : undefined,
+    tblData: dataSnapshot.tblData || dataSnapshot,
+    selectOptionsMap, formulaResultsMap,
+    electronicSignatures: options?.electronicSignatures || undefined,
+    quote: {
+      ...(dataSnapshot.quote || {}),
+      number: dataSnapshot.quote?.number || document.documentNumber || '',
+      reference: dataSnapshot.quote?.reference || document.documentNumber || '',
+      date: dataSnapshot.quote?.date || (document.createdAt ? new Intl.DateTimeFormat('fr-BE').format(document.createdAt) : new Intl.DateTimeFormat('fr-BE').format(new Date())),
+      validUntil: dataSnapshot.quote?.validUntil || (document.createdAt ? new Intl.DateTimeFormat('fr-BE').format(new Date(document.createdAt.getTime() + 30 * 24 * 60 * 60 * 1000)) : new Intl.DateTimeFormat('fr-BE').format(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000))),
+      totalHT: dataSnapshot.quote?.totalHT || dataSnapshot.totalHT || 0, totalTVA: dataSnapshot.quote?.totalTVA || dataSnapshot.totalTVA || 0,
+      totalTTC: dataSnapshot.quote?.totalTTC || dataSnapshot.totalTTC || 0, status: dataSnapshot.quote?.status || 'draft'
+    },
+    documentNumber: document.documentNumber || '',
+    language: document.language || 'fr'
+  };
+
+  const pdfBuffer = await renderDocumentPdf(renderContext);
+  const filename = `${document.documentNumber || document.id}.pdf`;
+  return { buffer: pdfBuffer, filename, documentNumber: document.documentNumber };
+}
 
 // GET /api/documents/generated/:id/download - Télécharger le PDF d'un document
 router.get('/generated/:id/download', async (req: AuthenticatedRequest, res: Response) => {
@@ -1639,7 +1821,7 @@ async function downloadDriveFileAsBuffer(
 router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { to, subject, body, cc, bcc, includeProductDocs, tblData: clientTblData } = req.body;
+    const { to, subject, body, cc, bcc, includeProductDocs, includeSignatureLink, tblData: clientTblData } = req.body;
     const organizationId = (req.headers['x-organization-id'] as string) || req.user?.organizationId || undefined;
     const userId = (req.headers['x-user-id'] as string) || req.user?.userId || undefined;
 
@@ -1826,6 +2008,68 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
       ? `<p style="font-size: 13px; color: #666; margin-top: 10px;">📄 ${attachedProductDocsCount} fiche(s) technique(s) jointe(s) :<br>${attachedProductDocNames.map(n => `&nbsp;&nbsp;• <em>${n}</em>`).join('<br>')}</p>`
       : '';
 
+    // ✍️ Créer un lien de signature dans l'email si demandé
+    let signatureButtonHtml = '';
+    let signatureAccessToken: string | null = null;
+    if (includeSignatureLink && organizationId) {
+      try {
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const accessToken = crypto.randomUUID();
+        const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000); // 3 jours
+
+        // Parser le nom du destinataire depuis le lead si dispo
+        const leadData = document.Lead as any;
+        const signerName = [leadData?.firstName, leadData?.lastName].filter(Boolean).join(' ') || to;
+
+        const legalText = `En signant ce document, je, ${signerName}, confirme avoir pris connaissance de l'intégralité du devis ci-joint et accepte les termes et conditions qui y sont décrits. Cette signature électronique a la même valeur juridique qu'une signature manuscrite conformément au règlement européen eIDAS. Date: ${new Date().toLocaleDateString('fr-BE')}`;
+
+        await prisma.electronicSignature.create({
+          data: {
+            submissionId: document.submissionId || null,
+            documentId: id,
+            leadId: document.leadId || null,
+            organizationId,
+            signatureType: 'DEVIS',
+            signerRole: 'CLIENT',
+            signerName,
+            signerEmail: to,
+            signerPhone: (leadData?.phone as string) || null,
+            signatureData: '',
+            signatureHash: '',
+            legalText,
+            otpMethod: 'EMAIL_LINK',
+            accessToken,
+            tokenExpiresAt: expiresAt,
+            expiresAt,
+            status: 'PENDING',
+            createdBy: userId || null,
+            auditTrail: [{
+              action: 'INITIATED_VIA_EMAIL',
+              timestamp: new Date().toISOString(),
+              initiatedBy: userId,
+              documentId: id,
+              emailTo: to,
+            }],
+          },
+        });
+
+        signatureAccessToken = accessToken;
+        const signUrl = `${frontendUrl}/sign/${accessToken}`;
+        signatureButtonHtml = `
+        <div style="text-align: center; margin: 25px 0;">
+          <p style="font-size: 14px; color: #555; margin-bottom: 15px;">✍️ <strong>Vous pouvez signer ce devis directement en ligne :</strong></p>
+          <a href="${signUrl}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #1890ff, #096dd9); color: #ffffff; text-decoration: none; padding: 14px 36px; border-radius: 8px; font-size: 16px; font-weight: 600; letter-spacing: 0.5px; box-shadow: 0 4px 12px rgba(24,144,255,0.3);">
+            🖊️ Signer ce devis
+          </a>
+          <p style="font-size: 11px; color: #aaa; margin-top: 10px;">Ce lien est valable 72 heures.</p>
+        </div>`;
+
+        console.log(`✍️ [SEND-EMAIL] Lien signature créé: ${signUrl}`);
+      } catch (sigErr) {
+        console.warn('⚠️ [SEND-EMAIL] Impossible de créer le lien de signature:', sigErr);
+      }
+    }
+
     const htmlBody = `<!DOCTYPE html>
 <html lang="fr">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
@@ -1842,6 +2086,7 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
         <hr style="border: none; border-top: 1px solid #eee; margin: 25px 0;">
         <p style="font-size: 13px; color: #666;">📎 Vous trouverez le document <strong>${filename}</strong> en pièce jointe de cet email.</p>
         ${fichesHtml}
+        ${signatureButtonHtml}
       </td>
     </tr>
     <tr>
@@ -1918,11 +2163,13 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
     }
 
     const fichesMsg = attachedProductDocsCount > 0 ? ` + ${attachedProductDocsCount} fiche(s) technique(s)` : '';
-    console.log(`📧 [SEND-EMAIL] ✅ Email envoyé à ${to} avec PDF ${filename}${fichesMsg}`);
+    const sigMsg = signatureAccessToken ? ' + lien signature' : '';
+    console.log(`📧 [SEND-EMAIL] ✅ Email envoyé à ${to} avec PDF ${filename}${fichesMsg}${sigMsg}`);
     res.json({ 
       success: true, 
       messageId: result.messageId,
-      productDocsAttached: attachedProductDocsCount
+      productDocsAttached: attachedProductDocsCount,
+      signatureLinkIncluded: !!signatureAccessToken,
     });
   } catch (error: any) {
     console.error('❌ [SEND-EMAIL] Erreur:', error);

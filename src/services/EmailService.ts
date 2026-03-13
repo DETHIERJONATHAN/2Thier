@@ -1,9 +1,14 @@
+import { GoogleGmailService } from '../google-auth/services/GoogleGmailService';
+import nodemailer from 'nodemailer';
+
 interface InvitationEmailPayload {
     to: string;
     token: string;
     isExistingUser: boolean;
     organizationName: string;
     roleName: string;
+    inviterId?: string;
+    organizationId?: string;
 }
 
 interface SendEmailPayload {
@@ -12,72 +17,175 @@ interface SendEmailPayload {
     html: string;
     text?: string;
     replyTo?: string;
+    inviterId?: string;
+    organizationId?: string;
 }
 
 class EmailService {
-    /**
-     * Envoie un e-mail d'invitation.
-     * Simule l'envoi en loggant les détails dans la console.
-     */
-    async sendInvitationEmail(payload: InvitationEmailPayload): Promise<void> {
-        const { to, token, isExistingUser, organizationName, roleName } = payload;
 
+    /**
+     * Construit le contenu HTML de l'email d'invitation
+     */
+    private buildInvitationContent(payload: InvitationEmailPayload): { subject: string; body: string } {
+        const { to, token, isExistingUser, organizationName, roleName } = payload;
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
         const acceptUrl = `${frontendUrl}/accept-invitation?token=${token}`;
 
-        let subject = '';
-        let body = '';
-
         if (isExistingUser) {
-            subject = `Vous êtes invité(e) à rejoindre ${organizationName}`;
-            body = `
-                <p>Bonjour,</p>
-                <p>Vous avez été invité(e) à rejoindre l'organisation "${organizationName}" avec le rôle "${roleName}".</p>
-                <p>Comme vous avez déjà un compte, il vous suffit de cliquer sur le lien ci-dessous pour accepter l'invitation :</p>
-                <p><a href="${acceptUrl}">Accepter l'invitation</a></p>
-                <p>Si vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet e-mail.</p>
-            `;
-        } else {
-            subject = `Invitation à rejoindre ${organizationName}`;
-            body = `
-                <p>Bonjour,</p>
-                <p>Vous avez été invité(e) à rejoindre l'organisation "${organizationName}" avec le rôle "${roleName}".</p>
-                <p>Pour finaliser votre inscription et rejoindre l'équipe, veuillez cliquer sur le lien ci-dessous :</p>
-                <p><a href="${acceptUrl}">Créer votre compte et accepter l'invitation</a></p>
-                <p>Ce lien est valide pendant 7 jours.</p>
-            `;
+            return {
+                subject: `Vous êtes invité(e) à rejoindre ${organizationName}`,
+                body: `
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                        <h2 style="color: #1a365d;">Invitation à rejoindre ${organizationName}</h2>
+                        <p>Bonjour,</p>
+                        <p>Vous avez été invité(e) à rejoindre l'organisation <strong>"${organizationName}"</strong> avec le rôle <strong>"${roleName}"</strong>.</p>
+                        <p>Comme vous avez déjà un compte, il vous suffit de cliquer sur le bouton ci-dessous pour accepter l'invitation :</p>
+                        <p style="text-align: center; margin: 30px 0;">
+                            <a href="${acceptUrl}" style="background-color: #2d5a7b; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold;">Accepter l'invitation</a>
+                        </p>
+                        <p style="color: #666; font-size: 12px;">Si vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet e-mail.</p>
+                        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+                        <p style="color: #999; font-size: 11px;">2Thier CRM</p>
+                    </div>
+                `,
+            };
         }
 
-        console.log('--- SIMULATION D\'ENVOI D\'EMAIL ---');
-        console.log(`À: ${to}`);
-        console.log(`Sujet: ${subject}`);
-        console.log(`URL d'acceptation: ${acceptUrl}`);
-        console.log(`Corps (HTML): ${body.replace(/\s+/g, ' ').trim()}`);
-        console.log('------------------------------------');
-        
-        // En production, vous intégreriez un vrai service d'envoi ici.
-        return Promise.resolve();
+        return {
+            subject: `Invitation à rejoindre ${organizationName}`,
+            body: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #1a365d;">Bienvenue chez ${organizationName} !</h2>
+                    <p>Bonjour,</p>
+                    <p>Vous avez été invité(e) à rejoindre l'organisation <strong>"${organizationName}"</strong> avec le rôle <strong>"${roleName}"</strong>.</p>
+                    <p>Pour finaliser votre inscription et rejoindre l'équipe, veuillez cliquer sur le bouton ci-dessous :</p>
+                    <p style="text-align: center; margin: 30px 0;">
+                        <a href="${acceptUrl}" style="background-color: #2d5a7b; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold;">Créer votre compte et accepter</a>
+                    </p>
+                    <p style="color: #666; font-size: 12px;">Ce lien est valide pendant 7 jours.</p>
+                    <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+                    <p style="color: #999; font-size: 11px;">2Thier CRM</p>
+                </div>
+            `,
+        };
     }
 
     /**
-     * Envoie un e-mail générique (simulation console).
+     * Tente d'envoyer via Gmail API (si l'utilisateur a un token Google valide)
      */
-    async sendEmail(payload: SendEmailPayload): Promise<void> {
-        const { to, subject, html, text, replyTo } = payload;
+    private async sendViaGmail(organizationId: string, userId: string, to: string, subject: string, htmlBody: string): Promise<boolean> {
+        try {
+            const gmailService = await GoogleGmailService.create(organizationId, userId);
+            if (!gmailService) {
+                console.log('[EmailService] ⚠️ Pas de service Gmail disponible pour cet utilisateur');
+                return false;
+            }
 
-        console.log('--- SIMULATION ENVOI EMAIL (générique) ---');
+            const result = await gmailService.sendEmail({
+                to,
+                subject,
+                body: htmlBody,
+                isHtml: true,
+            });
+
+            if (result) {
+                console.log(`[EmailService] ✅ Email envoyé via Gmail API (messageId: ${result.messageId})`);
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('[EmailService] ❌ Erreur Gmail API:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Fallback: envoie via Nodemailer SMTP (noreply@2thier.be ou config SMTP)
+     */
+    private async sendViaSMTP(to: string, subject: string, htmlBody: string): Promise<boolean> {
+        const smtpHost = process.env.SMTP_HOST;
+        const smtpUser = process.env.SMTP_USER;
+        const smtpPass = process.env.SMTP_PASS;
+
+        if (!smtpHost || !smtpUser || !smtpPass) {
+            console.warn('[EmailService] ⚠️ SMTP non configuré (SMTP_HOST, SMTP_USER, SMTP_PASS manquants)');
+            return false;
+        }
+
+        try {
+            const transporter = nodemailer.createTransport({
+                host: smtpHost,
+                port: parseInt(process.env.SMTP_PORT || '465'),
+                secure: (process.env.SMTP_PORT || '465') === '465',
+                auth: { user: smtpUser, pass: smtpPass },
+            });
+
+            await transporter.sendMail({
+                from: `"2Thier CRM" <${smtpUser}>`,
+                to,
+                subject,
+                html: htmlBody,
+            });
+
+            console.log(`[EmailService] ✅ Email envoyé via SMTP (${smtpHost})`);
+            return true;
+        } catch (error) {
+            console.error('[EmailService] ❌ Erreur SMTP:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Envoie un e-mail d'invitation.
+     * Stratégie : Gmail API > SMTP > Log console (fallback final)
+     */
+    async sendInvitationEmail(payload: InvitationEmailPayload): Promise<void> {
+        const { subject, body } = this.buildInvitationContent(payload);
+        const { to, inviterId, organizationId } = payload;
+
+        console.log(`[EmailService] 📧 Envoi invitation à ${to} (inviterId: ${inviterId || 'N/A'}, orgId: ${organizationId || 'N/A'})`);
+
+        // 1. Tenter Gmail API (si l'utilisateur qui invite a un token Google)
+        if (inviterId && organizationId) {
+            const sentViaGmail = await this.sendViaGmail(organizationId, inviterId, to, subject, body);
+            if (sentViaGmail) return;
+        }
+
+        // 2. Fallback SMTP
+        const sentViaSMTP = await this.sendViaSMTP(to, subject, body);
+        if (sentViaSMTP) return;
+
+        // 3. Fallback final : log console (dev uniquement)
+        console.warn('[EmailService] ⚠️ Aucun transport email disponible — affichage console uniquement');
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const acceptUrl = `${frontendUrl}/accept-invitation?token=${payload.token}`;
+        console.log('--- EMAIL NON ENVOYÉ (aucun transport) ---');
         console.log(`À: ${to}`);
         console.log(`Sujet: ${subject}`);
-        if (replyTo) {
-            console.log(`Répondre à: ${replyTo}`);
-        }
-        if (text) {
-            console.log(`Corps (texte): ${text.replace(/\s+/g, ' ').trim()}`);
-        }
-        console.log(`Corps (HTML): ${html.replace(/\s+/g, ' ').trim()}`);
-        console.log('------------------------------------------');
+        console.log(`URL d'acceptation: ${acceptUrl}`);
+        console.log('-------------------------------------------');
+    }
 
-        return Promise.resolve();
+    /**
+     * Envoie un e-mail générique.
+     * Stratégie : Gmail API > SMTP > Log console (fallback final)
+     */
+    async sendEmail(payload: SendEmailPayload): Promise<void> {
+        const { to, subject, html, inviterId, organizationId } = payload;
+
+        // 1. Gmail API
+        if (inviterId && organizationId) {
+            const sent = await this.sendViaGmail(organizationId, inviterId, to, subject, html);
+            if (sent) return;
+        }
+
+        // 2. SMTP
+        const sent = await this.sendViaSMTP(to, subject, html);
+        if (sent) return;
+
+        // 3. Console fallback
+        console.warn('[EmailService] ⚠️ Aucun transport — log console');
+        console.log(`[EmailService] À: ${to} | Sujet: ${subject}`);
     }
 }
 

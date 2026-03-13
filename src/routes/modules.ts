@@ -1,6 +1,8 @@
-import { Router } from 'express';
+import { Router, Request } from 'express';
 import { db } from '../lib/database';
 import { Module as PrismaModule } from '@prisma/client';
+import jwt from 'jsonwebtoken';
+import { JWT_SECRET } from '../config';
 
 // Implémentation MINIMALE restaurée pour éviter les 404 côté frontend
 // et rétablir l'affichage des modules. Conçue pour être sûre et simple.
@@ -83,7 +85,27 @@ function mapModule(m: MinimalModule, orgStatuses: Record<string, boolean> | null
 	};
 }
 
+// Helper: extraire l'utilisateur du JWT cookie (optionnel, ne bloque pas si absent)
+function extractUserFromRequest(req: Request): { userId: string; role?: string; isSuperAdmin?: boolean } | null {
+	try {
+		let token = req.cookies?.token;
+		if (!token) {
+			const authHeader = req.headers['authorization'];
+			token = authHeader && typeof authHeader === 'string' ? authHeader.split(' ')[1] : null;
+		}
+		if (!token) return null;
+		const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; role?: string; roles?: string[]; isSuperAdmin?: boolean };
+		// Le JWT utilise 'roles' (pluriel, tableau) – dériver le rôle singulier
+		const role = decoded.role || decoded.roles?.[0];
+		const isSuperAdmin = decoded.isSuperAdmin || role === 'super_admin' || decoded.roles?.includes('super_admin');
+		return { userId: decoded.userId, role, isSuperAdmin };
+	} catch {
+		return null;
+	}
+}
+
 // GET /api/modules?organizationId=xxx
+// 🔐 Filtre les modules selon: 1) activation globale, 2) activation org, 3) permissions du rôle
 router.get('/', async (req, res) => {
 	const { organizationId } = req.query as { organizationId?: string };
 	try {
@@ -117,9 +139,66 @@ router.get('/', async (req, res) => {
 		const mapped = modules.map(m => mapModule(m, orgStatuses, organizationId));
 
 		// Filtrage si organizationId fourni: n'afficher que les modules globaux + ceux de l'orga
-		const filtered = organizationId
+		let filtered = organizationId
 			? mapped.filter(m => !m.organizationId || m.organizationId === organizationId)
 			: mapped;
+
+		// 🔐 FILTRAGE PAR PERMISSIONS DU RÔLE
+		// Super admins voient tout, les autres ne voient que les modules autorisés par leur rôle
+		const currentUser = extractUserFromRequest(req);
+		if (currentUser && organizationId && !currentUser.isSuperAdmin && currentUser.role !== 'super_admin') {
+			try {
+				// Trouver le rôle de l'utilisateur dans cette organisation
+				const userOrg = await prisma.userOrganization.findUnique({
+					where: { userId_organizationId: { userId: currentUser.userId, organizationId } },
+					select: { roleId: true },
+				});
+
+				if (userOrg?.roleId) {
+					// Charger les permissions "access" du rôle
+					const rolePermissions = await prisma.permission.findMany({
+						where: { roleId: userOrg.roleId, action: 'access' },
+						select: { moduleId: true, allowed: true },
+					});
+
+					// Construire un set des modules explicitement autorisés et refusés
+					const allowedModuleIds = new Set<string>();
+					const deniedModuleIds = new Set<string>();
+					for (const perm of rolePermissions) {
+						if (perm.moduleId) {
+							if (perm.allowed) {
+								allowedModuleIds.add(perm.moduleId);
+							} else {
+								deniedModuleIds.add(perm.moduleId);
+							}
+						}
+					}
+
+					// Si des permissions existent pour ce rôle, filtrer:
+					// - Un module est visible SEULEMENT s'il a une permission allowed=true
+					// - Un module sans permission explicite est MASQUÉ (deny by default)
+					if (rolePermissions.length > 0) {
+						filtered = filtered.filter(m => allowedModuleIds.has(m.id));
+						console.log(`[modules] 🔐 Filtrage rôle ${userOrg.roleId}: ${filtered.length} modules autorisés sur ${mapped.length}`);
+					} else {
+						// Aucune permission access pour ce rôle → vérifier si le système de permissions est actif
+						// (d'autres rôles ont des permissions access configurées)
+						const otherRolesWithPerms = await prisma.permission.count({
+							where: { action: 'access', roleId: { not: userOrg.roleId } },
+						});
+						if (otherRolesWithPerms > 0) {
+							// Le système est actif → ce rôle n'a rien de configuré = aucun accès
+							filtered = [];
+							console.log(`[modules] 🔐 Rôle ${userOrg.roleId}: 0 permissions access (système actif) → aucun module`);
+						}
+						// Sinon, aucun rôle n'a de permissions → backward compatible, tout visible
+					}
+				}
+			} catch (permErr) {
+				console.error('[modules] Erreur lors du filtrage par permissions du rôle:', permErr);
+				// En cas d'erreur, on ne filtre pas (fail-open pour ne pas bloquer l'UI)
+			}
+		}
 
 		res.json({ success: true, data: filtered });
 	} catch (e) {

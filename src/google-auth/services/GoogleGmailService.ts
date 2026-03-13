@@ -283,7 +283,9 @@ export class GoogleGmailService {
       const fromName = options.fromName || this.userFullName || '2Thier CRM';
       messageParts.push(`From: ${fromName} <${fromEmail}>`);
       messageParts.push(`To: ${options.to}`);
-      messageParts.push(`Subject: ${options.subject}`);
+      // Encoder le sujet en RFC 2047 pour les caractères non-ASCII (accents, etc.)
+      const encodedSubject = `=?UTF-8?B?${Buffer.from(options.subject, 'utf-8').toString('base64')}?=`;
+      messageParts.push(`Subject: ${encodedSubject}`);
       messageParts.push(`Reply-To: ${fromName} <${fromEmail}>`);
       messageParts.push(`Date: ${new Date().toUTCString()}`);
       messageParts.push(`Message-ID: <${Date.now()}.${Math.random().toString(36).substring(2)}@${fromEmail.split('@')[1] || '2thier.be'}>`);

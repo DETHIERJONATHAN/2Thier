@@ -37,6 +37,9 @@ const MyCommercialLinks = lazy(() => import('./pages/MyCommercialLinks'));
 // Page publique réception chantier
 const ReceptionPage = lazy(() => import('./pages/ReceptionPage'));
 
+// Page publique signature électronique
+const PublicSignaturePage = lazy(() => import('./pages/public/PublicSignaturePage'));
+
 
 // Composant Loading
 const LoadingSpinner = () => (
@@ -229,6 +232,16 @@ const App: React.FC = () => {
         element={
           <Suspense fallback={<LoadingSpinner />}>
             <ReceptionPage />
+          </Suspense>
+        } 
+      />
+
+      {/* Route publique signature électronique de devis */}
+      <Route 
+        path="/sign/:token" 
+        element={
+          <Suspense fallback={<LoadingSpinner />}>
+            <PublicSignaturePage />
           </Suspense>
         } 
       />

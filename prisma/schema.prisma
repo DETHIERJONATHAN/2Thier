@@ -331,6 +331,8 @@ model DocumentTemplate {
   createdAt          DateTime            @default(now())
   updatedAt          DateTime
   treeId             String?
+  productValue       String?             // Lié à un produit spécifique (ex: "PV", "ISO", "PAC_AIR_AIR")
+  isDefault          Boolean             @default(false) // Document par défaut (page d'entrée, conditions générales, etc.)
   DocumentSection    DocumentSection[]
   User               User?               @relation(fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
   Organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -342,6 +344,7 @@ model DocumentTemplate {
   @@index([organizationId])
   @@index([treeId])
   @@index([type])
+  @@index([productValue])
 }
 
 model DocumentTheme {
@@ -962,6 +965,7 @@ model Module {
   organizationId           String?
   categoryId               String?
   superAdminOnly           Boolean                    @default(false)
+  parameters               Json?
   Category                 Category?                  @relation(fields: [categoryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   Organization             Organization?              @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   OrganizationModuleStatus OrganizationModuleStatus[]
@@ -3273,6 +3277,12 @@ model Technician {
   email          String?
   phone          String?
   company        String?         // Société du sous-traitant
+  vatNumber      String?         // Numéro de TVA (obligatoire pour sous-traitants)
+  address        String?         // Adresse (rue + numéro)
+  postalCode     String?         // Code postal
+  city           String?         // Ville
+  country        String?         @default("Belgique") // Pays
+  iban           String?         // Compte bancaire (IBAN)
   specialties    String[]        @default([]) // productValue[] : ["pc", "all", "toiture"]
   hourlyRate     Float?
   notes          String?
@@ -3500,4 +3510,86 @@ model ChantierAssignment {
   @@index([chantierId])
   @@index([technicianId])
   @@index([teamId])
+}
+
+// ═══════════════════════════════════════════════════
+// SIGNATURE ÉLECTRONIQUE AVANCÉE (eIDAS niveau avancé, 100% maison)
+// ═══════════════════════════════════════════════════
+model ElectronicSignature {
+  id                String    @id @default(cuid())
+  
+  // Contexte du document
+  submissionId      String?   // TBL submission signée
+  documentId        String?   // GeneratedDocument lié
+  leadId            String?   // Lead associé
+  organizationId    String
+  
+  // Type de signature
+  signatureType     String    @default("DEVIS")
+  // DEVIS | RECTIFICATION | CONTRAT | PV_RECEPTION
+  
+  // Signataires
+  signerRole        String    // CLIENT | COMMERCIAL | TECHNICIEN
+  signerName        String    // Nom complet du signataire
+  signerEmail       String    // Email du signataire
+  signerPhone       String?   // Téléphone (optionnel)
+  
+  // Signature visuelle
+  signatureData     String    // base64 PNG de la signature manuscrite (canvas)
+  signatureHash     String    // SHA-256 du signatureData
+  
+  // Vérification OTP (niveau avancé eIDAS)
+  otpCode           String?   // Code OTP hashé (SHA-256)
+  otpSentAt         DateTime? // Quand l'OTP a été envoyé
+  otpVerifiedAt     DateTime? // Quand l'OTP a été vérifié
+  otpMethod         String?   @default("EMAIL") // EMAIL | SMS
+  otpAttempts       Int       @default(0) // Nombre de tentatives
+  
+  // Scellement cryptographique du document
+  documentHash      String?   // SHA-256 du PDF au moment de la signature
+  documentSnapshot  Json?     // Données du document gelées au moment de signature
+  
+  // Clause légale
+  legalText         String?   // Texte juridique affiché et accepté
+  legalAccepted     Boolean   @default(false)
+  legalAcceptedAt   DateTime?
+  
+  // Métadonnées juridiques (piste d'audit)
+  ipAddress         String?   // IP au moment de la signature
+  userAgent         String?   // Navigateur/OS
+  geoLocation       String?   // Localisation approximative (optionnel)
+  
+  // Token d'accès (pour signature sans login - ex: client)
+  accessToken       String?   @unique
+  tokenExpiresAt    DateTime?
+  
+  // État
+  status            String    @default("PENDING")
+  // PENDING | OTP_SENT | OTP_VERIFIED | SIGNED | EXPIRED | REVOKED
+  signedAt          DateTime?
+  expiresAt         DateTime? // Date d'expiration de la demande
+  revokedAt         DateTime?
+  revokedReason     String?
+  
+  // PDF signé final
+  signedPdfUrl      String?   // URL du PDF avec signature intégrée
+  signedPdfHash     String?   // SHA-256 du PDF signé final
+  
+  // Traçabilité
+  createdBy         String?   // Qui a initié la demande de signature
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  // Audit trail (log détaillé de toutes les actions)
+  auditTrail        Json?     // [{action, timestamp, ip, userAgent, details}]
+  
+  @@index([submissionId])
+  @@index([documentId])
+  @@index([leadId])
+  @@index([organizationId])
+  @@index([signerEmail])
+  @@index([accessToken])
+  @@index([status])
+  @@index([signatureType])
+  @@index([createdAt])
 }

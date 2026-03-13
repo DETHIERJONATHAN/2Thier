@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Card, Table, Button, Modal, Form, Input, Select, Tag, Space, Switch, Statistic, Alert, Badge, Grid, Tooltip } from 'antd';
+import { Card, Table, Button, Modal, Form, Input, Select, Tag, Space, Switch, Statistic, Alert, Badge, Grid, Tooltip, Spin } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, TeamOutlined, AppstoreOutlined, CheckCircleOutlined, CrownOutlined, TagsOutlined } from '@ant-design/icons';
 import { useAuth } from '../../auth/useAuth';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
@@ -30,6 +30,14 @@ interface Module {
   label: string;
   active: boolean;
   isActiveForOrg?: boolean;
+  parameters?: {
+    availableActions?: Array<{
+      key: string;
+      label: string;
+      scopes: string[] | null;
+    }>;
+    scopeLabels?: Record<string, string>;
+  } | null;
 }
 
 // Ajout d'une interface pour les organisations
@@ -195,6 +203,7 @@ function ModulesModal({ role, open, onClose }: { role: Role; open: boolean; onCl
   const [modules, setModules] = useState<Module[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>('');
+  const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
 
   const fetchPermissions = useCallback(async () => {
     if (!role?.id) return;
@@ -207,6 +216,12 @@ function ModulesModal({ role, open, onClose }: { role: Role; open: boolean; onCl
         const permsData = Array.isArray(response.data) ? response.data : [];
         console.log('[ModulesModal] Permissions loaded:', permsData.length, '| access:', permsData.filter((p: any) => p.action === 'access' && p.allowed).length);
         setPermissions(permsData);
+        // Auto-expand modules that have fine-grained permissions
+        const modulesWithFinePerms = new Set<string>();
+        permsData.forEach((p: any) => {
+          if (p.action !== 'access' && p.moduleId) modulesWithFinePerms.add(p.moduleId);
+        });
+        setExpandedModules(modulesWithFinePerms);
       } else {
         throw new Error(response.message || 'Erreur lors du chargement des modules activés');
       }
@@ -219,18 +234,14 @@ function ModulesModal({ role, open, onClose }: { role: Role; open: boolean; onCl
 
   const fetchModules = useCallback(async () => {
     try {
-      // Charger les modules avec le statut d'activation
-      // Seuls les modules activés dans "Gestion des Modules" seront affichés
       const orgId = role.organizationId;
       const url = orgId ? `/api/modules?organizationId=${orgId}` : '/api/modules/all';
       const response = await api.get(url);
       if (response.success) {
         const all: Module[] = Array.isArray(response.data) ? response.data : [];
-        // Filtrer uniquement les modules actifs (activés dans Gestion des Modules)
         const activeModules = all.filter(m => m.active !== false);
-        // Tri alphabétique par label
         activeModules.sort((a, b) => a.label.localeCompare(b.label, 'fr'));
-        console.log('[ModulesModal] Modules loaded:', all.length, '| actifs:', activeModules.length);
+        console.log('[ModulesModal] Modules loaded:', all.length, '| actifs:', activeModules.length, '| with actions:', activeModules.filter(m => m.parameters?.availableActions?.length).length);
         setModules(activeModules);
       } else {
         throw new Error(response.message || 'Erreur lors du chargement des modules');
@@ -251,26 +262,72 @@ function ModulesModal({ role, open, onClose }: { role: Role; open: boolean; onCl
     }
   }, [open, fetchPermissions, fetchModules]);
 
+  // Toggle module access (ON/OFF)
   const updatePermission = useCallback((moduleId: string, allowed: boolean) => {
-    const newPerms = [...permissions];
-    const idx = newPerms.findIndex((p) => p.moduleId === moduleId && p.action === 'access');
-    if (idx > -1) newPerms[idx] = { ...newPerms[idx], allowed };
-    else if (allowed)
-      newPerms.push({ moduleId, action: 'access', resource: '*', allowed: true });
-    setPermissions(newPerms);
-  }, [permissions]);
+    setPermissions(prev => {
+      const newPerms = [...prev];
+      const idx = newPerms.findIndex((p) => p.moduleId === moduleId && p.action === 'access');
+      if (idx > -1) newPerms[idx] = { ...newPerms[idx], allowed };
+      else if (allowed)
+        newPerms.push({ moduleId, action: 'access', resource: '*', allowed: true });
+      return newPerms;
+    });
+  }, []);
+
+  // Toggle fine-grained action permission
+  const updateActionPermission = useCallback((moduleId: string, actionKey: string, allowed: boolean) => {
+    setPermissions(prev => {
+      const newPerms = [...prev];
+      const idx = newPerms.findIndex((p) => p.moduleId === moduleId && p.action === actionKey);
+      if (idx > -1) {
+        if (allowed) {
+          newPerms[idx] = { ...newPerms[idx], allowed };
+        } else {
+          // Remove the permission entry when disabling
+          newPerms.splice(idx, 1);
+        }
+      } else if (allowed) {
+        newPerms.push({ moduleId, action: actionKey, resource: '*', allowed: true });
+      }
+      return newPerms;
+    });
+  }, []);
+
+  // Update scope for an action
+  const updateActionScope = useCallback((moduleId: string, actionKey: string, scope: string) => {
+    setPermissions(prev => {
+      const newPerms = [...prev];
+      const idx = newPerms.findIndex((p) => p.moduleId === moduleId && p.action === actionKey);
+      if (idx > -1) {
+        newPerms[idx] = { ...newPerms[idx], resource: scope };
+      } else {
+        newPerms.push({ moduleId, action: actionKey, resource: scope, allowed: true });
+      }
+      return newPerms;
+    });
+  }, []);
 
   const toggleAll = (checked: boolean) => {
-    const newPerms = permissions.map(p => ({ ...p })); // deep copy to avoid mutation
-    modules.forEach((mod) => {
-      const idx = newPerms.findIndex((p) => p.moduleId === mod.id && p.action === 'access');
-      if (idx > -1) newPerms[idx] = { ...newPerms[idx], allowed: checked };
-      else if (checked)
-        newPerms.push({ moduleId: mod.id, action: 'access', resource: '*', allowed: true });
+    setPermissions(prev => {
+      const newPerms = prev.map(p => ({ ...p }));
+      modules.forEach((mod) => {
+        const idx = newPerms.findIndex((p) => p.moduleId === mod.id && p.action === 'access');
+        if (idx > -1) newPerms[idx] = { ...newPerms[idx], allowed: checked };
+        else if (checked)
+          newPerms.push({ moduleId: mod.id, action: 'access', resource: '*', allowed: true });
+      });
+      return newPerms;
     });
-    console.log('[ModulesModal] toggleAll:', checked, '→', newPerms.filter(p => p.action === 'access').length, 'access permissions');
-    setPermissions(newPerms);
   };
+
+  const toggleExpand = useCallback((moduleId: string) => {
+    setExpandedModules(prev => {
+      const next = new Set(prev);
+      if (next.has(moduleId)) next.delete(moduleId);
+      else next.add(moduleId);
+      return next;
+    });
+  }, []);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
@@ -280,10 +337,11 @@ function ModulesModal({ role, open, onClose }: { role: Role; open: boolean; onCl
         organizationId: role.organizationId,
         permissions: permissions.map(({ moduleId, action, resource, allowed }) => ({ moduleId, action, resource: resource || '*', allowed })),
       };
-      console.log('[ModulesModal] Saving', payload.permissions.length, 'permissions for role', role.label, '(', role.id, '), access:', payload.permissions.filter(p => p.action === 'access' && p.allowed).length);
+      console.log('[ModulesModal] Saving', payload.permissions.length, 'permissions for role', role.label);
       const response = await api.post('/api/permissions/bulk', payload);
       if (response.success) {
         NotificationManager.success('Modules du rôle sauvegardés avec succès.');
+        window.dispatchEvent(new CustomEvent('modulesUpdated', { detail: { roleId: role.id } }));
         onClose();
       } else {
         throw new Error(response.message || 'Erreur lors de la sauvegarde des modules');
@@ -297,40 +355,8 @@ function ModulesModal({ role, open, onClose }: { role: Role; open: boolean; onCl
     }
   }, [api, role.id, role.organizationId, permissions, onClose]);
 
-  type Permission = { moduleId: string; action: string; resource?: string; allowed: boolean };
-  const columns = useMemo(
-    () => [
-      {
-        title: 'Module',
-        dataIndex: 'label',
-        key: 'label',
-        render: (_: unknown, m: Module) => (
-          <span>
-            {m.label} <span style={{ color: '#999', fontSize: 12 }}>({m.key})</span>
-          </span>
-        ),
-      },
-      {
-        title: 'Accès',
-        key: 'access',
-        width: isMobile ? 120 : 160,
-        render: (_: unknown, m: Module) => {
-          const perm = permissions.find((p: Permission) => p.moduleId === m.id && p.action === 'access');
-          const allowed = !!(perm && perm.allowed);
-          return (
-            <Switch
-              checked={allowed}
-              onChange={(checked) => updatePermission(m.id, checked)}
-              size={isMobile ? 'small' : 'default'}
-            />
-          );
-        },
-      },
-    ],
-    [permissions, updatePermission, isMobile]
-  );
-
-  const allChecked = modules.length > 0 && modules.every((m) => permissions.find((p: Permission) => p.moduleId === m.id && p.allowed));
+  type PermItem = { moduleId: string; action: string; resource?: string; allowed: boolean };
+  const allChecked = modules.length > 0 && modules.every((m) => permissions.find((p: PermItem) => p.moduleId === m.id && p.action === 'access' && p.allowed));
   const loading = apiIsLoading && !permissions.length && !modules.length;
 
   return (
@@ -358,24 +384,115 @@ function ModulesModal({ role, open, onClose }: { role: Role; open: boolean; onCl
       }
       destroyOnClose
       centered={!isMobile}
-      width={isMobile ? '100%' : 720}
+      width={isMobile ? '100%' : 820}
       style={isMobile ? { top: 16 } : undefined}
-      styles={{ body: { padding: isMobile ? 16 : undefined } }}
+      styles={{ body: { padding: isMobile ? 16 : undefined, maxHeight: '70vh', overflowY: 'auto' } }}
     >
       {error && <Alert type="error" message={error} className="mb-3" />}
       <div className={`flex items-center gap-3 mb-3 ${isMobile ? 'flex-wrap text-sm' : ''}`}>
         <span className="font-semibold">Tout activer/désactiver</span>
         <Switch checked={allChecked} onChange={toggleAll} size={isMobile ? 'small' : 'default'} />
       </div>
-      <Table
-        size={isMobile ? 'small' : 'middle'}
-        rowKey={(m) => (m as Module).id}
-        columns={columns as unknown as import('antd').TableProps<Module>['columns']}
-        dataSource={modules}
-        pagination={false}
-        loading={loading}
-        scroll={{ x: 'max-content' }}
-      />
+
+      {loading ? <Spin /> : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {modules.map((mod) => {
+            const accessPerm = permissions.find((p: PermItem) => p.moduleId === mod.id && p.action === 'access');
+            const hasAccess = !!(accessPerm && accessPerm.allowed);
+            const actions = mod.parameters?.availableActions;
+            const scopeLabels = mod.parameters?.scopeLabels || {};
+            const hasActions = actions && actions.length > 0;
+            const isExpanded = expandedModules.has(mod.id);
+
+            return (
+              <div key={mod.id} style={{
+                border: '1px solid #f0f0f0',
+                borderRadius: 8,
+                overflow: 'hidden',
+                background: hasAccess ? '#fff' : '#fafafa',
+              }}>
+                {/* Module row */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: isMobile ? '8px 10px' : '10px 16px',
+                  cursor: hasActions && hasAccess ? 'pointer' : 'default',
+                }} onClick={() => hasActions && hasAccess && toggleExpand(mod.id)}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                    {hasActions && hasAccess && (
+                      <span style={{ fontSize: 10, color: '#8c8c8c', transition: 'transform 0.2s', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
+                    )}
+                    <span style={{ fontWeight: 500, fontSize: isMobile ? 13 : 14 }}>{mod.label}</span>
+                    <span style={{ color: '#999', fontSize: 11 }}>({mod.key})</span>
+                    {hasActions && (
+                      <Tag color="blue" style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px' }}>
+                        {actions!.length} actions
+                      </Tag>
+                    )}
+                  </div>
+                  <Switch
+                    checked={hasAccess}
+                    onChange={(checked, e) => { e.stopPropagation(); updatePermission(mod.id, checked); }}
+                    size={isMobile ? 'small' : 'default'}
+                  />
+                </div>
+
+                {/* Fine-grained actions (expandable) */}
+                {hasActions && hasAccess && isExpanded && (
+                  <div style={{
+                    borderTop: '1px solid #f0f0f0',
+                    background: '#fafcff',
+                    padding: isMobile ? '6px 10px' : '8px 16px 12px',
+                  }}>
+                    <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 6, fontWeight: 500 }}>
+                      Permissions fines pour {mod.label}
+                    </div>
+                    {actions!.map((act) => {
+                      const perm = permissions.find((p: PermItem) => p.moduleId === mod.id && p.action === act.key);
+                      const isAllowed = !!(perm && perm.allowed);
+                      const currentScope = perm?.resource || (act.scopes ? act.scopes[act.scopes.length - 1] : '*');
+
+                      return (
+                        <div key={act.key} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '4px 0',
+                          borderBottom: '1px solid #f5f5f5',
+                          gap: 8,
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                            <Switch
+                              checked={isAllowed}
+                              onChange={(checked) => updateActionPermission(mod.id, act.key, checked)}
+                              size="small"
+                            />
+                            <span style={{ fontSize: 13, color: isAllowed ? '#262626' : '#bfbfbf' }}>{act.label}</span>
+                          </div>
+                          {act.scopes && isAllowed && (
+                            <Select
+                              value={currentScope}
+                              onChange={(val) => updateActionScope(mod.id, act.key, val)}
+                              size="small"
+                              style={{ width: isMobile ? 130 : 180 }}
+                              onClick={(e) => e.stopPropagation()}
+                              options={act.scopes.map(s => ({
+                                value: s,
+                                label: scopeLabels[s] || s,
+                              }))}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </Modal>
   );
 }

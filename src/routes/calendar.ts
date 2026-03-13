@@ -485,6 +485,19 @@ router.post('/events', async (req: AuthenticatedRequest, res) => {
     if (eventData.linkedChantierId) {
       prismaData.linkedChantierId = eventData.linkedChantierId;
     }
+    // Lier aux autres entités CRM si spécifié
+    if (eventData.linkedClientId) {
+      prismaData.linkedClientId = eventData.linkedClientId;
+    }
+    if (eventData.linkedLeadId) {
+      prismaData.linkedLeadId = eventData.linkedLeadId;
+    }
+    if (eventData.linkedProjectId) {
+      prismaData.linkedProjectId = eventData.linkedProjectId;
+    }
+    if (eventData.linkedEmailId) {
+      prismaData.linkedEmailId = eventData.linkedEmailId;
+    }
     
     console.log('[CALENDAR ROUTES] Données préparées pour Prisma:', prismaData);
     console.log('[CALENDAR ROUTES] Champs mappés correctement:', {
