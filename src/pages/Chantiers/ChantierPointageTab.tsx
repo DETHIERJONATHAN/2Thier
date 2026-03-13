@@ -142,7 +142,7 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, c
 
   const fetchTechnicians = useCallback(async () => {
     try {
-      const res = await api.get('/api/teams/technicians') as any;
+      const res = await api.get('/api/teams/technicians?scopeAction=pointage') as any;
       // Filtrer: internes + sous-traitants en régie uniquement
       const eligible = (res.data || []).filter((t: any) =>
         t.type === 'INTERNAL' || (t.type === 'SUBCONTRACTOR' && t.billingMode === 'REGIE')

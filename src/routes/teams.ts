@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
-import { requireChantierAction } from '../middleware/chantierPermission';
+import { requireChantierAction, resolveChantierScope } from '../middleware/chantierPermission';
 import { z } from 'zod';
 import fs from 'fs';
 import path from 'path';
@@ -113,6 +113,16 @@ router.get('/technicians', authenticateToken, async (req, res) => {
     const organizationId = getOrgId(req);
     if (!organizationId) return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
 
+    // Résolution du scope : si ?scopeAction=pointage passé, filtrer selon les permissions
+    const scopeAction = req.query.scopeAction as string | undefined;
+    let allowedTechIds: string[] | null = null; // null = pas de filtre
+
+    if (scopeAction) {
+      const user = (req as any).user;
+      const resolved = await resolveChantierScope(user, organizationId, scopeAction);
+      allowedTechIds = resolved.technicianIds; // null = all, [] = rien, [...] = filtré
+    }
+
     const weekStart = startOfWeek();
     const weekEnd = endOfWeek();
     const today = new Date();
@@ -121,7 +131,11 @@ router.get('/technicians', authenticateToken, async (req, res) => {
     todayEnd.setHours(23, 59, 59, 999);
 
     const techs = await db.technician.findMany({
-      where: { organizationId, isActive: true },
+      where: {
+        organizationId,
+        isActive: true,
+        ...(allowedTechIds ? { id: { in: allowedTechIds } } : {}),
+      },
       include: {
         TeamMemberships: {
           include: {
@@ -736,9 +750,22 @@ router.get('/time-entries', authenticateToken, async (req, res) => {
     if (!organizationId) return res.status(400).json({ error: 'Organization ID required' });
     const { chantierId, technicianId, date, startDate, endDate } = req.query;
 
+    // Résolution scope pour filtrer les pointages visibles
+    const user = (req as any).user;
+    const resolved = await resolveChantierScope(user, organizationId, 'pointage');
+
     const where: any = { organizationId };
     if (chantierId) where.chantierId = chantierId;
-    if (technicianId) where.technicianId = technicianId;
+    if (technicianId) {
+      // Vérifier que le technicien demandé est dans le scope
+      if (resolved.technicianIds && !resolved.technicianIds.includes(technicianId as string)) {
+        return res.json({ success: true, data: [] }); // Pas le droit de voir ce technicien
+      }
+      where.technicianId = technicianId;
+    } else if (resolved.technicianIds) {
+      // Filtrer par les techniciens autorisés
+      where.technicianId = { in: resolved.technicianIds };
+    }
     if (date) {
       const d = new Date(date as string);
       where.date = d;
