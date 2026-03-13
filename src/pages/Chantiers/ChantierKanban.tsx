@@ -1525,7 +1525,8 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
               />
             </div>
               <div style={{ overflowY: 'auto', flex: 1, padding: '8px 6px' }}>
-                {/* Section : Actions rapides */}
+                {/* Section : Actions rapides (admin/contremaître uniquement) */}
+                {canManageTeams && (
                 <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
                   <button
                     onClick={async () => {
@@ -1541,18 +1542,18 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                   >
                     🔄 Sync
                   </button>
-                  {canManageTeams && (
-                    <button
+                  <button
                       onClick={() => { setTechFormData({ type: 'SUBCONTRACTOR', billingMode: 'FORFAIT', firstName: '', lastName: '', email: '', phone: '', company: '', specialties: [], color: '#8c8c8c', vatNumber: '', address: '', postalCode: '', city: '', country: 'Belgique', iban: '' }); setTechFormOpen(true); }}
                       style={{ flex: 1, padding: '6px 8px', borderRadius: 4, border: '1px dashed #8c8c8c', background: '#fff', cursor: 'pointer', fontSize: 11, color: '#8c8c8c', minHeight: 36 }}
                       title="Ajouter un sous-traitant"
                     >
                       🏢 + Sous-traitant
                     </button>
-                  )}
                 </div>
+                )}
 
-                {/* Filtre rapide - Sans technicien */}
+                {/* Filtre rapide - Sans technicien (gestion uniquement) */}
+                {canManageTeams && (
                 <div style={{ marginBottom: 8 }}>
                   <button
                     onClick={() => setSelectedTechFilter(selectedTechFilter === 'unassigned' ? null : 'unassigned')}
@@ -1587,6 +1588,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                     </span>
                   </button>
                 </div>
+                )}
 
                 {/* Tabs: Techniciens / Équipes */}
                 <div style={{ display: 'flex', gap: 0, marginBottom: 8, borderBottom: '1px solid #f0f0f0' }}>
@@ -1644,10 +1646,16 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
 
                     {technicians.length === 0 && (
                       <div style={{ textAlign: 'center', color: '#bfbfbf', fontSize: 11, padding: '16px 8px' }}>
-                        Aucun technicien.<br />
-                        <button onClick={async () => { try { const r = await syncTechnicians(); message.success(r.message || 'Sync OK'); } catch { message.error('Erreur sync'); } }} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#1677ff', textDecoration: 'underline', fontSize: 11 }}>
-                          Synchroniser les utilisateurs
-                        </button>
+                        {canManageTeams ? (
+                          <>
+                            Aucun technicien.<br />
+                            <button onClick={async () => { try { const r = await syncTechnicians(); message.success(r.message || 'Sync OK'); } catch { message.error('Erreur sync'); } }} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#1677ff', textDecoration: 'underline', fontSize: 11 }}>
+                              Synchroniser les utilisateurs
+                            </button>
+                          </>
+                        ) : (
+                          'Aucun technicien dans votre équipe'
+                        )}
                       </div>
                     )}
                   </>
