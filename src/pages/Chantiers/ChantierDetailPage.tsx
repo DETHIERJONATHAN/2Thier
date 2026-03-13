@@ -57,7 +57,7 @@ const ChantierDetailPage: React.FC = () => {
   const canValidate = isAdminOrAbove || canDo('chantiers', 'validate');
   const canSeePointage = isAdminOrAbove || canDo('chantiers', 'pointage');
   const canAssign = isAdminOrAbove || canDo('chantiers', 'assign');
-  const canSeeEvents = canDo('chantiers', 'view') || isAdminOrAbove;
+  const canSeeEvents = isAdminOrAbove || canDo('chantiers', 'edit');
   const { message } = App.useApp();
 
   const [chantier, setChantier] = useState<Chantier | null>(null);
@@ -1073,6 +1073,7 @@ const ChantierDetailPage: React.FC = () => {
             chantierLabel={chantier.customLabel || chantier.clientName || chantier.productLabel || ''}
             leadId={chantier.leadId || undefined}
             submissionId={chantier.submissionId || undefined}
+            canEdit={canEdit}
           />
         ), }] : []),
         ...(canSeePointage ? [{ key: 'pointage', label: <span><ClockCircleOutlined /> Pointage</span>, children: (

@@ -76,6 +76,7 @@ interface Props {
   chantierLabel?: string;
   leadId?: string;
   submissionId?: string;
+  canEdit?: boolean;
 }
 
 const EVENT_TYPES = [
@@ -92,11 +93,12 @@ const EVENT_STATUSES: Record<string, { label: string; color: string; badgeStatus
   PROBLEM: { label: 'Problème', color: 'error', badgeStatus: 'error' },
 };
 
-const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chantierLabel, leadId, submissionId }) => {
+const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chantierLabel, leadId, submissionId, canEdit: canEditProp }) => {
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, [apiHook.api]);
   const { isSuperAdmin, userRole } = useAuth();
   const isAdminOrAbove = isSuperAdmin || userRole === 'admin' || userRole === 'comptable';
+  const canEdit = canEditProp ?? isAdminOrAbove;
   const { message, modal } = App.useApp();
   const navigate = useNavigate();
 
@@ -421,9 +423,11 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
         size="small"
         title={<span><CalendarOutlined /> Événements du chantier</span>}
         extra={
-          <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => handleOpenModal()}>
-            Nouvel événement
-          </Button>
+          canEdit ? (
+            <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => handleOpenModal()}>
+              Nouvel événement
+            </Button>
+          ) : null
         }
       >
         {loading ? (
@@ -547,7 +551,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                           <Button size="small" icon={<LockOutlined />} style={{ minHeight: 36 }}>Verrouiller</Button>
                         </Popconfirm>
                       )}
-                      <Button size="small" icon={<EditOutlined />} onClick={() => handleOpenModal(event)} style={{ minHeight: 36 }} />
+                      {canEdit && <Button size="small" icon={<EditOutlined />} onClick={() => handleOpenModal(event)} style={{ minHeight: 36 }} />}
                       {isAdminOrAbove && (
                         <Popconfirm title="Supprimer cet événement ?" onConfirm={() => handleDelete(event.id)}>
                           <Button size="small" danger icon={<DeleteOutlined />} style={{ minHeight: 36 }} />

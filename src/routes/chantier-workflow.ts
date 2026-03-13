@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db } from '../lib/database';
 import { authenticateToken, isAdmin } from '../middleware/auth';
+import { requireChantierAction } from '../middleware/chantierPermission';
 import { z } from 'zod';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
@@ -1061,7 +1062,7 @@ router.get('/chantiers/:chantierId/events', authenticateToken, async (req, res) 
  * POST /api/chantier-workflow/chantiers/:chantierId/events
  * Crée un événement pour un chantier
  */
-router.post('/chantiers/:chantierId/events', authenticateToken, async (req, res) => {
+router.post('/chantiers/:chantierId/events', authenticateToken, requireChantierAction('edit'), async (req, res) => {
   try {
     const { chantierId } = req.params;
     const organizationId = req.headers['x-organization-id'] as string;
@@ -1126,7 +1127,7 @@ router.post('/chantiers/:chantierId/events', authenticateToken, async (req, res)
  * PUT /api/chantier-workflow/events/:id
  * Met à jour un événement
  */
-router.put('/events/:id', authenticateToken, async (req, res) => {
+router.put('/events/:id', authenticateToken, requireChantierAction('edit'), async (req, res) => {
   try {
     const { id } = req.params;
     const user = (req as any).user;
