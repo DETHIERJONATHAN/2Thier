@@ -1691,6 +1691,7 @@ model TreeBranchLeafNode {
   date_showTime               Boolean?                    @default(false)
   fieldSubType                String?
   fieldType                   String?
+  field_full_width            String?
   field_label                 String?
   formula_activeId            String?
   formula_instances           Json?

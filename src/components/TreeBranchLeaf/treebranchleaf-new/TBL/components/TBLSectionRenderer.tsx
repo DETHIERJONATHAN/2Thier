@@ -1400,29 +1400,51 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       const spanMobile = Math.max(1, Math.ceil(24 / columnsMobile));
       const baseSpans = getResponsiveColSpan(targetSection);
 
+      // ↔️ Colonnes occupées configurable par champ (desktop / mobile)
+      const fieldFullWidthRaw = (field as any).field_full_width as string | null | undefined;
+      let colSpanDesktop = 0;
+      let colSpanMobile = 0;
+      if (fieldFullWidthRaw) {
+        try {
+          const parsed = JSON.parse(fieldFullWidthRaw);
+          colSpanDesktop = typeof parsed.desktop === 'number' ? parsed.desktop : 0;
+          colSpanMobile = typeof parsed.mobile === 'number' ? parsed.mobile : 0;
+        } catch { /* ignore */ }
+      }
+      const fullWidthDesktop = options?.forceFullWidth;
+      const fullWidthMobile = options?.forceFullWidth;
+
       const { rawWidth, hintDesktop, hintMobile } = extractWidthHints(field);
 
-      const desktopColumns = options?.forceFullWidth
+      const desktopColumns = fullWidthDesktop
         ? columnsDesktop
-        : clampValue(
-            clampValue(hintDesktop ? Math.round(hintDesktop) : inferDefaultDesktopColumns(field, columnsDesktop), 1, columnsDesktop),
-            1,
-            columnsDesktop
-          );
+        : colSpanDesktop > 1
+          ? clampValue(colSpanDesktop, 1, columnsDesktop)
+          : clampValue(
+              clampValue(hintDesktop ? Math.round(hintDesktop) : inferDefaultDesktopColumns(field, columnsDesktop), 1, columnsDesktop),
+              1,
+              columnsDesktop
+            );
 
-      const parsedFromToken = options?.forceFullWidth
+      const parsedFromToken = fullWidthDesktop
         ? columnsDesktop
-        : parseWidthToken(rawWidth, columnsDesktop);
+        : colSpanDesktop > 1
+          ? clampValue(colSpanDesktop, 1, columnsDesktop)
+          : parseWidthToken(rawWidth, columnsDesktop);
 
-      const finalDesktopColumns = options?.forceFullWidth
+      const finalDesktopColumns = fullWidthDesktop
         ? columnsDesktop
-        : clampValue(parsedFromToken ?? desktopColumns, 1, columnsDesktop);
+        : colSpanDesktop > 1
+          ? clampValue(colSpanDesktop, 1, columnsDesktop)
+          : clampValue(parsedFromToken ?? desktopColumns, 1, columnsDesktop);
 
       const mobileFromHint = hintMobile ? clampValue(Math.round(hintMobile), 1, columnsMobile) : undefined;
       const ratioBasedMobile = Math.max(1, Math.round((finalDesktopColumns / columnsDesktop) * columnsMobile));
-      const finalMobileColumns = options?.forceFullWidth
+      const finalMobileColumns = fullWidthMobile
         ? columnsMobile
-        : clampValue(mobileFromHint ?? ratioBasedMobile, 1, columnsMobile);
+        : colSpanMobile > 1
+          ? clampValue(colSpanMobile, 1, columnsMobile)
+          : clampValue(mobileFromHint ?? ratioBasedMobile, 1, columnsMobile);
 
       const desktopSpan = clampValue(spanDesktop * finalDesktopColumns, spanDesktop, 24);
       const mobileSpan = clampValue(spanMobile * finalMobileColumns, spanMobile, 24);
@@ -1434,31 +1456,43 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       const fallbackXl = baseSpans?.xl ?? fallbackLg;
       const fallbackXxl = baseSpans?.xxl ?? fallbackXl;
 
-      const resolvedMobileSpan = options?.forceFullWidth ? 24 : mobileSpan;
-      const resolvedDesktopSpan = options?.forceFullWidth ? 24 : desktopSpan;
+      // 📱 Mobile : si le champ prend 2+ colonnes, on lui donne toute la ligne
+      // (sur petit écran, 2/3 de la largeur est souvent trop étroit → full width)
+      const mobileFieldUsesMultipleCols = colSpanMobile > 1;
+      const resolvedMobileSpan = fullWidthMobile ? 24 : mobileFieldUsesMultipleCols ? 24 : mobileSpan;
+      const resolvedDesktopSpan = fullWidthDesktop ? 24 : desktopSpan;
 
       // 🎯 Fix colonnes non-divisibles par 24 (5, 7, 9, 10, 11 colonnes)
-      // Le système de spans Ant Design arrondit et perd des colonnes (ex: 9→8)
-      // Solution: flex CSS pour obtenir exactement le bon pourcentage
-      const activeColumns = isMobile ? columnsMobile : columnsDesktop;
-      const activeFieldColumns = isMobile ? finalMobileColumns : finalDesktopColumns;
-      const needsFlexOverride = 24 % activeColumns !== 0;
-      const flexStyle = needsFlexOverride ? {
-        flex: `0 0 ${(activeFieldColumns / activeColumns) * 100}%`,
-        maxWidth: `${(activeFieldColumns / activeColumns) * 100}%`,
-      } : undefined;
+      // → Calcul SÉPARÉ desktop/mobile pour que chaque breakpoint ait la bonne valeur flex
+      //   (évite qu'un style inline unique n'écrase les breakpoints responsive)
+      const needsFlexDesktop = !fullWidthDesktop && 24 % columnsDesktop !== 0;
+      const needsFlexMobile = !fullWidthMobile && !mobileFieldUsesMultipleCols && 24 % columnsMobile !== 0;
+
+      const desktopFlexPct = `${(finalDesktopColumns / columnsDesktop) * 100}%`;
+      const mobileFlexPct = `${(finalMobileColumns / columnsMobile) * 100}%`;
+
+      // Mobile : pleine largeur si multi-cols, sinon flex responsive ou span classique
+      const mobileProp: number | { flex: string } = mobileFieldUsesMultipleCols
+        ? 24
+        : needsFlexMobile
+          ? { flex: `0 0 ${mobileFlexPct}` }
+          : (resolvedMobileSpan ?? fallbackXs);
+
+      // Desktop : idem
+      const desktopProp: number | { flex: string } = needsFlexDesktop
+        ? { flex: `0 0 ${desktopFlexPct}` }
+        : (resolvedDesktopSpan ?? fallbackMd);
 
       return {
-        xs: resolvedMobileSpan ?? fallbackXs,
-        sm: resolvedMobileSpan ?? fallbackSm,
-        md: resolvedDesktopSpan ?? fallbackMd,
-        lg: resolvedDesktopSpan ?? fallbackLg,
-        xl: resolvedDesktopSpan ?? fallbackXl,
-        xxl: resolvedDesktopSpan ?? fallbackXxl,
-        ...(flexStyle ? { style: flexStyle } : {})
+        xs: mobileProp,
+        sm: mobileProp,
+        md: desktopProp,
+        lg: desktopProp,
+        xl: desktopProp,
+        xxl: desktopProp,
       };
     },
-    [clampValue, extractWidthHints, getResponsiveColSpan, inferDefaultDesktopColumns, parseWidthToken, isMobile]
+    [clampValue, extractWidthHints, getResponsiveColSpan, inferDefaultDesktopColumns, parseWidthToken]
   );
 
   const getUniformDisplayColProps = useCallback((section: TBLSection) => {

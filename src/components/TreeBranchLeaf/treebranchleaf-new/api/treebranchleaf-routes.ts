@@ -2500,6 +2500,7 @@ async function deepCopyNodeInternal(
         appearance_variant: oldNode.appearance_variant,
         appearance_width: oldNode.appearance_width,
         appearance_displayIcon: oldNode.appearance_displayIcon,
+        field_full_width: oldNode.field_full_width,
         text_placeholder: oldNode.text_placeholder,
         text_maxLength: oldNode.text_maxLength,
         text_minLength: oldNode.text_minLength,

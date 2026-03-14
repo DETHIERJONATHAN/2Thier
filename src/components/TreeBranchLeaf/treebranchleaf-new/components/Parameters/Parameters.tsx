@@ -448,6 +448,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
   const [isVisible, setIsVisible] = useState<boolean>(true);
   const [isMultiple, setIsMultiple] = useState<boolean>(false);
   const [technicianVisible, setTechnicianVisible] = useState<boolean>(false);
+  const [fieldFullWidth, setFieldFullWidth] = useState<string | null>(null);
   // Repliable supprimé: état supprimé pour simplifier l'UI
   const [fieldType, setFieldType] = useState<string | undefined>(undefined);
   const [selectOptions, setSelectOptions] = useState<Array<{ label: string; value: string; group?: string }>>([]);
@@ -1401,6 +1402,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     setIsVisible(selectedNode.isVisible !== false);
     setIsMultiple(!!selectedNode.isMultiple);
     setTechnicianVisible(!!(selectedNode as any).technicianVisible);
+    setFieldFullWidth((selectedNode as any).field_full_width || null);
 
     if (isNewNode) {
       setAppearanceOpen(false);
@@ -1658,6 +1660,11 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     patchNode({ technicianVisible: value });
   }, [patchNode]);
 
+  const handleFieldFullWidthChange = useCallback((value: string | null) => {
+    setFieldFullWidth(value);
+    patchNode({ field_full_width: value });
+  }, [patchNode]);
+
   // Gestionnaire de changement de fieldType
   const handleFieldTypeChange = useCallback((value: string) => {
     setFieldType(value);
@@ -1901,6 +1908,61 @@ const Parameters: React.FC<ParametersProps> = (props) => {
               />
             </div>
             
+            {/* Largeur du champ (nombre de colonnes occupées sur PC et Mobile) */}
+            {!isContainerNode && (
+              <div>
+                <strong style={{ fontSize: 12 }}>↔️ Colonnes occupées</strong>
+                <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 11, color: '#888', marginBottom: 2 }}>🖥️ PC</div>
+                    <Select
+                      value={(() => { try { const p = fieldFullWidth ? JSON.parse(fieldFullWidth) : {}; return p.desktop || 1; } catch { return 1; } })()}
+                      onChange={(v) => {
+                        const current = (() => { try { return fieldFullWidth ? JSON.parse(fieldFullWidth) : {}; } catch { return {}; } })();
+                        const next = { ...current, desktop: v };
+                        if (next.desktop === 1 && (!next.mobile || next.mobile === 1)) {
+                          handleFieldFullWidthChange(null);
+                        } else {
+                          handleFieldFullWidthChange(JSON.stringify(next));
+                        }
+                      }}
+                      size="small"
+                      style={{ width: '100%' }}
+                      disabled={props.readOnly}
+                      options={[
+                        { value: 1, label: '1 col' },
+                        { value: 2, label: '2 cols' },
+                        { value: 3, label: '3 cols' },
+                      ]}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 11, color: '#888', marginBottom: 2 }}>📱 Mobile</div>
+                    <Select
+                      value={(() => { const p = (() => { try { return fieldFullWidth ? JSON.parse(fieldFullWidth) : {}; } catch { return {}; } })(); return p.mobile || 1; })()}
+                      onChange={(v) => {
+                        const current = (() => { try { return fieldFullWidth ? JSON.parse(fieldFullWidth) : {}; } catch { return {}; } })();
+                        const next = { ...current, mobile: v };
+                        if ((!next.desktop || next.desktop === 1) && next.mobile === 1) {
+                          handleFieldFullWidthChange(null);
+                        } else {
+                          handleFieldFullWidthChange(JSON.stringify(next));
+                        }
+                      }}
+                      size="small"
+                      style={{ width: '100%' }}
+                      disabled={props.readOnly}
+                      options={[
+                        { value: 1, label: '1 col' },
+                        { value: 2, label: '2 cols' },
+                        { value: 3, label: '3 cols' },
+                      ]}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Type de champ avec bouton Apparence à droite */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ flex: 1 }}>

@@ -1533,6 +1533,7 @@ const transformPrismaNodeToField = (
       hasProduct: node.hasProduct,
       product_visibleFor: node.product_visibleFor || null,
       product_sourceNodeId: node.product_sourceNodeId || null,
+      field_full_width: node.field_full_width || null,
       subTabKey: primarySubTabKey ?? undefined,
       subTabKeys: subTabAssignments.length ? subTabAssignments : undefined
     };
@@ -1678,6 +1679,7 @@ const transformPrismaNodeToField = (
       hasProduct: node.hasProduct,
       product_visibleFor: node.product_visibleFor || null,
       product_sourceNodeId: node.product_sourceNodeId || null,
+      field_full_width: node.field_full_width || null,
       subTabKey: primarySubTabKey ?? undefined,
       subTabKeys: subTabAssignments.length ? subTabAssignments : undefined
     };
@@ -1799,6 +1801,7 @@ const transformPrismaNodeToField = (
       hasProduct: node.hasProduct,
       product_visibleFor: node.product_visibleFor || null,
       product_sourceNodeId: node.product_sourceNodeId || null,
+      field_full_width: node.field_full_width || null,
       subTabKey: primarySubTabKey ?? undefined,
       subTabKeys: subTabAssignments.length ? subTabAssignments : undefined
     };
@@ -1829,6 +1832,7 @@ const transformPrismaNodeToField = (
     hasProduct: node.hasProduct,
     product_visibleFor: node.product_visibleFor || null,
     product_sourceNodeId: node.product_sourceNodeId || null,
+    field_full_width: node.field_full_width || null,
     subTabKey: primarySubTabKey ?? undefined,
     subTabKeys: subTabAssignments.length ? subTabAssignments : undefined
   };
