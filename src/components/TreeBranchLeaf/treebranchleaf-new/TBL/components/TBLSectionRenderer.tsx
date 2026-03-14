@@ -115,14 +115,20 @@ const extractFieldSuffix = (field: TBLField): string => {
   if (typeof repeaterIndex === 'number' || typeof repeaterIndex === 'string') {
     return String(repeaterIndex);
   }
-  const metaSuffix = (meta.copySuffix || meta.suffix || meta.instanceSuffix) as string | undefined;
-  if (metaSuffix) return String(metaSuffix);
-  const idSuffix = suffixFromString(field.id);
-  if (idSuffix) return idSuffix;
-  const labelSuffix = suffixFromString(field.label);
-  if (labelSuffix) return labelSuffix;
-  const sharedRefSuffix = suffixFromString((field as any).sharedReferenceName);
-  if (sharedRefSuffix) return sharedRefSuffix;
+  // Ne considérer les marqueurs de copie (copySuffix, ID -1, etc.) que pour les champs
+  // gérés par un repeater. Les duplications standalone (ex: "Couleur Extérieur" → "Couleur Intérieur")
+  // ont aussi copySuffix/ID -1 mais doivent respecter leur order normal.
+  const isRepeaterManaged = !!((field as any).parentRepeaterId || meta.repeaterParentId);
+  if (isRepeaterManaged) {
+    const metaSuffix = (meta.copySuffix || meta.suffix || meta.instanceSuffix) as string | undefined;
+    if (metaSuffix) return String(metaSuffix);
+    const idSuffix = suffixFromString(field.id);
+    if (idSuffix) return idSuffix;
+    const labelSuffix = suffixFromString(field.label);
+    if (labelSuffix) return labelSuffix;
+    const sharedRefSuffix = suffixFromString((field as any).sharedReferenceName);
+    if (sharedRefSuffix) return sharedRefSuffix;
+  }
   return BASE_SUFFIX_KEY;
 };
 

@@ -24,6 +24,7 @@ import {
   ExclamationCircleOutlined,
   PictureOutlined,
   VideoCameraOutlined,
+  FolderOutlined,
   CloseOutlined
 } from '@ant-design/icons';
 import { useAuth } from '../../../../../auth/useAuth';
@@ -155,6 +156,11 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
   
   // 🆕 État pour le modal plein écran
   const [showFullscreenImage, setShowFullscreenImage] = useState(false);
+  
+  // 📷 Photos supplémentaires (appareil normal + upload) - ne touchent PAS au flux IA
+  const [additionalPhotos, setAdditionalPhotos] = useState<Array<{ id: string; url: string; type: 'camera' | 'upload'; name: string }>>([]);
+  const normalCameraInputRef = useRef<HTMLInputElement>(null);
+  const multiUploadInputRef = useRef<HTMLInputElement>(null);
 
   // 🔒 Cache anti-doublons pour limiter les updates backend inutiles
   const lastAppliedMeasurementsRef = useRef<Record<string, number | string> | null>(null);
@@ -519,10 +525,74 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
   }, []);
 
   /**
-   * Ouvrir la caméra directement
+   * Ouvrir la caméra directement (IA)
    */
   const openCamera = useCallback(() => {
     cameraInputRef.current?.click();
+  }, []);
+
+  /**
+   * 📷 Appareil photo NORMAL (sans IA) - sauvegarde directe
+   */
+  const handleNormalCameraCapture = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (maxImageSizeBytes && file.size > maxImageSizeBytes) {
+      message.error(`Image trop lourde (max ${imageConfig.maxSize} Mo).`);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      if (!dataUrl) return;
+      const newPhoto = {
+        id: `photo_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+        url: dataUrl,
+        type: 'camera' as const,
+        name: `Photo ${new Date().toLocaleTimeString('fr-BE')}`
+      };
+      setAdditionalPhotos(prev => [...prev, newPhoto]);
+      message.success('📷 Photo ajoutée');
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  }, [maxImageSizeBytes, imageConfig.maxSize]);
+
+  /**
+   * 📁 Upload multiple de photos (sans IA)
+   */
+  const handleMultiUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    Array.from(files).forEach(file => {
+      if (!file.type.startsWith('image/')) return;
+      if (maxImageSizeBytes && file.size > maxImageSizeBytes) {
+        message.error(`${file.name} trop lourde (max ${imageConfig.maxSize} Mo).`);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target?.result as string;
+        if (!dataUrl) return;
+        const newPhoto = {
+          id: `photo_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+          url: dataUrl,
+          type: 'upload' as const,
+          name: file.name
+        };
+        setAdditionalPhotos(prev => [...prev, newPhoto]);
+      };
+      reader.readAsDataURL(file);
+    });
+    message.success(`📁 ${files.length} photo(s) chargée(s)`);
+    event.target.value = '';
+  }, [maxImageSizeBytes, imageConfig.maxSize]);
+
+  /**
+   * 🗑️ Supprimer une photo supplémentaire
+   */
+  const removeAdditionalPhoto = useCallback((photoId: string) => {
+    setAdditionalPhotos(prev => prev.filter(p => p.id !== photoId));
   }, []);
   
   /**
@@ -954,41 +1024,105 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
         onChange={handleNativeFileChange}
         style={{ display: 'none' }}
       />
+      {/* 📷 Input caméra NORMALE (sans IA) */}
+      <input
+        ref={normalCameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleNormalCameraCapture}
+        style={{ display: 'none' }}
+      />
+      {/* 📁 Input upload MULTIPLE (sans IA) */}
+      <input
+        ref={multiUploadInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={handleMultiUpload}
+        style={{ display: 'none' }}
+      />
 
       <Space direction="vertical" style={{ width: '100%' }} size={8}>
-        {/* Boutons d'action - IA Photo + Mesure */}
-        <Space size={8} align="center">
-          {/* 🎯 SmartCamera IA (multi-photos) - Bouton principal */}
+        {/* Boutons d'action - 3 icônes : Photo | IA | Dossier + Mesure */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap' }}>
           {aiMeasure_enabled && (
             <>
-              <Tooltip title="📷 Ouvrir l'appareil photo">
+              {/* 📷 Photo normale (appareil) */}
+              <Tooltip title="Photo (appareil)">
                 <Button
                   icon={<CameraOutlined />}
+                  onClick={() => normalCameraInputRef.current?.click()}
+                  disabled={disabled || isAnalyzingAI}
+                  size={size}
+                  type="default"
+                  style={{
+                    borderColor: '#1677ff',
+                    color: '#1677ff',
+                    width: iconButtonPx,
+                    height: iconButtonPx,
+                    minWidth: iconButtonPx,
+                    padding: 0,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  aria-label="Photo normale"
+                />
+              </Tooltip>
+
+              {/* 🤖 Photo IA */}
+              <Tooltip title="Photo IA (analyse + mesures)">
+                <Button
+                  icon={<RobotOutlined />}
                   onClick={openCamera}
                   disabled={disabled || isAnalyzingAI}
                   size={size}
                   type="primary"
                   style={{
-                    background: '#1677ff',
-                    borderColor: '#1677ff',
+                    background: '#722ed1',
+                    borderColor: '#722ed1',
                     width: iconButtonPx,
                     height: iconButtonPx,
+                    minWidth: iconButtonPx,
                     padding: 0,
                     display: 'inline-flex',
                     alignItems: 'center',
-                    justifyContent: 'center'
+                    justifyContent: 'center',
                   }}
-                  aria-label="Appareil photo"
+                  aria-label="Photo IA"
+                />
+              </Tooltip>
+
+              {/* 📂 Charger depuis dossier */}
+              <Tooltip title="Charger des photos">
+                <Button
+                  icon={<FolderOutlined />}
+                  onClick={() => multiUploadInputRef.current?.click()}
+                  disabled={disabled || isAnalyzingAI}
+                  size={size}
+                  type="default"
+                  style={{
+                    borderColor: '#52c41a',
+                    color: '#52c41a',
+                    width: iconButtonPx,
+                    height: iconButtonPx,
+                    minWidth: iconButtonPx,
+                    padding: 0,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  aria-label="Charger photos"
                 />
               </Tooltip>
               
-              {/* 🆕 Bouton "Mesurer" - Réutiliser les photos capturées */}
+              {/* 📐 Bouton "Mesurer" - Réutiliser les photos capturées (existant) */}
               {capturedPhotos.length > 0 && (
                 <Tooltip title="📐 Revoir l'analyse Métré A4 V10">
                   <Button
                     icon={<CheckCircleOutlined />}
                     onClick={() => {
-                      // 🎯 Réutiliser les photos avec référence détectée si possible
                       const bestPhoto = capturedPhotos.find(p => (p.metadata as any)?.referenceDetected || (p.metadata as any)?.fusedCorners);
                       const photoToUse = bestPhoto || capturedPhotos[0];
                       
@@ -1018,8 +1152,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
                     style={{ 
                       borderColor: '#52c41a',
                       color: '#52c41a',
-                      fontWeight: 'bold'
-                      ,
+                      fontWeight: 'bold',
                       width: iconButtonPx,
                       height: iconButtonPx,
                       padding: 0,
@@ -1033,7 +1166,75 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
               )}
             </>
           )}
-        </Space>
+        </div>
+
+        {/* 📸 Galerie des photos supplémentaires (normal + upload) */}
+        {additionalPhotos.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {additionalPhotos.map((photo) => (
+              <div
+                key={photo.id}
+                style={{
+                  position: 'relative',
+                  width: 72,
+                  height: 72,
+                  borderRadius: 8,
+                  overflow: 'hidden',
+                  border: '1px solid #d9d9d9',
+                  cursor: 'pointer',
+                }}
+              >
+                <img
+                  src={photo.url}
+                  alt={photo.name}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  onClick={() => {
+                    setShowFullscreenImage(true);
+                  }}
+                />
+                {/* Badge type */}
+                <div style={{
+                  position: 'absolute',
+                  top: 2,
+                  left: 2,
+                  fontSize: 10,
+                  background: photo.type === 'camera' ? '#1677ff' : '#52c41a',
+                  color: 'white',
+                  borderRadius: 4,
+                  padding: '0 3px',
+                  lineHeight: '16px',
+                }}>
+                  {photo.type === 'camera' ? '📷' : '📁'}
+                </div>
+                {/* Bouton supprimer */}
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeAdditionalPhoto(photo.id);
+                  }}
+                  style={{
+                    position: 'absolute',
+                    top: 2,
+                    right: 2,
+                    width: 18,
+                    height: 18,
+                    borderRadius: '50%',
+                    background: 'rgba(255,77,79,0.9)',
+                    color: 'white',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 10,
+                    cursor: 'pointer',
+                    lineHeight: 1,
+                  }}
+                >
+                  ✕
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         
         {/* 🔬 Indicateur d'analyse Métré A4 V10 en cours */}
         {isAnalyzingReference && (
