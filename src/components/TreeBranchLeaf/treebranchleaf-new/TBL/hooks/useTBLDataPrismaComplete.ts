@@ -1704,10 +1704,10 @@ const transformPrismaNodeToField = (
     
     const isSelectWithOptions = !!selectOptionsFromColumn && selectOptionsFromColumn.length > 0;
     
-    // 🛒 Si le champ a des select_options non vides, forcer le type à 'select' pour le rendu
-    // select_multiple n'affecte que le MODE (simple/multiple), pas la DÉCISION d'être un select
+    // 🛒 Si le champ a des select_options non vides, forcer le type à 'select' (ou 'multiselect') pour le rendu
+    // select_multiple détermine le MODE (simple/multiple)
     const effectiveFieldType = isSelectWithOptions
-      ? 'select'
+      ? (node.select_multiple === true ? 'multiselect' : 'select')
       : finalFieldType;
 
     if (isSelectWithOptions) {
@@ -1769,8 +1769,8 @@ const transformPrismaNodeToField = (
         // 🔥 AJOUT PRISMA DYNAMIC MINDATE/MAXDATE
         minDate: node.date_minDate,
         maxDate: node.date_maxDate,
-        // 🛒 PRODUIT: Forcer multiple à true si le champ a des select_options (source produit)
-        multiple: isSelectWithOptions ? (node.select_multiple !== false) : node.select_multiple,
+        // 🛒 PRODUIT + SELECT: Respecter select_multiple (true=multiselect, false/null=select simple)
+        multiple: isSelectWithOptions ? (node.select_multiple === true) : node.select_multiple,
         searchable: node.select_searchable,
         allowClear: node.select_allowClear,
         selectDefaultValue: node.select_defaultValue,

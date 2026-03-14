@@ -3071,7 +3071,10 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
     // Récupérer l'organisation de l'utilisateur authentifié
     const organizationId = req.headers['x-organization-id'] as string || (req as AuthenticatedRequest).user?.organizationId;
     const userId = req.headers['x-user-id'] as string || (req as AuthenticatedRequest).user?.userId || 'unknown-user';
-    const canEditCompletedInPlace = isAdminOrSuperAdmin(req);
+    // 🔥 FIX: Tous les utilisateurs peuvent éditer un devis completed in-place (pas de clonage/versioning)
+    // Avant: seuls les admins pouvaient éditer en place, les autres créaient une révision -2, -3...
+    // Maintenant: un devis enregistré se comporte comme un brouillon (édition directe)
+    const canEditCompletedInPlace = true;
     const isSuperAdmin = Boolean((req as AuthenticatedRequest).user?.isSuperAdmin) || (req as AuthenticatedRequest).user?.role === 'super_admin';
     
     if (!organizationId) {

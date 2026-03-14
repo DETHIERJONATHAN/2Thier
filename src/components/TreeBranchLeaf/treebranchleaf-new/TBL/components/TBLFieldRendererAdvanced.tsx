@@ -3396,7 +3396,8 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           />
         );
 
-      case 'SELECT': {
+      case 'SELECT':
+      case 'MULTISELECT': {
         // 🎯 DEBUG: Vérifier la configuration lookup pour diagnostic
         if (fieldConfig.hasTable && field.capabilities?.table?.currentTable?.meta?.lookup) {
           const lookup = field.capabilities.table.currentTable.meta.lookup;
@@ -3671,7 +3672,9 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         }
         
         // 📦 PRODUIT FIX: multiple:true doit TOUJOURS gagner sur mode:'single' (metadata stale)
-        const selectionMode = (fieldConfig.selectConfig?.multiple || fieldConfig.multiple)
+        // 📋 MULTISELECT: forcer le mode multiple si le fieldType est MULTISELECT
+        const isMultiSelectType = fieldConfig.fieldType === 'MULTISELECT';
+        const selectionMode = (isMultiSelectType || fieldConfig.selectConfig?.multiple || fieldConfig.multiple)
           ? 'multiple'
           : (fieldConfig.selectConfig?.mode || 'single');
         const allowCustomValues = fieldConfig.selectConfig?.allowCustom;

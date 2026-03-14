@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Modal, Spin, Tag, Alert } from 'antd';
 import { 
   MoreOutlined, 
   EditOutlined, 
@@ -8,12 +9,48 @@ import {
   ArrowDownOutlined,
   EyeOutlined,
   EyeInvisibleOutlined,
-  SettingOutlined
+  SettingOutlined,
+  WarningOutlined,
+  ExclamationCircleOutlined,
+  LinkOutlined,
+  FunctionOutlined,
+  TableOutlined,
+  BranchesOutlined
 } from '@ant-design/icons';
+import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import type { TreeNode } from '../../types';
+
+interface DependencyInfo {
+  dependentNodeId: string;
+  dependentNodeLabel: string;
+  dependentNodePath: string;
+  dependencyType: string;
+  referencedNodeIds: string[];
+  referencedNodeLabels: string[];
+  description: string;
+}
+
+interface CheckDependenciesResult {
+  hasDependencies: boolean;
+  nodeLabel: string;
+  nodesToDeleteCount: number;
+  externalDependencies: DependencyInfo[];
+}
+
+const depTypeConfig: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+  'link': { label: 'Lien', color: 'blue', icon: <LinkOutlined /> },
+  'formula': { label: 'Formule', color: 'purple', icon: <FunctionOutlined /> },
+  'formula-db': { label: 'Formule', color: 'purple', icon: <FunctionOutlined /> },
+  'table-lookup': { label: 'Table', color: 'orange', icon: <TableOutlined /> },
+  'condition': { label: 'Condition', color: 'cyan', icon: <BranchesOutlined /> },
+  'trigger': { label: 'Trigger', color: 'geekblue', icon: <FunctionOutlined /> },
+  'variable': { label: 'Variable', color: 'volcano', icon: <FunctionOutlined /> },
+  'select-dependency': { label: 'Liste', color: 'green', icon: <BranchesOutlined /> },
+};
 
 interface NodeActionMenuProps {
   node: TreeNode;
+  treeId?: string;
   readOnly?: boolean;
   isExpanded?: boolean;
   onEdit?: (node: TreeNode, newLabel?: string) => void;
@@ -29,6 +66,7 @@ interface NodeActionMenuProps {
 
 export const NodeActionMenu: React.FC<NodeActionMenuProps> = ({
   node,
+  treeId,
   readOnly = false,
   isExpanded,
   onEdit,
@@ -42,8 +80,13 @@ export const NodeActionMenu: React.FC<NodeActionMenuProps> = ({
   onToggleExpand
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [depResult, setDepResult] = useState<CheckDependenciesResult | null>(null);
+  const [depError, setDepError] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLDivElement | null>(null);
+  const { api } = useAuthenticatedApi();
 
   // Log pour vérifier que le composant est monté et l'ID
   // console.log('🔄 [NodeActionMenu] Composant monté pour node:', node.label, 'ID:', node.id, 'readOnly:', readOnly);
@@ -63,7 +106,7 @@ export const NodeActionMenu: React.FC<NodeActionMenuProps> = ({
     }
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!hasValidId) {
       console.warn('Impossible de supprimer: nœud sans ID valide');
       return;
@@ -74,16 +117,45 @@ export const NodeActionMenu: React.FC<NodeActionMenuProps> = ({
       return;
     }
 
-    const confirmed = window.confirm(`Êtes-vous sûr de vouloir supprimer l'élément "${node.label}" ?`);
-    if (!confirmed) return;
+    // Charger les dépendances depuis le backend
+    setDeleteLoading(true);
+    setDepResult(null);
+    setDepError(null);
+    setDeleteModalOpen(true);
 
     try {
-      onDelete(node);
+      if (treeId && api) {
+        const result = await api.get(`/api/treebranchleaf/trees/${treeId}/nodes/${node.id}/check-dependencies`);
+        setDepResult(result);
+      } else {
+        // Fallback si pas de treeId/api — confirmation simple
+        setDepResult({ hasDependencies: false, nodeLabel: node.label || '', nodesToDeleteCount: 1, externalDependencies: [] });
+      }
+    } catch (err) {
+      console.error('Erreur vérification dépendances:', err);
+      setDepError('Impossible de vérifier les dépendances. Vous pouvez quand même supprimer.');
+      setDepResult({ hasDependencies: false, nodeLabel: node.label || '', nodesToDeleteCount: 1, externalDependencies: [] });
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const confirmDelete = () => {
+    setDeleteModalOpen(false);
+    setDepResult(null);
+    try {
+      onDelete!(node);
       console.info('✅ Élément supprimé avec succès');
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
       console.error('❌ Erreur lors de la suppression:', errorMessage);
     }
+  };
+
+  const cancelDelete = () => {
+    setDeleteModalOpen(false);
+    setDepResult(null);
+    setDepError(null);
   };
 
   const handleMoveUp = () => {
@@ -417,6 +489,109 @@ export const NodeActionMenu: React.FC<NodeActionMenuProps> = ({
           </div>
         )}
       </div>
+
+      {/* Modal de confirmation de suppression avec vérification des dépendances */}
+      <Modal
+        open={deleteModalOpen}
+        onCancel={cancelDelete}
+        onOk={confirmDelete}
+        okText={depResult?.hasDependencies ? '⚠️ Supprimer quand même' : 'Supprimer'}
+        cancelText="Annuler"
+        okButtonProps={{
+          danger: true,
+          disabled: deleteLoading,
+        }}
+        title={
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {depResult?.hasDependencies 
+              ? <><WarningOutlined style={{ color: '#faad14', fontSize: 18 }} /> Attention — Dépendances détectées</>
+              : <><ExclamationCircleOutlined style={{ color: '#ff4d4f', fontSize: 18 }} /> Confirmer la suppression</>
+            }
+          </span>
+        }
+        width={depResult?.hasDependencies ? 640 : 420}
+        destroyOnClose
+      >
+        {deleteLoading ? (
+          <div style={{ textAlign: 'center', padding: '24px 0' }}>
+            <Spin size="default" />
+            <p style={{ marginTop: 12, color: '#666' }}>Vérification des dépendances...</p>
+          </div>
+        ) : (
+          <>
+            {depError && (
+              <Alert message={depError} type="warning" showIcon style={{ marginBottom: 12 }} />
+            )}
+
+            {depResult && !depResult.hasDependencies && (
+              <div>
+                <p>Êtes-vous sûr de vouloir supprimer <strong>"{depResult.nodeLabel}"</strong> ?</p>
+                {depResult.nodesToDeleteCount > 1 && (
+                  <p style={{ color: '#666', fontSize: 13 }}>
+                    Cela supprimera également {depResult.nodesToDeleteCount - 1} élément{depResult.nodesToDeleteCount - 1 > 1 ? 's' : ''} enfant{depResult.nodesToDeleteCount - 1 > 1 ? 's' : ''}.
+                  </p>
+                )}
+                <p style={{ color: '#52c41a', fontSize: 13, marginTop: 8 }}>
+                  ✅ Aucun autre champ ne dépend de cet élément.
+                </p>
+              </div>
+            )}
+
+            {depResult && depResult.hasDependencies && (
+              <div>
+                <Alert
+                  type="warning"
+                  showIcon
+                  message={
+                    <span>
+                      <strong>{depResult.externalDependencies.length} champ{depResult.externalDependencies.length > 1 ? 's' : ''}</strong> en dehors 
+                      de <strong>"{depResult.nodeLabel}"</strong> dépend{depResult.externalDependencies.length > 1 ? 'ent' : ''} d'éléments 
+                      que vous allez supprimer.
+                    </span>
+                  }
+                  description="Supprimer cet élément risque de casser les formules, prix et calculs de ces champs."
+                  style={{ marginBottom: 16 }}
+                />
+
+                <div style={{ maxHeight: 300, overflowY: 'auto', border: '1px solid #f0f0f0', borderRadius: 6, padding: 0 }}>
+                  {depResult.externalDependencies.map((dep, idx) => {
+                    const typeConf = depTypeConfig[dep.dependencyType] || { label: dep.dependencyType, color: 'default', icon: null };
+                    return (
+                      <div
+                        key={`${dep.dependentNodeId}-${idx}`}
+                        style={{
+                          padding: '10px 14px',
+                          borderBottom: idx < depResult.externalDependencies.length - 1 ? '1px solid #f5f5f5' : 'none',
+                          background: idx % 2 === 0 ? '#fafafa' : '#fff'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <Tag color={typeConf.color} style={{ margin: 0, fontSize: 11 }}>
+                            {typeConf.icon} {typeConf.label}
+                          </Tag>
+                          <strong style={{ fontSize: 13 }}>{dep.dependentNodeLabel}</strong>
+                        </div>
+                        <div style={{ fontSize: 11, color: '#888', marginBottom: 2 }}>
+                          📍 {dep.dependentNodePath}
+                        </div>
+                        <div style={{ fontSize: 12, color: '#555' }}>
+                          {dep.description}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {depResult.nodesToDeleteCount > 1 && (
+                  <p style={{ color: '#666', fontSize: 12, marginTop: 12 }}>
+                    ℹ️ {depResult.nodesToDeleteCount} éléments seront supprimés (nœud + descendants).
+                  </p>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </Modal>
     </>
   );
 };

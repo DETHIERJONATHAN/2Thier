@@ -80,6 +80,7 @@ const DocumentsSection = ({ submissionId, leadId, treeId, onLoadDevis, onDeleteD
   const [selectedDoc, setSelectedDoc] = useState<GeneratedDocument | null>(null);
   const [emailTo, setEmailTo] = useState('');
   const [selectedDevisIds, setSelectedDevisIds] = useState<Set<string>>(new Set());
+  const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
 
   // Charger les documents
   const loadDocuments = async () => {
@@ -248,10 +249,37 @@ const DocumentsSection = ({ submissionId, leadId, treeId, onLoadDevis, onDeleteD
     try {
       await api.delete(`/api/documents/generated/${id}`);
       message.success('Document supprimé');
+      setSelectedDocIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
       loadDocuments();
     } catch {
       message.error('Erreur lors de la suppression');
     }
+  };
+
+  // Supprimer plusieurs documents
+  const handleBulkDeleteDocs = async () => {
+    const count = selectedDocIds.size;
+    const confirmed = window.confirm(
+      `Supprimer ${count} document${count > 1 ? 's' : ''} sélectionné${count > 1 ? 's' : ''} ?\n\nCette action est irréversible.`
+    );
+    if (!confirmed) return;
+
+    let deleted = 0;
+    for (const id of selectedDocIds) {
+      try {
+        await api.delete(`/api/documents/generated/${id}`);
+        deleted++;
+      } catch (err) {
+        console.error('❌ Erreur suppression document:', id, err);
+      }
+    }
+    setSelectedDocIds(new Set());
+    message.success(`${deleted} document${deleted > 1 ? 's' : ''} supprimé${deleted > 1 ? 's' : ''}`);
+    loadDocuments();
   };
 
   // Couleurs des statuts
@@ -459,22 +487,59 @@ const DocumentsSection = ({ submissionId, leadId, treeId, onLoadDevis, onDeleteD
         ) : documents.length > 0 ? (
           /* Affichage horizontal des documents - Row/Col responsive */
           <>
-            {tblSubmissions.length > 0 && (
-              <div style={{ marginBottom: 16, marginTop: 8 }}>
+            <div style={{ marginBottom: 16, marginTop: tblSubmissions.length > 0 ? 8 : 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <Space size={12}>
                 <Text strong style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <DownloadOutlined />
                   Documents générés ({documents.length})
                 </Text>
-              </div>
-            )}
+                <Checkbox
+                  checked={selectedDocIds.size === documents.length && documents.length > 0}
+                  indeterminate={selectedDocIds.size > 0 && selectedDocIds.size < documents.length}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedDocIds(new Set(documents.map(d => d.id)));
+                    } else {
+                      setSelectedDocIds(new Set());
+                    }
+                  }}
+                >
+                  <span style={{ fontSize: 12 }}>Tout</span>
+                </Checkbox>
+              </Space>
+              {selectedDocIds.size > 0 && (
+                <Button
+                  danger
+                  size="small"
+                  icon={<DeleteOutlined />}
+                  onClick={handleBulkDeleteDocs}
+                >
+                  Supprimer ({selectedDocIds.size})
+                </Button>
+              )}
+            </div>
             <Row gutter={[12, 12]}>
             {documents.map(doc => (
               <Col key={doc.id} xs={24} sm={12} md={8} lg={6} xl={4}>
                 <Card
                   size="small"
                   className="shadow-sm hover:shadow-md transition-shadow"
-                  style={{ height: '100%' }}
+                  style={{ height: '100%', position: 'relative', border: selectedDocIds.has(doc.id) ? '2px solid #1890ff' : undefined }}
                 >
+                  {/* Checkbox */}
+                  <div style={{ position: 'absolute', top: 4, left: 4, zIndex: 1 }}>
+                    <Checkbox
+                      checked={selectedDocIds.has(doc.id)}
+                      onChange={(e) => {
+                        setSelectedDocIds(prev => {
+                          const next = new Set(prev);
+                          if (e.target.checked) next.add(doc.id);
+                          else next.delete(doc.id);
+                          return next;
+                        });
+                      }}
+                    />
+                  </div>
                   {/* Header compact */}
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
                     <span style={{ fontSize: 24, marginBottom: 4 }}>{getTypeIcon(doc.type)}</span>

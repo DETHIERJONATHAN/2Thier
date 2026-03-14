@@ -79,6 +79,7 @@ interface OptimizedStructureNodeProps {
   hasChildren: boolean;
   depth: number;
   readOnly?: boolean;
+  treeId?: string;
   allNodes?: TreeBranchLeafNode[]; // Pour détecter les sections parentes
   onSelect: (node: TreeBranchLeafNode) => void;
   onToggleExpanded: (nodeId: string) => void;
@@ -106,6 +107,7 @@ const OptimizedStructureNodeComponent: React.FC<OptimizedStructureNodeProps> = (
   onSelect,
   onToggleExpanded,
   onDoubleClick,
+  treeId,
   onEditNode,
   onDuplicateNode,
   onDeleteNode,
@@ -560,6 +562,7 @@ const OptimizedStructureNodeComponent: React.FC<OptimizedStructureNodeProps> = (
           <div style={{ marginLeft: '4px', flexShrink: 0 }}>
             <NodeActionMenu
               node={node}
+              treeId={treeId}
               isExpanded={isExpanded}
               onEdit={(nodeToEdit, newLabel) => {
                 console.log('🔗 [OptimizedStructureNode] Transmission onEdit vers NodeActionMenu');

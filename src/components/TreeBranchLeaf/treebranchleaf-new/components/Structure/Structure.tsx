@@ -639,6 +639,7 @@ const StructureComponent: React.FC<StructureProps> = ({
                 <OptimizedStructureNode
                   key={node.id}
                   node={node}
+                  treeId={tree?.id}
                   depth={level}
                   isSelected={isSelected}
                   isExpanded={isExpanded}

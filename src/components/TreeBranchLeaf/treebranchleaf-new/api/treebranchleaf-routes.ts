@@ -4403,6 +4403,306 @@ router.put('/nodes/:nodeId', async (req, res) => {
 });
 
 
+// GET /api/treebranchleaf/trees/:treeId/nodes/:nodeId/check-dependencies
+// Vérifie si d'autres nœuds de l'arbre dépendent du nœud (et ses descendants) avant suppression
+router.get('/trees/:treeId/nodes/:nodeId/check-dependencies', async (req, res) => {
+  try {
+    const { treeId, nodeId } = req.params;
+    const { organizationId, isSuperAdmin } = req.user! as { organizationId?: string; isSuperAdmin?: boolean };
+
+    const tree = await prisma.treeBranchLeafTree.findFirst({ where: { id: treeId } });
+    if (!tree) return res.status(404).json({ error: 'Arbre non trouvé' });
+    if (!isSuperAdmin && organizationId && tree.organizationId && tree.organizationId !== organizationId) {
+      return res.status(403).json({ error: 'Accès refusé' });
+    }
+
+    // 1. Collecter le sous-arbre à supprimer (BFS)
+    const allNodes = await prisma.treeBranchLeafNode.findMany({
+      where: { treeId },
+      select: { id: true, parentId: true, label: true, type: true, fieldType: true, hasLink: true, link_targetNodeId: true, formula_tokens: true, metadata: true }
+    });
+
+    const childrenByParent = new Map<string, string[]>();
+    const nodeById = new Map<string, typeof allNodes[0]>();
+    for (const n of allNodes) {
+      nodeById.set(n.id, n);
+      if (n.parentId) {
+        const arr = childrenByParent.get(n.parentId) || [];
+        arr.push(n.id);
+        childrenByParent.set(n.parentId, arr);
+      }
+    }
+
+    const subtreeIds = new Set<string>();
+    const queue = [nodeId];
+    while (queue.length) {
+      const cur = queue.shift()!;
+      subtreeIds.add(cur);
+      for (const child of (childrenByParent.get(cur) || [])) queue.push(child);
+    }
+
+    // 2. Chercher les nœuds HORS du sous-arbre qui référencent un ID du sous-arbre
+    const outsideNodes = allNodes.filter(n => !subtreeIds.has(n.id));
+    const outsideNodeIds = outsideNodes.map(n => n.id);
+
+    // Charger formules, conditions, tables, variables, selectConfigs des nœuds externes
+    const [formulas, conditions, tables, variables, selectConfigs] = await Promise.all([
+      outsideNodeIds.length > 0 ? prisma.treeBranchLeafNodeFormula.findMany({
+        where: { nodeId: { in: outsideNodeIds } },
+        select: { nodeId: true, tokens: true }
+      }) : Promise.resolve([]),
+      outsideNodeIds.length > 0 ? prisma.treeBranchLeafNodeCondition.findMany({
+        where: { nodeId: { in: outsideNodeIds } },
+        select: { nodeId: true, conditionSet: true }
+      }) : Promise.resolve([]),
+      outsideNodeIds.length > 0 ? prisma.treeBranchLeafNodeTable.findMany({
+        where: { nodeId: { in: outsideNodeIds } },
+        select: { nodeId: true, meta: true }
+      }) : Promise.resolve([]),
+      outsideNodeIds.length > 0 ? prisma.treeBranchLeafNodeVariable.findMany({
+        where: { nodeId: { in: outsideNodeIds } },
+        select: { nodeId: true, metadata: true, sourceRef: true }
+      }) : Promise.resolve([]),
+      outsideNodeIds.length > 0 ? prisma.treeBranchLeafSelectConfig.findMany({
+        where: { nodeId: { in: outsideNodeIds }, dependsOnNodeId: { in: Array.from(subtreeIds) } },
+        select: { nodeId: true, dependsOnNodeId: true }
+      }) : Promise.resolve([])
+    ]);
+
+    // Helper: extraire les nodeIds référencés dans une donnée JSON
+    const extractRefs = (data: unknown, out: Set<string>) => {
+      if (!data) return;
+      if (Array.isArray(data)) { for (const item of data) extractRefs(item, out); return; }
+      if (typeof data === 'object') {
+        const obj = data as Record<string, unknown>;
+        if (typeof obj.ref === 'string') out.add(obj.ref.replace(/^@(?:value|table|calculated|select|condition)\./, '').replace(/-\d+$/, ''));
+        const lr = (obj as any)?.left?.ref; if (typeof lr === 'string') out.add(lr.replace(/^@(?:value|table|calculated|select|condition)\./, '').replace(/-\d+$/, ''));
+        const rr = (obj as any)?.right?.ref; if (typeof rr === 'string') out.add(rr.replace(/^@(?:value|table|calculated|select|condition)\./, '').replace(/-\d+$/, ''));
+        if (Array.isArray((obj as any).nodeIds)) for (const raw of (obj as any).nodeIds) if (typeof raw === 'string') out.add(raw.replace(/^@(?:value|table|calculated|select|condition)\./, '').replace(/-\d+$/, ''));
+        const lk = (obj as any)?.lookup?.selectors;
+        if (lk?.rowFieldId) out.add(String(lk.rowFieldId));
+        if (lk?.columnFieldId) out.add(String(lk.columnFieldId));
+        for (const key of Object.keys(obj)) extractRefs(obj[key], out);
+        return;
+      }
+      if (typeof data === 'string') {
+        const s = data.trim();
+        if (!s) return;
+        const prefixes = ['@value.', '@table.', '@calculated.', '@select.', '@condition.', 'node-formula:', 'condition:'];
+        for (const p of prefixes) { if (s.startsWith(p)) { out.add(s.slice(p.length).replace(/-\d+$/, '')); return; } }
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)) out.add(s);
+      }
+    };
+
+    // Helper: construire le chemin d'un nœud dans l'arbre
+    const getNodePath = (nId: string): string => {
+      const parts: string[] = [];
+      let cur = nId;
+      let safety = 20;
+      while (cur && safety-- > 0) {
+        const n = nodeById.get(cur);
+        if (!n) break;
+        parts.unshift(n.label || n.id.substring(0, 8));
+        cur = n.parentId || '';
+      }
+      return parts.join(' > ');
+    };
+
+    interface ExternalDependency {
+      dependentNodeId: string;
+      dependentNodeLabel: string;
+      dependentNodePath: string;
+      dependencyType: string;
+      referencedNodeIds: string[];
+      referencedNodeLabels: string[];
+      description: string;
+    }
+    const dependencies: ExternalDependency[] = [];
+    const seen = new Set<string>();
+
+    // Scanner les liens directs (hasLink + link_targetNodeId)
+    for (const node of outsideNodes) {
+      if (node.hasLink && node.link_targetNodeId && subtreeIds.has(node.link_targetNodeId)) {
+        const key = `${node.id}:link:${node.link_targetNodeId}`;
+        if (seen.has(key)) continue; seen.add(key);
+        const targetNode = nodeById.get(node.link_targetNodeId);
+        dependencies.push({
+          dependentNodeId: node.id,
+          dependentNodeLabel: node.label || node.id.substring(0, 8),
+          dependentNodePath: getNodePath(node.id),
+          dependencyType: 'link',
+          referencedNodeIds: [node.link_targetNodeId],
+          referencedNodeLabels: [targetNode?.label || node.link_targetNodeId.substring(0, 8)],
+          description: `Lien vers "${targetNode?.label || '?'}"`
+        });
+      }
+    }
+
+    // Scanner formula_tokens (sur le nœud directement)
+    for (const node of outsideNodes) {
+      if (node.formula_tokens && Array.isArray(node.formula_tokens)) {
+        const refs = new Set<string>();
+        extractRefs(node.formula_tokens, refs);
+        const hits = Array.from(refs).filter(r => subtreeIds.has(r));
+        if (hits.length > 0) {
+          const key = `${node.id}:formula_tokens`;
+          if (!seen.has(key)) { seen.add(key);
+            dependencies.push({
+              dependentNodeId: node.id,
+              dependentNodeLabel: node.label || node.id.substring(0, 8),
+              dependentNodePath: getNodePath(node.id),
+              dependencyType: 'formula',
+              referencedNodeIds: hits,
+              referencedNodeLabels: hits.map(h => nodeById.get(h)?.label || h.substring(0, 8)),
+              description: `Formule utilise ${hits.map(h => `"${nodeById.get(h)?.label || '?'}"`).join(', ')}`
+            });
+          }
+        }
+      }
+    }
+
+    // Scanner metadata.triggerNodeIds
+    for (const node of outsideNodes) {
+      const triggerIds = (node.metadata as any)?.triggerNodeIds;
+      if (Array.isArray(triggerIds)) {
+        const hits = triggerIds.filter((id: string) => subtreeIds.has(id));
+        if (hits.length > 0) {
+          const key = `${node.id}:trigger`;
+          if (!seen.has(key)) { seen.add(key);
+            dependencies.push({
+              dependentNodeId: node.id,
+              dependentNodeLabel: node.label || node.id.substring(0, 8),
+              dependentNodePath: getNodePath(node.id),
+              dependencyType: 'trigger',
+              referencedNodeIds: hits,
+              referencedNodeLabels: hits.map((h: string) => nodeById.get(h)?.label || h.substring(0, 8)),
+              description: `Trigger configuré sur ${hits.map((h: string) => `"${nodeById.get(h)?.label || '?'}"`).join(', ')}`
+            });
+          }
+        }
+      }
+    }
+
+    // Scanner formules DB
+    for (const f of formulas) {
+      const refs = new Set<string>();
+      extractRefs((f as any).tokens, refs);
+      const hits = Array.from(refs).filter(r => subtreeIds.has(r));
+      if (hits.length > 0) {
+        const key = `${f.nodeId}:formula-db`;
+        if (!seen.has(key)) { seen.add(key);
+          const n = nodeById.get(f.nodeId);
+          dependencies.push({
+            dependentNodeId: f.nodeId,
+            dependentNodeLabel: n?.label || f.nodeId.substring(0, 8),
+            dependentNodePath: getNodePath(f.nodeId),
+            dependencyType: 'formula',
+            referencedNodeIds: hits,
+            referencedNodeLabels: hits.map(h => nodeById.get(h)?.label || h.substring(0, 8)),
+            description: `Formule utilise ${hits.map(h => `"${nodeById.get(h)?.label || '?'}"`).join(', ')}`
+          });
+        }
+      }
+    }
+
+    // Scanner conditions DB
+    for (const c of conditions) {
+      const refs = new Set<string>();
+      extractRefs((c as any).conditionSet, refs);
+      const hits = Array.from(refs).filter(r => subtreeIds.has(r));
+      if (hits.length > 0) {
+        const key = `${c.nodeId}:condition`;
+        if (!seen.has(key)) { seen.add(key);
+          const n = nodeById.get(c.nodeId);
+          dependencies.push({
+            dependentNodeId: c.nodeId,
+            dependentNodeLabel: n?.label || c.nodeId.substring(0, 8),
+            dependentNodePath: getNodePath(c.nodeId),
+            dependencyType: 'condition',
+            referencedNodeIds: hits,
+            referencedNodeLabels: hits.map(h => nodeById.get(h)?.label || h.substring(0, 8)),
+            description: `Condition dépend de ${hits.map(h => `"${nodeById.get(h)?.label || '?'}"`).join(', ')}`
+          });
+        }
+      }
+    }
+
+    // Scanner tables DB (table-lookup)
+    for (const t of tables) {
+      const refs = new Set<string>();
+      extractRefs((t as any).meta, refs);
+      const hits = Array.from(refs).filter(r => subtreeIds.has(r));
+      if (hits.length > 0) {
+        const key = `${t.nodeId}:table`;
+        if (!seen.has(key)) { seen.add(key);
+          const n = nodeById.get(t.nodeId);
+          dependencies.push({
+            dependentNodeId: t.nodeId,
+            dependentNodeLabel: n?.label || t.nodeId.substring(0, 8),
+            dependentNodePath: getNodePath(t.nodeId),
+            dependencyType: 'table-lookup',
+            referencedNodeIds: hits,
+            referencedNodeLabels: hits.map(h => nodeById.get(h)?.label || h.substring(0, 8)),
+            description: `Table lookup utilise ${hits.map(h => `"${nodeById.get(h)?.label || '?'}"`).join(', ')}`
+          });
+        }
+      }
+    }
+
+    // Scanner variables DB
+    for (const v of variables) {
+      const refs = new Set<string>();
+      extractRefs((v as any).metadata, refs);
+      if ((v as any).sourceRef) extractRefs((v as any).sourceRef, refs);
+      const hits = Array.from(refs).filter(r => subtreeIds.has(r));
+      if (hits.length > 0) {
+        const key = `${v.nodeId}:variable`;
+        if (!seen.has(key)) { seen.add(key);
+          const n = nodeById.get(v.nodeId);
+          dependencies.push({
+            dependentNodeId: v.nodeId,
+            dependentNodeLabel: n?.label || v.nodeId.substring(0, 8),
+            dependentNodePath: getNodePath(v.nodeId),
+            dependencyType: 'variable',
+            referencedNodeIds: hits,
+            referencedNodeLabels: hits.map(h => nodeById.get(h)?.label || h.substring(0, 8)),
+            description: `Variable référence ${hits.map(h => `"${nodeById.get(h)?.label || '?'}"`).join(', ')}`
+          });
+        }
+      }
+    }
+
+    // Scanner selectConfigs (dependsOnNodeId)
+    for (const sc of selectConfigs) {
+      const n = nodeById.get(sc.nodeId);
+      const depNode = nodeById.get(sc.dependsOnNodeId!);
+      const key = `${sc.nodeId}:selectConfig`;
+      if (!seen.has(key)) { seen.add(key);
+        dependencies.push({
+          dependentNodeId: sc.nodeId,
+          dependentNodeLabel: n?.label || sc.nodeId.substring(0, 8),
+          dependentNodePath: getNodePath(sc.nodeId),
+          dependencyType: 'select-dependency',
+          referencedNodeIds: [sc.dependsOnNodeId!],
+          referencedNodeLabels: [depNode?.label || sc.dependsOnNodeId!.substring(0, 8)],
+          description: `Liste déroulante dépend de "${depNode?.label || '?'}"`
+        });
+      }
+    }
+
+    const targetNode = nodeById.get(nodeId);
+    res.json({
+      hasDependencies: dependencies.length > 0,
+      nodeLabel: targetNode?.label || nodeId,
+      nodesToDeleteCount: subtreeIds.size,
+      externalDependencies: dependencies
+    });
+  } catch (error: any) {
+    console.error('[TreeBranchLeaf API] Erreur check-dependencies:', error);
+    res.status(500).json({ error: 'Erreur vérification dépendances', details: error.message });
+  }
+});
+
 // DELETE /api/treebranchleaf/trees/:treeId/nodes/:nodeId - Supprimer un nÃƒâ€¦Ã¢â‚¬Å“ud
 router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
   try {
@@ -11694,6 +11994,12 @@ router.delete('/submissions/:id', async (req, res) => {
 
     // Dissocier les soumissions de formulaires website
     await prisma.website_form_submissions.updateMany({
+      where: { submissionId: id },
+      data: { submissionId: null }
+    });
+
+    // Dissocier les chantiers liés
+    await prisma.chantier.updateMany({
       where: { submissionId: id },
       data: { submissionId: null }
     });

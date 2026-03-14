@@ -9538,6 +9538,18 @@ router.delete('/submissions/:id', async (req, res) => {
     }
 
     // Supprimer les donnÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©es associÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©es d'abord
+    // Détacher les documents générés liés (FK onDelete: NoAction)
+    await prisma.generatedDocument.updateMany({
+      where: { submissionId: id },
+      data: { submissionId: null }
+    });
+
+    // Détacher les chantiers liés
+    await prisma.chantier.updateMany({
+      where: { submissionId: id },
+      data: { submissionId: null }
+    });
+
     await prisma.treeBranchLeafSubmissionData.deleteMany({
       where: { submissionId: id }
     });

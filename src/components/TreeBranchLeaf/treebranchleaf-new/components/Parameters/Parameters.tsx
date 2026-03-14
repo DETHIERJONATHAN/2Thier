@@ -8,7 +8,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card, /* Typography, */ Empty, Space, Input, Select, Tooltip, Button, Alert, Popconfirm, Tag, Checkbox, Modal } from 'antd';
 import type { InputRef } from 'antd';
-import { EditOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { EditOutlined, ExclamationCircleOutlined, PlusOutlined, MinusCircleOutlined } from '@ant-design/icons';
 import {
   SettingOutlined, 
   AppstoreOutlined, 
@@ -450,6 +450,8 @@ const Parameters: React.FC<ParametersProps> = (props) => {
   const [technicianVisible, setTechnicianVisible] = useState<boolean>(false);
   // Repliable supprimé: état supprimé pour simplifier l'UI
   const [fieldType, setFieldType] = useState<string | undefined>(undefined);
+  const [selectOptions, setSelectOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const [newOptionLabel, setNewOptionLabel] = useState('');
   const [capsState, setCapsState] = useState<Record<string, boolean>>({});
   const [localSubTabSelection, setLocalSubTabSelection] = useState<string[]>(() => normalizeSubTabValue(selectedNode?.metadata?.subTab));
   // Mémorise l'état précédent des capacités pour détecter les activations externes
@@ -1417,6 +1419,15 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     });
     setFieldType(ft);
 
+    // 📋 Hydrater les options SELECT depuis select_options
+    const rawOpts = (selectedNode as any).select_options;
+    if (Array.isArray(rawOpts) && rawOpts.length > 0) {
+      setSelectOptions(rawOpts.map((o: any) => ({ label: o.label || o.value || '', value: o.value || o.label || '' })));
+    } else {
+      setSelectOptions([]);
+    }
+    setNewOptionLabel('');
+
     // ❌ DÉSACTIVÉ : Ne pas appliquer l'apparence par défaut ici car ça crée une boucle infinie
     // L'apparence par défaut doit être appliquée uniquement lors de la CRÉATION du nœud, pas lors de l'hydratation
     // Le TreeBranchLeafEditor applique déjà les valeurs par défaut lors de la création
@@ -1656,10 +1667,14 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     const defaultAppearance = TreeBranchLeafRegistry.getDefaultAppearanceConfig(value);
     const tblMapping = TreeBranchLeafRegistry.mapAppearanceConfigToTBL(defaultAppearance);
     
+    // Pour multiselect, activer select_multiple automatiquement
+    const selectMultiple = value === 'multiselect' ? true : value === 'select' ? false : undefined;
+    
     patchNode({ 
       subType: value,
       appearanceConfig: defaultAppearance,
-      ...tblMapping
+      ...tblMapping,
+      ...(selectMultiple !== undefined ? { select_multiple: selectMultiple } : {})
     });
   }, [patchNode]);
 
@@ -1954,6 +1969,99 @@ const Parameters: React.FC<ParametersProps> = (props) => {
             </div>
           </Space>
         </div>
+
+        {/* 📋 Éditeur d'options SELECT / MULTISELECT */}
+        {!isContainerNode && (fieldType === 'select' || fieldType === 'multiselect') && (
+          <div style={{ marginTop: 12 }}>
+            <strong style={{ fontSize: 12 }}>
+              {fieldType === 'multiselect' ? '📋✅ Options (sélection multiple)' : '📋 Options de sélection'}
+            </strong>
+            <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {selectOptions.map((opt, idx) => (
+                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Input
+                    size="small"
+                    value={opt.label}
+                    placeholder="Label de l'option"
+                    style={{ flex: 1 }}
+                    disabled={props.readOnly}
+                    onChange={(e) => {
+                      const updated = [...selectOptions];
+                      const newLabel = e.target.value;
+                      updated[idx] = { label: newLabel, value: newLabel.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || `opt_${idx}` };
+                      setSelectOptions(updated);
+                    }}
+                    onBlur={() => {
+                      // Sauvegarder au blur
+                      patchNode({ select_options: selectOptions });
+                    }}
+                    onPressEnter={() => {
+                      patchNode({ select_options: selectOptions });
+                    }}
+                  />
+                  <Button
+                    size="small"
+                    type="text"
+                    danger
+                    icon={<MinusCircleOutlined />}
+                    disabled={props.readOnly}
+                    onClick={() => {
+                      const updated = selectOptions.filter((_, i) => i !== idx);
+                      setSelectOptions(updated);
+                      patchNode({ select_options: updated });
+                    }}
+                    style={{ width: 24, height: 24, padding: 0 }}
+                  />
+                </div>
+              ))}
+              {/* Ajouter une nouvelle option */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                <Input
+                  size="small"
+                  value={newOptionLabel}
+                  placeholder="Nouvelle option..."
+                  style={{ flex: 1 }}
+                  disabled={props.readOnly}
+                  onChange={(e) => setNewOptionLabel(e.target.value)}
+                  onPressEnter={() => {
+                    if (!newOptionLabel.trim()) return;
+                    const newOpt = { 
+                      label: newOptionLabel.trim(), 
+                      value: newOptionLabel.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || `opt_${selectOptions.length}` 
+                    };
+                    const updated = [...selectOptions, newOpt];
+                    setSelectOptions(updated);
+                    setNewOptionLabel('');
+                    patchNode({ select_options: updated });
+                  }}
+                />
+                <Button
+                  size="small"
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  disabled={props.readOnly || !newOptionLabel.trim()}
+                  onClick={() => {
+                    if (!newOptionLabel.trim()) return;
+                    const newOpt = { 
+                      label: newOptionLabel.trim(), 
+                      value: newOptionLabel.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || `opt_${selectOptions.length}` 
+                    };
+                    const updated = [...selectOptions, newOpt];
+                    setSelectOptions(updated);
+                    setNewOptionLabel('');
+                    patchNode({ select_options: updated });
+                  }}
+                  style={{ width: 24, height: 24, padding: 0 }}
+                />
+              </div>
+              {selectOptions.length === 0 && (
+                <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>
+                  Ajoutez des options pour que ce champ s'affiche comme un menu déroulant.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Section Références partagées - Affichée uniquement pour les nœuds réutilisables */}
         {!isContainerNode && fieldType && (

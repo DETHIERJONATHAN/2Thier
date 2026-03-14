@@ -1886,14 +1886,10 @@ const TBL: React.FC<TBLProps> = ({
 
     const isRealUserChange = Boolean(changedField && changedField !== 'NULL');
 
-    // ✅ Devis enregistrés: on n'écrit PAS au fil de l'eau, SAUF si on est en train d'éditer une révision (-N)
-    // déjà créée (hasCopiedDevis=true). Dans ce cas, on écrase la révision au fil de l'eau.
-    // 🔧 IMPORTANT: si l'utilisateur modifie un devis enregistré (changedField réel),
-    // on DOIT laisser passer l'appel: le backend gère le versioning (clone vers une révision) et renvoie un nouveau submissionId.
-    // On continue à bloquer les autosaves périodiques (changedField='NULL') pour éviter de créer une révision sans action utilisateur.
-    if (isDevisSaved && !hasCopiedDevis) {
-      if (!isRealUserChange) return;
-    }
+    // 🔥 FIX PRIX COMPTABILITÉ: AUCUN garde-fou sur isDevisSaved.
+    // Tous les modes (brouillon, lead-draft, devis enregistré) passent par le même chemin.
+    // Les autosaves périodiques recalculent TOUS les prix (main d'oeuvre, onduleur, etc.)
+    // Bloquer les autosaves = risque de prix à 0.00 dans les offres → INTERDIT.
 
     // ✅ Garde-fou: certaines actions UI (ex: "Nouveau devis") réinitialisent le formData.
     // On suspend l'autosave pour éviter d'écraser un devis enregistré (submissionId précédent)
@@ -2479,19 +2475,10 @@ const TBL: React.FC<TBLProps> = ({
 
   // 🆕 FONCTION ENREGISTRER - Ouvre le modal pour choisir le nom du devis
   const handleSaveDevis = useCallback(async () => {
-    // ✅ Devis enregistré: on crée une nouvelle version uniquement si l'utilisateur a modifié quelque chose.
+    // 🔥 FIX: Devis déjà enregistré → les modifications sont sauvegardées automatiquement (autosave)
+    // Plus besoin de créer une révision -N. On confirme simplement que tout est bien enregistré.
     if (isDevisSaved) {
-      if (!isCompletedDirty) {
-        message.info('Aucune modification à enregistrer');
-        return;
-      }
-      try {
-        await persistCompletedRevisionIfDirty('manual-save');
-        message.success('Nouvelle version enregistrée');
-      } catch (e) {
-        console.warn('⚠️ [TBL] Échec enregistrement nouvelle version:', e);
-        message.error('Erreur lors de l\'enregistrement de la nouvelle version');
-      }
+      message.success('Devis enregistré ✓');
       return;
     }
 
@@ -2506,7 +2493,7 @@ const TBL: React.FC<TBLProps> = ({
     const defaultName = `Devis ${new Date().toLocaleDateString('fr-FR')} - ${clientName}`;
     setSaveDevisName(defaultName);
     setSaveDevisModalVisible(true);
-  }, [isDevisSaved, isCompletedDirty, persistCompletedRevisionIfDirty, leadId, clientData.name]);
+  }, [isDevisSaved, leadId, clientData.name]);
 
   // 🆕 CONFIRMER L'ENREGISTREMENT avec le nom choisi
   const handleConfirmSaveDevis = useCallback(async () => {
@@ -2689,24 +2676,8 @@ const TBL: React.FC<TBLProps> = ({
       return; // Ne pas traiter les miroirs, éviter d'appeler debounce avec undefined
     }
 
-    // ✅ Devis enregistré: créer une révision -N dès la 1ère modification, puis autosave dans cette révision.
-    if (isDevisSaved) {
-      const root = revisionRootName || stripRevisionSuffix(originalDevisName || devisName || 'Devis');
-      if (!isCompletedDirty) {
-        setIsCompletedDirty(true);
-        setRevisionRootName(root);
-        // Préparer immédiatement un nom -N pour refléter la copie en cours (sans écrire en DB)
-        if (leadId) {
-          void planPendingRevisionName(root, leadId, submissionId);
-        }
-      } else if (!revisionRootName) {
-        setRevisionRootName(root);
-      }
-    }
-    
-    // ⚠️ Versioning devis: on laisse le BACKEND être la source de vérité.
-    // Si l'utilisateur modifie un devis "completed" sans être admin, le backend clone vers une nouvelle submission draft
-    // et renvoie le nouveau submissionId; doAutosave bascule automatiquement.
+    // 🔥 FIX: Devis enregistré = édition in-place (comme un brouillon)
+    // Plus de révision -N, plus de copie. L'autosave met à jour directement la même submission.
     
     // Vérifier si le champ existe dans la configuration
     let fieldConfig = tblConfig?.fields.find(f => f.id === fieldId);
