@@ -450,8 +450,9 @@ const Parameters: React.FC<ParametersProps> = (props) => {
   const [technicianVisible, setTechnicianVisible] = useState<boolean>(false);
   // Repliable supprimé: état supprimé pour simplifier l'UI
   const [fieldType, setFieldType] = useState<string | undefined>(undefined);
-  const [selectOptions, setSelectOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const [selectOptions, setSelectOptions] = useState<Array<{ label: string; value: string; group?: string }>>([]);
   const [newOptionLabel, setNewOptionLabel] = useState('');
+  const [newOptionGroup, setNewOptionGroup] = useState('');
   const [capsState, setCapsState] = useState<Record<string, boolean>>({});
   const [localSubTabSelection, setLocalSubTabSelection] = useState<string[]>(() => normalizeSubTabValue(selectedNode?.metadata?.subTab));
   // Mémorise l'état précédent des capacités pour détecter les activations externes
@@ -1422,7 +1423,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     // 📋 Hydrater les options SELECT depuis select_options
     const rawOpts = (selectedNode as any).select_options;
     if (Array.isArray(rawOpts) && rawOpts.length > 0) {
-      setSelectOptions(rawOpts.map((o: any) => ({ label: o.label || o.value || '', value: o.value || o.label || '' })));
+      setSelectOptions(rawOpts.map((o: any) => ({ label: o.label || o.value || '', value: o.value || o.label || '', ...(o.group ? { group: o.group } : {}) })));
     } else {
       setSelectOptions([]);
     }
@@ -1976,44 +1977,74 @@ const Parameters: React.FC<ParametersProps> = (props) => {
             <strong style={{ fontSize: 12 }}>
               {fieldType === 'multiselect' ? '📋✅ Options (sélection multiple)' : '📋 Options de sélection'}
             </strong>
+            {/* Groupe actif pour les nouvelles options */}
+            <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ fontSize: 11, color: '#666', whiteSpace: 'nowrap' }}>Groupe :</span>
+              <Input
+                size="small"
+                value={newOptionGroup}
+                placeholder="(sans groupe)"
+                style={{ flex: 1 }}
+                disabled={props.readOnly}
+                onChange={(e) => setNewOptionGroup(e.target.value)}
+              />
+            </div>
             <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {selectOptions.map((opt, idx) => (
-                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <Input
-                    size="small"
-                    value={opt.label}
-                    placeholder="Label de l'option"
-                    style={{ flex: 1 }}
-                    disabled={props.readOnly}
-                    onChange={(e) => {
-                      const updated = [...selectOptions];
-                      const newLabel = e.target.value;
-                      updated[idx] = { label: newLabel, value: newLabel.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || `opt_${idx}` };
-                      setSelectOptions(updated);
-                    }}
-                    onBlur={() => {
-                      // Sauvegarder au blur
-                      patchNode({ select_options: selectOptions });
-                    }}
-                    onPressEnter={() => {
-                      patchNode({ select_options: selectOptions });
-                    }}
-                  />
-                  <Button
-                    size="small"
-                    type="text"
-                    danger
-                    icon={<MinusCircleOutlined />}
-                    disabled={props.readOnly}
-                    onClick={() => {
-                      const updated = selectOptions.filter((_, i) => i !== idx);
-                      setSelectOptions(updated);
-                      patchNode({ select_options: updated });
-                    }}
-                    style={{ width: 24, height: 24, padding: 0 }}
-                  />
-                </div>
-              ))}
+              {(() => {
+                // Regrouper les options par groupe pour l'affichage
+                const groups: Array<{ group: string; options: Array<{ label: string; value: string; group?: string; origIdx: number }> }> = [];
+                const groupMap = new Map<string, typeof groups[0]>();
+                selectOptions.forEach((opt, idx) => {
+                  const g = opt.group || '';
+                  if (!groupMap.has(g)) {
+                    const entry = { group: g, options: [] as any[] };
+                    groups.push(entry);
+                    groupMap.set(g, entry);
+                  }
+                  groupMap.get(g)!.options.push({ ...opt, origIdx: idx });
+                });
+                return groups.map((grp) => (
+                  <div key={grp.group || '__ungrouped__'}>
+                    {grp.group && (
+                      <div style={{ fontSize: 11, fontWeight: 600, color: '#1677ff', marginTop: 4, marginBottom: 2, borderBottom: '1px solid #e8e8e8', paddingBottom: 2 }}>
+                        {grp.group}
+                      </div>
+                    )}
+                    {grp.options.map(({ label, origIdx, group }) => (
+                      <div key={origIdx} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <Input
+                          size="small"
+                          value={label}
+                          placeholder="Label de l'option"
+                          style={{ flex: 1 }}
+                          disabled={props.readOnly}
+                          onChange={(e) => {
+                            const updated = [...selectOptions];
+                            const newLabel = e.target.value;
+                            updated[origIdx] = { label: newLabel, value: newLabel.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_\u00e0-\u00ff]/g, '') || `opt_${origIdx}`, ...(group ? { group } : {}) };
+                            setSelectOptions(updated);
+                          }}
+                          onBlur={() => patchNode({ select_options: selectOptions })}
+                          onPressEnter={() => patchNode({ select_options: selectOptions })}
+                        />
+                        <Button
+                          size="small"
+                          type="text"
+                          danger
+                          icon={<MinusCircleOutlined />}
+                          disabled={props.readOnly}
+                          onClick={() => {
+                            const updated = selectOptions.filter((_, i) => i !== origIdx);
+                            setSelectOptions(updated);
+                            patchNode({ select_options: updated });
+                          }}
+                          style={{ width: 24, height: 24, padding: 0 }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ));
+              })()}
               {/* Ajouter une nouvelle option */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
                 <Input
@@ -2025,10 +2056,11 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                   onChange={(e) => setNewOptionLabel(e.target.value)}
                   onPressEnter={() => {
                     if (!newOptionLabel.trim()) return;
-                    const newOpt = { 
+                    const newOpt: { label: string; value: string; group?: string } = { 
                       label: newOptionLabel.trim(), 
-                      value: newOptionLabel.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || `opt_${selectOptions.length}` 
+                      value: newOptionLabel.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_\u00e0-\u00ff]/g, '') || `opt_${selectOptions.length}` 
                     };
+                    if (newOptionGroup.trim()) newOpt.group = newOptionGroup.trim();
                     const updated = [...selectOptions, newOpt];
                     setSelectOptions(updated);
                     setNewOptionLabel('');
@@ -2042,10 +2074,11 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                   disabled={props.readOnly || !newOptionLabel.trim()}
                   onClick={() => {
                     if (!newOptionLabel.trim()) return;
-                    const newOpt = { 
+                    const newOpt: { label: string; value: string; group?: string } = { 
                       label: newOptionLabel.trim(), 
-                      value: newOptionLabel.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || `opt_${selectOptions.length}` 
+                      value: newOptionLabel.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_\u00e0-\u00ff]/g, '') || `opt_${selectOptions.length}` 
                     };
+                    if (newOptionGroup.trim()) newOpt.group = newOptionGroup.trim();
                     const updated = [...selectOptions, newOpt];
                     setSelectOptions(updated);
                     setNewOptionLabel('');
@@ -2057,6 +2090,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
               {selectOptions.length === 0 && (
                 <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>
                   Ajoutez des options pour que ce champ s'affiche comme un menu déroulant.
+                  Utilisez le champ "Groupe" pour organiser visuellement les options.
                 </div>
               )}
             </div>

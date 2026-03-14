@@ -1693,10 +1693,11 @@ const transformPrismaNodeToField = (
     // 🛒 PRODUIT: Construire les options depuis select_options (champs source produit sans enfants leaf_option)
     const selectOptionsFromColumn = (() => {
       if (node.select_options && Array.isArray(node.select_options) && (node.select_options as unknown[]).length > 0) {
-        return (node.select_options as Array<{ label: string; value: string }>).map(opt => ({
+        return (node.select_options as Array<{ label: string; value: string; group?: string }>).map(opt => ({
           id: opt.value || opt.label,
           label: opt.label,
           value: opt.value || opt.label,
+          ...(opt.group ? { group: opt.group } : {}),
         }));
       }
       return undefined;

@@ -3735,6 +3735,54 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         }
         
         // SELECT classique (sans hiérarchie)
+        // 📋 Détecter si des options ont un groupe pour afficher des OptGroup
+        const hasOptGroups = finalOptions.some((opt: any) => opt.group);
+        
+        const renderSelectOptions = () => {
+          if (!hasOptGroups) {
+            return finalOptions.map((option) => (
+              <Option 
+                key={option.value} 
+                value={option.value} 
+                label={option.label}
+                disabled={option.disabled}
+              >
+                {option.label}
+              </Option>
+            ));
+          }
+          // Regrouper par propriété group (préserver l'ordre d'insertion)
+          const groups: Array<{ group: string; items: typeof finalOptions }> = [];
+          const groupMap = new Map<string, typeof groups[0]>();
+          finalOptions.forEach((opt: any) => {
+            const g = opt.group || '';
+            if (!groupMap.has(g)) {
+              const entry = { group: g, items: [] as typeof finalOptions };
+              groups.push(entry);
+              groupMap.set(g, entry);
+            }
+            groupMap.get(g)!.items.push(opt);
+          });
+          return groups.map((grp) => {
+            const options = grp.items.map((option) => (
+              <Option 
+                key={option.value} 
+                value={option.value} 
+                label={option.label}
+                disabled={option.disabled}
+              >
+                {option.label}
+              </Option>
+            ));
+            if (!grp.group) return options;
+            return (
+              <Select.OptGroup key={grp.group} label={grp.group}>
+                {options}
+              </Select.OptGroup>
+            );
+          });
+        };
+
         return (
           <Select
             {...commonProps}
@@ -3757,16 +3805,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
               }
             }}
           >
-            {finalOptions.map((option) => (
-              <Option 
-                key={option.value} 
-                value={option.value} 
-                label={option.label}
-                disabled={option.disabled}
-              >
-                {option.label}
-              </Option>
-            ))}
+            {renderSelectOptions()}
           </Select>
         );
       }
