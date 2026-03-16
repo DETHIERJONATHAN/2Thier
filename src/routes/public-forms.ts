@@ -567,6 +567,100 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
       }
     } else {
       console.log('📋 [PublicForms] Formulaire de recrutement — pas de création de Lead');
+      
+      // 🎯 Auto-créer une Invitation si le formulaire est configuré pour (go, partenaire)
+      if (formSettings.autoInvite !== false && normalizedContact.email) {
+        try {
+          // Déterminer le rôle en fonction du formulaire et des réponses
+          let roleName = 'User'; // Rôle par défaut
+          
+          if (slug === 'go') {
+            // Extraire le type de collaboration choisi dans formData
+            const collaborationType = extractFromFormData(['Type de collaboration', 'collaboration', 'type_collaboration']);
+            if (collaborationType?.toLowerCase().includes('commercial')) {
+              roleName = 'Commercial CRM';
+            }
+            // Apporteur d'affaires = User par défaut
+          } else if (slug === 'partenaire') {
+            roleName = 'Sous-traitant';
+          } else if (slug === 'reunion') {
+            // Pas d'invitation pour les inscriptions réunion
+            roleName = '';
+          }
+          
+          if (roleName) {
+            // Trouver le rôle en DB
+            const role = await db.role.findFirst({
+              where: { 
+                name: roleName,
+                OR: [
+                  { organizationId: form.organizationId },
+                  { organizationId: null }
+                ]
+              }
+            });
+            
+            // Trouver un admin de l'org pour "invitedById"
+            const orgAdmin = await db.user.findFirst({
+              where: { 
+                organizationId: form.organizationId,
+                role: { in: ['super_admin', 'admin'] }
+              },
+              select: { id: true }
+            });
+            
+            if (role && orgAdmin) {
+              // Vérifier si une invitation existe déjà pour cet email/org
+              const existingInvitation = await db.invitation.findUnique({
+                where: { email_organizationId: { email: normalizedContact.email, organizationId: form.organizationId } }
+              });
+              
+              if (!existingInvitation) {
+                const token = uuidv4();
+                const expiresAt = new Date();
+                expiresAt.setDate(expiresAt.getDate() + 30); // 30 jours pour les invitations auto
+                
+                await db.invitation.create({
+                  data: {
+                    id: uuidv4(),
+                    email: normalizedContact.email,
+                    token,
+                    expiresAt,
+                    organizationId: form.organizationId,
+                    roleId: role.id,
+                    invitedById: orgAdmin.id,
+                    status: 'PENDING',
+                    source: `form:${slug}`,
+                    metadata: {
+                      formSlug: slug,
+                      formName: form.name,
+                      firstName: normalizedContact.firstName,
+                      lastName: normalizedContact.lastName,
+                      phone: normalizedContact.phone,
+                      address: normalizedContact.address,
+                      collaborationType: slug === 'go' ? extractFromFormData(['Type de collaboration', 'collaboration']) : undefined,
+                      company: slug === 'partenaire' ? extractFromFormData(['Nom de la société', 'societe', 'company']) : undefined,
+                      vatNumber: slug === 'partenaire' ? extractFromFormData(['Numéro de TVA', 'tva', 'vat']) : undefined,
+                      sector: slug === 'partenaire' ? extractFromFormData(['Secteur d activité', 'secteur']) : undefined,
+                      zone: slug === 'partenaire' ? extractFromFormData(['Zone d intervention', 'zone']) : undefined,
+                      formData: formData
+                    },
+                    updatedAt: new Date()
+                  }
+                });
+                
+                console.log(`✅ [PublicForms] Invitation PENDING auto-créée pour ${normalizedContact.email} (rôle: ${roleName}, source: form:${slug})`);
+              } else {
+                console.log(`📋 [PublicForms] Invitation existante pour ${normalizedContact.email} — pas de doublon`);
+              }
+            } else {
+              console.warn(`⚠️ [PublicForms] Impossible de créer l'invitation: rôle "${roleName}" ou admin non trouvé`);
+            }
+          }
+        } catch (inviteError) {
+          console.error('⚠️ [PublicForms] Auto-invitation failed (non-blocking):', inviteError);
+        }
+      }
     }
     
     // 5. Créer la submission TBL si un treeId est configuré

@@ -51,6 +51,8 @@ type UiInvitation = {
   expiresAt?: string;
   organization?: Organization;
   role?: Role;
+  source?: string;
+  metadata?: Record<string, unknown>;
 };
 // import helpers éventuels de usersOptimizations si nécessaire
 
@@ -518,9 +520,35 @@ const UsersAdminPageNew: React.FC = () => {
 
   // Colonnes pour les invitations
   const invitationColumns = [
-    { title: 'Email', dataIndex: 'email', key: 'email' },
+    { title: 'Email', dataIndex: 'email', key: 'email',
+      render: (email: string, record: UiInvitation) => (
+        <div>
+          <div>{email}</div>
+          {record.metadata && (record.metadata as Record<string, unknown>).firstName && (
+            <div className="text-xs text-gray-400">
+              {(record.metadata as Record<string, unknown>).firstName} {(record.metadata as Record<string, unknown>).lastName}
+              {(record.metadata as Record<string, unknown>).phone && ` • ${(record.metadata as Record<string, unknown>).phone}`}
+            </div>
+          )}
+          {record.metadata && (record.metadata as Record<string, unknown>).company && (
+            <div className="text-xs text-blue-400">{String((record.metadata as Record<string, unknown>).company)}</div>
+          )}
+        </div>
+      )
+    },
     { title: 'Organisation', dataIndex: ['organization', 'name'], key: 'organization' },
     { title: 'Rôle', dataIndex: ['role', 'name'], key: 'role' },
+    { title: 'Source', dataIndex: 'source', key: 'source',
+      render: (source: string) => {
+        if (!source) return <Tag>Manuel</Tag>;
+        if (source.startsWith('form:')) {
+          const formSlug = source.replace('form:', '');
+          const labels: Record<string, string> = { go: '📋 Formulaire Go', partenaire: '🤝 Partenaire', reunion: '📅 Réunion' };
+          return <Tag color="blue">{labels[formSlug] || source}</Tag>;
+        }
+        return <Tag>{source}</Tag>;
+      }
+    },
     { title: 'Statut', dataIndex: 'status', key: 'status', render: (status: string) => <Tag color={status === 'PENDING' ? 'orange' : 'red'}>{status}</Tag> },
     { title: 'Date création', dataIndex: 'createdAt', key: 'createdAt', render: (date: string) => new Date(date).toLocaleDateString() },
     { title: 'Expire le', dataIndex: 'expiresAt', key: 'expiresAt', render: (date: string) => new Date(date).toLocaleDateString() },
