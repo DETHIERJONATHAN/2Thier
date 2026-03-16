@@ -367,25 +367,21 @@ const NotificationsBell = () => {
       overlayStyle={{ zIndex: 1050 }}
       arrow={false}
     >
-      <div style={{ position: 'relative', cursor: 'pointer' }}>
-        <div
-          style={{
-            width: 36, height: 36, borderRadius: '50%', display: 'flex',
-            alignItems: 'center', justifyContent: 'center',
-            backgroundColor: isOpen ? '#E7F3FF' : '#E4E6EB',
-            transition: 'background 0.2s',
-          }}
-          onMouseEnter={e => { if (!isOpen) e.currentTarget.style.backgroundColor = '#D8DADF'; }}
-          onMouseLeave={e => { if (!isOpen) e.currentTarget.style.backgroundColor = '#E4E6EB'; }}
-        >
-          <BellOutlined style={{ fontSize: 18, color: isOpen ? '#0866FF' : '#050505' }} />
-        </div>
+      <div
+        className="header-2thier-item"
+        style={{
+          position: 'relative', cursor: 'pointer', display: 'inline-flex',
+          alignItems: 'center', justifyContent: 'center',
+          padding: 6, border: 'none',
+        }}
+      >
+        <BellOutlined style={{ fontSize: 16 }} />
         {unreadCount > 0 && (
           <div style={{
-            position: 'absolute', top: -4, right: -4,
-            minWidth: 18, height: 18, padding: '0 5px',
-            borderRadius: 9, backgroundColor: '#E41E3F',
-            color: '#fff', fontSize: 11, fontWeight: 700,
+            position: 'absolute', top: 0, right: -2,
+            minWidth: 16, height: 16, padding: '0 4px',
+            borderRadius: 8, backgroundColor: '#D67D35',
+            color: '#fff', fontSize: 10, fontWeight: 700,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             border: '2px solid #1F3B53',
             animation: hasNew ? 'notif-pop 0.3s ease' : undefined,
