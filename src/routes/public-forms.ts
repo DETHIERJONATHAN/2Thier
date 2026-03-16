@@ -449,116 +449,124 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
     
     console.log('📋 [PublicForms] Form found:', form.name);
     
+    // Déterminer si ce formulaire crée des Leads ou des candidatures (recrutement)
+    const formSettings = (form.settings && typeof form.settings === 'object') ? form.settings as Record<string, unknown> : {};
+    const shouldCreateLead = formSettings.createLead !== false;
+    
     // 2. Valider les données de contact
     if (!normalizedContact.email) {
       return res.status(400).json({ error: 'L\'email est requis' });
     }
     
-    // 3. Vérifier si un lead avec cet email existe déjà aujourd'hui
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    let leadId: string | null = null;
     
-    const existingLead = await db.lead.findFirst({
-      where: {
-        email: normalizedContact.email,
-        organizationId: form.organizationId,
-        createdAt: { gte: today }
-      }
-    });
-    
-    let leadId: string;
-    
-    if (existingLead) {
-      console.log('📋 [PublicForms] Existing lead found:', existingLead.id);
-      leadId = existingLead.id;
+    if (shouldCreateLead) {
+      // 3. Vérifier si un lead avec cet email existe déjà aujourd'hui
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
       
-      // Mettre à jour les infos du lead si nécessaire
-      await db.lead.update({
-        where: { id: leadId },
-        data: {
-          firstName: normalizedContact.firstName || existingLead.firstName,
-          lastName: normalizedContact.lastName || existingLead.lastName,
-          phone: normalizedContact.phone || existingLead.phone,
-          email: normalizedContact.email || existingLead.email,
-          data: {
-            ...((existingLead.data && typeof existingLead.data === 'object') ? existingLead.data as object : {}),
-            email: normalizedContact.email || undefined,
-            phone: normalizedContact.phone || undefined,
-            firstName: normalizedContact.firstName || undefined,
-            lastName: normalizedContact.lastName || undefined,
-            address: normalizedContact.address || undefined,
-            civility: normalizedContact.civility || undefined
-          },
-          updatedAt: new Date()
+      const existingLead = await db.lead.findFirst({
+        where: {
+          email: normalizedContact.email,
+          organizationId: form.organizationId,
+          createdAt: { gte: today }
         }
       });
-    } else {
-      // 4. Créer le lead
-      leadId = uuidv4();
-      const now = new Date();
       
-      // Générer un numéro de lead
-      const leadCount = await db.lead.count({
-        where: { organizationId: form.organizationId }
-      });
-      const leadNumber = `LEAD-${(leadCount + 1).toString().padStart(5, '0')}`;
-      
-      // Trouver le statut par défaut
-      const defaultStatus = await db.leadStatus.findFirst({
-        where: { organizationId: form.organizationId, isDefault: true }
-      });
-      
-      // 🎯 TRACKING COMMERCIAL : Si un referredBy existe, trouver l'utilisateur correspondant
-      let assignedToId: string | null = null;
-      if (referredBy) {
-        const referringUser = await db.user.findFirst({
-          where: {
+      if (existingLead) {
+        console.log('📋 [PublicForms] Existing lead found:', existingLead.id);
+        leadId = existingLead.id;
+        
+        // Mettre à jour les infos du lead si nécessaire
+        await db.lead.update({
+          where: { id: leadId },
+          data: {
+            firstName: normalizedContact.firstName || existingLead.firstName,
+            lastName: normalizedContact.lastName || existingLead.lastName,
+            phone: normalizedContact.phone || existingLead.phone,
+            email: normalizedContact.email || existingLead.email,
+            data: {
+              ...((existingLead.data && typeof existingLead.data === 'object') ? existingLead.data as object : {}),
+              email: normalizedContact.email || undefined,
+              phone: normalizedContact.phone || undefined,
+              firstName: normalizedContact.firstName || undefined,
+              lastName: normalizedContact.lastName || undefined,
+              address: normalizedContact.address || undefined,
+              civility: normalizedContact.civility || undefined
+            },
+            updatedAt: new Date()
+          }
+        });
+      } else {
+        // 4. Créer le lead
+        leadId = uuidv4();
+        const now = new Date();
+        
+        // Générer un numéro de lead
+        const leadCount = await db.lead.count({
+          where: { organizationId: form.organizationId }
+        });
+        const leadNumber = `LEAD-${(leadCount + 1).toString().padStart(5, '0')}`;
+        
+        // Trouver le statut par défaut
+        const defaultStatus = await db.leadStatus.findFirst({
+          where: { organizationId: form.organizationId, isDefault: true }
+        });
+        
+        // 🎯 TRACKING COMMERCIAL : Si un referredBy existe, trouver l'utilisateur correspondant
+        let assignedToId: string | null = null;
+        if (referredBy) {
+          const referringUser = await db.user.findFirst({
+            where: {
+              organizationId: form.organizationId,
+              commercialSlug: referredBy
+            }
+          });
+          
+          if (referringUser) {
+            assignedToId = referringUser.id;
+            console.log(`🎯 [PublicForms] Lead auto-assigné à ${referredBy} (${referringUser.email})`);
+          } else {
+            console.warn(`⚠️ [PublicForms] Commercial non trouvé pour le slug: ${referredBy}`);
+          }
+        }
+        
+        await db.lead.create({
+          data: {
+            id: leadId,
             organizationId: form.organizationId,
-            commercialSlug: referredBy
+            firstName: normalizedContact.firstName || '',
+            lastName: normalizedContact.lastName || '',
+            email: normalizedContact.email,
+            phone: normalizedContact.phone || null,
+            company: contact.company || null,
+            assignedToId,  // 🎯 Lead attribué au commercial si referredBy existe
+            // Pas de colonne address dédiée, stocker dans data uniquement
+            source: 'website_form',
+            status: 'nouveau',
+            statusId: defaultStatus?.id || null,
+            leadNumber,
+            notes: `Lead créé depuis le formulaire "${form.name}"` + (assignedToId ? ` (via ${referredBy})` : ''),
+            data: {
+              formSlug: slug,
+              formName: form.name,
+              referredBy: referredBy || undefined,  // 🎯 Stocker aussi dans data pour historique
+              email: normalizedContact.email || undefined,
+              phone: normalizedContact.phone || undefined,
+              firstName: normalizedContact.firstName || undefined,
+              lastName: normalizedContact.lastName || undefined,
+              address: normalizedContact.address || undefined,
+              civility: normalizedContact.civility || undefined
+            },
+            createdAt: now,
+            updatedAt: now
           }
         });
         
-        if (referringUser) {
-          assignedToId = referringUser.id;
-          console.log(`🎯 [PublicForms] Lead auto-assigné à ${referredBy} (${referringUser.email})`);
-        } else {
-          console.warn(`⚠️ [PublicForms] Commercial non trouvé pour le slug: ${referredBy}`);
-        }
+        console.log('✅ [PublicForms] Lead created:', leadId);
       }
-      
-      await db.lead.create({
-        data: {
-          id: leadId,
-          organizationId: form.organizationId,
-          firstName: normalizedContact.firstName || '',
-          lastName: normalizedContact.lastName || '',
-          email: normalizedContact.email,
-          phone: normalizedContact.phone || null,
-          company: contact.company || null,
-          assignedToId,  // 🎯 Lead attribué au commercial si referredBy existe
-          // Pas de colonne address dédiée, stocker dans data uniquement
-          source: 'website_form',
-          status: 'nouveau',
-          statusId: defaultStatus?.id || null,
-          leadNumber,
-          notes: `Lead créé depuis le formulaire "${form.name}"` + (assignedToId ? ` (via ${referredBy})` : ''),
-          data: {
-            formSlug: slug,
-            formName: form.name,
-            referredBy: referredBy || undefined,  // 🎯 Stocker aussi dans data pour historique
-            email: normalizedContact.email || undefined,
-            phone: normalizedContact.phone || undefined,
-            firstName: normalizedContact.firstName || undefined,
-            lastName: normalizedContact.lastName || undefined,
-            address: normalizedContact.address || undefined,
-            civility: normalizedContact.civility || undefined
-          },
-          createdAt: now,
-          updatedAt: now
-        }
-      });
-      
-      console.log('✅ [PublicForms] Lead created:', leadId);
+    } else {
+      console.log('📋 [PublicForms] Formulaire de recrutement — pas de création de Lead');
     }
     
     // 5. Créer la submission TBL si un treeId est configuré
@@ -715,7 +723,7 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
           questionType: q.questionType,
           options: q.options
         })),
-        leadNumber: existingLead ? undefined : `LEAD-${(await db.lead.count({ where: { organizationId: form.organizationId } })).toString().padStart(5, '0')}`
+        leadNumber: leadId ? `LEAD-${(await db.lead.count({ where: { organizationId: form.organizationId } })).toString().padStart(5, '0')}` : undefined
       };
       
       const pdfBuffer = await generateFormResponsePdf(pdfData);
@@ -726,28 +734,30 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
         fs.mkdirSync(uploadsDir, { recursive: true });
       }
       
-      const pdfFileName = `formulaire-${slug}-${leadId.substring(0, 8)}-${Date.now()}.pdf`;
+      const pdfFileName = `formulaire-${slug}-${leadId ? leadId.substring(0, 8) : 'candidat'}-${Date.now()}.pdf`;
       const pdfPath = path.join(uploadsDir, pdfFileName);
       fs.writeFileSync(pdfPath, pdfBuffer);
       
       pdfUrl = `/uploads/form-responses/${pdfFileName}`;
       
-      // Mettre à jour le Lead avec le lien vers le PDF
-      await db.lead.update({
-        where: { id: leadId },
-        data: {
+      // Mettre à jour le Lead avec le lien vers le PDF (seulement si un Lead existe)
+      if (leadId) {
+        await db.lead.update({
+          where: { id: leadId },
           data: {
-            ...(typeof (await db.lead.findUnique({ where: { id: leadId } }))?.data === 'object' 
-              ? (await db.lead.findUnique({ where: { id: leadId } }))?.data as object 
-              : {}),
-            formPdfUrl: pdfUrl,
-            formSlug: slug,
-            formName: form.name
+            data: {
+              ...(typeof (await db.lead.findUnique({ where: { id: leadId } }))?.data === 'object' 
+                ? (await db.lead.findUnique({ where: { id: leadId } }))?.data as object 
+                : {}),
+              formPdfUrl: pdfUrl,
+              formSlug: slug,
+              formName: form.name
+            }
           }
-        }
-      });
+        });
+      }
       
-      console.log('✅ [PublicForms] PDF generated and attached to Lead:', pdfUrl);
+      console.log('✅ [PublicForms] PDF generated:', pdfUrl);
     } catch (pdfError) {
       console.error('⚠️ [PublicForms] PDF generation failed (non-blocking):', pdfError);
       // Ne pas bloquer la soumission si le PDF échoue
