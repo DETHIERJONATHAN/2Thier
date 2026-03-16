@@ -892,6 +892,56 @@ router.get('/:id/stats', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 // ============================================================================
+// 📋 SOUMISSIONS D'UN FORMULAIRE
+// ============================================================================
+
+/**
+ * GET /api/website-forms/:id/submissions
+ * Liste les soumissions d'un formulaire
+ */
+router.get('/:id/submissions', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const submissions = await db.website_form_submissions.findMany({
+      where: { formId: Number(id) },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+      select: {
+        id: true,
+        formId: true,
+        leadId: true,
+        status: true,
+        formData: true,
+        ipAddress: true,
+        userAgent: true,
+        utmSource: true,
+        utmMedium: true,
+        utmCampaign: true,
+        referredBy: true,
+        createdAt: true
+      }
+    });
+
+    const mapped = submissions.map(s => ({
+      id: String(s.id),
+      formId: String(s.formId),
+      submittedAt: s.createdAt?.toISOString() || '',
+      ipAddress: s.ipAddress || '',
+      userAgent: s.userAgent || '',
+      leadId: s.leadId || undefined,
+      data: (s.formData && typeof s.formData === 'object') ? s.formData : {},
+      status: s.status || 'new'
+    }));
+
+    res.json(mapped);
+  } catch (error) {
+    console.error('❌ [WebsiteForms] Error fetching submissions:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des soumissions' });
+  }
+});
+
+// ============================================================================
 // 📋 CRUD QUESTIONS (Mode Simulateur - 1 écran = 1 question)
 // ============================================================================
 

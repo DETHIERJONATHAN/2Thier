@@ -671,6 +671,7 @@ const PublicFormRenderer: React.FC = () => {
             >
               <Select
                 size="large"
+                mode={field.allowMultiple ? 'multiple' : undefined}
                 placeholder={field.placeholder || 'Sélectionnez...'}
                 value={value}
                 onChange={(val) => handleValueChange(field.name, val)}

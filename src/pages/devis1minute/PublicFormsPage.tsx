@@ -467,7 +467,7 @@ export default function PublicFormsPage() {
 
   const loadSubmissions = useCallback(async (formId: string) => {
     try {
-      const submissionsData = await api.get<FormSubmission[]>(`/api/public-forms/${formId}/submissions`);
+      const submissionsData = await api.get<FormSubmission[]>(`/api/website-forms/${formId}/submissions`);
       setSubmissions(submissionsData);
     } catch (error) {
       console.error('Erreur lors du chargement des soumissions:', error);
