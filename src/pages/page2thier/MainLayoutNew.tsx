@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useEffect, useState } from 'react';
 import { Layout, Dropdown, Button, Input, Drawer, Collapse, Avatar } from 'antd';
+import NotificationsBell from '../../components/NotificationsBell';
 import type { CollapseProps, MenuProps } from 'antd';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { 
@@ -889,36 +890,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
           </div>
 
           {/* Notifications avec Badge */}
-          <div style={{ position: 'relative' }}>
-            <Button 
-              type="text" 
-              icon={<BellOutlined style={{ fontSize: '16px' }} />}
-              className="header-2thier-item"
-              style={{ 
-                border: 'none',
-                padding: '6px',
-                height: `${iconButtonSize}px`,
-                minWidth: `${iconButtonSize}px`
-              }}
-            />
-            <div style={{
-              position: 'absolute',
-              top: '8px',
-              right: '8px',
-              backgroundColor: '#ff4d4f',
-              color: 'white',
-              borderRadius: '50%',
-              width: '16px',
-              height: '16px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '9px',
-              fontWeight: 'bold'
-            }}>
-              3
-            </div>
-          </div>
+          <NotificationsBell />
 
           {/* Aide */}
           <Button 

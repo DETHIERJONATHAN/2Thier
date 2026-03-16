@@ -13,7 +13,7 @@ import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 // TYPES
 // ═══════════════════════════════════════════════════════
 
-interface Notification {
+interface NotificationItem {
   id: string;
   type: string;
   data: any;
@@ -112,30 +112,31 @@ function getNotifConfig(type: string) {
 // ═══════════════════════════════════════════════════════
 
 const NotificationsBell = () => {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [filter, setFilter] = useState<FilterCategory>('all');
   const [activeTab, setActiveTab] = useState<'unread' | 'all'>('unread');
   const [hasNewSinceLastOpen, setHasNewSinceLastOpen] = useState(false);
   const lastCountRef = useRef(0);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const { api } = useAuthenticatedApi();
+  const isOpenRef = useRef(false);
 
-  // Son de notification (simplifié, pas de fichier externe)
-  useEffect(() => {
-    // Utiliser un son subtil via Web Audio API
-    audioRef.current = null; // Placeholder: futur son personnalisable
-  }, []);
+  // ⚠️ Stabiliser l'API pour éviter les boucles de re-render infinies
+  const apiHook = useAuthenticatedApi();
+  const api = useMemo(() => apiHook.api, []);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Garder la ref à jour
+  useEffect(() => { isOpenRef.current = isOpen; }, [isOpen]);
 
   const fetchNotifications = useCallback(async () => {
     try {
       const response: any = await api.get('/api/notifications?includeRead=true');
-      const notifs: Notification[] = (Array.isArray(response) ? response : response?.data) || [];
-      
+      const notifs: NotificationItem[] = (Array.isArray(response) ? response : response?.data) || [];
+
       // Détecter nouvelles notifications depuis dernière vérification
-      if (notifs.length > lastCountRef.current && lastCountRef.current > 0 && !isOpen) {
+      const pendingCount = notifs.filter(n => n.status === 'PENDING').length;
+      if (pendingCount > lastCountRef.current && lastCountRef.current > 0 && !isOpenRef.current) {
         setHasNewSinceLastOpen(true);
-        // Essayer de jouer un son de notification
+        // Son de notification subtil
         try {
           const ctx = new AudioContext();
           const osc = ctx.createOscillator();
@@ -149,12 +150,12 @@ const NotificationsBell = () => {
           osc.stop(ctx.currentTime + 0.3);
         } catch (_) { /* audio non-bloquant */ }
       }
-      lastCountRef.current = notifs.length;
+      lastCountRef.current = pendingCount;
       setNotifications(notifs);
     } catch (error) {
       console.error("[NotificationsBell] Erreur fetch:", error);
     }
-  }, [api, isOpen]);
+  }, [api]);
 
   const markAsRead = useCallback(async (id: string) => {
     try {
@@ -167,13 +168,12 @@ const NotificationsBell = () => {
 
   const markAllAsRead = useCallback(async () => {
     try {
-      const pending = notifications.filter(n => n.status === 'PENDING');
-      await Promise.allSettled(pending.map(n => api.patch(`/api/notifications/${n.id}/read`)));
-      setNotifications(prev => prev.map(n => ({ ...n, status: 'READ', readAt: n.readAt || new Date().toISOString() })));
+      await api.patch('/api/notifications/mark-all-read');
+      setNotifications(prev => prev.map(n => n.status === 'PENDING' ? { ...n, status: 'READ', readAt: new Date().toISOString() } : n));
     } catch (error) {
       console.error("[NotificationsBell] Erreur mark all read:", error);
     }
-  }, [api, notifications]);
+  }, [api]);
 
   const deleteNotification = useCallback(async (id: string) => {
     try {
@@ -186,15 +186,17 @@ const NotificationsBell = () => {
 
   const clearAll = useCallback(async () => {
     try {
-      await Promise.allSettled(notifications.map(n => api.delete(`/api/notifications/${n.id}`)));
-      setNotifications([]);
+      setNotifications(prev => {
+        Promise.allSettled(prev.map(n => api.delete(`/api/notifications/${n.id}`))).catch(() => {});
+        return [];
+      });
     } catch (error) {
       console.error("[NotificationsBell] Erreur clear all:", error);
     }
-  }, [api, notifications]);
+  }, [api]);
 
   // Navigation vers la source
-  const handleNavigate = useCallback((notif: Notification) => {
+  const handleNavigate = useCallback((notif: NotificationItem) => {
     markAsRead(notif.id);
     const url = notif.actionUrl || notif.data?.actionUrl;
     if (url) {
@@ -245,7 +247,7 @@ const NotificationsBell = () => {
   // RENDER NOTIFICATION ITEM
   // ═══════════════════════════════════════════════════════
 
-  const renderNotifItem = (notif: Notification) => {
+  const renderNotifItem = (notif: NotificationItem) => {
     const config = getNotifConfig(notif.type);
     const priorityStyle = PRIORITY_STYLES[notif.priority || 'normal'] || PRIORITY_STYLES.normal;
     const isUnread = notif.status === 'PENDING';
