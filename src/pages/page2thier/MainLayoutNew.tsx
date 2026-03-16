@@ -9,7 +9,6 @@ import {
   StarOutlined,
   FlagOutlined,
   BellOutlined,
-  QuestionCircleOutlined,
   HomeOutlined,
   DownOutlined,
   LogoutOutlined,
@@ -891,20 +890,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({
 
           {/* Notifications avec Badge */}
           <NotificationsBell />
-
-          {/* Aide */}
-          <Button 
-            type="text" 
-            icon={<QuestionCircleOutlined style={{ fontSize: '16px' }} />}
-            className="header-2thier-item"
-            style={{ 
-              border: 'none',
-              padding: '6px',
-              height: `${iconButtonSize}px`,
-              minWidth: `${iconButtonSize}px`,
-              display: isMobile ? 'none' : 'inline-flex'
-            }}
-          />
 
           {/* Profil utilisateur */}
           <Dropdown menu={userProfileMenu} trigger={['click']}>
