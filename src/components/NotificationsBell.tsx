@@ -1,17 +1,14 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Badge, Popover, Button, Tabs, Empty, Tooltip, Tag, Segmented } from 'antd';
+import { Popover, Tooltip } from 'antd';
 import {
-  BellOutlined, CheckOutlined, DeleteOutlined, ClearOutlined,
+  BellOutlined, CheckOutlined, DeleteOutlined,
   UserAddOutlined, FormOutlined, MailOutlined, PhoneOutlined,
   CalendarOutlined, FileProtectOutlined, TeamOutlined, DollarOutlined,
   RobotOutlined, MessageOutlined, AlertOutlined, RocketOutlined,
-  CheckCircleOutlined, CloseCircleOutlined, EyeOutlined
+  CheckCircleOutlined, CloseCircleOutlined, EyeOutlined,
+  EllipsisOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
-
-// ═══════════════════════════════════════════════════════
-// TYPES
-// ═══════════════════════════════════════════════════════
 
 interface NotificationItem {
   id: string;
@@ -25,177 +22,108 @@ interface NotificationItem {
   organization?: { name: string };
 }
 
-type FilterCategory = 'all' | 'leads' | 'forms' | 'invitations' | 'calendar' | 'documents' | 'telephony' | 'chantiers' | 'quotes' | 'ai';
+type TabFilter = 'all' | 'unread';
 
-// ═══════════════════════════════════════════════════════
-// CONFIGURATION DES TYPES DE NOTIFICATIONS
-// ═══════════════════════════════════════════════════════
-
-const NOTIF_CONFIG: Record<string, { icon: React.ReactNode; color: string; label: string; category: FilterCategory }> = {
-  NEW_LEAD_RECEIVED:          { icon: <UserAddOutlined />,       color: '#D67D35', label: 'Nouveau lead',          category: 'leads' },
-  NEW_LEAD_ASSIGNED:          { icon: <RocketOutlined />,        color: '#D67D35', label: 'Lead assigné',           category: 'leads' },
-  LEAD_STATUS_CHANGED:        { icon: <RocketOutlined />,        color: '#fa8c16', label: 'Statut lead',            category: 'leads' },
-  FORM_SUBMISSION_RECEIVED:   { icon: <FormOutlined />,          color: '#1890ff', label: 'Formulaire',             category: 'forms' },
-  INVITATION_CREATED:         { icon: <MailOutlined />,          color: '#722ed1', label: 'Invitation envoyée',     category: 'invitations' },
-  INVITATION_ACCEPTED:        { icon: <CheckCircleOutlined />,   color: '#52c41a', label: 'Invitation acceptée',    category: 'invitations' },
-  JOIN_REQUEST_RECEIVED:      { icon: <TeamOutlined />,          color: '#13c2c2', label: 'Demande adhésion',       category: 'invitations' },
-  JOIN_REQUEST_APPROVED:      { icon: <CheckCircleOutlined />,   color: '#52c41a', label: 'Adhésion approuvée',     category: 'invitations' },
-  JOIN_REQUEST_REJECTED:      { icon: <CloseCircleOutlined />,   color: '#ff4d4f', label: 'Adhésion refusée',       category: 'invitations' },
-  QUOTE_SENT:                 { icon: <DollarOutlined />,        color: '#1890ff', label: 'Devis envoyé',           category: 'quotes' },
-  QUOTE_ACCEPTED:             { icon: <CheckCircleOutlined />,   color: '#52c41a', label: 'Devis accepté',          category: 'quotes' },
-  QUOTE_REJECTED:             { icon: <CloseCircleOutlined />,   color: '#ff4d4f', label: 'Devis rejeté',           category: 'quotes' },
-  DOCUMENT_SIGNED:            { icon: <FileProtectOutlined />,   color: '#52c41a', label: 'Document signé',         category: 'documents' },
-  DOCUMENT_VIEWED:            { icon: <EyeOutlined />,           color: '#1890ff', label: 'Document consulté',      category: 'documents' },
-  CALENDAR_EVENT_INVITATION:  { icon: <CalendarOutlined />,      color: '#1890ff', label: 'Événement',              category: 'calendar' },
-  CALENDAR_EVENT_UPDATED:     { icon: <CalendarOutlined />,      color: '#fa8c16', label: 'Événement modifié',      category: 'calendar' },
-  CALENDAR_EVENT_CANCELLED:   { icon: <CalendarOutlined />,      color: '#ff4d4f', label: 'Événement annulé',       category: 'calendar' },
-  CALENDAR_EVENT_REMINDER:    { icon: <AlertOutlined />,         color: '#faad14', label: 'Rappel',                 category: 'calendar' },
-  MISSED_CALL:                { icon: <PhoneOutlined />,         color: '#ff4d4f', label: 'Appel manqué',           category: 'telephony' },
-  INCOMING_SMS:               { icon: <MessageOutlined />,       color: '#1890ff', label: 'SMS reçu',               category: 'telephony' },
-  INCOMING_CALL:              { icon: <PhoneOutlined />,         color: '#52c41a', label: 'Appel entrant',          category: 'telephony' },
-  CHANTIER_STATUS_CHANGED:    { icon: <AlertOutlined />,         color: '#fa8c16', label: 'Chantier',               category: 'chantiers' },
-  CHANTIER_PROBLEM_REPORTED:  { icon: <AlertOutlined />,         color: '#ff4d4f', label: 'Problème chantier',      category: 'chantiers' },
-  CHANTIER_INVOICE_PAID:      { icon: <DollarOutlined />,        color: '#52c41a', label: 'Facture payée',          category: 'chantiers' },
-  CHANTIER_VISIT_VALIDATED:   { icon: <CheckCircleOutlined />,   color: '#52c41a', label: 'Visite validée',         category: 'chantiers' },
-  CHANTIER_MATERIAL_RECEIVED: { icon: <CheckCircleOutlined />,   color: '#52c41a', label: 'Matériel reçu',          category: 'chantiers' },
-  CHANTIER_INVOICE_CREATED:   { icon: <DollarOutlined />,        color: '#fa8c16', label: 'Nouvelle facture',       category: 'chantiers' },
-  NEW_MAIL_RECEIVED:          { icon: <MailOutlined />,          color: '#1890ff', label: 'Email reçu',             category: 'forms' },
-  TASK_COMPLETED:             { icon: <CheckOutlined />,         color: '#52c41a', label: 'Tâche terminée',         category: 'calendar' },
-  ROLE_UPDATE_AVAILABLE:      { icon: <TeamOutlined />,          color: '#722ed1', label: 'Rôle mis à jour',        category: 'invitations' },
-  AI_DAILY_DIGEST:            { icon: <RobotOutlined />,         color: '#722ed1', label: 'Résumé IA',              category: 'ai' },
+const NOTIF_CONFIG: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
+  NEW_LEAD_RECEIVED:          { icon: <UserAddOutlined />,       color: '#D67D35', label: 'Nouveau lead' },
+  NEW_LEAD_ASSIGNED:          { icon: <RocketOutlined />,        color: '#D67D35', label: 'Lead assigné' },
+  LEAD_STATUS_CHANGED:        { icon: <RocketOutlined />,        color: '#fa8c16', label: 'Statut lead' },
+  FORM_SUBMISSION_RECEIVED:   { icon: <FormOutlined />,          color: '#1890ff', label: 'Formulaire' },
+  INVITATION_CREATED:         { icon: <MailOutlined />,          color: '#722ed1', label: 'Invitation envoyée' },
+  INVITATION_ACCEPTED:        { icon: <CheckCircleOutlined />,   color: '#52c41a', label: 'Invitation acceptée' },
+  JOIN_REQUEST_RECEIVED:      { icon: <TeamOutlined />,          color: '#13c2c2', label: 'Demande adhésion' },
+  JOIN_REQUEST_APPROVED:      { icon: <CheckCircleOutlined />,   color: '#52c41a', label: 'Adhésion approuvée' },
+  JOIN_REQUEST_REJECTED:      { icon: <CloseCircleOutlined />,   color: '#ff4d4f', label: 'Adhésion refusée' },
+  QUOTE_SENT:                 { icon: <DollarOutlined />,        color: '#1890ff', label: 'Devis envoyé' },
+  QUOTE_ACCEPTED:             { icon: <CheckCircleOutlined />,   color: '#52c41a', label: 'Devis accepté' },
+  QUOTE_REJECTED:             { icon: <CloseCircleOutlined />,   color: '#ff4d4f', label: 'Devis rejeté' },
+  DOCUMENT_SIGNED:            { icon: <FileProtectOutlined />,   color: '#52c41a', label: 'Document signé' },
+  DOCUMENT_VIEWED:            { icon: <EyeOutlined />,           color: '#1890ff', label: 'Document consulté' },
+  CALENDAR_EVENT_INVITATION:  { icon: <CalendarOutlined />,      color: '#1890ff', label: 'Événement' },
+  CALENDAR_EVENT_UPDATED:     { icon: <CalendarOutlined />,      color: '#fa8c16', label: 'Événement modifié' },
+  CALENDAR_EVENT_CANCELLED:   { icon: <CalendarOutlined />,      color: '#ff4d4f', label: 'Événement annulé' },
+  CALENDAR_EVENT_REMINDER:    { icon: <AlertOutlined />,         color: '#faad14', label: 'Rappel' },
+  MISSED_CALL:                { icon: <PhoneOutlined />,         color: '#ff4d4f', label: 'Appel manqué' },
+  INCOMING_SMS:               { icon: <MessageOutlined />,       color: '#1890ff', label: 'SMS reçu' },
+  INCOMING_CALL:              { icon: <PhoneOutlined />,         color: '#52c41a', label: 'Appel entrant' },
+  CHANTIER_STATUS_CHANGED:    { icon: <AlertOutlined />,         color: '#fa8c16', label: 'Chantier' },
+  CHANTIER_PROBLEM_REPORTED:  { icon: <AlertOutlined />,         color: '#ff4d4f', label: 'Problème chantier' },
+  CHANTIER_INVOICE_PAID:      { icon: <DollarOutlined />,        color: '#52c41a', label: 'Facture payée' },
+  CHANTIER_VISIT_VALIDATED:   { icon: <CheckCircleOutlined />,   color: '#52c41a', label: 'Visite validée' },
+  CHANTIER_MATERIAL_RECEIVED: { icon: <CheckCircleOutlined />,   color: '#52c41a', label: 'Matériel reçu' },
+  CHANTIER_INVOICE_CREATED:   { icon: <DollarOutlined />,        color: '#fa8c16', label: 'Nouvelle facture' },
+  NEW_MAIL_RECEIVED:          { icon: <MailOutlined />,          color: '#1890ff', label: 'Email reçu' },
+  TASK_COMPLETED:             { icon: <CheckOutlined />,         color: '#52c41a', label: 'Tâche terminée' },
+  ROLE_UPDATE_AVAILABLE:      { icon: <TeamOutlined />,          color: '#722ed1', label: 'Rôle mis à jour' },
+  AI_DAILY_DIGEST:            { icon: <RobotOutlined />,         color: '#722ed1', label: 'Résumé IA' },
 };
-
-const CATEGORY_OPTIONS = [
-  { label: 'Tout', value: 'all' },
-  { label: '📥 Leads', value: 'leads' },
-  { label: '📋 Forms', value: 'forms' },
-  { label: '👥 Invit.', value: 'invitations' },
-  { label: '📅 Agenda', value: 'calendar' },
-  { label: '📄 Docs', value: 'documents' },
-  { label: '📞 Tél.', value: 'telephony' },
-  { label: '🏗️ Chant.', value: 'chantiers' },
-  { label: '💰 Devis', value: 'quotes' },
-];
-
-const PRIORITY_STYLES: Record<string, { border: string; bg: string }> = {
-  urgent: { border: 'border-l-4 border-l-red-500', bg: 'bg-red-50' },
-  high:   { border: 'border-l-4 border-l-orange-400', bg: 'bg-orange-50' },
-  normal: { border: 'border-l-2 border-l-transparent', bg: '' },
-  low:    { border: 'border-l-2 border-l-gray-200', bg: 'bg-gray-50' },
-};
-
-// ═══════════════════════════════════════════════════════
-// HELPER FUNCTIONS
-// ═══════════════════════════════════════════════════════
 
 function getRelativeTime(dateStr: string): string {
-  const now = Date.now();
-  const date = new Date(dateStr).getTime();
-  const diff = now - date;
-  const minutes = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-
-  if (minutes < 1) return "À l'instant";
-  if (minutes < 60) return `il y a ${minutes}min`;
-  if (hours < 24) return `il y a ${hours}h`;
-  if (days < 7) return `il y a ${days}j`;
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const m = Math.floor(diff / 60000);
+  const h = Math.floor(diff / 3600000);
+  const d = Math.floor(diff / 86400000);
+  const w = Math.floor(d / 7);
+  if (m < 1) return "À l'instant";
+  if (m < 60) return `${m} min`;
+  if (h < 24) return `${h} h`;
+  if (d < 7) return `${d} j`;
+  if (w < 4) return `${w} sem.`;
   return new Date(dateStr).toLocaleDateString('fr-BE', { day: 'numeric', month: 'short' });
 }
 
-function getNotifConfig(type: string) {
-  return NOTIF_CONFIG[type] || { icon: <BellOutlined />, color: '#8c8c8c', label: type, category: 'all' as FilterCategory };
+function cfg(type: string) {
+  return NOTIF_CONFIG[type] || { icon: <BellOutlined />, color: '#65676B', label: type };
 }
-
-// ═══════════════════════════════════════════════════════
-// COMPOSANT PRINCIPAL
-// ═══════════════════════════════════════════════════════
 
 const NotificationsBell = () => {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [isOpen, setIsOpen] = useState(false);
-  const [filter, setFilter] = useState<FilterCategory>('all');
-  const [activeTab, setActiveTab] = useState<'unread' | 'all'>('unread');
-  const [hasNewSinceLastOpen, setHasNewSinceLastOpen] = useState(false);
+  const [tab, setTab] = useState<TabFilter>('all');
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [hasNew, setHasNew] = useState(false);
   const lastCountRef = useRef(0);
   const isOpenRef = useRef(false);
 
-  // ⚠️ Stabiliser l'API pour éviter les boucles de re-render infinies
   const apiHook = useAuthenticatedApi();
-  const api = useMemo(() => apiHook.api, []);  // eslint-disable-line react-hooks/exhaustive-deps
+  const api = useMemo(() => apiHook.api, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Garder la ref à jour
   useEffect(() => { isOpenRef.current = isOpen; }, [isOpen]);
 
   const fetchNotifications = useCallback(async () => {
     try {
       const response: any = await api.get('/api/notifications?includeRead=true');
       const notifs: NotificationItem[] = (Array.isArray(response) ? response : response?.data) || [];
-
-      // Détecter nouvelles notifications depuis dernière vérification
       const pendingCount = notifs.filter(n => n.status === 'PENDING').length;
       if (pendingCount > lastCountRef.current && lastCountRef.current > 0 && !isOpenRef.current) {
-        setHasNewSinceLastOpen(true);
-        // Son de notification subtil
-        try {
-          const ctx = new AudioContext();
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.frequency.value = 800;
-          gain.gain.value = 0.1;
-          osc.start();
-          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-          osc.stop(ctx.currentTime + 0.3);
-        } catch (_) { /* audio non-bloquant */ }
+        setHasNew(true);
       }
       lastCountRef.current = pendingCount;
       setNotifications(notifs);
-    } catch (error) {
-      console.error("[NotificationsBell] Erreur fetch:", error);
-    }
+    } catch (_) {}
   }, [api]);
 
   const markAsRead = useCallback(async (id: string) => {
     try {
       await api.patch(`/api/notifications/${id}/read`);
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, status: 'READ', readAt: new Date().toISOString() } : n));
-    } catch (error) {
-      console.error("[NotificationsBell] Erreur mark read:", error);
-    }
+    } catch (_) {}
   }, [api]);
 
   const markAllAsRead = useCallback(async () => {
     try {
       await api.patch('/api/notifications/mark-all-read');
       setNotifications(prev => prev.map(n => n.status === 'PENDING' ? { ...n, status: 'READ', readAt: new Date().toISOString() } : n));
-    } catch (error) {
-      console.error("[NotificationsBell] Erreur mark all read:", error);
-    }
+    } catch (_) {}
   }, [api]);
 
   const deleteNotification = useCallback(async (id: string) => {
     try {
       await api.delete(`/api/notifications/${id}`);
       setNotifications(prev => prev.filter(n => n.id !== id));
-    } catch (error) {
-      console.error("[NotificationsBell] Erreur delete:", error);
-    }
+    } catch (_) {}
   }, [api]);
 
-  const clearAll = useCallback(async () => {
-    try {
-      setNotifications(prev => {
-        Promise.allSettled(prev.map(n => api.delete(`/api/notifications/${n.id}`))).catch(() => {});
-        return [];
-      });
-    } catch (error) {
-      console.error("[NotificationsBell] Erreur clear all:", error);
-    }
-  }, [api]);
-
-  // Navigation vers la source
   const handleNavigate = useCallback((notif: NotificationItem) => {
     markAsRead(notif.id);
     const url = notif.actionUrl || notif.data?.actionUrl;
@@ -207,224 +135,271 @@ const NotificationsBell = () => {
 
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 15000); // 15s au lieu de 30s
+    const interval = setInterval(fetchNotifications, 15000);
     return () => clearInterval(interval);
   }, [fetchNotifications]);
 
-  // Quand on ouvre le dropdown, reset le flag "nouveaux"
-  useEffect(() => {
-    if (isOpen) setHasNewSinceLastOpen(false);
-  }, [isOpen]);
+  useEffect(() => { if (isOpen) setHasNew(false); }, [isOpen]);
 
   const unreadCount = useMemo(() => notifications.filter(n => n.status === 'PENDING').length, [notifications]);
 
-  const filteredNotifications = useMemo(() => {
-    let result = notifications;
-    if (activeTab === 'unread') result = result.filter(n => n.status === 'PENDING');
-    if (filter !== 'all') result = result.filter(n => getNotifConfig(n.type).category === filter);
-    // Trier : urgent d'abord, puis par date
-    const priorityOrder: Record<string, number> = { urgent: 0, high: 1, normal: 2, low: 3 };
-    return result.sort((a, b) => {
-      const pa = priorityOrder[a.priority || 'normal'] ?? 2;
-      const pb = priorityOrder[b.priority || 'normal'] ?? 2;
+  const filtered = useMemo(() => {
+    const list = tab === 'unread' ? notifications.filter(n => n.status === 'PENDING') : notifications;
+    const po: Record<string, number> = { urgent: 0, high: 1, normal: 2, low: 3 };
+    return [...list].sort((a, b) => {
+      const pa = po[a.priority || 'normal'] ?? 2;
+      const pb = po[b.priority || 'normal'] ?? 2;
       if (pa !== pb) return pa - pb;
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
-  }, [notifications, filter, activeTab]);
+  }, [notifications, tab]);
 
-  // Compteurs par catégorie
-  const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    const pending = notifications.filter(n => n.status === 'PENDING');
-    pending.forEach(n => {
-      const cat = getNotifConfig(n.type).category;
-      counts[cat] = (counts[cat] || 0) + 1;
-    });
-    return counts;
-  }, [notifications]);
-
-  // ═══════════════════════════════════════════════════════
-  // RENDER NOTIFICATION ITEM
-  // ═══════════════════════════════════════════════════════
-
-  const renderNotifItem = (notif: NotificationItem) => {
-    const config = getNotifConfig(notif.type);
-    const priorityStyle = PRIORITY_STYLES[notif.priority || 'normal'] || PRIORITY_STYLES.normal;
+  // Facebook-style notification item
+  const renderItem = (notif: NotificationItem) => {
+    const c = cfg(notif.type);
     const isUnread = notif.status === 'PENDING';
+    const isHovered = hoveredId === notif.id;
 
     return (
       <div
         key={notif.id}
-        className={`flex items-start gap-3 p-3 cursor-pointer transition-all duration-200 hover:bg-gray-50 ${priorityStyle.border} ${isUnread ? priorityStyle.bg || 'bg-blue-50/40' : 'opacity-70'}`}
+        style={{
+          display: 'flex', alignItems: 'flex-start', gap: 12,
+          padding: '8px 12px', cursor: 'pointer', borderRadius: 8,
+          backgroundColor: isHovered ? '#f2f2f2' : isUnread ? '#E7F3FF' : 'transparent',
+          transition: 'background 0.15s',
+          position: 'relative',
+        }}
+        onMouseEnter={() => setHoveredId(notif.id)}
+        onMouseLeave={() => setHoveredId(null)}
         onClick={() => handleNavigate(notif)}
       >
-        {/* Icône avec couleur */}
-        <div
-          className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-white text-sm"
-          style={{ backgroundColor: config.color }}
-        >
-          {config.icon}
-        </div>
-
-        {/* Contenu */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-0.5">
-            <Tag color={config.color} className="text-xs px-1.5 py-0 leading-5 m-0">
-              {config.label}
-            </Tag>
-            {notif.priority === 'urgent' && <Tag color="red" className="text-xs px-1 py-0 leading-5 m-0 animate-pulse">URGENT</Tag>}
-            {notif.priority === 'high' && <Tag color="orange" className="text-xs px-1 py-0 leading-5 m-0">Important</Tag>}
+        {/* Avatar avec badge icône */}
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: '50%',
+            backgroundColor: '#E4E6EB', display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
+            fontSize: 24, color: '#65676B',
+          }}>
+            <span style={{ color: c.color, fontSize: 22 }}>{c.icon}</span>
           </div>
-          <p className={`text-sm mb-0.5 break-words ${isUnread ? 'text-gray-900 font-medium' : 'text-gray-600'}`}>
-            {notif.data?.message || 'Notification'}
-          </p>
-          <span className="text-xs text-gray-400">{getRelativeTime(notif.createdAt)}</span>
+          <div style={{
+            position: 'absolute', bottom: -2, right: -2,
+            width: 22, height: 22, borderRadius: '50%',
+            backgroundColor: c.color, display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
+            border: '2px solid white', fontSize: 10, color: 'white',
+          }}>
+            {c.icon}
+          </div>
         </div>
 
-        {/* Actions */}
-        <div className="flex-shrink-0 flex flex-col gap-1" onClick={e => e.stopPropagation()}>
-          {isUnread && (
-            <Tooltip title="Marquer lu">
-              <button
-                className="w-7 h-7 rounded-full flex items-center justify-center text-gray-400 hover:text-green-600 hover:bg-green-50 transition-all"
-                onClick={() => markAsRead(notif.id)}
-              >
-                <CheckOutlined style={{ fontSize: 12 }} />
-              </button>
-            </Tooltip>
+        {/* Texte */}
+        <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
+          <div style={{
+            fontSize: 13, lineHeight: '18px', color: '#050505',
+            fontWeight: isUnread ? 600 : 400,
+            display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+          }}>
+            {notif.data?.message || c.label}
+          </div>
+          <div style={{
+            fontSize: 12, marginTop: 2, fontWeight: isUnread ? 600 : 400,
+            color: isUnread ? '#0866FF' : '#65676B',
+          }}>
+            {getRelativeTime(notif.createdAt)}
+          </div>
+        </div>
+
+        {/* Point bleu non-lu + actions hover */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, paddingTop: 12 }}>
+          {isHovered && (
+            <>
+              {isUnread && (
+                <Tooltip title="Marquer comme lu">
+                  <div
+                    onClick={e => { e.stopPropagation(); markAsRead(notif.id); }}
+                    style={{
+                      width: 32, height: 32, borderRadius: '50%', display: 'flex',
+                      alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                      backgroundColor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+                    }}
+                  >
+                    <CheckOutlined style={{ fontSize: 14, color: '#65676B' }} />
+                  </div>
+                </Tooltip>
+              )}
+              <Tooltip title="Supprimer">
+                <div
+                  onClick={e => { e.stopPropagation(); deleteNotification(notif.id); }}
+                  style={{
+                    width: 32, height: 32, borderRadius: '50%', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                    backgroundColor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+                  }}
+                >
+                  <DeleteOutlined style={{ fontSize: 14, color: '#65676B' }} />
+                </div>
+              </Tooltip>
+            </>
           )}
-          <Tooltip title="Supprimer">
-            <button
-              className="w-7 h-7 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all"
-              onClick={() => deleteNotification(notif.id)}
-            >
-              <DeleteOutlined style={{ fontSize: 12 }} />
-            </button>
-          </Tooltip>
+          {isUnread && !isHovered && (
+            <div style={{
+              width: 12, height: 12, borderRadius: '50%',
+              backgroundColor: '#0866FF', flexShrink: 0,
+            }} />
+          )}
         </div>
       </div>
     );
   };
 
-  // ═══════════════════════════════════════════════════════
-  // DROPDOWN CONTENT
-  // ═══════════════════════════════════════════════════════
-
-  const dropdownContent = (
-    <div className="w-[420px] max-w-[95vw] bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden" style={{ maxHeight: '80vh' }}>
-      {/* Header */}
-      <div className="px-4 py-3 bg-gradient-to-r from-[#D67D35] to-[#e8954f] text-white">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <BellOutlined className="text-lg" />
-            <span className="font-bold text-base">Notifications</span>
-            {unreadCount > 0 && (
-              <Badge count={unreadCount} style={{ backgroundColor: '#fff', color: '#D67D35', fontWeight: 700, boxShadow: 'none' }} />
-            )}
-          </div>
-          <div className="flex items-center gap-1">
-            {unreadCount > 0 && (
-              <Tooltip title="Tout marquer lu">
-                <button className="text-white/80 hover:text-white p-1.5 rounded-md hover:bg-white/20 transition-all" onClick={markAllAsRead}>
-                  <CheckOutlined style={{ fontSize: 14 }} />
-                </button>
-              </Tooltip>
-            )}
-            {notifications.length > 0 && (
-              <Tooltip title="Tout supprimer">
-                <button className="text-white/80 hover:text-white p-1.5 rounded-md hover:bg-white/20 transition-all" onClick={clearAll}>
-                  <ClearOutlined style={{ fontSize: 14 }} />
-                </button>
-              </Tooltip>
-            )}
-          </div>
+  const panelContent = (
+    <div style={{
+      width: 360, maxHeight: '85vh', display: 'flex', flexDirection: 'column',
+      backgroundColor: '#fff', borderRadius: 8,
+      boxShadow: '0 2px 12px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05)',
+    }}>
+      {/* Header Facebook-style */}
+      <div style={{ padding: '12px 16px 4px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={{ fontSize: 24, fontWeight: 700, color: '#050505', margin: 0 }}>Notifications</h2>
+          <Tooltip title="Options">
+            <div
+              onClick={e => { e.stopPropagation(); if (unreadCount > 0) markAllAsRead(); }}
+              style={{
+                width: 32, height: 32, borderRadius: '50%', display: 'flex',
+                alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                backgroundColor: 'transparent', transition: 'background 0.15s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f2f2f2')}
+              onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+            >
+              <EllipsisOutlined style={{ fontSize: 20, color: '#65676B' }} />
+            </div>
+          </Tooltip>
         </div>
       </div>
 
-      {/* Tabs: Non lues / Toutes */}
-      <div className="px-3 pt-2 border-b border-gray-100">
-        <Tabs
-          activeKey={activeTab}
-          onChange={(k) => setActiveTab(k as 'unread' | 'all')}
-          size="small"
-          items={[
-            { key: 'unread', label: <span>Non lues {unreadCount > 0 && <Badge count={unreadCount} size="small" style={{ marginLeft: 4 }} />}</span> },
-            { key: 'all', label: `Toutes (${notifications.length})` },
-          ]}
-          className="notification-tabs"
-        />
+      {/* Tabs Facebook-style (pills) */}
+      <div style={{ display: 'flex', gap: 8, padding: '8px 16px 4px' }}>
+        {([
+          { key: 'all' as TabFilter, label: 'Toutes' },
+          { key: 'unread' as TabFilter, label: 'Non lues' },
+        ]).map(t => (
+          <div
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            style={{
+              padding: '6px 14px', borderRadius: 20, fontSize: 14, fontWeight: 600,
+              cursor: 'pointer', transition: 'all 0.15s', userSelect: 'none',
+              backgroundColor: tab === t.key ? '#E7F3FF' : 'transparent',
+              color: tab === t.key ? '#0866FF' : '#65676B',
+            }}
+            onMouseEnter={e => { if (tab !== t.key) e.currentTarget.style.backgroundColor = '#f2f2f2'; }}
+            onMouseLeave={e => { if (tab !== t.key) e.currentTarget.style.backgroundColor = 'transparent'; }}
+          >
+            {t.label}
+          </div>
+        ))}
       </div>
 
-      {/* Filtres par catégorie */}
-      {notifications.length > 3 && (
-        <div className="px-3 py-2 border-b border-gray-50 overflow-x-auto">
-          <Segmented
-            value={filter}
-            onChange={(v) => setFilter(v as FilterCategory)}
-            options={CATEGORY_OPTIONS.filter(opt => opt.value === 'all' || (categoryCounts[opt.value] && categoryCounts[opt.value] > 0)).map(opt => ({
-              ...opt,
-              label: opt.value !== 'all' && categoryCounts[opt.value]
-                ? <span>{opt.label} <Badge count={categoryCounts[opt.value]} size="small" style={{ marginLeft: 2 }} /></span>
-                : opt.label,
-            }))}
-            size="small"
-            className="w-full"
-          />
+      {/* Section header */}
+      {filtered.length > 0 && (
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '12px 16px 4px',
+        }}>
+          <span style={{ fontSize: 16, fontWeight: 700, color: '#050505' }}>
+            {tab === 'unread' ? 'Non lues' : 'Plus récentes'}
+          </span>
+          {unreadCount > 0 && (
+            <span
+              onClick={markAllAsRead}
+              style={{ fontSize: 14, color: '#0866FF', cursor: 'pointer', fontWeight: 400 }}
+              onMouseEnter={e => (e.currentTarget.style.textDecoration = 'underline')}
+              onMouseLeave={e => (e.currentTarget.style.textDecoration = 'none')}
+            >
+              Tout marquer comme lu
+            </span>
+          )}
         </div>
       )}
 
       {/* Liste */}
-      <div className="overflow-y-auto divide-y divide-gray-50" style={{ maxHeight: 'calc(80vh - 180px)' }}>
-        {filteredNotifications.length > 0 ? (
-          filteredNotifications.map(renderNotifItem)
+      <div style={{
+        flex: 1, overflowY: 'auto', padding: '4px 8px 8px',
+        maxHeight: 'calc(85vh - 140px)',
+      }}>
+        {filtered.length > 0 ? (
+          filtered.map(renderItem)
         ) : (
-          <div className="py-12">
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={
-                <span className="text-gray-400">
-                  {activeTab === 'unread' ? 'Aucune notification non lue' : 'Aucune notification'}
-                  {filter !== 'all' && ' dans cette catégorie'}
-                </span>
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            justifyContent: 'center', padding: '60px 20px', color: '#65676B',
+          }}>
+            <BellOutlined style={{ fontSize: 48, color: '#BEC3C9', marginBottom: 16 }} />
+            <div style={{ fontSize: 20, fontWeight: 700, color: '#050505', marginBottom: 4 }}>
+              {tab === 'unread' ? 'Vous êtes à jour !' : 'Aucune notification'}
+            </div>
+            <div style={{ fontSize: 14, textAlign: 'center' }}>
+              {tab === 'unread'
+                ? 'Aucune notification non lue pour le moment.'
+                : "Vos notifications apparaîtront ici."
               }
-            />
+            </div>
           </div>
         )}
       </div>
-
-      {/* Footer stats */}
-      {notifications.length > 0 && (
-        <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 text-xs text-gray-400 flex justify-between">
-          <span>{unreadCount} non lue{unreadCount !== 1 ? 's' : ''}</span>
-          <span>Actualisation toutes les 15s</span>
-        </div>
-      )}
     </div>
   );
 
   return (
     <Popover
-      content={dropdownContent}
+      content={panelContent}
       trigger="click"
       open={isOpen}
       onOpenChange={setIsOpen}
       placement="bottomRight"
-      overlayInnerStyle={{ padding: 0 }}
+      overlayInnerStyle={{ padding: 0, borderRadius: 8, overflow: 'hidden' }}
+      overlayStyle={{ zIndex: 1050 }}
       arrow={false}
     >
-      <div className="relative cursor-pointer">
-        <Button
-          type="text"
-          shape="circle"
-          icon={<BellOutlined style={{ fontSize: 20, color: 'inherit' }} />}
-          className={`flex items-center justify-center transition-all duration-300 hover:bg-[#D67D35]/20 ${hasNewSinceLastOpen ? 'animate-bounce' : ''}`}
-          style={{ width: 40, height: 40 }}
-        />
+      <div style={{ position: 'relative', cursor: 'pointer' }}>
+        <div
+          style={{
+            width: 36, height: 36, borderRadius: '50%', display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
+            backgroundColor: isOpen ? '#E7F3FF' : '#E4E6EB',
+            transition: 'background 0.2s',
+          }}
+          onMouseEnter={e => { if (!isOpen) e.currentTarget.style.backgroundColor = '#D8DADF'; }}
+          onMouseLeave={e => { if (!isOpen) e.currentTarget.style.backgroundColor = '#E4E6EB'; }}
+        >
+          <BellOutlined style={{ fontSize: 18, color: isOpen ? '#0866FF' : '#050505' }} />
+        </div>
         {unreadCount > 0 && (
-          <span className={`absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full text-xs font-bold flex items-center justify-center text-white ${unreadCount > 0 ? 'bg-[#D67D35]' : 'bg-gray-400'} ${hasNewSinceLastOpen ? 'animate-pulse' : ''}`}>
+          <div style={{
+            position: 'absolute', top: -4, right: -4,
+            minWidth: 18, height: 18, padding: '0 5px',
+            borderRadius: 9, backgroundColor: '#E41E3F',
+            color: '#fff', fontSize: 11, fontWeight: 700,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            border: '2px solid #1F3B53',
+            animation: hasNew ? 'notif-pop 0.3s ease' : undefined,
+          }}>
             {unreadCount > 99 ? '99+' : unreadCount}
-          </span>
+          </div>
         )}
+        <style>{`
+          @keyframes notif-pop {
+            0% { transform: scale(0.5); }
+            50% { transform: scale(1.3); }
+            100% { transform: scale(1); }
+          }
+        `}</style>
       </div>
     </Popover>
   );
