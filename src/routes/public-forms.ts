@@ -15,6 +15,60 @@ import { v4 as uuidv4 } from 'uuid';
 import { generateFormResponsePdf } from '../services/formResponsePdfGenerator';
 import * as fs from 'fs';
 import * as path from 'path';
+import axios from 'axios';
+import { decrypt } from '../utils/crypto';
+
+/**
+ * Envoyer un SMS via Telnyx (usage interne, pas besoin d'auth HTTP)
+ */
+async function sendSmsInternal(organizationId: string, to: string, text: string): Promise<boolean> {
+  try {
+    // Récupérer la config Telnyx
+    const config = await db.telnyxConfig.findUnique({ where: { organizationId } }).catch(() => null);
+    const envApiKey = (process.env.TELNYX_API_KEY || '').trim();
+    
+    let apiKey = envApiKey;
+    if (config?.encryptedApiKey) {
+      try { apiKey = decrypt(config.encryptedApiKey).trim(); } catch { /* use env */ }
+    }
+    if (!apiKey) {
+      console.warn('⚠️ [SMS] Pas de clé API Telnyx configurée');
+      return false;
+    }
+    apiKey = apiKey.replace(/^Bearer\s+/i, '').trim();
+
+    // Récupérer un numéro d'envoi
+    const phoneNumber = await db.telnyxPhoneNumber.findFirst({
+      where: { organizationId, isActive: true }
+    }).catch(() => null);
+    
+    const fromNumber = phoneNumber?.phoneNumber || process.env.TELNYX_FROM_NUMBER;
+    if (!fromNumber) {
+      console.warn('⚠️ [SMS] Pas de numéro Telnyx configuré pour l\'envoi');
+      return false;
+    }
+
+    // Normaliser le numéro destinataire (belge)
+    let toNorm = to.replace(/[\s\-\.]/g, '');
+    if (toNorm.startsWith('0')) toNorm = '+32' + toNorm.substring(1);
+    if (!toNorm.startsWith('+')) toNorm = '+32' + toNorm;
+
+    const response = await axios.post('https://api.telnyx.com/v2/messages', {
+      to: toNorm,
+      from: fromNumber,
+      text,
+      type: 'SMS'
+    }, {
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
+    });
+
+    console.log('✅ [SMS] Envoyé à', toNorm, ':', text.substring(0, 50) + '...');
+    return true;
+  } catch (error) {
+    console.error('❌ [SMS] Échec envoi:', error instanceof Error ? error.message : error);
+    return false;
+  }
+}
 
 const router = Router();
 
@@ -698,7 +752,33 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
       // Ne pas bloquer la soumission si le PDF échoue
     }
     
-    // 9. Retourner le résultat
+    // 9. 📱 SMS de confirmation (pour le formulaire réunion)
+    if (form.settings && typeof form.settings === 'object' && (form.settings as any).smsConfirmation && normalizedContact.phone) {
+      try {
+        // Extraire la date de réunion choisie depuis les formData
+        const reunionDate = formData?.reunion || formData?.Réunion || 
+          Object.values(formData || {}).find(v => typeof v === 'string' && v.includes('2026-'));
+        
+        let smsText = `Bonjour ${normalizedContact.firstName} ! Votre inscription à la réunion 2THIER est confirmée.`;
+        if (reunionDate && typeof reunionDate === 'string') {
+          // Parser la date "2026-03-22_10h" en texte lisible
+          const [datePart, timePart] = reunionDate.split('_');
+          if (datePart) {
+            const d = new Date(datePart);
+            const dayNames = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+            const monthNames = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+            const dateStr = `${dayNames[d.getDay()]} ${d.getDate()} ${monthNames[d.getMonth()]}`;
+            smsText = `Bonjour ${normalizedContact.firstName} ! Votre inscription à la réunion 2THIER du ${dateStr} à ${timePart || '10h'} est confirmée. Lieu : Bureau 2THIER, Floreffe. À bientôt !`;
+          }
+        }
+        
+        await sendSmsInternal(form.organizationId, normalizedContact.phone, smsText);
+      } catch (smsError) {
+        console.error('⚠️ [PublicForms] SMS confirmation failed (non-blocking):', smsError);
+      }
+    }
+    
+    // 10. Retourner le résultat
     res.status(201).json({
       success: true,
       message: form.successMessage || 'Merci pour votre demande !',
