@@ -43,9 +43,10 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ groupNode, values, onChange, de
     if (!node.product_sourceNodeId) return true;
 
     const sourceValue = values[node.product_sourceNodeId];
-    // Si aucune valeur sélectionnée dans le champ source → tout afficher
-    if (sourceValue === undefined || sourceValue === null || sourceValue === '') return true;
-    if (Array.isArray(sourceValue) && sourceValue.length === 0) return true;
+    // Si aucune valeur sélectionnée dans le champ source → masquer le champ
+    // (le champ n'apparaît qu'après un choix dans le champ source)
+    if (sourceValue === undefined || sourceValue === null || sourceValue === '') return false;
+    if (Array.isArray(sourceValue) && sourceValue.length === 0) return false;
 
     const selectedValues: string[] = Array.isArray(sourceValue)
       ? sourceValue.map(String)

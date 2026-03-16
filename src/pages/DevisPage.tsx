@@ -6,6 +6,7 @@ import { applyValidation } from '../utils/validationHelper';
 import { evaluateDependency } from '../utils/dependencyValidator';
 import type { FieldDependency as StoreFieldDependency } from '../store/slices/types';
 import { DynamicFormulaEngine } from '../services/DynamicFormulaEngine';
+import { HelpTooltip } from '../components/common/HelpTooltip';
 
 type FieldOption = { id: string; label: string; value?: string };
 type Field = {
@@ -1843,6 +1844,16 @@ export default function DevisPage() {
                     ) : autoFields.has(f.id) ? (
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 border border-indigo-200" title="Valeur calculée par formule – taper pour reprendre la main">AUTO</span>
                     ) : null}
+                    {(() => {
+                      const adv = f.advancedConfig as Record<string, unknown> | null | undefined;
+                      const ttType = adv?.helpTooltipType as string | undefined;
+                      const ttText = adv?.helpTooltipText as string | undefined;
+                      const ttImage = adv?.helpTooltipImage as string | undefined;
+                      if (ttType && ttType !== 'none') {
+                        return <HelpTooltip type={ttType as 'text' | 'image' | 'both'} text={ttText} image={ttImage} />;
+                      }
+                      return null;
+                    })()}
                   </label>
 
                   {f.type === 'text' && (

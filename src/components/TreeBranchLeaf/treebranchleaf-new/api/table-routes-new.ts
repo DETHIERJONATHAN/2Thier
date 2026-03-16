@@ -381,15 +381,12 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
       }
 
       if (tableRowsData.length > 0) {
-        
-        // Ã¢Å¡Â Ã¯Â¸Â IMPORTANT: createMany ne supporte PAS les champs JSONB !
-        // Il faut utiliser create() en boucle pour prÃƒÂ©server les arrays JSON
-        for (const rowData of tableRowsData) {
-          await tx.treeBranchLeafNodeTableRow.create({
-            data: rowData,
-          });
+        // Batch insert par lots de 1000 (createMany supporte les champs Json)
+        const BATCH_SIZE = 1000;
+        for (let i = 0; i < tableRowsData.length; i += BATCH_SIZE) {
+          const batch = tableRowsData.slice(i, i + BATCH_SIZE);
+          await tx.treeBranchLeafNodeTableRow.createMany({ data: batch });
         }
-        
       }
 
       return newTable;
@@ -819,18 +816,17 @@ router.put('/tables/:id', async (req, res) => {
         await tx.treeBranchLeafNodeTableRow.deleteMany({ where: { tableId: id } });
         
         if (rows.length > 0) {
-          // Ã¢Å¡Â Ã¯Â¸Â CRITIQUE: Utiliser create() en boucle au lieu de createMany()
-          // Prisma createMany() NE SUPPORTE PAS les champs JSONB correctement !
-          for (let index = 0; index < rows.length; index++) {
-            const row = rows[index];
-            await tx.treeBranchLeafNodeTableRow.create({
-              data: {
-                id: randomUUID(),
-                tableId: id,
-                rowIndex: index,
-                cells: toJsonSafe(row),
-              }
-            });
+          // Batch insert par lots de 1000
+          const allRowsData = rows.map((row: any, index: number) => ({
+            id: randomUUID(),
+            tableId: id,
+            rowIndex: index,
+            cells: toJsonSafe(row),
+          }));
+          const BATCH_SIZE = 1000;
+          for (let i = 0; i < allRowsData.length; i += BATCH_SIZE) {
+            const batch = allRowsData.slice(i, i + BATCH_SIZE);
+            await tx.treeBranchLeafNodeTableRow.createMany({ data: batch });
           }
         }
       }
@@ -1207,34 +1203,29 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
       if (Array.isArray(rows) && rows.length > 0) {
         await tx.treeBranchLeafNodeTableRow.deleteMany({ where: { tableId: effectiveDataTableId } });
         
-        // Ã¢Å¡Â Ã¯Â¸Â CRITIQUE: Utiliser create() en boucle au lieu de createMany()
-        // Prisma createMany() NE SUPPORTE PAS les champs JSONB correctement !
-        // Il convertit les arrays JSON en simple strings, perdant les donnÃƒÂ©es
-        // 🔗 Le frontend envoie rows (labels) et dataMatrix (matrice cellules) séparément.
-        // On doit recombiner : cells = [label, ...dataRow] pour chaque ligne.
+        // Batch insert par lots de 1000 (avec recombination rows + dataMatrix)
         const hasDataMatrix = Array.isArray(dataMatrix) && dataMatrix.length > 0;
-        for (let index = 0; index < rows.length; index++) {
-          const rowLabel = rows[index];
+        const allRowsData = rows.map((rowLabel: any, index: number) => {
           let cellsValue: any;
           if (hasDataMatrix && Array.isArray(dataMatrix[index])) {
-            // Recombiner label + données cellules = format complet [label, val1, val2, ...]
             const label = Array.isArray(rowLabel) ? rowLabel[0] : rowLabel;
             cellsValue = [label, ...dataMatrix[index]];
           } else if (Array.isArray(rowLabel)) {
-            // Déjà un array complet (ancien format)
             cellsValue = rowLabel;
           } else {
-            // Juste un label string, pas de données
             cellsValue = [rowLabel];
           }
-          await tx.treeBranchLeafNodeTableRow.create({
-            data: {
-              id: randomUUID(),
-              tableId: effectiveDataTableId,
-              rowIndex: index,
-              cells: toJsonSafe(cellsValue),
-            }
-          });
+          return {
+            id: randomUUID(),
+            tableId: effectiveDataTableId,
+            rowIndex: index,
+            cells: toJsonSafe(cellsValue),
+          };
+        });
+        const BATCH_SIZE = 1000;
+        for (let i = 0; i < allRowsData.length; i += BATCH_SIZE) {
+          const batch = allRowsData.slice(i, i + BATCH_SIZE);
+          await tx.treeBranchLeafNodeTableRow.createMany({ data: batch });
         }
       }
 

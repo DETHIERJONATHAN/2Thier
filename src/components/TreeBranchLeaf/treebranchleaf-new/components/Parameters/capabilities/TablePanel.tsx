@@ -5659,11 +5659,15 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                   </div>
                 )}
               </div>
-            </Space>      <div style={{ maxHeight: 320, overflow: 'auto', border: '1px solid #f0f0f0', borderRadius: 6 }}>
+            </Space>      <div style={{ maxHeight: 420, overflow: 'auto', border: '1px solid #f0f0f0', borderRadius: 6 }}>
               <Table
                 size="small"
                 sticky
-                pagination={false}
+                pagination={
+                  (cfg.rows || []).length > 101
+                    ? { pageSize: 100, showSizeChanger: true, pageSizeOptions: ['50', '100', '200', '500'], size: 'small', showTotal: (total: number) => `${total} lignes` }
+                    : false
+                }
                 scroll={{ x: true }}
                 columns={matrixEditableColumns}
                 // dataSource: skip header row (index 0) and provide rowIndex referencing actual cfg.rows/cfg.data

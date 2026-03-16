@@ -2233,7 +2233,10 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         link: buildBaseCapability(node.link_instances as Record<string, unknown> | null, node.link_activeId as string | null),
         markers: buildBaseCapability(node.markers_instances as Record<string, unknown> | null, node.markers_activeId as string | null),
       },
-      // � LINK: Propriétés au niveau racine pour TBLFieldRendererAdvanced
+      // 📊 TABLE: Propriétés au niveau racine pour le lookup de table
+      hasTable: node.hasTable as boolean | undefined,
+      table_activeId: node.table_activeId as string | undefined,
+      // 🔗 LINK: Propriétés au niveau racine pour TBLFieldRendererAdvanced
       hasLink: node.hasLink as boolean | undefined,
       link_targetNodeId: node.link_targetNodeId as string | undefined,
       link_targetTreeId: node.link_targetTreeId as string | undefined,
@@ -4032,8 +4035,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
 
       // Récupérer la valeur du champ source produit depuis formData
       const sourceValue = formData[f.product_sourceNodeId];
-      // Si aucune valeur sélectionnée → tout afficher
-      if (sourceValue === undefined || sourceValue === null || sourceValue === '') return true;
+      // Si aucune valeur sélectionnée → masquer le champ
+      // (le champ n'apparaît qu'après un choix dans le champ source)
+      if (sourceValue === undefined || sourceValue === null || sourceValue === '') return false;
 
       // Parser la valeur source (peut être string csv, array, ou valeur simple)
       let selectedValues: string[];
@@ -4045,7 +4049,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         selectedValues = [String(sourceValue)];
       }
 
-      if (selectedValues.length === 0) return true;
+      if (selectedValues.length === 0) return false;
 
       const isVisible = f.product_visibleFor.some((v: string) => selectedValues.includes(v));
       return isVisible;

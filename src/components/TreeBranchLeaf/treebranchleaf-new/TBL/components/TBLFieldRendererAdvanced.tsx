@@ -1232,14 +1232,24 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     
     // 2. Fallback : capabilities (peut être en cache)
     const capabilities = field.capabilities || {};
-    if (capabilities.table?.enabled !== undefined) {
-      return capabilities.table.enabled;
+    if (capabilities.table?.enabled) {
+      return true;
     }
     
-    // 3. Dernier recours : metadata
+    // 3. Fallback : capabilities.table.activeId (table liée même si table_instances vide)
+    if (capabilities.table?.activeId) {
+      return true;
+    }
+    
+    // 4. Fallback : field.table_activeId propagé depuis le nœud
+    if (field.table_activeId) {
+      return true;
+    }
+    
+    // 5. Dernier recours : metadata
     const metadata = treeMetadata || {};
     return metadata.hasTable || false;
-  }, [field.hasTable, field.capabilities, treeMetadata]);
+  }, [field.hasTable, field.table_activeId, field.capabilities, treeMetadata]);
   
   // � DEBUG 17/12/2025: Tracer pourquoi Onduleur n'est pas SELECT
   useEffect(() => {
@@ -1936,7 +1946,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       // 🎯 NOUVEAU: Capacités TreeBranchLeaf depuis les instances Prisma
       hasCondition: capabilities.condition?.enabled || metadata.hasCondition || false,
       hasFormula: capabilities.formula?.enabled || metadata.hasFormula || false,
-      hasTable: capabilities.table?.enabled || metadata.hasTable || false,
+      hasTable: capabilities.table?.enabled || !!field.hasTable || !!field.table_activeId || metadata.hasTable || false,
       hasAPI: capabilities.api?.enabled || metadata.hasAPI || false,
       hasMarkers: capabilities.markers?.enabled || metadata.hasMarkers || false,
       

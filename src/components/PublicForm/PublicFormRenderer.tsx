@@ -112,6 +112,7 @@ interface WebsiteForm {
   slug: string;
   description?: string;
   submitButtonText: string;
+  successTitle?: string;
   successMessage: string;
   isActive: boolean;
   steps: FormStep[];
@@ -283,7 +284,7 @@ const PublicFormRenderer: React.FC = () => {
   useEffect(() => {
     const fetchForm = async () => {
       try {
-        const response = await fetch(`/api/public-forms/${slug}`);
+        const response = await fetch(`/api/public/forms/${slug}`);
         if (!response.ok) {
           if (response.status === 404) {
             setError('Formulaire introuvable');
@@ -420,13 +421,18 @@ const PublicFormRenderer: React.FC = () => {
 
     setSubmitting(true);
     try {
-      const response = await fetch(`/api/public-forms/${slug}/submit`, {
+      const response = await fetch(`/api/public/forms/${slug}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          formId: formData.id,
-          data: values,
-          ref: commercialRef // Ajouter le tracking commercial
+          formData: values,
+          contact: {
+            firstName: values.firstName || values.prenom || '',
+            lastName: values.lastName || values.nom || '',
+            email: values.email || values.mail || '',
+            phone: values.phone || values.telephone || ''
+          },
+          referredBy: commercialRef || undefined
         })
       });
 
@@ -812,7 +818,7 @@ const PublicFormRenderer: React.FC = () => {
         <Card style={styles.formCard}>
           <Result
             status="success"
-            title="🎉 Merci pour votre demande !"
+            title={formData.successTitle || "🎉 Merci pour votre demande !"}
             subTitle={formData.successMessage}
             extra={[
               <Button 
