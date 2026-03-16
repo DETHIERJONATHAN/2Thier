@@ -17,6 +17,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import axios from 'axios';
 import { decrypt } from '../utils/crypto';
+import QRCode from 'qrcode';
 
 /**
  * Envoyer un SMS via Telnyx (usage interne, pas besoin d'auth HTTP)
@@ -854,6 +855,43 @@ router.post('/:slug/partial', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('❌ [PublicForms] Error saving partial:', error);
     res.status(500).json({ error: 'Erreur' });
+  }
+});
+
+// ============================================================
+// QR Code Generation
+// ============================================================
+router.get('/:slug/qrcode', async (req: Request, res: Response) => {
+  try {
+    const { slug } = req.params;
+    const format = (req.query.format as string) || 'png';
+    const size = Math.min(Math.max(parseInt(req.query.size as string) || 300, 100), 1000);
+
+    // Verify form exists
+    const form = await db.websiteForm.findFirst({
+      where: { slug, isActive: true },
+    });
+    if (!form) {
+      return res.status(404).json({ error: 'Formulaire introuvable' });
+    }
+
+    const url = `https://app.2thier.be/form/${slug}`;
+
+    if (format === 'svg') {
+      const svg = await QRCode.toString(url, { type: 'svg', width: size, margin: 2 });
+      res.setHeader('Content-Type', 'image/svg+xml');
+      res.setHeader('Content-Disposition', `inline; filename="qr-${slug}.svg"`);
+      return res.send(svg);
+    }
+
+    // Default: PNG
+    const buffer = await QRCode.toBuffer(url, { width: size, margin: 2, type: 'png' });
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Content-Disposition', `inline; filename="qr-${slug}.png"`);
+    return res.send(buffer);
+  } catch (error) {
+    console.error('❌ [PublicForms] QR code error:', error);
+    res.status(500).json({ error: 'Erreur génération QR code' });
   }
 });
 
