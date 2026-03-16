@@ -7,6 +7,7 @@ import { TelnyxCascadeService } from '../services/TelnyxCascadeService';
 import { decrypt, encrypt } from '../utils/crypto';
 import { getBackendBaseUrl, joinUrl } from '../utils/baseUrl';
 import crypto from 'crypto';
+import { notify } from '../services/NotificationHelper';
 
 const router = Router();
 const prisma = db;
@@ -1509,6 +1510,15 @@ router.post('/webhooks/calls', async (req: Request, res: Response) => {
       });
 
       console.log(`✅ [Telnyx Webhook] Appel mis à jour: ${call.callId} -> ${callData.state}`);
+
+      // 🔔 Notification: appel manqué
+      if (['hangup', 'completed'].includes(callData.state) && updateData.duration === 0 && call.organizationId) {
+        notify.missedCall(
+          call.organizationId,
+          { fromNumber: call.fromNumber || 'Inconnu', toNumber: call.toNumber || '' },
+          call.userId
+        );
+      }
     }
 
     res.json({ received: true });
@@ -1557,6 +1567,12 @@ router.post('/webhooks/messages', async (req: Request, res: Response) => {
       });
 
       console.log('✅ [Telnyx Webhook] Message entrant sauvegardé:', messageData.id);
+
+      // 🔔 Notification: SMS reçu
+      notify.incomingSms(
+        organizationId,
+        { fromNumber: messageData.from.phone_number, text: messageData.text || '' }
+      );
     } else if (eventType === 'message.sent') {
       // Mettre à jour le statut du message sortant
       const message = await prisma.telnyxMessage.findFirst({

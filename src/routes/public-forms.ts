@@ -18,6 +18,7 @@ import * as path from 'path';
 import axios from 'axios';
 import { decrypt } from '../utils/crypto';
 import QRCode from 'qrcode';
+import { notify } from '../services/NotificationHelper';
 
 /**
  * Envoyer un SMS via Telnyx (usage interne, pas besoin d'auth HTTP)
@@ -883,7 +884,21 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
       }
     }
     
-    // 10. Retourner le résultat
+    // 10. 🔔 Notification: soumission formulaire
+    notify.formSubmission(
+      form.organizationId,
+      {
+        formName: form.name,
+        formSlug: slug,
+        contactName: `${normalizedContact.firstName} ${normalizedContact.lastName}`.trim(),
+        contactEmail: normalizedContact.email || undefined,
+        contactPhone: normalizedContact.phone || undefined,
+        source: referredBy ? `formulaire (ref: ${referredBy})` : 'formulaire',
+      },
+      leadId
+    );
+
+    // 11. Retourner le résultat
     res.status(201).json({
       success: true,
       message: form.successMessage || 'Merci pour votre demande !',

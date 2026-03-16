@@ -9,6 +9,7 @@ import bcrypt from 'bcryptjs';
 import { emailService } from "../services/EmailService";
 import { prisma } from '../lib/prisma';
 import { GoogleWorkspaceIntegrationService } from "../services/GoogleWorkspaceIntegrationService";
+import { notify } from '../services/NotificationHelper';
 
 const router = Router();
 
@@ -133,6 +134,13 @@ router.post('/', authMiddleware, requireRole(['admin', 'super_admin']), async (r
         // Ne pas bloquer la réponse si l'e-mail échoue.
         // Un système de logging plus robuste serait utile ici en production.
     }
+
+    // 🔔 Notification: invitation créée
+    notify.invitationCreated(
+      organizationId,
+      { email: newInvitation.email, roleName: newInvitation.Role?.label || newInvitation.Role?.name || 'Unknown' },
+      inviterId
+    );
 
     res.status(201).json({
       success: true,
@@ -404,6 +412,12 @@ router.post('/accept', async (req: Request, res: Response): Promise<void> => {
                 }
             }
 
+            // 🔔 Notification: invitation acceptée (utilisateur existant)
+            notify.invitationAccepted(
+              invitation.organizationId,
+              { email: invitation.email, userName: `${user.firstName} ${user.lastName}`.trim() }
+            );
+
             res.status(200).json({ 
                 success: true, 
                 message: invitation.createWorkspaceAccount 
@@ -508,6 +522,12 @@ router.post('/accept', async (req: Request, res: Response): Promise<void> => {
                 // Ne pas bloquer l'inscription si le workspace échoue
             }
         }
+
+        // 🔔 Notification: invitation acceptée (nouvel utilisateur)
+        notify.invitationAccepted(
+          invitation.organizationId,
+          { email: invitation.email, userName: `${firstName} ${lastName}`.trim() }
+        );
 
         res.status(201).json({ 
             success: true, 
@@ -638,6 +658,12 @@ router.post('/:id/force-accept', requireRole(['super_admin']), async (req: Authe
 
         // NOTE: Vous devriez probablement envoyer un e-mail à l'utilisateur
         // avec un lien pour réinitialiser son mot de passe.
+
+  // 🔔 Notification: invitation acceptée (force-accept)
+  notify.invitationAccepted(
+    invitation.organizationId,
+    { email: invitation.email, userName: newUser ? `${(newUser as any).firstName} ${(newUser as any).lastName}`.trim() : invitation.email }
+  );
 
   res.status(201).json({ success: true, message: "L'utilisateur a été créé et l'invitation acceptée.", data: newUser });
 

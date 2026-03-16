@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { authMiddleware, AuthenticatedRequest } from '../middlewares/auth.js';
 import { prisma } from '../lib/prisma';
+import { notify } from '../services/NotificationHelper';
 import { generateFormResponsePdf } from '../services/formResponsePdfGenerator';
 
 const router = Router();
@@ -273,6 +274,14 @@ router.post('/', async (req, res) => {
     });
     
     console.log('[LEADS] Lead créé avec succès:', newLead.id);
+
+    // 🔔 Notification: nouveau lead
+    notify.leadReceived(
+      organizationId,
+      { name: `${newLead.firstName} ${newLead.lastName}`, source: newLead.source || 'manual', email: newLead.email || undefined, phone: newLead.phone || undefined },
+      newLead.assignedToId,
+      newLead.id
+    );
     
     // Formatter la réponse comme pour GET
     const formattedLead = {
@@ -532,7 +541,8 @@ router.put('/:id', async (req, res) => {
       where: {
         id,
         organizationId
-      }
+      },
+      include: { LeadStatus: true }
     });
     
     if (!existingLead) {
@@ -643,6 +653,24 @@ router.put('/:id', async (req, res) => {
     });
     
     console.log('[LEADS] Lead modifié avec succès:', updatedLead.id);
+
+    // 🔔 Notifications: changement de statut ou réassignation
+    if (existingLead.statusId !== updatedLead.statusId && updatedLead.LeadStatus) {
+      notify.leadStatusChanged(
+        organizationId,
+        { name: `${updatedLead.firstName} ${updatedLead.lastName}`, oldStatus: existingLead.LeadStatus?.name || existingLead.status, newStatus: updatedLead.LeadStatus?.name || updatedLead.status },
+        updatedLead.assignedToId,
+        updatedLead.id
+      );
+    }
+    if (existingLead.assignedToId !== updatedLead.assignedToId && updatedLead.assignedToId) {
+      notify.leadAssigned(
+        organizationId,
+        { name: `${updatedLead.firstName} ${updatedLead.lastName}`, assignedToName: updatedLead.User ? `${updatedLead.User.firstName} ${updatedLead.User.lastName}` : undefined },
+        updatedLead.assignedToId,
+        updatedLead.id
+      );
+    }
     
     // Formatter la réponse
     const formattedLead = {

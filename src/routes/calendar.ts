@@ -4,6 +4,7 @@ import { impersonationMiddleware } from '../middlewares/impersonation.js';
 import { googleCalendarService } from '../google-auth/services/GoogleCalendarService.js';
 import { prisma } from '../lib/prisma';
 import { db } from '../lib/database.js';
+import { notify } from '../services/NotificationHelper';
 
 const router = Router();
 // Logging global minimal pour diagnostiquer les requêtes qui n'atteignent pas les handlers spécifiques
@@ -540,6 +541,13 @@ router.post('/events', async (req: AuthenticatedRequest, res) => {
           data: { externalCalendarId },
         });
         broadcast(organizationId, 'event.created', updatedEvent);
+
+        // 🔔 Notification: événement créé
+        const participantIds = (eventData.participants || []).map((p: any) => p.userId).filter(Boolean);
+        if (participantIds.length > 0) {
+          notify.calendarEventCreated(organizationId, { title: event.title, startDate: event.startDate.toISOString() }, participantIds, event.id);
+        }
+
         return res.status(201).json(updatedEvent);
       } catch (googleError) {
         console.warn('[CALENDAR ROUTES] Erreur Google Calendar (événement créé en local):', googleError);
@@ -576,6 +584,13 @@ router.post('/events', async (req: AuthenticatedRequest, res) => {
     }
     
     broadcast(organizationId, 'event.created', event);
+
+    // 🔔 Notification: événement créé (fallback sans Google)
+    const participantIdsFallback = (eventData.participants || []).map((p: any) => p.userId).filter(Boolean);
+    if (participantIdsFallback.length > 0) {
+      notify.calendarEventCreated(organizationId, { title: event.title, startDate: event.startDate.toISOString() }, participantIdsFallback, event.id);
+    }
+
     res.status(201).json(event);
   } catch (error: any) {
     console.error('Erreur création événement:', error?.message || error);
@@ -789,7 +804,14 @@ router.put('/events/:id', async (req: AuthenticatedRequest, res) => {
         console.warn('[CALENDAR ROUTES] Erreur mise à jour Google Calendar:', googleError);
       }
     }
-
+    // 🔔 Notification: événement modifié
+    try {
+      const participants = await prisma.calendarParticipant.findMany({ where: { eventId: id }, select: { userId: true } });
+      const pIds = participants.map(p => p.userId).filter(Boolean) as string[];
+      if (pIds.length > 0) {
+        notify.calendarEventUpdated(organizationId, { title: updatedEvent.title }, pIds);
+      }
+    } catch (_) { /* non-blocking */ }
     res.json(updatedEvent);
   } catch (error) {
     console.error('Erreur modification événement:', error);
@@ -828,6 +850,15 @@ router.delete('/events/:id', async (req: AuthenticatedRequest, res) => {
         console.warn('[CALENDAR ROUTES] ⚠️ Erreur suppression Google Calendar:', googleError);
       }
     }
+
+    // 🔔 Notification: événement annulé
+    try {
+      const participants = await prisma.calendarParticipant.findMany({ where: { eventId: id }, select: { userId: true } });
+      const pIds = participants.map(p => p.userId).filter(Boolean) as string[];
+      if (pIds.length > 0) {
+        notify.calendarEventCancelled(organizationId, { title: eventToDelete.title }, pIds);
+      }
+    } catch (_) { /* non-blocking */ }
 
     console.log('[CALENDAR ROUTES] ✅ Suppression terminée avec succès');
     res.json({ message: 'Événement supprimé avec succès' });

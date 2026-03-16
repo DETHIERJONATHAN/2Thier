@@ -986,11 +986,15 @@ model Notification {
   createdAt      DateTime           @default(now())
   updatedAt      DateTime
   userId         String?
+  priority       String             @default("normal")  // low, normal, high, urgent
+  actionUrl      String?                                 // lien vers l'élément source
+  readAt         DateTime?
   Organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   User           User?              @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([organizationId])
   @@index([userId])
+  @@index([status, createdAt])
 }
 
 model Order {
@@ -2913,19 +2917,48 @@ enum NotificationStatus {
 }
 
 enum NotificationType {
+  // Leads
   ROLE_UPDATE_AVAILABLE
   NEW_LEAD_ASSIGNED
+  NEW_LEAD_RECEIVED
+  LEAD_STATUS_CHANGED
+  // Email
   NEW_MAIL_RECEIVED
+  // Tâches
   TASK_COMPLETED
+  // Calendrier
   CALENDAR_EVENT_REMINDER
   CALENDAR_EVENT_INVITATION
   CALENDAR_EVENT_UPDATED
   CALENDAR_EVENT_CANCELLED
+  // Chantiers
   CHANTIER_STATUS_CHANGED
   CHANTIER_PROBLEM_REPORTED
   CHANTIER_INVOICE_PAID
   CHANTIER_VISIT_VALIDATED
   CHANTIER_MATERIAL_RECEIVED
+  CHANTIER_INVOICE_CREATED
+  // Formulaires
+  FORM_SUBMISSION_RECEIVED
+  // Invitations & Adhésion
+  INVITATION_CREATED
+  INVITATION_ACCEPTED
+  JOIN_REQUEST_RECEIVED
+  JOIN_REQUEST_APPROVED
+  JOIN_REQUEST_REJECTED
+  // Devis
+  QUOTE_SENT
+  QUOTE_ACCEPTED
+  QUOTE_REJECTED
+  // Documents & E-signature
+  DOCUMENT_SIGNED
+  DOCUMENT_VIEWED
+  // Téléphonie
+  INCOMING_CALL
+  MISSED_CALL
+  INCOMING_SMS
+  // IA
+  AI_DAILY_DIGEST
 }
 
 enum OperationSource {

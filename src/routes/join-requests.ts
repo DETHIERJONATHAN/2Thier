@@ -3,6 +3,7 @@ import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth';
 import { requireRole } from '../middlewares/requireRole';
 import { db } from '../lib/database';
 import { JoinRequestStatus, UserOrganizationStatus } from '@prisma/client';
+import { notify } from '../services/NotificationHelper';
 
 const router = Router();
 
@@ -76,6 +77,13 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
     });
 
     console.log(`[JoinRequest] Nouvelle demande créée: user=${userId} -> org=${organizationId}`);
+
+    // 🔔 Notification: demande d'adhésion reçue
+    const requestUser = await db.user.findUnique({ where: { id: userId }, select: { firstName: true, lastName: true } });
+    notify.joinRequestReceived(
+      organizationId,
+      { userName: `${requestUser?.firstName || ''} ${requestUser?.lastName || ''}`.trim() || 'Utilisateur', userId, message: message?.trim() || undefined }
+    );
 
     res.status(201).json({
       success: true,
@@ -234,6 +242,13 @@ router.post('/:id/approve', authMiddleware, requireRole(['admin', 'super_admin']
 
     console.log(`[JoinRequest] Demande ${id} approuvée par ${adminId}`);
 
+    // 🔔 Notification: demande approuvée
+    notify.joinRequestApproved(
+      joinRequest.organizationId,
+      { userName: `${joinRequest.User?.firstName || ''} ${joinRequest.User?.lastName || ''}`.trim() },
+      joinRequest.userId
+    );
+
     res.json({
       success: true,
       data: result,
@@ -290,6 +305,13 @@ router.post('/:id/reject', authMiddleware, requireRole(['admin', 'super_admin'])
     });
 
     console.log(`[JoinRequest] Demande ${id} rejetée par ${adminId}. Raison: ${reason || 'Non spécifiée'}`);
+
+    // 🔔 Notification: demande rejetée
+    notify.joinRequestRejected(
+      joinRequest.organizationId,
+      { userName: '', reason: reason || undefined },
+      joinRequest.userId
+    );
 
     res.json({
       success: true,

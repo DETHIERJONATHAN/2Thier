@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db, Prisma } from '../lib/database';
 import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.js';
+import { notify } from '../services/NotificationHelper';
 
 // Enum temporaire pour les devis
 enum QuoteStatus {
@@ -229,6 +230,16 @@ router.patch('/:id', async (req, res) => {
     }
 
     const updated = await prisma.quote.update({ where: { id }, data });
+
+    // 🔔 Notification: changement de statut devis
+    if (status && status !== existing.status) {
+      notify.quoteStatusChanged(
+        organizationId,
+        { title: updated.title || `Devis #${id.slice(0, 8)}`, from: existing.status, to: status, quoteId: id },
+        user?.userId
+      );
+    }
+
     res.json(updated);
   } catch (e) {
     console.error('[QUOTES] PATCH update error', e);

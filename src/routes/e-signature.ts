@@ -22,6 +22,7 @@ import { generateTblPdf, generateTblPdfWithHash, hashPdf } from '../services/tbl
 import type { TblPdfData, TblPdfSection, TblPdfField, TblPdfSignatureInfo } from '../services/tblPdfGenerator';
 import { GoogleGmailService } from '../google-auth/services/GoogleGmailService';
 import { generateClientPdfBuffer } from './documents';
+import { notify } from '../services/NotificationHelper';
 
 const router = Router();
 
@@ -695,6 +696,14 @@ router.post('/:id/sign', async (req: Request, res: Response) => {
     });
 
     console.log(`[E-Signature] ✅ Document signé par ${signature.signerName} (${signature.signerRole})`);
+
+    // 🔔 Notification: document signé
+    if (signature.organizationId) {
+      notify.documentSigned(
+        signature.organizationId,
+        { signerName: signature.signerName, signerEmail: signature.signerEmail, documentId: signature.documentId || undefined }
+      );
+    }
 
     return res.json({
       success: true,
