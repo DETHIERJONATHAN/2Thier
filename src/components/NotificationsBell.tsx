@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Badge, Dropdown, Button, Tabs, Empty, Tooltip, Tag, Segmented } from 'antd';
+import { Badge, Popover, Button, Tabs, Empty, Tooltip, Tag, Segmented } from 'antd';
 import {
   BellOutlined, CheckOutlined, DeleteOutlined, ClearOutlined,
   UserAddOutlined, FormOutlined, MailOutlined, PhoneOutlined,
@@ -129,8 +129,8 @@ const NotificationsBell = () => {
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const response = await api.get('/api/notifications');
-      const notifs: Notification[] = response.data || [];
+      const response: any = await api.get('/api/notifications?includeRead=true');
+      const notifs: Notification[] = (Array.isArray(response) ? response : response?.data) || [];
       
       // Détecter nouvelles notifications depuis dernière vérification
       if (notifs.length > lastCountRef.current && lastCountRef.current > 0 && !isOpen) {
@@ -401,12 +401,14 @@ const NotificationsBell = () => {
   );
 
   return (
-    <Dropdown
-      dropdownRender={() => dropdownContent}
-      trigger={['click']}
+    <Popover
+      content={dropdownContent}
+      trigger="click"
       open={isOpen}
       onOpenChange={setIsOpen}
       placement="bottomRight"
+      overlayInnerStyle={{ padding: 0 }}
+      arrow={false}
     >
       <div className="relative cursor-pointer">
         <Button
@@ -422,7 +424,7 @@ const NotificationsBell = () => {
           </span>
         )}
       </div>
-    </Dropdown>
+    </Popover>
   );
 };
 

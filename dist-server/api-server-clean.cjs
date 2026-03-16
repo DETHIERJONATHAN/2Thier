@@ -16469,18 +16469,14 @@ router18.get("/", async (req2, res) => {
       return;
     }
     const userId = user.userId;
+    const includeRead = req2.query.includeRead === "true";
+    const statusFilter = includeRead ? { status: { in: ["PENDING", "READ"] } } : { status: "PENDING" };
     if (user.role === "super_admin") {
       const notifications2 = await db.notification.findMany({
-        where: {
-          status: "PENDING"
-        },
-        orderBy: {
-          createdAt: "desc"
-        },
-        include: {
-          Organization: true
-          // Include organization details for context
-        }
+        where: statusFilter,
+        orderBy: { createdAt: "desc" },
+        take: 100,
+        include: { Organization: true }
       });
       res.json({ success: true, data: notifications2 });
       return;
@@ -16496,15 +16492,11 @@ router18.get("/", async (req2, res) => {
           { organizationId: { in: orgIds } },
           { userId }
         ],
-        status: "PENDING"
+        ...statusFilter
       },
-      orderBy: {
-        createdAt: "desc"
-      },
-      include: {
-        Organization: true
-        // Include organization details for context
-      }
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      include: { Organization: true }
     });
     res.json({ success: true, data: notifications });
   } catch (error) {

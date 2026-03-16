@@ -19,32 +19,26 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const user = (req as AuthenticatedRequest).user;
     if (!user || !user.userId) {
-        // authMiddleware should prevent this, but as a safeguard:
         res.status(401).json({ success: false, message: 'Utilisateur non authentifié.' });
         return;
     }
     const userId = user.userId;
+    const includeRead = req.query.includeRead === 'true';
+    const statusFilter = includeRead ? { status: { in: ['PENDING', 'READ'] } } : { status: 'PENDING' as const };
 
     // SuperAdmin logic: can see ALL notifications
     if (user.role === 'super_admin') {
         const notifications = await prisma.notification.findMany({
-            where: {
-                status: 'PENDING',
-            },
-            orderBy: {
-                createdAt: 'desc',
-            },
-            include: {
-                Organization: true // Include organization details for context
-            }
+            where: statusFilter,
+            orderBy: { createdAt: 'desc' },
+            take: 100,
+            include: { Organization: true }
         });
         res.json({ success: true, data: notifications });
         return;
     }
 
     // Normal user: only see notifications from their organizations
-
-    // Get all organizations the user is a member of
     const userOrganizations = await prisma.userOrganization.findMany({
         where: { userId: userId },
         select: { organizationId: true }
@@ -57,14 +51,11 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
           { organizationId: { in: orgIds } },
           { userId: userId }
         ],
-        status: 'PENDING',
+        ...statusFilter,
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      include: {
-        Organization: true // Include organization details for context
-      }
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      include: { Organization: true }
     });
 
     res.json({ success: true, data: notifications });
