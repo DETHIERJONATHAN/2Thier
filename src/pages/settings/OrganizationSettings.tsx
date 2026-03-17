@@ -1,170 +1,225 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../auth/useAuth';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
-import { toast } from 'react-toastify';
-import { Card, Switch, Button, Space, Spin, Tag, Collapse, Typography, Divider, Alert } from 'antd';
-import { SettingOutlined, CheckCircleOutlined, CloseCircleOutlined, GoogleOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Spin, message } from 'antd';
+import {
+  BankOutlined,
+  SaveOutlined,
+  LoadingOutlined,
+  GoogleOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  ReloadOutlined,
+  SettingOutlined,
+  MailOutlined,
+  CalendarOutlined,
+  CloudOutlined,
+  VideoCameraOutlined,
+  FileTextOutlined,
+  TableOutlined,
+  RightOutlined,
+} from '@ant-design/icons';
 
-const { Text } = Typography;
-const { Panel } = Collapse;
+const FB = {
+  bg: '#f0f2f5', white: '#ffffff', text: '#050505', textSecondary: '#65676b',
+  blue: '#1877f2', blueHover: '#166fe5', border: '#ced0d4',
+  btnGray: '#e4e6eb', btnGrayHover: '#d8dadf', green: '#42b72a',
+  shadow: '0 1px 2px rgba(0,0,0,0.1)', radius: 8,
+};
 
-// ✅ Composant Section Google Workspace
-interface GoogleWorkspaceConfigSectionProps {
-  organizationId: string;
-}
+const useScreenSize = () => {
+  const [w, setW] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
+  useEffect(() => { const h = () => setW(window.innerWidth); window.addEventListener('resize', h); return () => window.removeEventListener('resize', h); }, []);
+  return { isMobile: w < 768 };
+};
 
-const GoogleWorkspaceConfigSection: React.FC<GoogleWorkspaceConfigSectionProps> = ({ organizationId }) => {
-  const { api } = useAuthenticatedApi();
-  const [config, setConfig] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [testing, setTesting] = useState(false);
+const FBCard: React.FC<{ children: React.ReactNode; style?: React.CSSProperties }> = ({ children, style }) => (
+  <div style={{ background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow, padding: 20, marginBottom: 16, ...style }}>
+    {children}
+  </div>
+);
 
-  useEffect(() => {
-    const fetchConfig = async () => {
-      try {
-        const response = await api.get(`/api/organizations/${organizationId}/google-workspace/config`);
-        if (response.success) {
-          setConfig(response.data);
-        }
-      } catch (error) {
-        console.error('Erreur chargement config Google Workspace:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchConfig();
-  }, [organizationId, api]);
-
-  const handleTestConnection = async () => {
-    setTesting(true);
-    try {
-      const response = await api.post(`/api/organizations/${organizationId}/google-workspace/test`);
-      if (response.success) {
-        toast.success('✅ Connexion Google Workspace réussie !');
-      } else {
-        toast.error(`❌ ${response.message || 'Échec de la connexion'}`);
-      }
-    } catch (error) {
-      toast.error('Erreur lors du test de connexion');
-    } finally {
-      setTesting(false);
-    }
-  };
-
-  const handleToggleModule = async (module: string, enabled: boolean) => {
-    try {
-      const response = await api.post(`/api/organizations/${organizationId}/google-workspace/config`, {
-        ...config,
-        [`${module}Enabled`]: enabled,
-      });
-      if (response.success) {
-        setConfig(response.data);
-        toast.success(`${module} ${enabled ? 'activé' : 'désactivé'}`);
-      }
-    } catch (error) {
-      toast.error('Erreur lors de la mise à jour');
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="text-center py-8">
-        <Spin size="large" />
-        <p className="mt-2 text-gray-500">Chargement configuration Google Workspace...</p>
-      </div>
-    );
-  }
-
+/* ── Facebook Toggle ───────────────────────────────────────── */
+const FBToggle: React.FC<{
+  checked: boolean; onChange: (v: boolean) => void; size?: 'default' | 'small';
+}> = ({ checked, onChange, size = 'default' }) => {
+  const s = size === 'small';
+  const w = s ? 36 : 44; const h = s ? 20 : 24; const d = s ? 16 : 20; const p = 2;
   return (
-    <Card className="mt-6">
-      <div className="flex items-center gap-3 mb-4">
-        <GoogleOutlined className="text-2xl text-blue-500" />
-        <h3 className="text-xl font-bold m-0">Configuration Google Workspace</h3>
-      </div>
-
-      {/* Statut */}
-      <div className="mb-4">
-        <Space>
-          <Text strong>Statut :</Text>
-          {config?.enabled ? (
-            <Tag icon={<CheckCircleOutlined />} color="success">Activé</Tag>
-          ) : (
-            <Tag icon={<CloseCircleOutlined />} color="default">Non configuré</Tag>
-          )}
-        </Space>
-      </div>
-
-      {config ? (
-        <>
-          {/* Détails configuration */}
-          <Collapse className="mb-4">
-            <Panel header="Configuration Service Account" key="1">
-              <div className="space-y-3">
-                <div>
-                  <Text strong>Domaine :</Text>{' '}
-                  <Text>{config.domain || <span className="text-gray-400">Non configuré</span>}</Text>
-                </div>
-                <div>
-                  <Text strong>Email admin :</Text>{' '}
-                  <Text>{config.adminEmail || <span className="text-gray-400">Non configuré</span>}</Text>
-                </div>
-                <div>
-                  <Text strong>Service Account :</Text>{' '}
-                  <Text className="text-xs">{config.serviceAccountEmail || <span className="text-gray-400">Non configuré</span>}</Text>
-                </div>
-                <Divider />
-                <Button 
-                  onClick={handleTestConnection} 
-                  loading={testing}
-                  type="primary"
-                  ghost
-                  icon={<ReloadOutlined />}
-                >
-                  Tester la connexion
-                </Button>
-              </div>
-            </Panel>
-          </Collapse>
-
-          {/* Modules Google Workspace */}
-          {config.enabled && (
-            <div className="mt-4">
-              <Text strong className="block mb-3">Modules actifs :</Text>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {['gmail', 'calendar', 'drive', 'meet', 'docs', 'sheets'].map(module => (
-                  <div key={module} className="flex items-center justify-between p-3 border rounded-lg bg-gray-50">
-                    <Text className="capitalize">{module}</Text>
-                    <Switch
-                      checked={config[`${module}Enabled`]}
-                      onChange={(checked) => handleToggleModule(module, checked)}
-                      size="small"
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Lien configuration avancée */}
-          <div className="mt-4 pt-4 border-t">
-            <Button type="link" href="/admin/google-workspace" className="p-0">
-              <SettingOutlined /> Configuration avancée →
-            </Button>
-          </div>
-        </>
-      ) : (
-        <Alert
-          type="info"
-          message="Google Workspace non configuré"
-          description="Contactez votre administrateur système pour configurer l'intégration Google Workspace."
-          showIcon
-        />
-      )}
-    </Card>
+    <div onClick={() => onChange(!checked)} style={{
+      width: w, height: h, borderRadius: h, background: checked ? FB.blue : '#bec3c9',
+      cursor: 'pointer', position: 'relative', transition: 'background 0.25s', flexShrink: 0,
+    }}>
+      <div style={{
+        position: 'absolute', top: p, left: checked ? w - d - p : p,
+        width: d, height: d, borderRadius: '50%', background: FB.white,
+        boxShadow: '0 1px 3px rgba(0,0,0,0.3)', transition: 'left 0.25s',
+      }} />
+    </div>
   );
 };
 
-const OrganizationSettings = () => {
+const MODULE_ICONS: Record<string, React.ReactNode> = {
+  gmail: <MailOutlined />, calendar: <CalendarOutlined />, drive: <CloudOutlined />,
+  meet: <VideoCameraOutlined />, docs: <FileTextOutlined />, sheets: <TableOutlined />,
+};
+
+const MODULE_COLORS: Record<string, string> = {
+  gmail: '#ea4335', calendar: '#4285f4', drive: '#34a853',
+  meet: '#00897b', docs: '#4285f4', sheets: '#0f9d58',
+};
+
+/* ── Google Workspace Section ──────────────────────────────── */
+const GoogleWorkspaceSection: React.FC<{ organizationId: string }> = ({ organizationId }) => {
+  const { api } = useAuthenticatedApi();
+  const { isMobile } = useScreenSize();
+  const [config, setConfig] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [testing, setTesting] = useState(false);
+  const [expandConfig, setExpandConfig] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await api.get(`/api/organizations/${organizationId}/google-workspace/config`);
+        if (r.success) setConfig(r.data);
+      } catch (e) { console.error('Erreur config GW:', e); }
+      finally { setLoading(false); }
+    })();
+  }, [organizationId, api]);
+
+  const handleTest = async () => {
+    setTesting(true);
+    try {
+      const r = await api.post(`/api/organizations/${organizationId}/google-workspace/test`);
+      r.success ? message.success('Connexion réussie !') : message.error(r.message || 'Échec');
+    } catch { message.error('Erreur lors du test'); }
+    finally { setTesting(false); }
+  };
+
+  const handleToggle = async (mod: string, on: boolean) => {
+    try {
+      const r = await api.post(`/api/organizations/${organizationId}/google-workspace/config`, {
+        ...config, [`${mod}Enabled`]: on,
+      });
+      if (r.success) { setConfig(r.data); message.success(`${mod} ${on ? 'activé' : 'désactivé'}`); }
+    } catch { message.error('Erreur lors de la mise à jour'); }
+  };
+
+  if (loading) return (
+    <FBCard style={{ textAlign: 'center', padding: 40 }}><Spin size="large" /></FBCard>
+  );
+
+  return (
+    <>
+      <FBCard>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: config ? 0 : 0 }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: '50%', background: '#4285f4',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>
+            <GoogleOutlined style={{ fontSize: 24, color: FB.white }} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 17, fontWeight: 700, color: FB.text }}>Google Workspace</div>
+            <div style={{ fontSize: 13, color: FB.textSecondary }}>Intégration Google Workspace</div>
+          </div>
+          <div style={{
+            padding: '4px 12px', borderRadius: 16, fontSize: 12, fontWeight: 600,
+            background: config?.enabled ? '#e6f4ea' : FB.btnGray,
+            color: config?.enabled ? '#1e8e3e' : FB.textSecondary,
+            display: 'flex', alignItems: 'center', gap: 4,
+          }}>
+            {config?.enabled ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
+            {config?.enabled ? 'Activé' : 'Non configuré'}
+          </div>
+        </div>
+      </FBCard>
+
+      {config && (
+        <>
+          <FBCard>
+            <div onClick={() => setExpandConfig(!expandConfig)} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <SettingOutlined style={{ color: FB.textSecondary }} />
+                <span style={{ fontSize: 15, fontWeight: 600, color: FB.text }}>Configuration Service Account</span>
+              </div>
+              <RightOutlined style={{
+                fontSize: 11, color: FB.textSecondary,
+                transform: expandConfig ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s',
+              }} />
+            </div>
+            {expandConfig && (
+              <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid ' + FB.border }}>
+                {[
+                  { label: 'Domaine', value: config.domain },
+                  { label: 'Email admin', value: config.adminEmail },
+                  { label: 'Service Account', value: config.serviceAccountEmail },
+                ].map((item, i) => (
+                  <div key={i} style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '8px 0', borderBottom: i < 2 ? '1px solid ' + FB.border : 'none',
+                  }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: FB.text }}>{item.label}</span>
+                    <span style={{ fontSize: 12, color: item.value ? FB.text : FB.textSecondary, maxWidth: '55%', textAlign: 'right', wordBreak: 'break-all' }}>
+                      {item.value || 'Non configuré'}
+                    </span>
+                  </div>
+                ))}
+                <button onClick={handleTest} disabled={testing} style={{
+                  marginTop: 12, padding: '7px 16px', borderRadius: 6, border: '1px solid ' + FB.blue,
+                  background: 'transparent', color: FB.blue, fontWeight: 600, fontSize: 13, cursor: 'pointer',
+                  opacity: testing ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <ReloadOutlined spin={testing} /> Tester la connexion
+                </button>
+              </div>
+            )}
+          </FBCard>
+
+          {config.enabled && (
+            <FBCard>
+              <div style={{ fontSize: 15, fontWeight: 700, color: FB.text, marginBottom: 12 }}>Modules actifs</div>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '1fr 1fr 1fr', gap: 10 }}>
+                {['gmail', 'calendar', 'drive', 'meet', 'docs', 'sheets'].map(mod => {
+                  const enabled = config[`${mod}Enabled`];
+                  const col = MODULE_COLORS[mod];
+                  return (
+                    <div key={mod} style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '12px 14px', borderRadius: FB.radius,
+                      background: enabled ? col + '10' : FB.btnGray,
+                      border: '1px solid ' + (enabled ? col + '30' : 'transparent'),
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 16, color: enabled ? col : FB.textSecondary }}>{MODULE_ICONS[mod]}</span>
+                        <span style={{ fontSize: 13, fontWeight: 600, textTransform: 'capitalize', color: enabled ? FB.text : FB.textSecondary }}>{mod}</span>
+                      </div>
+                      <FBToggle checked={!!enabled} onChange={v => handleToggle(mod, v)} size="small" />
+                    </div>
+                  );
+                })}
+              </div>
+            </FBCard>
+          )}
+        </>
+      )}
+
+      {!config && (
+        <FBCard style={{ textAlign: 'center', padding: 32 }}>
+          <GoogleOutlined style={{ fontSize: 40, color: FB.border, marginBottom: 12 }} />
+          <div style={{ fontSize: 15, fontWeight: 600, color: FB.text }}>Google Workspace non configuré</div>
+          <div style={{ fontSize: 13, color: FB.textSecondary }}>Contactez votre administrateur système.</div>
+        </FBCard>
+      )}
+    </>
+  );
+};
+
+/* ── Main Component ────────────────────────────────────────── */
+const OrganizationSettings: React.FC = () => {
   const { currentOrganization, user, refetchUser } = useAuth();
   const { api } = useAuthenticatedApi();
   const [name, setName] = useState('');
@@ -174,81 +229,92 @@ const OrganizationSettings = () => {
   const isAdmin = userRole === 'admin' || userRole === 'super_admin';
 
   useEffect(() => {
-    if (currentOrganization) {
-      setName(currentOrganization.name);
-    }
+    if (currentOrganization) setName(currentOrganization.name);
   }, [currentOrganization]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    
     if (!currentOrganization) {
-        toast.error("Impossible de trouver les informations de l'organisation.");
-        setIsLoading(false);
-        return;
+      message.error("Impossible de trouver les informations de l'organisation.");
+      setIsLoading(false);
+      return;
     }
-
     try {
       const response = await api.patch(`/api/organizations/${currentOrganization.id}`, { name });
-
       if (response.success) {
-        toast.success("Le nom de l'organisation a été mis à jour.");
-        // Rafraîchir les données utilisateur pour refléter le changement
-        if (refetchUser) {
-            await refetchUser();
-        }
+        message.success("Le nom de l'organisation a été mis à jour.");
+        if (refetchUser) await refetchUser();
       } else {
         throw new Error(response.message || "Une erreur est survenue.");
       }
     } catch (error: any) {
-      toast.error(error.message || "Erreur lors de la mise à jour de l'organisation.");
-    } finally {
-      setIsLoading(false);
-    }
+      message.error(error.message || "Erreur lors de la mise à jour.");
+    } finally { setIsLoading(false); }
   };
 
-  if (!currentOrganization) {
-    return (
-        <div>
-            <h2 className="text-2xl font-bold mb-4">Paramètres de l'organisation</h2>
-            <p>Chargement des informations de l'organisation ou aucune organisation associée.</p>
-        </div>
-    );
-  }
+  if (!currentOrganization) return (
+    <FBCard style={{ textAlign: 'center', padding: 40 }}>
+      <BankOutlined style={{ fontSize: 40, color: FB.border, marginBottom: 12 }} />
+      <div style={{ fontSize: 16, fontWeight: 600, color: FB.text }}>Paramètres de l'organisation</div>
+      <div style={{ fontSize: 14, color: FB.textSecondary }}>Chargement ou aucune organisation associée.</div>
+    </FBCard>
+  );
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6">Paramètres de l'organisation</h2>
-      <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
-        <div>
-          <label htmlFor="orgName" className="block text-sm font-medium text-gray-700">
-            Nom de l'organisation
-          </label>
-          <input
-            type="text"
-            id="orgName"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-            required
-            disabled={!isAdmin}
-          />
+      {/* Header */}
+      <FBCard>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: '50%', background: FB.blue,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>
+            <BankOutlined style={{ fontSize: 22, color: FB.white }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: FB.text }}>Paramètres de l'organisation</div>
+            <div style={{ fontSize: 14, color: FB.textSecondary }}>Configurez les informations de {currentOrganization.name}</div>
+          </div>
         </div>
-        <div>
-          <button
-            type="submit"
+      </FBCard>
+
+      {/* Organization Name */}
+      <FBCard>
+        <div style={{ fontSize: 16, fontWeight: 700, color: FB.text, marginBottom: 14 }}>Nom de l'organisation</div>
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 6 }}>
+              Nom de l'organisation
+            </label>
+            <input
+              type="text" value={name} onChange={e => setName(e.target.value)} required disabled={!isAdmin}
+              style={{
+                width: '100%', maxWidth: 480, border: '1px solid ' + FB.border, borderRadius: 6,
+                padding: '10px 12px', fontSize: 15, color: FB.text, outline: 'none', fontFamily: 'inherit',
+                background: isAdmin ? FB.white : FB.btnGray, boxSizing: 'border-box',
+              }}
+            />
+          </div>
+          <button type="submit"
             disabled={isLoading || name === currentOrganization.name || !isAdmin}
-            className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-gray-400"
+            style={{
+              padding: '9px 20px', borderRadius: 6, border: 'none',
+              background: (isLoading || name === currentOrganization.name || !isAdmin) ? FB.btnGray : FB.blue,
+              color: (isLoading || name === currentOrganization.name || !isAdmin) ? FB.textSecondary : FB.white,
+              fontSize: 14, fontWeight: 600, cursor: (isLoading || name === currentOrganization.name || !isAdmin) ? 'not-allowed' : 'pointer',
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}
           >
+            {isLoading ? <LoadingOutlined /> : <SaveOutlined />}
             {isLoading ? 'Enregistrement...' : 'Enregistrer les modifications'}
           </button>
-        </div>
-      </form>
+        </form>
+      </FBCard>
 
-      {/* ✅ Section Google Workspace (admin seulement) */}
-      {isAdmin && currentOrganization && (
-        <GoogleWorkspaceConfigSection organizationId={currentOrganization.id} />
+      {/* Google Workspace */}
+      {isAdmin && (
+        <GoogleWorkspaceSection organizationId={currentOrganization.id} />
       )}
     </div>
   );

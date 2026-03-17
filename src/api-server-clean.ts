@@ -425,8 +425,55 @@ if (process.env.NODE_ENV === 'production') {
       }
     });
     app.get('/favicon.ico', (req, res) => res.sendFile(path.join(distDir, 'favicon.ico')));
-    app.get('/manifest.json', (req, res) => res.sendFile(path.join(distDir, 'manifest.json')));
-    app.get('/manifest.webmanifest', (req, res) => res.sendFile(path.join(distDir, 'manifest.webmanifest')));
+
+    // 📱 MANIFEST PWA DYNAMIQUE — adapté au hostname (CRM, site vitrine, etc.)
+    const dynamicManifestHandler = (req: express.Request, res: express.Response) => {
+      // Fallback = CRM (app.2thier.be, localhost, etc.)
+      let manifest: Record<string, unknown> = {
+        name: '2Thier CRM',
+        short_name: '2Thier',
+        description: 'CRM 2Thier - Gestion de Formulaires',
+        start_url: '/',
+        scope: '/',
+        display: 'standalone',
+        orientation: 'portrait',
+        theme_color: '#1890ff',
+        background_color: '#ffffff',
+        icons: [
+          { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' }
+        ]
+      };
+
+      // Si detectWebsite a trouvé un site vitrine → adapter le manifest
+      if (req.isWebsiteRoute && req.websiteData) {
+        const site = req.websiteData;
+        const config = site.config as Record<string, unknown> | null;
+        manifest = {
+          name: site.name,
+          short_name: site.name.length > 12 ? site.name.substring(0, 12) : site.name,
+          description: (config?.metaDescription as string) || `Site ${site.name}`,
+          start_url: '/',
+          scope: '/',
+          display: 'standalone',
+          orientation: 'portrait',
+          theme_color: (config?.primaryColor as string) || '#1890ff',
+          background_color: '#ffffff',
+          icons: [
+            { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+            { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' }
+          ]
+        };
+        console.log(`📱 [MANIFEST] Dynamique pour ${site.domain} → ${site.name}`);
+      }
+
+      res.setHeader('Content-Type', 'application/manifest+json');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.json(manifest);
+    };
+    app.get('/manifest.json', dynamicManifestHandler);
+    app.get('/manifest.webmanifest', dynamicManifestHandler);
+
     app.get('/registerSW.js', (req, res) => {
       const swPath = path.join(distDir, 'registerSW.js');
       if (fs.existsSync(swPath)) {

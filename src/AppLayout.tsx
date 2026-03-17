@@ -96,6 +96,10 @@ const OrganizationSettings = lazy(() => import('./pages/settings/OrganizationSet
 const ProfileSettings = lazy(() => import('./pages/settings/ProfileSettings'));
 const EmailSettings = lazy(() => import('./pages/settings/EmailSettings'));
 const AIMeasureSettings = lazy(() => import('./pages/settings/AIMeasureSettings'));
+const UsersSettings = lazy(() => import('./pages/settings/UsersSettings'));
+const RolesSettings = lazy(() => import('./pages/settings/RolesSettings'));
+const CommercialSettings = lazy(() => import('./pages/settings/CommercialSettings'));
+const GoogleSettings = lazy(() => import('./pages/settings/GoogleSettings'));
 
 // Pages Documents (Admin)
 const DocumentTemplatesPage = lazy(() => import('./pages/DocumentTemplatesPage'));
@@ -322,10 +326,13 @@ export default function AppLayout() {
             {/* Routes Paramètres */}
             <Route path="/settings" element={<SettingsPage />}>
               <Route path="profile" element={<ProfileSettings />} />
+              <Route path="commercial" element={<CommercialSettings />} />
               <Route path="organization" element={<OrganizationSettings />} />
+              <Route path="users" element={<UsersSettings />} />
+              <Route path="roles" element={<RolesSettings />} />
               <Route path="emails" element={<EmailSettings />} />
+              <Route path="google" element={<GoogleSettings />} />
               <Route path="ai-measure" element={<AIMeasureSettings />} />
-              <Route path="" element={<Navigate to="/settings/profile" replace />} />
             </Route>
             <Route path="/profile" element={<ProfilePage />} />
 

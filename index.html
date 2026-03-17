@@ -8,6 +8,8 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="2Thier CRM" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <title>2Thier CRM - Gestion de Formulaires</title>
     <!-- 🔧 Configuration d'environnement runtime INLINE (AVANT tout code) -->
     <script>
@@ -37,6 +39,18 @@
         console.log('[ENV-CONFIG] API Base URL:', apiBaseUrl || '(relative - using proxy)');
         console.log('[ENV-CONFIG] Host:', hostname);
         console.log('[ENV-CONFIG] Mode:', useRelativeUrls ? 'PROXY/PRODUCTION' : 'LOCAL DEV');
+
+        // 📱 Mettre à jour le titre et meta PWA dynamiquement depuis le manifest
+        fetch('/manifest.webmanifest')
+          .then(function(r) { return r.json(); })
+          .then(function(m) {
+            if (m && m.name) {
+              document.title = m.name;
+              var appleMeta = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+              if (appleMeta) appleMeta.setAttribute('content', m.short_name || m.name);
+            }
+          })
+          .catch(function() { /* fallback silencieux */ });
       })();
     </script>
   </head>

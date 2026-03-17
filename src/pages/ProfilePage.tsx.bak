@@ -1,0 +1,597 @@
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useAuth } from '../auth/useAuth';
+import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
+import { Link } from 'react-router-dom';
+import { GoogleAutoConnectionStatus } from '../components/GoogleAutoConnectionStatus';
+import { GoogleConnectionCard } from '../components/GoogleConnectionCard';
+import MyCommercialLinks from './MyCommercialLinks';
+import {
+  Card,
+  Tabs,
+  Avatar,
+  Button,
+  Input,
+  Form,
+  Upload,
+  Tag,
+  Descriptions,
+  Spin,
+  Alert,
+  Typography,
+  Divider,
+  Space,
+  message,
+} from 'antd';
+import {
+  UserOutlined,
+  CameraOutlined,
+  MailOutlined,
+  PhoneOutlined,
+  HomeOutlined,
+  BankOutlined,
+  SafetyCertificateOutlined,
+  TeamOutlined,
+  LinkOutlined,
+  GoogleOutlined,
+  CrownOutlined,
+  CheckCircleOutlined,
+  SwapOutlined,
+} from '@ant-design/icons';
+
+const { Title, Text, Paragraph } = Typography;
+
+// ── Helpers ──────────────────────────────────────────────────────────
+const roleLabel = (role?: string) => {
+  const map: Record<string, { label: string; color: string }> = {
+    super_admin: { label: 'Super Administrateur', color: 'gold' },
+    admin: { label: 'Administrateur', color: 'blue' },
+    manager: { label: 'Manager', color: 'cyan' },
+    commercial: { label: 'Commercial', color: 'green' },
+    user: { label: 'Utilisateur', color: 'default' },
+    support: { label: 'Support', color: 'purple' },
+    client: { label: 'Client', color: 'orange' },
+    prestataire: { label: 'Prestataire', color: 'magenta' },
+  };
+  return map[role || 'user'] || { label: role || 'Utilisateur', color: 'default' };
+};
+
+const statusTag = (status?: string) => {
+  const map: Record<string, { label: string; color: string }> = {
+    active: { label: 'Actif', color: 'success' },
+    ACTIVE: { label: 'Actif', color: 'success' },
+    inactive: { label: 'Inactif', color: 'default' },
+    INACTIVE: { label: 'Inactif', color: 'default' },
+    pending: { label: 'En attente', color: 'warning' },
+    PENDING: { label: 'En attente', color: 'warning' },
+    suspended: { label: 'Suspendu', color: 'error' },
+    REJECTED: { label: 'Rejeté', color: 'error' },
+  };
+  return map[status || 'active'] || { label: status || 'Inconnu', color: 'default' };
+};
+
+// ── Organisation Tab ─────────────────────────────────────────────────
+const OrganizationDetails = () => {
+  const { currentOrganization, can, isSuperAdmin, organizations, selectOrganization } = useAuth();
+  const [changingOrg, setChangingOrg] = useState(false);
+
+  const handleOrgChange = async (orgId: string) => {
+    setChangingOrg(true);
+    try {
+      await selectOrganization(orgId);
+      message.success('Organisation changée avec succès');
+    } catch {
+      message.error("Erreur lors du changement d'organisation");
+    } finally {
+      setChangingOrg(false);
+    }
+  };
+
+  if (!currentOrganization) return <Spin tip="Chargement de l'organisation..." className="flex justify-center py-12" />;
+
+  const orgStatus = statusTag(currentOrganization.status);
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <div className="flex items-center gap-4 mb-6">
+          <div className="w-12 h-12 rounded-xl bg-[#2C5967]/10 flex items-center justify-center">
+            <TeamOutlined className="text-xl text-[#2C5967]" />
+          </div>
+          <div>
+            <Title level={4} className="!mb-0">{currentOrganization.name}</Title>
+            <Tag color={orgStatus.color}>{orgStatus.label}</Tag>
+          </div>
+        </div>
+
+        <Descriptions column={{ xs: 1, sm: 2 }} bordered size="small">
+          <Descriptions.Item label="Nom">{currentOrganization.name}</Descriptions.Item>
+          <Descriptions.Item label="Statut">
+            <Tag color={orgStatus.color}>{orgStatus.label}</Tag>
+          </Descriptions.Item>
+        </Descriptions>
+
+        {can('organization:read') && (
+          <div className="mt-4">
+            <Link to="/settings/organization">
+              <Button type="link" className="!px-0 !text-[#2C5967]">Gérer l'organisation →</Button>
+            </Link>
+          </div>
+        )}
+      </Card>
+
+      {/* Sélecteur d'organisation pour Super Admin */}
+      {isSuperAdmin && organizations && organizations.length > 1 && (
+        <Card title={<><SwapOutlined className="mr-2" />Changer d'organisation</>}>
+          <Paragraph type="secondary" className="!mb-4">
+            En tant que Super Admin, vous pouvez basculer entre vos organisations.
+          </Paragraph>
+          <div className="space-y-2">
+            {organizations.map(org => {
+              const isActive = currentOrganization.id === org.id;
+              return (
+                <div
+                  key={org.id}
+                  onClick={() => !isActive && !changingOrg && handleOrgChange(org.id)}
+                  className={`flex items-center justify-between px-4 py-3 rounded-lg border-2 transition-all cursor-pointer ${
+                    isActive
+                      ? 'border-[#2C5967] bg-[#2C5967]/5'
+                      : 'border-gray-200 hover:border-[#2C5967]/40 hover:bg-gray-50'
+                  } ${changingOrg ? 'opacity-50 pointer-events-none' : ''}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <TeamOutlined className={isActive ? 'text-[#2C5967]' : 'text-gray-400'} />
+                    <Text strong={isActive}>{org.name}</Text>
+                  </div>
+                  {isActive && <CheckCircleOutlined className="text-[#2C5967]" />}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+};
+
+// ── Google Integration Tab ───────────────────────────────────────────
+const GoogleIntegration = () => {
+  const { currentOrganization } = useAuth();
+
+  return (
+    <div className="space-y-6">
+      <Card
+        title={<><GoogleOutlined className="mr-2" />Connexion automatique</>}
+      >
+        <GoogleAutoConnectionStatus showManualActions={true} />
+      </Card>
+      <Card
+        title={<><GoogleOutlined className="mr-2" />Détails de connexion</>}
+      >
+        <GoogleConnectionCard organizationId={currentOrganization?.id} />
+      </Card>
+    </div>
+  );
+};
+
+// ── Role & Permissions Tab ───────────────────────────────────────────
+const RoleAndPermissions = () => {
+  const { user, isSuperAdmin, currentOrganization, can } = useAuth();
+  const [roleDetails, setRoleDetails] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (isSuperAdmin) {
+      setLoading(false);
+      return;
+    }
+    if (currentOrganization && currentOrganization.role) {
+      setRoleDetails(currentOrganization.role);
+    }
+    setLoading(false);
+  }, [isSuperAdmin, currentOrganization]);
+
+  if (loading) return <Spin tip="Chargement des permissions..." className="flex justify-center py-12" />;
+  if (!user) return <Alert type="warning" message="Utilisateur non chargé." />;
+
+  if (isSuperAdmin) {
+    return (
+      <Card>
+        <div className="flex items-center gap-4 mb-6">
+          <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center">
+            <CrownOutlined className="text-xl text-amber-600" />
+          </div>
+          <div>
+            <Title level={4} className="!mb-0">Super Administrateur</Title>
+            <Text type="secondary">Accès total à l'ensemble de la plateforme</Text>
+          </div>
+        </div>
+
+        <Alert
+          type="info"
+          showIcon
+          message="Permissions illimitées"
+          description="Vous disposez de toutes les permissions sur tous les modules et toutes les organisations."
+          className="mb-4"
+        />
+
+        <Link to="/admin/roles">
+          <Button type="link" className="!px-0 !text-[#2C5967]">Gérer les rôles globaux →</Button>
+        </Link>
+      </Card>
+    );
+  }
+
+  if (!roleDetails) {
+    return (
+      <Card>
+        <Alert type="warning" message="Aucun rôle n'est assigné dans cette organisation." />
+      </Card>
+    );
+  }
+
+  const rl = roleLabel(roleDetails.name);
+
+  return (
+    <Card>
+      <div className="flex items-center gap-4 mb-6">
+        <div className="w-12 h-12 rounded-xl bg-[#2C5967]/10 flex items-center justify-center">
+          <SafetyCertificateOutlined className="text-xl text-[#2C5967]" />
+        </div>
+        <div>
+          <Title level={4} className="!mb-0">{roleDetails.label || roleDetails.name}</Title>
+          <Tag color={rl.color}>{rl.label}</Tag>
+        </div>
+      </div>
+
+      {roleDetails.description && (
+        <Paragraph type="secondary" className="!mb-4">{roleDetails.description}</Paragraph>
+      )}
+
+      <Alert
+        type="info"
+        showIcon
+        message="Permissions"
+        description="Vos droits d'accès sont définis par votre rôle. Contactez un administrateur pour toute modification."
+      />
+
+      {can('role:read') && (
+        <div className="mt-4">
+          <Link to="/settings/roles">
+            <Button type="link" className="!px-0 !text-[#2C5967]">Gérer les rôles de l'organisation →</Button>
+          </Link>
+        </div>
+      )}
+    </Card>
+  );
+};
+
+// ── Profile Header Card ──────────────────────────────────────────────
+interface ProfileHeaderProps {
+  profile: { firstName: string; lastName: string; avatarUrl: string };
+  user: any;
+  currentOrganization: any;
+  avatarFile: File | null;
+  onAvatarChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
+}
+
+const ProfileHeader: React.FC<ProfileHeaderProps> = ({
+  profile,
+  user,
+  currentOrganization,
+  avatarFile,
+  onAvatarChange,
+  fileInputRef,
+}) => {
+  const rl = roleLabel(user?.role);
+  const st = statusTag(user?.status);
+  const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ') || 'Utilisateur';
+  const initials = [profile.firstName?.[0], profile.lastName?.[0]].filter(Boolean).join('').toUpperCase() || 'U';
+
+  return (
+    <Card className="!mb-6">
+      <div className="flex flex-col sm:flex-row items-center gap-6">
+        {/* Avatar */}
+        <div className="relative group">
+          <Avatar
+            size={96}
+            src={avatarFile ? URL.createObjectURL(avatarFile) : (profile.avatarUrl || undefined)}
+            icon={!profile.avatarUrl && !avatarFile ? <UserOutlined /> : undefined}
+            className="!bg-[#2C5967] ring-4 ring-[#2C5967]/10"
+            style={{ fontSize: 36 }}
+          >
+            {!profile.avatarUrl && !avatarFile && initials}
+          </Avatar>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+          >
+            <CameraOutlined className="text-lg" />
+          </button>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={onAvatarChange}
+            ref={fileInputRef}
+            className="hidden"
+          />
+        </div>
+
+        {/* Info */}
+        <div className="flex-1 text-center sm:text-left">
+          <Title level={3} className="!mb-1">{fullName}</Title>
+          <div className="flex flex-wrap items-center gap-2 justify-center sm:justify-start">
+            <Tag color={rl.color} icon={rl.color === 'gold' ? <CrownOutlined /> : undefined}>{rl.label}</Tag>
+            <Tag color={st.color}>{st.label}</Tag>
+            {currentOrganization && (
+              <Tag icon={<TeamOutlined />} color="processing">{currentOrganization.name}</Tag>
+            )}
+          </div>
+          {user?.email && (
+            <Text type="secondary" className="mt-2 block">
+              <MailOutlined className="mr-1" />{user.email}
+            </Text>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+};
+
+// ── Main Profile Page ────────────────────────────────────────────────
+const ProfilePage = () => {
+  const { user, loading: userLoading, refetchUser, isSuperAdmin, can, currentOrganization } = useAuth();
+  const { api } = useAuthenticatedApi();
+  const [form] = Form.useForm();
+  const [profile, setProfile] = useState({
+    firstName: '',
+    lastName: '',
+    avatarUrl: '',
+    address: '',
+    vatNumber: '',
+    phoneNumber: '',
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (user) {
+      setLoading(true);
+      api.get('/api/profile').then((response: any) => {
+        setProfile(response);
+        form.setFieldsValue(response);
+        setLoading(false);
+      }).catch(() => {
+        message.error('Impossible de charger les informations du profil.');
+        setLoading(false);
+      });
+    }
+  }, [user, api, form]);
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setAvatarFile(e.target.files[0]);
+    }
+  };
+
+  const handleAvatarUpload = async () => {
+    if (!avatarFile) return;
+    const formData = new FormData();
+    formData.append('avatar', avatarFile);
+    const response = await api.post('/api/profile/avatar', formData);
+    setProfile(prev => ({ ...prev, avatarUrl: (response as any).avatarUrl }));
+    setAvatarFile(null);
+  };
+
+  const handleSubmit = async (values: any) => {
+    setSaving(true);
+    try {
+      if (avatarFile) {
+        await handleAvatarUpload();
+      }
+      const updated = { ...profile, ...values };
+      const updatedProfile = await api.put('/api/profile', updated);
+      setProfile(updatedProfile as any);
+      form.setFieldsValue(updatedProfile as any);
+      message.success('Profil mis à jour avec succès !');
+      if (refetchUser) refetchUser();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Une erreur est survenue lors de la mise à jour.';
+      message.error(errorMessage);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ── Determine visible tabs based on role/permissions ──
+  const tabs = useMemo(() => {
+    const userRole = user?.role || 'user';
+    const isAdmin = isSuperAdmin || userRole === 'admin';
+    const isInternal = isAdmin || ['manager', 'commercial', 'support'].includes(userRole);
+
+    const items: { key: string; label: React.ReactNode; children: React.ReactNode }[] = [
+      {
+        key: 'profile',
+        label: <span><UserOutlined className="mr-1.5" />Profil</span>,
+        children: null, // rendered separately below
+      },
+    ];
+
+    // Liens commerciaux : internal roles + anyone with commercial_links feature
+    if (isInternal) {
+      items.push({
+        key: 'commercial',
+        label: <span><LinkOutlined className="mr-1.5" />Mes Liens Commerciaux</span>,
+        children: <MyCommercialLinks />,
+      });
+    }
+
+    // Organisation : everyone except clients/prestataires gets a view
+    if (isInternal || userRole === 'user') {
+      items.push({
+        key: 'organization',
+        label: <span><TeamOutlined className="mr-1.5" />Organisation</span>,
+        children: <OrganizationDetails />,
+      });
+    }
+
+    // Rôle & Permissions : all authenticated users can see their own role
+    items.push({
+      key: 'permissions',
+      label: <span><SafetyCertificateOutlined className="mr-1.5" />Rôle & Permissions</span>,
+      children: <RoleAndPermissions />,
+    });
+
+    // Google Workspace : only admins
+    if (isAdmin) {
+      items.push({
+        key: 'google',
+        label: <span><GoogleOutlined className="mr-1.5" />Google Workspace</span>,
+        children: <GoogleIntegration />,
+      });
+    }
+
+    return items;
+  }, [user?.role, isSuperAdmin, can, currentOrganization]);
+
+  if (userLoading || loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Spin size="large" tip="Chargement du profil..." />
+      </div>
+    );
+  }
+
+  // ── Profile form content ──
+  const profileForm = (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Main form */}
+      <Card className="lg:col-span-2" title="Informations personnelles">
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleSubmit}
+          initialValues={profile}
+          requiredMark={false}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
+            <Form.Item
+              label="Prénom"
+              name="firstName"
+              rules={[{ required: true, message: 'Le prénom est requis' }]}
+            >
+              <Input prefix={<UserOutlined className="text-gray-400" />} placeholder="Prénom" size="large" />
+            </Form.Item>
+
+            <Form.Item
+              label="Nom"
+              name="lastName"
+              rules={[{ required: true, message: 'Le nom est requis' }]}
+            >
+              <Input prefix={<UserOutlined className="text-gray-400" />} placeholder="Nom" size="large" />
+            </Form.Item>
+          </div>
+
+          <Form.Item label="Adresse" name="address">
+            <Input prefix={<HomeOutlined className="text-gray-400" />} placeholder="Adresse complète" size="large" />
+          </Form.Item>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
+            <Form.Item label="Numéro de TVA" name="vatNumber">
+              <Input prefix={<BankOutlined className="text-gray-400" />} placeholder="BE0000.000.000" size="large" />
+            </Form.Item>
+
+            <Form.Item label="Téléphone" name="phoneNumber">
+              <Input prefix={<PhoneOutlined className="text-gray-400" />} placeholder="+32 470 00 00 00" size="large" />
+            </Form.Item>
+          </div>
+
+          <Divider />
+
+          <div className="flex justify-end">
+            <Button
+              type="primary"
+              htmlType="submit"
+              size="large"
+              loading={saving}
+              className="!bg-[#2C5967] hover:!bg-[#234851]"
+            >
+              Enregistrer les modifications
+            </Button>
+          </div>
+        </Form>
+      </Card>
+
+      {/* Sidebar summary */}
+      <div className="space-y-6">
+        <Card title="Résumé du compte">
+          <Descriptions column={1} size="small" colon={false}>
+            <Descriptions.Item label={<Text type="secondary">Email</Text>}>
+              <Text copyable>{user?.email}</Text>
+            </Descriptions.Item>
+            <Descriptions.Item label={<Text type="secondary">Rôle</Text>}>
+              <Tag color={roleLabel(user?.role).color}>{roleLabel(user?.role).label}</Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label={<Text type="secondary">Statut</Text>}>
+              <Tag color={statusTag(user?.status).color}>{statusTag(user?.status).label}</Tag>
+            </Descriptions.Item>
+            {currentOrganization && (
+              <Descriptions.Item label={<Text type="secondary">Organisation</Text>}>
+                {currentOrganization.name}
+              </Descriptions.Item>
+            )}
+          </Descriptions>
+        </Card>
+
+        {/* Quick tips based on role */}
+        {(user?.role === 'client' || user?.role === 'prestataire') && (
+          <Card size="small" className="!bg-blue-50 !border-blue-200">
+            <Text type="secondary" className="text-sm">
+              💡 Cet espace vous permet de gérer vos informations personnelles. Pour toute question concernant votre accès, contactez votre administrateur.
+            </Text>
+          </Card>
+        )}
+
+        {isSuperAdmin && (
+          <Card size="small" className="!bg-amber-50 !border-amber-200">
+            <Text className="text-sm">
+              <CrownOutlined className="mr-1 text-amber-600" />
+              Vous êtes connecté en tant que <Text strong>Super Admin</Text>. Vous avez accès à l'ensemble de la plateforme.
+            </Text>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 py-6">
+      {/* Header */}
+      <ProfileHeader
+        profile={profile}
+        user={user}
+        currentOrganization={currentOrganization}
+        avatarFile={avatarFile}
+        onAvatarChange={handleAvatarChange}
+        fileInputRef={fileInputRef}
+      />
+
+      {/* Tabs */}
+      <Card className="!shadow-sm">
+        <Tabs
+          defaultActiveKey="profile"
+          items={tabs.map(tab => ({
+            ...tab,
+            children: tab.key === 'profile' ? profileForm : tab.children,
+          }))}
+          size="large"
+        />
+      </Card>
+    </div>
+  );
+};
+
+export default ProfilePage;

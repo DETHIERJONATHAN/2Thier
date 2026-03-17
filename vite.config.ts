@@ -28,29 +28,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
-      manifest: {
-        name: 'Devis1Minute',
-        short_name: 'Devis1Min',
-        description: 'Obtenez vos devis en 1 minute',
-        theme_color: '#1890ff',
-        background_color: '#ffffff',
-        display: 'standalone',
-        orientation: 'portrait',
-        scope: '/',
-        start_url: '/devis1minute',
-        icons: [
-          {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png'
-          }
-        ]
-      },
+      manifest: false, // 📱 Manifest servi dynamiquement par l'API selon le hostname
       workbox: {
   // 🔧 CORRECTION: Augmenter limite fichiers lourds (assets ~13MB)
   maximumFileSizeToCacheInBytes: 20 * 1024 * 1024, // 20MB au lieu de 2MB

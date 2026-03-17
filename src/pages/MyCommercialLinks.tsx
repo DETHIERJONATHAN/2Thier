@@ -1,29 +1,37 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Card, 
-  Typography, 
-  Space, 
-  Button, 
-  Input, 
-  message, 
-  Alert,
-  Empty,
-  Tag,
-  Divider,
-  Spin
-} from 'antd';
+import { Spin, message } from 'antd';
 import {
   LinkOutlined,
   CopyOutlined,
   FormOutlined,
   UserOutlined,
   CheckCircleOutlined,
-  ShareAltOutlined
+  ShareAltOutlined,
+  BulbOutlined,
+  LoadingOutlined,
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { useAuth } from '../auth/useAuth';
 
-const { Title, Text, Paragraph } = Typography;
+const FB = {
+  bg: '#f0f2f5', white: '#ffffff', text: '#050505', textSecondary: '#65676b',
+  blue: '#1877f2', blueHover: '#166fe5', border: '#ced0d4',
+  btnGray: '#e4e6eb', btnGrayHover: '#d8dadf', green: '#42b72a',
+  red: '#e4405f', orange: '#f7931a', purple: '#722ed1',
+  shadow: '0 1px 2px rgba(0,0,0,0.1)', radius: 8,
+};
+
+const useScreenSize = () => {
+  const [w, setW] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
+  useEffect(() => { const h = () => setW(window.innerWidth); window.addEventListener('resize', h); return () => window.removeEventListener('resize', h); }, []);
+  return { isMobile: w < 768 };
+};
+
+const FBCard: React.FC<{ children: React.ReactNode; style?: React.CSSProperties }> = ({ children, style }) => (
+  <div style={{ background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow, padding: 20, marginBottom: 16, ...style }}>
+    {children}
+  </div>
+);
 
 interface NominativeForm {
   id: string;
@@ -32,27 +40,22 @@ interface NominativeForm {
   slug: string;
   isActive: boolean;
   submissionCount: number;
-  websiteUrl: string | null; // URL du site associé (ex: https://2thier.be)
-  websiteName?: string; // Nom du site
-  urlPath?: string; // Chemin URL (ex: /simulateur)
+  websiteUrl: string | null;
+  websiteName?: string;
+  urlPath?: string;
 }
 
-/**
- * Page "Mes Liens Commerciaux"
- * Accessible à tous les utilisateurs du CRM
- * Génère automatiquement les liens personnalisés pour le tracking des leads
- */
 export default function MyCommercialLinks() {
   const { api } = useAuthenticatedApi();
   const { user } = useAuth();
-  
+  const { isMobile } = useScreenSize();
+
   const [forms, setForms] = useState<NominativeForm[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userSlug, setUserSlug] = useState<string>('');
+  const [userSlug, setUserSlug] = useState('');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
     try {
@@ -61,184 +64,212 @@ export default function MyCommercialLinks() {
       setForms(response.forms);
       setUserSlug(response.userSlug);
     } catch (error) {
-      console.error('Erreur lors du chargement:', error);
+      console.error('Erreur:', error);
       message.error('Impossible de charger vos liens commerciaux');
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   const generateLink = (form: NominativeForm) => {
-    // Utiliser l'URL du site associé au formulaire
-    if (!form.websiteUrl) {
-      console.warn(`Formulaire ${form.name} n'a pas de site associé`);
-      return null;
-    }
+    if (!form.websiteUrl) return null;
     const urlPath = form.urlPath || '/simulateur';
     return `${form.websiteUrl}${urlPath}/${form.slug}?ref=${userSlug}`;
   };
 
   const handleCopyLink = (form: NominativeForm) => {
     const link = generateLink(form);
-    if (!link) {
-      message.error(`Ce formulaire n'est pas lié à un site web.`);
-      return;
-    }
+    if (!link) { message.error("Ce formulaire n'est pas lié à un site web."); return; }
     navigator.clipboard.writeText(link);
-    message.success(`Lien "${form.name}" copié ! Vous pouvez maintenant le partager avec vos prospects.`);
+    message.success(`Lien "${form.name}" copié !`);
+    setCopiedId(form.id);
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Spin size="large" />
-      </div>
-    );
-  }
+  if (loading) return (
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+      <Spin size="large" />
+    </div>
+  );
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      {/* En-tête */}
-      <div className="mb-6">
-        <Title level={2} className="mb-2">
-          <ShareAltOutlined className="mr-2" />
-          Mes Liens Commerciaux
-        </Title>
-        <Text type="secondary">
-          Vos liens personnalisés pour tracker vos leads et mesurer vos performances
-        </Text>
-      </div>
-
-      {/* Info utilisateur */}
-      <Card className="mb-6" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center">
-            <UserOutlined className="text-3xl text-purple-600" />
+    <div style={{ maxWidth: 900, margin: '0 auto' }}>
+      {/* Header */}
+      <FBCard>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: '50%', background: FB.blue,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>
+            <ShareAltOutlined style={{ fontSize: 22, color: FB.white }} />
           </div>
-          <div className="flex-1">
-            <Text strong className="text-white text-lg block">
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: FB.text }}>Mes Liens Commerciaux</div>
+            <div style={{ fontSize: 14, color: FB.textSecondary }}>
+              Vos liens personnalisés pour tracker vos leads
+            </div>
+          </div>
+        </div>
+      </FBCard>
+
+      {/* User Info Card */}
+      <FBCard style={{
+        background: 'linear-gradient(135deg, ' + FB.blue + ' 0%, ' + FB.purple + ' 100%)',
+        color: FB.white,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: '50%', background: 'rgba(255,255,255,0.2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>
+            <UserOutlined style={{ fontSize: 26, color: FB.white }} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 18, fontWeight: 700 }}>
               {user?.firstName} {user?.lastName}
-            </Text>
-            <Text className="text-white opacity-90">
-              Votre identifiant de tracking : <Tag color="white" className="ml-2">{userSlug}</Tag>
-            </Text>
+            </div>
+            <div style={{ fontSize: 14, opacity: 0.9, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              Identifiant de tracking :
+              <span style={{
+                padding: '3px 10px', borderRadius: 12, background: 'rgba(255,255,255,0.25)',
+                fontSize: 13, fontWeight: 600,
+              }}>
+                {userSlug}
+              </span>
+            </div>
           </div>
         </div>
-      </Card>
+      </FBCard>
 
-      {/* Guide d'utilisation */}
-      <Alert
-        message="💡 Comment ça fonctionne ?"
-        description={
-          <div className="space-y-2">
-            <p><strong>1.</strong> Copiez votre lien personnalisé ci-dessous</p>
-            <p><strong>2.</strong> Partagez-le avec vos prospects (email, WhatsApp, réseaux sociaux...)</p>
-            <p><strong>3.</strong> Chaque personne qui remplit le formulaire via votre lien devient automatiquement VOTRE lead</p>
-            <p><strong>4.</strong> Suivez vos performances en temps réel dans le CRM</p>
+      {/* How it works */}
+      <FBCard style={{ background: FB.blue + '08', border: '1px solid ' + FB.blue + '20' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+          <BulbOutlined style={{ fontSize: 18, color: FB.blue, flexShrink: 0, marginTop: 2 }} />
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: FB.blue, marginBottom: 8 }}>Comment ça fonctionne ?</div>
+            {[
+              'Copiez votre lien personnalisé ci-dessous',
+              'Partagez-le avec vos prospects (email, WhatsApp, réseaux sociaux...)',
+              'Chaque personne qui remplit le formulaire via votre lien devient automatiquement VOTRE lead',
+              'Suivez vos performances en temps réel dans le CRM',
+            ].map((step, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6, fontSize: 13, color: FB.blue, opacity: 0.85 }}>
+                <span style={{
+                  width: 20, height: 20, borderRadius: '50%', background: FB.blue,
+                  color: FB.white, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 11, fontWeight: 700, flexShrink: 0,
+                }}>{i + 1}</span>
+                <span>{step}</span>
+              </div>
+            ))}
           </div>
-        }
-        type="info"
-        showIcon
-        className="mb-6"
-      />
+        </div>
+      </FBCard>
 
-      {/* Liste des formulaires nominatifs */}
+      {/* Forms list */}
       {forms.length === 0 ? (
-        <Card>
-          <Empty
-            description={
-              <div className="text-center">
-                <Text type="secondary">
-                  Aucun formulaire nominatif disponible pour le moment
-                </Text>
-                <br />
-                <Text type="secondary" className="text-sm">
-                  Contactez votre administrateur pour activer des formulaires en mode tracking commercial
-                </Text>
-              </div>
-            }
-          />
-        </Card>
+        <FBCard style={{ textAlign: 'center', padding: 40 }}>
+          <FormOutlined style={{ fontSize: 40, color: FB.border, marginBottom: 12 }} />
+          <div style={{ fontSize: 15, fontWeight: 600, color: FB.text, marginBottom: 4 }}>
+            Aucun formulaire nominatif disponible
+          </div>
+          <div style={{ fontSize: 13, color: FB.textSecondary }}>
+            Contactez votre administrateur pour activer des formulaires en mode tracking commercial
+          </div>
+        </FBCard>
       ) : (
-        <div className="space-y-4">
-          {forms.map((form) => (
-            <Card 
-              key={form.id}
-              className="hover:shadow-lg transition-shadow"
-              styles={{ body: { padding: '24px' } }}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <FormOutlined className="text-xl text-blue-500" />
-                    <Title level={4} className="mb-0">
-                      {form.name}
-                    </Title>
-                    {form.isActive ? (
-                      <Tag color="success" icon={<CheckCircleOutlined />}>Actif</Tag>
-                    ) : (
-                      <Tag color="default">Inactif</Tag>
-                    )}
-                  </div>
-                  
-                  {form.description && (
-                    <Paragraph type="secondary" className="mb-3">
-                      {form.description}
-                    </Paragraph>
-                  )}
-
-                  <div className="bg-gray-50 p-3 rounded mb-3">
-                    <Text strong className="block mb-2 text-sm">Votre lien personnalisé :</Text>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        value={generateLink(form) || 'Site non configuré'}
-                        readOnly
-                        className="font-mono text-sm"
-                        status={!form.websiteUrl ? 'warning' : undefined}
-                      />
-                      <Button
-                        type="primary"
-                        icon={<CopyOutlined />}
-                        onClick={() => handleCopyLink(form)}
-                        disabled={!form.websiteUrl}
-                      >
-                        Copier
-                      </Button>
-                    </div>
-                    {form.websiteName && (
-                      <Text type="secondary" className="text-xs mt-1 block">
-                        📍 Site: {form.websiteName}
-                      </Text>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-4 text-sm">
-                    <Text type="secondary">
-                      📊 {form.submissionCount} soumission{form.submissionCount > 1 ? 's' : ''} totale{form.submissionCount > 1 ? 's' : ''}
-                    </Text>
-                  </div>
-                </div>
+        forms.map(form => {
+          const link = generateLink(form);
+          return (
+            <FBCard key={form.id}>
+              {/* Form header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                <FormOutlined style={{ fontSize: 20, color: FB.blue }} />
+                <span style={{ fontSize: 17, fontWeight: 700, color: FB.text, flex: 1 }}>
+                  {form.name}
+                </span>
+                <span style={{
+                  padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600,
+                  background: form.isActive ? FB.green + '15' : FB.btnGray,
+                  color: form.isActive ? FB.green : FB.textSecondary,
+                  display: 'flex', alignItems: 'center', gap: 4,
+                }}>
+                  {form.isActive ? <CheckCircleOutlined /> : null}
+                  {form.isActive ? 'Actif' : 'Inactif'}
+                </span>
               </div>
-            </Card>
-          ))}
-        </div>
+
+              {form.description && (
+                <div style={{ fontSize: 14, color: FB.textSecondary, marginBottom: 12 }}>
+                  {form.description}
+                </div>
+              )}
+
+              {/* Link section */}
+              <div style={{
+                padding: 14, background: FB.btnGray, borderRadius: FB.radius, marginBottom: 12,
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 8 }}>
+                  Votre lien personnalisé :
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{
+                    flex: 1, padding: '9px 12px', borderRadius: 6,
+                    border: '1px solid ' + (link ? FB.border : FB.orange + '50'),
+                    background: FB.white, fontSize: 13, color: link ? FB.text : FB.textSecondary,
+                    fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {link || 'Site non configuré'}
+                  </div>
+                  <button
+                    onClick={() => handleCopyLink(form)}
+                    disabled={!link}
+                    style={{
+                      padding: '9px 16px', borderRadius: 6, border: 'none',
+                      background: copiedId === form.id ? FB.green : FB.blue,
+                      color: FB.white, fontSize: 14, fontWeight: 600, cursor: link ? 'pointer' : 'not-allowed',
+                      display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
+                      opacity: link ? 1 : 0.5, transition: 'background 0.2s',
+                    }}
+                  >
+                    {copiedId === form.id ? <CheckCircleOutlined /> : <CopyOutlined />}
+                    {!isMobile && (copiedId === form.id ? 'Copié !' : 'Copier')}
+                  </button>
+                </div>
+                {form.websiteName && (
+                  <div style={{ fontSize: 12, color: FB.textSecondary, marginTop: 6 }}>
+                    📍 Site: {form.websiteName}
+                  </div>
+                )}
+              </div>
+
+              {/* Submission count */}
+              <div style={{ fontSize: 13, color: FB.textSecondary, display: 'flex', alignItems: 'center', gap: 6 }}>
+                📊 {form.submissionCount} soumission{form.submissionCount > 1 ? 's' : ''} totale{form.submissionCount > 1 ? 's' : ''}
+              </div>
+            </FBCard>
+          );
+        })
       )}
 
-      <Divider />
-
-      {/* Conseils */}
-      <Card className="bg-blue-50 border-blue-200">
-        <Title level={5} className="text-blue-800 mb-3">
+      {/* Tips Card */}
+      <FBCard style={{ background: FB.green + '08', border: '1px solid ' + FB.green + '20' }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: FB.green, marginBottom: 10 }}>
           💼 Conseils pour maximiser vos conversions
-        </Title>
-        <ul className="space-y-2 text-sm">
-          <li>✅ Utilisez un <strong>raccourcisseur de liens</strong> (bit.ly, tinyurl.com) pour faciliter le partage</li>
-          <li>✅ Ajoutez votre lien dans la <strong>signature de vos emails</strong></li>
-          <li>✅ Partagez-le sur vos <strong>réseaux sociaux professionnels</strong> (LinkedIn, Facebook...)</li>
-          <li>✅ Intégrez-le dans vos <strong>campagnes WhatsApp Business</strong></li>
-          <li>✅ Suivez vos <strong>statistiques de conversion</strong> dans le module Leads du CRM</li>
-        </ul>
-      </Card>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {[
+            ['Utilisez un', 'raccourcisseur de liens', '(bit.ly, tinyurl.com) pour faciliter le partage'],
+            ['Ajoutez votre lien dans la', 'signature de vos emails', ''],
+            ['Partagez-le sur vos', 'réseaux sociaux professionnels', '(LinkedIn, Facebook...)'],
+            ['Intégrez-le dans vos', 'campagnes WhatsApp Business', ''],
+            ['Suivez vos', 'statistiques de conversion', 'dans le module Leads du CRM'],
+          ].map((tip, i) => (
+            <div key={i} style={{ fontSize: 13, color: FB.text, display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+              <CheckCircleOutlined style={{ color: FB.green, marginTop: 2, flexShrink: 0 }} />
+              <span>{tip[0]} <strong>{tip[1]}</strong> {tip[2]}</span>
+            </div>
+          ))}
+        </div>
+      </FBCard>
     </div>
   );
 }

@@ -2,29 +2,8 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useAuthenticatedApi } from "../hooks/useAuthenticatedApi";
 import { useAuth } from "../auth/useAuth";
 import { useLeadStatuses } from "../hooks/useLeadStatuses";
-import { Link } from "react-router-dom";
-import { 
-  Card, 
-  Row, 
-  Col, 
-  Statistic, 
-  Timeline, 
-  List, 
-  Avatar, 
-  Progress, 
-  Button, 
-  Space, 
-  Typography,
-  Spin,
-  Badge,
-  Table,
-  Tag,
-  Divider,
-  Tabs,
-  Segmented,
-  Switch,
-  Tooltip as AntTooltip
-} from "antd";
+import { Link, useNavigate } from "react-router-dom";
+import { Avatar, Spin, Tooltip as AntTooltip } from "antd";
 import {
   UserOutlined,
   TeamOutlined,
@@ -34,39 +13,74 @@ import {
   RiseOutlined,
   ClockCircleOutlined,
   CheckCircleOutlined,
-  ExclamationCircleOutlined,
   PlusOutlined,
-  EyeOutlined,
   MailOutlined,
   BankOutlined,
   SettingOutlined,
   BarChartOutlined,
-  PieChartOutlined,
-  LineChartOutlined,
   ReloadOutlined,
-  FilterOutlined,
-  ExportOutlined,
-  FireOutlined,
   ThunderboltOutlined,
-  StarOutlined,
-  WarningOutlined
-} from '@ant-design/icons';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { SmartNotifications } from '../components/SmartNotifications';
-import { LEAD_SOURCES, LEAD_PRIORITIES } from './Leads/LeadsConfig';
-import { NotificationManager } from '../components/Notifications';
-import type { SegmentedValue } from 'antd/es/segmented';
+  BulbOutlined,
+  FileTextOutlined,
+  FunnelPlotOutlined,
+  LikeOutlined,
+  LikeFilled,
+  MessageOutlined,
+  ShareAltOutlined,
+  SmileOutlined,
+  MoreOutlined,
+  GlobalOutlined,
+  ToolOutlined,
+} from "@ant-design/icons";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+} from "recharts";
+import { LEAD_SOURCES, LEAD_PRIORITIES } from "./Leads/LeadsConfig";
+import { NotificationManager } from "../components/Notifications";
 
-const { Title, Text, Paragraph } = Typography;
-const { TabPane } = Tabs;
+/* ═══════════════════════════════════════════════════════════════
+   FACEBOOK COLORS — exactement les mêmes tokens
+   ═══════════════════════════════════════════════════════════════ */
+const FB = {
+  bg: "#f0f2f5",
+  white: "#ffffff",
+  text: "#050505",
+  textSecondary: "#65676b",
+  blue: "#1877f2",
+  blueHover: "#166fe5",
+  border: "#ced0d4",
+  btnGray: "#e4e6eb",
+  btnGrayHover: "#d8dadf",
+  activeBlue: "#e7f3ff",
+  green: "#42b72a",
+  red: "#e4405f",
+  orange: "#f7931a",
+  shadow: "0 1px 2px rgba(0,0,0,0.1)",
+  shadowHover: "0 2px 8px rgba(0,0,0,0.15)",
+  radius: 8,
+};
 
-type ChartType = 'pie' | 'bar';
-type TimeRange = 'week' | 'month' | 'quarter';
+/* ═══════════════════════════════════════════════════════════════
+   RESPONSIVE HOOK
+   ═══════════════════════════════════════════════════════════════ */
+const useScreenSize = () => {
+  const [width, setWidth] = useState(
+    typeof window !== "undefined" ? window.innerWidth : 1024
+  );
+  useEffect(() => {
+    const onResize = () => setWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return { isMobile: width < 768, isTablet: width >= 768 && width < 1100, width };
+};
 
-const isChartType = (value: SegmentedValue): value is ChartType => value === 'pie' || value === 'bar';
-const isTimeRange = (value: SegmentedValue): value is TimeRange =>
-  value === 'week' || value === 'month' || value === 'quarter';
-
+/* ═══════════════════════════════════════════════════════════════
+   TYPES
+   ═══════════════════════════════════════════════════════════════ */
 interface DashboardStats {
   totalLeads: number;
   newLeadsToday: number;
@@ -82,11 +96,11 @@ interface DashboardStats {
 
 interface RecentActivity {
   id: string;
-  type: 'lead' | 'client' | 'email' | 'meeting' | 'task' | 'creation';
+  type: "lead" | "client" | "email" | "meeting" | "task" | "creation";
   title: string;
   description: string;
   timestamp: string;
-  status: 'success' | 'warning' | 'error' | 'info';
+  status: "success" | "warning" | "error" | "info";
   user?: string;
 }
 
@@ -95,930 +109,759 @@ interface TopLead {
   nom: string;
   prenom: string;
   entreprise: string;
-  email?: string;
-  phone?: string;
   status: string;
   statusColor?: string;
   score: number;
-  lastContact?: string;
-  nextFollowUp?: string;
-  assignedTo?: string;
-  source?: string;
   createdAt: string;
-  notes?: string;
 }
 
 interface LeadChartData {
   leadsByStatus: { name: string; value: number; color: string }[];
-  leadsBySource: { name: string; value: number }[];
-  leadsByPriority: { name: string; value: number; color: string }[];
-  leadsEvolution: { name: string; value: number }[];
 }
 
-// Composant épuré pour les utilisateurs sans organisation
-const CreateOrganizationPrompt = () => {
+/* ═══════════════════════════════════════════════════════════════
+   HELPERS
+   ═══════════════════════════════════════════════════════════════ */
+const activityIcon = (type: string) => {
+  switch (type) {
+    case "creation": return <UserOutlined />;
+    case "email": return <MailOutlined />;
+    case "meeting": return <CalendarOutlined />;
+    case "task": return <CheckCircleOutlined />;
+    default: return <ThunderboltOutlined />;
+  }
+};
+
+const activityColor = (type: string) => {
+  switch (type) {
+    case "creation": return FB.green;
+    case "email": return FB.blue;
+    case "meeting": return FB.orange;
+    case "task": return "#722ed1";
+    default: return FB.blue;
+  }
+};
+
+const activityVerb = (type: string) => {
+  switch (type) {
+    case "creation": return "a ajouté un nouveau lead";
+    case "email": return "a envoyé un email";
+    case "meeting": return "a planifié une réunion";
+    case "task": return "a complété une tâche";
+    default: return "a effectué une action";
+  }
+};
+
+const timeAgo = (timestamp: string): string => {
+  const diff = Date.now() - new Date(timestamp).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "À l\u0027instant";
+  if (mins < 60) return "il y a " + mins + " min";
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return "il y a " + hrs + "h";
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return "il y a " + days + "j";
+  return new Date(timestamp).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   FB CARD
+   ═══════════════════════════════════════════════════════════════ */
+const FBCard: React.FC<{
+  children: React.ReactNode;
+  style?: React.CSSProperties;
+  noPadding?: boolean;
+}> = ({ children, style, noPadding }) => (
+  <div style={{
+    background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow,
+    padding: noPadding ? 0 : 16, marginBottom: 16, ...style,
+  }}>
+    {children}
+  </div>
+);
+
+/* ═══════════════════════════════════════════════════════════════
+   LEFT SIDEBAR SHORTCUT ITEM
+   ═══════════════════════════════════════════════════════════════ */
+const ShortcutItem: React.FC<{
+  icon: React.ReactNode;
+  label: string;
+  to: string;
+  color?: string;
+}> = ({ icon, label, to, color }) => {
+  const [hovered, setHovered] = useState(false);
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
-      <Card className="max-w-md w-full text-center">
-        <div className="mb-6">
-          <Avatar size={64} icon={<BankOutlined />} className="mb-4" />
-          <Title level={3}>Bienvenue</Title>
-          <Text type="secondary">
-            Pour commencer, vous devez créer ou rejoindre une organisation.
-          </Text>
-        </div>
-        
-        <Space direction="vertical" size="middle" className="w-full">
-          <Link to="/organization/create">
-            <Button type="primary" size="large" icon={<PlusOutlined />} block>
-              Créer une organisation
-            </Button>
-          </Link>
-          
-          <Link to="/settings/profile">
-            <Button size="large" icon={<SettingOutlined />} block>
-              Paramètres du profil
-            </Button>
-          </Link>
-        </Space>
-        
-        <Divider />
-        
-        <Paragraph type="secondary" className="text-sm">
-          <ExclamationCircleOutlined className="mr-2" />
-          Si vous avez déjà été invité à rejoindre une organisation,
-          vérifiez vos emails et acceptez l'invitation.
-        </Paragraph>
-      </Card>
-    </div>
+    <Link to={to} style={{ textDecoration: "none" }}>
+      <div
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          display: "flex", alignItems: "center", gap: 12,
+          padding: "8px 8px", borderRadius: FB.radius,
+          background: hovered ? FB.btnGray : "transparent",
+          cursor: "pointer", transition: "background 0.15s",
+        }}
+      >
+        {color ? (
+          <div style={{
+            width: 36, height: 36, borderRadius: "50%",
+            background: color, display: "flex", alignItems: "center",
+            justifyContent: "center", fontSize: 18, color: FB.white, flexShrink: 0,
+          }}>
+            {icon}
+          </div>
+        ) : (
+          <div style={{ flexShrink: 0 }}>{icon}</div>
+        )}
+        <span style={{
+          fontSize: 15, fontWeight: 500, color: FB.text,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>
+          {label}
+        </span>
+      </div>
+    </Link>
   );
 };
 
+/* ═══════════════════════════════════════════════════════════════
+   ACTIVITY POST (Facebook-style post card)
+   ═══════════════════════════════════════════════════════════════ */
+const ActivityPost: React.FC<{ activity: RecentActivity; isMobile: boolean }> = ({ activity, isMobile }) => {
+  const [liked, setLiked] = useState(false);
+  const [showComments, setShowComments] = useState(false);
+
+  return (
+    <FBCard noPadding>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", padding: "12px 16px 0", gap: 8 }}>
+        <Avatar size={40} style={{ backgroundColor: activityColor(activity.type), flexShrink: 0 }}
+          icon={activityIcon(activity.type)} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div>
+            <span style={{ fontWeight: 600, fontSize: 14, color: FB.text }}>{activity.user || "Système"}</span>{" "}
+            <span style={{ color: FB.textSecondary, fontSize: 14 }}>{activityVerb(activity.type)}</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: FB.textSecondary }}>
+            <span>{timeAgo(activity.timestamp)}</span>
+            <span>·</span>
+            <GlobalOutlined style={{ fontSize: 11 }} />
+          </div>
+        </div>
+        <div style={{ width: 36, height: 36, borderRadius: "50%", display: "flex",
+          alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+          <MoreOutlined style={{ fontSize: 20, color: FB.textSecondary }} />
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{ padding: "12px 16px" }}>
+        <div style={{ fontSize: 15, color: FB.text, lineHeight: 1.5 }}>{activity.description}</div>
+        <div style={{
+          display: "inline-flex", alignItems: "center", gap: 6, marginTop: 8,
+          padding: "4px 10px", borderRadius: 16,
+          background: activityColor(activity.type) + "15",
+          color: activityColor(activity.type), fontSize: 12, fontWeight: 600,
+        }}>
+          {activityIcon(activity.type)}
+          <span style={{ textTransform: "capitalize" }}>{activity.title}</span>
+        </div>
+      </div>
+
+      {/* Reaction counts */}
+      <div style={{
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        padding: "0 16px 8px", color: FB.textSecondary, fontSize: 13,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{
+            width: 18, height: 18, borderRadius: "50%", background: FB.blue,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            border: "2px solid " + FB.white,
+          }}>
+            <LikeFilled style={{ fontSize: 10, color: FB.white }} />
+          </span>
+          <span>{liked ? 1 : 0}</span>
+        </div>
+        <span>0 commentaire</span>
+      </div>
+
+      {/* Divider */}
+      <div style={{ height: 1, background: FB.border, margin: "0 16px" }} />
+
+      {/* Action buttons */}
+      <div style={{ display: "flex", padding: "4px 16px" }}>
+        {[
+          { icon: liked ? <LikeFilled style={{ color: FB.blue }} /> : <LikeOutlined />,
+            label: "J\u0027aime", active: liked, onClick: () => setLiked(!liked) },
+          { icon: <MessageOutlined />, label: "Commenter", active: false,
+            onClick: () => setShowComments(!showComments) },
+          { icon: <ShareAltOutlined />, label: "Partager", active: false, onClick: () => {} },
+        ].map((btn, i) => (
+          <div key={i} onClick={btn.onClick}
+            style={{
+              flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
+              gap: 6, padding: "8px 0", borderRadius: FB.radius, cursor: "pointer",
+              color: btn.active ? FB.blue : FB.textSecondary,
+              fontWeight: 600, fontSize: isMobile ? 13 : 14, transition: "background 0.15s",
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = FB.btnGray)}
+            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+          >
+            {btn.icon}
+            {!isMobile && <span>{btn.label}</span>}
+          </div>
+        ))}
+      </div>
+
+      {/* Comment box */}
+      {showComments && (
+        <div style={{ padding: "8px 16px 12px", display: "flex", gap: 8, alignItems: "center" }}>
+          <Avatar size={32} icon={<UserOutlined />} />
+          <div style={{
+            flex: 1, display: "flex", alignItems: "center",
+            background: FB.btnGray, borderRadius: 20, padding: "6px 12px",
+          }}>
+            <span style={{ flex: 1, color: FB.textSecondary, fontSize: 14 }}>
+              Écrire un commentaire…
+            </span>
+            <SmileOutlined style={{ color: FB.textSecondary, fontSize: 16, cursor: "pointer" }} />
+          </div>
+        </div>
+      )}
+    </FBCard>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   STAT WIDGET (right sidebar)
+   ═══════════════════════════════════════════════════════════════ */
+const StatWidget: React.FC<{
+  icon: React.ReactNode; label: string;
+  value: string | number; color: string; sub?: string;
+}> = ({ icon, label, value, color, sub }) => (
+  <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0" }}>
+    <div style={{
+      width: 40, height: 40, borderRadius: FB.radius,
+      background: color + "15", display: "flex", alignItems: "center",
+      justifyContent: "center", fontSize: 18, color: color, flexShrink: 0,
+    }}>
+      {icon}
+    </div>
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ fontSize: 14, fontWeight: 600, color: FB.text }}>{value}</div>
+      <div style={{ fontSize: 12, color: FB.textSecondary }}>{label}</div>
+    </div>
+    {sub && <span style={{ fontSize: 12, fontWeight: 600, color: color }}>{sub}</span>}
+  </div>
+);
+
+/* ═══════════════════════════════════════════════════════════════
+   NO-ORG PROMPT
+   ═══════════════════════════════════════════════════════════════ */
+const CreateOrganizationPrompt = () => (
+  <div style={{
+    minHeight: "100vh", background: FB.bg, display: "flex",
+    alignItems: "center", justifyContent: "center", padding: 24,
+  }}>
+    <FBCard style={{ maxWidth: 420, width: "100%", textAlign: "center" }}>
+      <Avatar size={64} icon={<BankOutlined />} style={{ marginBottom: 16 }} />
+      <h3 style={{ fontSize: 20, fontWeight: 700, color: FB.text, margin: "0 0 8px" }}>Bienvenue</h3>
+      <p style={{ color: FB.textSecondary, marginBottom: 20 }}>
+        Pour commencer, vous devez créer ou rejoindre une organisation.
+      </p>
+      <Link to="/organization/create">
+        <button style={{
+          width: "100%", padding: "10px 0", background: FB.blue, color: FB.white,
+          border: "none", borderRadius: 6, fontWeight: 600, fontSize: 15, cursor: "pointer", marginBottom: 10,
+        }}>
+          <PlusOutlined /> Créer une organisation
+        </button>
+      </Link>
+      <Link to="/settings/profile">
+        <button style={{
+          width: "100%", padding: "10px 0", background: FB.btnGray, color: FB.text,
+          border: "none", borderRadius: 6, fontWeight: 600, fontSize: 15, cursor: "pointer",
+        }}>
+          <SettingOutlined /> Paramètres du profil
+        </button>
+      </Link>
+    </FBCard>
+  </div>
+);
+
+/* ═══════════════════════════════════════════════════════════════
+   MAIN COMPONENT — FACEBOOK NEWS FEED / WALL
+   ═══════════════════════════════════════════════════════════════ */
 export default function DashboardPageUnified() {
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, [apiHook.api]);
   const { currentOrganization, isSuperAdmin, user } = useAuth();
   const { leadStatuses } = useLeadStatuses();
-  
+  const navigate = useNavigate();
+  const { isMobile, isTablet } = useScreenSize();
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState('overview');
-  const [chartType, setChartType] = useState<ChartType>('pie');
-  const [timeRange, setTimeRange] = useState<TimeRange>('month');
-  const [showDetails, setShowDetails] = useState(false);
-  
+
   const [stats, setStats] = useState<DashboardStats>({
-    totalLeads: 0,
-    newLeadsToday: 0,
-    totalClients: 0,
-    totalUsers: 0,
-    conversionRate: 0,
-    pendingTasks: 0,
-    upcomingMeetings: 0,
-    totalRevenue: 0,
-    monthlyGrowth: 0,
-    averageResponseTime: 0,
-  });
-  
-  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
-  const [topLeads, setTopLeads] = useState<TopLead[]>([]);
-  const [chartData, setChartData] = useState<LeadChartData>({
-    leadsByStatus: [],
-    leadsBySource: [],
-    leadsByPriority: [],
-    leadsEvolution: []
+    totalLeads: 0, newLeadsToday: 0, totalClients: 0, totalUsers: 0,
+    conversionRate: 0, pendingTasks: 0, upcomingMeetings: 0,
+    totalRevenue: 0, monthlyGrowth: 0, averageResponseTime: 0,
   });
 
+  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
+  const [topLeads, setTopLeads] = useState<TopLead[]>([]);
+  const [chartData, setChartData] = useState<LeadChartData>({ leadsByStatus: [] });
+
+  /* ─── DATA FETCHING ────────────────────────────────────────── */
   const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
-
-      // Récupérer les données (users/clients uniquement pour admin/super_admin)
-      const isAdmin = isSuperAdmin || user?.role === 'admin' || user?.role === 'super_admin';
+      const isAdmin = isSuperAdmin || user?.role === "admin" || user?.role === "super_admin";
       const [leadsResponse, usersResponse, clientsResponse] = await Promise.all([
-        api.get('/api/leads').catch(() => ({ data: [] })),
-        isAdmin ? api.get('/api/users').catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
-        isAdmin ? api.get('/api/users?role=CLIENT').catch(() => ({ data: [] })) : Promise.resolve({ data: [] })
+        api.get("/api/leads").catch(() => ({ data: [] })),
+        isAdmin ? api.get("/api/users").catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
+        isAdmin ? api.get("/api/users?role=CLIENT").catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
       ]);
 
-      const leads = Array.isArray(leadsResponse) ? leadsResponse : (leadsResponse?.data || []);
-      const users = Array.isArray(usersResponse) ? usersResponse : (usersResponse?.data || []);
-      const clients = Array.isArray(clientsResponse) ? clientsResponse : (clientsResponse?.data || []);
+      const leads = Array.isArray(leadsResponse) ? leadsResponse : ((leadsResponse as any)?.data || []);
+      const users = Array.isArray(usersResponse) ? usersResponse : ((usersResponse as any)?.data || []);
+      const clients = Array.isArray(clientsResponse) ? clientsResponse : ((clientsResponse as any)?.data || []);
 
-      console.log('📊 Données complètes chargées:', {
-        leads: leads.length,
-        users: users.length,
-        clients: clients.length
-      });
-
-      // Calcul des statistiques globales
       const totalLeads = leads.length;
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      
-      const newLeadsToday = leads.filter(lead => {
-        const leadDate = new Date(lead.createdAt);
-        leadDate.setHours(0, 0, 0, 0);
-        return leadDate.getTime() === today.getTime();
+      const newLeadsToday = leads.filter((lead: any) => {
+        const d = new Date(lead.createdAt); d.setHours(0, 0, 0, 0);
+        return d.getTime() === today.getTime();
       }).length;
 
-      // Taux de conversion
-      const convertedLeads = leads.filter(lead => {
-        const statusName = lead.LeadStatus?.name?.toLowerCase();
-        return statusName?.includes('gagné') || statusName?.includes('converti') || statusName?.includes('client');
+      const convertedLeads = leads.filter((lead: any) => {
+        const s = lead.LeadStatus?.name?.toLowerCase();
+        return s?.includes("gagné") || s?.includes("converti") || s?.includes("client");
       });
       const conversionRate = totalLeads > 0 ? (convertedLeads.length / totalLeads) * 100 : 0;
 
-      // Temps de réponse moyen
       let totalResponseTime = 0;
       let leadsWithResponse = 0;
-      
-      leads.forEach(lead => {
+      leads.forEach((lead: any) => {
         if (lead.lastContactDate && lead.createdAt) {
-          const responseTime = new Date(lead.lastContactDate).getTime() - new Date(lead.createdAt).getTime();
-          totalResponseTime += responseTime / (1000 * 60 * 60);
+          totalResponseTime += (new Date(lead.lastContactDate).getTime() - new Date(lead.createdAt).getTime()) / (1000 * 60 * 60);
           leadsWithResponse++;
         }
       });
-      
       const averageResponseTime = leadsWithResponse > 0 ? totalResponseTime / leadsWithResponse : 0;
 
-      // Revenus (simulation basée sur les clients convertis)
       const avgDealSize = 5000;
       const totalRevenue = convertedLeads.length * avgDealSize;
-
-      // Croissance mensuelle (simulation)
-      const lastMonthLeads = leads.filter(lead => {
-        const createdDate = new Date(lead.createdAt);
-        const lastMonth = new Date();
-        lastMonth.setMonth(lastMonth.getMonth() - 1);
-        return createdDate >= lastMonth;
+      const lastMonthLeads = leads.filter((lead: any) => {
+        const d = new Date(lead.createdAt);
+        const lm = new Date(); lm.setMonth(lm.getMonth() - 1);
+        return d >= lm;
       }).length;
-      const monthlyGrowth = totalLeads > 0 ? ((lastMonthLeads / totalLeads) * 100) : 0;
+      const monthlyGrowth = totalLeads > 0 ? (lastMonthLeads / totalLeads) * 100 : 0;
 
       setStats({
-        totalLeads,
-        newLeadsToday,
-        totalClients: clients.length,
-        totalUsers: users.length,
-        conversionRate,
-        pendingTasks: Math.floor(totalLeads * 0.15),
+        totalLeads, newLeadsToday, totalClients: clients.length, totalUsers: users.length,
+        conversionRate, pendingTasks: Math.floor(totalLeads * 0.15),
         upcomingMeetings: Math.floor(totalLeads * 0.1),
-        totalRevenue,
-        monthlyGrowth,
-        averageResponseTime
+        totalRevenue, monthlyGrowth, averageResponseTime,
       });
 
-      // Données pour les graphiques
+      // Chart: leads by status
       const statusCounts: Record<string, number> = {};
-      leadStatuses.forEach(status => {
-        statusCounts[status.id] = 0;
+      leadStatuses.forEach((s: any) => { statusCounts[s.id] = 0; });
+      leads.forEach((lead: any) => {
+        if (statusCounts[lead.statusId] !== undefined) statusCounts[lead.statusId]++;
       });
-      
-      leads.forEach(lead => {
-        const statusId = lead.statusId;
-        if (statusCounts[statusId] !== undefined) {
-          statusCounts[statusId]++;
-        }
-      });
-      
-      const leadsByStatus = leadStatuses.map(status => ({
-        name: status.name,
-        value: statusCounts[status.id] || 0,
-        color: status.color
-      }));
-
-      const sourceCounts: Record<string, number> = {};
-      LEAD_SOURCES.forEach(source => {
-        sourceCounts[source.value] = 0;
-      });
-      
-      leads.forEach(lead => {
-        const source = lead.source || lead.data?.source || 'direct';
-        if (sourceCounts[source] !== undefined) {
-          sourceCounts[source]++;
-        } else {
-          sourceCounts['other'] = (sourceCounts['other'] || 0) + 1;
-        }
-      });
-      
-      const leadsBySource = LEAD_SOURCES.map(source => ({
-        name: source.label,
-        value: sourceCounts[source.value] || 0
-      }));
-
-      const priorityCounts: Record<string, number> = {};
-      LEAD_PRIORITIES.forEach(priority => {
-        priorityCounts[priority.value] = 0;
-      });
-      
-      leads.forEach(lead => {
-        const priority = lead.priority || lead.data?.priority || 'medium';
-        if (priorityCounts[priority] !== undefined) {
-          priorityCounts[priority]++;
-        } else {
-          priorityCounts['medium']++;
-        }
-      });
-      
-      const leadsByPriority = LEAD_PRIORITIES.map(priority => ({
-        name: priority.label,
-        value: priorityCounts[priority.value] || 0,
-        color: priority.color
-      }));
-
-      // Évolution mensuelle
-      const monthCounts: Record<string, number> = {};
-      const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
-      
-      leads.forEach(lead => {
-        const createdDate = new Date(lead.createdAt);
-        const monthKey = `${months[createdDate.getMonth()]} ${createdDate.getFullYear()}`;
-        monthCounts[monthKey] = (monthCounts[monthKey] || 0) + 1;
-      });
-      
-      const leadsEvolution = Object.entries(monthCounts)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .slice(-6)
-        .map(([name, value]) => ({ name, value }));
-
       setChartData({
-        leadsByStatus,
-        leadsBySource,
-        leadsByPriority,
-        leadsEvolution
+        leadsByStatus: leadStatuses.map((s: any) => ({
+          name: s.name, value: statusCounts[s.id] || 0, color: s.color,
+        })),
       });
 
       // Top Leads
-      const sortedLeads = [...leads]
-        .sort((a, b) => {
-          const scoreA = (a.data?.score || 50);
-          const scoreB = (b.data?.score || 50);
-          return scoreB - scoreA;
-        })
-        .slice(0, 10);
+      const sorted = [...leads].sort((a: any, b: any) => (b.data?.score || 50) - (a.data?.score || 50)).slice(0, 5);
+      setTopLeads(sorted.map((l: any) => ({
+        id: l.id,
+        nom: l.lastName || l.data?.lastName || "N/A",
+        prenom: l.firstName || l.data?.firstName || "",
+        entreprise: l.company || l.data?.company || "",
+        status: l.LeadStatus?.name || "Inconnu",
+        statusColor: l.LeadStatus?.color,
+        score: l.data?.score || 50,
+        createdAt: l.createdAt,
+      })));
 
-      const formattedTopLeads: TopLead[] = sortedLeads.map(lead => ({
-        id: lead.id,
-        nom: lead.lastName || lead.data?.lastName || 'N/A',
-        prenom: lead.firstName || lead.data?.firstName || 'N/A',
-        entreprise: lead.company || lead.data?.company || 'N/A',
-        email: lead.email || lead.data?.email,
-        phone: lead.phone || lead.data?.phone,
-        status: lead.LeadStatus?.name || 'Inconnu',
-        statusColor: lead.LeadStatus?.color,
-        score: lead.data?.score || 50,
-        lastContact: lead.lastContactDate,
-        nextFollowUp: lead.data?.nextFollowUp,
-        assignedTo: lead.assignedTo ? `${lead.assignedTo.firstName || ''} ${lead.assignedTo.lastName || ''}`.trim() : undefined,
-        source: lead.source || lead.data?.source,
-        createdAt: lead.createdAt,
-        notes: lead.notes
-      }));
-
-      setTopLeads(formattedTopLeads);
-
-      // Activités récentes
-      const activities: RecentActivity[] = [];
-      
-      leads.forEach(lead => {
-        activities.push({
-          id: `creation-${lead.id}`,
-          type: 'creation',
-          title: `Nouveau lead`,
-          description: `${lead.firstName || ''} ${lead.lastName || ''} ${lead.company ? `(${lead.company})` : ''}`.trim(),
-          timestamp: lead.createdAt,
-          status: 'success',
-          user: lead.assignedTo ? `${lead.assignedTo.firstName || ''} ${lead.assignedTo.lastName || ''}`.trim() : 'Système'
+      // Activities
+      const acts: RecentActivity[] = [];
+      leads.forEach((lead: any) => {
+        acts.push({
+          id: "creation-" + lead.id, type: "creation", title: "Nouveau lead",
+          description: ((lead.firstName || "") + " " + (lead.lastName || "") + " " + (lead.company ? "(" + lead.company + ")" : "")).trim(),
+          timestamp: lead.createdAt, status: "success",
+          user: lead.assignedTo ? ((lead.assignedTo.firstName || "") + " " + (lead.assignedTo.lastName || "")).trim() : "Système",
         });
-
         if (lead.TimelineEvent && Array.isArray(lead.TimelineEvent)) {
-          lead.TimelineEvent.forEach(event => {
-            activities.push({
-              id: event.id,
-              type: event.eventType === 'email' ? 'email' : event.eventType === 'call' ? 'lead' : event.eventType === 'meeting' ? 'meeting' : 'task',
-              title: event.eventType,
-              description: event.data?.description || `Événement ${event.eventType}`,
-              timestamp: event.createdAt,
-              status: 'info',
-              user: 'Utilisateur'
+          lead.TimelineEvent.forEach((ev: any) => {
+            acts.push({
+              id: ev.id,
+              type: ev.eventType === "email" ? "email" : ev.eventType === "meeting" ? "meeting" : "task",
+              title: ev.eventType,
+              description: ev.data?.description || "Événement " + ev.eventType,
+              timestamp: ev.createdAt, status: "info", user: "Utilisateur",
             });
           });
         }
       });
-
-      activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-      setRecentActivities(activities.slice(0, 15));
-
+      acts.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      setRecentActivities(acts.slice(0, 30));
     } catch (error) {
-      console.error("❌ Erreur lors du chargement des données:", error);
-      NotificationManager.error('Impossible de charger les données du dashboard');
+      console.error("Erreur chargement données:", error);
+      NotificationManager.error("Impossible de charger les données du dashboard");
     } finally {
       setLoading(false);
     }
-  }, [api, leadStatuses]);
+  }, [api, leadStatuses, isSuperAdmin, user?.role]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     await fetchDashboardData();
     setRefreshing(false);
-    NotificationManager.success('Données actualisées !');
+    NotificationManager.success("Données actualisées !");
   }, [fetchDashboardData]);
 
-  const handleTimeRangeChange = useCallback((next: SegmentedValue) => {
-    if (isTimeRange(next)) setTimeRange(next);
-  }, []);
-
-  const handleChartTypeChange = useCallback((next: SegmentedValue) => {
-    if (isChartType(next)) setChartType(next);
-  }, []);
-
   useEffect(() => {
-    if (!user) {
-      console.log('Utilisateur non authentifié');
-      return;
-    }
-    
-    if (!currentOrganization && !isSuperAdmin) {
-      console.log('Aucune organisation');
-      return;
-    }
-    
+    if (!user) return;
+    if (!currentOrganization && !isSuperAdmin) return;
     fetchDashboardData();
   }, [user, currentOrganization, isSuperAdmin, fetchDashboardData]);
 
-  if (!currentOrganization && !isSuperAdmin) {
-    return <CreateOrganizationPrompt />;
-  }
+  if (!currentOrganization && !isSuperAdmin) return <CreateOrganizationPrompt />;
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Spin size="large" tip="Chargement du dashboard...">
-          <div className="p-20" />
-        </Spin>
+      <div style={{ minHeight: "100vh", background: FB.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Spin size="large" />
       </div>
     );
   }
 
-  const leadColumns = [
-    {
-      title: 'Contact',
-      dataIndex: 'nom',
-      key: 'nom',
-      render: (text: string, record: TopLead) => (
-        <Space>
-          <Avatar icon={<UserOutlined />} />
-          <div>
-            <Text strong>{record.prenom} {record.nom}</Text>
-            <br />
-            <Text type="secondary" className="text-xs">{record.entreprise}</Text>
-            {record.source && (
-              <>
-                <br />
-                <Text type="secondary" className="text-xs">Source: {record.source}</Text>
-              </>
-            )}
-          </div>
-        </Space>
-      ),
-    },
-    {
-      title: 'Contact Info',
-      key: 'contact',
-      render: (record: TopLead) => (
-        <Space direction="vertical" size="small">
-          {record.email && (
-            <Text className="text-xs" copyable={{ text: record.email }}>
-              <MailOutlined /> {record.email}
-            </Text>
-          )}
-          {record.phone && (
-            <Text className="text-xs" copyable={{ text: record.phone }}>
-              <PhoneOutlined /> {record.phone}
-            </Text>
-          )}
-        </Space>
-      ),
-    },
-    {
-      title: 'Score',
-      dataIndex: 'score',
-      key: 'score',
-      render: (score: number) => (
-        <Progress 
-          percent={score} 
-          size="small" 
-          format={(percent) => `${percent}%`} 
-          strokeColor={score > 80 ? '#52c41a' : score > 60 ? '#faad14' : '#ff4d4f'}
-        />
-      ),
-      sorter: (a: TopLead, b: TopLead) => a.score - b.score,
-    },
-    {
-      title: 'Statut',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: string, record: TopLead) => (
-        <Tag color={record.statusColor || '#6b7280'}>{status}</Tag>
-      ),
-    },
-    {
-      title: 'Actions',
-      key: 'actions',
-      render: (record: TopLead) => (
-        <Space>
-          <Link to={`/leads/${record.id}`}>
-            <Button size="small" icon={<EyeOutlined />}>Voir</Button>
-          </Link>
-        </Space>
-      ),
-    },
+  /* ─── SIDEBAR DATA ─────────────────────────────────────────── */
+  const shortcuts = [
+    { icon: <FunnelPlotOutlined />, label: "Leads", to: "/leads", color: "#ff7a45" },
+    { icon: <TeamOutlined />, label: "Clients", to: "/clients", color: "#52c41a" },
+    { icon: <CalendarOutlined />, label: "Agenda", to: "/agenda", color: "#1890ff" },
+    { icon: <MailOutlined />, label: "Emails", to: "/google-gmail", color: "#f5222d" },
+    { icon: <FileTextOutlined />, label: "Factures", to: "/facture", color: "#722ed1" },
+    { icon: <ToolOutlined />, label: "Chantiers", to: "/chantiers", color: "#fa8c16" },
+    { icon: <BarChartOutlined />, label: "Analytics", to: "/analytics", color: "#13c2c2" },
+    { icon: <SettingOutlined />, label: "Paramètres", to: "/settings", color: FB.textSecondary },
   ];
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* En-tête global */}
-      <div className="bg-white border-b border-gray-200 p-6 mb-6">
-        <div className="max-w-7xl mx-auto text-center">
-          <Title level={2} className="!mb-2">
-            <BarChartOutlined className="text-blue-500 mr-2" />
-            Dashboard Central
-          </Title>
-          <Paragraph className="!mb-0 text-gray-600">
-            Vue d'ensemble complète de votre CRM avec données en temps réel
-          </Paragraph>
+  const quickActions = [
+    { icon: <FunnelPlotOutlined />, label: "Nouveau Lead", to: "/leads/kanban", color: "#ff7a45" },
+    { icon: <UserOutlined />, label: "Nouveau Client", to: "/clients", color: FB.green },
+    { icon: <CalendarOutlined />, label: "Planifier RDV", to: "/agenda", color: FB.orange },
+    { icon: <MailOutlined />, label: "Envoyer Email", to: "/google-gmail", color: FB.red },
+  ];
+
+  const userName = user ? ((user.firstName || "") + " " + (user.lastName || "")).trim() || "Utilisateur" : "Utilisateur";
+
+  /* ═══════════════════════════════════════════════════════════
+     LEFT SIDEBAR
+     ═══════════════════════════════════════════════════════════ */
+  const renderLeftSidebar = () => (
+    <div style={{ width: 280, flexShrink: 0, position: "sticky", top: 16, alignSelf: "flex-start", paddingRight: 8 }}>
+      <ShortcutItem
+        icon={
+          <Avatar size={36} src={user?.avatarUrl}
+            icon={!user?.avatarUrl ? <UserOutlined /> : undefined}
+            style={{ background: !user?.avatarUrl ? FB.blue : undefined }} />
+        }
+        label={userName} to="/profile"
+      />
+      <div style={{ marginTop: 4 }}>
+        {shortcuts.map((s, i) => <ShortcutItem key={i} {...s} />)}
+      </div>
+      <div style={{ height: 1, background: FB.border, margin: "12px 8px" }} />
+      {currentOrganization && (
+        <div style={{ padding: "8px 8px", fontSize: 13, color: FB.textSecondary }}>
+          <span style={{ fontWeight: 600 }}>{currentOrganization.name}</span><br />
+          <span style={{ fontSize: 12 }}>{stats.totalUsers} membres · {stats.totalLeads} leads</span>
+        </div>
+      )}
+    </div>
+  );
+
+  /* ═══════════════════════════════════════════════════════════
+     RIGHT SIDEBAR
+     ═══════════════════════════════════════════════════════════ */
+  const renderRightSidebar = () => (
+    <div style={{ width: 280, flexShrink: 0, position: "sticky", top: 16, alignSelf: "flex-start", paddingLeft: 8 }}>
+      {/* Performance */}
+      <FBCard>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <span style={{ fontSize: 16, fontWeight: 700, color: FB.text }}>Performance</span>
+          <AntTooltip title="Actualiser">
+            <ReloadOutlined spin={refreshing}
+              style={{ fontSize: 16, color: FB.textSecondary, cursor: "pointer" }}
+              onClick={handleRefresh} />
+          </AntTooltip>
+        </div>
+        <StatWidget icon={<FunnelPlotOutlined />} label="Total Leads" value={stats.totalLeads} color="#1890ff" sub={"+" + stats.newLeadsToday} />
+        <StatWidget icon={<TeamOutlined />} label="Clients Actifs" value={stats.totalClients} color={FB.green} sub={"+" + Math.floor(stats.monthlyGrowth) + "%"} />
+        <StatWidget icon={<TrophyOutlined />} label="Conversion" value={stats.conversionRate.toFixed(1) + "%"} color="#fa8c16" />
+        <StatWidget icon={<RiseOutlined />} label="Chiffre d'Affaires" value={"€" + stats.totalRevenue.toLocaleString("fr-FR")} color="#722ed1" />
+      </FBCard>
+
+      {/* Mini pie chart */}
+      {chartData.leadsByStatus.length > 0 && (
+        <FBCard>
+          <span style={{ fontSize: 16, fontWeight: 700, color: FB.text, display: "block", marginBottom: 8 }}>
+            Leads par statut
+          </span>
+          <div style={{ height: 160 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={chartData.leadsByStatus.filter(d => d.value > 0)}
+                  cx="50%" cy="50%" outerRadius={60} innerRadius={35}
+                  dataKey="value" paddingAngle={2}>
+                  {chartData.leadsByStatus.filter(d => d.value > 0).map((entry, i) => (
+                    <Cell key={i} fill={entry.color} />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
+            {chartData.leadsByStatus.filter(d => d.value > 0).map((d, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: FB.textSecondary }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: d.color }} />
+                <span>{d.name} ({d.value})</span>
+              </div>
+            ))}
+          </div>
+        </FBCard>
+      )}
+
+      {/* Top Leads */}
+      {topLeads.length > 0 && (
+        <FBCard>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <span style={{ fontSize: 16, fontWeight: 700, color: FB.text }}>Top Leads</span>
+            <Link to="/leads/list" style={{ fontSize: 13, color: FB.blue, textDecoration: "none" }}>Voir tous</Link>
+          </div>
+          {topLeads.map(lead => (
+            <Link key={lead.id} to={"/leads/" + lead.id} style={{ textDecoration: "none" }}>
+              <div style={{
+                display: "flex", alignItems: "center", gap: 10, padding: "8px 4px",
+                borderRadius: 6, cursor: "pointer", transition: "background 0.15s",
+              }}
+                onMouseEnter={e => (e.currentTarget.style.background = FB.btnGray)}
+                onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+              >
+                <Avatar size={32} style={{ background: lead.statusColor || FB.blue }}>
+                  {(lead.prenom[0] || lead.nom[0] || "?")}
+                </Avatar>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: FB.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {lead.prenom} {lead.nom}
+                  </div>
+                  <div style={{ fontSize: 11, color: FB.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {lead.entreprise || lead.status}
+                  </div>
+                </div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: lead.score > 80 ? FB.green : lead.score > 60 ? FB.orange : FB.textSecondary }}>
+                  {lead.score}%
+                </div>
+              </div>
+            </Link>
+          ))}
+        </FBCard>
+      )}
+
+      {/* Tasks */}
+      <FBCard>
+        <span style={{ fontSize: 16, fontWeight: 700, color: FB.text, display: "block", marginBottom: 10 }}>
+          À faire aujourd'hui
+        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0" }}>
+          <ClockCircleOutlined style={{ color: "#fa8c16", fontSize: 16 }} />
+          <span style={{ fontSize: 14, color: FB.text }}>
+            <b>{stats.pendingTasks}</b> tâche{stats.pendingTasks > 1 ? "s" : ""} en attente
+          </span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0" }}>
+          <CalendarOutlined style={{ color: FB.blue, fontSize: 16 }} />
+          <span style={{ fontSize: 14, color: FB.text }}>
+            <b>{stats.upcomingMeetings}</b> RDV aujourd'hui
+          </span>
+        </div>
+      </FBCard>
+    </div>
+  );
+
+  /* ═══════════════════════════════════════════════════════════
+     MOBILE STATS BAR
+     ═══════════════════════════════════════════════════════════ */
+  const renderMobileStats = () => (
+    <div style={{
+      display: "flex", gap: 8, overflowX: "auto", padding: "0 0 4px",
+      marginBottom: 12, WebkitOverflowScrolling: "touch", scrollbarWidth: "none",
+    }}>
+      {[
+        { label: "Leads", val: stats.totalLeads, col: "#1890ff" },
+        { label: "Clients", val: stats.totalClients, col: FB.green },
+        { label: "Conversion", val: stats.conversionRate.toFixed(0) + "%", col: "#fa8c16" },
+        { label: "CA", val: "€" + (stats.totalRevenue / 1000).toFixed(0) + "k", col: "#722ed1" },
+      ].map((s, i) => (
+        <div key={i} style={{
+          flex: "0 0 auto", background: FB.white, boxShadow: FB.shadow,
+          borderRadius: FB.radius, padding: "10px 16px", textAlign: "center", minWidth: 90,
+        }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: s.col }}>{s.val}</div>
+          <div style={{ fontSize: 11, color: FB.textSecondary, marginTop: 2 }}>{s.label}</div>
+        </div>
+      ))}
+    </div>
+  );
+
+  /* ═══════════════════════════════════════════════════════════
+     CENTER FEED
+     ═══════════════════════════════════════════════════════════ */
+  const renderFeed = () => (
+    <div style={{ flex: 1, minWidth: 0, maxWidth: isMobile ? "100%" : 680 }}>
+      {isMobile && renderMobileStats()}
+
+      {/* "Create Post" — Quick Actions */}
+      <FBCard>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+          <Avatar size={40} src={user?.avatarUrl}
+            icon={!user?.avatarUrl ? <UserOutlined /> : undefined}
+            style={{ background: !user?.avatarUrl ? FB.blue : undefined, flexShrink: 0, cursor: "pointer" }}
+            onClick={() => navigate("/profile")} />
+          <div onClick={() => navigate("/leads/kanban")}
+            style={{
+              flex: 1, background: FB.btnGray, borderRadius: 20, padding: "10px 16px",
+              fontSize: 15, color: FB.textSecondary, cursor: "pointer", transition: "background 0.15s",
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = FB.btnGrayHover)}
+            onMouseLeave={e => (e.currentTarget.style.background = FB.btnGray)}
+          >
+            {"Quoi de neuf, " + (user?.firstName || "cher collègue") + " ?"}
+          </div>
+        </div>
+        <div style={{ height: 1, background: FB.border, margin: "0 0 8px" }} />
+        <div style={{ display: "flex", justifyContent: "space-around" }}>
+          {quickActions.map((qa, i) => (
+            <Link key={i} to={qa.to} style={{ textDecoration: "none", flex: 1 }}>
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                gap: 6, padding: "8px 4px", borderRadius: FB.radius,
+                cursor: "pointer", transition: "background 0.15s",
+              }}
+                onMouseEnter={e => (e.currentTarget.style.background = FB.btnGray)}
+                onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+              >
+                <span style={{ color: qa.color, fontSize: 18 }}>{qa.icon}</span>
+                {!isMobile && <span style={{ fontSize: 13, fontWeight: 600, color: FB.textSecondary }}>{qa.label}</span>}
+              </div>
+            </Link>
+          ))}
+        </div>
+      </FBCard>
+
+      {/* Mobile: shortcuts */}
+      {isMobile && (
+        <div style={{
+          display: "flex", gap: 8, overflowX: "auto", marginBottom: 12,
+          WebkitOverflowScrolling: "touch", scrollbarWidth: "none",
+        }}>
+          {shortcuts.slice(0, 6).map((s, i) => (
+            <Link key={i} to={s.to} style={{ textDecoration: "none" }}>
+              <div style={{
+                flex: "0 0 auto", display: "flex", flexDirection: "column",
+                alignItems: "center", gap: 4, padding: "8px 14px",
+                borderRadius: FB.radius, background: FB.white, boxShadow: FB.shadow, minWidth: 70,
+              }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: "50%", background: s.color,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 16, color: FB.white,
+                }}>
+                  {s.icon}
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 600, color: FB.text, whiteSpace: "nowrap" }}>{s.label}</span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+
+      {/* Feed header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0 12px" }}>
+        <span style={{ fontSize: 16, fontWeight: 700, color: FB.text }}>Fil d'actualité</span>
+        <div onClick={handleRefresh}
+          style={{
+            display: "flex", alignItems: "center", gap: 6, padding: "6px 12px",
+            borderRadius: 20, background: FB.btnGray, cursor: "pointer",
+            fontSize: 13, fontWeight: 600, color: FB.textSecondary,
+          }}>
+          <ReloadOutlined spin={refreshing} />
+          {!isMobile && <span>Actualiser</span>}
         </div>
       </div>
 
-      {/* Contenu principal avec onglets */}
-      <div className="max-w-7xl mx-auto px-6 pb-6">
-        <Tabs 
-          activeKey={activeTab} 
-          onChange={setActiveTab}
-          size="large"
-          tabBarExtraContent={
-            <Space>
-              <Switch 
-                checkedChildren="Détails" 
-                unCheckedChildren="Simple"
-                checked={showDetails}
-                onChange={setShowDetails}
-              />
-            </Space>
-          }
-        >
-          {/* ONGLET 1 : VUE D'ENSEMBLE */}
-          <TabPane 
-            tab={
-              <span>
-                <TrophyOutlined />
-                Vue d'ensemble
-              </span>
-            } 
-            key="overview"
-          >
-            {/* Stats principales */}
-            <Row gutter={[16, 16]} className="mb-6">
-              <Col xs={24} sm={12} md={6}>
-                <Card hoverable>
-                  <Statistic
-                    title="Total Leads"
-                    value={stats.totalLeads}
-                    prefix={<UserOutlined style={{ color: '#1890ff' }} />}
-                    valueStyle={{ color: '#1890ff' }}
-                  />
-                  <Progress percent={100} showInfo={false} strokeColor="#1890ff" />
-                  <Text type="secondary" className="text-xs">+{stats.newLeadsToday} aujourd'hui</Text>
-                </Card>
-              </Col>
-              
-              <Col xs={24} sm={12} md={6}>
-                <Card hoverable>
-                  <Statistic
-                    title="Clients Actifs"
-                    value={stats.totalClients}
-                    prefix={<TeamOutlined style={{ color: '#52c41a' }} />}
-                    valueStyle={{ color: '#52c41a' }}
-                  />
-                  <Progress percent={75} showInfo={false} strokeColor="#52c41a" />
-                  <Text type="secondary" className="text-xs">+{Math.floor(stats.monthlyGrowth)}% ce mois</Text>
-                </Card>
-              </Col>
-              
-              <Col xs={24} sm={12} md={6}>
-                <Card hoverable>
-                  <Statistic
-                    title="Taux de conversion"
-                    value={stats.conversionRate}
-                    precision={1}
-                    suffix="%"
-                    prefix={<TrophyOutlined style={{ color: '#fa8c16' }} />}
-                    valueStyle={{ color: '#fa8c16' }}
-                  />
-                  <Progress percent={stats.conversionRate} showInfo={false} strokeColor="#fa8c16" />
-                </Card>
-              </Col>
-              
-              <Col xs={24} sm={12} md={6}>
-                <Card hoverable>
-                  <Statistic
-                    title="Chiffre d'Affaires"
-                    value={stats.totalRevenue}
-                    prefix="€"
-                    precision={0}
-                    valueStyle={{ color: '#722ed1' }}
-                  />
-                  <Progress percent={65} showInfo={false} strokeColor="#722ed1" />
-                  <Text type="secondary" className="text-xs">
-                    <RiseOutlined /> {stats.monthlyGrowth.toFixed(1)}% vs mois dernier
-                  </Text>
-                </Card>
-              </Col>
-            </Row>
+      {/* Activity Posts */}
+      {recentActivities.length === 0 ? (
+        <FBCard style={{ textAlign: "center", padding: "40px 16px" }}>
+          <BulbOutlined style={{ fontSize: 48, color: FB.border, marginBottom: 16 }} />
+          <div style={{ fontSize: 17, fontWeight: 600, color: FB.text, marginBottom: 8 }}>
+            Aucune activité récente
+          </div>
+          <div style={{ color: FB.textSecondary, fontSize: 14 }}>
+            Commencez par ajouter des leads pour voir l'activité ici.
+          </div>
+          <Link to="/leads/kanban">
+            <button style={{
+              marginTop: 16, padding: "8px 20px", background: FB.blue, color: FB.white,
+              border: "none", borderRadius: 6, fontWeight: 600, fontSize: 14, cursor: "pointer",
+            }}>
+              <PlusOutlined /> Ajouter un Lead
+            </button>
+          </Link>
+        </FBCard>
+      ) : (
+        recentActivities.map(activity => (
+          <ActivityPost key={activity.id} activity={activity} isMobile={isMobile} />
+        ))
+      )}
 
-            {/* Actions rapides & Activités récentes */}
-            <Row gutter={[16, 16]}>
-              <Col xs={24} md={8}>
-                <Card title="Actions Rapides" hoverable>
-                  <Space direction="vertical" className="w-full">
-                    <Link to="/leads/kanban">
-                      <Button type="primary" icon={<PlusOutlined />} block>
-                        Nouveau Lead
-                      </Button>
-                    </Link>
-                    <Link to="/clients">
-                      <Button icon={<UserOutlined />} block>
-                        Nouveau Client
-                      </Button>
-                    </Link>
-                    <Link to="/calendar">
-                      <Button icon={<CalendarOutlined />} block>
-                        Planifier RDV
-                      </Button>
-                    </Link>
-                    <Link to="/emails">
-                      <Button icon={<MailOutlined />} block>
-                        Envoyer Email
-                      </Button>
-                    </Link>
-                  </Space>
-                  
-                  <Divider />
-                  
-                  <div>
-                    <Text strong>À faire aujourd'hui</Text>
-                    <div className="mt-3">
-                      <Badge status="error" text={`${stats.pendingTasks} tâches en retard`} className="block mb-2" />
-                      <Badge status="processing" text={`${stats.upcomingMeetings} RDV aujourd'hui`} className="block" />
-                    </div>
-                  </div>
-                </Card>
-              </Col>
+      {/* End of feed */}
+      {recentActivities.length > 0 && (
+        <div style={{ textAlign: "center", padding: "20px 0 40px", color: FB.textSecondary, fontSize: 14 }}>
+          <CheckCircleOutlined style={{ fontSize: 24, marginBottom: 8, display: "block" }} />
+          Vous êtes à jour ! Aucune nouvelle activité.
+        </div>
+      )}
+    </div>
+  );
 
-              <Col xs={24} md={16}>
-                <Card 
-                  title={
-                    <Space>
-                      <ClockCircleOutlined />
-                      Activités Récentes
-                    </Space>
-                  }
-                  extra={<Button size="small" icon={<ReloadOutlined />}>Actualiser</Button>}
-                  hoverable
-                >
-                  <List
-                    dataSource={recentActivities.slice(0, 5)}
-                    renderItem={(activity) => (
-                      <List.Item>
-                        <List.Item.Meta
-                          avatar={
-                            <Avatar 
-                              icon={
-                                activity.type === 'creation' ? <UserOutlined /> :
-                                activity.type === 'email' ? <MailOutlined /> :
-                                activity.type === 'meeting' ? <CalendarOutlined /> :
-                                <ThunderboltOutlined />
-                              }
-                              style={{
-                                backgroundColor: 
-                                  activity.type === 'creation' ? '#52c41a' :
-                                  activity.type === 'email' ? '#1890ff' :
-                                  activity.type === 'meeting' ? '#fa8c16' :
-                                  '#722ed1'
-                              }}
-                            />
-                          }
-                          title={
-                            <Space>
-                              <Text strong>{activity.title}</Text>
-                              <Tag color={activity.status === 'success' ? 'green' : activity.status === 'warning' ? 'orange' : 'blue'}>
-                                {activity.type}
-                              </Tag>
-                            </Space>
-                          }
-                          description={
-                            <>
-                              <Text>{activity.description}</Text>
-                              <br />
-                              <Text type="secondary" className="text-xs">
-                                {new Date(activity.timestamp).toLocaleString('fr-FR')} • {activity.user}
-                              </Text>
-                            </>
-                          }
-                        />
-                      </List.Item>
-                    )}
-                  />
-                  <div className="text-center mt-3">
-                    <Button type="link" onClick={() => setActiveTab('activity')}>
-                      Voir toute l'activité ({recentActivities.length})
-                    </Button>
-                  </div>
-                </Card>
-              </Col>
-            </Row>
-
-            {/* Top Leads */}
-            <Card 
-              title={
-                <Space>
-                  <StarOutlined className="text-orange-500" />
-                  Top Leads à suivre
-                </Space>
-              }
-              extra={<Link to="/leads/list"><Button size="small">Voir tous</Button></Link>}
-              className="mt-6"
-            >
-              <Table 
-                dataSource={topLeads}
-                columns={leadColumns}
-                pagination={{ pageSize: 5 }}
-                size="middle"
-              />
-            </Card>
-          </TabPane>
-
-          {/* ONGLET 2 : LEADS EN DÉTAIL */}
-          <TabPane 
-            tab={
-              <span>
-                <PieChartOutlined />
-                Leads en détail
-              </span>
-            } 
-            key="leads"
-          >
-            {/* Contrôles */}
-            <Card className="mb-6">
-              <Row gutter={16}>
-                <Col>
-                  <Text strong className="mr-2">Période :</Text>
-                  <Segmented
-                    options={[
-                      { label: 'Semaine', value: 'week' },
-                      { label: 'Mois', value: 'month' },
-                      { label: 'Trimestre', value: 'quarter' }
-                    ]}
-                    value={timeRange}
-                    onChange={handleTimeRangeChange}
-                  />
-                </Col>
-                <Col>
-                  <Text strong className="mr-2">Vue :</Text>
-                  <Segmented
-                    options={[
-                      { label: <PieChartOutlined />, value: 'pie' },
-                      { label: <BarChartOutlined />, value: 'bar' }
-                    ]}
-                    value={chartType}
-                    onChange={handleChartTypeChange}
-                  />
-                </Col>
-              </Row>
-            </Card>
-
-            {/* KPIs Leads */}
-            <Row gutter={[16, 16]} className="mb-6">
-              <Col xs={24} sm={12} lg={6}>
-                <Card hoverable>
-                  <Statistic
-                    title="Total des leads"
-                    value={stats.totalLeads}
-                    prefix={<UserOutlined className="text-blue-500" />}
-                    valueStyle={{ color: '#1890ff' }}
-                  />
-                  <Progress percent={100} showInfo={false} strokeColor="#1890ff" className="mt-2" />
-                </Card>
-              </Col>
-
-              <Col xs={24} sm={12} lg={6}>
-                <Card hoverable>
-                  <Statistic
-                    title="Nouveaux leads"
-                    value={stats.newLeadsToday}
-                    prefix={<FireOutlined className="text-green-500" />}
-                    valueStyle={{ color: '#52c41a' }}
-                  />
-                  <Progress 
-                    percent={stats.totalLeads > 0 ? (stats.newLeadsToday / stats.totalLeads) * 100 : 0}
-                    showInfo={false} 
-                    strokeColor="#52c41a"
-                    className="mt-2"
-                  />
-                </Card>
-              </Col>
-
-              <Col xs={24} sm={12} lg={6}>
-                <Card hoverable>
-                  <Statistic
-                    title="Taux de conversion"
-                    value={stats.conversionRate}
-                    precision={1}
-                    suffix="%"
-                    prefix={<TrophyOutlined className="text-orange-500" />}
-                    valueStyle={{ color: '#fa8c16' }}
-                  />
-                  <Progress percent={stats.conversionRate} showInfo={false} strokeColor="#fa8c16" className="mt-2" />
-                </Card>
-              </Col>
-
-              <Col xs={24} sm={12} lg={6}>
-                <Card hoverable>
-                  <Statistic
-                    title="Temps de réponse"
-                    value={stats.averageResponseTime}
-                    precision={1}
-                    suffix="h"
-                    prefix={<ClockCircleOutlined className="text-purple-500" />}
-                    valueStyle={{ color: '#722ed1' }}
-                  />
-                  <Progress 
-                    percent={Math.max(0, 100 - (stats.averageResponseTime * 4))} 
-                    showInfo={false} 
-                    strokeColor="#722ed1"
-                    className="mt-2"
-                  />
-                </Card>
-              </Col>
-            </Row>
-
-            {/* Graphiques */}
-            <Row gutter={[16, 16]}>
-              <Col xs={24} lg={12}>
-                <Card 
-                  title={<Space><PieChartOutlined />Répartition par statut</Space>}
-                  extra={<Badge status="processing" text="Temps réel" />}
-                  hoverable
-                >
-                  <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      {chartType === 'pie' ? (
-                        <PieChart>
-                          <Pie
-                            data={chartData.leadsByStatus}
-                            cx="50%"
-                            cy="50%"
-                            outerRadius={80}
-                            dataKey="value"
-                            label={({ name, value, percent }) => `${name}: ${value} (${(percent * 100).toFixed(0)}%)`}
-                          >
-                            {chartData.leadsByStatus.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.color} />
-                            ))}
-                          </Pie>
-                          <Tooltip />
-                        </PieChart>
-                      ) : (
-                        <BarChart data={chartData.leadsByStatus}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="name" />
-                          <YAxis />
-                          <Tooltip />
-                          <Bar dataKey="value" fill="#3B82F6" />
-                        </BarChart>
-                      )}
-                    </ResponsiveContainer>
-                  </div>
-                </Card>
-              </Col>
-
-              <Col xs={24} lg={12}>
-                <Card 
-                  title={<Space><LineChartOutlined />Évolution mensuelle</Space>}
-                  extra={<Tag color="green">Tendance ↗</Tag>}
-                  hoverable
-                >
-                  <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={chartData.leadsEvolution}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" />
-                        <YAxis />
-                        <Tooltip />
-                        <Bar dataKey="value" fill="#52c41a" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </Card>
-              </Col>
-            </Row>
-          </TabPane>
-
-          {/* ONGLET 3 : ACTIVITÉS */}
-          <TabPane 
-            tab={
-              <span>
-                <ClockCircleOutlined />
-                Activités ({recentActivities.length})
-              </span>
-            } 
-            key="activity"
-          >
-            <Row gutter={[16, 16]}>
-              <Col xs={24} lg={16}>
-                <Card 
-                  title="Timeline complète"
-                  extra={<Button icon={<ReloadOutlined />} onClick={handleRefresh}>Actualiser</Button>}
-                >
-                  <Timeline>
-                    {recentActivities.map((activity) => (
-                      <Timeline.Item
-                        key={activity.id}
-                        dot={
-                          <Avatar 
-                            size="small" 
-                            icon={
-                              activity.type === 'creation' ? <UserOutlined /> :
-                              activity.type === 'email' ? <MailOutlined /> :
-                              activity.type === 'meeting' ? <CalendarOutlined /> :
-                              <ThunderboltOutlined />
-                            }
-                            style={{
-                              backgroundColor: 
-                                activity.type === 'creation' ? '#52c41a' :
-                                activity.type === 'email' ? '#1890ff' :
-                                '#722ed1'
-                            }}
-                          />
-                        }
-                      >
-                        <div className="flex justify-between">
-                          <div>
-                            <Text strong>{activity.title}</Text>
-                            <br />
-                            <Text>{activity.description}</Text>
-                            <br />
-                            <Text type="secondary" className="text-xs">
-                              {new Date(activity.timestamp).toLocaleString('fr-FR')} • {activity.user}
-                            </Text>
-                          </div>
-                          <Tag color={activity.status === 'success' ? 'green' : 'blue'}>
-                            {activity.type}
-                          </Tag>
-                        </div>
-                      </Timeline.Item>
-                    ))}
-                  </Timeline>
-                </Card>
-              </Col>
-
-              <Col xs={24} lg={8}>
-                <Card title="Stats rapides">
-                  <Row gutter={[0, 16]}>
-                    <Col span={24}>
-                      <Statistic
-                        title="Leads actifs"
-                        value={stats.totalLeads - stats.newLeadsToday}
-                        prefix={<CheckCircleOutlined style={{ color: '#52c41a' }} />}
-                        valueStyle={{ color: '#52c41a' }}
-                      />
-                    </Col>
-                    <Col span={24}>
-                      <Statistic
-                        title="En attente"
-                        value={stats.pendingTasks}
-                        prefix={<WarningOutlined style={{ color: '#fa8c16' }} />}
-                        valueStyle={{ color: '#fa8c16' }}
-                      />
-                    </Col>
-                    <Col span={24}>
-                      <div>
-                        <Text strong>Performance ce mois</Text>
-                        <Progress 
-                          percent={75} 
-                          status="active"
-                          strokeColor={{ '0%': '#108ee9', '100%': '#87d068' }}
-                          className="mt-2"
-                        />
-                      </div>
-                    </Col>
-                  </Row>
-                </Card>
-              </Col>
-            </Row>
-          </TabPane>
-        </Tabs>
+  /* ═══════════════════════════════════════════════════════════
+     MAIN RENDER — 3-COLUMN LAYOUT
+     ═══════════════════════════════════════════════════════════ */
+  return (
+    <div style={{ minHeight: "100vh", background: FB.bg }}>
+      <div style={{
+        maxWidth: 1320, margin: "0 auto",
+        padding: isMobile ? "12px 12px" : "20px 16px",
+        display: "flex", gap: 16, justifyContent: "center",
+      }}>
+        {!isMobile && !isTablet && renderLeftSidebar()}
+        {renderFeed()}
+        {!isMobile && !isTablet && renderRightSidebar()}
       </div>
     </div>
   );

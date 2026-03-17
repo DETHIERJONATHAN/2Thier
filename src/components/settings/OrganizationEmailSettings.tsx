@@ -1,23 +1,89 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Table, Button, Input, Modal, message, Spin, Tag } from 'antd';
-import { EditOutlined, MailOutlined, SyncOutlined, SettingOutlined } from '@ant-design/icons';
+import { Spin, message } from 'antd';
+import {
+  EditOutlined,
+  MailOutlined,
+  SyncOutlined,
+  SettingOutlined,
+  CloseOutlined,
+  LoadingOutlined,
+  CheckCircleOutlined,
+  UserOutlined,
+  InfoCircleOutlined,
+  ReloadOutlined,
+  EyeInvisibleOutlined,
+  EyeOutlined,
+} from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
+
+const FB = {
+  bg: '#f0f2f5', white: '#ffffff', text: '#050505', textSecondary: '#65676b',
+  blue: '#1877f2', blueHover: '#166fe5', border: '#ced0d4',
+  btnGray: '#e4e6eb', btnGrayHover: '#d8dadf', green: '#42b72a',
+  red: '#e4405f', orange: '#f7931a',
+  shadow: '0 1px 2px rgba(0,0,0,0.1)', radius: 8,
+};
+
+const useScreenSize = () => {
+  const [w, setW] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
+  useEffect(() => { const h = () => setW(window.innerWidth); window.addEventListener('resize', h); return () => window.removeEventListener('resize', h); }, []);
+  return { isMobile: w < 768 };
+};
+
+const FBCard: React.FC<{ children: React.ReactNode; style?: React.CSSProperties }> = ({ children, style }) => (
+  <div style={{ background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow, padding: 20, marginBottom: 16, ...style }}>
+    {children}
+  </div>
+);
+
+/* ── FB Modal ──────────────────────────────────────────────── */
+const FBModal: React.FC<{
+  open: boolean; onClose: () => void; title: React.ReactNode;
+  children: React.ReactNode; footer?: React.ReactNode;
+}> = ({ open, onClose, title, children, footer }) => {
+  if (!open) return null;
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 1000, padding: 16,
+    }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: FB.white, borderRadius: FB.radius, width: '100%',
+        maxWidth: 480, boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+        maxHeight: '90vh', display: 'flex', flexDirection: 'column',
+      }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '16px 20px', borderBottom: '1px solid ' + FB.border, flexShrink: 0,
+        }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: FB.text }}>{title}</div>
+          <div onClick={onClose} style={{
+            width: 32, height: 32, borderRadius: '50%', background: FB.btnGray,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+          }}>
+            <CloseOutlined style={{ fontSize: 14, color: FB.textSecondary }} />
+          </div>
+        </div>
+        <div style={{ padding: 20, overflowY: 'auto', flex: 1 }}>{children}</div>
+        {footer && (
+          <div style={{ padding: '12px 20px', borderTop: '1px solid ' + FB.border, flexShrink: 0 }}>
+            {footer}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 interface UserEmailData {
   id: string;
   firstName: string;
   lastName: string;
   email: string;
-  organization: {
-    id: string;
-    name: string;
-  };
-  emailAccount?: {
-    emailAddress: string;
-    domain: string;
-    isConfigured: boolean;
-  };
+  organization: { id: string; name: string };
+  emailAccount?: { emailAddress: string; domain: string; isConfigured: boolean };
   generatedEmail: string;
 }
 
@@ -28,353 +94,308 @@ interface YandexConfig {
   port?: number;
 }
 
-/**
- * Composant de gestion des emails pour les administrateurs d'organisation
- * Version limitée accessible dans les paramètres normaux
- */
 const OrganizationEmailSettings: React.FC = () => {
   const [users, setUsers] = useState<UserEmailData[]>([]);
   const [loading, setLoading] = useState(false);
-  const [editingRecord, setEditingRecord] = useState<UserEmailData | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingEmail, setEditingEmail] = useState('');
   const [isYandexModalVisible, setIsYandexModalVisible] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserEmailData | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const [yandexConfig, setYandexConfig] = useState<YandexConfig>({
-    username: '',
-    password: '',
-    host: 'imap.yandex.com',
-    port: 993
+    username: '', password: '', host: 'imap.yandex.com', port: 993,
   });
 
   const { api } = useAuthenticatedApi();
   const { user, selectedOrganization } = useAuth();
-
-  // Seuls les admins peuvent accéder à cette interface
+  const { isMobile } = useScreenSize();
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
 
   useEffect(() => {
-    if (isAdmin && selectedOrganization) {
-      loadOrganizationUsers();
-    }
+    if (isAdmin && selectedOrganization) loadOrganizationUsers();
   }, [isAdmin, selectedOrganization]);
 
   const loadOrganizationUsers = useCallback(async () => {
-    if (!selectedOrganization) {
-      message.warning('Aucune organisation sélectionnée');
-      return;
-    }
-
+    if (!selectedOrganization) { message.warning('Aucune organisation sélectionnée'); return; }
     setLoading(true);
     try {
       const response = await api.get(`/api/admin-password/users-emails?organizationId=${selectedOrganization.id}`);
-      
       if (response.success && Array.isArray(response.data)) {
-        // Filtrer pour ne montrer que les utilisateurs de l'organisation actuelle
-        const organizationUsers = response.data.filter((userData: UserEmailData) => 
-          userData.organization.id === selectedOrganization.id
-        );
-        setUsers(organizationUsers);
-      } else {
-        throw new Error(response.message || 'Erreur lors du chargement');
-      }
+        setUsers(response.data.filter((u: UserEmailData) => u.organization.id === selectedOrganization.id));
+      } else { throw new Error(response.message || 'Erreur'); }
     } catch (error) {
-      console.error('Erreur lors du chargement des utilisateurs:', error);
-      message.error('Erreur lors du chargement des utilisateurs de votre organisation');
+      console.error('Erreur chargement:', error);
+      message.error('Erreur lors du chargement des utilisateurs');
       setUsers([]);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }, [api, selectedOrganization]);
 
   const handleSave = async (record: UserEmailData) => {
     try {
-      await api.post('/api/admin-password/update-email-config', {
-        userId: record.id,
-        generatedEmail: record.generatedEmail
-      });
-      
+      await api.post('/api/admin-password/update-email-config', { userId: record.id, generatedEmail: editingEmail });
       message.success('Configuration email mise à jour');
-      setEditingRecord(null);
+      setEditingId(null);
       loadOrganizationUsers();
-    } catch (error) {
-      console.error('Erreur lors de la sauvegarde:', error);
-      message.error('Erreur lors de la sauvegarde');
-    }
+    } catch { message.error('Erreur lors de la sauvegarde'); }
   };
 
-  const handleYandexConfig = (user: UserEmailData) => {
-    setSelectedUser(user);
-    setYandexConfig({
-      username: user.generatedEmail || '',
-      password: '',
-      host: 'imap.yandex.com',
-      port: 993
-    });
+  const handleYandexConfig = (u: UserEmailData) => {
+    setSelectedUser(u);
+    setYandexConfig({ username: u.generatedEmail || '', password: '', host: 'imap.yandex.com', port: 993 });
+    setShowPassword(false);
     setIsYandexModalVisible(true);
   };
 
   const handleYandexSave = async () => {
     if (!selectedUser || !yandexConfig.username || !yandexConfig.password) {
-      message.error('Veuillez remplir tous les champs obligatoires');
-      return;
+      message.error('Veuillez remplir tous les champs obligatoires'); return;
     }
-
     try {
-      await api.post('/api/yandex/setup', {
-        userId: selectedUser.id,
-        config: yandexConfig
-      });
-
+      await api.post('/api/yandex/setup', { userId: selectedUser.id, config: yandexConfig });
       message.success('Configuration Yandex sauvegardée');
       setIsYandexModalVisible(false);
       loadOrganizationUsers();
-    } catch (error) {
-      console.error('Erreur lors de la configuration Yandex:', error);
-      message.error('Erreur lors de la configuration Yandex');
-    }
+    } catch { message.error('Erreur lors de la configuration Yandex'); }
   };
 
-  const handleTestConnection = async (user: UserEmailData) => {
+  const handleTestConnection = async (u: UserEmailData) => {
     try {
       message.loading('Test de connexion en cours...', 2);
-      
-      const response = await api.get(`/api/yandex/test?userId=${user.id}`);
-      
-      if (response.success) {
-        message.success('Connexion email réussie !');
-      } else {
-        message.error('Échec de la connexion : ' + (response.message || 'Erreur inconnue'));
-      }
-    } catch (error) {
-      console.error('Erreur lors du test:', error);
-      message.error('Erreur lors du test de connexion');
-    }
+      const response = await api.get(`/api/yandex/test?userId=${u.id}`);
+      response.success ? message.success('Connexion email réussie !') : message.error('Échec : ' + (response.message || 'Erreur'));
+    } catch { message.error('Erreur lors du test de connexion'); }
   };
 
-  const handleSync = async (user: UserEmailData) => {
+  const handleSync = async (u: UserEmailData) => {
     try {
       message.loading('Synchronisation en cours...', 3);
-      
-      await api.post('/api/yandex/sync', {
-        userId: user.id
-      });
-      
+      await api.post('/api/yandex/sync', { userId: u.id });
       message.success('Synchronisation terminée');
-    } catch (error) {
-      console.error('Erreur lors de la synchronisation:', error);
-      message.error('Erreur lors de la synchronisation');
-    }
+    } catch { message.error('Erreur lors de la synchronisation'); }
   };
 
-  const columns = [
-    {
-      title: 'Utilisateur',
-      dataIndex: 'firstName',
-      key: 'user',
-      render: (_text: string, record: UserEmailData) => (
-        <div>
-          <div className="font-semibold">{record.firstName} {record.lastName}</div>
-          <div className="text-xs text-gray-500">{record.email}</div>
-        </div>
-      ),
-    },
-    {
-      title: 'Email Professionnel',
-      dataIndex: 'generatedEmail',
-      key: 'generatedEmail',
-      render: (text: string, record: UserEmailData) => {
-        if (editingRecord?.id === record.id) {
-          return (
-            <Input
-              value={editingRecord.generatedEmail}
-              onChange={(e) => setEditingRecord({
-                ...editingRecord,
-                generatedEmail: e.target.value
-              })}
-              placeholder="email@organisation.be"
-            />
-          );
-        }
-        return (
-          <div className="flex items-center">
-            <span className={text ? 'text-green-600' : 'text-gray-400'}>
-              {text || 'Non configuré'}
-            </span>
-            {record.emailAccount?.isConfigured && (
-              <Tag color="green" className="ml-2">Configuré</Tag>
-            )}
-          </div>
-        );
-      },
-    },
-    {
-      title: 'Actions',
-      key: 'actions',
-      render: (_text: string, record: UserEmailData) => (
-        <div className="flex gap-2">
-          {editingRecord?.id === record.id ? (
-            <>
-              <Button 
-                type="primary" 
-                size="small"
-                onClick={() => handleSave(record)}
-              >
-                Sauvegarder
-              </Button>
-              <Button 
-                size="small"
-                onClick={() => setEditingRecord(null)}
-              >
-                Annuler
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button
-                icon={<EditOutlined />}
-                size="small"
-                onClick={() => setEditingRecord(record)}
-                title="Modifier l'email"
-              />
-              <Button
-                icon={<SettingOutlined />}
-                size="small"
-                onClick={() => handleYandexConfig(record)}
-                title="Configurer Yandex"
-                disabled={!record.generatedEmail}
-              />
-              <Button
-                icon={<MailOutlined />}
-                size="small"
-                onClick={() => handleTestConnection(record)}
-                title="Tester la connexion"
-                disabled={!record.emailAccount?.isConfigured}
-              />
-              <Button
-                icon={<SyncOutlined />}
-                size="small"
-                onClick={() => handleSync(record)}
-                title="Synchroniser les emails"
-                disabled={!record.emailAccount?.isConfigured}
-              />
-            </>
-          )}
-        </div>
-      ),
-    },
-  ];
-
-  // Protection d'accès
-  if (!isAdmin) {
-    return (
-      <div className="text-center py-8">
-        <p className="text-gray-500">
-          Vous n'avez pas les permissions nécessaires pour accéder à cette section.
-        </p>
+  if (!isAdmin) return (
+    <FBCard style={{ textAlign: 'center', padding: 40 }}>
+      <div style={{ fontSize: 15, color: FB.textSecondary }}>
+        Vous n'avez pas les permissions nécessaires pour accéder à cette section.
       </div>
-    );
-  }
+    </FBCard>
+  );
 
-  if (!selectedOrganization) {
-    return (
-      <div className="text-center py-8">
-        <p className="text-gray-500">
-          Veuillez sélectionner une organisation pour gérer les emails.
-        </p>
+  if (!selectedOrganization) return (
+    <FBCard style={{ textAlign: 'center', padding: 40 }}>
+      <div style={{ fontSize: 15, color: FB.textSecondary }}>
+        Veuillez sélectionner une organisation pour gérer les emails.
       </div>
-    );
-  }
+    </FBCard>
+  );
 
   return (
-    <div className="organization-email-settings">
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold mb-2">
-          📧 Gestion des Emails - {selectedOrganization.name}
-        </h2>
-        <p className="text-gray-600">
-          Gérez les adresses email professionnelles des utilisateurs de votre organisation.
-        </p>
-      </div>
-
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-        <h4 className="font-semibold text-blue-800 mb-2">ℹ️ Information</h4>
-        <p className="text-blue-700 text-sm">
-          En tant qu'administrateur d'organisation, vous pouvez configurer les emails de vos utilisateurs.
-          Les adresses suivent le format : prénom.nom@{selectedOrganization.name?.toLowerCase()}.be
-        </p>
-      </div>
-
-      <div className="mb-4">
-        <Button
-          type="primary"
-          onClick={loadOrganizationUsers}
-          loading={loading}
-          icon={<SyncOutlined />}
-        >
-          Actualiser
-        </Button>
-      </div>
-
-      <Spin spinning={loading}>
-        <Table
-          columns={columns}
-          dataSource={users}
-          rowKey="id"
-          pagination={{
-            pageSize: 10,
-            showSizeChanger: true,
-            showQuickJumper: true,
-          }}
-          locale={{
-            emptyText: 'Aucun utilisateur trouvé dans votre organisation'
-          }}
-        />
-      </Spin>
-
-      {/* Modal de configuration Yandex */}
-      <Modal
-        title="🔧 Configuration Yandex"
-        open={isYandexModalVisible}
-        onOk={handleYandexSave}
-        onCancel={() => setIsYandexModalVisible(false)}
-        okText="Sauvegarder"
-        cancelText="Annuler"
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Nom d'utilisateur Yandex :</label>
-            <Input
-              value={yandexConfig.username}
-              onChange={(e) => setYandexConfig({ ...yandexConfig, username: e.target.value })}
-              placeholder="votre-email@yandex.com"
-            />
+    <div>
+      {/* Header */}
+      <FBCard>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{
+              width: 48, height: 48, borderRadius: '50%', background: FB.red,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+              <MailOutlined style={{ fontSize: 22, color: FB.white }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: FB.text }}>
+                Gestion des Emails
+              </div>
+              <div style={{ fontSize: 14, color: FB.textSecondary }}>
+                {selectedOrganization.name} — Adresses email professionnelles
+              </div>
+            </div>
           </div>
+          <button onClick={loadOrganizationUsers} disabled={loading} style={{
+            padding: '8px 16px', borderRadius: 6, border: 'none', background: FB.blue,
+            color: FB.white, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 6, opacity: loading ? 0.7 : 1,
+          }}>
+            {loading ? <LoadingOutlined /> : <ReloadOutlined />} Actualiser
+          </button>
+        </div>
+      </FBCard>
+
+      {/* Info box */}
+      <FBCard style={{ background: FB.blue + '08', border: '1px solid ' + FB.blue + '25' }}>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <InfoCircleOutlined style={{ color: FB.blue, fontSize: 18, flexShrink: 0, marginTop: 2 }} />
           <div>
-            <label className="block text-sm font-medium mb-1">Mot de passe :</label>
-            <Input.Password
-              value={yandexConfig.password}
-              onChange={(e) => setYandexConfig({ ...yandexConfig, password: e.target.value })}
-              placeholder="Votre mot de passe Yandex"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Serveur IMAP :</label>
-            <Input
-              value={yandexConfig.host}
-              onChange={(e) => setYandexConfig({ ...yandexConfig, host: e.target.value })}
-              disabled
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Port :</label>
-            <Input
-              type="number"
-              value={yandexConfig.port}
-              onChange={(e) => setYandexConfig({ ...yandexConfig, port: parseInt(e.target.value) })}
-              disabled
-            />
+            <div style={{ fontSize: 14, fontWeight: 600, color: FB.blue, marginBottom: 4 }}>Information</div>
+            <div style={{ fontSize: 13, color: FB.blue, opacity: 0.85 }}>
+              En tant qu'administrateur, vous pouvez configurer les emails de vos utilisateurs.
+              Les adresses suivent le format : prénom.nom@{selectedOrganization.name?.toLowerCase()}.be
+            </div>
           </div>
         </div>
-      </Modal>
+      </FBCard>
+
+      {/* Users List */}
+      {loading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>
+      ) : (
+        <FBCard style={{ padding: 0 }}>
+          {users.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 40, color: FB.textSecondary }}>
+              Aucun utilisateur trouvé dans votre organisation
+            </div>
+          ) : (
+            users.map((u, i) => (
+              <div key={u.id} style={{
+                padding: '14px 16px',
+                borderBottom: i < users.length - 1 ? '1px solid ' + FB.border : 'none',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: editingId === u.id ? 12 : 0 }}>
+                  {/* Avatar */}
+                  <div style={{
+                    width: 40, height: 40, borderRadius: '50%', background: FB.blue + '15',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  }}>
+                    <UserOutlined style={{ fontSize: 18, color: FB.blue }} />
+                  </div>
+
+                  {/* User info */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: FB.text }}>{u.firstName} {u.lastName}</div>
+                    <div style={{ fontSize: 12, color: FB.textSecondary }}>{u.email}</div>
+                  </div>
+
+                  {/* Pro email */}
+                  {editingId !== u.id && !isMobile && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                      <span style={{
+                        fontSize: 13,
+                        color: u.generatedEmail ? FB.green : FB.textSecondary,
+                      }}>
+                        {u.generatedEmail || 'Non configuré'}
+                      </span>
+                      {u.emailAccount?.isConfigured && (
+                        <span style={{
+                          padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600,
+                          background: FB.green + '15', color: FB.green,
+                        }}>
+                          <CheckCircleOutlined style={{ marginRight: 3 }} />Configuré
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Action buttons */}
+                  {editingId !== u.id && (
+                    <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                      {[
+                        { icon: <EditOutlined />, title: 'Modifier', onClick: () => { setEditingId(u.id); setEditingEmail(u.generatedEmail || ''); }, disabled: false },
+                        { icon: <SettingOutlined />, title: 'Configurer Yandex', onClick: () => handleYandexConfig(u), disabled: !u.generatedEmail },
+                        { icon: <MailOutlined />, title: 'Tester connexion', onClick: () => handleTestConnection(u), disabled: !u.emailAccount?.isConfigured },
+                        { icon: <SyncOutlined />, title: 'Synchroniser', onClick: () => handleSync(u), disabled: !u.emailAccount?.isConfigured },
+                      ].map((btn, j) => (
+                        <button key={j} onClick={btn.onClick} disabled={btn.disabled} title={btn.title} style={{
+                          width: 32, height: 32, borderRadius: '50%', border: 'none',
+                          background: 'transparent', cursor: btn.disabled ? 'not-allowed' : 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          opacity: btn.disabled ? 0.35 : 1, color: FB.blue,
+                        }}>{btn.icon}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Editing row */}
+                {editingId === u.id && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 52 }}>
+                    <input
+                      value={editingEmail}
+                      onChange={e => setEditingEmail(e.target.value)}
+                      placeholder="email@organisation.be"
+                      style={{
+                        flex: 1, border: '1px solid ' + FB.blue, borderRadius: 6,
+                        padding: '8px 12px', fontSize: 14, color: FB.text, outline: 'none',
+                        fontFamily: 'inherit', boxSizing: 'border-box',
+                      }}
+                    />
+                    <button onClick={() => handleSave(u)} style={{
+                      padding: '8px 14px', borderRadius: 6, border: 'none', background: FB.blue,
+                      color: FB.white, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    }}>Sauvegarder</button>
+                    <button onClick={() => setEditingId(null)} style={{
+                      padding: '8px 14px', borderRadius: 6, border: 'none', background: FB.btnGray,
+                      color: FB.text, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    }}>Annuler</button>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </FBCard>
+      )}
+
+      {/* ── Yandex Modal ── */}
+      <FBModal
+        open={isYandexModalVisible}
+        onClose={() => setIsYandexModalVisible(false)}
+        title={<><SettingOutlined style={{ marginRight: 8 }} />Configuration Yandex</>}
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button onClick={() => setIsYandexModalVisible(false)} style={{
+              padding: '8px 16px', borderRadius: 6, border: 'none', background: FB.btnGray,
+              color: FB.text, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+            }}>Annuler</button>
+            <button onClick={handleYandexSave} style={{
+              padding: '8px 20px', borderRadius: 6, border: 'none', background: FB.blue,
+              color: FB.white, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+            }}>Sauvegarder</button>
+          </div>
+        }
+      >
+        {[
+          { label: "Nom d'utilisateur Yandex", value: yandexConfig.username, key: 'username', placeholder: 'votre-email@yandex.com', disabled: false, isPassword: false },
+          { label: 'Mot de passe', value: yandexConfig.password, key: 'password', placeholder: 'Votre mot de passe Yandex', disabled: false, isPassword: true },
+          { label: 'Serveur IMAP', value: yandexConfig.host || '', key: 'host', placeholder: '', disabled: true, isPassword: false },
+          { label: 'Port', value: String(yandexConfig.port || ''), key: 'port', placeholder: '', disabled: true, isPassword: false },
+        ].map((field) => (
+          <div key={field.key} style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 6 }}>
+              {field.label}
+            </label>
+            <div style={{
+              display: 'flex', alignItems: 'center',
+              border: '1px solid ' + FB.border, borderRadius: 6,
+              background: field.disabled ? FB.btnGray : FB.white,
+            }}>
+              <input
+                type={field.isPassword && !showPassword ? 'password' : field.key === 'port' ? 'number' : 'text'}
+                value={field.value}
+                onChange={e => {
+                  const v = e.target.value;
+                  if (field.key === 'username') setYandexConfig(c => ({ ...c, username: v }));
+                  else if (field.key === 'password') setYandexConfig(c => ({ ...c, password: v }));
+                  else if (field.key === 'host') setYandexConfig(c => ({ ...c, host: v }));
+                  else if (field.key === 'port') setYandexConfig(c => ({ ...c, port: parseInt(v) || 0 }));
+                }}
+                placeholder={field.placeholder}
+                disabled={field.disabled}
+                style={{
+                  flex: 1, border: 'none', outline: 'none', padding: '10px 12px',
+                  fontSize: 15, color: FB.text, background: 'transparent',
+                  fontFamily: 'inherit',
+                }}
+              />
+              {field.isPassword && (
+                <div onClick={() => setShowPassword(!showPassword)} style={{
+                  padding: '0 12px', cursor: 'pointer', color: FB.textSecondary,
+                }}>
+                  {showPassword ? <EyeOutlined /> : <EyeInvisibleOutlined />}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </FBModal>
     </div>
   );
 };
