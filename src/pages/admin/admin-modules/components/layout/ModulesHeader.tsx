@@ -1,6 +1,13 @@
 import React from 'react';
-import { Card, Row, Col, Input, Button, Tooltip, Badge } from 'antd';
+import { Input, Button, Tooltip, Badge } from 'antd';
 import { ReloadOutlined, AppstoreOutlined, CheckCircleOutlined, RocketOutlined } from '@ant-design/icons';
+
+// ── Facebook Design Tokens ──
+const FB = {
+	bg: '#f0f2f5', white: '#ffffff', text: '#050505', textSecondary: '#65676b',
+	blue: '#1877f2', border: '#ced0d4', green: '#42b72a',
+	shadow: '0 1px 2px rgba(0,0,0,0.1)', radius: 8,
+};
 
 type ModulesHeaderProps = {
 	categoriesCount: number;
@@ -36,65 +43,69 @@ export default function ModulesHeader(props: ModulesHeaderProps) {
 		organizationSelector
 	} = props;
 
+	const statCardStyle: React.CSSProperties = {
+		background: FB.white, borderRadius: FB.radius, padding: 16,
+		boxShadow: FB.shadow, flex: '1 1 180px', minWidth: 180,
+	};
+
 	return (
-		<div className="mb-6 text-slate-900">
-			<div className="mb-6 text-center">
-				<h1 className="text-3xl font-black tracking-tight text-slate-900">Administration des Modules</h1>
-				<p className="text-base text-slate-600 mt-2">Gérez les modules et leurs catégories pour votre organisation</p>
+		<div style={{ marginBottom: 20 }}>
+			{/* Header */}
+			<div style={{
+				background: FB.white, borderRadius: FB.radius, padding: '18px 24px',
+				boxShadow: FB.shadow, marginBottom: 16, textAlign: 'center',
+			}}>
+				<div style={{ fontSize: 24, fontWeight: 700, color: FB.text }}>Administration des Modules</div>
+				<div style={{ color: FB.textSecondary, fontSize: 14, marginTop: 4 }}>Gérez les modules et leurs catégories pour votre organisation</div>
 			</div>
 
-			{/* Cartes de statistiques */}
-			<Row gutter={[16, 16]} className="mb-4">
-				<Col xs={24} sm={12} md={6}>
-					<Card className="shadow-sm hover:shadow-md transition-shadow border border-slate-200 bg-white text-slate-900">
-						<div className="flex items-center justify-between">
-							<div>
-								<div className="text-xs uppercase tracking-wide text-slate-500">Total Catégories</div>
-								<div className="text-2xl font-semibold text-slate-900">{categoriesCount}</div>
-							</div>
-							<AppstoreOutlined className="text-[#2C5967]" style={{ fontSize: 26 }} />
+			{/* Stats */}
+			<div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+				<div style={statCardStyle}>
+					<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+						<div>
+							<div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, color: FB.textSecondary }}>Total Catégories</div>
+							<div style={{ fontSize: 22, fontWeight: 700, color: FB.text }}>{categoriesCount}</div>
 						</div>
-					</Card>
-				</Col>
-				<Col xs={24} sm={12} md={6}>
-					<Card className="shadow-sm hover:shadow-md transition-shadow border border-slate-200 bg-white text-slate-900">
-						<div className="flex items-center justify-between">
-							<div>
-								<div className="text-xs uppercase tracking-wide text-slate-500">Modules (total)</div>
-								<div className="text-2xl font-semibold text-slate-900">{totalModules}</div>
-							</div>
-							<RocketOutlined className="text-blue-600" style={{ fontSize: 26 }} />
+						<AppstoreOutlined style={{ fontSize: 26, color: '#2C5967' }} />
+					</div>
+				</div>
+				<div style={statCardStyle}>
+					<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+						<div>
+							<div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, color: FB.textSecondary }}>Modules (total)</div>
+							<div style={{ fontSize: 22, fontWeight: 700, color: FB.text }}>{totalModules}</div>
 						</div>
-					</Card>
-				</Col>
-				<Col xs={24} sm={12} md={6}>
-					<Card className="shadow-sm hover:shadow-md transition-shadow border border-slate-200 bg-white text-slate-900">
-						<div className="flex items-center justify-between">
-							<div>
-								<div className="text-xs uppercase tracking-wide text-slate-500">Modules Actifs (global)</div>
-								<div className="text-2xl font-semibold text-slate-900">{totalActiveGlobal}</div>
-							</div>
-							<CheckCircleOutlined className="text-green-600" style={{ fontSize: 26 }} />
+						<RocketOutlined style={{ fontSize: 26, color: FB.blue }} />
+					</div>
+				</div>
+				<div style={statCardStyle}>
+					<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+						<div>
+							<div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, color: FB.textSecondary }}>Modules Actifs (global)</div>
+							<div style={{ fontSize: 22, fontWeight: 700, color: FB.text }}>{totalActiveGlobal}</div>
 						</div>
-					</Card>
-				</Col>
-				<Col xs={24} sm={12} md={6}>
-					<Card className="shadow-sm hover:shadow-md transition-shadow border border-slate-200 bg-white text-slate-900">
-						<div className="flex items-center justify-between">
-							<div>
-								<div className="text-xs uppercase tracking-wide text-slate-500">Actifs ({orgName || 'Orga'})</div>
-								<div className="text-2xl font-semibold text-slate-900">{totalActiveForOrg}</div>
-							</div>
-							<CheckCircleOutlined className="text-emerald-600" style={{ fontSize: 26 }} />
+						<CheckCircleOutlined style={{ fontSize: 26, color: FB.green }} />
+					</div>
+				</div>
+				<div style={statCardStyle}>
+					<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+						<div>
+							<div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, color: FB.textSecondary }}>Actifs ({orgName || 'Orga'})</div>
+							<div style={{ fontSize: 22, fontWeight: 700, color: FB.text }}>{totalActiveForOrg}</div>
 						</div>
-					</Card>
-				</Col>
-			</Row>
+						<CheckCircleOutlined style={{ fontSize: 26, color: '#10b981' }} />
+					</div>
+				</div>
+			</div>
 
 			{/* Barre de filtres et actions */}
-			<div className="bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm text-slate-900">
-				<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-					<div className="flex flex-1 items-center gap-3 text-slate-900">
+			<div style={{
+				background: FB.white, borderRadius: FB.radius, padding: '12px 16px',
+				boxShadow: FB.shadow,
+			}}>
+				<div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+					<div style={{ display: 'flex', flex: 1, alignItems: 'center', gap: 12 }}>
 						<Input
 							placeholder="Rechercher un module…"
 							value={searchValue}
@@ -107,16 +118,20 @@ export default function ModulesHeader(props: ModulesHeaderProps) {
 							onChange={(e) => onOrderFilterChange(e.target.value)}
 							style={{ maxWidth: 200 }}
 						/>
-						<Tooltip title="Actualiser">
-							<Button icon={<ReloadOutlined />} onClick={onRefresh} />
-						</Tooltip>
+						<button onClick={onRefresh} title="Actualiser" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: 'none', background: FB.btnGray, color: FB.text, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+							<span>🔄</span><span>Actualiser</span>
+						</button>
 					</div>
-					<div className="flex items-center gap-2">
+					<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
 						{organizationSelector}
 						<Badge color="#2C5967" count={categoriesCount} offset={[8, -4]}>
-							<Button type="primary" onClick={onAddCategory}>Ajouter une catégorie</Button>
+							<button onClick={onAddCategory} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: 'none', background: FB.blue, color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+								<span>➕</span><span>Catégorie</span>
+							</button>
 						</Badge>
-						<Button onClick={onAddModule}>Ajouter un module</Button>
+						<button onClick={onAddModule} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: 'none', background: FB.btnGray, color: FB.text, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+							<span>📦</span><span>Module</span>
+						</button>
 					</div>
 				</div>
 			</div>

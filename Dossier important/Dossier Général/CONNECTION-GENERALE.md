@@ -38,8 +38,17 @@ git push origin main
 
 ## 🏠 Connexion Locale (Développement)
 
-### Script de démarrage rapide
-bash scripts/start-local.sh
+### Script de démarrage rapide**
+
+
+
+
+
+
+
+
+
+bash scripts/start-local.sh,t§
 ```bash
 # Démarrer tout l'environnement de développement (proxy + serveur)
 ```

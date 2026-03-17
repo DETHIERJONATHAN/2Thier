@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Card, Button, Spin, Alert, Row, Col, Select, Typography, Divider, Space, Tag, Statistic, Progress, Badge, Descriptions } from 'antd';
+import { Button, Spin, Alert, Select, Typography, Space, Tag, Progress, Badge, Descriptions } from 'antd';
 import { 
   UserOutlined, 
   TeamOutlined, 
@@ -22,7 +22,26 @@ import {
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
 
-const { Title, Text, Paragraph } = Typography;
+const { Text, Paragraph } = Typography;
+
+// ── Facebook Design Tokens ──
+const FB = {
+  bg: '#f0f2f5', white: '#ffffff', text: '#050505', textSecondary: '#65676b',
+  blue: '#1877f2', blueHover: '#166fe5', border: '#ced0d4',
+  btnGray: '#e4e6eb', btnGrayHover: '#d8dadf',
+  green: '#42b72a', red: '#e4405f', orange: '#f7931a', purple: '#722ed1',
+  shadow: '0 1px 2px rgba(0,0,0,0.1)', radius: 8,
+};
+
+function useScreenSize() {
+  const [width, setWidth] = React.useState(window.innerWidth);
+  React.useEffect(() => {
+    const h = () => setWidth(window.innerWidth);
+    window.addEventListener('resize', h);
+    return () => window.removeEventListener('resize', h);
+  }, []);
+  return { isMobile: width < 768, isTablet: width >= 768 && width < 1100, width };
+}
 
 // Types enrichis pour tableau de bord complet
 interface User {
@@ -711,20 +730,30 @@ const UserRightsSummaryPage: React.FC = () => {
     });
   }
 
+  const { isMobile } = useScreenSize();
+
+  const cardStyle: React.CSSProperties = { background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow, marginBottom: 16, padding: isMobile ? 14 : 20 };
+  const statCardStyle: React.CSSProperties = { background: FB.white, borderRadius: FB.radius, padding: isMobile ? 14 : 18, boxShadow: FB.shadow, flex: '1 1 180px', minWidth: isMobile ? '100%' : 180 };
+  const statLabel: React.CSSProperties = { fontSize: 12, color: FB.textSecondary, marginBottom: 4 };
+  const statValue: React.CSSProperties = { fontSize: 22, fontWeight: 700, color: FB.text };
+
   return (
-    <div style={{ padding: 24, backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
-      {/* En-tête simple */}
-      <div style={{ marginBottom: 24 }}>
-        <Title level={2} style={{ margin: 0, color: '#262626' }}>
+    <div style={{ background: FB.bg, minHeight: '100vh', width: '100%', padding: isMobile ? '12px 8px' : '20px 24px' }}>
+      {/* ── En-tête ── */}
+      <div style={{
+        background: FB.white, borderRadius: FB.radius, padding: isMobile ? '14px 16px' : '18px 24px',
+        boxShadow: FB.shadow, marginBottom: 16,
+      }}>
+        <span style={{ fontSize: isMobile ? 20 : 24, fontWeight: 700, color: FB.text }}>
           Résumé des droits utilisateur
-        </Title>
-        <Text type="secondary">
+        </span>
+        <div style={{ color: FB.textSecondary, fontSize: 13, marginTop: 4 }}>
           Sélectionnez un utilisateur et une organisation pour afficher les permissions
-        </Text>
+        </div>
       </div>
 
-      {/* Section de sélection */}
-      <Card style={{ marginBottom: 24 }}>
+      {/* ── Section de sélection ── */}
+      <div style={cardStyle}>
         {/* Informations de diagnostic */}
         {(isFetchingData || error || users.length === 0 || organizations.length === 0) && (
           <Alert
@@ -753,16 +782,16 @@ const UserRightsSummaryPage: React.FC = () => {
           />
         )}
 
-        <Row gutter={[16, 16]}>
-          <Col xs={24} sm={12} md={8}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+          <div style={{ flex: '1 1 250px', minWidth: isMobile ? '100%' : 250 }}>
             <div style={{ marginBottom: 8 }}>
-              <Text strong>
+              <span style={{ fontWeight: 600, color: FB.text }}>
                 <UserOutlined style={{ marginRight: 8 }} />
                 Sélectionner un utilisateur
-              </Text>
-              <Text type="secondary" style={{ marginLeft: 8 }}>
+              </span>
+              <span style={{ marginLeft: 8, color: FB.textSecondary, fontSize: 12 }}>
                 ({selectedOrgId ? filteredUsers.length : users.length} disponible{(selectedOrgId ? filteredUsers.length : users.length) > 1 ? 's' : ''}{selectedOrgId ? ' dans cette organisation' : ''})
-              </Text>
+              </span>
             </div>
             <Select
               style={{ width: '100%' }}
@@ -792,17 +821,17 @@ const UserRightsSummaryPage: React.FC = () => {
               styles={{ popup: { root: { zIndex: 9999 } } }}
               getPopupContainer={(trigger) => trigger.parentElement || document.body}
             />
-          </Col>
+          </div>
 
-          <Col xs={24} sm={12} md={8}>
+          <div style={{ flex: '1 1 250px', minWidth: isMobile ? '100%' : 250 }}>
             <div style={{ marginBottom: 8 }}>
-              <Text strong>
+              <span style={{ fontWeight: 600, color: FB.text }}>
                 <TeamOutlined style={{ marginRight: 8 }} />
                 Sélectionner une organisation
-              </Text>
-              <Text type="secondary" style={{ marginLeft: 8 }}>
+              </span>
+              <span style={{ marginLeft: 8, color: FB.textSecondary, fontSize: 12 }}>
                 ({selectedUserId ? filteredOrganizations.length : organizations.length} disponible{(selectedUserId ? filteredOrganizations.length : organizations.length) > 1 ? 's' : ''}{selectedUserId ? ' pour cet utilisateur' : ''})
-              </Text>
+              </span>
             </div>
             <Select
               style={{ width: '100%' }}
@@ -832,11 +861,11 @@ const UserRightsSummaryPage: React.FC = () => {
               styles={{ popup: { root: { zIndex: 9999 } } }}
               getPopupContainer={(trigger) => trigger.parentElement || document.body}
             />
-          </Col>
+          </div>
 
-          <Col xs={24} sm={24} md={8}>
+          <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'flex-end' }}>
             <div style={{ marginBottom: 8 }}>
-              <Text strong>Actions</Text>
+              <span style={{ fontWeight: 600, color: FB.text }}>Actions</span>
             </div>
             <Space>
               <Button 
@@ -855,9 +884,9 @@ const UserRightsSummaryPage: React.FC = () => {
                 Exporter
               </Button>
             </Space>
-          </Col>
-        </Row>
-      </Card>
+          </div>
+        </div>
+      </div>
 
       {/* Section des résultats */}
       {error && (
@@ -871,14 +900,12 @@ const UserRightsSummaryPage: React.FC = () => {
       )}
 
       {isLoading ? (
-        <Card>
+        <div style={cardStyle}>
           <div style={{ textAlign: 'center', padding: 48 }}>
             <Spin size="large" />
-            <div style={{ marginTop: 16 }}>
-              <Text>Chargement des permissions...</Text>
-            </div>
+            <div style={{ marginTop: 16, color: FB.textSecondary }}>Chargement des permissions...</div>
           </div>
-        </Card>
+        </div>
       ) : rightsSummary ? (
         <div data-testid="rights-summary-results">
           {/* Debug des données reçues */}
@@ -899,82 +926,46 @@ const UserRightsSummaryPage: React.FC = () => {
 
           {/* Tableau de bord principal - Vue d'ensemble statistique */}
           {globalStats && (
-            <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-              <Col xs={24} sm={12} lg={6}>
-                <Card>
-                  <Statistic
-                    title="Modules accessibles"
-                    value={globalStats.totalPermissions}
-                    prefix={<DatabaseOutlined style={{ color: '#1890ff' }} />}
-                    suffix="modules"
-                  />
-                </Card>
-              </Col>
-              <Col xs={24} sm={12} lg={6}>
-                <Card>
-                  <Statistic
-                    title="Actions autorisées"
-                    value={globalStats.totalActions}
-                    prefix={<ThunderboltOutlined style={{ color: '#52c41a' }} />}
-                    suffix="actions"
-                  />
-                </Card>
-              </Col>
-              <Col xs={24} sm={12} lg={6}>
-                <Card>
-                  <Statistic
-                    title="Niveau de sécurité"
-                    value={globalStats.securityScore}
-                    prefix={<SafetyOutlined style={{ color: getAccessLevelColor(globalStats.accessLevel) }} />}
-                    suffix="/ 100"
-                  />
-                  <Progress 
-                    percent={globalStats.securityScore} 
-                    strokeColor={getAccessLevelColor(globalStats.accessLevel)}
-                    size="small"
-                    style={{ marginTop: 8 }}
-                  />
-                </Card>
-              </Col>
-              <Col xs={24} sm={12} lg={6}>
-                <Card>
-                  <Statistic
-                    title="Niveau d'accès"
-                    value={globalStats.accessLevel}
-                    prefix={<TrophyOutlined style={{ color: getAccessLevelColor(globalStats.accessLevel) }} />}
-                  />
-                  <Badge 
-                    color={getAccessLevelColor(globalStats.accessLevel)} 
-                    text={`${globalStats.activeModules} modules actifs`}
-                    style={{ marginTop: 8 }}
-                  />
-                </Card>
-              </Col>
-            </Row>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+              <div style={statCardStyle}>
+                <div style={statLabel}>Modules accessibles</div>
+                <div style={{ ...statValue, color: FB.blue }}><DatabaseOutlined style={{ marginRight: 6 }} />{globalStats.totalPermissions} <span style={{ fontSize: 13, fontWeight: 400 }}>modules</span></div>
+              </div>
+              <div style={statCardStyle}>
+                <div style={statLabel}>Actions autorisées</div>
+                <div style={{ ...statValue, color: FB.green }}><ThunderboltOutlined style={{ marginRight: 6 }} />{globalStats.totalActions} <span style={{ fontSize: 13, fontWeight: 400 }}>actions</span></div>
+              </div>
+              <div style={statCardStyle}>
+                <div style={statLabel}>Niveau de sécurité</div>
+                <div style={statValue}><SafetyOutlined style={{ marginRight: 6, color: getAccessLevelColor(globalStats.accessLevel) }} />{globalStats.securityScore} <span style={{ fontSize: 13, fontWeight: 400 }}>/ 100</span></div>
+                <Progress percent={globalStats.securityScore} strokeColor={getAccessLevelColor(globalStats.accessLevel)} size="small" style={{ marginTop: 8 }} />
+              </div>
+              <div style={statCardStyle}>
+                <div style={statLabel}>Niveau d'accès</div>
+                <div style={statValue}><TrophyOutlined style={{ marginRight: 6, color: getAccessLevelColor(globalStats.accessLevel) }} />{globalStats.accessLevel}</div>
+                <Badge color={getAccessLevelColor(globalStats.accessLevel)} text={`${globalStats.activeModules} modules actifs`} style={{ marginTop: 8 }} />
+              </div>
+            </div>
           )}
 
           {/* Section principale avec layout en deux colonnes */}
-          <Row gutter={[24, 24]} style={{ marginBottom: 24 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginBottom: 16 }}>
             
             {/* Colonne gauche - Informations utilisateur */}
-            <Col xs={24} lg={12}>
-              <Space direction="vertical" size="large" style={{ width: '100%' }}>
+            <div style={{ flex: '1 1 400px', minWidth: isMobile ? '100%' : 400, display: 'flex', flexDirection: 'column', gap: 16 }}>
                 
                 {/* Profil utilisateur détaillé */}
                 {rightsSummary.userInfo && (
-                  <Card 
-                    title={
-                      <span>
+                  <div style={cardStyle}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                      <span style={{ fontWeight: 600, fontSize: 15, color: FB.text }}>
                         <UserOutlined style={{ marginRight: 8 }} />
                         Profil utilisateur
                       </span>
-                    }
-                    extra={
                       <Tag color={getStatusColor(rightsSummary.userInfo.accountStatus)}>
                         {rightsSummary.userInfo.accountStatus || 'Statut inconnu'}
                       </Tag>
-                    }
-                  >
+                    </div>
                     <Descriptions bordered column={1} size="small">
                       <Descriptions.Item label={<><MailOutlined /> Email</>}>
                         <Text copyable strong>{rightsSummary.userInfo.email}</Text>
@@ -1030,23 +1021,20 @@ const UserRightsSummaryPage: React.FC = () => {
                         <Text code copyable>{rightsSummary.userInfo.id}</Text>
                       </Descriptions.Item>
                     </Descriptions>
-                  </Card>
+                  </div>
                 )}
 
                 {/* Rôles attribués */}
-                <Card 
-                  title={
-                    <span>
+                <div style={cardStyle}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <span style={{ fontWeight: 600, fontSize: 15, color: FB.text }}>
                       <SafetyOutlined style={{ marginRight: 8 }} />
                       Rôles et privilèges
                     </span>
-                  }
-                  extra={
                     <Badge count={rightsSummary.roles?.length || 0} showZero>
                       <span>Rôles</span>
                     </Badge>
-                  }
-                >
+                  </div>
                   {rightsSummary.roles && rightsSummary.roles.length > 0 ? (
                     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                       <Space wrap>
@@ -1068,25 +1056,23 @@ const UserRightsSummaryPage: React.FC = () => {
                       {/* Métriques de sécurité */}
                       <div style={{ background: '#fafafa', padding: '12px', borderRadius: '6px' }}>
                         <Text strong style={{ color: '#666' }}>Évaluation de sécurité:</Text>
-                        <div style={{ marginTop: 8 }}>
-                          <Row gutter={16}>
-                            <Col span={12}>
+                        <div style={{ marginTop: 8, display: 'flex', gap: 24 }}>
+                            <div>
                               <Text style={{ fontSize: '12px', color: '#666' }}>Score de sécurité</Text>
                               <div>
                                 <Text strong style={{ color: getAccessLevelColor(globalStats?.accessLevel) }}>
                                   {globalStats?.securityScore || 0}/100
                                 </Text>
                               </div>
-                            </Col>
-                            <Col span={12}>
+                            </div>
+                            <div>
                               <Text style={{ fontSize: '12px', color: '#666' }}>Niveau d'accès</Text>
                               <div>
                                 <Tag color={getAccessLevelColor(globalStats?.accessLevel)}>
                                   {globalStats?.accessLevel || 'INCONNU'}
                                 </Tag>
                               </div>
-                            </Col>
-                          </Row>
+                            </div>
                         </div>
                       </div>
                     </Space>
@@ -1098,25 +1084,21 @@ const UserRightsSummaryPage: React.FC = () => {
                       showIcon
                     />
                   )}
-                </Card>
+                </div>
                 
-              </Space>
-            </Col>
+            </div>
 
             {/* Colonne droite - Informations organisation */}
-            <Col xs={24} lg={12}>
-              <Space direction="vertical" size="large" style={{ width: '100%' }}>
+            <div style={{ flex: '1 1 400px', minWidth: isMobile ? '100%' : 400, display: 'flex', flexDirection: 'column', gap: 16 }}>
                 
                 {/* Informations organisation détaillées */}
                 {rightsSummary.organizationInfo && (
-                  <Card 
-                    title={
-                      <span>
+                  <div style={cardStyle}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                      <span style={{ fontWeight: 600, fontSize: 15, color: FB.text }}>
                         <TeamOutlined style={{ marginRight: 8 }} />
                         Organisation - {rightsSummary.organizationInfo.name}
                       </span>
-                    }
-                    extra={
                       <Space>
                         <Tag color={getStatusColor(rightsSummary.organizationInfo.status)}>
                           {rightsSummary.organizationInfo.status || 'Statut inconnu'}
@@ -1125,8 +1107,7 @@ const UserRightsSummaryPage: React.FC = () => {
                           <span>Utilisateurs</span>
                         </Badge>
                       </Space>
-                    }
-                  >
+                    </div>
                     <Descriptions bordered column={1} size="small">
                       <Descriptions.Item label="Nom organisation">
                         <Text strong>{rightsSummary.organizationInfo.name}</Text>
@@ -1190,64 +1171,45 @@ const UserRightsSummaryPage: React.FC = () => {
                         <Text code copyable>{rightsSummary.organizationInfo.id}</Text>
                       </Descriptions.Item>
                     </Descriptions>
-                  </Card>
+                  </div>
                 )}
 
                 {/* Statistiques d'utilisation */}
-                <Card 
-                  title={
-                    <span>
-                      <BulbOutlined style={{ marginRight: 8 }} />
-                      Statistiques d'utilisation
-                    </span>
-                  }
-                >
-                  <Row gutter={[16, 16]}>
-                    <Col span={12}>
-                      <Statistic
-                        title="Modules accessibles"
-                        value={globalStats?.totalPermissions || 0}
-                        prefix={<DatabaseOutlined />}
-                      />
-                    </Col>
-                    <Col span={12}>
-                      <Statistic
-                        title="Actions autorisées"
-                        value={globalStats?.totalActions || 0}
-                        prefix={<ThunderboltOutlined />}
-                      />
-                    </Col>
-                    <Col span={12}>
-                      <Statistic
-                        title="Modules actifs"
-                        value={globalStats?.activeModules || 0}
-                        prefix={<CheckCircleOutlined />}
-                      />
-                    </Col>
-                    <Col span={12}>
-                      <Statistic
-                        title="Niveau sécurité"
-                        value={globalStats?.securityScore || 0}
-                        suffix="/100"
-                        prefix={<SafetyOutlined />}
-                      />
-                    </Col>
-                  </Row>
-                </Card>
+                <div style={cardStyle}>
+                  <div style={{ fontWeight: 600, fontSize: 15, color: FB.text, marginBottom: 12 }}>
+                    <BulbOutlined style={{ marginRight: 8 }} />
+                    Statistiques d'utilisation
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+                    <div style={{ flex: '1 1 120px' }}>
+                      <div style={statLabel}>Modules accessibles</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: FB.text }}><DatabaseOutlined style={{ marginRight: 4 }} />{globalStats?.totalPermissions || 0}</div>
+                    </div>
+                    <div style={{ flex: '1 1 120px' }}>
+                      <div style={statLabel}>Actions autorisées</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: FB.text }}><ThunderboltOutlined style={{ marginRight: 4 }} />{globalStats?.totalActions || 0}</div>
+                    </div>
+                    <div style={{ flex: '1 1 120px' }}>
+                      <div style={statLabel}>Modules actifs</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: FB.green }}><CheckCircleOutlined style={{ marginRight: 4 }} />{globalStats?.activeModules || 0}</div>
+                    </div>
+                    <div style={{ flex: '1 1 120px' }}>
+                      <div style={statLabel}>Niveau sécurité</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: FB.text }}><SafetyOutlined style={{ marginRight: 4 }} />{globalStats?.securityScore || 0}/100</div>
+                    </div>
+                  </div>
+                </div>
                 
-              </Space>
-            </Col>
-          </Row>
+            </div>
+          </div>
 
           {/* Permissions par module - Section principale */}
-          <Card 
-            title={
-              <span>
+          <div style={cardStyle}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <span style={{ fontWeight: 600, fontSize: 15, color: FB.text }}>
                 <ApiOutlined style={{ marginRight: 8 }} />
                 Permissions détaillées par module
               </span>
-            }
-            extra={
               <Badge 
                 count={
                   rightsSummary.permissions ? 
@@ -1261,10 +1223,9 @@ const UserRightsSummaryPage: React.FC = () => {
               >
                 <span>Modules actifs</span>
               </Badge>
-            }
-          >
+            </div>
             {rightsSummary.permissions && Object.keys(rightsSummary.permissions).length > 0 ? (
-              <Row gutter={[16, 16]}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
                 {Object.entries(rightsSummary.permissions)
                   // Filtrer pour ne montrer que les modules actifs
                   .filter(([moduleKey, modulePerms]) => {
@@ -1300,19 +1261,17 @@ const UserRightsSummaryPage: React.FC = () => {
                   };
 
                   return (
-                    <Col xs={24} sm={12} lg={8} xl={6} key={moduleKey}>
-                      <Card 
-                        size="small"
-                        title={
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ flex: '1 1 220px', maxWidth: isMobile ? '100%' : 280 }} key={moduleKey}>
+                      <div style={{
+                        background: FB.white, border: `1px solid ${FB.border}`, borderRadius: FB.radius,
+                        padding: 14, height: '100%',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, fontWeight: 600, fontSize: 13, color: FB.text }}>
                             <span>{modulePerms.label || moduleKey}</span>
                             <Tag color={levelColors[permissionLevel]} size="small">
                               {permissionLevel}
                             </Tag>
-                          </div>
-                        }
-                        style={{ height: '100%' }}
-                      >
+                        </div>
                         <Space direction="vertical" size="small" style={{ width: '100%' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                             <Text>Lecture</Text>
@@ -1331,11 +1290,11 @@ const UserRightsSummaryPage: React.FC = () => {
                             {hasAdmin ? <CheckCircleOutlined style={{ color: '#52c41a' }} /> : <CloseCircleOutlined style={{ color: '#ff4d4f' }} />}
                           </div>
                         </Space>
-                      </Card>
-                    </Col>
+                      </div>
+                    </div>
                   );
                 })}
-              </Row>
+              </div>
             ) : (
               <Alert
                 message="Aucune permission trouvée"
@@ -1344,39 +1303,38 @@ const UserRightsSummaryPage: React.FC = () => {
                 showIcon
               />
             )}
-          </Card>
+          </div>
         </div>
       ) : (!selectedUserId || !selectedOrgId) ? (
-        <Card>
-          <div style={{ textAlign: 'center', padding: 48 }}>
-            <Text type="secondary">Sélectionnez un utilisateur et une organisation pour voir les permissions</Text>
+        <div style={cardStyle}>
+          <div style={{ textAlign: 'center', padding: 48, color: FB.textSecondary }}>
+            Sélectionnez un utilisateur et une organisation pour voir les permissions
           </div>
-        </Card>
+        </div>
       ) : null}
 
       {/* Informations de sélection actuelle */}
       {(selectedUserId || selectedOrgId) && (
-        <>
-          <Divider />
-          <Card title="Sélection actuelle" size="small" style={{ marginTop: 16 }}>
-            <Row gutter={16}>
-              <Col span={12}>
+        <div style={cardStyle}>
+          <div style={{ fontWeight: 600, fontSize: 14, color: FB.text, marginBottom: 10 }}>Sélection actuelle</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+              <div style={{ flex: '1 1 200px' }}>
                 <Text strong>Utilisateur sélectionné :</Text>{' '}
                 {selectedUserId ? (
                   <Text code>{users.find(u => u.id === selectedUserId)?.email || selectedUserId}</Text>
                 ) : (
                   <Text type="secondary">Aucun</Text>
                 )}
-              </Col>
-              <Col span={12}>
+              </div>
+              <div style={{ flex: '1 1 200px' }}>
                 <Text strong>Organisation sélectionnée :</Text>{' '}
                 {selectedOrgId ? (
                   <Text code>{organizations.find(o => o.id === selectedOrgId)?.name || selectedOrgId}</Text>
                 ) : (
                   <Text type="secondary">Aucune</Text>
                 )}
-              </Col>
-            </Row>
+              </div>
+          </div>
             {selectedUserId && selectedOrgId && !rightsSummary && !isLoading && (
               <Alert
                 message="Prêt à charger les permissions"
@@ -1391,8 +1349,7 @@ const UserRightsSummaryPage: React.FC = () => {
                 }
               />
             )}
-          </Card>
-        </>
+        </div>
       )}
     </div>
   );

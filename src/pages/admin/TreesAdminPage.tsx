@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
-  Card, Table, Button, Modal, Form, Select, Tag, Space, Switch,
+  Card, Table, Button, Modal, Form, Select, Tag, Space,
   Typography, Spin, Empty, Popconfirm, App, Collapse, Checkbox,
-  Tooltip, Divider, Input, Badge, Row, Col, Statistic,
+  Tooltip, Divider, Input, Badge, Row, Col,
 } from 'antd';
 import {
   DeleteOutlined, ShareAltOutlined,
@@ -15,9 +15,56 @@ import {
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 const { Panel } = Collapse;
 const { Option } = Select;
+
+// ── Facebook Design Tokens ──
+const FB = {
+  bg: '#f0f2f5', white: '#ffffff', text: '#050505', textSecondary: '#65676b',
+  blue: '#1877f2', blueHover: '#166fe5', border: '#ced0d4',
+  btnGray: '#e4e6eb', btnGrayHover: '#d8dadf',
+  green: '#42b72a', red: '#e4405f', orange: '#f7931a', purple: '#722ed1',
+  shadow: '0 1px 2px rgba(0,0,0,0.1)', radius: 8,
+};
+
+// ── FBToggle (identique à UsersAdminPageNew) ──
+const FBToggle = ({ checked, onChange, disabled, size = 'small' }: {
+  checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; size?: 'small' | 'default';
+}) => {
+  const w = size === 'small' ? 36 : 44;
+  const h = size === 'small' ? 20 : 24;
+  const dot = size === 'small' ? 16 : 20;
+  return (
+    <div
+      onClick={() => !disabled && onChange(!checked)}
+      style={{
+        width: w, height: h, borderRadius: h,
+        background: disabled ? '#ccc' : checked ? FB.blue : '#ccc',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        position: 'relative', transition: 'background 0.2s',
+        opacity: disabled ? 0.5 : 1, flexShrink: 0,
+      }}
+    >
+      <div style={{
+        width: dot, height: dot, borderRadius: '50%', background: FB.white,
+        position: 'absolute', top: (h - dot) / 2,
+        left: checked ? w - dot - (h - dot) / 2 : (h - dot) / 2,
+        transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+      }} />
+    </div>
+  );
+};
+
+function useScreenSize() {
+  const [w, setW] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200);
+  useEffect(() => {
+    const h = () => setW(window.innerWidth);
+    window.addEventListener('resize', h);
+    return () => window.removeEventListener('resize', h);
+  }, []);
+  return { isMobile: w < 768, width: w };
+}
 
 // ============================================================
 // Types
@@ -306,32 +353,26 @@ export default function TreesAdminPage() {
     {
       title: 'Actions',
       key: 'actions',
-      width: 120,
+      width: 200,
       render: (_: unknown, record: TreeData) => (
-        <Space>
-          <Tooltip title="Gérer les accès">
-            <Button
-              type="primary"
-              icon={<EyeOutlined />}
-              size="small"
-              onClick={() => fetchTreeDetail(record.id)}
-            />
-          </Tooltip>
-          <Tooltip title="Dupliquer">
-            <Button
-              icon={<CopyOutlined />}
-              size="small"
-              onClick={() => {
-                setSelectedTree(record);
-                setDuplicateModalOpen(true);
-                // Charger orgs si pas encore fait
-                if (organizations.length === 0) {
-                  fetchTreeDetail(record.id);
-                }
-              }}
-            />
-          </Tooltip>
-        </Space>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button
+            onClick={() => fetchTreeDetail(record.id)}
+            title="Gérer les accès"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: 'none', background: '#e7f3ff', color: FB.blue, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+          ><span>👁️</span><span>Accès</span></button>
+          <button
+            onClick={() => {
+              setSelectedTree(record);
+              setDuplicateModalOpen(true);
+              if (organizations.length === 0) {
+                fetchTreeDetail(record.id);
+              }
+            }}
+            title="Dupliquer"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: 'none', background: FB.btnGray, color: FB.text, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+          ><span>📋</span><span>Dupliquer</span></button>
+        </div>
       ),
     },
   ], [fetchTreeDetail, organizations.length]);
@@ -350,228 +391,237 @@ export default function TreesAdminPage() {
   // ============================================================
   // Guard
   // ============================================================
+  const { isMobile } = useScreenSize();
+
   if (!isSuperAdmin) {
     return (
-      <Card>
-        <Empty description="Accès réservé au Super Admin" />
-      </Card>
+      <div style={{ background: FB.bg, minHeight: '100vh', padding: 40, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <div style={{ background: FB.white, borderRadius: FB.radius, padding: 40, boxShadow: FB.shadow, textAlign: 'center' }}>
+          <Empty description="Accès réservé au Super Admin" />
+        </div>
+      </div>
     );
   }
+
+  const statCardStyle: React.CSSProperties = {
+    background: FB.white, borderRadius: FB.radius, padding: isMobile ? 14 : 18,
+    boxShadow: FB.shadow, flex: '1 1 180px', minWidth: isMobile ? '100%' : 180,
+  };
+  const statLabel: React.CSSProperties = { fontSize: 12, color: FB.textSecondary, marginBottom: 4 };
+  const statValue: React.CSSProperties = { fontSize: 22, fontWeight: 700, color: FB.text };
 
   // ============================================================
   // Rendu
   // ============================================================
   return (
-    <div style={{ padding: 24 }}>
-      <Title level={2}>
-        <BranchesOutlined style={{ marginRight: 8 }} />
-        Gestion des Arbres
-      </Title>
-      <Text type="secondary" style={{ marginBottom: 24, display: 'block' }}>
-        Gérez les arbres TBL, assignez-les à des organisations et configurez l'accès aux onglets par rôle.
-      </Text>
+    <div style={{ background: FB.bg, minHeight: '100vh', width: '100%', padding: isMobile ? '12px 8px' : '20px 24px' }}>
+      {/* ── Header ── */}
+      <div style={{
+        background: FB.white, borderRadius: FB.radius, padding: isMobile ? '14px 16px' : '18px 24px',
+        boxShadow: FB.shadow, marginBottom: 16,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+          <BranchesOutlined style={{ fontSize: isMobile ? 22 : 26, color: FB.blue }} />
+          <span style={{ fontSize: isMobile ? 20 : 24, fontWeight: 700, color: FB.text }}>
+            Gestion des Arbres
+          </span>
+        </div>
+        <div style={{ color: FB.textSecondary, fontSize: 13 }}>
+          Gérez les arbres TBL, assignez-les à des organisations et configurez l'accès aux onglets par rôle.
+        </div>
+      </div>
 
-      {/* Statistiques */}
-      <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col span={6}>
-          <Card>
-            <Statistic
-              title="Total Arbres"
-              value={stats.totalTrees}
-              prefix={<BranchesOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic
-              title="Arbres Partagés"
-              value={stats.sharedTrees}
-              prefix={<ShareAltOutlined />}
-              valueStyle={{ color: '#52c41a' }}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic
-              title="Accès Configurés"
-              value={stats.totalAccesses}
-              prefix={<LockOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic
-              title="Organisations"
-              value={stats.uniqueOrgs}
-              prefix={<TeamOutlined />}
-              valueStyle={{ color: '#1890ff' }}
-            />
-          </Card>
-        </Col>
-      </Row>
+      {/* ── Stats ── */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+        <div style={statCardStyle}>
+          <div style={statLabel}>Total Arbres</div>
+          <div style={statValue}><BranchesOutlined style={{ marginRight: 6 }} />{stats.totalTrees}</div>
+        </div>
+        <div style={statCardStyle}>
+          <div style={statLabel}>Arbres Partagés</div>
+          <div style={{ ...statValue, color: FB.green }}><ShareAltOutlined style={{ marginRight: 6 }} />{stats.sharedTrees}</div>
+        </div>
+        <div style={statCardStyle}>
+          <div style={statLabel}>Accès Configurés</div>
+          <div style={statValue}><LockOutlined style={{ marginRight: 6 }} />{stats.totalAccesses}</div>
+        </div>
+        <div style={statCardStyle}>
+          <div style={statLabel}>Organisations</div>
+          <div style={{ ...statValue, color: FB.blue }}><TeamOutlined style={{ marginRight: 6 }} />{stats.uniqueOrgs}</div>
+        </div>
+      </div>
 
-      {/* Table des arbres */}
-      <Card title="Arbres disponibles" style={{ marginBottom: 24 }}>
-        <Table
-          dataSource={trees}
-          columns={columns}
-          rowKey="id"
-          loading={loading}
-          pagination={{ pageSize: 10, showSizeChanger: true }}
-          size="middle"
-          onRow={(record) => ({
-            style: { cursor: 'pointer' },
-            onClick: () => fetchTreeDetail(record.id),
-          })}
-        />
-      </Card>
+      {/* ── Table des arbres ── */}
+      <div style={{ background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow, marginBottom: 16, overflow: 'hidden' }}>
+        <div style={{ padding: '14px 20px', borderBottom: `1px solid ${FB.border}`, fontWeight: 600, fontSize: 15, color: FB.text }}>
+          Arbres disponibles
+        </div>
+        <div style={{ padding: isMobile ? 8 : 0 }}>
+          <Table
+            dataSource={trees}
+            columns={columns}
+            rowKey="id"
+            loading={loading}
+            pagination={{ pageSize: 10, showSizeChanger: true }}
+            size="middle"
+            onRow={(record) => ({
+              style: { cursor: 'pointer' },
+              onClick: () => fetchTreeDetail(record.id),
+            })}
+          />
+        </div>
+      </div>
 
-      {/* Panneau détail de l'arbre sélectionné */}
+      {/* ── Panneau détail de l'arbre sélectionné ── */}
       {selectedTree && (
-        <Card
-          title={
-            <Space>
-              <ApartmentOutlined />
-              <span>Configuration : {selectedTree.name}</span>
+        <div style={{ background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow, marginBottom: 16, overflow: 'hidden' }}>
+          <div style={{
+            padding: isMobile ? '12px 14px' : '14px 20px', borderBottom: `1px solid ${FB.border}`,
+            display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <ApartmentOutlined style={{ color: FB.blue }} />
+              <span style={{ fontWeight: 600, fontSize: 15, color: FB.text }}>Configuration : {selectedTree.name}</span>
               <Tag color="blue">{selectedTree.ownerOrganization?.name}</Tag>
-            </Space>
-          }
-          extra={
-            <Space>
-              <Button
-                type="primary"
-                icon={<ShareAltOutlined />}
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button
                 onClick={() => setShareModalOpen(true)}
+                style={{
+                  background: FB.blue, color: '#fff', border: 'none', borderRadius: 6,
+                  padding: '6px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 13,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}
               >
-                Partager
-              </Button>
-              <Button
-                icon={<CopyOutlined />}
+                <ShareAltOutlined /> Partager
+              </button>
+              <button
                 onClick={() => setDuplicateModalOpen(true)}
+                style={{
+                  background: FB.btnGray, color: FB.text, border: 'none', borderRadius: 6,
+                  padding: '6px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 13,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}
               >
-                Dupliquer
-              </Button>
-            </Space>
-          }
-        >
-          <Spin spinning={detailLoading}>
-            {/* Onglets de l'arbre */}
-            <Divider orientation="left">
-              <AppstoreOutlined /> Onglets ({selectedTree.tabs?.length || 0})
-            </Divider>
-            <Space wrap style={{ marginBottom: 16 }}>
-              {(selectedTree.tabs || []).map((tab, index) => (
-                <Tag
-                  key={tab.id}
-                  color={tab.isActive !== false ? 'processing' : 'default'}
-                  style={{ fontSize: 13, padding: '4px 12px' }}
-                >
-                  {index + 1}. {tab.label || 'Sans nom'}
-                </Tag>
-              ))}
-            </Space>
+                <CopyOutlined /> Dupliquer
+              </button>
+            </div>
+          </div>
 
-            {/* Produits disponibles */}
-            {selectedTree.productSource && selectedTree.productSource.options.length > 0 && (
-              <>
-                <Divider orientation="left">
-                  <AppstoreOutlined /> Produits disponibles ({selectedTree.productSource.options.length})
-                </Divider>
-                <Space wrap style={{ marginBottom: 16 }}>
-                  {selectedTree.productSource.options.map((opt) => (
-                    <Tag key={opt.value} color="purple" style={{ fontSize: 13, padding: '4px 12px' }}>
-                      {opt.label}
+          <Spin spinning={detailLoading}>
+            <div style={{ padding: isMobile ? 14 : 20 }}>
+              {/* Onglets de l'arbre */}
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: FB.text, marginBottom: 8 }}>
+                  <AppstoreOutlined style={{ marginRight: 6 }} /> Onglets ({selectedTree.tabs?.length || 0})
+                </div>
+                <Space wrap>
+                  {(selectedTree.tabs || []).map((tab, index) => (
+                    <Tag
+                      key={tab.id}
+                      color={tab.isActive !== false ? 'processing' : 'default'}
+                      style={{ fontSize: 13, padding: '4px 12px' }}
+                    >
+                      {index + 1}. {tab.label || 'Sans nom'}
                     </Tag>
                   ))}
                 </Space>
-                <div style={{ marginBottom: 8 }}>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    Source : champ "{selectedTree.productSource.label}" — Les produits contrôlent la visibilité des champs dans l'arbre
-                  </Text>
+              </div>
+
+              {/* Produits disponibles */}
+              {selectedTree.productSource && selectedTree.productSource.options.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: FB.text, marginBottom: 8 }}>
+                    <AppstoreOutlined style={{ marginRight: 6, color: FB.purple }} /> Produits disponibles ({selectedTree.productSource.options.length})
+                  </div>
+                  <Space wrap style={{ marginBottom: 8 }}>
+                    {selectedTree.productSource.options.map((opt) => (
+                      <Tag key={opt.value} color="purple" style={{ fontSize: 13, padding: '4px 12px' }}>
+                        {opt.label}
+                      </Tag>
+                    ))}
+                  </Space>
+                  <div style={{ fontSize: 12, color: FB.textSecondary }}>
+                    Source : champ « {selectedTree.productSource.label} » — Les produits contrôlent la visibilité des champs dans l'arbre
+                  </div>
                 </div>
-              </>
-            )}
+              )}
 
-            {/* Accès par organisation */}
-            <Divider orientation="left">
-              <TeamOutlined /> Accès par Organisation
-            </Divider>
+              {/* Accès par organisation */}
+              <div style={{ fontWeight: 600, fontSize: 14, color: FB.text, marginBottom: 10 }}>
+                <TeamOutlined style={{ marginRight: 6 }} /> Accès par Organisation
+              </div>
 
-            {(!selectedTree.TreeOrganizationAccess || selectedTree.TreeOrganizationAccess.length === 0) ? (
-              <Empty
-                description="Aucun accès configuré. Cliquez sur 'Partager' pour donner accès à une organisation."
-                style={{ padding: 24 }}
-              />
-            ) : (
-              <Collapse accordion>
-                {selectedTree.TreeOrganizationAccess.map((access) => (
-                  <Panel
-                    key={access.id}
-                    header={
-                      <Space>
-                        <TeamOutlined />
-                        <Text strong>{access.organization?.name || access.organizationId}</Text>
-                        {access.isOwner && <Tag color="gold">Propriétaire</Tag>}
-                        {access.active ? (
-                          <Tag color="green" icon={<CheckCircleOutlined />}>Actif</Tag>
-                        ) : (
-                          <Tag color="red" icon={<CloseCircleOutlined />}>Inactif</Tag>
-                        )}
-                      </Space>
-                    }
-                    extra={
-                      <Space onClick={(e) => e.stopPropagation()}>
-                        <Tooltip title="Configurer les onglets">
-                          <Button
-                            size="small"
-                            icon={<SettingOutlined />}
+              {(!selectedTree.TreeOrganizationAccess || selectedTree.TreeOrganizationAccess.length === 0) ? (
+                <Empty
+                  description="Aucun accès configuré. Cliquez sur 'Partager' pour donner accès à une organisation."
+                  style={{ padding: 24 }}
+                />
+              ) : (
+                <Collapse accordion>
+                  {selectedTree.TreeOrganizationAccess.map((access) => (
+                    <Panel
+                      key={access.id}
+                      header={
+                        <Space>
+                          <TeamOutlined />
+                          <span style={{ fontWeight: 600 }}>{access.organization?.name || access.organizationId}</span>
+                          {access.isOwner && <Tag color="gold">Propriétaire</Tag>}
+                          {access.active ? (
+                            <Tag color="green" icon={<CheckCircleOutlined />}>Actif</Tag>
+                          ) : (
+                            <Tag color="red" icon={<CloseCircleOutlined />}>Inactif</Tag>
+                          )}
+                        </Space>
+                      }
+                      extra={
+                        <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: 6 }}>
+                          <button
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedAccess(access);
                               setConfigModalOpen(true);
                             }}
-                          />
-                        </Tooltip>
-                        {!access.isOwner && (
-                          <Popconfirm
-                            title="Retirer l'accès ?"
-                            description={`${access.organization?.name} n'aura plus accès à cet arbre.`}
-                            onConfirm={(e) => {
-                              e?.stopPropagation();
-                              handleRemoveAccess(selectedTree.id, access.organizationId);
-                            }}
-                            okText="Oui"
-                            cancelText="Non"
-                          >
-                            <Button
-                              size="small"
-                              danger
-                              icon={<DeleteOutlined />}
-                              onClick={(e) => e.stopPropagation()}
-                            />
-                          </Popconfirm>
-                        )}
-                      </Space>
-                    }
-                  >
-                    <TabAccessConfigPanel
-                      tabs={selectedTree.tabs || []}
-                      access={access}
-                      roles={roles}
-                      productSource={selectedTree.productSource}
-                      onSave={(config) =>
-                        handleUpdateTabConfig(selectedTree.id, access.organizationId, config)
+                            title="Configurer les onglets"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: 'none', background: FB.btnGray, color: FB.text, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                          ><span>⚙️</span><span>Onglets</span></button>
+                          {!access.isOwner && (
+                            <Popconfirm
+                              title="Retirer l'accès ?"
+                              description={`${access.organization?.name} n'aura plus accès à cet arbre.`}
+                              onConfirm={(e) => {
+                                e?.stopPropagation();
+                                handleRemoveAccess(selectedTree.id, access.organizationId);
+                              }}
+                              okText="Oui"
+                              cancelText="Non"
+                            >
+                              <button
+                                onClick={(e) => e.stopPropagation()}
+                                title="Retirer l'accès"
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: 'none', background: '#ffeef0', color: FB.red, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                              ><span>🗑️</span><span>Retirer</span></button>
+                            </Popconfirm>
+                          )}
+                        </div>
                       }
-                    />
-                  </Panel>
-                ))}
-              </Collapse>
-            )}
+                    >
+                      <TabAccessConfigPanel
+                        tabs={selectedTree.tabs || []}
+                        access={access}
+                        roles={roles}
+                        productSource={selectedTree.productSource}
+                        onSave={(config) =>
+                          handleUpdateTabConfig(selectedTree.id, access.organizationId, config)
+                        }
+                      />
+                    </Panel>
+                  ))}
+                </Collapse>
+              )}
+            </div>
           </Spin>
-        </Card>
+        </div>
       )}
 
       {/* Modal Partager un arbre */}
@@ -855,13 +905,11 @@ function TabAccessConfigPanel({ tabs, access, roles, onSave, isModal: _isModal, 
               {/* Visible */}
               <Col flex="120px">
                 <Space>
-                  <Switch
+                  <FBToggle
                     checked={cfg.visible}
                     onChange={(v) => handleToggleVisible(tab.id, v)}
-                    checkedChildren="Visible"
-                    unCheckedChildren="Masqué"
-                    size="small"
                   />
+                  <span style={{ fontSize: 12, color: cfg.visible ? FB.text : FB.textSecondary }}>{cfg.visible ? 'Visible' : 'Masqué'}</span>
                 </Space>
               </Col>
 
@@ -934,11 +982,8 @@ function TabAccessConfigPanel({ tabs, access, roles, onSave, isModal: _isModal, 
                         <Text style={{ fontSize: 12 }}>↳ {subTabName}</Text>
                       </Col>
                       <Col flex="100px">
-                        <Switch
+                        <FBToggle
                           checked={subCfg.visible}
-                          size="small"
-                          checkedChildren="On"
-                          unCheckedChildren="Off"
                           onChange={(v) => {
                             setLocalConfig(prev => ({
                               ...prev,
@@ -991,9 +1036,9 @@ function TabAccessConfigPanel({ tabs, access, roles, onSave, isModal: _isModal, 
       })}
 
       <div style={{ marginTop: 16, textAlign: 'right' }}>
-        <Button type="primary" onClick={handleSave} icon={<CheckCircleOutlined />}>
-          Enregistrer la configuration
-        </Button>
+        <button onClick={handleSave} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 20px', borderRadius: 6, border: 'none', background: FB.blue, color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+          <span>✅</span><span>Enregistrer la configuration</span>
+        </button>
       </div>
     </div>
   );

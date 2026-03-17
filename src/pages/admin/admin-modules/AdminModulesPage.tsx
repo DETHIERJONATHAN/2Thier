@@ -345,8 +345,8 @@ export default function AdminModulesPage() {
 
   const orgSelector =
     user?.role === 'super_admin' ? (
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-gray-600 hidden md:inline">Contexte:</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 13, color: '#65676b' }}>Contexte:</span>
         <Select
           allowClear
           value={selectedOrganizationId || undefined}
@@ -403,7 +403,7 @@ export default function AdminModulesPage() {
 
   return (
     <ConfigProvider theme={modulesTheme}>
-      <div className="admin-modules-surface min-h-screen bg-slate-50 p-6">
+      <div style={{ background: '#f0f2f5', minHeight: '100vh', width: '100%', padding: '20px 24px' }}>
       <NotificationsContainer />
       <ModulesHeader
         categoriesCount={filteredSections.length}
@@ -431,7 +431,7 @@ export default function AdminModulesPage() {
       <InfoBanner />
 
       {loading ? (
-        <div className="text-center py-8">Chargement…</div>
+        <div style={{ textAlign: 'center', padding: '32px 0' }}>Chargement…</div>
       ) : (
         <DndContext
           sensors={sensors}
@@ -476,9 +476,9 @@ export default function AdminModulesPage() {
               const sec = sections.find(s => String(s.id) === dragId);
               if (!sec) return null;
               return (
-                <div className="px-4 py-3 bg-white rounded-md shadow-lg border border-gray-200 flex items-center gap-3">
+                <div style={{ padding: '12px 16px', background: '#fff', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', border: '1px solid #e4e6eb', display: 'flex', alignItems: 'center', gap: 12 }}>
                   <IconRenderer name={sec.iconName || 'AppstoreOutlined'} color={sec.iconColor || '#1890ff'} size={18} />
-                  <span className="font-semibold text-base text-gray-800">{sec.title}</span>
+                  <span style={{ fontWeight: 600, fontSize: 16, color: '#1c1e21' }}>{sec.title}</span>
                 </div>
               );
             })()}
@@ -487,9 +487,9 @@ export default function AdminModulesPage() {
               const mod = sections.flatMap(s => s.modules).find(m => String(m.id) === dragId || String(m.key) === dragId);
               if (!mod) return null;
               return (
-                <div className="px-3 py-2 bg-white rounded shadow-lg border border-gray-200 flex items-center gap-2">
+                <div style={{ padding: '8px 12px', background: '#fff', borderRadius: 6, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', border: '1px solid #e4e6eb', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <IconRenderer name={mod.icon || 'AppstoreOutlined'} color={mod.iconColor || '#1890ff'} size={16} />
-                  <span className="text-sm font-medium">{mod.label}</span>
+                  <span style={{ fontSize: 13, fontWeight: 500 }}>{mod.label}</span>
                 </div>
               );
             })()}

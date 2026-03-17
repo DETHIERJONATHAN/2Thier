@@ -1,31 +1,26 @@
 import { useState, useEffect } from 'react';
 import { 
-  Card, 
-  Button, 
   Table, 
   Modal, 
   Form, 
   Input, 
   Select, 
   message, 
-  Space, 
   Tag,
   Tabs,
   Drawer,
-  Tooltip,
   Grid,
   Dropdown
 } from 'antd';
 import { 
-  PlusOutlined, 
-  EditOutlined, 
-  DeleteOutlined, 
   FileTextOutlined,
-  CopyOutlined,
-  SettingOutlined,
   BuildOutlined,
+  SettingOutlined,
   MoreOutlined,
-  EllipsisOutlined
+  EllipsisOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  CopyOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import DocumentTemplateEditor from '../components/Documents/DocumentTemplateEditor';
@@ -36,6 +31,8 @@ import { DocumentTemplate as PrebuiltTemplate, instantiateTemplate } from '../co
 
 const { TabPane } = Tabs;
 const { TextArea } = Input;
+
+const FB = { bg: '#f0f2f5', white: '#ffffff', text: '#050505', textSecondary: '#65676b', blue: '#1877f2', blueHover: '#166fe5', border: '#ced0d4', btnGray: '#e4e6eb', btnGrayHover: '#d8dadf', green: '#42b72a', red: '#e4405f', orange: '#f7931a', purple: '#722ed1', shadow: '0 1px 2px rgba(0,0,0,0.1)', radius: 8 as number };
 
 interface DocumentTemplate {
   id: string;
@@ -463,58 +460,42 @@ const DocumentTemplatesPage = () => {
     {
       title: '',
       key: 'actions',
-      width: isMobile ? 50 : 140,
+      width: isMobile ? 50 : 220,
       render: (_: any, record: DocumentTemplate) => (
         isMobile ? (
           <Dropdown menu={getActionMenu(record)} trigger={['click']}>
-            <Button icon={<EllipsisOutlined />} type="text" />
+            <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18 }}>⋯</button>
           </Dropdown>
         ) : (
-          <Space size={2}>
-            <Tooltip title="Page Builder">
-              <Button
-                type="primary"
-                icon={<BuildOutlined />}
-                onClick={() => openPageBuilder(record.id)}
-                size="small"
-              />
-            </Tooltip>
-            <Tooltip title="Classique">
-              <Button
-                icon={<SettingOutlined />}
-                onClick={() => openEditor(record.id)}
-                size="small"
-              />
-            </Tooltip>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <button onClick={() => openPageBuilder(record.id)} title="Page Builder" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: 'none', background: '#e7f3ff', color: FB.blue, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}><span>🏗️</span><span>Builder</span></button>
+            <button onClick={() => openEditor(record.id)} title="Éditeur classique" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: 'none', background: FB.btnGray, color: FB.text, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}><span>⚙️</span><span>Classique</span></button>
             <Dropdown menu={getActionMenu(record)} trigger={['click']}>
-              <Button icon={<MoreOutlined />} size="small" />
+              <button style={{ display: 'inline-flex', alignItems: 'center', padding: '6px 8px', borderRadius: 6, border: 'none', background: FB.btnGray, color: FB.text, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>⋯</button>
             </Dropdown>
-          </Space>
+          </div>
         )
       )
     }
   ];
 
   return (
-    <div className="p-2 sm:p-4 md:p-6">
-      <Card
-        title={
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <h1 className="text-lg sm:text-xl md:text-2xl font-bold m-0">
-              📄 {isMobile ? 'Documents' : 'Gestion des Documents'}
-            </h1>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => openModal()}
-              size={isMobile ? 'middle' : 'large'}
-            >
-              {isMobile ? 'Nouveau' : 'Nouveau Template'}
-            </Button>
+    <div style={{ background: FB.bg, minHeight: '100vh', width: '100%', padding: isMobile ? '8px' : '20px 24px' }}>
+      {/* Header */}
+      <div style={{ background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow, padding: isMobile ? '14px 16px' : '18px 24px', marginBottom: 16 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <div style={{ fontSize: isMobile ? 18 : 24, fontWeight: 700, color: FB.text }}>
+            📄 {isMobile ? 'Documents' : 'Gestion des Documents'}
           </div>
-        }
-        styles={{ body: { padding: isMobile ? '8px' : '12px' } }}
-      >
+          <button
+            onClick={() => openModal()}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: isMobile ? '8px 14px' : '8px 16px', borderRadius: 6, border: 'none', background: FB.blue, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}
+          ><span>➕</span><span>{isMobile ? 'Nouveau' : 'Nouveau Template'}</span></button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{ background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow, padding: isMobile ? 8 : 16 }}>
         <Tabs defaultActiveKey="templates">
           <TabPane tab="Templates" key="templates">
             <Table
@@ -528,45 +509,34 @@ const DocumentTemplatesPage = () => {
           </TabPane>
           
           <TabPane tab="Thèmes Visuels" key="themes">
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
+            <button
               onClick={() => setThemeModalVisible(true)}
-              className="mb-4 w-full sm:w-auto"
-            >
-              Nouveau Thème
-            </Button>
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 6, border: 'none', background: FB.blue, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600, marginBottom: 16 }}
+            ><span>➕</span><span>Nouveau Thème</span></button>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
               {themes.map(theme => (
-                <Card
-                  key={theme.id}
-                  size="small"
-                  title={theme.name}
-                  extra={theme.isDefault && <Tag color="gold">Par défaut</Tag>}
-                >
-                  <Space direction="vertical" className="w-full">
-                    <div className="flex items-center gap-2">
-                      <div 
-                        className="w-8 h-8 rounded" 
-                        style={{ backgroundColor: theme.primaryColor }}
-                      />
-                      <span>Couleur principale</span>
+                <div key={theme.id} style={{ background: FB.bg, borderRadius: FB.radius, padding: 16, border: `1px solid ${FB.border}` }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <span style={{ fontWeight: 600, color: FB.text }}>{theme.name}</span>
+                    {theme.isDefault && <Tag color="gold">Par défaut</Tag>}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 6, backgroundColor: theme.primaryColor }} />
+                      <span style={{ fontSize: 13, color: FB.textSecondary }}>Couleur principale</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <div 
-                        className="w-8 h-8 rounded" 
-                        style={{ backgroundColor: theme.secondaryColor }}
-                      />
-                      <span>Couleur secondaire</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 6, backgroundColor: theme.secondaryColor }} />
+                      <span style={{ fontSize: 13, color: FB.textSecondary }}>Couleur secondaire</span>
                     </div>
-                  </Space>
-                </Card>
+                  </div>
+                </div>
               ))}
             </div>
           </TabPane>
         </Tabs>
-      </Card>
+      </div>
 
       {/* Modal Confirmation Suppression */}
       <Modal

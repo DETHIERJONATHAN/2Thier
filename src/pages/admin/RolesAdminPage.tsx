@@ -1,14 +1,56 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Card, Table, Button, Modal, Form, Input, Select, Tag, Space, Switch, Statistic, Alert, Badge, Grid, Tooltip, Spin } from 'antd';
+import { Table, Modal, Form, Input, Select, Tag, Alert, Badge, Spin } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, TeamOutlined, AppstoreOutlined, CheckCircleOutlined, CrownOutlined, TagsOutlined } from '@ant-design/icons';
 import { useAuth } from '../../auth/useAuth';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { NotificationManager } from '../../components/Notifications';
-// AdminSwitch remplacé par Switch d'AntD
-// utilitaires potentiels (non utilisés partout, conservés si existants)
-// import { formatRoleName, formatRoleDescription, getRoleIcon, getRoleTypeLabel, calculateRoleStats, validateRoleData, debounce } from '../../utils/rolesOptimizations';
 
-const { useBreakpoint } = Grid;
+// ── Facebook Design Tokens ──
+const FB = {
+  bg: '#f0f2f5', white: '#ffffff', text: '#050505', textSecondary: '#65676b',
+  blue: '#1877f2', blueHover: '#166fe5', border: '#ced0d4',
+  btnGray: '#e4e6eb', btnGrayHover: '#d8dadf',
+  green: '#42b72a', red: '#e4405f', orange: '#f7931a', purple: '#722ed1',
+  shadow: '0 1px 2px rgba(0,0,0,0.1)', radius: 8,
+};
+
+// ── FBToggle (identique à UsersAdminPageNew) ──
+const FBToggle = ({ checked, onChange, disabled, size = 'default' }: {
+  checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; size?: 'small' | 'default';
+}) => {
+  const w = size === 'small' ? 36 : 44;
+  const h = size === 'small' ? 20 : 24;
+  const dot = size === 'small' ? 16 : 20;
+  return (
+    <div
+      onClick={(e) => { e.stopPropagation(); !disabled && onChange(!checked); }}
+      style={{
+        width: w, height: h, borderRadius: h,
+        background: disabled ? '#ccc' : checked ? FB.blue : '#ccc',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        position: 'relative', transition: 'background 0.2s',
+        opacity: disabled ? 0.5 : 1, flexShrink: 0,
+      }}
+    >
+      <div style={{
+        width: dot, height: dot, borderRadius: '50%', background: FB.white,
+        position: 'absolute', top: (h - dot) / 2,
+        left: checked ? w - dot - (h - dot) / 2 : (h - dot) / 2,
+        transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+      }} />
+    </div>
+  );
+};
+
+function useScreenSize() {
+  const [width, setWidth] = React.useState(window.innerWidth);
+  React.useEffect(() => {
+    const h = () => setWidth(window.innerWidth);
+    window.addEventListener('resize', h);
+    return () => window.removeEventListener('resize', h);
+  }, []);
+  return { isMobile: width < 768, isTablet: width >= 768 && width < 1100, width };
+}
 
 const compactTableStyles = `
 .roles-compact-table .ant-table-thead > tr > th,
@@ -80,8 +122,7 @@ function RoleFormModal({
   confirmLoading?: boolean;
 }) {
   const [form] = Form.useForm();
-  const screens = useBreakpoint();
-  const isMobile = !screens.md;
+  const { isMobile } = useScreenSize();
   const isEditing = !!initial?.id;
   const isSuperAdminRole = initial?.name === 'super_admin';
 
@@ -122,28 +163,14 @@ function RoleFormModal({
       style={isMobile ? { top: 16 } : undefined}
       styles={{ body: { padding: isMobile ? 16 : undefined } }}
       footer={
-        <Space
-          direction={isMobile ? 'vertical' : 'horizontal'}
-          style={{ width: '100%', justifyContent: isMobile ? 'stretch' : 'flex-end' }}
-          size={12}
-        >
-          <Button onClick={onCancel} block={isMobile}>
-            Annuler
-          </Button>
-          <Button
-            type="primary"
-            htmlType="submit"
-            form="role-form-modal"
-            loading={!!confirmLoading}
-            block={isMobile}
-          >
-            {isEditing ? 'Enregistrer' : 'Créer'}
-          </Button>
-        </Space>
+        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: isMobile ? 'stretch' : 'flex-end', gap: 12, width: '100%' }}>
+          <button onClick={onCancel} style={{ padding: '8px 20px', borderRadius: 6, border: `1px solid ${FB.border}`, background: FB.btnGray, color: FB.text, cursor: 'pointer', fontWeight: 600, fontSize: 14, width: isMobile ? '100%' : 'auto' }}>Annuler</button>
+          <button type="submit" form="role-form-modal" disabled={!!confirmLoading} style={{ padding: '8px 20px', borderRadius: 6, border: 'none', background: FB.blue, color: '#fff', cursor: confirmLoading ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: 14, opacity: confirmLoading ? 0.7 : 1, width: isMobile ? '100%' : 'auto' }}>{confirmLoading ? '⏳' : ''} {isEditing ? 'Enregistrer' : 'Créer'}</button>
+        </div>
       }
     >
       <Alert
-        className="mb-3"
+        style={{ marginBottom: 12 }}
         message="Conseil"
         description="Le nom technique sert d'identifiant unique (ex: admin, manager). Le rôle 'super_admin' est réservé et non modifiable."
         type="info"
@@ -155,7 +182,7 @@ function RoleFormModal({
         id="role-form-modal"
         name="role-form-modal"
         onFinish={handleFinish}
-        className="space-y-4"
+        style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
       >
         <Form.Item
           name="name"
@@ -197,8 +224,7 @@ function RoleFormModal({
 // --------- UI modernisée: Modal pour gérer les modules d'un rôle ---------
 function ModulesModal({ role, open, onClose }: { role: Role; open: boolean; onClose: () => void }) {
   const { api, isLoading: apiIsLoading } = useAuthenticatedApi();
-  const screens = useBreakpoint();
-  const isMobile = !screens.md;
+  const { isMobile } = useScreenSize();
   const [permissions, setPermissions] = useState<Array<{ moduleId: string; action: string; resource?: string; allowed: boolean }>>([]);
   const [modules, setModules] = useState<Module[]>([]);
   const [saving, setSaving] = useState(false);
@@ -369,18 +395,10 @@ function ModulesModal({ role, open, onClose }: { role: Role; open: boolean; onCl
       open={open}
       onCancel={onClose}
       footer={
-        <Space
-          direction={isMobile ? 'vertical' : 'horizontal'}
-          style={{ width: '100%', justifyContent: isMobile ? 'stretch' : 'flex-end' }}
-          size={12}
-        >
-          <Button onClick={onClose} block={isMobile}>
-            Annuler
-          </Button>
-          <Button type="primary" loading={saving} onClick={handleSave} block={isMobile}>
-            Sauvegarder
-          </Button>
-        </Space>
+        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: isMobile ? 'stretch' : 'flex-end', gap: 12, width: '100%' }}>
+          <button onClick={onClose} style={{ padding: '8px 20px', borderRadius: 6, border: `1px solid ${FB.border}`, background: FB.btnGray, color: FB.text, cursor: 'pointer', fontWeight: 600, fontSize: 14, width: isMobile ? '100%' : 'auto' }}>Annuler</button>
+          <button onClick={handleSave} disabled={saving} style={{ padding: '8px 20px', borderRadius: 6, border: 'none', background: FB.blue, color: '#fff', cursor: saving ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: 14, opacity: saving ? 0.7 : 1, width: isMobile ? '100%' : 'auto' }}>{saving ? '⏳ ' : ''}Sauvegarder</button>
+        </div>
       }
       destroyOnClose
       centered={!isMobile}
@@ -388,10 +406,10 @@ function ModulesModal({ role, open, onClose }: { role: Role; open: boolean; onCl
       style={isMobile ? { top: 16 } : undefined}
       styles={{ body: { padding: isMobile ? 16 : undefined, maxHeight: '70vh', overflowY: 'auto' } }}
     >
-      {error && <Alert type="error" message={error} className="mb-3" />}
-      <div className={`flex items-center gap-3 mb-3 ${isMobile ? 'flex-wrap text-sm' : ''}`}>
-        <span className="font-semibold">Tout activer/désactiver</span>
-        <Switch checked={allChecked} onChange={toggleAll} size={isMobile ? 'small' : 'default'} />
+      {error && <Alert type="error" message={error} style={{ marginBottom: 12 }} />}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: isMobile ? 'wrap' : undefined, fontSize: isMobile ? 13 : undefined }}>
+        <span style={{ fontWeight: 600 }}>Tout activer/désactiver</span>
+        <FBToggle checked={allChecked} onChange={toggleAll} size={isMobile ? 'small' : 'default'} />
       </div>
 
       {loading ? <Spin /> : (
@@ -431,9 +449,9 @@ function ModulesModal({ role, open, onClose }: { role: Role; open: boolean; onCl
                       </Tag>
                     )}
                   </div>
-                  <Switch
+                  <FBToggle
                     checked={hasAccess}
-                    onChange={(checked, e) => { e.stopPropagation(); updatePermission(mod.id, checked); }}
+                    onChange={(checked) => { updatePermission(mod.id, checked); }}
                     size={isMobile ? 'small' : 'default'}
                   />
                 </div>
@@ -463,7 +481,7 @@ function ModulesModal({ role, open, onClose }: { role: Role; open: boolean; onCl
                           gap: 8,
                         }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-                            <Switch
+                            <FBToggle
                               checked={isAllowed}
                               onChange={(checked) => updateActionPermission(mod.id, act.key, checked)}
                               size="small"
@@ -501,8 +519,7 @@ export default function RolesAdminPage() {
   const { isSuperAdmin, selectedOrganization } = useAuth();
   const organizationId = selectedOrganization?.id;
   const { api, isLoading } = useAuthenticatedApi();
-  const screens = useBreakpoint();
-  const isMobile = !screens.md;
+  const { isMobile } = useScreenSize();
 
   const [roles, setRoles] = useState<Role[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
@@ -662,14 +679,14 @@ export default function RolesAdminPage() {
         dataIndex: 'name',
         key: 'name',
         ellipsis: true,
-        render: (value: string) => <span className="font-medium text-gray-800">{value}</span>,
+        render: (value: string) => <span style={{ fontWeight: 500, color: FB.text }}>{value}</span>,
       },
       {
         title: 'Label',
         dataIndex: 'label',
         key: 'label',
         ellipsis: true,
-        render: (value: string) => <span className="text-gray-600">{value}</span>,
+        render: (value: string) => <span style={{ color: FB.textSecondary }}>{value}</span>,
       },
       {
         title: 'Organisation',
@@ -685,7 +702,7 @@ export default function RolesAdminPage() {
         width: isMobile ? 120 : 140,
         render: (_: unknown, r: Role) =>
           r.isGlobal && orgScope ? (
-            <Switch
+            <FBToggle
               checked={!!r.isActiveForOrg}
               onChange={() => handleToggleRoleStatus(r)}
               disabled={r.name === 'super_admin'}
@@ -699,48 +716,46 @@ export default function RolesAdminPage() {
         title: 'Actions',
         key: 'actions',
         width: isMobile ? undefined : 160,
-        render: (_: unknown, r: Role) => (
-          <Space
-            size={isMobile ? 8 : 12}
-            wrap
-            className={isMobile ? 'w-full' : undefined}
-          >
-            <Tooltip title={!isSuperAdmin && r.isGlobal && !r.isActiveForOrg ? 'Activer le rôle pour gérer les modules' : 'Gérer les modules'}>
-              <Button
-                size="small"
-                icon={<AppstoreOutlined />}
-                onClick={() => setSelectedRoleForPermissions(r)}
-                disabled={!isSuperAdmin && r.isGlobal && !r.isActiveForOrg}
-                shape="circle"
-                aria-label="Gérer les modules"
-              />
-            </Tooltip>
-            <Tooltip title="Modifier le rôle">
-              <Button
-                size="small"
-                icon={<EditOutlined />}
-                disabled={r.name === 'super_admin' || (r.isGlobal && !isSuperAdmin)}
-                onClick={() => {
-                  setEditingRole(r);
-                  setIsRoleModalOpen(true);
-                }}
-                shape="circle"
-                aria-label="Modifier le rôle"
-              />
-            </Tooltip>
-            <Tooltip title="Supprimer le rôle">
-              <Button
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                disabled={r.name === 'super_admin' || (r.isGlobal && !isSuperAdmin)}
-                onClick={() => handleDeleteRole(r)}
-                shape="circle"
-                aria-label="Supprimer le rôle"
-              />
-            </Tooltip>
-          </Space>
-        ),
+        render: (_: unknown, r: Role) => {
+          const disabledPerm = !isSuperAdmin && r.isGlobal && !r.isActiveForOrg;
+          const disabledEdit = r.name === 'super_admin' || (r.isGlobal && !isSuperAdmin);
+          const ABtnStyle = (opts: { danger?: boolean; disabled?: boolean; primary?: boolean }) => ({
+            display: 'inline-flex' as const, alignItems: 'center' as const, gap: 6,
+            padding: '6px 12px', borderRadius: 6, border: 'none',
+            background: opts.primary ? FB.blue : opts.danger ? '#ffeef0' : FB.btnGray,
+            color: opts.disabled ? '#bbb' : opts.primary ? FB.white : opts.danger ? FB.red : FB.text,
+            cursor: opts.disabled ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600,
+            transition: 'background 0.15s', whiteSpace: 'nowrap' as const, opacity: opts.disabled ? 0.6 : 1,
+          });
+          return (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <button
+                onClick={() => !disabledPerm && setSelectedRoleForPermissions(r)}
+                title="Gérer les modules"
+                disabled={disabledPerm}
+                style={ABtnStyle({ disabled: disabledPerm })}
+              >
+                <span>📋</span><span>Modules</span>
+              </button>
+              <button
+                onClick={() => { if (!disabledEdit) { setEditingRole(r); setIsRoleModalOpen(true); } }}
+                title="Modifier le rôle"
+                disabled={disabledEdit}
+                style={ABtnStyle({ disabled: disabledEdit })}
+              >
+                <span>✏️</span><span>Modifier</span>
+              </button>
+              <button
+                onClick={() => !disabledEdit && handleDeleteRole(r)}
+                title="Supprimer le rôle"
+                disabled={disabledEdit}
+                style={ABtnStyle({ danger: true, disabled: disabledEdit })}
+              >
+                <span>🗑️</span><span>Supprimer</span>
+              </button>
+            </div>
+          );
+        },
       },
     ];
   }, [isSuperAdmin, filterOrgId, organizationId, handleToggleRoleStatus, handleDeleteRole, isMobile]);
@@ -749,14 +764,14 @@ export default function RolesAdminPage() {
     if (!isMobile) return undefined;
     return {
       expandedRowRender: (record: Role) => (
-        <div className="space-y-2 text-sm">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
           <div>
-            <span className="font-semibold text-gray-600">Organisation :</span>{' '}
+            <span style={{ fontWeight: 600, color: FB.textSecondary }}>Organisation :</span>{' '}
             {record.organizationId ? record.organization?.name ?? 'N/A' : 'Global'}
           </div>
           {record.description && (
             <div>
-              <span className="font-semibold text-gray-600">Description :</span> {record.description}
+              <span style={{ fontWeight: 600, color: FB.textSecondary }}>Description :</span> {record.description}
             </div>
           )}
         </div>
@@ -766,91 +781,86 @@ export default function RolesAdminPage() {
     } as import('antd').TableProps<Role>['expandable'];
   }, [isMobile]);
 
+  const statCardStyle: React.CSSProperties = {
+    background: FB.white, borderRadius: FB.radius, padding: isMobile ? 14 : 18,
+    boxShadow: FB.shadow, flex: '1 1 180px', minWidth: isMobile ? '100%' : 180,
+  };
+  const statLabel: React.CSSProperties = { fontSize: 12, color: FB.textSecondary, marginBottom: 4 };
+  const statValue: React.CSSProperties = { fontSize: 22, fontWeight: 700, color: FB.text };
+
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
+    <div style={{ background: FB.bg, minHeight: '100vh', width: '100%', padding: isMobile ? '12px 8px' : '20px 24px' }}>
       <style>{compactTableStyles}</style>
-      <div className="mb-4 flex flex-wrap items-start gap-3 md:items-center md:justify-between">
-        <h1 className="flex items-center text-xl font-semibold text-gray-900 md:text-2xl">
-          <CrownOutlined className="mr-2 text-orange-500 md:mr-3" />
-          <span>Gestion des Rôles</span>
-        </h1>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => {
-            setEditingRole(null);
-            setIsRoleModalOpen(true);
+
+      {/* ── Header ── */}
+      <div style={{
+        background: FB.white, borderRadius: FB.radius, padding: isMobile ? '14px 16px' : '18px 24px',
+        boxShadow: FB.shadow, marginBottom: 16,
+        display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <CrownOutlined style={{ fontSize: isMobile ? 22 : 26, color: FB.orange }} />
+          <span style={{ fontSize: isMobile ? 20 : 24, fontWeight: 700, color: FB.text }}>Gestion des Rôles</span>
+        </div>
+        <button
+          onClick={() => { setEditingRole(null); setIsRoleModalOpen(true); }}
+          style={{
+            background: FB.blue, color: '#fff', border: 'none', borderRadius: 6,
+            padding: isMobile ? '10px 18px' : '8px 16px', cursor: 'pointer', fontWeight: 600, fontSize: 14,
+            display: 'flex', alignItems: 'center', gap: 6, width: isMobile ? '100%' : 'auto', justifyContent: 'center',
           }}
-          block={isMobile}
-          size={isMobile ? 'large' : 'middle'}
         >
-          Nouveau Rôle
-        </Button>
+          <PlusOutlined /> Nouveau Rôle
+        </button>
       </div>
 
-
-      <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Card size={isMobile ? 'small' : 'default'} className="shadow-sm" styles={{ body: { padding: isMobile ? 16 : 20 } }}>
-          <Statistic title="Total Rôles" value={roles.length} prefix={<TagsOutlined />} valueStyle={{ color: '#1890ff' }} />
-        </Card>
-        <Card size={isMobile ? 'small' : 'default'} className="shadow-sm" styles={{ body: { padding: isMobile ? 16 : 20 } }}>
-          <Statistic
-            title="Rôles Actifs"
-            value={roles.filter((r) => !r.isGlobal || r.isActiveForOrg).length}
-            prefix={<CheckCircleOutlined style={{ color: '#52c41a' }} />}
-            valueStyle={{ color: '#52c41a' }}
-          />
-        </Card>
-        <Card size={isMobile ? 'small' : 'default'} className="shadow-sm" styles={{ body: { padding: isMobile ? 16 : 20 } }}>
-          <Statistic
-            title="Rôles Globaux"
-            value={roles.filter((r) => r.isGlobal).length}
-            prefix={<AppstoreOutlined style={{ color: '#722ed1' }} />}
-            valueStyle={{ color: '#722ed1' }}
-          />
-        </Card>
-        <Card size={isMobile ? 'small' : 'default'} className="shadow-sm" styles={{ body: { padding: isMobile ? 16 : 20 } }}>
-          <Statistic
-            title="Organisations"
-            value={new Set(roles.filter((r) => r.organization).map((r) => r.organization?.id)).size}
-            prefix={<TeamOutlined style={{ color: '#fa8c16' }} />}
-            valueStyle={{ color: '#fa8c16' }}
-          />
-        </Card>
+      {/* ── Stats ── */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+        <div style={statCardStyle}>
+          <div style={statLabel}>Total Rôles</div>
+          <div style={{ ...statValue, color: FB.blue }}><TagsOutlined style={{ marginRight: 6 }} />{roles.length}</div>
+        </div>
+        <div style={statCardStyle}>
+          <div style={statLabel}>Rôles Actifs</div>
+          <div style={{ ...statValue, color: FB.green }}><CheckCircleOutlined style={{ marginRight: 6 }} />{roles.filter((r) => !r.isGlobal || r.isActiveForOrg).length}</div>
+        </div>
+        <div style={statCardStyle}>
+          <div style={statLabel}>Rôles Globaux</div>
+          <div style={{ ...statValue, color: FB.purple }}><AppstoreOutlined style={{ marginRight: 6 }} />{roles.filter((r) => r.isGlobal).length}</div>
+        </div>
+        <div style={statCardStyle}>
+          <div style={statLabel}>Organisations</div>
+          <div style={{ ...statValue, color: FB.orange }}><TeamOutlined style={{ marginRight: 6 }} />{new Set(roles.filter((r) => r.organization).map((r) => r.organization?.id)).size}</div>
+        </div>
       </div>
 
+      {/* ── Filtre Organisation (SuperAdmin) ── */}
       {isSuperAdmin && (
-        <Card
-          className="mb-4 shadow-sm"
-          size="small"
-          styles={{ body: { padding: isMobile ? 12 : 16 } }}
-        >
-          <Space
-            direction={isMobile ? 'vertical' : 'horizontal'}
-            className="w-full"
-            align={isMobile ? 'start' : 'center'}
-            size={12}
-          >
-            <span className="font-semibold text-sm md:text-base">Filtrer par organisation :</span>
-            <Select
-              value={filterOrgId}
-              onChange={(val: string | undefined) => setFilterOrgId(val ?? '')}
-              style={{ width: isMobile ? '100%' : 320 }}
-              options={[{ value: '', label: 'Toutes les organisations & Rôles Globaux' }, ...organizations.map((o) => ({ value: o.id, label: o.name }))]}
-              showSearch
-              allowClear
-              placeholder="Toutes les organisations & Rôles Globaux"
-              optionFilterProp="label"
-              dropdownMatchSelectWidth={false}
-            />
-          </Space>
-        </Card>
+        <div style={{
+          background: FB.white, borderRadius: FB.radius, padding: isMobile ? 12 : 16,
+          boxShadow: FB.shadow, marginBottom: 16,
+          display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12,
+        }}>
+          <span style={{ fontWeight: 600, fontSize: 14, color: FB.text }}>Filtrer par organisation :</span>
+          <Select
+            value={filterOrgId}
+            onChange={(val: string | undefined) => setFilterOrgId(val ?? '')}
+            style={{ width: isMobile ? '100%' : 320 }}
+            options={[{ value: '', label: 'Toutes les organisations & Rôles Globaux' }, ...organizations.map((o) => ({ value: o.id, label: o.name }))]}
+            showSearch
+            allowClear
+            placeholder="Toutes les organisations & Rôles Globaux"
+            optionFilterProp="label"
+            popupMatchSelectWidth={false}
+          />
+        </div>
       )}
 
-      {error && <Alert type="error" message={error} className="mb-4" />}
+      {error && <Alert type="error" message={error} style={{ marginBottom: 16, borderRadius: FB.radius }} />}
 
-      <Card className="shadow-sm" styles={{ body: { padding: isMobile ? 0 : 24 } }}>
-        <div className={isMobile ? 'overflow-x-auto' : undefined}>
+      {/* ── Table ── */}
+      <div style={{ background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow, overflow: 'hidden' }}>
+        <div style={{ overflow: isMobile ? 'auto' : undefined }}>
           <Table
             rowKey={(r) => r.id}
             columns={columns as unknown as import('antd').TableProps<Role>['columns']}
@@ -865,11 +875,10 @@ export default function RolesAdminPage() {
             scroll={isMobile ? { x: 720 } : undefined}
             expandable={expandable}
             locale={{ emptyText: 'Aucun rôle à afficher pour le filtre sélectionné.' }}
-            className="roles-compact-table"
-            rowClassName={() => 'text-sm'}
+            style={{ fontSize: 13 }}
           />
         </div>
-      </Card>
+      </div>
 
       <RoleFormModal
         open={isRoleModalOpen}

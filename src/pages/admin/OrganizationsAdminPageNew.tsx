@@ -11,7 +11,6 @@ import {
   Tag, 
   Space, 
   Tooltip, 
-  Switch, 
   Statistic, 
   Row, 
   Col,
@@ -65,6 +64,53 @@ import {
 } from '../../utils/organizationOptimizations';
 
 const { Title, Text } = Typography;
+
+// ── Facebook Design Tokens ──
+const FB = {
+  bg: '#f0f2f5', white: '#ffffff', text: '#050505', textSecondary: '#65676b',
+  blue: '#1877f2', blueHover: '#166fe5', border: '#ced0d4',
+  btnGray: '#e4e6eb', btnGrayHover: '#d8dadf',
+  green: '#42b72a', red: '#e4405f', orange: '#f7931a', purple: '#722ed1',
+  shadow: '0 1px 2px rgba(0,0,0,0.1)', radius: 8,
+};
+
+// ── FBToggle (identique à UsersAdminPageNew) ──
+const FBToggle = ({ checked, onChange, disabled, size = 'default' }: {
+  checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; size?: 'small' | 'default';
+}) => {
+  const w = size === 'small' ? 36 : 44;
+  const h = size === 'small' ? 20 : 24;
+  const dot = size === 'small' ? 16 : 20;
+  return (
+    <div
+      onClick={() => !disabled && onChange(!checked)}
+      style={{
+        width: w, height: h, borderRadius: h,
+        background: disabled ? '#ccc' : checked ? FB.blue : '#ccc',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        position: 'relative', transition: 'background 0.2s',
+        opacity: disabled ? 0.5 : 1, flexShrink: 0,
+      }}
+    >
+      <div style={{
+        width: dot, height: dot, borderRadius: '50%', background: FB.white,
+        position: 'absolute', top: (h - dot) / 2,
+        left: checked ? w - dot - (h - dot) / 2 : (h - dot) / 2,
+        transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+      }} />
+    </div>
+  );
+};
+
+function useScreenSize() {
+  const [w, setW] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200);
+  useEffect(() => {
+    const h = () => setW(window.innerWidth);
+    window.addEventListener('resize', h);
+    return () => window.removeEventListener('resize', h);
+  }, []);
+  return { isMobile: w < 768, isTablet: w >= 768 && w < 1100, width: w };
+}
 
 // 🏷️ INTERFACES TYPES ULTRA-PRÉCISES
 interface Organization {
@@ -187,9 +233,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
   const isSuperAdmin = user?.role === 'super_admin' || user?.isSuperAdmin;
   const canManageOrgs = isSuperAdmin;
 
-  const screens = Grid.useBreakpoint();
-  const isMobile = !screens.md;
-  const isTablet = !!screens.md && !screens.lg;
+  const { isMobile, isTablet } = useScreenSize();
 
   // � RECHERCHE OPTIMISÉE AVEC DEBOUNCE 
   const [searchInputValue, setSearchInputValue] = useState('');
@@ -831,26 +875,28 @@ const OrganizationsAdminPageNew: React.FC = () => {
     const isOpen = sectionsOpen[sectionId];
     
     return (
-      <div key={sectionId} className={`border rounded-lg overflow-hidden ${
-        sectionActive ? 'border-gray-200' : 'border-red-300 bg-red-50'
-      }`}>
+      <div key={sectionId} style={{
+        border: `1px solid ${sectionActive ? FB.border : '#ffa39e'}`,
+        borderRadius: FB.radius, overflow: 'hidden',
+        background: sectionActive ? FB.white : '#fff1f0',
+      }}>
         {/* En-tête de section */}
         <button
           onClick={() => toggleSection(sectionId)}
-          className={`w-full flex items-center justify-between p-4 transition-colors ${
-            sectionActive 
-              ? 'bg-gray-50 hover:bg-gray-100' 
-              : 'bg-red-50 hover:bg-red-100'
-          }`}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: 16, transition: 'background 0.2s', border: 'none', cursor: 'pointer',
+            background: sectionActive ? '#f8f9fa' : '#fff1f0',
+          }}
         >
-          <div className="flex items-center space-x-3">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {icon}
-            <div className="text-left">
-              <div className={`font-semibold text-lg ${!sectionActive ? 'text-red-600' : ''}`}>
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontWeight: 600, fontSize: 16, color: !sectionActive ? FB.red : FB.text }}>
                 {title}
-                {!sectionActive && <span className="ml-2 text-xs text-red-500">(DÉSACTIVÉE)</span>}
+                {!sectionActive && <span style={{ marginLeft: 8, fontSize: 11, color: FB.red }}>(DÉSACTIVÉE)</span>}
               </div>
-              <div className={`text-sm ${sectionActive ? 'text-gray-600' : 'text-red-500'}`}>
+              <div style={{ fontSize: 13, color: sectionActive ? FB.textSecondary : FB.red }}>
                 {description}
               </div>
             </div>
@@ -864,7 +910,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
         
         {/* Contenu de la section */}
         {isOpen && (
-          <div className="p-4 space-y-3 bg-white">
+          <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12, background: FB.white }}>
             {modules.length > 0 ? (
               modules.map((module: Module) => {
                 const orgModule = organizationModules.find((orgMod: Module) => 
@@ -875,51 +921,49 @@ const OrganizationsAdminPageNew: React.FC = () => {
                 return (
                   <div 
                     key={module.id} 
-                    className={`p-4 border rounded-lg transition-all ${
-                      !sectionActive 
-                        ? 'border-red-200 bg-red-50 opacity-60' 
-                        : isActive 
-                          ? 'border-green-500 bg-green-50' 
-                          : 'border-gray-200 bg-white'
-                    } hover:shadow-md`}
+                    style={{
+                      padding: 16, borderRadius: FB.radius, transition: 'box-shadow 0.2s',
+                      border: `1px solid ${!sectionActive ? '#ffa39e' : isActive ? FB.green : FB.border}`,
+                      background: !sectionActive ? '#fff1f0' : isActive ? '#f6ffed' : FB.white,
+                      opacity: !sectionActive ? 0.6 : 1,
+                    }}
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                         {module.icon ? (
-                          <span className={`text-2xl ${!sectionActive ? 'text-gray-400' : ''}`}>
+                          <span style={{ fontSize: 24, color: !sectionActive ? '#bfbfbf' : undefined }}>
                             {module.icon}
                           </span>
                         ) : (
-                          <AppstoreOutlined className={`text-2xl ${!sectionActive ? 'text-gray-400' : 'text-gray-500'}`} />
+                          <AppstoreOutlined style={{ fontSize: 24, color: !sectionActive ? '#bfbfbf' : FB.textSecondary }} />
                         )}
                         <div>
-                          <div className={`font-semibold text-lg ${!sectionActive ? 'text-gray-500' : ''}`}>
+                          <div style={{ fontWeight: 600, fontSize: 16, color: !sectionActive ? FB.textSecondary : FB.text }}>
                             {module.label || module.name}
                             {!sectionActive && (
-                              <span className="ml-2 text-xs text-red-500">(Section désactivée)</span>
+                              <span style={{ marginLeft: 8, fontSize: 11, color: FB.red }}>(Section désactivée)</span>
                             )}
                           </div>
                           {module.description && (
-                            <div className={`text-sm mt-1 ${!sectionActive ? 'text-gray-400' : 'text-gray-600'}`}>
+                            <div style={{ fontSize: 13, marginTop: 4, color: !sectionActive ? '#bfbfbf' : FB.textSecondary }}>
                               {module.description}
                             </div>
                           )}
-                          <div className={`text-xs mt-1 ${!sectionActive ? 'text-gray-400' : 'text-gray-400'}`}>
+                          <div style={{ fontSize: 11, marginTop: 4, color: '#bfbfbf' }}>
                             Clé: {module.feature || module.key}
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center space-x-3">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <Badge 
                           status={!sectionActive ? "error" : isActive ? "success" : "default"} 
                           text={!sectionActive ? "Section désactivée" : isActive ? "Actif" : "Inactif"}
                         />
-                        <Switch
+                        <FBToggle
                           checked={sectionActive && isActive}
                           onChange={(checked) => sectionActive && handleToggleModule(module, checked)}
                           disabled={!sectionActive}
-                          checkedChildren="ON"
-                          unCheckedChildren="OFF"
+                          size="small"
                         />
                       </div>
                     </div>
@@ -927,7 +971,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
                 );
               })
             ) : (
-              <div className="text-center py-8 text-gray-500">
+              <div style={{ textAlign: 'center', padding: '32px 0', color: FB.textSecondary }}>
                 Aucun module dans cette catégorie
               </div>
             )}
@@ -1124,218 +1168,115 @@ const OrganizationsAdminPageNew: React.FC = () => {
     {
       title: 'Actions',
       key: 'actions',
-      width: 240,
-      render: (_, record: Organization) => (
-        <Space size={4}>
-          <Tooltip title="📋 Voir détails complets">
-            <Button
-              type="text"
-              icon={<EyeOutlined />}
-              onClick={() => openOrganizationDetails(record)}
-              style={{ color: '#1890ff' }}
-            />
-          </Tooltip>
-          
-          {canManageOrgs && (
-            <>
-              <Tooltip title={`⚡ ${record.status === 'ACTIVE' ? 'Désactiver' : 'Activer'} l'organisation`}>
+      width: 260,
+      render: (_, record: Organization) => {
+        const ab = (emoji: string, label: string, onClick: () => void, opts: { bg?: string; color?: string; danger?: boolean } = {}) => (
+          <button key={label} onClick={onClick} title={label} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6,
+            border: 'none', background: opts.danger ? '#ffeef0' : opts.bg || FB.btnGray,
+            color: opts.danger ? FB.red : opts.color || FB.text, cursor: 'pointer', fontSize: 13, fontWeight: 600,
+            transition: 'background 0.15s', whiteSpace: 'nowrap' as const,
+          }}><span>{emoji}</span><span>{label}</span></button>
+        );
+        return (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {ab('📋', 'Détails', () => openOrganizationDetails(record), { bg: '#e7f3ff', color: FB.blue })}
+            {canManageOrgs && (
+              <>
                 <Popconfirm
                   title={`${record.status === 'ACTIVE' ? 'Désactiver' : 'Activer'} cette organisation ?`}
                   description={`L'organisation sera ${record.status === 'ACTIVE' ? 'désactivée' : 'activée'}.`}
                   onConfirm={() => handleToggleOrganizationStatus(record.id, record.name, record.status)}
                   okText={record.status === 'ACTIVE' ? 'Désactiver' : 'Activer'}
                   cancelText="Annuler"
-                  okButtonProps={{ 
-                    type: record.status === 'ACTIVE' ? 'default' : 'primary'
-                  }}
                 >
-                  <Button
-                    type="text"
-                    icon={<PoweroffOutlined style={{ 
-                      color: record.status === 'ACTIVE' ? '#ff4d4f' : '#52c41a' 
-                    }} />}
-                  />
+                  {ab(record.status === 'ACTIVE' ? '⛔' : '✅', record.status === 'ACTIVE' ? 'Désactiver' : 'Activer', () => {}, { bg: record.status === 'ACTIVE' ? '#fff2f0' : '#f6ffed', color: record.status === 'ACTIVE' ? FB.red : FB.green })}
                 </Popconfirm>
-              </Tooltip>
-
-              <Tooltip title="✏️ Modifier les informations">
-                <Button
-                  type="text"
-                  icon={<EditOutlined />}
-                  onClick={() => openEditOrganization(record)}
-                  style={{ color: '#722ed1' }}
-                />
-              </Tooltip>
-
-              <Tooltip title="🔗 Configuration Google Workspace">
-                <Button
-                  type="text"
-                  icon={<GoogleOutlined />}
-                  onClick={() => openGoogleWorkspaceConfig(record)}
-                  style={{ color: '#4285F4' }}
-                />
-              </Tooltip>
-
-              {/* 🚀 BOUTON DEBUG : Forcer activation modules Google Workspace */}
-              <Tooltip title="🚀 Forcer activation modules Google Workspace (DEBUG)">
-                <Button
-                  type="text"
-                  icon={<RocketOutlined />}
-                  onClick={() => handleActivateGoogleWorkspaceModules(record.id)}
-                  style={{ color: '#ff4d4f' }}
-                />
-              </Tooltip>
-
-              <Tooltip title="📞 Configuration Telnyx">
-                <Button
-                  type="text"
-                  icon={<PhoneOutlined />}
-                  onClick={() => openTelnyxConfig(record)}
-                  style={{ color: '#FF6B6B' }}
-                />
-              </Tooltip>
-
-              <Tooltip title="🧩 Gérer les modules CRM">
-                <Button
-                  type="text"
-                  icon={<AppstoreAddOutlined />}
-                  onClick={() => openModulesManager(record)}
-                  style={{ color: '#52c41a' }}
-                />
-              </Tooltip>
-
-              <Tooltip title="🚀 Activer Devis1Minute">
-                <Button
-                  type="text"
-                  icon={<RocketOutlined />}
-                  onClick={() => openDevis1Minute(record)}
-                  style={{ color: '#ff7a00' }}
-                />
-              </Tooltip>
-
-              <Popconfirm
-                title="⚠️ Supprimer cette organisation ?"
-                description="Cette action est irréversible et supprimera toutes les données associées."
-                onConfirm={() => handleDeleteOrganization(record.id, record.name)}
-                okText="🗑️ Supprimer"
-                cancelText="Annuler"
-                okButtonProps={{ danger: true }}
-              >
-                <Tooltip title="🗑️ Supprimer définitivement">
-                  <Button
-                    type="text"
-                    icon={<DeleteOutlined />}
-                    danger
-                  />
-                </Tooltip>
-              </Popconfirm>
-            </>
-          )}
-        </Space>
-      ),
+                {ab('✏️', 'Modifier', () => openEditOrganization(record), { bg: '#f9f0ff', color: FB.purple })}
+                {ab('🔗', 'Google WS', () => openGoogleWorkspaceConfig(record), { bg: '#e6f4ff', color: '#4285F4' })}
+                {ab('🚀', 'GW Modules', () => handleActivateGoogleWorkspaceModules(record.id), { bg: '#fff1f0', color: FB.red })}
+                {ab('📞', 'Telnyx', () => openTelnyxConfig(record), { bg: '#fff0f0', color: '#FF6B6B' })}
+                {ab('🧩', 'Modules', () => openModulesManager(record), { bg: '#f6ffed', color: FB.green })}
+                {ab('🚀', 'Devis1Min', () => openDevis1Minute(record), { bg: '#fff7e6', color: '#ff7a00' })}
+                <Popconfirm
+                  title="⚠️ Supprimer cette organisation ?"
+                  description="Cette action est irréversible et supprimera toutes les données associées."
+                  onConfirm={() => handleDeleteOrganization(record.id, record.name)}
+                  okText="🗑️ Supprimer"
+                  cancelText="Annuler"
+                  okButtonProps={{ danger: true }}
+                >
+                  {ab('🗑️', 'Supprimer', () => {}, { danger: true })}
+                </Popconfirm>
+              </>
+            )}
+          </div>
+        );
+      },
     },
   ];
 
   const renderMobileOrganizationActions = (organization: Organization) => {
     const googleWorkspaceEnabled = organization.googleWorkspaceEnabled || organization.stats?.googleWorkspaceEnabled;
+    const btnStyle: React.CSSProperties = {
+      width: '100%', padding: '10px 0', border: `1px solid ${FB.border}`,
+      borderRadius: FB.radius, background: FB.white, cursor: 'pointer',
+      fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center',
+      justifyContent: 'center', gap: 6, color: FB.text,
+    };
+    const primaryBtn: React.CSSProperties = { ...btnStyle, background: FB.blue, color: '#fff', border: 'none' };
+    const dangerBtn: React.CSSProperties = { ...btnStyle, color: FB.red, borderColor: FB.red };
 
     return (
-      <Space direction="vertical" size={8} style={{ width: '100%' }}>
-        <Button
-          type="primary"
-          icon={<EyeOutlined />}
-          block
-          onClick={() => openOrganizationDetails(organization)}
-        >
-          Voir les détails
-        </Button>
-
-        {canManageOrgs && (
-          <>
-            <Button
-              icon={<EditOutlined />}
-              block
-              onClick={() => openEditOrganization(organization)}
-            >
-              Modifier l'organisation
-            </Button>
-
-            <Button
-              icon={<AppstoreAddOutlined />}
-              block
-              onClick={() => openModulesManager(organization)}
-            >
-              Modules CRM
-            </Button>
-
-            <Button
-              icon={<GoogleOutlined />}
-              block
-              onClick={() => openGoogleWorkspaceConfig(organization)}
-            >
-              Google Workspace
-            </Button>
-
-            {!googleWorkspaceEnabled && (
-              <Button
-                icon={<RocketOutlined />}
-                block
-                onClick={() => handleQuickActivateGoogleWorkspace(organization)}
-              >
-                Activer Google Workspace
-              </Button>
-            )}
-
-            <Button
-              icon={<PhoneOutlined />}
-              block
-              onClick={() => openTelnyxConfig(organization)}
-            >
-              Configuration Telnyx
-            </Button>
-
-            <Button
-              icon={<RocketOutlined />}
-              block
-              onClick={() => openDevis1Minute(organization)}
-            >
-              Devis1Minute
-            </Button>
-
-            <Popconfirm
-              title={`${organization.status === 'ACTIVE' ? 'Désactiver' : 'Activer'} cette organisation ?`}
-              onConfirm={() => handleToggleOrganizationStatus(organization.id, organization.name, organization.status)}
-              okText={organization.status === 'ACTIVE' ? 'Désactiver' : 'Activer'}
-              cancelText="Annuler"
-              okButtonProps={{ type: organization.status === 'ACTIVE' ? 'default' : 'primary' }}
-            >
-              <Button
-                icon={<PoweroffOutlined />}
-                block
-              >
-                {organization.status === 'ACTIVE' ? 'Désactiver' : 'Activer'}
-              </Button>
-            </Popconfirm>
-
-            <Popconfirm
-              title="Supprimer cette organisation ?"
-              description="Cette action est irréversible et supprimera toutes les données associées."
-              onConfirm={() => handleDeleteOrganization(organization.id, organization.name)}
-              okText="Supprimer"
-              cancelText="Annuler"
-              okButtonProps={{ danger: true }}
-            >
-              <Button
-                icon={<DeleteOutlined />}
-                block
-                danger
-              >
-                Supprimer
-              </Button>
-            </Popconfirm>
-          </>
-        )}
-      </Space>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <button style={primaryBtn} onClick={() => openOrganizationDetails(organization)}>
+          <EyeOutlined /> Voir les détails
+        </button>
+        {canManageOrgs && (<>
+          <button style={btnStyle} onClick={() => openEditOrganization(organization)}>
+            <EditOutlined /> Modifier l'organisation
+          </button>
+          <button style={btnStyle} onClick={() => openModulesManager(organization)}>
+            <AppstoreAddOutlined /> Modules CRM
+          </button>
+          <button style={btnStyle} onClick={() => openGoogleWorkspaceConfig(organization)}>
+            <GoogleOutlined /> Google Workspace
+          </button>
+          {!googleWorkspaceEnabled && (
+            <button style={btnStyle} onClick={() => handleQuickActivateGoogleWorkspace(organization)}>
+              <RocketOutlined /> Activer Google Workspace
+            </button>
+          )}
+          <button style={btnStyle} onClick={() => openTelnyxConfig(organization)}>
+            <PhoneOutlined /> Configuration Telnyx
+          </button>
+          <button style={btnStyle} onClick={() => openDevis1Minute(organization)}>
+            <RocketOutlined /> Devis1Minute
+          </button>
+          <Popconfirm
+            title={`${organization.status === 'ACTIVE' ? 'Désactiver' : 'Activer'} cette organisation ?`}
+            onConfirm={() => handleToggleOrganizationStatus(organization.id, organization.name, organization.status)}
+            okText={organization.status === 'ACTIVE' ? 'Désactiver' : 'Activer'}
+            cancelText="Annuler"
+          >
+            <button style={btnStyle}>
+              <PoweroffOutlined /> {organization.status === 'ACTIVE' ? 'Désactiver' : 'Activer'}
+            </button>
+          </Popconfirm>
+          <Popconfirm
+            title="Supprimer cette organisation ?"
+            description="Cette action est irréversible."
+            onConfirm={() => handleDeleteOrganization(organization.id, organization.name)}
+            okText="Supprimer"
+            cancelText="Annuler"
+            okButtonProps={{ danger: true }}
+          >
+            <button style={dangerBtn}>
+              <DeleteOutlined /> Supprimer
+            </button>
+          </Popconfirm>
+        </>)}
+      </div>
     );
   };
 
@@ -1344,128 +1285,70 @@ const OrganizationsAdminPageNew: React.FC = () => {
     const moduleCount = cachedModuleCount !== undefined
       ? cachedModuleCount
       : organization.stats?.activeModules || 0;
-
     const googleEnabled = organization.googleWorkspaceEnabled || organization.stats?.googleWorkspaceEnabled;
 
-    const statChipStyle: React.CSSProperties = {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 8,
-      padding: '10px 12px',
-      borderRadius: 10,
-      backgroundColor: '#f5f5f5',
-      flex: isTablet ? '1 1 45%' : '1 1 48%',
-      minWidth: 140
-    };
-
     return (
-      <Card
-        key={organization.id}
-        size="small"
-        className="shadow-sm"
-        style={{ borderRadius: 12 }}
-        styles={{ body: { padding: 16 } }}
-      >
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
-          <div className="flex flex-wrap items-start gap-3 justify-between">
-            <Space direction="vertical" size={8} style={{ flex: '1 1 240px' }}>
-              <Space size={8} wrap>
-                <Text strong style={{ fontSize: 16 }}>
-                  {formatOrganizationName(organization.name, 60)}
-                </Text>
-                {renderStatusTag(organization.status)}
-              </Space>
-              {organization.description && (
-                <Text type="secondary">
-                  {formatDescription(organization.description, 90)}
-                </Text>
-              )}
-              {organization.website && (
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  🌐 {organization.website}
-                </Text>
-              )}
-              {organization.googleWorkspaceDomain && (
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  Domaine Google Workspace : {organization.googleWorkspaceDomain}
-                </Text>
-              )}
-            </Space>
-
-            <Space size={12} direction="vertical" style={{ minWidth: 140 }}>
-              <div style={{ textAlign: 'right' }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>Modules actifs</Text>
-                <div style={{ fontWeight: 700, fontSize: 20, color: moduleCount > 0 ? '#52c41a' : '#999' }}>
-                  {moduleCount}
-                </div>
+      <div key={organization.id} style={{
+        background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow,
+        padding: 16, display: 'flex', flexDirection: 'column', gap: 14,
+      }}>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontWeight: 700, fontSize: 16, color: FB.text }}>
+                {formatOrganizationName(organization.name, 60)}
+              </span>
+              {renderStatusTag(organization.status)}
+            </div>
+            {organization.description && (
+              <div style={{ color: FB.textSecondary, fontSize: 13, marginTop: 4 }}>
+                {formatDescription(organization.description, 90)}
               </div>
-              <Badge
-                status={googleEnabled ? 'success' : 'default'}
-                text={googleEnabled ? 'Google Workspace activé' : 'Google Workspace inactif'}
-              />
-            </Space>
+            )}
           </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ color: FB.textSecondary, fontSize: 12 }}>Modules actifs</div>
+            <div style={{ fontWeight: 700, fontSize: 20, color: moduleCount > 0 ? FB.green : '#999' }}>{moduleCount}</div>
+          </div>
+        </div>
 
-          <Space size={12} wrap>
-            <div style={statChipStyle}>
-              <UserOutlined style={{ color: '#1890ff' }} />
+        {/* Stats Grid */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {[
+            { icon: <UserOutlined style={{ color: FB.blue }} />, label: 'Utilisateurs', val: organization.stats?.totalUsers || 0 },
+            { icon: <TeamOutlined style={{ color: FB.purple }} />, label: 'Rôles', val: organization.stats?.totalRoles || 0 },
+            { icon: <AppstoreOutlined style={{ color: FB.green }} />, label: 'Modules CRM', val: moduleCount },
+            { icon: <GoogleOutlined style={{ color: '#4285F4' }} />, label: 'Google', val: googleEnabled ? 'Activé' : 'Inactif' },
+          ].map((s, i) => (
+            <div key={i} style={{
+              display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
+              borderRadius: FB.radius, background: FB.bg, flex: '1 1 45%', minWidth: 130,
+            }}>
+              {s.icon}
               <div>
-                <Text type="secondary" style={{ fontSize: 12 }}>Utilisateurs</Text>
-                <div style={{ fontWeight: 600, fontSize: 16 }}>
-                  {organization.stats?.totalUsers || 0}
-                </div>
+                <div style={{ fontSize: 11, color: FB.textSecondary }}>{s.label}</div>
+                <div style={{ fontWeight: 600, fontSize: 15 }}>{s.val}</div>
               </div>
             </div>
-            <div style={statChipStyle}>
-              <TeamOutlined style={{ color: '#722ed1' }} />
-              <div>
-                <Text type="secondary" style={{ fontSize: 12 }}>Rôles</Text>
-                <div style={{ fontWeight: 600, fontSize: 16 }}>
-                  {organization.stats?.totalRoles || 0}
-                </div>
-              </div>
-            </div>
-            <div style={statChipStyle}>
-              <AppstoreOutlined style={{ color: '#52c41a' }} />
-              <div>
-                <Text type="secondary" style={{ fontSize: 12 }}>Modules CRM</Text>
-                <div style={{ fontWeight: 600, fontSize: 16 }}>
-                  {moduleCount}
-                </div>
-              </div>
-            </div>
-            <div style={statChipStyle}>
-              <GoogleOutlined style={{ color: '#4285F4' }} />
-              <div>
-                <Text type="secondary" style={{ fontSize: 12 }}>Google Workspace</Text>
-                <div style={{ fontWeight: 600, fontSize: 16 }}>
-                  {googleEnabled ? 'Activé' : 'Inactif'}
-                </div>
-              </div>
-            </div>
-          </Space>
+          ))}
+        </div>
 
-          {organization.googleWorkspaceModules.length > 0 && (
-            <Space size={8} wrap>
-              {organization.googleWorkspaceModules.map(module => {
-                const iconConfig = getCachedGoogleIcon(module.key);
-                return (
-                  <Tag
-                    key={module.id}
-                    icon={getGoogleModuleIcon(module.key)}
-                    color={iconConfig.color}
-                    style={{ borderRadius: 16, marginRight: 0 }}
-                  >
-                    {module.label}
-                  </Tag>
-                );
-              })}
-            </Space>
-          )}
+        {/* Google Workspace modules pills */}
+        {organization.googleWorkspaceModules.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {organization.googleWorkspaceModules.map(module => (
+              <Tag key={module.id} icon={getGoogleModuleIcon(module.key)} color={getCachedGoogleIcon(module.key).color}
+                style={{ borderRadius: 16, marginRight: 0 }}>
+                {module.label}
+              </Tag>
+            ))}
+          </div>
+        )}
 
-          {renderMobileOrganizationActions(organization)}
-        </Space>
-      </Card>
+        {/* Actions */}
+        {renderMobileOrganizationActions(organization)}
+      </div>
     );
   };
 
@@ -1474,182 +1357,154 @@ const OrganizationsAdminPageNew: React.FC = () => {
     fetchOrganizations();
   }, [fetchOrganizations]);
 
+  // ── FB helpers ──
+  const statCardStyle: React.CSSProperties = {
+    background: FB.white, borderRadius: FB.radius, padding: isMobile ? 14 : 18,
+    boxShadow: FB.shadow, flex: '1 1 200px', minWidth: isMobile ? '100%' : 200,
+  };
+  const statLabel: React.CSSProperties = { fontSize: 12, color: FB.textSecondary, marginBottom: 4 };
+  const statValue: React.CSSProperties = { fontSize: 22, fontWeight: 700, color: FB.text };
+
   return (
-    <div
-      style={{
-        padding: isMobile ? '16px 12px' : '32px',
-        backgroundColor: '#f7f9fc',
-        minHeight: '100%',
-        transition: 'padding 0.2s ease-in-out'
-      }}
-    >
-      <div style={{ maxWidth: 1280, margin: '0 auto', width: '100%' }}>
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: isMobile ? 'column' : 'row',
-            alignItems: isMobile ? 'flex-start' : 'center',
-            justifyContent: 'space-between',
-            gap: 16,
-            marginBottom: isMobile ? 16 : 24
-          }}
-        >
-          <Space align="center" size={12}>
-            <TeamOutlined style={{ fontSize: isMobile ? 24 : 28, color: '#1f2937' }} />
-            <Title level={2} style={{ margin: 0, fontSize: isMobile ? 22 : 28 }}>
-              Gestion des Organisations
-            </Title>
-          </Space>
-
-          {canManageOrgs && (
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              size={isMobile ? 'middle' : 'large'}
-              onClick={() => setCreateModal(true)}
-              style={{ width: isMobile ? '100%' : 'auto' }}
-            >
-              Nouvelle Organisation
-            </Button>
-          )}
+    <div style={{ background: FB.bg, minHeight: '100vh', width: '100%', padding: isMobile ? '12px 8px' : '20px 24px' }}>
+      {/* ── Header ── */}
+      <div style={{
+        background: FB.white, borderRadius: FB.radius, padding: isMobile ? '14px 16px' : '18px 24px',
+        boxShadow: FB.shadow, marginBottom: 16, display: 'flex', flexWrap: 'wrap',
+        alignItems: 'center', justifyContent: 'space-between', gap: 12,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <TeamOutlined style={{ fontSize: isMobile ? 22 : 26, color: FB.blue }} />
+          <span style={{ fontSize: isMobile ? 20 : 24, fontWeight: 700, color: FB.text }}>
+            Gestion des Organisations
+          </span>
         </div>
-
-        <Row gutter={[16, 16]} style={{ marginBottom: isMobile ? 12 : 24 }}>
-          <Col xs={24} sm={12} md={12} lg={6}>
-            <Card styles={{ body: { padding: isMobile ? 16 : 20 } }} style={{ borderRadius: 14 }}>
-              <Statistic
-                title="Total Organisations"
-                value={organizations.length}
-                prefix={<TeamOutlined />}
-              />
-            </Card>
-          </Col>
-          <Col xs={24} sm={12} md={12} lg={6}>
-            <Card styles={{ body: { padding: isMobile ? 16 : 20 } }} style={{ borderRadius: 14 }}>
-              <Statistic
-                title="Organisations Actives"
-                value={organizations.filter(o => o.status === 'ACTIVE').length}
-                prefix={<CheckCircleOutlined style={{ color: '#52c41a' }} />}
-              />
-            </Card>
-          </Col>
-          <Col xs={24} sm={12} md={12} lg={6}>
-            <Card styles={{ body: { padding: isMobile ? 16 : 20 } }} style={{ borderRadius: 14 }}>
-              <Statistic
-                title="Avec Google Workspace"
-                value={organizations.filter(o => o.googleWorkspaceEnabled).length}
-                prefix={<GoogleOutlined style={{ color: '#4285F4' }} />}
-              />
-            </Card>
-          </Col>
-          <Col xs={24} sm={12} md={12} lg={6}>
-            <Card styles={{ body: { padding: isMobile ? 16 : 20 } }} style={{ borderRadius: 14 }}>
-              <Statistic
-                title="Total Modules Actifs"
-                value={Object.values(moduleCache).reduce((sum, count) => sum + count, 0)}
-                prefix={<AppstoreOutlined style={{ color: '#722ed1' }} />}
-              />
-            </Card>
-          </Col>
-        </Row>
-
-        <Card
-          className="mb-4"
-          style={{
-            borderRadius: 18,
-            boxShadow: isMobile ? 'none' : '0 12px 32px rgba(15, 23, 42, 0.08)'
-          }}
-          styles={{ body: { padding: isMobile ? 16 : 20 } }}
-        >
-          <Row gutter={[12, 12]} align="middle">
-            <Col xs={24} md={12} lg={10}>
-              <Input
-                placeholder="Rechercher par nom ou description..."
-                value={searchInputValue}
-                onChange={handleSearchChange}
-                prefix={<SearchOutlined style={{ color: '#666' }} />}
-                allowClear
-                size={isMobile ? 'middle' : 'large'}
-                style={{ borderRadius: 8 }}
-              />
-            </Col>
-            <Col xs={24} sm={12} md={6} lg={6}>
-              <Select
-                placeholder="Filtrer par statut"
-                value={statusFilter}
-                onChange={setStatusFilter}
-                style={{ width: '100%' }}
-                size={isMobile ? 'middle' : 'large'}
-              >
-                <Select.Option value="all">
-                  <Space>
-                    <AppstoreOutlined />
-                    Tous les statuts
-                  </Space>
-                </Select.Option>
-                <Select.Option value="ACTIVE">
-                  <Space>
-                    <CheckCircleOutlined style={{ color: '#52c41a' }} />
-                    Actives
-                  </Space>
-                </Select.Option>
-                <Select.Option value="INACTIVE">
-                  <Space>
-                    <PoweroffOutlined style={{ color: '#f5222d' }} />
-                    Inactives
-                  </Space>
-                </Select.Option>
-              </Select>
-            </Col>
-            <Col xs={24} sm={12} md={6} lg={5}>
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={fetchOrganizations}
-                loading={loading}
-                size={isMobile ? 'middle' : 'large'}
-                style={{ width: '100%' }}
-              >
-                Actualiser
-              </Button>
-            </Col>
-            <Col xs={24} md={6} lg={3}>
-              <Text type="secondary" style={{ display: 'block', textAlign: isMobile ? 'left' : 'right' }}>
-                {filteredOrganizations.length} résultat{filteredOrganizations.length > 1 ? 's' : ''}
-              </Text>
-            </Col>
-          </Row>
-        </Card>
-
-        {isMobile ? (
-          filteredOrganizations.length > 0 ? (
-            <Space direction="vertical" size={16} style={{ width: '100%' }}>
-              {filteredOrganizations.map(renderOrganizationCard)}
-            </Space>
-          ) : (
-            <Card style={{ borderRadius: 18 }}>
-              <Empty
-                description="Aucune organisation ne correspond à votre recherche"
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-              />
-            </Card>
-          )
-        ) : (
-          <Card styles={{ body: { padding: 0 } }} style={{ borderRadius: 20, overflow: 'hidden' }}>
-            <Table
-              columns={columns}
-              dataSource={filteredOrganizations}
-              rowKey="id"
-              loading={loading}
-              pagination={{
-                showSizeChanger: true,
-                showQuickJumper: true,
-                showTotal: (total, range) => `${range[0]}-${range[1]} sur ${total} organisations`,
-              }}
-              scroll={{ x: isTablet ? 960 : 1200 }}
-            />
-          </Card>
+        {canManageOrgs && (
+          <button onClick={() => setCreateModal(true)} style={{
+            background: FB.blue, color: '#fff', border: 'none', borderRadius: FB.radius,
+            padding: '10px 20px', fontWeight: 600, fontSize: 14, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 6, width: isMobile ? '100%' : 'auto',
+            justifyContent: 'center',
+          }}>
+            <PlusOutlined /> Nouvelle Organisation
+          </button>
         )}
       </div>
+
+      {/* ── Stats ── */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+        <div style={statCardStyle}>
+          <div style={statLabel}>Total Organisations</div>
+          <div style={statValue}><TeamOutlined style={{ marginRight: 6 }} />{organizations.length}</div>
+        </div>
+        <div style={statCardStyle}>
+          <div style={statLabel}>Organisations Actives</div>
+          <div style={{ ...statValue, color: FB.green }}>
+            <CheckCircleOutlined style={{ marginRight: 6 }} />{organizations.filter(o => o.status === 'ACTIVE').length}
+          </div>
+        </div>
+        <div style={statCardStyle}>
+          <div style={statLabel}>Avec Google Workspace</div>
+          <div style={{ ...statValue, color: '#4285F4' }}>
+            <GoogleOutlined style={{ marginRight: 6 }} />{organizations.filter(o => o.googleWorkspaceEnabled).length}
+          </div>
+        </div>
+        <div style={statCardStyle}>
+          <div style={statLabel}>Total Modules Actifs</div>
+          <div style={{ ...statValue, color: FB.purple }}>
+            <AppstoreOutlined style={{ marginRight: 6 }} />{Object.values(moduleCache).reduce((sum, count) => sum + count, 0)}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Search / Filter ── */}
+      <div style={{
+        background: FB.white, borderRadius: FB.radius, padding: isMobile ? 12 : 16,
+        boxShadow: FB.shadow, marginBottom: 16, display: 'flex', flexWrap: 'wrap',
+        gap: 12, alignItems: 'center',
+      }}>
+        <div style={{ flex: '1 1 280px' }}>
+          <Input
+            placeholder="Rechercher par nom ou description..."
+            value={searchInputValue}
+            onChange={handleSearchChange}
+            prefix={<SearchOutlined style={{ color: FB.textSecondary }} />}
+            allowClear
+            style={{ borderRadius: FB.radius }}
+          />
+        </div>
+        <div style={{ flex: '0 1 220px' }}>
+          <Select
+            placeholder="Filtrer par statut"
+            value={statusFilter}
+            onChange={setStatusFilter}
+            style={{ width: '100%' }}
+          >
+            <Select.Option value="all">
+              <Space>
+                <AppstoreOutlined />
+                Tous les statuts
+              </Space>
+            </Select.Option>
+            <Select.Option value="ACTIVE">
+              <Space>
+                <CheckCircleOutlined style={{ color: FB.green }} />
+                Actives
+              </Space>
+            </Select.Option>
+            <Select.Option value="INACTIVE">
+              <Space>
+                <PoweroffOutlined style={{ color: FB.red }} />
+                Inactives
+              </Space>
+                </Select.Option>
+              </Select>
+        </div>
+        <button onClick={fetchOrganizations} disabled={loading} style={{
+          background: FB.btnGray, border: 'none', borderRadius: FB.radius,
+          padding: '8px 16px', cursor: 'pointer', fontWeight: 600, fontSize: 13,
+          display: 'flex', alignItems: 'center', gap: 6, color: FB.text,
+        }}>
+          <ReloadOutlined spin={loading} /> Actualiser
+        </button>
+        <span style={{ color: FB.textSecondary, fontSize: 13, whiteSpace: 'nowrap' }}>
+          {filteredOrganizations.length} résultat{filteredOrganizations.length > 1 ? 's' : ''}
+        </span>
+      </div>
+
+      {/* ── Content ── */}
+      {isMobile ? (
+        filteredOrganizations.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {filteredOrganizations.map(renderOrganizationCard)}
+          </div>
+        ) : (
+          <div style={{
+            background: FB.white, borderRadius: FB.radius, padding: 40,
+            textAlign: 'center', boxShadow: FB.shadow,
+          }}>
+            <Empty description="Aucune organisation ne correspond à votre recherche" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          </div>
+        )
+      ) : (
+        <div style={{
+          background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow,
+          overflow: 'hidden',
+        }}>
+          <Table
+            columns={columns}
+            dataSource={filteredOrganizations}
+            rowKey="id"
+            loading={loading}
+            pagination={{
+              showSizeChanger: true,
+              showQuickJumper: true,
+              showTotal: (total, range) => `${range[0]}-${range[1]} sur ${total} organisations`,
+            }}
+            scroll={{ x: isTablet ? 960 : 1200 }}
+          />
+        </div>
+      )}
 
       {/* 🏗️ MODAL CRÉATION ORGANISATION */}
       <Modal
@@ -1666,31 +1521,27 @@ const OrganizationsAdminPageNew: React.FC = () => {
           form={form}
           layout="vertical"
           onFinish={handleCreateOrganization}
-          className="mt-4"
+          style={{ marginTop: 16 }}
         >
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="name"
-                label="Nom de l'organisation"
-                rules={[
-                  { required: true, message: 'Le nom est requis' },
-                  { min: 2, message: 'Minimum 2 caractères' },
-                  { max: 100, message: 'Maximum 100 caractères' }
-                ]}
-              >
-                <Input placeholder="Nom de l'organisation" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                name="website"
-                label="Site web"
-              >
-                <Input placeholder="exemple.com (https:// sera ajouté automatiquement)" />
-              </Form.Item>
-            </Col>
-          </Row>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <Form.Item
+              name="name"
+              label="Nom de l'organisation"
+              rules={[
+                { required: true, message: 'Le nom est requis' },
+                { min: 2, message: 'Minimum 2 caractères' },
+                { max: 100, message: 'Maximum 100 caractères' }
+              ]}
+            >
+              <Input placeholder="Nom de l'organisation" />
+            </Form.Item>
+            <Form.Item
+              name="website"
+              label="Site web"
+            >
+              <Input placeholder="exemple.com (https:// sera ajouté automatiquement)" />
+            </Form.Item>
+          </div>
 
           <Form.Item
             name="description"
@@ -1703,33 +1554,25 @@ const OrganizationsAdminPageNew: React.FC = () => {
             />
           </Form.Item>
 
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="phone"
-                label="Téléphone"
-              >
-                <Input placeholder="+32 123 456 789" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                name="address"
-                label="Adresse"
-                rules={[{ max: 200, message: 'Maximum 200 caractères' }]}
-              >
-                <Input placeholder="Adresse complète" />
-              </Form.Item>
-            </Col>
-          </Row>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <Form.Item
+              name="phone"
+              label="Téléphone"
+            >
+              <Input placeholder="+32 123 456 789" />
+            </Form.Item>
+            <Form.Item
+              name="address"
+              label="Adresse"
+              rules={[{ max: 200, message: 'Maximum 200 caractères' }]}
+            >
+              <Input placeholder="Adresse complète" />
+            </Form.Item>
+          </div>
 
-          <div className="flex justify-end space-x-2">
-            <Button onClick={() => setCreateModal(false)}>
-              Annuler
-            </Button>
-            <Button type="primary" htmlType="submit">
-              Créer l'Organisation
-            </Button>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button onClick={() => setCreateModal(false)} style={{ padding: '8px 20px', borderRadius: 6, border: `1px solid ${FB.border}`, background: FB.btnGray, color: FB.text, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>Annuler</button>
+            <button type="submit" style={{ padding: '8px 20px', borderRadius: 6, border: 'none', background: FB.blue, color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>Créer l'Organisation</button>
           </div>
         </Form>
       </Modal>
@@ -1749,31 +1592,27 @@ const OrganizationsAdminPageNew: React.FC = () => {
           form={editForm}
           layout="vertical"
           onFinish={handleUpdateOrganization}
-          className="mt-4"
+          style={{ marginTop: 16 }}
         >
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="name"
-                label="Nom de l'organisation"
-                rules={[
-                  { required: true, message: 'Le nom est requis' },
-                  { min: 2, message: 'Minimum 2 caractères' },
-                  { max: 100, message: 'Maximum 100 caractères' }
-                ]}
-              >
-                <Input placeholder="Nom de l'organisation" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                name="website"
-                label="Site web"
-              >
-                <Input placeholder="exemple.com (https:// sera ajouté automatiquement)" />
-              </Form.Item>
-            </Col>
-          </Row>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <Form.Item
+              name="name"
+              label="Nom de l'organisation"
+              rules={[
+                { required: true, message: 'Le nom est requis' },
+                { min: 2, message: 'Minimum 2 caractères' },
+                { max: 100, message: 'Maximum 100 caractères' }
+              ]}
+            >
+              <Input placeholder="Nom de l'organisation" />
+            </Form.Item>
+            <Form.Item
+              name="website"
+              label="Site web"
+            >
+              <Input placeholder="exemple.com (https:// sera ajouté automatiquement)" />
+            </Form.Item>
+          </div>
 
           <Form.Item
             name="description"
@@ -1786,33 +1625,25 @@ const OrganizationsAdminPageNew: React.FC = () => {
             />
           </Form.Item>
 
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="phone"
-                label="Téléphone"
-              >
-                <Input placeholder="+32 123 456 789" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                name="address"
-                label="Adresse"
-                rules={[{ max: 200, message: 'Maximum 200 caractères' }]}
-              >
-                <Input placeholder="Adresse complète" />
-              </Form.Item>
-            </Col>
-          </Row>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <Form.Item
+              name="phone"
+              label="Téléphone"
+            >
+              <Input placeholder="+32 123 456 789" />
+            </Form.Item>
+            <Form.Item
+              name="address"
+              label="Adresse"
+              rules={[{ max: 200, message: 'Maximum 200 caractères' }]}
+            >
+              <Input placeholder="Adresse complète" />
+            </Form.Item>
+          </div>
 
-          <div className="flex justify-end space-x-2">
-            <Button onClick={() => setEditModal(false)}>
-              Annuler
-            </Button>
-            <Button type="primary" htmlType="submit">
-              Sauvegarder
-            </Button>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button onClick={() => setEditModal(false)} style={{ padding: '8px 20px', borderRadius: 6, border: `1px solid ${FB.border}`, background: FB.btnGray, color: FB.text, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>Annuler</button>
+            <button type="submit" style={{ padding: '8px 20px', borderRadius: 6, border: 'none', background: FB.blue, color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>Sauvegarder</button>
           </div>
         </Form>
       </Modal>
@@ -1822,133 +1653,85 @@ const OrganizationsAdminPageNew: React.FC = () => {
         title="Détails de l'Organisation"
         open={detailModal}
         onCancel={() => setDetailModal(false)}
-        footer={[
-          <Button key="close" onClick={() => setDetailModal(false)}>
-            Fermer
-          </Button>
-        ]}
+        footer={
+          <button onClick={() => setDetailModal(false)} style={{ padding: '8px 20px', borderRadius: 6, border: `1px solid ${FB.border}`, background: FB.btnGray, color: FB.text, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>Fermer</button>
+        }
         width={900}
       >
         {selectedOrganization && (
-          <div className="space-y-6">
-            <Row gutter={16}>
-              <Col span={12}>
-                <Card title="Informations Générales">
-                  <Space direction="vertical" style={{ width: '100%' }}>
-                    <div>
-                      <Text strong>Nom: </Text>
-                      <Text>{selectedOrganization.name}</Text>
-                    </div>
-                    {selectedOrganization.description && (
-                      <div>
-                        <Text strong>Description: </Text>
-                        <Text>{selectedOrganization.description}</Text>
-                      </div>
-                    )}
-                    {selectedOrganization.website && (
-                      <div>
-                        <Text strong>Site web: </Text>
-                        <Text copyable>{selectedOrganization.website}</Text>
-                      </div>
-                    )}
-                    {selectedOrganization.phone && (
-                      <div>
-                        <Text strong>Téléphone: </Text>
-                        <Text copyable>{selectedOrganization.phone}</Text>
-                      </div>
-                    )}
-                    {selectedOrganization.address && (
-                      <div>
-                        <Text strong>Adresse: </Text>
-                        <Text>{selectedOrganization.address}</Text>
-                      </div>
-                    )}
-                  </Space>
-                </Card>
-              </Col>
-              
-              <Col span={12}>
-                <Card title="Statistiques">
-                  <Row gutter={16}>
-                    <Col span={12}>
-                      <Statistic
-                        title="Utilisateurs"
-                        value={selectedOrganization.stats?.totalUsers || 0}
-                        prefix={<UserOutlined />}
-                      />
-                    </Col>
-                    <Col span={12}>
-                      <Statistic
-                        title="Rôles"
-                        value={selectedOrganization.stats?.totalRoles || 0}
-                        prefix={<TeamOutlined />}
-                      />
-                    </Col>
-                    <Col span={12}>
-                      <Statistic
-                        title="Modules Actifs"
-                        value={selectedOrganization.stats?.activeModules || 0}
-                        prefix={<AppstoreOutlined />}
-                      />
-                    </Col>
-                    <Col span={12}>
-                      <Statistic
-                        title="Google Workspace"
-                        value={selectedOrganization.stats?.googleWorkspaceEnabled ? 'Activé' : 'Désactivé'}
-                        prefix={<GoogleOutlined />}
-                      />
-                    </Col>
-                  </Row>
-                  
-                  {/* 🚀 BOUTON DEBUG : Actualiser les stats */}
-                  <div style={{ marginTop: 16, textAlign: 'center' }}>
-                    <Button 
-                      type="dashed" 
-                      size="small"
-                      icon={<ReloadOutlined />}
-                      onClick={async () => {
-                        console.log('🔄 Actualisation des statistiques...');
-                        await fetchOrganizations();
-                        messageApi.success('Statistiques actualisées');
-                      }}
-                    >
-                      Actualiser les statistiques
-                    </Button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              {/* Informations Générales */}
+              <div style={{ background: FB.bg, borderRadius: FB.radius, padding: 16 }}>
+                <div style={{ fontWeight: 700, fontSize: 15, color: FB.text, marginBottom: 12 }}>Informations Générales</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div><span style={{ fontWeight: 600 }}>Nom: </span>{selectedOrganization.name}</div>
+                  {selectedOrganization.description && <div><span style={{ fontWeight: 600 }}>Description: </span>{selectedOrganization.description}</div>}
+                  {selectedOrganization.website && <div><span style={{ fontWeight: 600 }}>Site web: </span>{selectedOrganization.website}</div>}
+                  {selectedOrganization.phone && <div><span style={{ fontWeight: 600 }}>Téléphone: </span>{selectedOrganization.phone}</div>}
+                  {selectedOrganization.address && <div><span style={{ fontWeight: 600 }}>Adresse: </span>{selectedOrganization.address}</div>}
+                </div>
+              </div>
+
+              {/* Statistiques */}
+              <div style={{ background: FB.bg, borderRadius: FB.radius, padding: 16 }}>
+                <div style={{ fontWeight: 700, fontSize: 15, color: FB.text, marginBottom: 12 }}>Statistiques</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div style={{ background: FB.white, borderRadius: 6, padding: 12, textAlign: 'center' }}>
+                    <div style={{ fontSize: 11, color: FB.textSecondary }}>Utilisateurs</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: FB.blue }}><UserOutlined style={{ marginRight: 4 }} />{selectedOrganization.stats?.totalUsers || 0}</div>
                   </div>
-                </Card>
-              </Col>
-            </Row>
+                  <div style={{ background: FB.white, borderRadius: 6, padding: 12, textAlign: 'center' }}>
+                    <div style={{ fontSize: 11, color: FB.textSecondary }}>Rôles</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: FB.purple }}><TeamOutlined style={{ marginRight: 4 }} />{selectedOrganization.stats?.totalRoles || 0}</div>
+                  </div>
+                  <div style={{ background: FB.white, borderRadius: 6, padding: 12, textAlign: 'center' }}>
+                    <div style={{ fontSize: 11, color: FB.textSecondary }}>Modules Actifs</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: FB.green }}><AppstoreOutlined style={{ marginRight: 4 }} />{selectedOrganization.stats?.activeModules || 0}</div>
+                  </div>
+                  <div style={{ background: FB.white, borderRadius: 6, padding: 12, textAlign: 'center' }}>
+                    <div style={{ fontSize: 11, color: FB.textSecondary }}>Google Workspace</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: selectedOrganization.stats?.googleWorkspaceEnabled ? FB.green : FB.red }}><GoogleOutlined style={{ marginRight: 4 }} />{selectedOrganization.stats?.googleWorkspaceEnabled ? 'Activé' : 'Désactivé'}</div>
+                  </div>
+                </div>
+                
+                <div style={{ marginTop: 16, textAlign: 'center' }}>
+                  <button
+                    onClick={async () => {
+                      console.log('🔄 Actualisation des statistiques...');
+                      await fetchOrganizations();
+                      messageApi.success('Statistiques actualisées');
+                    }}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: `1px dashed ${FB.border}`, background: FB.white, color: FB.textSecondary, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                  ><span>🔄</span><span>Actualiser les statistiques</span></button>
+                </div>
+              </div>
+            </div>
 
             {organizationModules.length > 0 && (
-              <Card title="Modules CRM Actifs">
-                <Space wrap>
+              <div style={{ background: FB.bg, borderRadius: FB.radius, padding: 16 }}>
+                <div style={{ fontWeight: 700, fontSize: 15, color: FB.text, marginBottom: 12 }}>Modules CRM Actifs</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {organizationModules.map(module => (
-                    <Tag
-                      key={module.id}
-                      icon={getCrmModuleIcon(module.key)}
-                      color="blue"
-                    >
+                    <Tag key={module.id} icon={getCrmModuleIcon(module.key)} color="blue">
                       {module.label || module.name}
                     </Tag>
                   ))}
-                </Space>
-              </Card>
+                </div>
+              </div>
             )}
 
             {selectedOrganization.googleWorkspaceModules.length > 0 && (
-              <Card title="Modules Google Workspace Actifs">
-                <Space wrap>
+              <div style={{ background: FB.bg, borderRadius: FB.radius, padding: 16 }}>
+                <div style={{ fontWeight: 700, fontSize: 15, color: FB.text, marginBottom: 12 }}>Modules Google Workspace Actifs</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {selectedOrganization.googleWorkspaceModules.map(module => (
-                    <Tag
-                      key={module.id}
-                      icon={getGoogleModuleIcon(module.key)}
-                      color="blue"
-                    >
+                    <Tag key={module.id} icon={getGoogleModuleIcon(module.key)} color="blue">
                       {module.label}
                     </Tag>
                   ))}
-                </Space>
-              </Card>
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -1957,22 +1740,20 @@ const OrganizationsAdminPageNew: React.FC = () => {
       {/* 🌐 MODAL GOOGLE WORKSPACE */}
       <Modal
         title={
-          <Space>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <GoogleOutlined style={{ color: '#4285F4' }} />
             Google Workspace - {selectedOrganization?.name}
-          </Space>
+          </div>
         }
         open={googleWorkspaceModal}
         onCancel={() => setGoogleWorkspaceModal(false)}
-        footer={[
-          <Button key="close" onClick={() => setGoogleWorkspaceModal(false)}>
-            Fermer
-          </Button>
-        ]}
+        footer={
+          <button onClick={() => setGoogleWorkspaceModal(false)} style={{ padding: '8px 20px', borderRadius: 6, border: `1px solid ${FB.border}`, background: FB.btnGray, color: FB.text, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>Fermer</button>
+        }
         width={1000}
       >
         {selectedOrganization && (
-          <div className="space-y-4">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <GoogleWorkspaceConfig 
               organizationId={selectedOrganization.id} 
               onGoogleWorkspaceActivated={() => handleActivateGoogleWorkspaceModules(selectedOrganization.id)}
@@ -1984,36 +1765,34 @@ const OrganizationsAdminPageNew: React.FC = () => {
       {/* 📦 MODAL GESTION DES MODULES */}
       <Modal
         title={
-          <Space>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <AppstoreAddOutlined style={{ color: '#1890ff' }} />
             Gestion des modules - {selectedOrganization?.name}
-          </Space>
+          </div>
         }
         open={modulesModal}
         onCancel={() => setModulesModal(false)}
-        footer={[
-          <Button key="close" onClick={() => setModulesModal(false)}>
-            Fermer
-          </Button>
-        ]}
+        footer={
+          <button onClick={() => setModulesModal(false)} style={{ padding: '8px 20px', borderRadius: 6, border: `1px solid ${FB.border}`, background: FB.btnGray, color: FB.text, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>Fermer</button>
+        }
         width={800}
       >
         {selectedOrganization && (
-          <div className="space-y-4">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <Alert
               message="Interface simplifiée de gestion des modules"
               description="Utilisez les interrupteurs pour activer ou désactiver directement chaque module pour cette organisation. Les modules activés seront visibles dans le menu de navigation des utilisateurs."
               type="info"
               showIcon
-              className="mb-4"
+              style={{ marginBottom: 0 }}
             />
             
             {modulesLoading ? (
-              <div className="flex justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '32px 0' }}>
+                <Spin size="large" />
               </div>
             ) : (
-              <div className="space-y-4">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {/* MODULES ORGANISÉS PAR SECTIONS */}
                 {(() => {
                   console.log('[Modal] État des modules:', {
@@ -2035,9 +1814,8 @@ const OrganizationsAdminPageNew: React.FC = () => {
                     );
                   }
 
-                  // Utiliser les sections organisées dynamiquement (comme dans ModulesAdminPage)
                   return (
-                    <div className="space-y-4">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                       {organizedSections.map(section => (
                         renderModuleSection(
                           section.title,
@@ -2060,36 +1838,33 @@ const OrganizationsAdminPageNew: React.FC = () => {
       {/* 🚀 MODAL DEVIS1MINUTE */}
       <Modal
         title={
-          <Space>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <RocketOutlined style={{ color: '#ff7a00' }} />
             Gestion Devis1Minute - {selectedOrganization?.name}
-          </Space>
+          </div>
         }
         open={devis1minuteModal}
         onCancel={() => setDevis1minuteModal(false)}
-        footer={[
-          <Button key="close" onClick={() => setDevis1minuteModal(false)}>
-            Fermer
-          </Button>
-        ]}
+        footer={
+          <button onClick={() => setDevis1minuteModal(false)} style={{ padding: '8px 20px', borderRadius: 6, border: `1px solid ${FB.border}`, background: FB.btnGray, color: FB.text, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>Fermer</button>
+        }
         width={800}
       >
         {selectedOrganization && (
-          <div className="space-y-4">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <Alert
               message="Gestion des modules Devis1Minute"
-              description="Activez ou désactivez individuellement chaque module Devis1Minute pour cette organisation. Les utilisateurs ne verront que les modules activés."
+              description="Activez ou désactivez individuellement chaque module Devis1Minute pour cette organisation."
               type="info"
               showIcon
-              className="mb-4"
             />
             
             {devis1minuteLoading ? (
-              <div className="flex justify-center py-8">
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '32px 0' }}>
                 <Spin size="large" />
               </div>
             ) : (
-              <div className="space-y-3">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {devis1minuteModules.length > 0 ? (
                   devis1minuteModules.map((module: Module) => {
                     const isActive = module.isActiveForOrg || false;
@@ -2097,35 +1872,34 @@ const OrganizationsAdminPageNew: React.FC = () => {
                     return (
                       <div 
                         key={module.id} 
-                        className={`p-4 border rounded-lg transition-all ${
-                          isActive ? 'border-orange-500 bg-orange-50' : 'border-gray-200 bg-white'
-                        } hover:shadow-md`}
+                        style={{
+                          padding: 16, borderRadius: FB.radius, transition: 'box-shadow 0.2s',
+                          border: `1px solid ${isActive ? FB.orange : FB.border}`,
+                          background: isActive ? '#fff7e6' : FB.white,
+                        }}
                       >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-4">
-                            <RocketOutlined 
-                              className={`text-2xl ${isActive ? 'text-orange-500' : 'text-gray-400'}`} 
-                            />
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                            <RocketOutlined style={{ fontSize: 24, color: isActive ? FB.orange : '#bfbfbf' }} />
                             <div>
-                              <div className="font-semibold text-lg">{module.label || module.name}</div>
+                              <div style={{ fontWeight: 600, fontSize: 16 }}>{module.label || module.name}</div>
                               {module.description && (
-                                <div className="text-sm text-gray-600 mt-1">{module.description}</div>
+                                <div style={{ fontSize: 13, color: FB.textSecondary, marginTop: 4 }}>{module.description}</div>
                               )}
-                              <div className="text-xs text-gray-400 mt-1">
+                              <div style={{ fontSize: 11, color: '#bfbfbf', marginTop: 4 }}>
                                 Feature: {module.feature}
                               </div>
                             </div>
                           </div>
-                          <div className="flex items-center space-x-3">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                             <Badge 
                               status={isActive ? "success" : "default"} 
                               text={isActive ? "Actif" : "Inactif"}
                             />
-                            <Switch
+                            <FBToggle
                               checked={isActive}
                               onChange={(checked) => handleToggleDevis1minuteModule(module, checked)}
-                              checkedChildren="ON"
-                              unCheckedChildren="OFF"
+                              size="small"
                             />
                           </div>
                         </div>
@@ -2133,10 +1907,10 @@ const OrganizationsAdminPageNew: React.FC = () => {
                     );
                   })
                 ) : (
-                  <div className="text-center py-8">
-                    <RocketOutlined className="text-4xl text-gray-300 mb-4" />
-                    <p className="text-gray-500">Aucun module Devis1Minute disponible</p>
-                    <p className="text-sm text-gray-400 mt-2">
+                  <div style={{ textAlign: 'center', padding: '32px 0' }}>
+                    <RocketOutlined style={{ fontSize: 32, color: '#d9d9d9', marginBottom: 16, display: 'block' }} />
+                    <p style={{ color: FB.textSecondary }}>Aucun module Devis1Minute disponible</p>
+                    <p style={{ fontSize: 13, color: '#bfbfbf', marginTop: 8 }}>
                       Les modules doivent être créés par le Super Admin
                     </p>
                   </div>

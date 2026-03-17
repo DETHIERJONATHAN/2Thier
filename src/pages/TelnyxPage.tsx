@@ -1,6 +1,31 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import dayjs from 'dayjs';
+import 'dayjs/locale/fr';
 // import { useAuth } from '../auth/useAuth';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
+import {
+  PhoneOutlined,
+  PhoneTwoTone,
+  MessageOutlined,
+  NumberOutlined,
+  ClockCircleOutlined,
+  SoundOutlined,
+  MutedOutlined,
+  ApiOutlined,
+  AudioOutlined,
+  SyncOutlined,
+  DashboardOutlined,
+  BarChartOutlined,
+  PlusOutlined,
+  SettingOutlined,
+  DeleteOutlined,
+  SearchOutlined,
+  ReloadOutlined,
+  CheckCircleOutlined,
+  ExclamationCircleOutlined,
+  CloseCircleOutlined,
+  InfoCircleOutlined,
+} from '@ant-design/icons';
 import {
   Layout,
   Card,
@@ -800,14 +825,14 @@ const TelnyxPage: React.FC = () => {
             national: 'orange',
             mobile: 'purple'
           };
-          return <Tag color={colors[type]}>{type}</Tag>;
+          return type ? <Tag color={colors[type]}>{type}</Tag> : <Text>—</Text>;
         }
       },
       {
         title: 'Pays',
         dataIndex: 'country_code',
         key: 'country_code',
-        render: (code: string) => <Text>{code.toUpperCase()}</Text>
+        render: (code: string) => <Text>{code?.toUpperCase() ?? '—'}</Text>
       },
       {
         title: 'Fonctionnalités',
@@ -815,7 +840,7 @@ const TelnyxPage: React.FC = () => {
         key: 'features',
         render: (features: string[]) => (
           <Space wrap>
-            {features.map((feature) => (
+            {(features || []).map((feature) => (
               <Tag key={feature}>{feature}</Tag>
             ))}
           </Space>
@@ -857,11 +882,11 @@ const TelnyxPage: React.FC = () => {
                   </Space>
                   <Space size={8} wrap>
                     <Tag>{number.number_type}</Tag>
-                    <Tag>{number.country_code.toUpperCase()}</Tag>
+                    <Tag>{number.country_code?.toUpperCase() ?? '—'}</Tag>
                     <Tag color="purple">{formatCurrency(number.monthly_cost)}</Tag>
                   </Space>
                   <Space wrap>
-                    {number.features.map((feature) => (
+                    {(number.features || []).map((feature) => (
                       <Tag key={feature} bordered={false} color="geekblue">
                         {feature}
                       </Tag>

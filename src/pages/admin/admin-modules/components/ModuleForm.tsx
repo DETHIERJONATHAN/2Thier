@@ -1,9 +1,29 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Form, Input, InputNumber, Switch, Button, ColorPicker } from 'antd';
+import { Card, Form, Input, InputNumber, Button, ColorPicker } from 'antd';
 import IconPicker from '../components/shared/IconPicker';
 import IconRenderer from '../components/shared/IconRenderer';
 import { useAuth } from '../../../../auth/useAuth';
 import { ModuleWithStatus } from '../types';
+
+// ── FB Tokens + Toggle ──
+const FB = { blue: '#1877f2', white: '#ffffff' };
+const FBToggle = ({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) => {
+  const w = 44, h = 24, dot = 20;
+  return (
+    <div onClick={() => onChange(!checked)} style={{
+      width: w, height: h, borderRadius: h,
+      background: checked ? FB.blue : '#ccc',
+      cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0,
+    }}>
+      <div style={{
+        width: dot, height: dot, borderRadius: '50%', background: FB.white,
+        position: 'absolute', top: (h - dot) / 2,
+        left: checked ? w - dot - (h - dot) / 2 : (h - dot) / 2,
+        transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+      }} />
+    </div>
+  );
+};
 
 export type ModuleFormData = Partial<Pick<ModuleWithStatus,
   'id' | 'key' | 'label' | 'feature' | 'icon' | 'iconColor' | 'route' | 'description' | 'page' | 'order' | 'active' | 'categoryId'
@@ -71,7 +91,7 @@ export function ModuleForm({ initial, onSave, onCancel }:{
         <Form.Item className="m-0">
           <div className="flex items-end">
             <label className="flex items-center gap-2 p-2 border rounded bg-slate-800 text-white h-full">
-              <Switch checked={!!form.active} onChange={v=>setForm(f=>({...f, active:v}))} />
+              <FBToggle checked={!!form.active} onChange={v=>setForm(f=>({...f, active:v}))} />
               <span>Actif (global)</span>
             </label>
           </div>

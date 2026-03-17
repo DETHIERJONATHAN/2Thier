@@ -15,7 +15,6 @@ import {
   Form, 
   Input, 
   Select,
-  Switch,
   message,
   Tabs,
   Row,
@@ -44,6 +43,30 @@ import CloudRunDomainSelector from '../../components/websites/CloudRunDomainSele
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
+
+// ── FB Tokens + Toggle (identique à UsersAdminPageNew) ──
+const FB = { bg: '#f0f2f5', white: '#ffffff', text: '#050505', textSecondary: '#65676b', blue: '#1877f2', blueHover: '#166fe5', border: '#ced0d4', btnGray: '#e4e6eb', btnGrayHover: '#d8dadf', green: '#42b72a', red: '#e4405f', orange: '#f7931a', purple: '#722ed1', shadow: '0 1px 2px rgba(0,0,0,0.1)', radius: 8 as number };
+const FBToggle = React.forwardRef<HTMLDivElement, { checked?: boolean; onChange?: (v: boolean) => void; disabled?: boolean }>(
+  ({ checked = false, onChange, disabled }, ref) => {
+    const w = 44, h = 24, dot = 20;
+    return (
+      <div ref={ref} onClick={() => !disabled && onChange?.(!checked)} style={{
+        width: w, height: h, borderRadius: h,
+        background: disabled ? '#ccc' : checked ? FB.blue : '#ccc',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        position: 'relative', transition: 'background 0.2s',
+        opacity: disabled ? 0.5 : 1, flexShrink: 0,
+      }}>
+        <div style={{
+          width: dot, height: dot, borderRadius: '50%', background: FB.white,
+          position: 'absolute', top: (h - dot) / 2,
+          left: checked ? w - dot - (h - dot) / 2 : (h - dot) / 2,
+          transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+        }} />
+      </div>
+    );
+  }
+);
 
 interface Website {
   id: number;
@@ -171,48 +194,28 @@ export const WebsitesAdminPage: React.FC = () => {
       title: 'Actions',
       key: 'actions',
       render: (_: any, record: Website) => (
-        <Space>
-          <Button 
-            type="link" 
-            icon={<EyeOutlined />} 
-            onClick={() => handleView(record)}
-          >
-            Voir
-          </Button>
-          <Button 
-            type="link" 
-            icon={<EditOutlined />} 
-            onClick={() => handleEdit(record)}
-          >
-            Éditer
-          </Button>
-          <Button 
-            type="link" 
-            danger 
-            icon={<DeleteOutlined />}
-            onClick={() => handleDelete(record)}
-          >
-            Supprimer
-          </Button>
-        </Space>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <button onClick={() => handleView(record)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: 'none', background: '#e7f3ff', color: FB.blue, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}><span>👁️</span><span>Voir</span></button>
+          <button onClick={() => handleEdit(record)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: 'none', background: '#f9f0ff', color: FB.purple, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}><span>✏️</span><span>Éditer</span></button>
+          <button onClick={() => handleDelete(record)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: 'none', background: '#ffeef0', color: FB.red, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}><span>🗑️</span><span>Supprimer</span></button>
+        </div>
       )
     }
   ];
 
   return (
-    <div style={{ padding: '24px' }}>
-      <Card>
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div style={{ background: FB.bg, minHeight: '100vh', width: '100%', padding: '20px 24px' }}>
+      <div style={{ background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow, padding: '18px 24px', marginBottom: 16 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 16 }}>
             <div>
-              <Title level={2} style={{ margin: 0 }}>
-                <GlobalOutlined /> Gestion des Sites Web
-              </Title>
-              <Text type="secondary">
+              <div style={{ fontSize: 24, fontWeight: 700, color: FB.text, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <GlobalOutlined style={{ color: FB.blue }} /> Gestion des Sites Web
+              </div>
+              <div style={{ fontSize: 13, color: FB.textSecondary }}>
                 Gérez tous vos sites : Site Vitrine 2Thier, Devis1Minute, etc.
-              </Text>
+              </div>
             </div>
-            <Space>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <AIContentAssistant
                 type="page"
                 onContentGenerated={(content) => {
@@ -221,18 +224,17 @@ export const WebsitesAdminPage: React.FC = () => {
                 }}
                 buttonText="🤖 Générer un nouveau site"
               />
-              <Button 
-                type="primary" 
-                icon={<PlusOutlined />}
+              <button
                 onClick={() => {
                   setCurrentWebsite(null);
                   form.resetFields();
                   setModalVisible(true);
                 }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 6, border: 'none', background: FB.blue, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}
               >
-                Nouveau site
-              </Button>
-            </Space>
+                <span>➕</span><span>Nouveau site</span>
+              </button>
+            </div>
           </div>
 
           <Alert
@@ -241,6 +243,7 @@ export const WebsitesAdminPage: React.FC = () => {
             type="info"
             showIcon
             closable
+            style={{ marginBottom: 16 }}
           />
 
           <Table
@@ -253,8 +256,7 @@ export const WebsitesAdminPage: React.FC = () => {
               showTotal: (total) => `${total} site(s)`
             }}
           />
-        </Space>
-      </Card>
+      </div>
 
       <Modal
         title={
@@ -427,7 +429,7 @@ export const WebsitesAdminPage: React.FC = () => {
                     valuePropName="checked"
                     initialValue={true}
                   >
-                    <Switch checkedChildren="Oui" unCheckedChildren="Non" />
+                    <FBToggle />
                   </Form.Item>
                 </Col>
 
@@ -438,7 +440,7 @@ export const WebsitesAdminPage: React.FC = () => {
                     valuePropName="checked"
                     initialValue={false}
                   >
-                    <Switch checkedChildren="Oui" unCheckedChildren="Non" />
+                    <FBToggle />
                   </Form.Item>
                 </Col>
 
@@ -449,7 +451,7 @@ export const WebsitesAdminPage: React.FC = () => {
                     valuePropName="checked"
                     initialValue={false}
                   >
-                    <Switch checkedChildren="Oui" unCheckedChildren="Non" />
+                    <FBToggle />
                   </Form.Item>
                 </Col>
 
@@ -486,29 +488,14 @@ export const WebsitesAdminPage: React.FC = () => {
             }}
             className="mobile-action-buttons"
           >
-            <Button 
-              size="large"
+            <button
               onClick={() => setModalVisible(false)}
-              style={{ 
-                minWidth: '120px',
-                flex: '1',
-                maxWidth: '200px'
-              }}
-            >
-              ❌ Annuler
-            </Button>
-            <Button 
-              type="primary" 
-              htmlType="submit"
-              size="large"
-              style={{ 
-                minWidth: '120px',
-                flex: '1',
-                maxWidth: '200px'
-              }}
-            >
-              ➕ Créer le site
-            </Button>
+              style={{ padding: '10px 20px', borderRadius: 6, border: `1px solid ${FB.border}`, background: FB.btnGray, color: FB.text, cursor: 'pointer', fontWeight: 600, fontSize: 14, minWidth: 120, flex: 1, maxWidth: 200 }}
+            >❌ Annuler</button>
+            <button
+              type="submit"
+              style={{ padding: '10px 20px', borderRadius: 6, border: 'none', background: FB.blue, color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: 14, minWidth: 120, flex: 1, maxWidth: 200 }}
+            >➕ Créer le site</button>
           </div>
         )}
 
