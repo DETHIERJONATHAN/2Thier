@@ -58,7 +58,7 @@ const AIMeasureSettings: React.FC = () => {
   );
 
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto' }}>
+    <div style={{ width: '100%' }}>
       {/* Header */}
       <FBCard>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>

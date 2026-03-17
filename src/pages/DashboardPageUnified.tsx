@@ -855,8 +855,8 @@ export default function DashboardPageUnified() {
   return (
     <div style={{ minHeight: "100vh", background: FB.bg }}>
       <div style={{
-        maxWidth: 1320, margin: "0 auto",
-        padding: isMobile ? "12px 12px" : "20px 16px",
+        maxWidth: isMobile ? '100%' : '96%', margin: "0 auto",
+        padding: isMobile ? "12px 12px" : "20px 24px",
         display: "flex", gap: 16, justifyContent: "center",
       }}>
         {!isMobile && !isTablet && renderLeftSidebar()}

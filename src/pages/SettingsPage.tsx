@@ -345,7 +345,7 @@ const SettingsPage = () => {
   /* ═══ DESKTOP LAYOUT ═══ */
   return (
     <div style={{ background: FB.bg, minHeight: '100vh' }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex' }}>
+      <div style={{ maxWidth: isMobile ? '100%' : '96%', margin: '0 auto', display: 'flex', padding: isMobile ? 0 : '0 24px' }}>
 
         {/* ── LEFT SIDEBAR ── */}
         <aside style={{ width: 360, flexShrink: 0, padding: '24px 16px 24px 0' }}>

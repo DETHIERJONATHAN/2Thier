@@ -88226,8 +88226,48 @@ if (process.env.NODE_ENV === "production") {
       }
     });
     app.get("/favicon.ico", (req2, res) => res.sendFile(import_path11.default.join(distDir, "favicon.ico")));
-    app.get("/manifest.json", (req2, res) => res.sendFile(import_path11.default.join(distDir, "manifest.json")));
-    app.get("/manifest.webmanifest", (req2, res) => res.sendFile(import_path11.default.join(distDir, "manifest.webmanifest")));
+    const dynamicManifestHandler = (req2, res) => {
+      let manifest = {
+        name: "2Thier CRM",
+        short_name: "2Thier",
+        description: "CRM 2Thier - Gestion de Formulaires",
+        start_url: "/",
+        scope: "/",
+        display: "standalone",
+        orientation: "portrait",
+        theme_color: "#1890ff",
+        background_color: "#ffffff",
+        icons: [
+          { src: "/pwa-192x192.png", sizes: "192x192", type: "image/png" },
+          { src: "/pwa-512x512.png", sizes: "512x512", type: "image/png" }
+        ]
+      };
+      if (req2.isWebsiteRoute && req2.websiteData) {
+        const site = req2.websiteData;
+        const config = site.config;
+        manifest = {
+          name: site.name,
+          short_name: site.name.length > 12 ? site.name.substring(0, 12) : site.name,
+          description: config?.metaDescription || `Site ${site.name}`,
+          start_url: "/",
+          scope: "/",
+          display: "standalone",
+          orientation: "portrait",
+          theme_color: config?.primaryColor || "#1890ff",
+          background_color: "#ffffff",
+          icons: [
+            { src: "/pwa-192x192.png", sizes: "192x192", type: "image/png" },
+            { src: "/pwa-512x512.png", sizes: "512x512", type: "image/png" }
+          ]
+        };
+        console.log(`\u{1F4F1} [MANIFEST] Dynamique pour ${site.domain} \u2192 ${site.name}`);
+      }
+      res.setHeader("Content-Type", "application/manifest+json");
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.json(manifest);
+    };
+    app.get("/manifest.json", dynamicManifestHandler);
+    app.get("/manifest.webmanifest", dynamicManifestHandler);
     app.get("/registerSW.js", (req2, res) => {
       const swPath = import_path11.default.join(distDir, "registerSW.js");
       if (import_fs11.default.existsSync(swPath)) {
