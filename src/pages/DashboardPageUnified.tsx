@@ -573,7 +573,7 @@ export default function DashboardPageUnified() {
      LEFT SIDEBAR
      ═══════════════════════════════════════════════════════════ */
   const renderLeftSidebar = () => (
-    <div style={{ width: 280, flexShrink: 0, position: "sticky", top: 16, alignSelf: "flex-start", paddingRight: 8 }}>
+    <div style={{ width: 280, flexShrink: 0, position: "sticky", top: 56, alignSelf: "flex-start", height: "calc(100vh - 56px)", overflowY: "auto", paddingTop: 16, paddingRight: 8, paddingBottom: 16, scrollbarWidth: "none" }}>
       <ShortcutItem
         icon={
           <Avatar size={36} src={user?.avatarUrl}
@@ -599,7 +599,26 @@ export default function DashboardPageUnified() {
      RIGHT SIDEBAR
      ═══════════════════════════════════════════════════════════ */
   const renderRightSidebar = () => (
-    <div style={{ width: 280, flexShrink: 0, position: "sticky", top: 16, alignSelf: "flex-start", paddingLeft: 8 }}>
+    <div style={{ width: 280, flexShrink: 0, position: "sticky", top: 56, alignSelf: "flex-start", height: "calc(100vh - 56px)", overflowY: "auto", paddingTop: 16, paddingLeft: 8, paddingBottom: 16, scrollbarWidth: "none" }}>
+      {/* À faire aujourd'hui — en premier */}
+      <FBCard>
+        <span style={{ fontSize: 16, fontWeight: 700, color: FB.text, display: "block", marginBottom: 10 }}>
+          À faire aujourd'hui
+        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0" }}>
+          <ClockCircleOutlined style={{ color: "#fa8c16", fontSize: 16 }} />
+          <span style={{ fontSize: 14, color: FB.text }}>
+            <b>{stats.pendingTasks}</b> tâche{stats.pendingTasks > 1 ? "s" : ""} en attente
+          </span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0" }}>
+          <CalendarOutlined style={{ color: FB.blue, fontSize: 16 }} />
+          <span style={{ fontSize: 14, color: FB.text }}>
+            <b>{stats.upcomingMeetings}</b> RDV aujourd'hui
+          </span>
+        </div>
+      </FBCard>
+
       {/* Performance */}
       <FBCard>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -681,25 +700,6 @@ export default function DashboardPageUnified() {
           ))}
         </FBCard>
       )}
-
-      {/* Tasks */}
-      <FBCard>
-        <span style={{ fontSize: 16, fontWeight: 700, color: FB.text, display: "block", marginBottom: 10 }}>
-          À faire aujourd'hui
-        </span>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0" }}>
-          <ClockCircleOutlined style={{ color: "#fa8c16", fontSize: 16 }} />
-          <span style={{ fontSize: 14, color: FB.text }}>
-            <b>{stats.pendingTasks}</b> tâche{stats.pendingTasks > 1 ? "s" : ""} en attente
-          </span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0" }}>
-          <CalendarOutlined style={{ color: FB.blue, fontSize: 16 }} />
-          <span style={{ fontSize: 14, color: FB.text }}>
-            <b>{stats.upcomingMeetings}</b> RDV aujourd'hui
-          </span>
-        </div>
-      </FBCard>
     </div>
   );
 
@@ -732,7 +732,7 @@ export default function DashboardPageUnified() {
      CENTER FEED
      ═══════════════════════════════════════════════════════════ */
   const renderFeed = () => (
-    <div style={{ flex: 1, minWidth: 0, maxWidth: isMobile ? "100%" : 680 }}>
+    <div style={{ flex: 1, minWidth: 0, maxWidth: isMobile ? "100%" : 680, paddingTop: isMobile ? 0 : 16 }}>
       {isMobile && renderMobileStats()}
 
       {/* "Create Post" — Quick Actions */}
@@ -855,9 +855,9 @@ export default function DashboardPageUnified() {
   return (
     <div style={{ minHeight: "100vh", background: FB.bg }}>
       <div style={{
-        maxWidth: isMobile ? '100%' : '96%', margin: "0 auto",
-        padding: isMobile ? "12px 12px" : "20px 24px",
-        display: "flex", gap: 16, justifyContent: "center",
+        maxWidth: 1400, margin: "0 auto",
+        padding: isMobile ? "12px 12px" : "0 16px",
+        display: "flex", gap: 0, justifyContent: "center",
       }}>
         {!isMobile && !isTablet && renderLeftSidebar()}
         {renderFeed()}
