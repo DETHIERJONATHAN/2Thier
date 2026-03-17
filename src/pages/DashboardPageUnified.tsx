@@ -396,7 +396,7 @@ const CreateOrganizationPrompt = () => (
 export default function DashboardPageUnified() {
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, [apiHook.api]);
-  const { currentOrganization, isSuperAdmin, user } = useAuth();
+  const { currentOrganization, isSuperAdmin, user, hasFeature } = useAuth();
   const { leadStatuses } = useLeadStatuses();
   const navigate = useNavigate();
   const { isMobile, isTablet } = useScreenSize();
@@ -549,23 +549,25 @@ export default function DashboardPageUnified() {
   }
 
   /* ─── SIDEBAR DATA ─────────────────────────────────────────── */
-  const shortcuts = [
-    { icon: <FunnelPlotOutlined />, label: "Leads", to: "/leads", color: "#ff7a45" },
-    { icon: <TeamOutlined />, label: "Clients", to: "/clients", color: "#52c41a" },
-    { icon: <CalendarOutlined />, label: "Agenda", to: "/agenda", color: "#1890ff" },
-    { icon: <MailOutlined />, label: "Emails", to: "/google-gmail", color: "#f5222d" },
-    { icon: <FileTextOutlined />, label: "Factures", to: "/facture", color: "#722ed1" },
-    { icon: <ToolOutlined />, label: "Chantiers", to: "/chantiers", color: "#fa8c16" },
-    { icon: <BarChartOutlined />, label: "Analytics", to: "/analytics", color: "#13c2c2" },
-    { icon: <SettingOutlined />, label: "Paramètres", to: "/settings", color: FB.textSecondary },
+  const allShortcuts = [
+    { icon: <FunnelPlotOutlined />, label: "Leads", to: "/leads", color: "#ff7a45", features: ['leads_access'] },
+    { icon: <TeamOutlined />, label: "Clients", to: "/clients", color: "#52c41a", features: ['clients_access'] },
+    { icon: <CalendarOutlined />, label: "Agenda", to: "/agenda", color: "#1890ff", features: ['Agenda'] },
+    { icon: <MailOutlined />, label: "Emails", to: "/google-gmail", color: "#f5222d", features: ['google_gmail_access', 'google_gmail'] },
+    { icon: <FileTextOutlined />, label: "Factures", to: "/facture", color: "#722ed1", features: ['facture'] },
+    { icon: <ToolOutlined />, label: "Chantiers", to: "/chantiers", color: "#fa8c16", features: ['leads_access', 'chantiers_access'] },
+    { icon: <BarChartOutlined />, label: "Analytics", to: "/analytics", color: "#13c2c2", features: ['analytics_access'] },
+    { icon: <SettingOutlined />, label: "Paramètres", to: "/settings", color: FB.textSecondary, features: [] },
   ];
+  const shortcuts = allShortcuts.filter(s => s.features.length === 0 || s.features.some(f => hasFeature(f)));
 
-  const quickActions = [
-    { icon: <FunnelPlotOutlined />, label: "Nouveau Lead", to: "/leads/kanban", color: "#ff7a45" },
-    { icon: <UserOutlined />, label: "Nouveau Client", to: "/clients", color: FB.green },
-    { icon: <CalendarOutlined />, label: "Planifier RDV", to: "/agenda", color: FB.orange },
-    { icon: <MailOutlined />, label: "Envoyer Email", to: "/google-gmail", color: FB.red },
+  const allQuickActions = [
+    { icon: <FunnelPlotOutlined />, label: "Nouveau Lead", to: "/leads/kanban", color: "#ff7a45", features: ['leads_access'] },
+    { icon: <UserOutlined />, label: "Nouveau Client", to: "/clients", color: FB.green, features: ['clients_access'] },
+    { icon: <CalendarOutlined />, label: "Planifier RDV", to: "/agenda", color: FB.orange, features: ['Agenda'] },
+    { icon: <MailOutlined />, label: "Envoyer Email", to: "/google-gmail", color: FB.red, features: ['google_gmail_access', 'google_gmail'] },
   ];
+  const quickActions = allQuickActions.filter(a => a.features.length === 0 || a.features.some(f => hasFeature(f)));
 
   const userName = user ? ((user.firstName || "") + " " + (user.lastName || "")).trim() || "Utilisateur" : "Utilisateur";
 
