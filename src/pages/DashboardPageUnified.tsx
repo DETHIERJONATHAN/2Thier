@@ -573,7 +573,7 @@ export default function DashboardPageUnified() {
      LEFT SIDEBAR
      ═══════════════════════════════════════════════════════════ */
   const renderLeftSidebar = () => (
-    <div style={{ width: 280, flexShrink: 0, position: "sticky", top: 56, alignSelf: "flex-start", height: "calc(100vh - 56px)", overflowY: "auto", paddingTop: 16, paddingRight: 8, paddingBottom: 16, scrollbarWidth: "none" }}>
+    <div style={{ position: "fixed", left: 0, top: 56, width: 280, height: "calc(100vh - 56px)", overflowY: "auto", paddingTop: 16, paddingLeft: 8, paddingRight: 8, paddingBottom: 16, scrollbarWidth: "none", background: FB.bg, zIndex: 10 }}>
       <ShortcutItem
         icon={
           <Avatar size={36} src={user?.avatarUrl}
@@ -599,7 +599,7 @@ export default function DashboardPageUnified() {
      RIGHT SIDEBAR
      ═══════════════════════════════════════════════════════════ */
   const renderRightSidebar = () => (
-    <div style={{ width: 280, flexShrink: 0, position: "sticky", top: 56, alignSelf: "flex-start", height: "calc(100vh - 56px)", overflowY: "auto", paddingTop: 16, paddingLeft: 8, paddingBottom: 16, scrollbarWidth: "none" }}>
+    <div style={{ position: "fixed", right: 0, top: 56, width: 280, height: "calc(100vh - 56px)", overflowY: "auto", paddingTop: 16, paddingRight: 8, paddingLeft: 8, paddingBottom: 16, scrollbarWidth: "none", background: FB.bg, zIndex: 10 }}>
       {/* À faire aujourd'hui — en premier */}
       <FBCard>
         <span style={{ fontSize: 16, fontWeight: 700, color: FB.text, display: "block", marginBottom: 10 }}>
@@ -732,7 +732,7 @@ export default function DashboardPageUnified() {
      CENTER FEED
      ═══════════════════════════════════════════════════════════ */
   const renderFeed = () => (
-    <div style={{ flex: 1, minWidth: 0, maxWidth: isMobile ? "100%" : 680, paddingTop: isMobile ? 0 : 16 }}>
+    <div style={{ flex: 1, minWidth: 0, maxWidth: isMobile ? "100%" : 680, margin: "0 auto", paddingTop: isMobile ? 0 : 16 }}>
       {isMobile && renderMobileStats()}
 
       {/* "Create Post" — Quick Actions */}
@@ -854,14 +854,15 @@ export default function DashboardPageUnified() {
      ═══════════════════════════════════════════════════════════ */
   return (
     <div style={{ minHeight: "100vh", background: FB.bg }}>
+      {!isMobile && !isTablet && renderLeftSidebar()}
+      {!isMobile && !isTablet && renderRightSidebar()}
       <div style={{
-        maxWidth: 1400, margin: "0 auto",
-        padding: isMobile ? "12px 12px" : "0 16px",
-        display: "flex", gap: 0, justifyContent: "center",
+        marginLeft: isMobile || isTablet ? 0 : 300,
+        marginRight: isMobile || isTablet ? 0 : 300,
+        padding: isMobile ? "12px 12px" : "16px 16px",
+        display: "flex", justifyContent: "center",
       }}>
-        {!isMobile && !isTablet && renderLeftSidebar()}
         {renderFeed()}
-        {!isMobile && !isTablet && renderRightSidebar()}
       </div>
     </div>
   );

@@ -197,7 +197,7 @@ const ProfilePage = () => {
 
       {/* ════════ TOP WHITE SECTION (cover + name + tabs) ════════ */}
       <div style={{ background: FB.white, boxShadow: FB.shadow }}>
-        <div style={{ maxWidth: isMobile ? '100%' : 1095, margin: '0 auto', padding: isMobile ? 0 : '0 16px' }}>
+        <div style={{ width: '100%', padding: isMobile ? 0 : '0 16px' }}>
 
           {/* Cover photo */}
           <div style={{
@@ -362,7 +362,7 @@ const ProfilePage = () => {
 
       {/* ════════ BODY (gray background, responsive layout) ════════ */}
       <div style={{
-        maxWidth: isMobile ? '100%' : 1095, margin: '0 auto',
+        width: '100%',
         padding: isMobile ? '12px 8px 32px' : '16px 16px 40px',
       }}>
         {activeTab === 'about' && (
