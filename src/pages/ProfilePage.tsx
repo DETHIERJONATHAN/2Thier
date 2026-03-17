@@ -367,14 +367,20 @@ const ProfilePage = () => {
       }}>
         {activeTab === 'about' && (
           <div style={{
-            display: isMobile ? 'flex' : 'grid',
-            flexDirection: isMobile ? 'column' : undefined,
-            gridTemplateColumns: isMobile ? undefined : '360px 1fr',
-            gap: 16, alignItems: 'start',
+            display: 'flex',
+            flexDirection: isMobile ? 'column' : 'row',
+            gap: 16,
+            alignItems: 'flex-start',
           }}>
 
-            {/* ── LEFT COLUMN ── */}
-            <div style={{ position: isMobile ? 'static' : 'sticky', top: 64, width: '100%' }}>
+            {/* ── LEFT COLUMN (sticky on desktop) ── */}
+            <div style={{
+              position: isMobile ? 'static' : 'sticky',
+              top: 56,
+              width: isMobile ? '100%' : 360,
+              flexShrink: 0,
+              alignSelf: 'flex-start',
+            }}>
               {/* Informations personnelles */}
               <FBCard title="Informations personnelles" onEdit={() => navigate('/settings/profile')}>
                 {profile.firstName && <InfoLine icon={<UserOutlined />}>{profile.firstName}</InfoLine>}
@@ -474,8 +480,11 @@ const ProfilePage = () => {
               )}
             </div>
 
-            {/* ── RIGHT COLUMN ── */}
-            <div style={{ width: '100%' }}>
+            {/* ── RIGHT COLUMN (scrolls infinitely) ── */}
+            <div style={{ 
+              flex: 1,
+              minWidth: 0,
+            }}>
               {/* À la une */}
               <FBCard title="À la une">
                 <div style={{
