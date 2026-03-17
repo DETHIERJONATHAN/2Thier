@@ -3396,5 +3396,5 @@ const Parameters: React.FC<ParametersProps> = (props) => {
   );
 };
 
-export default Parameters;
+export default React.memo(Parameters);
 

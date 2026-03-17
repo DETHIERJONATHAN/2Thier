@@ -114,22 +114,7 @@ const TreeBranchLeafWrapper: React.FC<TreeBranchLeafWrapperProps> = ({
 
   const loadTreeNodes = useCallback(async (treeId: string) => {
     try {
-      // console.log('🔍 [TreeBranchLeafWrapper] Chargement nœuds pour arbre:', treeId); // ✨ Log réduit
-      const cacheBuster = `?t=${new Date().getTime()}`;
-      const flatNodesData = await api.get(`/api/treebranchleaf/trees/${treeId}/nodes${cacheBuster}`);
-      
-      // console.log(...) // ✨ Log réduit
-      /* {
-        // treeId,
-        // flatNodesCount: flatNodesData?.length || 0,
-        // flatNodesData: flatNodesData?.slice(0, 3) // Premiers 3 pour debug
-      } */
-
-      // 🚨 DEBUG DÉTAILLÉ: Affichons TOUS les nœuds avec leurs parentId
-      // console.log('🔍 [TreeBranchLeafWrapper] DÉTAIL COMPLET des nœuds plats:'); // ✨ Log réduit
-      flatNodesData?.forEach((_node, _index) => {
-        // console.log(`  ${index + 1}. ${node.label} (${node.type}) - ID: ${node.id.substring(0, 8)}... - ParentID: ${node.parentId ? node.parentId.substring(0, 8) + '...' : 'NULL'}`); // ✨ Log réduit
-      });
+      const flatNodesData = await api.get(`/api/treebranchleaf/trees/${treeId}/nodes`);
       
       // Transformer les données plates en hiérarchie
       const hierarchicalNodes = buildNodeHierarchy(flatNodesData || []);
@@ -218,53 +203,32 @@ const TreeBranchLeafWrapper: React.FC<TreeBranchLeafWrapperProps> = ({
     return flat;
   }, []);
 
-  const handleNodesUpdate = (updatedNodes: TreeBranchLeafNode[]) => {
-    // 🔍 DEBUG : Voir ce que le serveur renvoie
-    console.log('🔄 [handleNodesUpdate] Reçu:', {
-      count: updatedNodes.length,
-      premier: updatedNodes[0],
-      hasChildren: updatedNodes.some(n => n.children && n.children.length > 0)
-    });
-    
-    // 🔍 AFFICHER LES ORDERS EN CLAIR
-    console.table(updatedNodes.slice(0, 15).map(n => ({ 
-      label: n.label, 
-      order: n.order, 
-      parentId: n.parentId?.substring(0, 8) || 'ROOT'
-    })));
-    
-    // ✅ OPTIMISATION AMÉLIORÉE :
+  const handleNodesUpdate = useCallback((updatedNodes: TreeBranchLeafNode[]) => {
     // Si les nœuds ont déjà une hiérarchie (children présents), c'est un reload serveur
     // → Utiliser directement sans reconstruction
     const hasHierarchy = updatedNodes.some(n => n.children && n.children.length > 0);
     
     if (hasHierarchy) {
-      // Données déjà hiérarchisées (reload après drag & drop) → utiliser telles quelles
-      console.log('✅ [handleNodesUpdate] Données hiérarchisées détectées, pas de reconstruction');
       setNodes(updatedNodes);
       return;
     }
     
-    console.log('🔨 [handleNodesUpdate] Pas de hiérarchie, reconstruction nécessaire');
-    
     // Sinon, vérifier si c'est juste une mise à jour de propriétés
-    const currentFlatNodes = flattenNodes(nodes);
-    const newFlatNodes = flattenNodes(updatedNodes);
-    
-    const sameStructure = currentFlatNodes.length === newFlatNodes.length &&
-      currentFlatNodes.every(n => newFlatNodes.some(nn => nn.id === n.id));
-    
-    if (sameStructure) {
-      // Simple mise à jour sans reconstruction
-      setNodes(updatedNodes);
-    } else {
-      // Reconstruction complète nécessaire (ajout/suppression de nœuds)
-      const normalizedFlatNodes = flattenNodes(updatedNodes);
-      const newHierarchy = buildNodeHierarchy(normalizedFlatNodes);
-      console.log('✅ [handleNodesUpdate] Hiérarchie reconstruite:', newHierarchy.slice(0, 3).map(n => ({ label: n.label, order: n.order })));
-      setNodes(newHierarchy);
-    }
-  };
+    setNodes(prev => {
+      const currentFlatNodes = flattenNodes(prev);
+      const newFlatNodes = flattenNodes(updatedNodes);
+      
+      const sameStructure = currentFlatNodes.length === newFlatNodes.length &&
+        currentFlatNodes.every(n => newFlatNodes.some(nn => nn.id === n.id));
+      
+      if (sameStructure) {
+        return updatedNodes;
+      } else {
+        const normalizedFlatNodes = flattenNodes(updatedNodes);
+        return buildNodeHierarchy(normalizedFlatNodes);
+      }
+    });
+  }, [flattenNodes, buildNodeHierarchy]);
 
   const handleNodeCreate = useCallback(async (data: {
     type: NodeTypeKey;
@@ -340,10 +304,7 @@ const TreeBranchLeafWrapper: React.FC<TreeBranchLeafWrapperProps> = ({
     <TreeBranchLeafEditor
       trees={trees}
       selectedTree={selectedTree}
-      nodes={nodes} // Toujours passer les nœuds hiérarchiques
-      flatNodes={nodes.flatMap(function flatten(node): TreeBranchLeafNode[] {
-        return [node, ...(node.children || []).flatMap(flatten)];
-      })} // Passer aussi les nœuds plats pour la validation
+      nodes={nodes}
       readOnly={mode === 'view'}
       onTreeChange={handleTreeChange}
       onTreesUpdate={handleTreesUpdate}

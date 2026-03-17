@@ -363,7 +363,7 @@ const NotificationsBell = () => {
       open={isOpen}
       onOpenChange={setIsOpen}
       placement="bottomRight"
-      overlayInnerStyle={{ padding: 0, borderRadius: 8, overflow: 'hidden' }}
+      styles={{ body: { padding: 0, borderRadius: 8, overflow: 'hidden' } }}
       overlayStyle={{ zIndex: 1050 }}
       arrow={false}
     >

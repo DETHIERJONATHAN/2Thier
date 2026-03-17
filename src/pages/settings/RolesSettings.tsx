@@ -166,7 +166,7 @@ const RolesSettings: React.FC = () => {
     setLoading(true);
     try {
       const res: any = await api.get(`/api/roles?organizationId=${orgId}`);
-      setRoles(Array.isArray(res) ? res : res?.roles || []);
+      setRoles(Array.isArray(res) ? res : res?.data || res?.roles || []);
     } catch { message.error('Erreur lors du chargement des rôles.'); }
     finally { setLoading(false); }
   }, [api, orgId]);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../auth/useAuth';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { useNavigate } from 'react-router-dom';
@@ -8,8 +8,10 @@ import {
   HomeOutlined, BankOutlined, TeamOutlined, CrownOutlined,
   SettingOutlined, EditOutlined,
   LinkOutlined, SafetyCertificateOutlined, SwapOutlined,
-  EllipsisOutlined,
+  EllipsisOutlined, DragOutlined, CheckOutlined, CloseOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
+import { WallPostCard, WallPostData } from './DashboardPageUnified';
 
 /* ═══════════════════════════════════════════════════════════════
    FACEBOOK COLORS — exactement les mêmes tokens
@@ -128,6 +130,56 @@ const FBButton: React.FC<{
   );
 };
 
+/* ── Photo cell with hover overlay ─────────────────────────── */
+const PhotoCell: React.FC<{
+  photo: { id: string; url: string };
+  onView: () => void;
+  onDelete: () => void;
+}> = ({ photo, onView, onDelete }) => {
+  const [hover, setHover] = useState(false);
+  return (
+    <div
+      style={{
+        position: 'relative', paddingBottom: '100%', overflow: 'hidden',
+        borderRadius: 4, cursor: 'pointer',
+      }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onClick={onView}
+    >
+      <img
+        src={photo.url}
+        alt=""
+        style={{
+          position: 'absolute', top: 0, left: 0,
+          width: '100%', height: '100%',
+          objectFit: 'cover',
+        }}
+      />
+      {hover && (
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.25)',
+          display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end',
+          padding: 6,
+        }}>
+          <span
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            style={{
+              width: 28, height: 28, borderRadius: '50%',
+              background: 'rgba(0,0,0,0.6)', color: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer',
+            }}
+          >
+            <DeleteOutlined style={{ fontSize: 13 }} />
+          </span>
+        </div>
+      )}
+    </div>
+  );
+};
+
 /* ═══════════════════════════════════════════════════════════════
    PROFILE PAGE
    ═══════════════════════════════════════════════════════════════ */
@@ -136,20 +188,144 @@ const ProfilePage = () => {
   const { api } = useAuthenticatedApi();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
   const { isMobile, width } = useScreenSize();
 
-  const [profile, setProfile] = useState({ firstName: '', lastName: '', avatarUrl: '', address: '', vatNumber: '', phoneNumber: '' });
+  const [profile, setProfile] = useState({ firstName: '', lastName: '', avatarUrl: '', coverUrl: '', coverPositionY: 50, address: '', vatNumber: '', phoneNumber: '' });
   const [loading, setLoading] = useState(true);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [coverUploading, setCoverUploading] = useState(false);
+  const [coverDragging, setCoverDragging] = useState(false);
+  const [coverPosY, setCoverPosY] = useState(50);
+  const [coverRepositioning, setCoverRepositioning] = useState(false);
+  const coverContainerRef = useRef<HTMLDivElement>(null);
+  const dragStartY = useRef(0);
+  const dragStartPos = useRef(50);
   const [activeTab, setActiveTab] = useState('about');
   const [changingOrg, setChangingOrg] = useState(false);
+  const [wallPosts, setWallPosts] = useState<WallPostData[]>([]);
+  const [wallLoading, setWallLoading] = useState(false);
+  const [wallCursor, setWallCursor] = useState<string | null>(null);
+  const [wallHasMore, setWallHasMore] = useState(true);
+  const [userPhotos, setUserPhotos] = useState<{ id: string; url: string; category: string; createdAt: string }[]>([]);
+  const [photosLoading, setPhotosLoading] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [photosTab, setPhotosTab] = useState<string>('all');
 
   useEffect(() => {
     if (!user) return;
     setLoading(true);
-    api.get('/api/profile').then((r: any) => { setProfile(r); setLoading(false); })
-      .catch(() => { message.error('Impossible de charger le profil.'); setLoading(false); });
+    api.get('/api/profile').then((r: any) => {
+      setProfile(r);
+      setCoverPosY(r.coverPositionY ?? 50);
+      setLoading(false);
+    }).catch(() => { message.error('Impossible de charger le profil.'); setLoading(false); });
   }, [user, api]);
+
+  /* ── Fetch photos when Photos tab is activated ──────────── */
+  const fetchPhotos = useCallback(async () => {
+    setPhotosLoading(true);
+    try {
+      const r: any = await api.get('/api/profile/photos');
+      setUserPhotos(r.photos || []);
+    } catch { /* silently fail */ }
+    finally { setPhotosLoading(false); }
+  }, [api]);
+
+  useEffect(() => {
+    if (activeTab === 'photos' && user) fetchPhotos();
+  }, [activeTab, user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const deletePhoto = async (photoId: string) => {
+    try {
+      await api.delete(`/api/profile/photos/${photoId}`);
+      setUserPhotos(prev => prev.filter(p => p.id !== photoId));
+      message.success('Photo supprimée');
+    } catch { message.error('Erreur lors de la suppression'); }
+  };
+
+  /* ── Cover drag-to-reposition ────────────────────────────── */
+  const handleCoverDragStart = useCallback((clientY: number) => {
+    setCoverDragging(true);
+    dragStartY.current = clientY;
+    dragStartPos.current = coverPosY;
+  }, [coverPosY]);
+
+  const handleCoverDragMove = useCallback((clientY: number) => {
+    if (!coverContainerRef.current) return;
+    const containerH = coverContainerRef.current.clientHeight;
+    const deltaPixels = clientY - dragStartY.current;
+    // Convert pixel delta to percentage (invert: drag down = image goes up = posY decreases)
+    const deltaPct = -(deltaPixels / containerH) * 100;
+    const newPos = Math.min(100, Math.max(0, dragStartPos.current + deltaPct));
+    setCoverPosY(newPos);
+  }, []);
+
+  const handleCoverDragEnd = useCallback(() => {
+    setCoverDragging(false);
+  }, []);
+
+  // Mouse events
+  useEffect(() => {
+    if (!coverRepositioning) return;
+    const onMove = (e: MouseEvent) => { if (coverDragging) handleCoverDragMove(e.clientY); };
+    const onUp = () => { if (coverDragging) handleCoverDragEnd(); };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+  }, [coverRepositioning, coverDragging, handleCoverDragMove, handleCoverDragEnd]);
+
+  // Touch events
+  useEffect(() => {
+    if (!coverRepositioning) return;
+    const onMove = (e: TouchEvent) => { if (coverDragging && e.touches[0]) handleCoverDragMove(e.touches[0].clientY); };
+    const onEnd = () => { if (coverDragging) handleCoverDragEnd(); };
+    window.addEventListener('touchmove', onMove, { passive: true });
+    window.addEventListener('touchend', onEnd);
+    return () => { window.removeEventListener('touchmove', onMove); window.removeEventListener('touchend', onEnd); };
+  }, [coverRepositioning, coverDragging, handleCoverDragMove, handleCoverDragEnd]);
+
+  const saveCoverPosition = async () => {
+    try {
+      await api.put('/api/profile/cover-position', { positionY: Math.round(coverPosY * 100) / 100 });
+      setProfile(p => ({ ...p, coverPositionY: coverPosY }));
+      setCoverRepositioning(false);
+      message.success('Position de la couverture enregistrée !');
+    } catch { message.error("Erreur lors de la sauvegarde."); }
+  };
+
+  const cancelCoverPosition = () => {
+    setCoverPosY(profile.coverPositionY ?? 50);
+    setCoverRepositioning(false);
+  };
+
+  /* ── Wall feed fetch ─────────────────────────────────────── */
+  const fetchWallPosts = useCallback(async (reset = false) => {
+    if (wallLoading) return;
+    setWallLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set('limit', '10');
+      if (!reset && wallCursor) params.set('cursor', wallCursor);
+      const r: any = await api.get(`/api/wall/my-feed?${params.toString()}`);
+      const posts: WallPostData[] = r.posts || [];
+      setWallPosts(prev => reset ? posts : [...prev, ...posts]);
+      setWallCursor(r.nextCursor || null);
+      setWallHasMore(!!r.nextCursor);
+    } catch { /* silently fail */ }
+    finally { setWallLoading(false); }
+  }, [api, wallCursor, wallLoading]);
+
+  useEffect(() => {
+    if (user) fetchWallPosts(true);
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const refreshWall = useCallback(() => {
+    setWallCursor(null);
+    setWallHasMore(true);
+    setWallPosts([]);
+    setTimeout(() => fetchWallPosts(true), 100);
+  }, [fetchWallPosts]);
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.[0]) return;
@@ -158,11 +334,29 @@ const ProfilePage = () => {
       const fd = new FormData();
       fd.append('avatar', e.target.files[0]);
       const r: any = await api.post('/api/profile/avatar', fd);
-      setProfile(p => ({ ...p, avatarUrl: r.avatarUrl }));
+      const newUrl = r.avatarUrl ? `${r.avatarUrl}?t=${Date.now()}` : '';
+      setProfile(p => ({ ...p, avatarUrl: newUrl }));
       message.success('Photo mise à jour !');
       refetchUser?.();
     } catch { message.error("Erreur lors du téléversement."); }
     finally { setAvatarUploading(false); }
+  };
+
+  const handleCoverChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.[0]) return;
+    setCoverUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('cover', e.target.files[0]);
+      const r: any = await api.post('/api/profile/cover', fd);
+      // Add cache-buster to force browser to reload the new image
+      const newUrl = r.coverUrl ? `${r.coverUrl}?t=${Date.now()}` : '';
+      setProfile(p => ({ ...p, coverUrl: newUrl, coverPositionY: 50 }));
+      setCoverPosY(50);
+      setCoverRepositioning(false);
+      message.success('Photo de couverture mise à jour !');
+    } catch { message.error("Erreur lors du téléversement de la couverture."); }
+    finally { setCoverUploading(false); }
   };
 
   const handleOrgChange = async (orgId: string) => {
@@ -181,7 +375,7 @@ const ProfilePage = () => {
 
   const tabs = [
     { key: 'about', label: 'À propos' },
-    { key: 'activity', label: 'Activité' },
+    { key: 'publications', label: 'Publications' },
     { key: 'photos', label: 'Photos' },
   ];
 
@@ -200,20 +394,93 @@ const ProfilePage = () => {
         <div style={{ width: '100%', padding: isMobile ? 0 : '0 16px' }}>
 
           {/* Cover photo */}
-          <div style={{
-            height: coverH, borderRadius: isMobile ? 0 : '0 0 8px 8px', overflow: 'hidden',
-            background: 'linear-gradient(135deg, #1a4951 0%, #2C5967 30%, #3d7a8a 60%, #4a9aad 100%)',
-            position: 'relative',
-          }}>
+          <div
+            ref={coverContainerRef}
+            onMouseDown={e => { if (coverRepositioning) { e.preventDefault(); handleCoverDragStart(e.clientY); } }}
+            onTouchStart={e => { if (coverRepositioning && e.touches[0]) { handleCoverDragStart(e.touches[0].clientY); } }}
+            style={{
+              height: coverH, borderRadius: isMobile ? 0 : '0 0 8px 8px', overflow: 'hidden',
+              position: 'relative',
+              cursor: coverRepositioning ? (coverDragging ? 'grabbing' : 'grab') : 'default',
+              userSelect: coverRepositioning ? 'none' : undefined,
+              background: !profile.coverUrl
+                ? 'linear-gradient(135deg, #1a4951 0%, #2C5967 30%, #3d7a8a 60%, #4a9aad 100%)'
+                : '#000',
+            }}
+          >
+            {/* Cover image — <img> for object-position control */}
+            {profile.coverUrl && (
+              <img
+                src={profile.coverUrl}
+                alt="Couverture"
+                draggable={false}
+                style={{
+                  width: '100%', height: '100%',
+                  objectFit: 'cover',
+                  objectPosition: `center ${coverPosY}%`,
+                  pointerEvents: 'none',
+                }}
+              />
+            )}
+
+            {/* Repositioning overlay */}
+            {coverRepositioning && (
+              <div style={{
+                position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                background: 'rgba(0,0,0,0.3)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                pointerEvents: 'none',
+              }}>
+                <div style={{
+                  background: 'rgba(0,0,0,0.7)', color: '#fff', padding: '8px 20px',
+                  borderRadius: 8, fontSize: 14, fontWeight: 600,
+                  display: 'flex', alignItems: 'center', gap: 8,
+                }}>
+                  <DragOutlined /> Glissez pour repositionner
+                </div>
+              </div>
+            )}
+
+            {/* Bottom action buttons */}
             <div style={{
               position: 'absolute', bottom: isMobile ? 8 : 16, right: isMobile ? 8 : 16,
-              background: 'rgba(0,0,0,0.5)', color: '#fff',
-              padding: isMobile ? '4px 10px' : '6px 16px',
-              borderRadius: 6, fontSize: isMobile ? 12 : 14, fontWeight: 600, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: 6,
+              display: 'flex', gap: 8,
             }}>
-              <CameraOutlined />{!isMobile && ' Modifier la couverture'}
+              {coverRepositioning ? (
+                <>
+                  <div onClick={cancelCoverPosition} style={{
+                    background: 'rgba(0,0,0,0.6)', color: '#fff',
+                    padding: isMobile ? '4px 10px' : '6px 16px',
+                    borderRadius: 6, fontSize: isMobile ? 12 : 14, fontWeight: 600, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 6,
+                  }}><CloseOutlined /> Annuler</div>
+                  <div onClick={saveCoverPosition} style={{
+                    background: FB.blue, color: '#fff',
+                    padding: isMobile ? '4px 10px' : '6px 16px',
+                    borderRadius: 6, fontSize: isMobile ? 12 : 14, fontWeight: 600, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 6,
+                  }}><CheckOutlined /> Enregistrer</div>
+                </>
+              ) : (
+                <>
+                  {profile.coverUrl && (
+                    <div onClick={() => setCoverRepositioning(true)} style={{
+                      background: 'rgba(0,0,0,0.5)', color: '#fff',
+                      padding: isMobile ? '4px 10px' : '6px 16px',
+                      borderRadius: 6, fontSize: isMobile ? 12 : 14, fontWeight: 600, cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', gap: 6,
+                    }}><DragOutlined />{!isMobile && ' Repositionner'}</div>
+                  )}
+                  <div onClick={() => coverInputRef.current?.click()} style={{
+                    background: 'rgba(0,0,0,0.5)', color: '#fff',
+                    padding: isMobile ? '4px 10px' : '6px 16px',
+                    borderRadius: 6, fontSize: isMobile ? 12 : 14, fontWeight: 600, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 6,
+                  }}>{coverUploading ? <Spin size="small" /> : <CameraOutlined />}{!isMobile && ' Modifier la couverture'}</div>
+                </>
+              )}
             </div>
+            <input type="file" accept="image/*" onChange={handleCoverChange} ref={coverInputRef} style={{ display: 'none' }} />
           </div>
 
           {/* ─── MOBILE: avatar centré au-dessus du nom ─── */}
@@ -517,33 +784,275 @@ const ProfilePage = () => {
                   </div>
                 </div>
               </FBCard>
+
+              {/* Recent publications in About tab */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow,
+                  padding: 16, marginBottom: 12,
+                }}>
+                  <span style={{ fontSize: 17, fontWeight: 700, color: FB.text }}>Publications</span>
+                  <span
+                    onClick={() => setActiveTab('publications')}
+                    style={{ fontSize: 14, color: FB.blue, cursor: 'pointer', fontWeight: 600 }}
+                  >
+                    Voir tout
+                  </span>
+                </div>
+                {wallPosts.length === 0 && !wallLoading && (
+                  <div style={{
+                    background: FB.white, borderRadius: 8, boxShadow: FB.shadow,
+                    padding: 32, textAlign: 'center', color: FB.textSecondary, fontSize: 15,
+                  }}>
+                    Aucune publication pour le moment.
+                  </div>
+                )}
+                {wallPosts.slice(0, 3).map(post => (
+                  <WallPostCard
+                    key={post.id}
+                    post={post}
+                    isMobile={isMobile}
+                    currentUserId={user?.id || ''}
+                    api={api}
+                    onUpdate={refreshWall}
+                  />
+                ))}
+                {wallPosts.length > 3 && (
+                  <div
+                    onClick={() => setActiveTab('publications')}
+                    style={{
+                      textAlign: 'center', padding: 12, fontSize: 14, fontWeight: 600,
+                      color: FB.blue, cursor: 'pointer', background: FB.white,
+                      borderRadius: 8, boxShadow: FB.shadow,
+                    }}
+                  >
+                    Voir toutes les publications
+                  </div>
+                )}
+                {wallLoading && <div style={{ textAlign: 'center', padding: 16 }}><Spin /></div>}
+              </div>
             </div>
           </div>
         )}
 
-        {activeTab === 'activity' && (
+        {activeTab === 'publications' && (
           <div style={{
-            background: FB.white, borderRadius: 8, boxShadow: FB.shadow,
-            padding: isMobile ? 20 : 32, textAlign: 'center',
+            maxWidth: 680, margin: '0 auto',
           }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
-            <div style={{ fontSize: 17, fontWeight: 600, color: FB.text }}>Historique d'activité</div>
-            <div style={{ fontSize: 15, color: FB.textSecondary, marginTop: 8 }}>
-              L'historique de vos actions sera bientôt disponible ici.
-            </div>
+            {wallPosts.length === 0 && !wallLoading && (
+              <div style={{
+                background: FB.white, borderRadius: 8, boxShadow: FB.shadow,
+                padding: 40, textAlign: 'center',
+              }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>📝</div>
+                <div style={{ fontSize: 17, fontWeight: 600, color: FB.text }}>Aucune publication</div>
+                <div style={{ fontSize: 15, color: FB.textSecondary, marginTop: 8 }}>
+                  Vos publications sur le mur apparaîtront ici.
+                </div>
+              </div>
+            )}
+            {wallPosts.map(post => (
+              <WallPostCard
+                key={post.id}
+                post={post}
+                isMobile={isMobile}
+                currentUserId={user?.id || ''}
+                api={api}
+                onUpdate={refreshWall}
+              />
+            ))}
+            {wallLoading && <div style={{ textAlign: 'center', padding: 24 }}><Spin size="large" /></div>}
+            {!wallLoading && wallHasMore && wallPosts.length > 0 && (
+              <div
+                onClick={() => fetchWallPosts(false)}
+                style={{
+                  textAlign: 'center', padding: 14, fontSize: 15, fontWeight: 600,
+                  color: FB.blue, cursor: 'pointer', background: FB.white,
+                  borderRadius: 8, boxShadow: FB.shadow, marginBottom: 16,
+                }}
+              >
+                Charger plus de publications
+              </div>
+            )}
+            {!wallLoading && !wallHasMore && wallPosts.length > 0 && (
+              <div style={{ textAlign: 'center', padding: 16, color: FB.textSecondary, fontSize: 14 }}>
+                Vous avez vu toutes vos publications.
+              </div>
+            )}
           </div>
         )}
 
         {activeTab === 'photos' && (
-          <div style={{
-            background: FB.white, borderRadius: 8, boxShadow: FB.shadow,
-            padding: isMobile ? 20 : 32, textAlign: 'center',
-          }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>📷</div>
-            <div style={{ fontSize: 17, fontWeight: 600, color: FB.text }}>Photos</div>
-            <div style={{ fontSize: 15, color: FB.textSecondary, marginTop: 8 }}>
-              Vos photos de chantiers et projets apparaîtront ici.
+          <div style={{ maxWidth: 900, margin: '0 auto' }}>
+            {/* Category sub-tabs */}
+            <div style={{
+              background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow,
+              padding: '12px 16px', marginBottom: 16,
+              display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center',
+            }}>
+              <span style={{ fontSize: 20, fontWeight: 700, color: FB.text, marginRight: 8 }}>Photos</span>
+              {[
+                { key: 'all', label: 'Toutes' },
+                { key: 'profile', label: 'Photos de profil' },
+                { key: 'cover', label: 'Photos de couverture' },
+                { key: 'wall', label: 'Publications' },
+              ].map(cat => (
+                <button
+                  key={cat.key}
+                  type="button"
+                  onClick={() => setPhotosTab(cat.key)}
+                  style={{
+                    padding: '6px 16px', borderRadius: 20, border: 'none', cursor: 'pointer',
+                    fontSize: 14, fontWeight: 600,
+                    background: photosTab === cat.key ? FB.activeBlue : FB.btnGray,
+                    color: photosTab === cat.key ? FB.blue : FB.text,
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {cat.label}
+                </button>
+              ))}
             </div>
+
+            {photosLoading && (
+              <div style={{ textAlign: 'center', padding: 40 }}><Spin size="large" /></div>
+            )}
+
+            {!photosLoading && (() => {
+              const CATEGORY_LABELS: Record<string, string> = {
+                profile: 'Photos de profil',
+                cover: 'Photos de couverture',
+                wall: 'Publications',
+                other: 'Autres',
+              };
+
+              const filtered = photosTab === 'all' ? userPhotos : userPhotos.filter(p => p.category === photosTab);
+
+              if (filtered.length === 0) {
+                return (
+                  <div style={{
+                    background: FB.white, borderRadius: 8, boxShadow: FB.shadow,
+                    padding: 40, textAlign: 'center',
+                  }}>
+                    <div style={{ fontSize: 40, marginBottom: 12 }}>📷</div>
+                    <div style={{ fontSize: 17, fontWeight: 600, color: FB.text }}>Aucune photo</div>
+                    <div style={{ fontSize: 15, color: FB.textSecondary, marginTop: 8 }}>
+                      Vos photos de profil, couverture et publications apparaîtront ici.
+                    </div>
+                  </div>
+                );
+              }
+
+              if (photosTab !== 'all') {
+                // Single category grid
+                return (
+                  <div style={{
+                    background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow,
+                    padding: 16,
+                  }}>
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
+                      gap: 4,
+                    }}>
+                    {filtered.map(photo => (
+                        <PhotoCell
+                          key={photo.id}
+                          photo={photo}
+                          onView={() => setLightboxUrl(photo.url)}
+                          onDelete={() => deletePhoto(photo.id)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              }
+
+              // "All" view — grouped by category
+              const grouped: Record<string, typeof filtered> = {};
+              for (const p of filtered) {
+                const cat = p.category || 'other';
+                if (!grouped[cat]) grouped[cat] = [];
+                grouped[cat].push(p);
+              }
+
+              return Object.entries(grouped).map(([cat, photos]) => (
+                <div
+                  key={cat}
+                  style={{
+                    background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow,
+                    padding: 16, marginBottom: 16,
+                  }}
+                >
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    marginBottom: 12,
+                  }}>
+                    <span style={{ fontSize: 17, fontWeight: 700, color: FB.text }}>
+                      {CATEGORY_LABELS[cat] || cat}
+                    </span>
+                    <span
+                      onClick={() => setPhotosTab(cat)}
+                      style={{ fontSize: 14, color: FB.blue, cursor: 'pointer', fontWeight: 600 }}
+                    >
+                      Voir tout
+                    </span>
+                  </div>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(5, 1fr)',
+                    gap: 4,
+                  }}>
+                  {photos.slice(0, isMobile ? 4 : 10).map(photo => (
+                      <PhotoCell
+                        key={photo.id}
+                        photo={photo}
+                        onView={() => setLightboxUrl(photo.url)}
+                        onDelete={() => deletePhoto(photo.id)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ));
+            })()}
+
+            {/* Lightbox overlay */}
+            {lightboxUrl && (
+              <div
+                onClick={() => setLightboxUrl(null)}
+                style={{
+                  position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                  background: 'rgba(0,0,0,0.9)', zIndex: 10000,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'zoom-out',
+                }}
+              >
+                <img
+                  src={lightboxUrl}
+                  alt=""
+                  onClick={e => e.stopPropagation()}
+                  style={{
+                    maxWidth: '90vw', maxHeight: '90vh',
+                    objectFit: 'contain', borderRadius: 8,
+                    cursor: 'default',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setLightboxUrl(null)}
+                  style={{
+                    position: 'absolute', top: 20, right: 20,
+                    width: 40, height: 40, borderRadius: '50%',
+                    background: 'rgba(255,255,255,0.1)', border: 'none',
+                    color: '#fff', fontSize: 20, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >
+                  <CloseOutlined />
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

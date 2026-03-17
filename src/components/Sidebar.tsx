@@ -106,20 +106,11 @@ const Sidebar = ({ modules }: { modules: Array<ModuleNav> }) => {
 
 
   const visibleAdminPages = useMemo(() => adminPages.filter(p => {
-    // 👑 SOLUTION SIMPLIFIÉE: Pour SuperAdmin, donner accès à TOUT !
-    if (isSuperAdmin) {
-      console.log('[Sidebar] 👑 SuperAdmin - Accès accordé à:', p.label, p.permission);
-      return true;
-    }
-    
-    if (p.permission === 'super_admin') {
-      return false; // Seuls les SuperAdmins peuvent accéder
-    }
-    
-    const hasPermission = can && can(p.permission);
-    console.log('[Sidebar] Permission check for', p.label, ':', p.permission, '=', hasPermission);
-    return hasPermission;
-  }), [adminPages, isSuperAdmin, can]);
+    // 👑 Pages admin réservées au Super Admin uniquement (développeur)
+    // Les autres utilisateurs accèdent à ces fonctionnalités via /settings
+    if (!isSuperAdmin) return false;
+    return true;
+  }), [adminPages, isSuperAdmin]);
 
   // Séparer les modules Devis1Minute par type
   // Petit utilitaire pour dédupliquer par feature/route (sécurité UI)

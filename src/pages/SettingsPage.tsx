@@ -14,6 +14,16 @@ import {
   SearchOutlined,
   IdcardOutlined,
   ArrowLeftOutlined,
+  AppstoreOutlined,
+  ApartmentOutlined,
+  LockOutlined,
+  FileTextOutlined,
+  ApiOutlined,
+  AuditOutlined,
+  BankOutlined,
+  PhoneOutlined,
+  ToolOutlined,
+  CrownOutlined,
 } from '@ant-design/icons';
 
 /* ═══════════════════════════════════════════════════════════════
@@ -66,29 +76,31 @@ interface MenuCategory {
 
 /* ── Quick access cards data ─────────────────────────────────── */
 const quickCards = [
-  { to: '/settings/profile', emoji: '👤', bg: '#e7f3ff', title: 'Mon Profil', desc: 'Modifiez votre nom, photo et coordonnées.' },
-  { to: '/settings/organization', emoji: '🏢', bg: '#fff3e0', title: 'Organisation', desc: 'Gérez les paramètres de votre organisation.' },
-  { to: '/settings/users', emoji: '👥', bg: '#e8f5e9', title: 'Utilisateurs', desc: 'Invitez et gérez les membres.' },
-  { to: '/settings/roles', emoji: '🛡️', bg: '#fce4ec', title: 'Rôles & Permissions', desc: "Configurez les droits d'accès." },
-  { to: '/settings/emails', emoji: '📧', bg: '#f3e5f5', title: 'Emails', desc: 'Paramètres email et SMTP.' },
-  { to: '/settings/ai-measure', emoji: '📐', bg: '#e0f7fa', title: 'IA Mesure', desc: 'Calibration du métré A4 V10.' },
+  { to: '/settings/profile', emoji: '👤', bg: '#e7f3ff', title: 'Mon Profil', desc: 'Modifiez votre nom, photo et coordonnées.', permission: null as string | null, superAdminOnly: false },
+  { to: '/settings/organization', emoji: '🏢', bg: '#fff3e0', title: 'Organisation', desc: 'Gérez les paramètres de votre organisation.', permission: 'organization:read', superAdminOnly: false },
+  { to: '/settings/users', emoji: '👥', bg: '#e8f5e9', title: 'Utilisateurs', desc: 'Invitez et gérez les membres.', permission: 'user:read', superAdminOnly: false },
+  { to: '/settings/roles', emoji: '🛡️', bg: '#fce4ec', title: 'Rôles & Permissions', desc: "Configurez les droits d'accès.", permission: 'role:read', superAdminOnly: false },
+  { to: '/settings/emails', emoji: '📧', bg: '#f3e5f5', title: 'Emails', desc: 'Paramètres email et SMTP.', permission: 'user:read', superAdminOnly: false },
+  { to: '/settings/ai-measure', emoji: '📐', bg: '#e0f7fa', title: 'IA Mesure', desc: 'Calibration du métré A4 V10.', permission: 'organization:read', superAdminOnly: false },
+  { to: '/settings/modules', emoji: '🧩', bg: '#ede7f6', title: 'Modules', desc: 'Gérer les modules et fonctionnalités.', permission: null, superAdminOnly: true },
+  { to: '/settings/trees', emoji: '🌳', bg: '#e8f5e9', title: 'Arbres & Formulaires', desc: 'Gérer les arbres de formulaires.', permission: null, superAdminOnly: true },
+  { to: '/settings/permissions', emoji: '🔐', bg: '#fff8e1', title: 'Permissions', desc: 'Gestion granulaire des permissions.', permission: null, superAdminOnly: true },
+  { to: '/settings/rights-summary', emoji: '📊', bg: '#e3f2fd', title: 'Synthèse des droits', desc: 'Vue matricielle des droits utilisateurs.', permission: 'user:read', superAdminOnly: false },
+  { to: '/settings/documents', emoji: '📄', bg: '#fce4ec', title: 'Documents', desc: 'Templates et modèles de documents.', permission: null, superAdminOnly: true },
+  { to: '/settings/integrations', emoji: '🔌', bg: '#e0f2f1', title: 'Intégrations', desc: 'Connexions avec services externes.', permission: null, superAdminOnly: true },
 ];
 
 /* ═══════════════════════════════════════════════════════════════
    Settings Index — page d'accueil (grille de cartes Facebook)
    ═══════════════════════════════════════════════════════════════ */
-const SettingsIndex: React.FC<{ can: (p: string) => boolean; isMobile: boolean }> = ({ can, isMobile }) => {
+const SettingsIndex: React.FC<{ can: (p: string) => boolean; isMobile: boolean; isSuperAdmin: boolean }> = ({ can, isMobile, isSuperAdmin }) => {
   const navigate = useNavigate();
   const [hoverCard, setHoverCard] = useState<string | null>(null);
 
   const visibleCards = quickCards.filter(card => {
-    if (card.to === '/settings/profile') return true;
-    if (card.to === '/settings/users') return can('user:read');
-    if (card.to === '/settings/roles') return can('role:read');
-    if (card.to === '/settings/organization') return can('organization:read');
-    if (card.to === '/settings/emails') return can('user:read');
-    if (card.to === '/settings/ai-measure') return can('organization:read');
-    return true;
+    if (card.superAdminOnly && !isSuperAdmin) return false;
+    if (!card.permission) return true;
+    return can(card.permission);
   });
 
   return (
@@ -240,6 +252,7 @@ const SettingsPage = () => {
     const isInternal = isAdmin || ['manager', 'commercial', 'support'].includes(userRole);
 
     const cats: MenuCategory[] = [];
+    const filterItems = (items: MenuItem[]) => items.filter(i => !i.requiredPermission || can(i.requiredPermission));
 
     // Category 1: Espace Compte
     const accountItems: MenuItem[] = [
@@ -255,9 +268,11 @@ const SettingsPage = () => {
       { key: 'users', to: '/settings/users', icon: <UserOutlined />, label: 'Utilisateurs', requiredPermission: 'user:read' },
       { key: 'roles', to: '/settings/roles', icon: <SafetyCertificateOutlined />, label: 'Rôles & Permissions', requiredPermission: 'role:read' },
       { key: 'emails', to: '/settings/emails', icon: <MailOutlined />, label: 'Emails', requiredPermission: 'user:read' },
+      { key: 'rights-summary', to: '/settings/rights-summary', icon: <AuditOutlined />, label: 'Synthèse des droits', requiredPermission: 'user:read' },
     ];
     if (isAdmin) {
       toolItems.push({ key: 'google', to: '/settings/google', icon: <GoogleOutlined />, label: 'Google Workspace', requiredPermission: 'organization:read' });
+      toolItems.push({ key: 'organizations', to: '/settings/organizations', icon: <BankOutlined />, label: 'Organisations', requiredPermission: 'organization:read' });
     }
 
     // Category 3: Préférences
@@ -265,9 +280,24 @@ const SettingsPage = () => {
       { key: 'ai-measure', to: '/settings/ai-measure', icon: <CameraOutlined />, label: 'IA Mesure', requiredPermission: 'organization:read' },
     ];
 
-    cats.push({ title: '', description: '', items: accountItems.filter(i => !i.requiredPermission || can(i.requiredPermission)) });
-    cats.push({ title: 'Outils et ressources', description: 'Gérez votre organisation et vos équipes.', items: toolItems.filter(i => !i.requiredPermission || can(i.requiredPermission)) });
-    cats.push({ title: 'Préférences', description: 'Personnalisez votre expérience.', items: prefItems.filter(i => !i.requiredPermission || can(i.requiredPermission)) });
+    // Category 4: Administration (Super Admin + Admin avancé)
+    const adminItems: MenuItem[] = [];
+    if (isSuperAdmin) {
+      adminItems.push(
+        { key: 'modules', to: '/settings/modules', icon: <AppstoreOutlined />, label: 'Modules', requiredPermission: null },
+        { key: 'permissions', to: '/settings/permissions', icon: <LockOutlined />, label: 'Permissions', requiredPermission: null },
+        { key: 'trees', to: '/settings/trees', icon: <ApartmentOutlined />, label: 'Arbres & Formulaires', requiredPermission: null },
+        { key: 'documents', to: '/settings/documents', icon: <FileTextOutlined />, label: 'Documents', requiredPermission: null },
+        { key: 'integrations', to: '/settings/integrations', icon: <ApiOutlined />, label: 'Intégrations', requiredPermission: null },
+      );
+    }
+
+    cats.push({ title: '', description: '', items: filterItems(accountItems) });
+    cats.push({ title: 'Outils et ressources', description: 'Gérez votre organisation et vos équipes.', items: filterItems(toolItems) });
+    cats.push({ title: 'Préférences', description: 'Personnalisez votre expérience.', items: filterItems(prefItems) });
+    if (adminItems.length > 0) {
+      cats.push({ title: 'Administration', description: 'Configuration avancée du CRM.', items: filterItems(adminItems) });
+    }
 
     return cats.filter(c => c.items.length > 0);
   }, [can, isSuperAdmin, user?.role]);
@@ -328,7 +358,7 @@ const SettingsPage = () => {
         {/* Mobile content */}
         <div style={{ padding: '12px 12px 32px' }}>
           {isIndex ? (
-            <SettingsIndex can={can} isMobile={isMobile} />
+            <SettingsIndex can={can} isMobile={isMobile} isSuperAdmin={isSuperAdmin} />
           ) : (
             <div style={{
               background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow,
@@ -349,7 +379,7 @@ const SettingsPage = () => {
 
         {/* ── LEFT SIDEBAR ── */}
         <aside style={{ width: 360, flexShrink: 0, padding: '24px 16px 24px 0' }}>
-          <div style={{ position: 'sticky', top: 64 }}>
+          <div style={{ position: 'sticky', top: 64, maxHeight: 'calc(100vh - 80px)', overflowY: 'auto' }}>
             {/* Title */}
             <h1 style={{ fontSize: 24, fontWeight: 700, color: FB.text, margin: '0 0 16px 8px' }}>
               Paramètres et confidentialité
@@ -427,7 +457,7 @@ const SettingsPage = () => {
         {/* ── MAIN CONTENT ── */}
         <main style={{ flex: 1, minWidth: 0, padding: '24px 0' }}>
           {isIndex ? (
-            <SettingsIndex can={can} isMobile={false} />
+            <SettingsIndex can={can} isMobile={false} isSuperAdmin={isSuperAdmin} />
           ) : (
             <div style={{
               background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow,

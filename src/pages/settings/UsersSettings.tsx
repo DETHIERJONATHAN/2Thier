@@ -105,7 +105,7 @@ const UsersSettings: React.FC = () => {
         api.get(`/api/users?organizationId=${orgId}`),
         api.get(`/api/roles?organizationId=${orgId}`),
       ]);
-      const userList = Array.isArray(usersRes) ? usersRes : usersRes?.users || [];
+      const userList = Array.isArray(usersRes) ? usersRes : usersRes?.data || usersRes?.users || [];
       setUsers(userList.map((u: any) => {
         const uo = u.UserOrganization?.find?.((uo: any) => uo.organizationId === orgId) || u.userOrganization;
         return {
@@ -115,7 +115,7 @@ const UsersSettings: React.FC = () => {
           role: uo?.Role || uo?.role,
         };
       }));
-      const roleList = Array.isArray(rolesRes) ? rolesRes : rolesRes?.roles || [];
+      const roleList = Array.isArray(rolesRes) ? rolesRes : rolesRes?.data || rolesRes?.roles || [];
       setRoles(roleList);
     } catch (err) {
       console.error('Erreur chargement users:', err);

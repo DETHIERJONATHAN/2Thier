@@ -257,12 +257,13 @@ app.use(cookieParser());
 
 // 📎 Middleware pour parser les formulaires multipart (pièces jointes email)
 app.use(fileUpload({
-  limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB max
-  useTempFiles: false, // Garder en mémoire (Buffer) pour compatibilité avec le contrôleur Gmail
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB max (vidéos)
+  useTempFiles: true,
+  tempFileDir: '/tmp/',
   abortOnLimit: true,
-  responseOnLimit: 'Fichier trop volumineux (max 25 Mo)',
+  responseOnLimit: 'Fichier trop volumineux (max 100 Mo)',
 }));
-console.log('✅ [FileUpload] Middleware configuré (25MB max)');
+console.log('✅ [FileUpload] Middleware configuré (100MB max)');
 
 // 🔐 Configuration Session avec sécurité Enterprise
 app.use(session({

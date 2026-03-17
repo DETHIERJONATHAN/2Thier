@@ -167,35 +167,16 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
         const customEvent = event as CustomEvent<{ node?: TreeBranchLeafNode; treeId?: string | number; nodeId?: string }>;
         const { node: updatedNode, nodeId } = customEvent.detail || {};
         
-        console.log('🔔 [TreeBranchLeafEditor] Événement tbl-node-updated reçu:', {
-          updatedNodeId: updatedNode?.id,
-          nodeId,
-          hasLink: updatedNode?.hasLink,
-          detail: customEvent.detail
-        });
-        
         if (!updatedNode && !nodeId) return;
         
         // Mettre à jour le selectedNode si c'est lui qui a été modifié
         setUIState(prev => {
           const targetId = updatedNode?.id || nodeId;
-          console.log('🔔 [TreeBranchLeafEditor] Comparaison IDs:', {
-            targetId,
-            selectedNodeId: prev.selectedNode?.id,
-            match: prev.selectedNode?.id === targetId
-          });
           if (!prev.selectedNode || prev.selectedNode.id !== targetId) {
             return prev;
           }
           // Fusionner les propriétés mises à jour (notamment hasData, hasFormula, hasLink, etc.)
           const merged = { ...prev.selectedNode, ...updatedNode } as TreeBranchLeafNode;
-          console.log('🔄 [TreeBranchLeafEditor] selectedNode mis à jour via tbl-node-updated:', {
-            nodeId: targetId,
-            hasData: merged.hasData,
-            hasFormula: merged.hasFormula,
-            hasLink: merged.hasLink,
-            link_targetNodeId: merged.link_targetNodeId
-          });
           return { ...prev, selectedNode: merged };
         });
       } catch (e) {
@@ -1429,21 +1410,20 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
       return;
     }
     let cancelled = false;
-    (async () => {
+    // Debounce : attendre 300ms que la sélection se stabilise
+    const timer = setTimeout(async () => {
       try {
         const full = await api.get(`/api/treebranchleaf/nodes/${id}/full`);
         if (cancelled) return;
         selectedNodeFullRef.current = full;
-        // Expose pour debug et travail TBL rapide
         if (typeof window !== 'undefined') {
           (window as any).__TBL_SELECTED_FULL = full;
         }
-        console.log('[TreeBranchLeafEditor] 🔎 Analyse complète (auto) chargée pour', id);
       } catch (e) {
         if (!cancelled) console.warn('[TreeBranchLeafEditor] ⚠️ Échec chargement analyse complète', e);
       }
-    })();
-    return () => { cancelled = true; };
+    }, 300);
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [uiState.selectedNode?.id, api]);
 
   // =============================================================================
@@ -1654,6 +1634,49 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
   // }, [isDesktop, activeMobileTab]);
 
   // =============================================================================
+  // 🎨 RENDER - Callbacks stables pour Parameters
+  // =============================================================================
+
+  const handleNodeMetadataUpdated = useCallback((node: TreeBranchLeafNode) => {
+    setUIState(prev => {
+      if (!prev.selectedNode || prev.selectedNode.id !== node.id) {
+        return prev;
+      }
+      return { ...prev, selectedNode: { ...prev.selectedNode, ...node } };
+    });
+  }, []);
+
+  const refreshTree = useCallback(async () => {
+    if (!selectedTree) return;
+    try {
+      const updatedNodes = await api.get(`/api/treebranchleaf/trees/${selectedTree.id}/nodes`);
+      onNodesUpdate(updatedNodes || []);
+    } catch (e) {
+      console.warn('⚠️ [TreeBranchLeafEditor] refreshTree a échoué:', e);
+    }
+  }, [selectedTree, api, onNodesUpdate]);
+
+  const handleSelectNodeId = useCallback((nodeId: string) => {
+    const findNode = (list: TreeBranchLeafNode[] | undefined, id: string): TreeBranchLeafNode | undefined => {
+      if (!list) return undefined;
+      for (const n of list) {
+        if (n.id === id) return n;
+        const found = findNode(n.children, id);
+        if (found) return found;
+      }
+      return undefined;
+    };
+    const found = findNode(nodesRef.current, nodeId);
+    if (found) {
+      setUIState(prev => ({ ...prev, selectedNode: found }));
+    }
+  }, []);
+
+  const handleExpandNodeId = useCallback((nodeId: string) => {
+    setUIState(prev => ({ ...prev, expandedNodes: new Set([...prev.expandedNodes, nodeId]) }));
+  }, []);
+
+  // =============================================================================
   // 🎨 RENDER - Rendu
   // =============================================================================
 
@@ -1741,41 +1764,10 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
           readOnly={readOnly}
           registry={TreeBranchLeafRegistry}
           onDeleteNode={deleteNode}
-          onNodeMetadataUpdated={(node) => {
-            setUIState(prev => {
-              if (!prev.selectedNode || prev.selectedNode.id !== node.id) {
-                return prev;
-              }
-              return { ...prev, selectedNode: { ...prev.selectedNode, ...node } };
-            });
-          }}
-          refreshTree={async () => {
-            if (!selectedTree) return;
-            try {
-              const updatedNodes = await api.get(`/api/treebranchleaf/trees/${selectedTree.id}/nodes`);
-              onNodesUpdate(updatedNodes || []);
-            } catch (e) {
-              console.warn('⚠️ [TreeBranchLeafEditor] refreshTree a échoué:', e);
-            }
-          }}
-          onSelectNodeId={(nodeId: string) => {
-            const findNode = (list: TreeBranchLeafNode[] | undefined, id: string): TreeBranchLeafNode | undefined => {
-              if (!list) return undefined;
-              for (const n of list) {
-                if (n.id === id) return n;
-                const found = findNode(n.children, id);
-                if (found) return found;
-              }
-              return undefined;
-            };
-            const found = findNode(propNodes || [], nodeId);
-            if (found) {
-              setUIState(prev => ({ ...prev, selectedNode: found }));
-            }
-          }}
-          onExpandNodeId={(nodeId: string) => {
-            setUIState(prev => ({ ...prev, expandedNodes: new Set([...prev.expandedNodes, nodeId]) }));
-          }}
+          onNodeMetadataUpdated={handleNodeMetadataUpdated}
+          refreshTree={refreshTree}
+          onSelectNodeId={handleSelectNodeId}
+          onExpandNodeId={handleExpandNodeId}
         />
       </div>
     </div>

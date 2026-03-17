@@ -2,14 +2,13 @@ import { Router, Response } from "express";
 import { authMiddleware, AuthenticatedRequest } from "../middlewares/auth";
 import { impersonationMiddleware } from "../middlewares/impersonation";
 import { db } from '../lib/database';
-import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 
 const prisma = db;
 const router = Router();
 
-const buildAvatarUrl = (req: AuthenticatedRequest, avatarPath?: string | null) => {
+const buildAvatarUrl = (_req: AuthenticatedRequest, avatarPath?: string | null) => {
   if (!avatarPath) {
     return '';
   }
@@ -18,13 +17,8 @@ const buildAvatarUrl = (req: AuthenticatedRequest, avatarPath?: string | null) =
     return avatarPath;
   }
 
-  const host = req.get('host');
-  if (!host) {
-    return avatarPath;
-  }
-
-  const normalizedPath = avatarPath.startsWith('/') ? avatarPath : `/${avatarPath}`;
-  return `${req.protocol}://${host}${normalizedPath}`;
+  // Return relative path — the frontend proxy handles routing to the API server
+  return avatarPath.startsWith('/') ? avatarPath : `/${avatarPath}`;
 };
 
 const sanitizeText = (value: unknown): string | null | undefined => {
@@ -36,23 +30,26 @@ const sanitizeText = (value: unknown): string | null | undefined => {
   return trimmed.length === 0 ? null : trimmed;
 };
 
-// Configuration de Multer pour le stockage des avatars
-const storage = multer.diskStorage({
-    destination: function (_req, _file, cb) {
-        const dir = 'public/uploads/avatars';
-        if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
-        }
-        cb(null, dir);
-    },
-    filename: function (req, file, cb) {
-        const authReq = req as AuthenticatedRequest;
-        const userId = authReq.user?.userId;
-        cb(null, userId + path.extname(file.originalname));
+// Helper: save uploaded file via express-fileupload (timestamped unique name)
+const saveUploadedFile = async (file: any, destDir: string, filename: string): Promise<string> => {
+  if (!fs.existsSync(destDir)) {
+    fs.mkdirSync(destDir, { recursive: true });
+  }
+  const ext = path.extname(file.name);
+  const finalName = `${filename}_${Date.now()}${ext}`;
+  const destPath = path.join(destDir, finalName);
+  // Remove old files for this prefix
+  try {
+    const existing = fs.readdirSync(destDir);
+    for (const f of existing) {
+      if (f.startsWith(filename + '_') || f.startsWith(filename + '.')) {
+        fs.unlinkSync(path.join(destDir, f));
+      }
     }
-});
-
-const upload = multer({ storage: storage });
+  } catch { /* ignore cleanup errors */ }
+  await file.mv(destPath);
+  return finalName;
+};
 
 // Le middleware d'authentification est appliqué à toutes les routes de ce routeur
 router.use(authMiddleware, impersonationMiddleware as any);
@@ -92,6 +89,8 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<any> =
       phoneNumber: user.phoneNumber || "", // Ajouter le numéro de téléphone
       role: user.role || "user",
   avatarUrl: buildAvatarUrl(req, user.avatarUrl),
+  coverUrl: buildAvatarUrl(req, (user as any).coverUrl),
+  coverPositionY: (user as any).coverPositionY ?? 50,
       createdAt: user.createdAt.toISOString(),
       updatedAt: user.updatedAt.toISOString(),
       organizationId: req.user?.organizationId || null,
@@ -110,20 +109,28 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<any> =
 });
 
 // POST /api/profile/avatar - Upload a new avatar
-router.post('/avatar', upload.single('avatar'), async (req: AuthenticatedRequest, res: Response): Promise<any> => {
+router.post('/avatar', async (req: AuthenticatedRequest, res: Response): Promise<any> => {
   try {
     const userId = req.user?.userId;
     if (!userId) {
-      res.status(400).json({ error: "User ID not found in token" });
-      return;
+      return res.status(400).json({ error: "User ID not found in token" });
     }
 
-    if (!req.file) {
-      res.status(400).json({ error: "Aucun fichier n'a été téléversé." });
-      return;
+    const files = (req as any).files;
+    if (!files || !files.avatar) {
+      return res.status(400).json({ error: "Aucun fichier n'a été téléversé." });
     }
 
-    const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+    const file = files.avatar;
+    const savedName = await saveUploadedFile(file, 'public/uploads/avatars', userId);
+    const avatarUrl = `/uploads/avatars/${savedName}`;
+
+    // Save to UserPhoto collection
+    try {
+      await prisma.userPhoto.create({
+        data: { userId, url: avatarUrl, category: 'profile' },
+      });
+    } catch { /* ignore if model not ready */ }
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
@@ -169,6 +176,66 @@ router.post('/avatar', upload.single('avatar'), async (req: AuthenticatedRequest
     });
   } catch (error) {
     console.error("Erreur lors du téléversement de l'avatar:", error);
+    res.status(500).json({ error: 'Erreur interne du serveur' });
+  }
+});
+
+// POST /api/profile/cover - Upload a new cover photo
+router.post('/cover', async (req: AuthenticatedRequest, res: Response): Promise<any> => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(400).json({ error: "User ID not found in token" });
+    }
+
+    const files = (req as any).files;
+    if (!files || !files.cover) {
+      return res.status(400).json({ error: "Aucun fichier n'a été téléversé." });
+    }
+
+    const file = files.cover;
+    const savedName = await saveUploadedFile(file, 'public/uploads/covers', userId);
+    const coverUrl = `/uploads/covers/${savedName}`;
+
+    // Save to UserPhoto collection
+    try {
+      await prisma.userPhoto.create({
+        data: { userId, url: coverUrl, category: 'cover' },
+      });
+    } catch { /* ignore if model not ready */ }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { coverUrl, coverPositionY: 50 },
+      select: { id: true, coverUrl: true },
+    });
+
+    res.json({ coverUrl: buildAvatarUrl(req, updatedUser.coverUrl) });
+  } catch (error) {
+    console.error("Erreur lors du téléversement de la couverture:", error);
+    res.status(500).json({ error: 'Erreur interne du serveur' });
+  }
+});
+
+// PUT /api/profile/cover-position - Save cover photo vertical position
+router.put('/cover-position', async (req: AuthenticatedRequest, res: Response): Promise<any> => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(400).json({ error: "User ID not found" });
+
+    const posY = Number(req.body?.positionY);
+    if (isNaN(posY) || posY < 0 || posY > 100) {
+      return res.status(400).json({ error: "positionY must be between 0 and 100" });
+    }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { coverPositionY: posY },
+    });
+
+    res.json({ positionY: posY });
+  } catch (error) {
+    console.error("Erreur cover-position:", error);
     res.status(500).json({ error: 'Erreur interne du serveur' });
   }
 });
@@ -318,5 +385,60 @@ router.put('/', (async (req: any, res: Response) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 }) as any);
+
+// GET /api/profile/photos - Fetch user photos grouped by category
+router.get('/photos', async (req: AuthenticatedRequest, res: Response): Promise<any> => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ error: "Utilisateur non authentifié" });
+    }
+
+    const photos = await prisma.userPhoto.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Group by category
+    const grouped: Record<string, typeof photos> = {};
+    for (const p of photos) {
+      const cat = p.category || 'other';
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push(p);
+    }
+
+    return res.json({ photos, grouped });
+  } catch (error) {
+    console.error("Error fetching user photos:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// DELETE /api/profile/photos/:id - Delete a user photo
+router.delete('/photos/:id', async (req: AuthenticatedRequest, res: Response): Promise<any> => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ error: "Utilisateur non authentifié" });
+    }
+
+    const photo = await prisma.userPhoto.findUnique({ where: { id: req.params.id } });
+    if (!photo || photo.userId !== userId) {
+      return res.status(404).json({ error: "Photo non trouvée" });
+    }
+
+    // Delete file from disk
+    const filePath = path.join('public', photo.url);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    await prisma.userPhoto.delete({ where: { id: req.params.id } });
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting photo:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 export default router;

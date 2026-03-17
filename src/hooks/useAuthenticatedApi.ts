@@ -32,7 +32,10 @@ const ROUTE_TTLS: Record<string, number> = {
   // Cache statut Google pour éviter des rafales d'appels tout en restant frais
   '/api/google-auth/status': 30_000,
   // Statut auto-google (utile pour l'auto-connect); faible risque, même fenêtre de 30s
-  '/api/auto-google-auth/status': 30_000
+  '/api/auto-google-auth/status': 30_000,
+  // TreeBranchLeaf : éviter les re-fetches inutiles (liste des arbres + nœuds)
+  '/api/treebranchleaf/trees': 15_000,
+  '/api/treebranchleaf/nodes': 10_000
 };
 const matchTtl = (path: string) => {
   for (const k of Object.keys(ROUTE_TTLS)) if (path.startsWith(k)) return ROUTE_TTLS[k];

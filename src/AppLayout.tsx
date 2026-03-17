@@ -285,12 +285,12 @@ export default function AppLayout() {
             {hasFeature('gemini_access') && <Route path="/gemini" element={<GoogleGeminiPage />} />}
             {hasFeature('telnyx_communications_access') && <Route path="/telnyx-communications" element={<TelnyxPage />} />}
 
-            {/* Routes Admin */}
+            {/* Routes Admin — réservées au Super Admin (développeur) */}
             {isSuperAdmin && <Route path="/admin/modules" element={<ModulesAdminPage />} />}
-            {can('role:read') && <Route path="/admin/roles" element={<RolesAdminPage />} />}
-            {can('user:read') && <Route path="/admin/users" element={<UsersAdminPage />} />}
-            {can('user:read') && <Route path="/admin/rights-summary" element={<UserRightsSummaryPage />} />}
-            {can('organization:read') && <Route path="/admin/organizations" element={<OrganizationsAdminPage />} />}
+            {isSuperAdmin && <Route path="/admin/roles" element={<RolesAdminPage />} />}
+            {isSuperAdmin && <Route path="/admin/users" element={<UsersAdminPage />} />}
+            {isSuperAdmin && <Route path="/admin/rights-summary" element={<UserRightsSummaryPage />} />}
+            {isSuperAdmin && <Route path="/admin/organizations" element={<OrganizationsAdminPage />} />}
             {isSuperAdmin && <Route path="/admin/permissions" element={<PermissionsAdminPage />} />}
             {isSuperAdmin && <Route path="/admin/integrations" element={<IntegrationsAdminPage />} />}
             {isSuperAdmin && <Route path="/admin/trees" element={<TreesAdminPage />} />}
@@ -333,6 +333,14 @@ export default function AppLayout() {
               <Route path="emails" element={<EmailSettings />} />
               <Route path="google" element={<GoogleSettings />} />
               <Route path="ai-measure" element={<AIMeasureSettings />} />
+              {/* Pages admin intégrées aux paramètres */}
+              {isSuperAdmin && <Route path="modules" element={<ModulesAdminPage />} />}
+              {can('role:read') && <Route path="permissions" element={<PermissionsAdminPage />} />}
+              {can('user:read') && <Route path="rights-summary" element={<UserRightsSummaryPage />} />}
+              {can('organization:read') && <Route path="organizations" element={<OrganizationsAdminPage />} />}
+              {isSuperAdmin && <Route path="trees" element={<TreesAdminPage />} />}
+              {isSuperAdmin && <Route path="documents" element={<DocumentTemplatesPage />} />}
+              {isSuperAdmin && <Route path="integrations" element={<IntegrationsAdminPage />} />}
             </Route>
             <Route path="/profile" element={<ProfilePage />} />
 

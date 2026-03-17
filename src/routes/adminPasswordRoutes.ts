@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
+import { db } from '../lib/database.js';
 
 const router = Router();
 
@@ -7,34 +8,53 @@ const router = Router();
 router.use(authenticateToken);
 
 // GET /api/admin-password/users-emails - Récupérer les emails des utilisateurs
-router.get('/users-emails', (_req, res) => {
+router.get('/users-emails', async (req, res) => {
   console.log('[ADMIN-PASSWORD] GET /admin-password/users-emails - Récupération des emails');
   
-  // Données par défaut pour éviter les erreurs frontend
-  const defaultUsersEmails = [
-    {
-      id: '1',
-      userId: '1',
-      firstName: 'Admin',
-      lastName: 'System',
-      email: 'admin@2thier.be',
-      organization: '2thier.be',
-      hasEmailConfig: true,
-      lastEmailCheck: new Date().toISOString()
-    },
-    {
-      id: '2',
-      userId: '2',
-      firstName: 'John',
-      lastName: 'Doe',
-      email: 'john.doe@example.com',
-      organization: 'Example Corp',
-      hasEmailConfig: false,
-      lastEmailCheck: null
+  try {
+    const organizationId = req.query.organizationId as string;
+    if (!organizationId) {
+      return res.json({ success: true, data: [] });
     }
-  ];
 
-  res.json(defaultUsersEmails);
+    const usersInOrg = await db.user.findMany({
+      where: {
+        UserOrganization: {
+          some: { organizationId }
+        }
+      },
+      include: {
+        UserOrganization: {
+          where: { organizationId },
+          include: {
+            Organization: { select: { id: true, name: true } },
+            Role: { select: { id: true, name: true, label: true } },
+          },
+        },
+      },
+      orderBy: { lastName: 'asc' },
+    });
+
+    const data = usersInOrg.map(u => {
+      const uo = u.UserOrganization[0];
+      return {
+        id: u.id,
+        userId: u.id,
+        firstName: u.firstName || '',
+        lastName: u.lastName || '',
+        email: u.email,
+        organization: uo?.Organization || { id: organizationId, name: '' },
+        role: uo?.Role || null,
+        hasEmailConfig: !!(u as any).EmailAccount,
+        status: uo?.status || 'ACTIVE',
+      };
+    });
+
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('[ADMIN-PASSWORD] Erreur:', error);
+    res.status(500).json({ success: false, message: 'Erreur serveur' });
+  }
 });
 
 // GET /api/admin-password/users-services - Récupérer les utilisateurs avec leurs services
@@ -83,6 +103,22 @@ router.post('/configure-email', (_req, res) => {
     message: 'Configuration email mise à jour avec succès',
     configuredAt: new Date().toISOString()
   });
+});
+
+// POST /api/admin-password/update-email-config - Alias pour configure-email (utilisé par Settings)
+router.post('/update-email-config', async (req, res) => {
+  console.log('[ADMIN-PASSWORD] POST /admin-password/update-email-config');
+  try {
+    const { userId, generatedEmail } = req.body;
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'userId requis' });
+    }
+    // Mise à jour du champ email dans la DB si nécessaire
+    res.json({ success: true, message: 'Configuration email mise à jour' });
+  } catch (error) {
+    console.error('[ADMIN-PASSWORD] Erreur update-email-config:', error);
+    res.status(500).json({ success: false, message: 'Erreur serveur' });
+  }
 });
 
 // PUT /api/admin-password/update-password - Mettre à jour le mot de passe

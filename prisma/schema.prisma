@@ -912,6 +912,10 @@ model Lead {
 
   Chantier            Chantier[]
 
+  // Wall — posts ciblant ce client
+  WallPostsTargeted   WallPost[]      @relation("WallPostTargetLead")
+  ClientAccounts      ClientAccount[]
+
   @@index([email])
   @@index([firstName, lastName])
   @@index([organizationId, createdAt])
@@ -1105,6 +1109,10 @@ model Organization {
   contact_submissions        contact_submissions[]
   website_forms              website_forms[]
   websites                   websites[]
+
+  // Wall / Réseau social
+  WallPost                   WallPost[]
+  ClientAccount              ClientAccount[]
 }
 
 model OrganizationModuleStatus {
@@ -2193,6 +2201,8 @@ model User {
   status                                              String                                   @default("active")
   address                                             String?
   avatarUrl                                           String?
+  coverUrl                                            String?
+  coverPositionY                                      Float?                                   @default(50)
   firstName                                           String?
   lastName                                            String?
   phoneNumber                                         String?
@@ -2239,6 +2249,23 @@ model User {
   website_blog_posts                                  website_blog_posts[]
   website_media_files                                 website_media_files[]
   Technicians                                         Technician[]
+
+  // Wall / Réseau social
+  WallPosts                                           WallPost[]          @relation("WallPostAuthor")
+  WallReactions                                       WallReaction[]      @relation("WallReactionUser")
+  WallComments                                        WallComment[]       @relation("WallCommentAuthor")
+  WallShares                                          WallShare[]         @relation("WallShareUser")
+  ClientAccount                                       ClientAccount?
+  PushSubscriptions                                   PushSubscription[]
+  UserPhotos                                          UserPhoto[]
+
+  // Friends & Messenger
+  FriendshipsSent                                     Friendship[]        @relation("FriendshipRequester")
+  FriendshipsReceived                                 Friendship[]        @relation("FriendshipAddressee")
+  ConversationParticipants                            ConversationParticipant[]
+  MessagesSent                                        Message[]           @relation("MessageSender")
+  CallParticipants                                    CallParticipant[]
+  CallsInitiated                                      VideoCall[]         @relation("VideoCallInitiator")
 
   @@index([organizationId, commercialSlug])
 }
@@ -3628,4 +3655,290 @@ model ElectronicSignature {
   @@index([status])
   @@index([signatureType])
   @@index([createdAt])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RÉSEAU SOCIAL D'ENTREPRISE — MUR / WALL
+// ═══════════════════════════════════════════════════════════════
+
+model WallPost {
+  id              String    @id @default(uuid())
+  organizationId  String
+  authorId        String
+
+  // Contenu
+  content         String?
+  mediaUrls       Json?               // ["url1.jpg", "video.mp4"]
+  mediaType       String?             // "image", "video", "document", "gallery"
+
+  // Visibilité : OUT (privé), IN (organisation), ALL (toutes orgas), CLIENT (client spécifique)
+  visibility      String              @default("IN")
+  targetLeadId    String?             // Si visibility=CLIENT → quel client voit ce post
+
+  // Liaison CRM automatique
+  crmEventType    String?             // DEVIS_SIGNE, COMMANDE, RECEPTION_COMMANDE, PLANIFICATION,
+                                      // CHANTIER_EN_COURS, FIN_CHANTIER, RECEPTION, FACTURE,
+                                      // TERMINE, SAV, DOCUMENT, NOUVEAU_LEAD, EMAIL_ENVOYE,
+                                      // RDV_PLANIFIE, APPEL_EFFECTUE
+  crmEntityType   String?             // "Chantier", "Lead", "Quote", "ChantierInvoice"
+  crmEntityId     String?
+
+  // Catégorie pour filtrage
+  category        String?             // "projet", "actualite", "chantier_realise", "conseil", "promotion"
+
+  // Compteurs dénormalisés
+  likesCount      Int       @default(0)
+  commentsCount   Int       @default(0)
+  sharesCount     Int       @default(0)
+
+  isPinned        Boolean   @default(false)
+  isPublished     Boolean   @default(true)
+  publishedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  author          User         @relation("WallPostAuthor", fields: [authorId], references: [id])
+  targetLead      Lead?        @relation("WallPostTargetLead", fields: [targetLeadId], references: [id])
+  reactions       WallReaction[]
+  comments        WallComment[]
+  shares          WallShare[]
+
+  @@index([organizationId, visibility, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([targetLeadId, createdAt])
+  @@index([organizationId, category, createdAt])
+  @@index([authorId, createdAt])
+  @@index([crmEntityType, crmEntityId])
+}
+
+model WallReaction {
+  id        String   @id @default(uuid())
+  postId    String
+  userId    String
+  type      String   @default("LIKE")  // LIKE, LOVE, BRAVO, UTILE, WOW
+  createdAt DateTime @default(now())
+
+  post      WallPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation("WallReactionUser", fields: [userId], references: [id])
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId])
+}
+
+model WallComment {
+  id              String    @id @default(uuid())
+  postId          String
+  authorId        String
+  parentCommentId String?
+
+  content         String
+  mediaUrl        String?
+
+  isEdited        Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  post            WallPost     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author          User         @relation("WallCommentAuthor", fields: [authorId], references: [id])
+  parentComment   WallComment? @relation("CommentReplies", fields: [parentCommentId], references: [id])
+  replies         WallComment[] @relation("CommentReplies")
+
+  @@index([postId, createdAt])
+  @@index([authorId])
+}
+
+model WallShare {
+  id          String   @id @default(uuid())
+  postId      String
+  userId      String
+  targetType  String   // INTERNAL, FACEBOOK, LINKEDIN, WHATSAPP, EMAIL, LINK
+  targetUrl   String?
+  createdAt   DateTime @default(now())
+
+  post        WallPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user        User     @relation("WallShareUser", fields: [userId], references: [id])
+
+  @@index([postId])
+  @@index([userId])
+}
+
+model ClientAccount {
+  id              String    @id @default(uuid())
+  userId          String    @unique
+  leadId          String
+  organizationId  String
+
+  isActive        Boolean   @default(true)
+  activatedAt     DateTime  @default(now())
+  lastLoginAt     DateTime?
+
+  notifyEmail     Boolean   @default(true)
+  notifyPush      Boolean   @default(true)
+  notifyWhatsApp  Boolean   @default(false)
+
+  referralCode    String?   @unique
+  referredBy      String?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lead            Lead         @relation(fields: [leadId], references: [id])
+  organization    Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@index([leadId])
+}
+
+model PushSubscription {
+  id              String    @id @default(uuid())
+  userId          String
+  endpoint        String    @unique
+  p256dh          String
+  auth            String
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+
+  user            User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model UserPhoto {
+  id        String   @id @default(uuid())
+  userId    String
+  url       String
+  category  String   @default("other")
+  createdAt DateTime @default(now())
+
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, category])
+}
+
+// ═══════════════════════════════════════════════════════
+// FRIENDS SYSTEM
+// ═══════════════════════════════════════════════════════
+
+model Friendship {
+  id            String   @id @default(uuid())
+  requesterId   String
+  addresseeId   String
+  status        String   @default("pending") // pending, accepted, blocked
+  source        String   @default("manual")  // manual, organization (auto-added)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  requester     User @relation("FriendshipRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee     User @relation("FriendshipAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, addresseeId])
+  @@index([requesterId, status])
+  @@index([addresseeId, status])
+}
+
+// ═══════════════════════════════════════════════════════
+// MESSENGER SYSTEM
+// ═══════════════════════════════════════════════════════
+
+model Conversation {
+  id            String   @id @default(uuid())
+  name          String?  // null for 1-to-1, set for groups
+  isGroup       Boolean  @default(false)
+  avatarUrl     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  lastMessageAt DateTime @default(now())
+
+  participants  ConversationParticipant[]
+  messages      Message[]
+  videoCalls    VideoCall[]
+
+  @@index([lastMessageAt])
+}
+
+model ConversationParticipant {
+  id              String   @id @default(uuid())
+  conversationId  String
+  userId          String
+  role            String   @default("member") // member, admin
+  lastReadAt      DateTime @default(now())
+  isActive        Boolean  @default(true)
+  joinedAt        DateTime @default(now())
+
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([userId, isActive])
+}
+
+model Message {
+  id              String   @id @default(uuid())
+  conversationId  String
+  senderId        String
+  content         String?
+  mediaUrls       Json?    // ["url1", "url2"]
+  mediaType       String?  // image, video, file
+  replyToId       String?
+  isEdited        Boolean  @default(false)
+  isDeleted       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender          User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  replyTo         Message?     @relation("MessageReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies         Message[]    @relation("MessageReply")
+
+  @@index([conversationId, createdAt])
+  @@index([senderId])
+}
+
+// ═══════════════════════════════════════════════════════
+// VIDEO CALLS & MEETINGS
+// ═══════════════════════════════════════════════════════
+
+model VideoCall {
+  id              String   @id @default(uuid())
+  conversationId  String?
+  initiatorId     String
+  title           String?
+  status          String   @default("ringing") // ringing, active, ended, missed
+  callType        String   @default("video")   // video, audio
+  startedAt       DateTime?
+  endedAt         DateTime?
+  duration        Int?     // seconds
+  recordingUrl    String?
+  transcription   String?  @db.Text
+  meetingSummary  String?  @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  conversation    Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  initiator       User          @relation("VideoCallInitiator", fields: [initiatorId], references: [id], onDelete: Cascade)
+  participants    CallParticipant[]
+
+  @@index([conversationId])
+  @@index([initiatorId])
+  @@index([status])
+}
+
+model CallParticipant {
+  id          String   @id @default(uuid())
+  callId      String
+  userId      String
+  status      String   @default("invited") // invited, joined, left, rejected
+  joinedAt    DateTime?
+  leftAt      DateTime?
+  isMuted     Boolean  @default(false)
+  isVideoOff  Boolean  @default(false)
+
+  call        VideoCall @relation(fields: [callId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([callId, userId])
+  @@index([userId, status])
 }

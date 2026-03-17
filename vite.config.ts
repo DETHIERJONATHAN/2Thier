@@ -102,6 +102,11 @@ export default defineConfig({
             proxyReq.setHeader('X-Forwarded-Host', forwardedHost || '');
           });
         },
+      },
+      '/uploads': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+        secure: false,
       }
     }
   },

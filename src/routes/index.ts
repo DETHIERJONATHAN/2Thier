@@ -85,6 +85,11 @@ import documentsRoutes from './documents'; // 📄 Routes documents (templates, 
 import productDocumentsRoutes from './product-documents'; // 📋 Routes fiches techniques produits (panneaux/onduleurs)
 import syncTempRoutes from './sync-temp'; // 🔄 TEMPORAIRE: Sync documents
 import joinRequestsRoutes from './join-requests'; // 📝 Routes demandes d'adhésion
+import wallRoutes from './wall'; // 🏠 Routes Mur / Réseau Social d'Entreprise
+import friendsRoutes from './friends'; // 👥 Routes Amis
+import messengerRoutes from './messenger'; // 💬 Routes Messenger
+import callsRoutes from './calls'; // 📹 Routes Appels Vidéo/Audio
+import pushRoutes from './push'; // 🔔 Routes Push Notifications
 import { authenticateToken, fetchFullUser } from '../middleware/auth'; // 🔐 Middleware auth pour TBL
 
 const apiRouter = Router();
@@ -414,6 +419,14 @@ console.log('[ROUTER] Routes fiches techniques produits montées sur /product-do
 // �🔄 TEMPORAIRE: Sync documents vers Cloud SQL
 apiRouter.use('/sync', syncTempRoutes);
 
+// 🏠 MUR / RÉSEAU SOCIAL D'ENTREPRISE
+apiRouter.use('/wall', wallRoutes);
+
+// 👥 AMIS & 💬 MESSENGER & 📹 APPELS & 🔔 PUSH
+apiRouter.use('/friends', friendsRoutes);
+apiRouter.use('/messenger', messengerRoutes);
+apiRouter.use('/calls', callsRoutes);
+apiRouter.use('/push', pushRoutes);
 
 // apiRouter.use('/auth/google', googleAuthRouter); // NOUVEAU: Authentification Google OAuth - Commenté car non défini
 

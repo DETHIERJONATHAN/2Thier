@@ -750,16 +750,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         const rawModules = fetchedModules && fetchedModules.success && Array.isArray(fetchedModules.data) ? fetchedModules.data : [];
         const activeModules = rawModules.filter((module: ModuleAccess) => {
-          const isOrgSpecific = !!module.organizationId;
-          const activeForOrg = module.isActiveForOrg !== false;
-
-          if (isOrgSpecific) {
-            // Modules scoped à une organisation : on respecte le statut spécifique, même si "active" est false globalement.
-            return activeForOrg;
-          }
-
-          // Modules globaux : ils doivent être actifs globalement ET pas explicitement désactivés pour l'organisation.
+          // Un module doit être actif globalement (Module.active) ET actif pour l'organisation
           const globallyActive = module.active !== false;
+          const activeForOrg = module.isActiveForOrg !== false;
           return globallyActive && activeForOrg;
         });
         
