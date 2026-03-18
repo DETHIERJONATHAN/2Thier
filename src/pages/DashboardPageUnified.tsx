@@ -1083,6 +1083,8 @@ export default function DashboardPageUnified() {
   const [postMood, setPostMood] = useState<string | null>(null);
   const [showMoodPicker, setShowMoodPicker] = useState(false);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [mobilePanel, setMobilePanel] = useState(0); // 0 = feed, 1 = analytics
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Analytics state (colonne droite)
@@ -1784,26 +1786,154 @@ export default function DashboardPageUnified() {
   );
 
   /* ═══════════════════════════════════════════════════════════
-     MOBILE STATS BAR
+     MOBILE ANALYTICS PANEL (swipe page 2)
      ═══════════════════════════════════════════════════════════ */
-  const renderMobileStats = () => (
-    <div style={{
-      display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
-      padding: "4px 8px", marginBottom: 4, background: FB.white,
-      borderRadius: 20, boxShadow: FB.shadow, flexWrap: "nowrap",
-    }}>
-      {[
-        { label: "Leads", val: stats.totalLeads, col: "#1890ff" },
-        { label: "Conv", val: stats.totalClients, col: FB.green },
-        { label: "%", val: stats.conversionRate.toFixed(0) + "%", col: "#fa8c16" },
-        { label: "CA", val: formatRevenue(stats.totalRevenue), col: "#722ed1" },
-      ].map((s, i) => (
-        <React.Fragment key={i}>
-          {i > 0 && <span style={{ color: FB.border, fontSize: 10 }}>·</span>}
-          <span style={{ fontSize: 11, fontWeight: 700, color: s.col }}>{s.val}</span>
-          <span style={{ fontSize: 10, color: FB.textSecondary, marginRight: 2 }}>{s.label}</span>
-        </React.Fragment>
-      ))}
+  const renderMobileAnalytics = () => (
+    <div style={{ padding: "0 4px", paddingTop: 4 }}>
+      {/* Collaborator selector (admin) */}
+      {isAdminRole && analytics?.collaborators?.length > 0 && (
+        <FBCard>
+          <span style={{ fontSize: 13, fontWeight: 700, color: FB.text, display: "block", marginBottom: 6 }}>
+            <BarChartOutlined style={{ marginRight: 4, color: FB.blue }} /> Analytics
+          </span>
+          <Select placeholder="Vue globale" allowClear showSearch
+            style={{ width: "100%", fontSize: 12 }}
+            value={selectedCollaborator}
+            onChange={(val) => setSelectedCollaborator(val || null)}
+            filterOption={(input, option) => (option?.label as string || "").toLowerCase().includes(input.toLowerCase())}
+            options={analytics.collaborators.map((c: any) => ({ value: c.id, label: `${c.name} (${getRoleLabel(c.role)})` }))}
+          />
+        </FBCard>
+      )}
+
+      {/* KPIs */}
+      <FBCard>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: FB.text }}>
+            {selectedCollaborator ? "Performance perso" : "Performance"}
+          </span>
+          <ReloadOutlined spin={refreshing || analyticsLoading}
+            style={{ fontSize: 13, color: FB.textSecondary, cursor: "pointer" }}
+            onClick={() => { handleRefresh(); fetchAnalytics(selectedCollaborator); }} />
+        </div>
+        {analyticsLoading ? (
+          <div style={{ textAlign: "center", padding: 16 }}><Spin size="small" /></div>
+        ) : analytics ? (
+          <>
+            {(isAdminRole || user?.role === "comptable") && !selectedCollaborator && (
+              <>
+                <StatWidget icon={<FunnelPlotOutlined />} label="Total Leads" value={analytics.totalLeads} color="#1890ff" sub={`+${analytics.newLeadsThisMonth} ce mois`} />
+                <StatWidget icon={<TrophyOutlined />} label="Convertis" value={analytics.convertedLeads} color={FB.green} sub={`${analytics.conversionRate}%`} />
+                <StatWidget icon={<ToolOutlined />} label="Chantiers" value={analytics.totalChantiers} color="#fa8c16" />
+                <StatWidget icon={<RiseOutlined />} label="CA" value={formatRevenue(analytics.totalRevenue)} color="#722ed1" />
+              </>
+            )}
+            {((!isTechRole && !isAdminRole) || selectedCollaborator) && analytics.roleStats?.myLeads != null && (
+              <>
+                <StatWidget icon={<FunnelPlotOutlined />} label="Mes Leads" value={analytics.roleStats.myLeads} color="#1890ff" />
+                <StatWidget icon={<TrophyOutlined />} label="Mes Convertis" value={analytics.roleStats.myConvertedLeads} color={FB.green} sub={`${analytics.roleStats.myConversion}%`} />
+                <StatWidget icon={<ToolOutlined />} label="Mes Chantiers" value={analytics.roleStats.myChantiers} color="#fa8c16" />
+                <StatWidget icon={<RiseOutlined />} label="Mon CA" value={formatRevenue(analytics.roleStats.myRevenue)} color="#722ed1" />
+              </>
+            )}
+            {(isTechRole || (selectedCollaborator && analytics.roleStats?.assignedChantiers != null)) && (
+              <>
+                <StatWidget icon={<ToolOutlined />} label="Chantiers assignés" value={analytics.roleStats.assignedChantiers || 0} color="#fa8c16" />
+                <StatWidget icon={<ClockCircleOutlined />} label="Heures ce mois" value={`${analytics.roleStats.hoursThisMonth || 0}h`} color={FB.blue} />
+                <StatWidget icon={<CalendarOutlined />} label="Jours travaillés" value={analytics.roleStats.daysWorkedThisMonth || 0} color={FB.green} />
+              </>
+            )}
+          </>
+        ) : null}
+      </FBCard>
+
+      {/* Monthly bar chart */}
+      {analytics?.monthlyData?.length > 0 && (
+        <FBCard>
+          <span style={{ fontSize: 13, fontWeight: 700, color: FB.text, display: "block", marginBottom: 6 }}>Évolution mensuelle</span>
+          <div style={{ height: 130 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={analytics.monthlyData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                <XAxis dataKey="month" tick={{ fontSize: 10, fill: FB.textSecondary }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: FB.textSecondary }} axisLine={false} tickLine={false} />
+                <RechartsTooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: "none", boxShadow: FB.shadow }} />
+                <Bar dataKey="chantiers" fill={FB.blue} radius={[4, 4, 0, 0]} barSize={16} name="Chantiers" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </FBCard>
+      )}
+
+      {/* Revenue area chart */}
+      {analytics?.monthlyData?.length > 0 && analytics.monthlyData.some((d: any) => d.revenue > 0) && (
+        <FBCard>
+          <span style={{ fontSize: 13, fontWeight: 700, color: FB.text, display: "block", marginBottom: 6 }}>CA mensuel</span>
+          <div style={{ height: 110 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={analytics.monthlyData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="mobileRevenueGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#722ed1" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#722ed1" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="month" tick={{ fontSize: 10, fill: FB.textSecondary }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: FB.textSecondary }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? `${v / 1000}k` : v} />
+                <RechartsTooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: "none", boxShadow: FB.shadow }} formatter={(value: any) => [formatRevenue(value), "CA"]} />
+                <Area type="monotone" dataKey="revenue" stroke="#722ed1" strokeWidth={2} fill="url(#mobileRevenueGrad)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </FBCard>
+      )}
+
+      {/* Pie chart leads */}
+      {chartData.leadsByStatus.length > 0 && (
+        <FBCard>
+          <span style={{ fontSize: 13, fontWeight: 700, color: FB.text, display: "block", marginBottom: 6 }}>Leads par statut</span>
+          <div style={{ height: 130 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={chartData.leadsByStatus.filter(d => d.value > 0)}
+                  cx="50%" cy="50%" outerRadius={50} innerRadius={25} dataKey="value" paddingAngle={2}>
+                  {chartData.leadsByStatus.filter(d => d.value > 0).map((entry, i) => (
+                    <Cell key={i} fill={entry.color} />
+                  ))}
+                </Pie>
+                <RechartsTooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: "none", boxShadow: FB.shadow }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 2 }}>
+            {chartData.leadsByStatus.filter(d => d.value > 0).map((d, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10, color: FB.textSecondary }}>
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: d.color }} />
+                <span>{d.name} ({d.value})</span>
+              </div>
+            ))}
+          </div>
+        </FBCard>
+      )}
+
+      {/* Top Leads */}
+      {topLeads.length > 0 && (
+        <FBCard>
+          <span style={{ fontSize: 13, fontWeight: 700, color: FB.text, display: "block", marginBottom: 6 }}>Top Leads</span>
+          {topLeads.slice(0, 5).map(lead => (
+            <Link key={lead.id} to={"/leads/" + lead.id} style={{ textDecoration: "none" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0" }}>
+                <Avatar size={24} style={{ background: lead.statusColor || FB.blue, fontSize: 10 }}>
+                  {(lead.prenom[0] || lead.nom[0] || "?")}
+                </Avatar>
+                <div style={{ flex: 1, minWidth: 0, fontSize: 12, color: FB.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {lead.prenom} {lead.nom}
+                </div>
+                <span style={{ fontSize: 10, fontWeight: 700, color: lead.score > 80 ? FB.green : lead.score > 60 ? FB.orange : FB.textSecondary }}>{lead.score}%</span>
+              </div>
+            </Link>
+          ))}
+        </FBCard>
+      )}
     </div>
   );
 
@@ -1812,7 +1942,6 @@ export default function DashboardPageUnified() {
      ═══════════════════════════════════════════════════════════ */
   const renderFeed = () => (
     <div style={{ flex: 1, minWidth: 0, maxWidth: isMobile ? "100%" : 680, margin: "0 auto", paddingTop: isMobile ? 0 : 4 }}>
-      {isMobile && renderMobileStats()}
 
       {/* "Quoi de neuf" — Twitter-style single line */}
       <FBCard>
@@ -2101,20 +2230,97 @@ export default function DashboardPageUnified() {
   );
 
   /* ═══════════════════════════════════════════════════════════
-     MAIN RENDER — 3-COLUMN LAYOUT
+     SCROLL-SNAP HANDLER (mobile swipe detection)
+     ═══════════════════════════════════════════════════════════ */
+  const handleMobileScroll = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const page = Math.round(el.scrollLeft / el.offsetWidth);
+    setMobilePanel(page);
+  }, []);
+
+  const scrollToPanel = useCallback((panel: number) => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    el.scrollTo({ left: panel * el.offsetWidth, behavior: "smooth" });
+  }, []);
+
+  /* ═══════════════════════════════════════════════════════════
+     MAIN RENDER — 3-COLUMN LAYOUT / MOBILE SWIPE
      ═══════════════════════════════════════════════════════════ */
   return (
     <div style={{ minHeight: "100vh", background: FB.bg }}>
+      {/* Hide scrollbar for webkit browsers on swipe container */}
+      <style>{`.mobile-swipe::-webkit-scrollbar { display: none; }`}</style>
       {!isMobile && !isTablet && renderLeftSidebar()}
       {!isMobile && !isTablet && renderRightSidebar()}
-      <div style={{
-        marginLeft: isMobile || isTablet ? 0 : 300,
-        marginRight: isMobile || isTablet ? 0 : 320,
-        padding: isMobile ? "4px 8px" : "8px 16px",
-        display: "flex", justifyContent: "center",
-      }}>
-        {renderFeed()}
-      </div>
+
+      {isMobile ? (
+        /* ── MOBILE: horizontal scroll-snap feed ↔ analytics ── */
+        <>
+          <div
+            ref={scrollContainerRef}
+            onScroll={handleMobileScroll}
+            className="mobile-swipe"
+            style={{
+              display: "flex", overflowX: "auto", overflowY: "hidden",
+              scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch",
+              scrollbarWidth: "none", msOverflowStyle: "none" as any,
+              height: "calc(100vh - 56px)",
+            }}
+          >
+            {/* Page 1: Feed */}
+            <div style={{
+              flex: "0 0 100%", width: "100%", scrollSnapAlign: "start",
+              overflowY: "auto", padding: "4px 8px",
+            }}>
+              {renderFeed()}
+            </div>
+            {/* Page 2: Analytics */}
+            <div style={{
+              flex: "0 0 100%", width: "100%", scrollSnapAlign: "start",
+              overflowY: "auto", padding: "4px 8px",
+            }}>
+              {renderMobileAnalytics()}
+            </div>
+          </div>
+          {/* Dot indicator + swipe hint */}
+          <div style={{
+            position: "fixed", bottom: 12, left: "50%", transform: "translateX(-50%)",
+            display: "flex", gap: 6, alignItems: "center", zIndex: 50,
+            background: "rgba(0,0,0,0.5)", borderRadius: 12, padding: "4px 10px",
+          }}>
+            {["Fil", "Stats"].map((label, i) => (
+              <div key={i} onClick={() => scrollToPanel(i)} style={{
+                display: "flex", alignItems: "center", gap: 3, cursor: "pointer",
+                padding: "2px 6px", borderRadius: 8,
+                background: mobilePanel === i ? "rgba(255,255,255,0.25)" : "transparent",
+                transition: "all 0.2s",
+              }}>
+                <div style={{
+                  width: mobilePanel === i ? 8 : 6, height: mobilePanel === i ? 8 : 6,
+                  borderRadius: "50%",
+                  background: mobilePanel === i ? "#fff" : "rgba(255,255,255,0.4)",
+                  transition: "all 0.2s",
+                }} />
+                <span style={{ fontSize: 10, color: mobilePanel === i ? "#fff" : "rgba(255,255,255,0.5)", fontWeight: 600 }}>
+                  {label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        /* ── DESKTOP / TABLET: classic centered feed ── */
+        <div style={{
+          marginLeft: isTablet ? 0 : 300,
+          marginRight: isTablet ? 0 : 320,
+          padding: "8px 16px",
+          display: "flex", justifyContent: "center",
+        }}>
+          {renderFeed()}
+        </div>
+      )}
       <MessengerChat />
     </div>
   );
