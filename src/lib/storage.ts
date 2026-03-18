@@ -41,17 +41,22 @@ export async function uploadFile(
 }
 
 /**
- * Upload a file using express-fileupload's .mv() — local only, wraps GCS in prod.
- * @param file     - express-fileupload file object (.mv, .name, .mimetype, .data)
+ * Upload a file using express-fileupload — reads from tempFilePath when useTempFiles is enabled.
+ * @param file     - express-fileupload file object (.data, .tempFilePath, .mimetype, .mv)
  * @param key      - The storage path, e.g. "wall/1710000000_photo.jpg"
  * @returns The public URL
  */
 export async function uploadExpressFile(
-  file: { data: Buffer; mimetype: string; mv: (path: string) => Promise<void> },
+  file: { data: Buffer; mimetype: string; tempFilePath?: string; mv: (path: string) => Promise<void> },
   key: string,
 ): Promise<string> {
   if (isProduction) {
-    return uploadToGCS(file.data, key, file.mimetype);
+    // When useTempFiles is enabled, file.data is empty — read from temp file instead
+    let buffer = file.data;
+    if ((!buffer || buffer.length === 0) && file.tempFilePath) {
+      buffer = await fs.readFile(file.tempFilePath);
+    }
+    return uploadToGCS(buffer, key, file.mimetype);
   }
   // In dev, save locally under public/uploads/
   const localPath = path.join(process.cwd(), 'public', 'uploads', key);

@@ -402,7 +402,12 @@ router.post('/upload', async (req: Request, res: Response) => {
     const fileName = file.name;
     const mimeType = file.mimetype;
     const fileSize = file.size;
-    const fileBuffer = file.data;
+    // When useTempFiles is enabled, file.data is empty — read from temp file
+    let fileBuffer: Buffer = file.data;
+    if ((!fileBuffer || fileBuffer.length === 0) && file.tempFilePath) {
+      const fsP = await import('fs/promises');
+      fileBuffer = await fsP.readFile(file.tempFilePath);
+    }
 
     const resolvedStorageType = storageType || 'LOCAL';
     let localPath: string | null = null;
