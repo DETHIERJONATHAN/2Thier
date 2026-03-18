@@ -48,6 +48,7 @@ import {
   KeyOutlined,
   SafetyOutlined,
   ApartmentOutlined,
+  FilterOutlined,
 } from "@ant-design/icons";
 import { useSharedSections } from "../hooks/useSharedSections";
 import { organizeModulesInSections } from "../utils/modulesSections";
@@ -274,7 +275,7 @@ const FBCard: React.FC<{
 }> = ({ children, style, noPadding }) => (
   <div style={{
     background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow,
-    padding: noPadding ? 0 : 16, marginBottom: 16, ...style,
+    padding: noPadding ? 0 : 8, marginBottom: 6, ...style,
   }}>
     {children}
   </div>
@@ -1081,6 +1082,7 @@ export default function DashboardPageUnified() {
   const [postMediaPreviews, setPostMediaPreviews] = useState<{ file: File; preview: string; type: string }[]>([]);
   const [postMood, setPostMood] = useState<string | null>(null);
   const [showMoodPicker, setShowMoodPicker] = useState(false);
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Analytics state (colonne droite)
@@ -1786,22 +1788,21 @@ export default function DashboardPageUnified() {
      ═══════════════════════════════════════════════════════════ */
   const renderMobileStats = () => (
     <div style={{
-      display: "flex", gap: 8, overflowX: "auto", padding: "0 0 4px",
-      marginBottom: 12, WebkitOverflowScrolling: "touch", scrollbarWidth: "none",
+      display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+      padding: "4px 8px", marginBottom: 4, background: FB.white,
+      borderRadius: 20, boxShadow: FB.shadow, flexWrap: "nowrap",
     }}>
       {[
         { label: "Leads", val: stats.totalLeads, col: "#1890ff" },
-        { label: "Convertis", val: stats.totalClients, col: FB.green },
-        { label: "Conversion", val: stats.conversionRate.toFixed(0) + "%", col: "#fa8c16" },
+        { label: "Conv", val: stats.totalClients, col: FB.green },
+        { label: "%", val: stats.conversionRate.toFixed(0) + "%", col: "#fa8c16" },
         { label: "CA", val: formatRevenue(stats.totalRevenue), col: "#722ed1" },
       ].map((s, i) => (
-        <div key={i} style={{
-          flex: "0 0 auto", background: FB.white, boxShadow: FB.shadow,
-          borderRadius: FB.radius, padding: "10px 16px", textAlign: "center", minWidth: 90,
-        }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: s.col }}>{s.val}</div>
-          <div style={{ fontSize: 11, color: FB.textSecondary, marginTop: 2 }}>{s.label}</div>
-        </div>
+        <React.Fragment key={i}>
+          {i > 0 && <span style={{ color: FB.border, fontSize: 10 }}>·</span>}
+          <span style={{ fontSize: 11, fontWeight: 700, color: s.col }}>{s.val}</span>
+          <span style={{ fontSize: 10, color: FB.textSecondary, marginRight: 2 }}>{s.label}</span>
+        </React.Fragment>
       ))}
     </div>
   );
@@ -1810,74 +1811,115 @@ export default function DashboardPageUnified() {
      CENTER FEED
      ═══════════════════════════════════════════════════════════ */
   const renderFeed = () => (
-    <div style={{ flex: 1, minWidth: 0, maxWidth: isMobile ? "100%" : 680, margin: "0 auto", paddingTop: isMobile ? 0 : 16 }}>
+    <div style={{ flex: 1, minWidth: 0, maxWidth: isMobile ? "100%" : 680, margin: "0 auto", paddingTop: isMobile ? 0 : 4 }}>
       {isMobile && renderMobileStats()}
 
-      {/* "Quoi de neuf" — REAL Create Post */}
+      {/* "Quoi de neuf" — Twitter-style single line */}
       <FBCard>
         <input type="file" ref={fileInputRef} multiple style={{ display: 'none' }} onChange={handleFileChange} />
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 12 }}>
-          <Avatar size={40} src={user?.avatarUrl}
+        {postMood && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4, paddingLeft: 36 }}>
+            <span style={{ fontSize: 14 }}>{postMood}</span>
+            <span style={{ fontSize: 11, color: FB.textSecondary }}>{moods.find(m => m.emoji === postMood)?.label}</span>
+            <span onClick={() => setPostMood(null)} style={{ fontSize: 11, color: FB.textSecondary, cursor: 'pointer' }}>✕</span>
+          </div>
+        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <Avatar size={30} src={user?.avatarUrl}
             icon={!user?.avatarUrl ? <UserOutlined /> : undefined}
-            style={{ background: !user?.avatarUrl ? FB.blue : undefined, flexShrink: 0, marginTop: 2 }} />
-          <div style={{ flex: 1 }}>
-            {postMood && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                <span style={{ fontSize: 16 }}>{postMood}</span>
-                <span style={{ fontSize: 12, color: FB.textSecondary }}>
-                  {moods.find(m => m.emoji === postMood)?.label || 'Humeur'}
-                </span>
-                <span onClick={() => setPostMood(null)}
-                  style={{ fontSize: 12, color: FB.textSecondary, cursor: 'pointer', marginLeft: 4 }}>✕</span>
-              </div>
-            )}
-            <textarea
-              value={newPostContent}
-              onChange={e => setNewPostContent(e.target.value)}
-              placeholder={"Quoi de neuf, " + (user?.firstName || "cher collègue") + " ?"}
-              style={{
-                width: '100%', background: FB.btnGray, borderRadius: 12, padding: "10px 14px",
-                fontSize: 15, color: FB.text, border: "none", outline: "none",
-                resize: "none", minHeight: (newPostContent || postMediaPreviews.length > 0) ? 80 : 40,
-                transition: "min-height 0.2s", fontFamily: "inherit", boxSizing: 'border-box',
-              }}
-              onFocus={e => { e.currentTarget.style.minHeight = "80px"; }}
-            />
+            style={{ background: !user?.avatarUrl ? FB.blue : undefined, flexShrink: 0 }} />
+          <textarea
+            value={newPostContent}
+            onChange={e => setNewPostContent(e.target.value)}
+            placeholder={"Quoi de neuf, " + (user?.firstName || "collègue") + " ?"}
+            rows={1}
+            style={{
+              flex: 1, background: FB.btnGray, borderRadius: 20, padding: "6px 12px",
+              fontSize: 13, color: FB.text, border: "none", outline: "none",
+              resize: "none", minHeight: (newPostContent || postMediaPreviews.length > 0) ? 60 : 32,
+              transition: "min-height 0.2s", fontFamily: "inherit", boxSizing: 'border-box',
+            }}
+            onFocus={e => { e.currentTarget.style.minHeight = "60px"; }}
+          />
+          {/* Action icons inline à droite */}
+          <div style={{ display: "flex", gap: 2, flexShrink: 0, alignItems: "center" }}>
+            {[
+              { emoji: "📷", action: () => handleMediaSelect('image/*'), tip: "Photo" },
+              { emoji: "🎥", action: () => handleMediaSelect('video/*'), tip: "Vidéo" },
+              { emoji: "📎", action: () => handleMediaSelect('*/*'), tip: "Fichier" },
+            ].map((btn, i) => (
+              <AntTooltip key={i} title={btn.tip}>
+                <div onClick={btn.action}
+                  style={{ width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 14, transition: "background 0.15s" }}
+                  onMouseEnter={e => (e.currentTarget.style.background = FB.btnGray)}
+                  onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                  {btn.emoji}
+                </div>
+              </AntTooltip>
+            ))}
+            <div style={{ position: 'relative' }}>
+              <AntTooltip title="Humeur">
+                <div onClick={() => setShowMoodPicker(!showMoodPicker)}
+                  style={{ width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 14, transition: "background 0.15s" }}
+                  onMouseEnter={e => (e.currentTarget.style.background = FB.btnGray)}
+                  onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                  😊
+                </div>
+              </AntTooltip>
+              {showMoodPicker && (
+                <div style={{
+                  position: 'absolute', bottom: '100%', right: 0, marginBottom: 4,
+                  background: FB.white, borderRadius: 12, boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+                  padding: 6, display: 'flex', flexWrap: 'wrap', gap: 2, width: 200, zIndex: 100,
+                }}>
+                  {moods.map(m => (
+                    <div key={m.emoji}
+                      onClick={() => { setPostMood(m.emoji); setShowMoodPicker(false); }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '4px 6px', borderRadius: 6, cursor: 'pointer', fontSize: 12, background: postMood === m.emoji ? FB.blue + '15' : 'transparent' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = FB.btnGray; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = postMood === m.emoji ? FB.blue + '15' : 'transparent'; }}>
+                      <span style={{ fontSize: 16 }}>{m.emoji}</span>
+                      <span style={{ color: FB.text, fontSize: 11 }}>{m.label}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Media previews */}
         {postMediaPreviews.length > 0 && (
-          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '0 0 12px', marginLeft: 50 }}>
+          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '4px 0 0', marginLeft: 36 }}>
             {postMediaPreviews.map((m, i) => (
               <div key={i} style={{ position: 'relative', flexShrink: 0 }}>
                 {m.type === 'video' ? (
-                  <video src={m.preview} style={{ width: 120, height: 90, objectFit: 'cover', borderRadius: 8 }} />
+                  <video src={m.preview} style={{ width: 80, height: 60, objectFit: 'cover', borderRadius: 6 }} />
                 ) : (
-                  <img src={m.preview} alt="" style={{ width: 120, height: 90, objectFit: 'cover', borderRadius: 8 }} />
+                  <img src={m.preview} alt="" style={{ width: 80, height: 60, objectFit: 'cover', borderRadius: 6 }} />
                 )}
                 <div onClick={() => removeMediaPreview(i)} style={{
-                  position: 'absolute', top: -6, right: -6, width: 22, height: 22, borderRadius: '50%',
+                  position: 'absolute', top: -4, right: -4, width: 18, height: 18, borderRadius: '50%',
                   background: '#e74c3c', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 12, cursor: 'pointer', fontWeight: 700, boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
+                  fontSize: 10, cursor: 'pointer', fontWeight: 700,
                 }}>✕</div>
               </div>
             ))}
           </div>
         )}
 
-        {/* Visibility selector + Post button */}
+        {/* Visibility selector + Post button — only when composing */}
         {(newPostContent.trim() || postMediaPreviews.length > 0) && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-            <div style={{ display: "flex", gap: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6 }}>
+            <div style={{ display: "flex", gap: 4 }}>
               {(["IN", "ALL", "OUT"] as WallVisibility[]).map(v => {
                 const vis = visibilityLabel[v];
                 const active = newPostVisibility === v;
                 return (
                   <div key={v} onClick={() => setNewPostVisibility(v)}
                     style={{
-                      display: "flex", alignItems: "center", gap: 4, padding: "4px 10px",
-                      borderRadius: 16, cursor: "pointer", fontSize: 12, fontWeight: 600,
+                      display: "flex", alignItems: "center", gap: 3, padding: "2px 8px",
+                      borderRadius: 12, cursor: "pointer", fontSize: 11, fontWeight: 600,
                       background: active ? vis.color + "20" : FB.btnGray,
                       color: active ? vis.color : FB.textSecondary,
                       border: active ? `1px solid ${vis.color}` : "1px solid transparent",
@@ -1891,168 +1933,97 @@ export default function DashboardPageUnified() {
               onClick={handleCreatePost}
               disabled={postSubmitting || (!newPostContent.trim() && postMediaPreviews.length === 0)}
               style={{
-                padding: "6px 20px", background: FB.blue, color: FB.white,
-                border: "none", borderRadius: 6, fontWeight: 600, fontSize: 14,
+                padding: "4px 16px", background: FB.blue, color: FB.white,
+                border: "none", borderRadius: 14, fontWeight: 600, fontSize: 13,
                 cursor: postSubmitting ? "not-allowed" : "pointer",
                 opacity: postSubmitting ? 0.6 : 1,
               }}>
-              {postSubmitting ? "Publication..." : "Publier"}
+              {postSubmitting ? "..." : "Publier"}
             </button>
           </div>
         )}
-
-        <div style={{ height: 1, background: FB.border, margin: "0 0 8px" }} />
-
-        {/* Post action bar — Photo/Vidéo/Humeur + Quick Actions */}
-        <div style={{ display: "flex", justifyContent: "space-around", position: 'relative' }}>
-          <div onClick={() => handleMediaSelect('image/*')}
-            style={{
-              flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-              gap: 6, padding: "8px 4px", borderRadius: FB.radius, cursor: "pointer",
-              transition: "background 0.15s",
-            }}
-            onMouseEnter={e => (e.currentTarget.style.background = FB.btnGray)}
-            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-          >
-            <span style={{ color: '#27ae60', fontSize: 18 }}>📷</span>
-            {!isMobile && <span style={{ fontSize: 13, fontWeight: 600, color: FB.textSecondary }}>Photo</span>}
-          </div>
-
-          <div onClick={() => handleMediaSelect('video/*')}
-            style={{
-              flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-              gap: 6, padding: "8px 4px", borderRadius: FB.radius, cursor: "pointer",
-              transition: "background 0.15s",
-            }}
-            onMouseEnter={e => (e.currentTarget.style.background = FB.btnGray)}
-            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-          >
-            <span style={{ color: '#e74c3c', fontSize: 18 }}>🎥</span>
-            {!isMobile && <span style={{ fontSize: 13, fontWeight: 600, color: FB.textSecondary }}>Vidéo</span>}
-          </div>
-
-          <div onClick={() => handleMediaSelect('*/*')}
-            style={{
-              flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-              gap: 6, padding: "8px 4px", borderRadius: FB.radius, cursor: "pointer",
-              transition: "background 0.15s",
-            }}
-            onMouseEnter={e => (e.currentTarget.style.background = FB.btnGray)}
-            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-          >
-            <span style={{ color: '#3498db', fontSize: 18 }}>📎</span>
-            {!isMobile && <span style={{ fontSize: 13, fontWeight: 600, color: FB.textSecondary }}>Document</span>}
-          </div>
-
-          <div style={{ flex: 1, position: 'relative' }}>
-            <div onClick={() => setShowMoodPicker(!showMoodPicker)}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                gap: 6, padding: "8px 4px", borderRadius: FB.radius, cursor: "pointer",
-                transition: "background 0.15s",
-              }}
-              onMouseEnter={e => (e.currentTarget.style.background = FB.btnGray)}
-              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-            >
-              <span style={{ color: '#f39c12', fontSize: 18 }}>😊</span>
-              {!isMobile && <span style={{ fontSize: 13, fontWeight: 600, color: FB.textSecondary }}>Humeur</span>}
-            </div>
-            {showMoodPicker && (
-              <div style={{
-                position: 'absolute', bottom: '100%', right: 0, marginBottom: 4,
-                background: FB.white, borderRadius: 12, boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-                padding: 8, display: 'flex', flexWrap: 'wrap', gap: 4, width: 220, zIndex: 100,
-              }}>
-                {moods.map(m => (
-                  <div key={m.emoji}
-                    onClick={() => { setPostMood(m.emoji); setShowMoodPicker(false); }}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 4, padding: '6px 8px',
-                      borderRadius: 8, cursor: 'pointer', fontSize: 13,
-                      background: postMood === m.emoji ? FB.blue + '15' : 'transparent',
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.background = FB.btnGray; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = postMood === m.emoji ? FB.blue + '15' : 'transparent'; }}
-                  >
-                    <span style={{ fontSize: 18 }}>{m.emoji}</span>
-                    <span style={{ color: FB.text }}>{m.label}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
       </FBCard>
 
-      {/* Mobile: shortcuts */}
+      {/* Mobile: shortcuts — ultra compact pill style */}
       {isMobile && (
         <div style={{
-          display: "flex", gap: 8, overflowX: "auto", marginBottom: 12,
+          display: "flex", gap: 4, overflowX: "auto", marginBottom: 4,
           WebkitOverflowScrolling: "touch", scrollbarWidth: "none",
         }}>
           {sectionsWithModules.flatMap(s => s.modules).map((mod, i) => (
             <Link key={mod.key || mod.id || i} to={getModuleRoute(mod)} style={{ textDecoration: "none" }}>
               <div style={{
-                flex: "0 0 auto", display: "flex", flexDirection: "column",
-                alignItems: "center", gap: 4, padding: "8px 14px",
-                borderRadius: FB.radius, background: FB.white, boxShadow: FB.shadow, minWidth: 70,
+                flex: "0 0 auto", display: "flex", alignItems: "center",
+                gap: 4, padding: "4px 8px",
+                borderRadius: 14, background: FB.white, boxShadow: FB.shadow,
               }}>
                 <div style={{
-                  width: 36, height: 36, borderRadius: "50%", background: getModuleColor(mod),
+                  width: 22, height: 22, borderRadius: "50%", background: getModuleColor(mod),
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 16, color: FB.white,
+                  fontSize: 11, color: FB.white,
                 }}>
                   {getModuleIcon(mod)}
                 </div>
-                <span style={{ fontSize: 11, fontWeight: 600, color: FB.text, whiteSpace: "nowrap" }}>{mod.label || mod.name || mod.key}</span>
+                <span style={{ fontSize: 10, fontWeight: 600, color: FB.text, whiteSpace: "nowrap" }}>{mod.label || mod.name || mod.key}</span>
               </div>
             </Link>
           ))}
         </div>
       )}
 
-      {/* Feed header with filters */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0 12px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: FB.text }}>Fil d'actualité</span>
-          {wallPosts.length > 0 && (
-            <span style={{ fontSize: 12, color: FB.textSecondary, background: FB.btnGray, borderRadius: 12, padding: "2px 8px" }}>
-              {wallPosts.length} post{wallPosts.length > 1 ? "s" : ""}
-            </span>
-          )}
-        </div>
-        <div onClick={handleRefresh}
-          style={{
-            display: "flex", alignItems: "center", gap: 6, padding: "6px 12px",
-            borderRadius: 20, background: FB.btnGray, cursor: "pointer",
-            fontSize: 13, fontWeight: 600, color: FB.textSecondary,
-          }}>
-          <ReloadOutlined spin={refreshing} />
-          {!isMobile && <span>Actualiser</span>}
-        </div>
-      </div>
-
-      {/* Category filter chips */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
-        {[
-          { key: "", label: "Tout", icon: "🏠" },
-          { key: "projet", label: "Projets", icon: "📋" },
-          { key: "chantier_realise", label: "Chantiers", icon: "🔨" },
-          { key: "promotion", label: "Promos", icon: "📢" },
-          { key: "conseil", label: "Conseils", icon: "💡" },
-        ].map(cat => (
-          <div key={cat.key} onClick={() => { setFeedFilter(cat.key); setWallPosts([]); setWallCursor(null); }}
-            style={{
-              display: "flex", alignItems: "center", gap: 4, padding: "4px 12px",
-              borderRadius: 20, cursor: "pointer", fontSize: 13, fontWeight: 600,
-              background: feedFilter === cat.key ? FB.blue + "15" : FB.white,
-              color: feedFilter === cat.key ? FB.blue : FB.textSecondary,
-              border: feedFilter === cat.key ? `1px solid ${FB.blue}` : `1px solid ${FB.border}`,
-              boxShadow: FB.shadow,
-            }}>
-            <span>{cat.icon}</span> <span>{cat.label}</span>
+      {/* Feed header — single compact line with filter dropdown */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0 4px", marginBottom: 4, position: "relative" }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: FB.text }}>Fil</span>
+        {wallPosts.length > 0 && (
+          <span style={{ fontSize: 10, color: FB.textSecondary, background: FB.btnGray, borderRadius: 8, padding: "0 5px", fontWeight: 600 }}>
+            {wallPosts.length}
+          </span>
+        )}
+        {feedFilter && (
+          <span style={{ fontSize: 10, background: FB.blue + "15", color: FB.blue, borderRadius: 8, padding: "1px 6px", fontWeight: 600 }}>
+            {({ projet: "📋 Projets", chantier_realise: "🔨 Chantiers", promotion: "📢 Promos", conseil: "💡 Conseils" } as Record<string,string>)[feedFilter]}
+            <span onClick={() => { setFeedFilter(""); setWallPosts([]); setWallCursor(null); }} style={{ cursor: "pointer", marginLeft: 3 }}>✕</span>
+          </span>
+        )}
+        <div style={{ marginLeft: "auto", display: "flex", gap: 4, alignItems: "center" }}>
+          <div onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: "50%", background: feedFilter ? FB.blue + "15" : FB.btnGray, cursor: "pointer", position: "relative" }}>
+            <FilterOutlined style={{ fontSize: 12, color: feedFilter ? FB.blue : FB.textSecondary }} />
           </div>
-        ))}
+          <div onClick={handleRefresh}
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: "50%", background: FB.btnGray, cursor: "pointer" }}>
+            <ReloadOutlined spin={refreshing} style={{ fontSize: 12, color: FB.textSecondary }} />
+          </div>
+        </div>
+        {/* Filter dropdown popover */}
+        {showFilterDropdown && (
+          <div style={{
+            position: "absolute", top: "100%", right: 0, zIndex: 50,
+            background: FB.white, borderRadius: 10, boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+            padding: 6, display: "flex", flexDirection: "column", gap: 2, minWidth: 150, marginTop: 2,
+          }}>
+            {[
+              { key: "", label: "Tout", icon: "🏠" },
+              { key: "projet", label: "Projets", icon: "📋" },
+              { key: "chantier_realise", label: "Chantiers", icon: "🔨" },
+              { key: "promotion", label: "Promos", icon: "📢" },
+              { key: "conseil", label: "Conseils", icon: "💡" },
+            ].map(cat => (
+              <div key={cat.key} onClick={() => { setFeedFilter(cat.key); setWallPosts([]); setWallCursor(null); setShowFilterDropdown(false); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6, padding: "5px 10px",
+                  borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 600,
+                  background: feedFilter === cat.key ? FB.blue + "15" : "transparent",
+                  color: feedFilter === cat.key ? FB.blue : FB.text,
+                }}
+                onMouseEnter={e => { if (feedFilter !== cat.key) e.currentTarget.style.background = FB.btnGray; }}
+                onMouseLeave={e => { if (feedFilter !== cat.key) e.currentTarget.style.background = "transparent"; }}>
+                <span>{cat.icon}</span> <span>{cat.label}</span>
+                {feedFilter === cat.key && <span style={{ marginLeft: "auto", fontSize: 11 }}>✓</span>}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Wall Posts (real API data) */}
@@ -2139,7 +2110,7 @@ export default function DashboardPageUnified() {
       <div style={{
         marginLeft: isMobile || isTablet ? 0 : 300,
         marginRight: isMobile || isTablet ? 0 : 320,
-        padding: isMobile ? "12px 12px" : "16px 16px",
+        padding: isMobile ? "4px 8px" : "8px 16px",
         display: "flex", justifyContent: "center",
       }}>
         {renderFeed()}
