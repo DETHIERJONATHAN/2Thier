@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Avatar, Input, Badge } from 'antd';
+import { Avatar, Input } from 'antd';
 import {
   MessageOutlined,
   CloseOutlined,
@@ -81,6 +81,18 @@ const FB = {
 const CHAT_WIDTH = 338;
 const CHAT_HEIGHT = 455;
 const LIST_HEIGHT = 500;
+const MOBILE_BREAKPOINT = 768;
+
+/** Hook to detect mobile screen */
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < MOBILE_BREAKPOINT : false);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  return isMobile;
+}
 
 // ═══════════════════════════════════════════════════════════════
 // MESSENGER CHAT COMPONENT
@@ -89,6 +101,7 @@ const LIST_HEIGHT = 500;
 const MessengerChat: React.FC = () => {
   const { api } = useAuthenticatedApi();
   const { user } = useAuth();
+  const isMobile = useIsMobile();
 
   // Panel & chat state
   const [isListOpen, setIsListOpen] = useState(false);
@@ -248,7 +261,8 @@ const MessengerChat: React.FC = () => {
     setOpenChats(prev => {
       if (prev.includes(convId)) return prev;
       const newChats = [...prev, convId];
-      return newChats.slice(-3); // Max 3 open chat windows
+      // Mobile: only 1 chat window at a time
+      return isMobile ? [convId] : newChats.slice(-3);
     });
     setIsListOpen(false);
   };
@@ -309,10 +323,13 @@ const MessengerChat: React.FC = () => {
     if (!isListOpen) return null;
     return (
       <div style={{
-        position: 'fixed', bottom: 56, right: 16, width: CHAT_WIDTH, height: LIST_HEIGHT,
-        background: FB.white, borderRadius: '8px 8px 0 0', boxShadow: '0 -2px 12px rgba(0,0,0,0.15)',
+        position: 'fixed',
+        ...(isMobile
+          ? { top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', borderRadius: 0 }
+          : { bottom: 56, right: 16, width: CHAT_WIDTH, height: LIST_HEIGHT, borderRadius: '8px 8px 0 0' }),
+        background: FB.white, boxShadow: '0 -2px 12px rgba(0,0,0,0.15)',
         display: 'flex', flexDirection: 'column', zIndex: 1100,
-        border: `1px solid ${FB.border}`,
+        border: isMobile ? 'none' : `1px solid ${FB.border}`,
       }}>
         {/* Header */}
         <div style={{ padding: '12px 16px', borderBottom: `1px solid ${FB.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -449,9 +466,20 @@ const MessengerChat: React.FC = () => {
       onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
       onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
     >
-      <Badge count={totalUnread} offset={[-2, -2]} size="small">
-        <MessageOutlined style={{ fontSize: 22, color: '#fff' }} />
-      </Badge>
+      <MessageOutlined style={{ fontSize: 22, color: '#fff' }} />
+      {totalUnread > 0 && (
+        <div style={{
+          position: 'absolute', top: -4, right: -4,
+          minWidth: 20, height: 20, borderRadius: 10,
+          background: '#e41e3f', color: '#fff',
+          fontSize: 11, fontWeight: 700,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '0 5px', border: '2px solid #fff',
+          lineHeight: 1,
+        }}>
+          {totalUnread > 99 ? '99+' : totalUnread}
+        </div>
+      )}
     </div>
   );
 
@@ -464,7 +492,9 @@ const MessengerChat: React.FC = () => {
       conversationId={convId}
       conversation={conversations.find(c => c.id === convId)}
       index={index}
+      isMobile={isMobile}
       onClose={() => closeChat(convId)}
+      onBack={() => { closeChat(convId); setIsListOpen(true); }}
       api={api}
       userId={user?.id || ''}
       onRefresh={fetchConversations}
@@ -500,14 +530,16 @@ interface ChatWindowProps {
   conversationId: string;
   conversation?: Conversation;
   index: number;
+  isMobile: boolean;
   onClose: () => void;
+  onBack: () => void;
   api: any;
   userId: string;
   onRefresh: () => void;
   onStartCall: (conversationId: string, callType: 'video' | 'audio', conversationName: string) => void;
 }
 
-const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, index, onClose, api, userId, onRefresh, onStartCall }) => {
+const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, index, isMobile, onClose, onBack, api, userId, onRefresh, onStartCall }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -565,14 +597,15 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
   const convName = conversation?.name || 'Conversation';
   const convAvatar = conversation?.avatarUrl;
   const isGroup = conversation?.isGroup;
-  const rightOffset = 16 + (index + 1) * (CHAT_WIDTH + 12);
+  const rightOffset = isMobile ? 0 : 16 + (index + 1) * (CHAT_WIDTH + 12);
 
   const formatTime = (date: string) => {
     const d = new Date(date);
     return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   };
 
-  if (minimized) {
+  // On mobile: no minimized bubble (use back button instead)
+  if (minimized && !isMobile) {
     return (
       <div
         onClick={() => setMinimized(false)}
@@ -588,22 +621,41 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
     );
   }
 
+  // On mobile minimized = go back to list
+  if (minimized && isMobile) {
+    onBack();
+    return null;
+  }
+
   return (
     <div style={{
-      position: 'fixed', bottom: 0, right: rightOffset, width: CHAT_WIDTH,
-      height: CHAT_HEIGHT, background: FB.white, borderRadius: '8px 8px 0 0',
-      boxShadow: '0 -2px 12px rgba(0,0,0,0.15)', display: 'flex', flexDirection: 'column',
-      zIndex: 1100, border: `1px solid ${FB.border}`,
+      position: 'fixed',
+      ...(isMobile
+        ? { top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', borderRadius: 0 }
+        : { bottom: 0, right: rightOffset, width: CHAT_WIDTH, height: CHAT_HEIGHT, borderRadius: '8px 8px 0 0' }),
+      background: FB.white,
+      boxShadow: isMobile ? 'none' : '0 -2px 12px rgba(0,0,0,0.15)',
+      display: 'flex', flexDirection: 'column',
+      zIndex: 1100, border: isMobile ? 'none' : `1px solid ${FB.border}`,
     }}>
       {/* Header */}
       <div style={{
-        padding: '8px 12px', borderBottom: `1px solid ${FB.border}`,
+        padding: isMobile ? '12px 12px' : '8px 12px', borderBottom: `1px solid ${FB.border}`,
         display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', flexShrink: 0,
-        background: FB.white, borderRadius: '8px 8px 0 0',
+        background: FB.white, borderRadius: isMobile ? 0 : '8px 8px 0 0',
       }}>
+        {/* Back button on mobile */}
+        {isMobile && (
+          <div onClick={onBack}
+            style={{ width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+            onMouseEnter={e => e.currentTarget.style.background = FB.hover}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+            <span style={{ fontSize: 18, color: FB.blue }}>‹</span>
+          </div>
+        )}
         <Avatar size={32} src={convAvatar} icon={isGroup ? <TeamOutlined /> : <UserOutlined />}
           style={{ backgroundColor: convAvatar ? undefined : FB.blue, flexShrink: 0 }} />
-        <div style={{ flex: 1, minWidth: 0 }} onClick={() => setMinimized(true)}>
+        <div style={{ flex: 1, minWidth: 0 }} onClick={() => !isMobile && setMinimized(true)}>
           <div style={{ fontSize: 13, fontWeight: 700, color: FB.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {convName}
           </div>
@@ -623,13 +675,15 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
             <VideoCameraOutlined style={{ fontSize: 14, color: FB.blue }} />
           </div>
-          <div onClick={() => setMinimized(true)}
-            style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-            onMouseEnter={e => e.currentTarget.style.background = FB.hover}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-            <MinusOutlined style={{ fontSize: 14, color: FB.blue }} />
-          </div>
-          <div onClick={onClose}
+          {!isMobile && (
+            <div onClick={() => setMinimized(true)}
+              style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+              onMouseEnter={e => e.currentTarget.style.background = FB.hover}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+              <MinusOutlined style={{ fontSize: 14, color: FB.blue }} />
+            </div>
+          )}
+          <div onClick={isMobile ? onBack : onClose}
             style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
             onMouseEnter={e => e.currentTarget.style.background = FB.hover}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
