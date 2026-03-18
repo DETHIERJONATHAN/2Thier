@@ -205,6 +205,15 @@ const MessengerChat: React.FC = () => {
     return () => navigator.serviceWorker.removeEventListener('message', handleSWMessage);
   }, [user, api]);
 
+  const fetchInlineMessages = useCallback(async (convId?: string) => {
+    const id = convId || activeConversationId;
+    if (!id) return;
+    try {
+      const data = await api.get(`/api/messenger/conversations/${id}/messages`);
+      if (data?.messages) setInlineMessages(data.messages);
+    } catch { /* silent */ }
+  }, [api, activeConversationId]);
+
   // Poll for new messages every 5s
   useEffect(() => {
     pollRef.current = setInterval(() => {
@@ -269,15 +278,6 @@ const MessengerChat: React.FC = () => {
     // Fetch messages
     fetchInlineMessages(convId);
   };
-
-  const fetchInlineMessages = useCallback(async (convId?: string) => {
-    const id = convId || activeConversationId;
-    if (!id) return;
-    try {
-      const data = await api.get(`/api/messenger/conversations/${id}/messages`);
-      if (data?.messages) setInlineMessages(data.messages);
-    } catch { /* silent */ }
-  }, [api, activeConversationId]);
 
   const sendInlineMessage = async () => {
     if (!inlineNewMessage.trim() || inlineSending || !activeConversationId) return;
