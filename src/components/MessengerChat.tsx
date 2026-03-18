@@ -81,17 +81,17 @@ const FB = {
 const CHAT_WIDTH = 338;
 const CHAT_HEIGHT = 455;
 const LIST_HEIGHT = 500;
-const MOBILE_BREAKPOINT = 768;
 
-/** Hook to detect mobile screen */
-function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < MOBILE_BREAKPOINT : false);
+/** Hook to detect screen size — returns width + isMobile flag */
+function useScreenWidth() {
+  const [width, setWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
   useEffect(() => {
-    const handler = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
+    const handler = () => setWidth(window.innerWidth);
     window.addEventListener('resize', handler);
     return () => window.removeEventListener('resize', handler);
   }, []);
-  return isMobile;
+  // Consider mobile if viewport < 900px (covers tablets & landscape phones)
+  return { width, isMobile: width < 900 };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -101,7 +101,7 @@ function useIsMobile() {
 const MessengerChat: React.FC = () => {
   const { api } = useAuthenticatedApi();
   const { user } = useAuth();
-  const isMobile = useIsMobile();
+  const { isMobile } = useScreenWidth();
 
   // Panel & chat state
   const [isListOpen, setIsListOpen] = useState(false);
@@ -325,10 +325,10 @@ const MessengerChat: React.FC = () => {
       <div style={{
         position: 'fixed',
         ...(isMobile
-          ? { top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', borderRadius: 0 }
+          ? { top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100vh', borderRadius: 0 }
           : { bottom: 56, right: 16, width: CHAT_WIDTH, height: LIST_HEIGHT, borderRadius: '8px 8px 0 0' }),
-        background: FB.white, boxShadow: '0 -2px 12px rgba(0,0,0,0.15)',
-        display: 'flex', flexDirection: 'column', zIndex: 1100,
+        background: FB.white, boxShadow: isMobile ? 'none' : '0 -2px 12px rgba(0,0,0,0.15)',
+        display: 'flex', flexDirection: 'column', zIndex: 10000,
         border: isMobile ? 'none' : `1px solid ${FB.border}`,
       }}>
         {/* Header */}
@@ -461,7 +461,7 @@ const MessengerChat: React.FC = () => {
         position: 'fixed', bottom: 16, right: 16, width: 48, height: 48,
         borderRadius: '50%', background: FB.blue, display: 'flex', alignItems: 'center',
         justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 12px rgba(0,0,0,0.3)',
-        zIndex: 1100, transition: 'transform 0.2s',
+        zIndex: 9999, transition: 'transform 0.2s',
       }}
       onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
       onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
@@ -597,22 +597,27 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
   const convName = conversation?.name || 'Conversation';
   const convAvatar = conversation?.avatarUrl;
   const isGroup = conversation?.isGroup;
-  const rightOffset = isMobile ? 0 : 16 + (index + 1) * (CHAT_WIDTH + 12);
+  // Calculate position — go fullscreen if chat would overflow viewport
+  const screenW = typeof window !== 'undefined' ? window.innerWidth : 1024;
+  const desktopRight = 16 + (index + 1) * (CHAT_WIDTH + 12);
+  const wouldOverflow = (desktopRight + CHAT_WIDTH) > screenW;
+  const forceFullscreen = isMobile || wouldOverflow;
+  const rightOffset = forceFullscreen ? 0 : desktopRight;
 
   const formatTime = (date: string) => {
     const d = new Date(date);
     return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   };
 
-  // On mobile: no minimized bubble (use back button instead)
-  if (minimized && !isMobile) {
+  // On mobile/narrow: no minimized bubble (use back button instead)
+  if (minimized && !forceFullscreen) {
     return (
       <div
         onClick={() => setMinimized(false)}
         style={{
           position: 'fixed', bottom: 16, right: rightOffset, width: 48, height: 48,
           borderRadius: '50%', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-          zIndex: 1100, overflow: 'hidden',
+          zIndex: 9999, overflow: 'hidden',
         }}
       >
         <Avatar size={48} src={convAvatar} icon={isGroup ? <TeamOutlined /> : <UserOutlined />}
@@ -621,8 +626,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
     );
   }
 
-  // On mobile minimized = go back to list
-  if (minimized && isMobile) {
+  // On mobile/narrow minimized = go back to list
+  if (minimized && forceFullscreen) {
     onBack();
     return null;
   }
@@ -630,22 +635,22 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
   return (
     <div style={{
       position: 'fixed',
-      ...(isMobile
-        ? { top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', borderRadius: 0 }
+      ...(forceFullscreen
+        ? { top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100vh', borderRadius: 0 }
         : { bottom: 0, right: rightOffset, width: CHAT_WIDTH, height: CHAT_HEIGHT, borderRadius: '8px 8px 0 0' }),
       background: FB.white,
-      boxShadow: isMobile ? 'none' : '0 -2px 12px rgba(0,0,0,0.15)',
+      boxShadow: forceFullscreen ? 'none' : '0 -2px 12px rgba(0,0,0,0.15)',
       display: 'flex', flexDirection: 'column',
-      zIndex: 1100, border: isMobile ? 'none' : `1px solid ${FB.border}`,
+      zIndex: 10000, border: forceFullscreen ? 'none' : `1px solid ${FB.border}`,
     }}>
       {/* Header */}
       <div style={{
-        padding: isMobile ? '12px 12px' : '8px 12px', borderBottom: `1px solid ${FB.border}`,
+        padding: forceFullscreen ? '12px 12px' : '8px 12px', borderBottom: `1px solid ${FB.border}`,
         display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', flexShrink: 0,
-        background: FB.white, borderRadius: isMobile ? 0 : '8px 8px 0 0',
+        background: FB.white, borderRadius: forceFullscreen ? 0 : '8px 8px 0 0',
       }}>
-        {/* Back button on mobile */}
-        {isMobile && (
+        {/* Back button on mobile/narrow */}
+        {forceFullscreen && (
           <div onClick={onBack}
             style={{ width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
             onMouseEnter={e => e.currentTarget.style.background = FB.hover}
@@ -655,7 +660,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
         )}
         <Avatar size={32} src={convAvatar} icon={isGroup ? <TeamOutlined /> : <UserOutlined />}
           style={{ backgroundColor: convAvatar ? undefined : FB.blue, flexShrink: 0 }} />
-        <div style={{ flex: 1, minWidth: 0 }} onClick={() => !isMobile && setMinimized(true)}>
+        <div style={{ flex: 1, minWidth: 0 }} onClick={() => !forceFullscreen && setMinimized(true)}>
           <div style={{ fontSize: 13, fontWeight: 700, color: FB.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {convName}
           </div>
@@ -675,7 +680,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
             <VideoCameraOutlined style={{ fontSize: 14, color: FB.blue }} />
           </div>
-          {!isMobile && (
+          {!forceFullscreen && (
             <div onClick={() => setMinimized(true)}
               style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
               onMouseEnter={e => e.currentTarget.style.background = FB.hover}
@@ -683,7 +688,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
               <MinusOutlined style={{ fontSize: 14, color: FB.blue }} />
             </div>
           )}
-          <div onClick={isMobile ? onBack : onClose}
+          <div onClick={forceFullscreen ? onBack : onClose}
             style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
             onMouseEnter={e => e.currentTarget.style.background = FB.hover}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
