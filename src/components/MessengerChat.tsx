@@ -11,6 +11,7 @@ import {
   TeamOutlined,
   PhoneOutlined,
   VideoCameraOutlined,
+  ArrowLeftOutlined,
 } from '@ant-design/icons';
 import VideoCallModal from './VideoCallModal';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
@@ -82,18 +83,6 @@ const CHAT_WIDTH = 338;
 const CHAT_HEIGHT = 455;
 const LIST_HEIGHT = 500;
 
-/** Hook to detect screen size — returns width + isMobile flag */
-function useScreenWidth() {
-  const [width, setWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
-  useEffect(() => {
-    const handler = () => setWidth(window.innerWidth);
-    window.addEventListener('resize', handler);
-    return () => window.removeEventListener('resize', handler);
-  }, []);
-  // Consider mobile if viewport < 900px (covers tablets & landscape phones)
-  return { width, isMobile: width < 900 };
-}
-
 // ═══════════════════════════════════════════════════════════════
 // MESSENGER CHAT COMPONENT
 // ═══════════════════════════════════════════════════════════════
@@ -101,14 +90,19 @@ function useScreenWidth() {
 const MessengerChat: React.FC = () => {
   const { api } = useAuthenticatedApi();
   const { user } = useAuth();
-  const { isMobile } = useScreenWidth();
 
   // Panel & chat state
   const [isListOpen, setIsListOpen] = useState(false);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null); // conversation open inside popup
   const [openChats, setOpenChats] = useState<string[]>([]); // conversation IDs of open chat windows
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [friends, setFriends] = useState<Friend[]>([]);
   const [totalUnread, setTotalUnread] = useState(0);
+  const [inlineMessages, setInlineMessages] = useState<Message[]>([]);
+  const [inlineNewMessage, setInlineNewMessage] = useState('');
+  const [inlineSending, setInlineSending] = useState(false);
+  const inlineMessagesEndRef = useRef<HTMLDivElement>(null);
+  const inlineInputRef = useRef<HTMLInputElement>(null);
 
   // Video call state
   const [activeCall, setActiveCall] = useState<{ callId: string; callType: 'video' | 'audio'; isIncoming: boolean; conversationName: string } | null>(null);
@@ -216,9 +210,17 @@ const MessengerChat: React.FC = () => {
     pollRef.current = setInterval(() => {
       fetchUnread();
       if (isListOpen || openChats.length > 0) fetchConversations();
+      if (activeConversationId) fetchInlineMessages();
     }, 5000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [isListOpen, openChats, fetchUnread, fetchConversations]);
+  }, [isListOpen, openChats, activeConversationId, fetchUnread, fetchConversations, fetchInlineMessages]);
+
+  // Auto-scroll inline messages
+  useEffect(() => {
+    if (activeConversationId) {
+      inlineMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [inlineMessages, activeConversationId]);
 
   // Poll for incoming calls every 3s
   useEffect(() => {
@@ -258,13 +260,46 @@ const MessengerChat: React.FC = () => {
 
   // ─── ACTIONS ───────────────────────────────────────────────
   const openChat = (convId: string) => {
-    setOpenChats(prev => {
-      if (prev.includes(convId)) return prev;
-      const newChats = [...prev, convId];
-      // Mobile: only 1 chat window at a time
-      return isMobile ? [convId] : newChats.slice(-3);
-    });
-    setIsListOpen(false);
+    // Open conversation inside the popup instead of a separate window
+    setActiveConversationId(convId);
+    setInlineMessages([]);
+    setInlineNewMessage('');
+    // Mark as read
+    api.post(`/api/messenger/conversations/${convId}/read`, {}).catch(() => {});
+    // Fetch messages
+    fetchInlineMessages(convId);
+  };
+
+  const fetchInlineMessages = useCallback(async (convId?: string) => {
+    const id = convId || activeConversationId;
+    if (!id) return;
+    try {
+      const data = await api.get(`/api/messenger/conversations/${id}/messages`);
+      if (data?.messages) setInlineMessages(data.messages);
+    } catch { /* silent */ }
+  }, [api, activeConversationId]);
+
+  const sendInlineMessage = async () => {
+    if (!inlineNewMessage.trim() || inlineSending || !activeConversationId) return;
+    setInlineSending(true);
+    try {
+      await api.post(`/api/messenger/conversations/${activeConversationId}/messages`, {
+        content: inlineNewMessage.trim(),
+      });
+      setInlineNewMessage('');
+      await fetchInlineMessages();
+      fetchConversations();
+      inlineInputRef.current?.focus();
+    } catch (e) { console.error('[MESSENGER] Send error:', e); }
+    setInlineSending(false);
+  };
+
+  const goBackToList = () => {
+    setActiveConversationId(null);
+    setInlineMessages([]);
+    setInlineNewMessage('');
+    fetchConversations();
+    fetchUnread();
   };
 
   const closeChat = (convId: string) => {
@@ -321,15 +356,176 @@ const MessengerChat: React.FC = () => {
   // ═══════════════════════════════════════════════════════════
   const renderList = () => {
     if (!isListOpen) return null;
+
+    // If a conversation is open inside the popup, render the chat view
+    if (activeConversationId) {
+      const conv = conversations.find(c => c.id === activeConversationId);
+      const convName = conv?.name || 'Conversation';
+      const convAvatar = conv?.avatarUrl;
+      const isGroup = conv?.isGroup;
+
+      const formatTime = (date: string) => {
+        const d = new Date(date);
+        return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      };
+
+      const handleInlineKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendInlineMessage();
+        }
+      };
+
+      return (
+        <div style={{
+          position: 'fixed', bottom: 56, right: 16, width: CHAT_WIDTH, height: LIST_HEIGHT,
+          background: FB.white, borderRadius: '8px 8px 0 0', boxShadow: '0 -2px 12px rgba(0,0,0,0.15)',
+          display: 'flex', flexDirection: 'column', zIndex: 1100,
+          border: `1px solid ${FB.border}`,
+        }}>
+          {/* Header with back button */}
+          <div style={{
+            padding: '8px 12px', borderBottom: `1px solid ${FB.border}`,
+            display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
+          }}>
+            <div onClick={goBackToList}
+              style={{ width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+              onMouseEnter={e => e.currentTarget.style.background = FB.hover}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+              <ArrowLeftOutlined style={{ fontSize: 16, color: FB.blue }} />
+            </div>
+            <Avatar size={32} src={convAvatar} icon={isGroup ? <TeamOutlined /> : <UserOutlined />}
+              style={{ backgroundColor: convAvatar ? undefined : FB.blue, flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: FB.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {convName}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <div onClick={() => startCall(activeConversationId, 'audio', convName)}
+                title="Appel audio"
+                style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                onMouseEnter={e => e.currentTarget.style.background = FB.hover}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <PhoneOutlined style={{ fontSize: 14, color: FB.blue }} />
+              </div>
+              <div onClick={() => startCall(activeConversationId, 'video', convName)}
+                title="Appel vidéo"
+                style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                onMouseEnter={e => e.currentTarget.style.background = FB.hover}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <VideoCameraOutlined style={{ fontSize: 14, color: FB.blue }} />
+              </div>
+              <div onClick={() => { setIsListOpen(false); setActiveConversationId(null); }}
+                style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                onMouseEnter={e => e.currentTarget.style.background = FB.hover}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <CloseOutlined style={{ fontSize: 14, color: FB.textSecondary }} />
+              </div>
+            </div>
+          </div>
+
+          {/* Messages */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {inlineMessages.length === 0 && (
+              <div style={{ textAlign: 'center', padding: 20, color: FB.textSecondary, fontSize: 13 }}>
+                <Avatar size={56} src={convAvatar} icon={isGroup ? <TeamOutlined /> : <UserOutlined />}
+                  style={{ backgroundColor: convAvatar ? undefined : FB.blue, marginBottom: 8 }} />
+                <div style={{ fontWeight: 600, color: FB.text }}>{convName}</div>
+                <div style={{ marginTop: 4 }}>Commencez la conversation !</div>
+              </div>
+            )}
+            {inlineMessages.map((msg, i) => {
+              const isMine = msg.senderId === user?.id;
+              const showAvatar = !isMine && (i === 0 || inlineMessages[i - 1].senderId !== msg.senderId);
+              const showName = !isMine && isGroup && showAvatar;
+
+              return (
+                <div key={msg.id} style={{
+                  display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start',
+                  alignItems: 'flex-end', gap: 6,
+                  marginTop: (i > 0 && inlineMessages[i - 1].senderId !== msg.senderId) ? 8 : 0,
+                }}>
+                  {!isMine && (
+                    <div style={{ width: 28, flexShrink: 0 }}>
+                      {showAvatar && (
+                        <Avatar size={28} src={msg.sender.avatarUrl} icon={<UserOutlined />}
+                          style={{ backgroundColor: msg.sender.avatarUrl ? undefined : FB.blue }} />
+                      )}
+                    </div>
+                  )}
+                  <div style={{ maxWidth: '70%' }}>
+                    {showName && (
+                      <div style={{ fontSize: 11, color: FB.textSecondary, marginBottom: 2, paddingLeft: 12 }}>
+                        {msg.sender.firstName}
+                      </div>
+                    )}
+                    <div style={{
+                      padding: '8px 12px', borderRadius: 18,
+                      background: isMine ? FB.msgBlueBg : FB.msgBg,
+                      color: isMine ? '#fff' : FB.text,
+                      fontSize: 14, lineHeight: '1.35', wordBreak: 'break-word',
+                    }}>
+                      {msg.isDeleted ? (
+                        <span style={{ fontStyle: 'italic', opacity: 0.6 }}>Message supprimé</span>
+                      ) : (
+                        msg.content
+                      )}
+                    </div>
+                    {(i === inlineMessages.length - 1 || inlineMessages[i + 1].senderId !== msg.senderId) && (
+                      <div style={{
+                        fontSize: 10, color: FB.textSecondary, marginTop: 2,
+                        textAlign: isMine ? 'right' : 'left', paddingLeft: isMine ? 0 : 12, paddingRight: isMine ? 12 : 0,
+                      }}>
+                        {formatTime(msg.createdAt)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={inlineMessagesEndRef} />
+          </div>
+
+          {/* Input */}
+          <div style={{
+            padding: '8px 12px', borderTop: `1px solid ${FB.border}`, display: 'flex',
+            alignItems: 'center', gap: 6, flexShrink: 0,
+          }}>
+            <input
+              ref={inlineInputRef}
+              value={inlineNewMessage}
+              onChange={e => setInlineNewMessage(e.target.value)}
+              onKeyDown={handleInlineKeyDown}
+              placeholder="Aa"
+              autoFocus
+              style={{
+                flex: 1, border: 'none', outline: 'none', borderRadius: 20,
+                padding: '8px 14px', background: FB.bg, fontSize: 14, color: FB.text,
+              }}
+            />
+            <div
+              onClick={sendInlineMessage}
+              style={{
+                width: 32, height: 32, borderRadius: '50%', display: 'flex',
+                alignItems: 'center', justifyContent: 'center', cursor: inlineNewMessage.trim() ? 'pointer' : 'default',
+                opacity: inlineNewMessage.trim() ? 1 : 0.4,
+              }}
+            >
+              <SendOutlined style={{ fontSize: 18, color: FB.blue }} />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Default: show conversation list
     return (
       <div style={{
-        position: 'fixed',
-        ...(isMobile
-          ? { top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100vh', borderRadius: 0 }
-          : { bottom: 56, right: 16, width: CHAT_WIDTH, height: LIST_HEIGHT, borderRadius: '8px 8px 0 0' }),
-        background: FB.white, boxShadow: isMobile ? 'none' : '0 -2px 12px rgba(0,0,0,0.15)',
-        display: 'flex', flexDirection: 'column', zIndex: 10000,
-        border: isMobile ? 'none' : `1px solid ${FB.border}`,
+        position: 'fixed', bottom: 56, right: 16, width: CHAT_WIDTH, height: LIST_HEIGHT,
+        background: FB.white, borderRadius: '8px 8px 0 0', boxShadow: '0 -2px 12px rgba(0,0,0,0.15)',
+        display: 'flex', flexDirection: 'column', zIndex: 1100,
+        border: `1px solid ${FB.border}`,
       }}>
         {/* Header */}
         <div style={{ padding: '12px 16px', borderBottom: `1px solid ${FB.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -456,12 +652,21 @@ const MessengerChat: React.FC = () => {
   // ═══════════════════════════════════════════════════════════
   const renderFab = () => (
     <div
-      onClick={() => { setIsListOpen(!isListOpen); setShowNewChat(false); setSearchQuery(''); }}
+      onClick={() => { 
+        if (isListOpen) {
+          setIsListOpen(false);
+          setActiveConversationId(null);
+        } else {
+          setIsListOpen(true);
+        }
+        setShowNewChat(false); 
+        setSearchQuery(''); 
+      }}
       style={{
         position: 'fixed', bottom: 16, right: 16, width: 48, height: 48,
         borderRadius: '50%', background: FB.blue, display: 'flex', alignItems: 'center',
         justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 12px rgba(0,0,0,0.3)',
-        zIndex: 9999, transition: 'transform 0.2s',
+        zIndex: 1100, transition: 'transform 0.2s',
       }}
       onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
       onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
@@ -471,11 +676,12 @@ const MessengerChat: React.FC = () => {
         <div style={{
           position: 'absolute', top: -4, right: -4,
           minWidth: 20, height: 20, borderRadius: 10,
-          background: '#e41e3f', color: '#fff',
+          background: '#ff3b30', color: '#fff',
           fontSize: 11, fontWeight: 700,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          padding: '0 5px', border: '2px solid #fff',
-          lineHeight: 1,
+          padding: '0 5px',
+          border: '2px solid #fff',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
         }}>
           {totalUnread > 99 ? '99+' : totalUnread}
         </div>
@@ -492,9 +698,7 @@ const MessengerChat: React.FC = () => {
       conversationId={convId}
       conversation={conversations.find(c => c.id === convId)}
       index={index}
-      isMobile={isMobile}
       onClose={() => closeChat(convId)}
-      onBack={() => { closeChat(convId); setIsListOpen(true); }}
       api={api}
       userId={user?.id || ''}
       onRefresh={fetchConversations}
@@ -530,16 +734,14 @@ interface ChatWindowProps {
   conversationId: string;
   conversation?: Conversation;
   index: number;
-  isMobile: boolean;
   onClose: () => void;
-  onBack: () => void;
   api: any;
   userId: string;
   onRefresh: () => void;
   onStartCall: (conversationId: string, callType: 'video' | 'audio', conversationName: string) => void;
 }
 
-const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, index, isMobile, onClose, onBack, api, userId, onRefresh, onStartCall }) => {
+const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, index, onClose, api, userId, onRefresh, onStartCall }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -597,27 +799,21 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
   const convName = conversation?.name || 'Conversation';
   const convAvatar = conversation?.avatarUrl;
   const isGroup = conversation?.isGroup;
-  // Calculate position — go fullscreen if chat would overflow viewport
-  const screenW = typeof window !== 'undefined' ? window.innerWidth : 1024;
-  const desktopRight = 16 + (index + 1) * (CHAT_WIDTH + 12);
-  const wouldOverflow = (desktopRight + CHAT_WIDTH) > screenW;
-  const forceFullscreen = isMobile || wouldOverflow;
-  const rightOffset = forceFullscreen ? 0 : desktopRight;
+  const rightOffset = 16 + (index + 1) * (CHAT_WIDTH + 12);
 
   const formatTime = (date: string) => {
     const d = new Date(date);
     return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   };
 
-  // On mobile/narrow: no minimized bubble (use back button instead)
-  if (minimized && !forceFullscreen) {
+  if (minimized) {
     return (
       <div
         onClick={() => setMinimized(false)}
         style={{
           position: 'fixed', bottom: 16, right: rightOffset, width: 48, height: 48,
           borderRadius: '50%', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-          zIndex: 9999, overflow: 'hidden',
+          zIndex: 1100, overflow: 'hidden',
         }}
       >
         <Avatar size={48} src={convAvatar} icon={isGroup ? <TeamOutlined /> : <UserOutlined />}
@@ -626,41 +822,22 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
     );
   }
 
-  // On mobile/narrow minimized = go back to list
-  if (minimized && forceFullscreen) {
-    onBack();
-    return null;
-  }
-
   return (
     <div style={{
-      position: 'fixed',
-      ...(forceFullscreen
-        ? { top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100vh', borderRadius: 0 }
-        : { bottom: 0, right: rightOffset, width: CHAT_WIDTH, height: CHAT_HEIGHT, borderRadius: '8px 8px 0 0' }),
-      background: FB.white,
-      boxShadow: forceFullscreen ? 'none' : '0 -2px 12px rgba(0,0,0,0.15)',
-      display: 'flex', flexDirection: 'column',
-      zIndex: 10000, border: forceFullscreen ? 'none' : `1px solid ${FB.border}`,
+      position: 'fixed', bottom: 0, right: rightOffset, width: CHAT_WIDTH,
+      height: CHAT_HEIGHT, background: FB.white, borderRadius: '8px 8px 0 0',
+      boxShadow: '0 -2px 12px rgba(0,0,0,0.15)', display: 'flex', flexDirection: 'column',
+      zIndex: 1100, border: `1px solid ${FB.border}`,
     }}>
       {/* Header */}
       <div style={{
-        padding: forceFullscreen ? '12px 12px' : '8px 12px', borderBottom: `1px solid ${FB.border}`,
+        padding: '8px 12px', borderBottom: `1px solid ${FB.border}`,
         display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', flexShrink: 0,
-        background: FB.white, borderRadius: forceFullscreen ? 0 : '8px 8px 0 0',
+        background: FB.white, borderRadius: '8px 8px 0 0',
       }}>
-        {/* Back button on mobile/narrow */}
-        {forceFullscreen && (
-          <div onClick={onBack}
-            style={{ width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-            onMouseEnter={e => e.currentTarget.style.background = FB.hover}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-            <span style={{ fontSize: 18, color: FB.blue }}>‹</span>
-          </div>
-        )}
         <Avatar size={32} src={convAvatar} icon={isGroup ? <TeamOutlined /> : <UserOutlined />}
           style={{ backgroundColor: convAvatar ? undefined : FB.blue, flexShrink: 0 }} />
-        <div style={{ flex: 1, minWidth: 0 }} onClick={() => !forceFullscreen && setMinimized(true)}>
+        <div style={{ flex: 1, minWidth: 0 }} onClick={() => setMinimized(true)}>
           <div style={{ fontSize: 13, fontWeight: 700, color: FB.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {convName}
           </div>
@@ -680,15 +857,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
             <VideoCameraOutlined style={{ fontSize: 14, color: FB.blue }} />
           </div>
-          {!forceFullscreen && (
-            <div onClick={() => setMinimized(true)}
-              style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-              onMouseEnter={e => e.currentTarget.style.background = FB.hover}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-              <MinusOutlined style={{ fontSize: 14, color: FB.blue }} />
-            </div>
-          )}
-          <div onClick={forceFullscreen ? onBack : onClose}
+          <div onClick={() => setMinimized(true)}
+            style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+            onMouseEnter={e => e.currentTarget.style.background = FB.hover}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+            <MinusOutlined style={{ fontSize: 14, color: FB.blue }} />
+          </div>
+          <div onClick={onClose}
             style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
             onMouseEnter={e => e.currentTarget.style.background = FB.hover}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
