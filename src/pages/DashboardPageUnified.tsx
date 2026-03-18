@@ -1087,6 +1087,20 @@ export default function DashboardPageUnified() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Scroll-snap handlers (must be before early returns to preserve hooks order)
+  const handleMobileScroll = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const page = Math.round(el.scrollLeft / el.offsetWidth);
+    setMobilePanel(page);
+  }, []);
+
+  const scrollToPanel = useCallback((panel: number) => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    el.scrollTo({ left: panel * el.offsetWidth, behavior: "smooth" });
+  }, []);
+
   // Analytics state (colonne droite)
   const [analytics, setAnalytics] = useState<any>(null);
   const [selectedCollaborator, setSelectedCollaborator] = useState<string | null>(null);
@@ -1142,7 +1156,7 @@ export default function DashboardPageUnified() {
       // Récupérer le vrai CA depuis les chantiers
       let totalRevenue = 0;
       try {
-        const chantierStats = await api.get("/api/chantiers/stats").catch(() => null);
+        const chantierStats = await api.get("/api/chantiers/stats/overview").catch(() => null);
         if (chantierStats?.data?.totalAmount) {
           totalRevenue = chantierStats.data.totalAmount;
         } else if ((chantierStats as any)?.totalAmount) {
@@ -2228,22 +2242,6 @@ export default function DashboardPageUnified() {
       )}
     </div>
   );
-
-  /* ═══════════════════════════════════════════════════════════
-     SCROLL-SNAP HANDLER (mobile swipe detection)
-     ═══════════════════════════════════════════════════════════ */
-  const handleMobileScroll = useCallback(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-    const page = Math.round(el.scrollLeft / el.offsetWidth);
-    setMobilePanel(page);
-  }, []);
-
-  const scrollToPanel = useCallback((panel: number) => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-    el.scrollTo({ left: panel * el.offsetWidth, behavior: "smooth" });
-  }, []);
 
   /* ═══════════════════════════════════════════════════════════
      MAIN RENDER — 3-COLUMN LAYOUT / MOBILE SWIPE
