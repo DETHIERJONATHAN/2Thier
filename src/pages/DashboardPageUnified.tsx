@@ -3,7 +3,7 @@ import { useAuthenticatedApi } from "../hooks/useAuthenticatedApi";
 import { useAuth } from "../auth/useAuth";
 import { useLeadStatuses } from "../hooks/useLeadStatuses";
 import { Link, useLocation } from "react-router-dom";
-import { Avatar, Spin, Tooltip as AntTooltip } from "antd";
+import { Avatar, Spin, Tooltip as AntTooltip, Select } from "antd";
 import {
   UserOutlined,
   TeamOutlined,
@@ -56,6 +56,13 @@ import {
   Pie,
   Cell,
   ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip as RechartsTooltip,
+  AreaChart,
+  Area,
 } from "recharts";
 import { NotificationManager } from "../components/Notifications";
 import MessengerChat, { FriendsWidget } from "../components/MessengerChat";
@@ -1076,6 +1083,11 @@ export default function DashboardPageUnified() {
   const [showMoodPicker, setShowMoodPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Analytics state (colonne droite)
+  const [analytics, setAnalytics] = useState<any>(null);
+  const [selectedCollaborator, setSelectedCollaborator] = useState<string | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+
   const moods = [
     { emoji: "😊", label: "Heureux" }, { emoji: "💪", label: "Motivé" },
     { emoji: "🎉", label: "Fête" }, { emoji: "🤝", label: "Reconnaissant" },
@@ -1123,8 +1135,17 @@ export default function DashboardPageUnified() {
       });
       const averageResponseTime = leadsWithResponse > 0 ? totalResponseTime / leadsWithResponse : 0;
 
-      const avgDealSize = 5000;
-      const totalRevenue = convertedLeads.length * avgDealSize;
+      // Récupérer le vrai CA depuis les chantiers
+      let totalRevenue = 0;
+      try {
+        const chantierStats = await api.get("/api/chantiers/stats").catch(() => null);
+        if (chantierStats?.data?.totalAmount) {
+          totalRevenue = chantierStats.data.totalAmount;
+        } else if ((chantierStats as any)?.totalAmount) {
+          totalRevenue = (chantierStats as any).totalAmount;
+        }
+      } catch { /* fallback 0 */ }
+
       const lastMonthLeads = leads.filter((lead: any) => {
         const d = new Date(lead.createdAt);
         const lm = new Date(); lm.setMonth(lm.getMonth() - 1);
@@ -1133,7 +1154,7 @@ export default function DashboardPageUnified() {
       const monthlyGrowth = totalLeads > 0 ? (lastMonthLeads / totalLeads) * 100 : 0;
 
       setStats({
-        totalLeads, newLeadsToday, totalClients: clients.length, totalUsers: users.length,
+        totalLeads, newLeadsToday, totalClients: convertedLeads.length, totalUsers: users.length,
         conversionRate, pendingTasks: Math.floor(totalLeads * 0.15),
         upcomingMeetings: Math.floor(totalLeads * 0.1),
         totalRevenue, monthlyGrowth, averageResponseTime,
@@ -1194,6 +1215,27 @@ export default function DashboardPageUnified() {
       setLoading(false);
     }
   }, [api, leadStatuses, isSuperAdmin, user?.role]);
+
+  /* ─── ANALYTICS FETCHING (colonne droite) ───────────────────── */
+  const fetchAnalytics = useCallback(async (collaboratorId?: string | null) => {
+    try {
+      setAnalyticsLoading(true);
+      const queryParam = collaboratorId ? `?userId=${collaboratorId}` : '';
+      const resp = await api.get(`/api/dashboard/analytics${queryParam}`);
+      const data = (resp as any)?.data || resp;
+      setAnalytics(data);
+    } catch (error) {
+      console.error('Erreur analytics:', error);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }, [api]);
+
+  useEffect(() => {
+    if (user && (currentOrganization || isSuperAdmin)) {
+      fetchAnalytics(selectedCollaborator);
+    }
+  }, [user, currentOrganization, isSuperAdmin, fetchAnalytics, selectedCollaborator]);
 
   /* ─── WALL FEED FETCHING ───────────────────────────────────── */
   const fetchWallFeed = useCallback(async (reset = false) => {
@@ -1461,68 +1503,185 @@ export default function DashboardPageUnified() {
   );
 
   /* ═══════════════════════════════════════════════════════════
-     RIGHT SIDEBAR
+     RIGHT SIDEBAR — Panneau Analytique
      ═══════════════════════════════════════════════════════════ */
-  const renderRightSidebar = () => (
-    <div style={{ position: "fixed", right: 0, top: 56, width: 280, height: "calc(100vh - 56px)", overflowY: "auto", paddingTop: 16, paddingRight: 8, paddingLeft: 8, paddingBottom: 16, scrollbarWidth: "none", background: FB.bg, zIndex: 10 }}>
-      {/* À faire aujourd'hui — en premier */}
-      <FBCard>
-        <span style={{ fontSize: 16, fontWeight: 700, color: FB.text, display: "block", marginBottom: 10 }}>
-          À faire aujourd'hui
-        </span>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0" }}>
-          <ClockCircleOutlined style={{ color: "#fa8c16", fontSize: 16 }} />
-          <span style={{ fontSize: 14, color: FB.text }}>
-            <b>{stats.pendingTasks}</b> tâche{stats.pendingTasks > 1 ? "s" : ""} en attente
-          </span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0" }}>
-          <CalendarOutlined style={{ color: FB.blue, fontSize: 16 }} />
-          <span style={{ fontSize: 14, color: FB.text }}>
-            <b>{stats.upcomingMeetings}</b> RDV aujourd'hui
-          </span>
-        </div>
-      </FBCard>
+  const formatRevenue = (val: number) => {
+    if (val >= 1000000) return `€${(val / 1000000).toFixed(1)}M`;
+    if (val >= 1000) return `€${(val / 1000).toFixed(1)}k`;
+    return `€${val.toLocaleString("fr-FR")}`;
+  };
 
-      {/* Performance */}
+  const getRoleLabel = (role: string) => {
+    const labels: Record<string, string> = {
+      super_admin: "Super Admin", admin: "Admin", comptable: "Comptable",
+      commercial: "Commercial", technicien: "Technicien", chef_equipe: "Chef d'équipe",
+      contremaitre: "Contremaître", sous_traitant: "Sous-traitant", user: "Utilisateur",
+    };
+    return labels[role] || role;
+  };
+
+  const isAdminRole = isSuperAdmin || user?.role === "admin" || user?.role === "super_admin";
+  const isTechRole = ["technicien", "chef_equipe", "contremaitre", "sous_traitant"].includes(user?.role || "");
+
+  const renderRightSidebar = () => (
+    <div style={{ position: "fixed", right: 0, top: 56, width: 300, height: "calc(100vh - 56px)", overflowY: "auto", paddingTop: 12, paddingRight: 8, paddingLeft: 8, paddingBottom: 16, scrollbarWidth: "none", background: FB.bg, zIndex: 10 }}>
+
+      {/* === SÉLECTEUR DE COLLABORATEUR (admin) === */}
+      {isAdminRole && analytics?.collaborators?.length > 0 && (
+        <FBCard>
+          <span style={{ fontSize: 14, fontWeight: 700, color: FB.text, display: "block", marginBottom: 8 }}>
+            <BarChartOutlined style={{ marginRight: 6, color: FB.blue }} />
+            Analytics
+          </span>
+          <Select
+            placeholder="Vue globale"
+            allowClear
+            showSearch
+            style={{ width: "100%", fontSize: 13 }}
+            value={selectedCollaborator}
+            onChange={(val) => setSelectedCollaborator(val || null)}
+            filterOption={(input, option) =>
+              (option?.label as string || "").toLowerCase().includes(input.toLowerCase())
+            }
+            options={analytics.collaborators.map((c: any) => ({
+              value: c.id,
+              label: `${c.name} (${getRoleLabel(c.role)})`,
+            }))}
+          />
+          {selectedCollaborator && (
+            <div style={{ marginTop: 6, fontSize: 11, color: FB.textSecondary }}>
+              Vue des stats de : <b>{analytics.collaborators.find((c: any) => c.id === selectedCollaborator)?.name}</b>
+            </div>
+          )}
+        </FBCard>
+      )}
+
+      {/* === KPIs GLOBAUX === */}
       <FBCard>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: FB.text }}>Performance</span>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: FB.text }}>
+            {selectedCollaborator ? "Performance perso" : "Performance globale"}
+          </span>
           <AntTooltip title="Actualiser">
-            <ReloadOutlined spin={refreshing}
-              style={{ fontSize: 16, color: FB.textSecondary, cursor: "pointer" }}
-              onClick={handleRefresh} />
+            <ReloadOutlined spin={refreshing || analyticsLoading}
+              style={{ fontSize: 14, color: FB.textSecondary, cursor: "pointer" }}
+              onClick={() => { handleRefresh(); fetchAnalytics(selectedCollaborator); }} />
           </AntTooltip>
         </div>
-        <StatWidget icon={<FunnelPlotOutlined />} label="Total Leads" value={stats.totalLeads} color="#1890ff" sub={"+" + stats.newLeadsToday} />
-        <StatWidget icon={<TeamOutlined />} label="Clients Actifs" value={stats.totalClients} color={FB.green} sub={"+" + Math.floor(stats.monthlyGrowth) + "%"} />
-        <StatWidget icon={<TrophyOutlined />} label="Conversion" value={stats.conversionRate.toFixed(1) + "%"} color="#fa8c16" />
-        <StatWidget icon={<RiseOutlined />} label="Chiffre d'Affaires" value={"€" + stats.totalRevenue.toLocaleString("fr-FR")} color="#722ed1" />
+
+        {analyticsLoading ? (
+          <div style={{ textAlign: "center", padding: 20 }}><Spin size="small" /></div>
+        ) : analytics ? (
+          <>
+            {/* KPIs pour Admin/Comptable */}
+            {(isAdminRole || user?.role === "comptable") && !selectedCollaborator && (
+              <>
+                <StatWidget icon={<FunnelPlotOutlined />} label="Total Leads" value={analytics.totalLeads} color="#1890ff" sub={`+${analytics.newLeadsThisMonth} ce mois`} />
+                <StatWidget icon={<TrophyOutlined />} label="Convertis" value={analytics.convertedLeads} color={FB.green} sub={`${analytics.conversionRate}%`} />
+                <StatWidget icon={<ToolOutlined />} label="Chantiers" value={analytics.totalChantiers} color="#fa8c16" />
+                <StatWidget icon={<RiseOutlined />} label="Chiffre d'Affaires" value={formatRevenue(analytics.totalRevenue)} color="#722ed1" />
+                {analytics.roleStats?.totalUsers != null && (
+                  <StatWidget icon={<TeamOutlined />} label="Équipe active" value={analytics.roleStats.totalUsers} color={FB.blue} />
+                )}
+              </>
+            )}
+
+            {/* KPIs pour Commercial / User ou collaborateur sélectionné */}
+            {((!isTechRole && !isAdminRole) || selectedCollaborator) && analytics.roleStats?.myLeads != null && (
+              <>
+                <StatWidget icon={<FunnelPlotOutlined />} label="Mes Leads" value={analytics.roleStats.myLeads} color="#1890ff" />
+                <StatWidget icon={<TrophyOutlined />} label="Mes Convertis" value={analytics.roleStats.myConvertedLeads} color={FB.green} sub={`${analytics.roleStats.myConversion}%`} />
+                <StatWidget icon={<ToolOutlined />} label="Mes Chantiers" value={analytics.roleStats.myChantiers} color="#fa8c16" />
+                <StatWidget icon={<RiseOutlined />} label="Mon CA" value={formatRevenue(analytics.roleStats.myRevenue)} color="#722ed1" />
+              </>
+            )}
+
+            {/* KPIs pour Technicien / Chef d'équipe / Contremaître / Sous-traitant */}
+            {(isTechRole || (selectedCollaborator && analytics.roleStats?.assignedChantiers != null)) && (
+              <>
+                <StatWidget icon={<ToolOutlined />} label="Chantiers assignés" value={analytics.roleStats.assignedChantiers || 0} color="#fa8c16" />
+                <StatWidget icon={<ClockCircleOutlined />} label="Heures ce mois" value={`${analytics.roleStats.hoursThisMonth || 0}h`} color={FB.blue} />
+                <StatWidget icon={<CalendarOutlined />} label="Jours travaillés" value={analytics.roleStats.daysWorkedThisMonth || 0} color={FB.green} />
+              </>
+            )}
+          </>
+        ) : null}
       </FBCard>
 
-      {/* Mini pie chart */}
+      {/* === GRAPHIQUE ÉVOLUTION MENSUELLE (Bar) === */}
+      {analytics?.monthlyData?.length > 0 && (
+        <FBCard>
+          <span style={{ fontSize: 14, fontWeight: 700, color: FB.text, display: "block", marginBottom: 8 }}>
+            Évolution mensuelle
+          </span>
+          <div style={{ height: 140, minWidth: 0, minHeight: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={analytics.monthlyData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                <XAxis dataKey="month" tick={{ fontSize: 10, fill: FB.textSecondary }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: FB.textSecondary }} axisLine={false} tickLine={false} />
+                <RechartsTooltip
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: "none", boxShadow: FB.shadow }}
+                  formatter={(value: any, name: string) => [name === "revenue" ? formatRevenue(value) : value, name === "revenue" ? "CA" : "Chantiers"]}
+                />
+                <Bar dataKey="chantiers" fill={FB.blue} radius={[4, 4, 0, 0]} barSize={16} name="Chantiers" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </FBCard>
+      )}
+
+      {/* === GRAPHIQUE CA MENSUEL (Area) === */}
+      {analytics?.monthlyData?.length > 0 && analytics.monthlyData.some((d: any) => d.revenue > 0) && (
+        <FBCard>
+          <span style={{ fontSize: 14, fontWeight: 700, color: FB.text, display: "block", marginBottom: 8 }}>
+            CA mensuel
+          </span>
+          <div style={{ height: 120, minWidth: 0, minHeight: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={analytics.monthlyData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#722ed1" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#722ed1" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="month" tick={{ fontSize: 10, fill: FB.textSecondary }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: FB.textSecondary }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? `${v / 1000}k` : v} />
+                <RechartsTooltip
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: "none", boxShadow: FB.shadow }}
+                  formatter={(value: any) => [formatRevenue(value), "CA"]}
+                />
+                <Area type="monotone" dataKey="revenue" stroke="#722ed1" strokeWidth={2} fill="url(#revenueGradient)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </FBCard>
+      )}
+
+      {/* === PIE CHART LEADS PAR STATUT === */}
       {chartData.leadsByStatus.length > 0 && (
         <FBCard>
-          <span style={{ fontSize: 16, fontWeight: 700, color: FB.text, display: "block", marginBottom: 8 }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: FB.text, display: "block", marginBottom: 8 }}>
             Leads par statut
           </span>
-          <div style={{ height: 160, minWidth: 0, minHeight: 0 }}>
+          <div style={{ height: 140, minWidth: 0, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <PieChart>
                 <Pie data={chartData.leadsByStatus.filter(d => d.value > 0)}
-                  cx="50%" cy="50%" outerRadius={60} innerRadius={35}
+                  cx="50%" cy="50%" outerRadius={55} innerRadius={30}
                   dataKey="value" paddingAngle={2}>
                   {chartData.leadsByStatus.filter(d => d.value > 0).map((entry, i) => (
                     <Cell key={i} fill={entry.color} />
                   ))}
                 </Pie>
+                <RechartsTooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "none", boxShadow: FB.shadow }} />
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
             {chartData.leadsByStatus.filter(d => d.value > 0).map((d, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: FB.textSecondary }}>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: d.color }} />
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: FB.textSecondary }}>
+                <div style={{ width: 7, height: 7, borderRadius: "50%", background: d.color }} />
                 <span>{d.name} ({d.value})</span>
               </div>
             ))}
@@ -1530,34 +1689,80 @@ export default function DashboardPageUnified() {
         </FBCard>
       )}
 
-      {/* Top Leads */}
+      {/* === CHANTIERS PAR STATUT (admin) === */}
+      {isAdminRole && analytics?.roleStats?.chantiersByStatus?.length > 0 && !selectedCollaborator && (
+        <FBCard>
+          <span style={{ fontSize: 14, fontWeight: 700, color: FB.text, display: "block", marginBottom: 8 }}>
+            Chantiers par statut
+          </span>
+          {analytics.roleStats.chantiersByStatus.map((s: any, i: number) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0" }}>
+              <div style={{ width: 10, height: 10, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
+              <div style={{ flex: 1, fontSize: 12, color: FB.text }}>{s.name}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: FB.text }}>{s.count}</div>
+              {s.amount > 0 && <div style={{ fontSize: 10, color: FB.textSecondary }}>{formatRevenue(s.amount)}</div>}
+            </div>
+          ))}
+        </FBCard>
+      )}
+
+      {/* === TOP COMMERCIAUX (admin) === */}
+      {isAdminRole && analytics?.roleStats?.topCommercials?.length > 0 && !selectedCollaborator && (
+        <FBCard>
+          <span style={{ fontSize: 14, fontWeight: 700, color: FB.text, display: "block", marginBottom: 8 }}>
+            Top Commerciaux
+          </span>
+          {analytics.roleStats.topCommercials.map((c: any, i: number) => (
+            <div key={i} style={{
+              display: "flex", alignItems: "center", gap: 8, padding: "6px 2px",
+              borderRadius: 6, cursor: "pointer", transition: "background 0.15s",
+            }}
+              onMouseEnter={e => (e.currentTarget.style.background = FB.btnGray)}
+              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+              onClick={() => setSelectedCollaborator(c.userId)}
+            >
+              <Avatar size={28} style={{ background: ["#1890ff", "#52c41a", "#fa8c16", "#722ed1", "#eb2f96"][i % 5] }}>
+                {c.name?.[0] || "?"}
+              </Avatar>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: FB.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {c.name}
+                </div>
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: FB.blue }}>{c.leadCount} leads</div>
+            </div>
+          ))}
+        </FBCard>
+      )}
+
+      {/* === TOP LEADS === */}
       {topLeads.length > 0 && (
         <FBCard>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <span style={{ fontSize: 16, fontWeight: 700, color: FB.text }}>Top Leads</span>
-            <Link to="/leads/list" style={{ fontSize: 13, color: FB.blue, textDecoration: "none" }}>Voir tous</Link>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: FB.text }}>Top Leads</span>
+            <Link to="/leads/list" style={{ fontSize: 12, color: FB.blue, textDecoration: "none" }}>Voir tous</Link>
           </div>
-          {topLeads.map(lead => (
+          {topLeads.slice(0, 4).map(lead => (
             <Link key={lead.id} to={"/leads/" + lead.id} style={{ textDecoration: "none" }}>
               <div style={{
-                display: "flex", alignItems: "center", gap: 10, padding: "8px 4px",
+                display: "flex", alignItems: "center", gap: 8, padding: "5px 2px",
                 borderRadius: 6, cursor: "pointer", transition: "background 0.15s",
               }}
                 onMouseEnter={e => (e.currentTarget.style.background = FB.btnGray)}
                 onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
               >
-                <Avatar size={32} style={{ background: lead.statusColor || FB.blue }}>
+                <Avatar size={26} style={{ background: lead.statusColor || FB.blue, fontSize: 11 }}>
                   {(lead.prenom[0] || lead.nom[0] || "?")}
                 </Avatar>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: FB.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: FB.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {lead.prenom} {lead.nom}
                   </div>
-                  <div style={{ fontSize: 11, color: FB.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div style={{ fontSize: 10, color: FB.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {lead.entreprise || lead.status}
                   </div>
                 </div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: lead.score > 80 ? FB.green : lead.score > 60 ? FB.orange : FB.textSecondary }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: lead.score > 80 ? FB.green : lead.score > 60 ? FB.orange : FB.textSecondary }}>
                   {lead.score}%
                 </div>
               </div>
@@ -1566,10 +1771,10 @@ export default function DashboardPageUnified() {
         </FBCard>
       )}
 
-      {/* Contacts / Amis */}
+      {/* === CONTACTS === */}
       <FBCard>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: FB.text }}>Contacts</span>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: FB.text }}>Contacts</span>
         </div>
         <FriendsWidget onStartChat={() => {}} />
       </FBCard>
@@ -1586,9 +1791,9 @@ export default function DashboardPageUnified() {
     }}>
       {[
         { label: "Leads", val: stats.totalLeads, col: "#1890ff" },
-        { label: "Clients", val: stats.totalClients, col: FB.green },
+        { label: "Convertis", val: stats.totalClients, col: FB.green },
         { label: "Conversion", val: stats.conversionRate.toFixed(0) + "%", col: "#fa8c16" },
-        { label: "CA", val: "€" + (stats.totalRevenue / 1000).toFixed(0) + "k", col: "#722ed1" },
+        { label: "CA", val: formatRevenue(stats.totalRevenue), col: "#722ed1" },
       ].map((s, i) => (
         <div key={i} style={{
           flex: "0 0 auto", background: FB.white, boxShadow: FB.shadow,
@@ -1933,7 +2138,7 @@ export default function DashboardPageUnified() {
       {!isMobile && !isTablet && renderRightSidebar()}
       <div style={{
         marginLeft: isMobile || isTablet ? 0 : 300,
-        marginRight: isMobile || isTablet ? 0 : 300,
+        marginRight: isMobile || isTablet ? 0 : 320,
         padding: isMobile ? "12px 12px" : "16px 16px",
         display: "flex", justifyContent: "center",
       }}>

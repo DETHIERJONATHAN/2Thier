@@ -522,4 +522,274 @@ router.get('/tasks', authMiddleware, async (req: AuthenticatedRequest, res) => {
   }
 });
 
+// 📊 GET /api/dashboard/analytics - Stats analytiques par rôle, avec sélection de collaborateur
+router.get('/analytics', authMiddleware, async (req: AuthenticatedRequest, res) => {
+  try {
+    const organizationId = req.user?.organizationId;
+    const isSuperAdmin = req.user?.role === 'super_admin';
+    const userRole = req.user?.role || 'user';
+    const userId = req.user?.id;
+    // Admin peut voir les stats d'un collaborateur via ?userId=xxx
+    const targetUserId = (req.query.userId as string) || null;
+
+    if (!organizationId && !isSuperAdmin) {
+      return res.status(400).json({ success: false, message: 'Organisation ID requis' });
+    }
+
+    const isAdmin = isSuperAdmin || userRole === 'admin' || userRole === 'super_admin';
+    const orgWhere = isSuperAdmin ? {} : { organizationId };
+
+    // Si admin regarde un collaborateur spécifique, on vérifie qu'il est dans la même org
+    let viewUserId = isAdmin && targetUserId ? targetUserId : userId;
+
+    // === DONNÉES COMMUNES ===
+    const [totalLeads, totalChantiers, chantierRevenue, convertedLeads, newLeadsThisMonth, newLeadsLastMonth] = await Promise.all([
+      prisma.lead.count({ where: orgWhere }),
+      prisma.chantier.count({ where: orgWhere }),
+      prisma.chantier.aggregate({ where: orgWhere, _sum: { amount: true } }),
+      prisma.lead.count({
+        where: {
+          ...orgWhere,
+          LeadStatus: { name: { in: ['Gagné', 'Converti', 'Client', 'gagné', 'converti', 'client'] } }
+        }
+      }),
+      prisma.lead.count({
+        where: {
+          ...orgWhere,
+          createdAt: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) }
+        }
+      }),
+      prisma.lead.count({
+        where: {
+          ...orgWhere,
+          createdAt: {
+            gte: new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1),
+            lt: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+          }
+        }
+      }),
+    ]);
+
+    const conversionRate = totalLeads > 0 ? Math.round((convertedLeads / totalLeads) * 1000) / 10 : 0;
+    const monthlyGrowth = newLeadsLastMonth > 0
+      ? Math.round(((newLeadsThisMonth - newLeadsLastMonth) / newLeadsLastMonth) * 100)
+      : (newLeadsThisMonth > 0 ? 100 : 0);
+    const totalRevenue = chantierRevenue._sum.amount || 0;
+
+    // === CHANTIERS PAR MOIS (6 derniers mois) ===
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+    sixMonthsAgo.setDate(1);
+    sixMonthsAgo.setHours(0, 0, 0, 0);
+
+    const recentChantiers = await prisma.chantier.findMany({
+      where: { ...orgWhere, createdAt: { gte: sixMonthsAgo } },
+      select: { createdAt: true, amount: true },
+    });
+
+    const monthlyData: { month: string; chantiers: number; revenue: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date();
+      d.setMonth(d.getMonth() - i);
+      const monthKey = d.toLocaleString('fr-FR', { month: 'short' });
+      const year = d.getFullYear();
+      const month = d.getMonth();
+      const filtered = recentChantiers.filter(c => {
+        const cd = new Date(c.createdAt);
+        return cd.getFullYear() === year && cd.getMonth() === month;
+      });
+      monthlyData.push({
+        month: monthKey,
+        chantiers: filtered.length,
+        revenue: filtered.reduce((sum, c) => sum + (c.amount || 0), 0),
+      });
+    }
+
+    // === STATS SPÉCIFIQUES AU RÔLE ===
+    let roleStats: any = {};
+
+    if (isAdmin || userRole === 'comptable') {
+      // Admin / Comptable : vue globale
+      const [totalUsers, chantiersByStatus, topCommercials] = await Promise.all([
+        prisma.user.count({ where: { ...orgWhere, status: 'active' } }),
+        prisma.chantier.groupBy({
+          by: ['statusId'],
+          where: orgWhere,
+          _count: true,
+          _sum: { amount: true },
+        }),
+        prisma.lead.groupBy({
+          by: ['assignedToId'],
+          where: {
+            ...orgWhere,
+            assignedToId: { not: null },
+          },
+          _count: true,
+          orderBy: { _count: { assignedToId: 'desc' } },
+          take: 5,
+        }),
+      ]);
+
+      // Enrichir les statuts chantier
+      const statusNames = await prisma.chantierStatus.findMany({
+        where: orgWhere,
+        select: { id: true, name: true, color: true },
+      });
+      const enrichedStatuses = chantiersByStatus.map(s => {
+        const status = statusNames.find(st => st.id === s.statusId);
+        return {
+          name: status?.name || 'Sans statut',
+          color: status?.color || '#999',
+          count: s._count,
+          amount: s._sum.amount || 0,
+        };
+      });
+
+      // Enrichir les top commerciaux
+      const commercialIds = topCommercials.map(c => c.assignedToId).filter(Boolean) as string[];
+      const commercialUsers = await prisma.user.findMany({
+        where: { id: { in: commercialIds } },
+        select: { id: true, firstName: true, lastName: true, avatarUrl: true },
+      });
+      const enrichedCommercials = topCommercials.map(c => {
+        const u = commercialUsers.find(u => u.id === c.assignedToId);
+        return {
+          userId: c.assignedToId,
+          name: u ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : 'Inconnu',
+          avatarUrl: u?.avatarUrl,
+          leadCount: c._count,
+        };
+      });
+
+      roleStats = {
+        type: 'admin',
+        totalUsers,
+        chantiersByStatus: enrichedStatuses,
+        topCommercials: enrichedCommercials,
+      };
+    }
+
+    if (userRole === 'commercial' || userRole === 'user') {
+      // Commercial : ses leads + ses chantiers
+      const [myLeads, myConvertedLeads, myChantiers, myRevenue] = await Promise.all([
+        prisma.lead.count({ where: { ...orgWhere, assignedToId: viewUserId } }),
+        prisma.lead.count({
+          where: {
+            ...orgWhere,
+            assignedToId: viewUserId,
+            LeadStatus: { name: { in: ['Gagné', 'Converti', 'Client', 'gagné', 'converti', 'client'] } },
+          },
+        }),
+        prisma.chantier.count({ where: { ...orgWhere, commercialId: viewUserId } }),
+        prisma.chantier.aggregate({
+          where: { ...orgWhere, commercialId: viewUserId },
+          _sum: { amount: true },
+        }),
+      ]);
+      roleStats = {
+        ...roleStats,
+        type: roleStats.type || 'commercial',
+        myLeads,
+        myConvertedLeads,
+        myConversion: myLeads > 0 ? Math.round((myConvertedLeads / myLeads) * 1000) / 10 : 0,
+        myChantiers,
+        myRevenue: myRevenue._sum.amount || 0,
+      };
+    }
+
+    if (userRole === 'technicien' || userRole === 'chef_equipe' || userRole === 'contremaitre' || userRole === 'sous_traitant') {
+      // Technicien & co : chantiers assignés + pointage
+      const technician = await prisma.technician.findFirst({
+        where: { userId: viewUserId, ...orgWhere },
+        select: { id: true },
+      });
+
+      if (technician) {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const [assignedChantiers, timeEntries, totalTimeThisMonth] = await Promise.all([
+          prisma.chantierAssignment.count({ where: { technicianId: technician.id } }),
+          prisma.timeEntry.findMany({
+            where: { technicianId: technician.id, date: { gte: startOfMonth } },
+            select: { durationMinutes: true, startTime: true, endTime: true, breakMinutes: true },
+          }),
+          prisma.timeEntry.aggregate({
+            where: { technicianId: technician.id, date: { gte: startOfMonth } },
+            _sum: { durationMinutes: true },
+            _count: true,
+          }),
+        ]);
+
+        // Calculer les heures travaillées si durationMinutes est null
+        let totalMinutes = totalTimeThisMonth._sum.durationMinutes || 0;
+        if (totalMinutes === 0) {
+          totalMinutes = timeEntries.reduce((sum, e) => {
+            if (e.durationMinutes) return sum + e.durationMinutes;
+            if (e.startTime && e.endTime) {
+              const diff = (new Date(e.endTime).getTime() - new Date(e.startTime).getTime()) / 60000;
+              return sum + diff - (e.breakMinutes || 0);
+            }
+            return sum;
+          }, 0);
+        }
+
+        roleStats = {
+          ...roleStats,
+          type: roleStats.type || 'technicien',
+          assignedChantiers,
+          hoursThisMonth: Math.round(totalMinutes / 60 * 10) / 10,
+          daysWorkedThisMonth: totalTimeThisMonth._count,
+          technicianId: technician.id,
+        };
+      }
+    }
+
+    // === LISTE DES COLLABORATEURS (pour le sélecteur admin) ===
+    let collaborators: any[] = [];
+    if (isAdmin) {
+      const users = await prisma.user.findMany({
+        where: { ...orgWhere, status: 'active' },
+        select: { id: true, firstName: true, lastName: true, role: true, avatarUrl: true },
+        orderBy: [{ role: 'asc' }, { firstName: 'asc' }],
+      });
+      collaborators = users.map(u => ({
+        id: u.id,
+        name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || 'Sans nom',
+        role: u.role,
+        avatarUrl: u.avatarUrl,
+      }));
+    }
+
+    res.json({
+      success: true,
+      data: {
+        // Globaux
+        totalLeads,
+        convertedLeads,
+        conversionRate,
+        totalChantiers,
+        totalRevenue,
+        monthlyGrowth,
+        newLeadsThisMonth,
+        // Graphiques
+        monthlyData,
+        // Rôle
+        roleStats,
+        // Collaborateurs
+        collaborators,
+        // Meta
+        viewUserId,
+        viewerRole: userRole,
+      },
+    });
+  } catch (error: any) {
+    console.error('❌ [DASHBOARD] Erreur analytics:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des analytics',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
+  }
+});
+
 export default router;
