@@ -4,6 +4,7 @@ import { impersonationMiddleware } from "../middlewares/impersonation";
 import { db } from '../lib/database';
 import path from 'path';
 import fs from 'fs';
+import { uploadExpressFile, deleteFile } from '../lib/storage';
 
 const prisma = db;
 const router = Router();
@@ -30,25 +31,27 @@ const sanitizeText = (value: unknown): string | null | undefined => {
   return trimmed.length === 0 ? null : trimmed;
 };
 
-// Helper: save uploaded file via express-fileupload (timestamped unique name)
-const saveUploadedFile = async (file: any, destDir: string, filename: string): Promise<string> => {
-  if (!fs.existsSync(destDir)) {
-    fs.mkdirSync(destDir, { recursive: true });
-  }
+// Helper: save uploaded file via storage module (local in dev, GCS in prod)
+const saveUploadedFileToStorage = async (file: any, folder: string, filename: string): Promise<string> => {
   const ext = path.extname(file.name);
   const finalName = `${filename}_${Date.now()}${ext}`;
-  const destPath = path.join(destDir, finalName);
-  // Remove old files for this prefix
-  try {
-    const existing = fs.readdirSync(destDir);
-    for (const f of existing) {
-      if (f.startsWith(filename + '_') || f.startsWith(filename + '.')) {
-        fs.unlinkSync(path.join(destDir, f));
+  const key = `${folder}/${finalName}`;
+  // Clean up old local files in dev
+  if (process.env.NODE_ENV !== 'production') {
+    const destDir = path.join('public', 'uploads', folder);
+    try {
+      if (fs.existsSync(destDir)) {
+        const existing = fs.readdirSync(destDir);
+        for (const f of existing) {
+          if (f.startsWith(filename + '_') || f.startsWith(filename + '.')) {
+            fs.unlinkSync(path.join(destDir, f));
+          }
+        }
       }
-    }
-  } catch { /* ignore cleanup errors */ }
-  await file.mv(destPath);
-  return finalName;
+    } catch { /* ignore cleanup errors */ }
+  }
+  const url = await uploadExpressFile(file, key);
+  return url;
 };
 
 // Le middleware d'authentification est appliqué à toutes les routes de ce routeur
@@ -122,8 +125,7 @@ router.post('/avatar', async (req: AuthenticatedRequest, res: Response): Promise
     }
 
     const file = files.avatar;
-    const savedName = await saveUploadedFile(file, 'public/uploads/avatars', userId);
-    const avatarUrl = `/uploads/avatars/${savedName}`;
+    const avatarUrl = await saveUploadedFileToStorage(file, 'avatars', userId);
 
     // Save to UserPhoto collection
     try {
@@ -194,8 +196,7 @@ router.post('/cover', async (req: AuthenticatedRequest, res: Response): Promise<
     }
 
     const file = files.cover;
-    const savedName = await saveUploadedFile(file, 'public/uploads/covers', userId);
-    const coverUrl = `/uploads/covers/${savedName}`;
+    const coverUrl = await saveUploadedFileToStorage(file, 'covers', userId);
 
     // Save to UserPhoto collection
     try {

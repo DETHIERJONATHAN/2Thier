@@ -24,6 +24,7 @@ import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
 import path from 'path';
 import fs from 'fs';
+import { uploadFile } from '../lib/storage';
 
 const router = Router();
 
@@ -452,14 +453,9 @@ router.post('/upload', async (req: Request, res: Response) => {
         });
       }
     } else {
-      const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'product-documents', organizationId);
-      if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true });
-      }
       const uniqueName = `${Date.now()}-${fileName.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-      const filePath = path.join(uploadsDir, uniqueName);
-      fs.writeFileSync(filePath, fileBuffer);
-      localPath = `/uploads/product-documents/${organizationId}/${uniqueName}`;
+      const key = `product-documents/${organizationId}/${uniqueName}`;
+      localPath = await uploadFile(fileBuffer, key, file.mimetype || 'application/octet-stream');
     }
 
     const documents = [];

@@ -19,6 +19,7 @@ import axios from 'axios';
 import { decrypt } from '../utils/crypto';
 import QRCode from 'qrcode';
 import { notify } from '../services/NotificationHelper';
+import { uploadFile } from '../lib/storage';
 
 /**
  * Envoyer un SMS via Telnyx (usage interne, pas besoin d'auth HTTP)
@@ -823,17 +824,9 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
       
       const pdfBuffer = await generateFormResponsePdf(pdfData);
       
-      // Sauvegarder le PDF dans le dossier public/uploads/form-responses
-      const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'form-responses');
-      if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true });
-      }
-      
       const pdfFileName = `formulaire-${slug}-${leadId ? leadId.substring(0, 8) : 'candidat'}-${Date.now()}.pdf`;
-      const pdfPath = path.join(uploadsDir, pdfFileName);
-      fs.writeFileSync(pdfPath, pdfBuffer);
-      
-      pdfUrl = `/uploads/form-responses/${pdfFileName}`;
+      const key = `form-responses/${pdfFileName}`;
+      pdfUrl = await uploadFile(pdfBuffer, key, 'application/pdf');
       
       // Mettre à jour le Lead avec le lien vers le PDF (seulement si un Lead existe)
       if (leadId) {

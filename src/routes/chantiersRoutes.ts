@@ -6,6 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { sendTransitionNotifications } from './chantier-workflow';
+import { uploadExpressFile } from '../lib/storage';
 
 const router = Router();
 
@@ -812,11 +813,8 @@ router.post('/from-lead-document', authenticateToken, async (req, res) => {
       const timestamp = Date.now();
       const safeName = uploadedFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
       const filename = `${timestamp}-${safeName}`;
-      const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'chantiers');
-      fs.mkdirSync(uploadDir, { recursive: true });
-      const filePath = path.join(uploadDir, filename);
-      await uploadedFile.mv(filePath);
-      documentUrl = `/uploads/chantiers/${filename}`;
+      const key = `chantiers/${filename}`;
+      documentUrl = await uploadExpressFile(uploadedFile, key);
       documentName = uploadedFile.name;
     }
 

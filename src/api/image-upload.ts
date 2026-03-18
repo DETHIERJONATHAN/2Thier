@@ -10,24 +10,27 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs/promises';
 import { db } from '../lib/database';
+import { uploadFile } from '../lib/storage';
 
 const router = Router();
 const prisma = db;
 
-// Configuration Multer pour l'upload
-const storage = multer.diskStorage({
-  destination: async (req, file, cb) => {
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'websites');
-    // Créer le dossier s'il n'existe pas
-    await fs.mkdir(uploadDir, { recursive: true });
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    // Générer un nom unique : timestamp_originalname
-    const uniqueName = `${Date.now()}_${file.originalname.replace(/\s+/g, '_')}`;
-    cb(null, uniqueName);
-  }
-});
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Configuration Multer : memoryStorage en prod (pour GCS), diskStorage en dev
+const multerStorage = isProduction
+  ? multer.memoryStorage()
+  : multer.diskStorage({
+      destination: async (req, file, cb) => {
+        const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'websites');
+        await fs.mkdir(uploadDir, { recursive: true });
+        cb(null, uploadDir);
+      },
+      filename: (req, file, cb) => {
+        const uniqueName = `${Date.now()}_${file.originalname.replace(/\s+/g, '_')}`;
+        cb(null, uniqueName);
+      }
+    });
 
 // Filtre pour n'accepter que les images
 const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
@@ -41,12 +44,23 @@ const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCa
 };
 
 const upload = multer({
-  storage,
+  storage: multerStorage,
   fileFilter,
   limits: {
     fileSize: 5 * 1024 * 1024 // 5MB max
   }
 });
+
+/** Helper: get URL from multer file — delegates to storage module in prod */
+async function getUploadedFileUrl(file: Express.Multer.File): Promise<{ fileUrl: string }> {
+  const uniqueName = `${Date.now()}_${file.originalname.replace(/\\s+/g, '_')}`;
+  if (isProduction) {
+    const key = `websites/${uniqueName}`;
+    const url = await uploadFile(file.buffer, key, file.mimetype);
+    return { fileUrl: url };
+  }
+  return { fileUrl: `/uploads/websites/${file.filename}` };
+}
 
 // POST - Upload simple pour documents (sans websiteId requis)
 router.post('/upload', upload.single('file'), async (req: any, res) => {
@@ -62,24 +76,21 @@ router.post('/upload', upload.single('file'), async (req: any, res) => {
       originalName: req.file.originalname,
       size: req.file.size,
       mimetype: req.file.mimetype,
-      filename: req.file.filename
     });
 
-    // Construire l'URL publique
-    const fileUrl = `/uploads/websites/${req.file.filename}`;
-    const fullUrl = `http://localhost:4000${fileUrl}`;
+    const { fileUrl } = await getUploadedFileUrl(req.file);
 
     console.log('📸 ✅ Upload réussi:', {
       fileName: req.file.originalname,
-      url: fullUrl,
+      url: fileUrl,
       size: `${(req.file.size / 1024).toFixed(2)} KB`
     });
 
     res.json({
       success: true,
       message: 'Image uploadée avec succès',
-      url: fullUrl, // URL complète utilisable dans le frontend
-      fileUrl, // Chemin relatif
+      url: fileUrl,
+      fileUrl,
       file: {
         fileName: req.file.originalname,
         size: req.file.size,
@@ -116,7 +127,7 @@ router.post('/upload-image', upload.single('image'), async (req: any, res) => {
     }
 
     // Construire l'URL publique
-    const fileUrl = `/uploads/websites/${req.file.filename}`;
+    const { fileUrl } = await getUploadedFileUrl(req.file);
 
     // Enregistrer dans la BDD (table WebSiteMediaFile)
     const mediaFile = await prisma.webSiteMediaFile.create({
@@ -125,7 +136,7 @@ router.post('/upload-image', upload.single('image'), async (req: any, res) => {
         fileName: req.file.originalname,
         fileType: req.file.mimetype, // ✅ CORRECTION: fileType au lieu de mimeType
         fileUrl,
-        filePath: req.file.path,
+        filePath: fileUrl,
         fileSize: req.file.size,
         category, // 'logo', 'project', 'service', 'general'
         uploadedById: (req as any).user?.id || null

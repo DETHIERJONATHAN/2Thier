@@ -5,6 +5,7 @@ import { authMiddleware, AuthenticatedRequest } from '../middlewares/auth.js';
 import { prisma } from '../lib/prisma';
 import { notify } from '../services/NotificationHelper';
 import { generateFormResponsePdf } from '../services/formResponsePdfGenerator';
+import { uploadFile } from '../lib/storage';
 
 const router = Router();
 
@@ -483,16 +484,9 @@ router.post('/:id/form-pdf/regenerate', async (req, res) => {
 
     const pdfBuffer = await generateFormResponsePdf(pdfData);
 
-    const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'form-responses');
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
-    }
-
     const pdfFileName = `formulaire-${form.slug}-${lead.id.substring(0, 8)}-${Date.now()}.pdf`;
-    const pdfPath = path.join(uploadsDir, pdfFileName);
-    fs.writeFileSync(pdfPath, pdfBuffer);
-
-    const pdfUrl = `/uploads/form-responses/${pdfFileName}`;
+    const key = `form-responses/${pdfFileName}`;
+    const pdfUrl = await uploadFile(pdfBuffer, key, 'application/pdf');
 
     const existingData = (typeof lead.data === 'object' && lead.data) ? (lead.data as Record<string, unknown>) : {};
     const updatedLead = await prisma.lead.update({

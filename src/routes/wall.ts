@@ -4,6 +4,7 @@ import { authenticateToken } from '../middleware/auth';
 import { z } from 'zod';
 import path from 'path';
 import fs from 'fs/promises';
+import { uploadExpressFile } from '../lib/storage';
 
 const router = Router();
 
@@ -569,9 +570,6 @@ router.post('/upload', authenticateToken, async (req: Request, res: Response) =>
       return res.status(400).json({ error: 'Aucun fichier fourni' });
     }
 
-    const dir = path.join(process.cwd(), 'public', 'uploads', 'wall');
-    await fs.mkdir(dir, { recursive: true });
-
     // express-fileupload can give single file or array under 'files' key
     const fileList = Array.isArray(uploadedFiles.files)
       ? uploadedFiles.files
@@ -588,9 +586,9 @@ router.post('/upload', authenticateToken, async (req: Request, res: Response) =>
       }
       const safeName = file.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_.-]/g, '');
       const filename = `${Date.now()}_${safeName}`;
-      const filepath = path.join(dir, filename);
-      await file.mv(filepath);
-      urls.push(`/uploads/wall/${filename}`);
+      const key = `wall/${filename}`;
+      const url = await uploadExpressFile(file, key);
+      urls.push(url);
     }
 
     if (urls.length === 0) {
