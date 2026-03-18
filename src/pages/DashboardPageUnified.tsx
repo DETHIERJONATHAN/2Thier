@@ -1785,7 +1785,7 @@ export default function DashboardPageUnified() {
           display: "flex", gap: 8, overflowX: "auto", marginBottom: 12,
           WebkitOverflowScrolling: "touch", scrollbarWidth: "none",
         }}>
-          {sectionsWithModules.flatMap(s => s.modules).slice(0, 8).map((mod, i) => (
+          {sectionsWithModules.flatMap(s => s.modules).map((mod, i) => (
             <Link key={mod.key || mod.id || i} to={getModuleRoute(mod)} style={{ textDecoration: "none" }}>
               <div style={{
                 flex: "0 0 auto", display: "flex", flexDirection: "column",
