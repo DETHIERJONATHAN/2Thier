@@ -47,6 +47,14 @@ const LazyTreesAdminPage = React.lazy(() => import('./admin/TreesAdminPage'));
 const LazyProfilePage = React.lazy(() => import('./ProfilePage'));
 const LazySettingsPageEmbedded = React.lazy(() => import('./SettingsPageEmbedded'));
 
+/* ═══════════════════════════════════════════════════════════════
+   SPACEFLOW — Lazy-loaded panel components
+   ═══════════════════════════════════════════════════════════════ */
+const LazyExplorePanel = React.lazy(() => import('../components/spaceflow/ExplorePanel'));
+const LazyFlowPanel = React.lazy(() => import('../components/spaceflow/FlowPanel'));
+const LazyUniversePanel = React.lazy(() => import('../components/spaceflow/UniversePanel'));
+const LazyStoriesBar = React.lazy(() => import('../components/spaceflow/StoriesBar'));
+
 /** Maps route paths to their lazy-loaded component */
 const MODULE_COMPONENTS: Record<string, React.LazyExoticComponent<any>> = {
   '/leads': LazyLeadsKanbanWrapper,
@@ -1162,7 +1170,7 @@ export default function DashboardPageUnified() {
   const api = useMemo(() => apiHook.api, [apiHook.api]);
   const { currentOrganization, isSuperAdmin, user, hasFeature, modules } = useAuth();
   const { leadStatuses } = useLeadStatuses();
-  const { isMobile, isTablet } = useScreenSize();
+  const { isMobile } = useScreenSize();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -1189,7 +1197,7 @@ export default function DashboardPageUnified() {
   const [postMood, setPostMood] = useState<string | null>(null);
   const [showMoodPicker, setShowMoodPicker] = useState(false);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
-  const [mobilePanel, setMobilePanel] = useState(0); // 0 = feed, 1 = analytics
+  const [mobilePanel, setMobilePanel] = useState(2); // SpaceFlow: 0=Explore, 1=Flow, 2=Mur(centre), 3=Universe, 4=Dashboard
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -1226,6 +1234,19 @@ export default function DashboardPageUnified() {
     if (!el) return;
     el.scrollTo({ left: panel * el.offsetWidth, behavior: "smooth" });
   }, []);
+
+  // SpaceFlow: scroll to center panel (index 2) on mount
+  const hasScrolledToCenter = useRef(false);
+  useEffect(() => {
+    if (hasScrolledToCenter.current) return;
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    // Use instant scroll (no animation) for initial position
+    requestAnimationFrame(() => {
+      el.scrollTo({ left: 2 * el.offsetWidth, behavior: "instant" as ScrollBehavior });
+      hasScrolledToCenter.current = true;
+    });
+  });
 
   // Analytics state (colonne droite)
   const [analytics, setAnalytics] = useState<any>(null);
@@ -1596,14 +1617,14 @@ export default function DashboardPageUnified() {
     { icon: <CalendarOutlined />, label: "Planifier RDV", to: "/agenda", color: FB.orange, features: ['Agenda'] },
     { icon: <MailOutlined />, label: "Envoyer Email", to: "/google-gmail", color: FB.red, features: ['google_gmail_access', 'google_gmail'] },
   ];
-  const quickActions = allQuickActions.filter(a => a.features.length === 0 || a.features.some(f => hasFeature(f)));
+  const _quickActions = allQuickActions.filter(a => a.features.length === 0 || a.features.some(f => hasFeature(f)));
 
   const userName = user ? ((user.firstName || "") + " " + (user.lastName || "")).trim() || "Utilisateur" : "Utilisateur";
 
   /* ═══════════════════════════════════════════════════════════
-     LEFT SIDEBAR
+     LEFT SIDEBAR (kept for module navigation — used when a module is active)
      ═══════════════════════════════════════════════════════════ */
-  const renderLeftSidebar = () => (
+  const _renderLeftSidebar = () => (
     <div style={{ position: "fixed", left: 0, top: 56, width: 280, height: "calc(100vh - 56px)", overflowY: "auto", paddingTop: 8, paddingLeft: 8, paddingRight: 8, paddingBottom: 16, scrollbarWidth: "none", background: FB.bg, zIndex: 10 }}>
       {/* Home / feed button */}
       <div onClick={goHome} style={{ cursor: 'pointer' }}>
@@ -1679,7 +1700,7 @@ export default function DashboardPageUnified() {
   const isAdminRole = isSuperAdmin || user?.role === "admin" || user?.role === "super_admin";
   const isTechRole = ["technicien", "chef_equipe", "contremaitre", "sous_traitant"].includes(user?.role || "");
 
-  const renderRightSidebar = () => (
+  const _renderRightSidebar = () => (
     <div style={{ position: "fixed", right: 0, top: 56, width: 300, height: "calc(100vh - 56px)", overflowY: "auto", paddingTop: 8, paddingRight: 8, paddingLeft: 8, paddingBottom: 16, scrollbarWidth: "none", background: FB.bg, zIndex: 10 }}>
 
       {/* === SÉLECTEUR DE COLLABORATEUR (admin) === */}
@@ -2438,86 +2459,133 @@ export default function DashboardPageUnified() {
     <div style={{ minHeight: "100vh", background: FB.bg }}>
       {/* Hide scrollbar for webkit browsers on swipe container */}
       <style>{`.mobile-swipe::-webkit-scrollbar { display: none; }`}</style>
-      {!isMobile && !isTablet && renderLeftSidebar()}
-      {/* Right sidebar — always visible on desktop */}
-      {!isMobile && !isTablet && renderRightSidebar()}
 
-      {isMobile ? (
-        activeModule ? (
-          /* ── MOBILE: Module embedded below compose + pills ── */
-          <div style={{ overflowY: "auto", padding: "4px 8px", height: "calc(100vh - 56px)" }}>
-            {renderFeed()}
-            {renderEmbeddedModule()}
-          </div>
-        ) : (
-          /* ── MOBILE: horizontal scroll-snap feed ↔ analytics ── */
-          <>
-            <div
-              ref={scrollContainerRef}
-              onScroll={handleMobileScroll}
-              className="mobile-swipe"
-              style={{
-                display: "flex", overflowX: "auto", overflowY: "hidden",
-                scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch",
-                scrollbarWidth: "none", msOverflowStyle: "none" as any,
-                height: "calc(100vh - 56px)",
-              }}
-            >
-              {/* Page 1: Feed */}
-              <div style={{
-                flex: "0 0 100%", width: "100%", scrollSnapAlign: "start",
-                overflowY: "auto", padding: "4px 8px",
-              }}>
+      {activeModule ? (
+        /* ── MODULE ACTIVE: Single view (no carousel) ── */
+        <div style={{
+          overflowY: "auto", padding: "4px 8px", height: "calc(100vh - 56px)",
+          maxWidth: isMobile ? '100%' : 900, margin: '0 auto',
+        }}>
+          {renderFeed()}
+          {renderEmbeddedModule()}
+        </div>
+      ) : (
+        /* ═══════════════════════════════════════════════════════
+           SPACEFLOW — 5-PANEL CAROUSEL
+           Explore ← Flow ← LE MUR → Universe → Dashboard
+           Same layout on ALL devices (mobile, tablet, desktop)
+           ═══════════════════════════════════════════════════════ */
+        <>
+          <div
+            ref={scrollContainerRef}
+            onScroll={handleMobileScroll}
+            className="mobile-swipe"
+            style={{
+              display: "flex", overflowX: "auto", overflowY: "hidden",
+              scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch",
+              scrollbarWidth: "none", msOverflowStyle: "none" as any,
+              height: "calc(100vh - 56px)",
+            }}
+          >
+            {/* ── Panel 0: EXPLORE ── */}
+            <div style={{
+              flex: "0 0 100%", width: "100%", scrollSnapAlign: "start",
+              overflowY: "auto",
+            }}>
+              <div style={{ maxWidth: isMobile ? '100%' : 600, margin: '0 auto' }}>
+                <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
+                  <LazyExplorePanel api={api} openModule={openModule} />
+                </Suspense>
+              </div>
+            </div>
+
+            {/* ── Panel 1: FLOW ── */}
+            <div style={{
+              flex: "0 0 100%", width: "100%", scrollSnapAlign: "start",
+              overflowY: "auto",
+            }}>
+              <div style={{ maxWidth: isMobile ? '100%' : 600, margin: '0 auto' }}>
+                <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
+                  <LazyFlowPanel api={api} currentUser={user} />
+                </Suspense>
+              </div>
+            </div>
+
+            {/* ── Panel 2: LE MUR (centre) ── */}
+            <div style={{
+              flex: "0 0 100%", width: "100%", scrollSnapAlign: "start",
+              overflowY: "auto", padding: "4px 8px",
+            }}>
+              <div style={{ maxWidth: isMobile ? '100%' : 600, margin: '0 auto' }}>
+                {/* StoriesBar */}
+                <Suspense fallback={null}>
+                  <LazyStoriesBar api={api} currentUser={user} />
+                </Suspense>
                 {renderFeed()}
               </div>
-              {/* Page 2: Analytics */}
-              <div style={{
-                flex: "0 0 100%", width: "100%", scrollSnapAlign: "start",
-                overflowY: "auto", padding: "4px 8px",
-              }}>
+            </div>
+
+            {/* ── Panel 3: UNIVERSE ── */}
+            <div style={{
+              flex: "0 0 100%", width: "100%", scrollSnapAlign: "start",
+              overflowY: "auto",
+            }}>
+              <div style={{ maxWidth: isMobile ? '100%' : 600, margin: '0 auto' }}>
+                <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
+                  <LazyUniversePanel api={api} currentUser={user} />
+                </Suspense>
+              </div>
+            </div>
+
+            {/* ── Panel 4: DASHBOARD / STATS ── */}
+            <div style={{
+              flex: "0 0 100%", width: "100%", scrollSnapAlign: "start",
+              overflowY: "auto", padding: "4px 8px",
+            }}>
+              <div style={{ maxWidth: isMobile ? '100%' : 600, margin: '0 auto' }}>
                 {renderMobileAnalytics()}
               </div>
             </div>
-            {/* Dot indicator + swipe hint */}
-            <div style={{
-              position: "fixed", bottom: 12, left: "50%", transform: "translateX(-50%)",
-              display: "flex", gap: 6, alignItems: "center", zIndex: 50,
-              background: "rgba(0,0,0,0.5)", borderRadius: 12, padding: "4px 10px",
-            }}>
-              {["Fil", "Stats"].map((label, i) => (
-                <div key={i} onClick={() => scrollToPanel(i)} style={{
-                  display: "flex", alignItems: "center", gap: 3, cursor: "pointer",
-                  padding: "2px 6px", borderRadius: 8,
-                  background: mobilePanel === i ? "rgba(255,255,255,0.25)" : "transparent",
-                  transition: "all 0.2s",
-                }}>
-                  <div style={{
-                    width: mobilePanel === i ? 8 : 6, height: mobilePanel === i ? 8 : 6,
-                    borderRadius: "50%",
-                    background: mobilePanel === i ? "#fff" : "rgba(255,255,255,0.4)",
-                    transition: "all 0.2s",
-                  }} />
-                  <span style={{ fontSize: 10, color: mobilePanel === i ? "#fff" : "rgba(255,255,255,0.5)", fontWeight: 600 }}>
-                    {label}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </>
-        )
-      ) : (
-        /* ── DESKTOP / TABLET ── */
-        <div style={{
-          marginLeft: isTablet ? 0 : 288,
-          marginRight: isTablet ? 0 : 308,
-          padding: 0,
-          display: "flex", justifyContent: "center",
-        }}>
-          <div style={{ flex: 1, minWidth: 0, margin: "0 auto" }}>
-            {renderFeed()}
-            {activeModule && renderEmbeddedModule()}
           </div>
-        </div>
+
+          {/* ── SpaceFlow Navigation Bar ── */}
+          <div style={{
+            position: "fixed", bottom: 12, left: "50%", transform: "translateX(-50%)",
+            display: "flex", gap: 2, alignItems: "center", zIndex: 50,
+            background: "rgba(0,0,0,0.65)", borderRadius: 20, padding: "4px 8px",
+            backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)",
+          }}>
+            {[
+              { icon: "🔍", label: "Explore", color: "#00CEC9" },
+              { icon: "🌊", label: "Flow", color: "#6C5CE7" },
+              { icon: "🏠", label: "Mur", color: "#1877F2" },
+              { icon: "🌌", label: "Universe", color: "#FD79A8" },
+              { icon: "📊", label: "Stats", color: "#FDCB6E" },
+            ].map((panel, i) => (
+              <div key={i} onClick={() => scrollToPanel(i)} style={{
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 1,
+                cursor: "pointer", padding: "4px 8px", borderRadius: 14,
+                background: mobilePanel === i ? panel.color + "30" : "transparent",
+                transition: "all 0.25s", minWidth: 44,
+              }}>
+                <span style={{
+                  fontSize: mobilePanel === i ? 18 : 14,
+                  transition: "font-size 0.2s",
+                  filter: mobilePanel === i ? "none" : "grayscale(0.5)",
+                }}>
+                  {panel.icon}
+                </span>
+                <span style={{
+                  fontSize: 9, fontWeight: 700, letterSpacing: 0.3,
+                  color: mobilePanel === i ? panel.color : "rgba(255,255,255,0.5)",
+                  transition: "color 0.2s",
+                }}>
+                  {panel.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
       )}
       <MessengerChat />
     </div>

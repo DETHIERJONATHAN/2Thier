@@ -1113,6 +1113,14 @@ model Organization {
   // Wall / Réseau social
   WallPost                   WallPost[]
   ClientAccount              ClientAccount[]
+
+  // SpaceFlow
+  Stories                    Story[]
+  Sparks                     Spark[]
+  Battles                    Battle[]
+  TimeCapsules               TimeCapsule[]
+  Quests                     Quest[]
+  SocialEvents               SocialEvent[]
 }
 
 model OrganizationModuleStatus {
@@ -2266,6 +2274,28 @@ model User {
   MessagesSent                                        Message[]           @relation("MessageSender")
   CallParticipants                                    CallParticipant[]
   CallsInitiated                                      VideoCall[]         @relation("VideoCallInitiator")
+
+  // SpaceFlow
+  Followers                                           Follow[]            @relation("UserFollowers")
+  Following                                           Follow[]            @relation("UserFollowing")
+  Stories                                             Story[]             @relation("StoryAuthor")
+  StoryViews                                          StoryView[]         @relation("StoryViewer")
+  Sparks                                              Spark[]             @relation("SparkAuthor")
+  SparkVotes                                          SparkVote[]         @relation("SparkVoter")
+  BattlesCreated                                      Battle[]            @relation("BattleChallenger")
+  BattlesOpponent                                     Battle[]            @relation("BattleOpponent")
+  BattlesWon                                          Battle[]            @relation("BattleWinner")
+  BattleEntries                                       BattleEntry[]       @relation("BattleEntryUser")
+  CapsulesSent                                        TimeCapsule[]       @relation("CapsuleAuthor")
+  CapsulesReceived                                    TimeCapsule[]       @relation("CapsuleRecipient")
+  QuestsSponsored                                     Quest[]             @relation("QuestSponsor")
+  QuestProgress                                       QuestProgress[]     @relation("QuestProgressUser")
+  UserBadges                                          UserBadge[]         @relation("UserBadges")
+  UserStreak                                          UserStreak?         @relation("UserStreakData")
+  ContentReports                                      ContentReport[]     @relation("ContentReporter")
+  ContentReviews                                      ContentReport[]     @relation("ContentReviewer")
+  EventsCreated                                       SocialEvent[]       @relation("EventCreator")
+  EventAttendances                                    EventAttendee[]     @relation("EventAttendees")
 
   @@index([organizationId, commercialSlug])
 }
@@ -3686,6 +3716,11 @@ model WallPost {
   // Catégorie pour filtrage
   category        String?             // "projet", "actualite", "chantier_realise", "conseil", "promotion"
 
+  // SpaceFlow
+  tags            String[]  @default([])  // hashtags extraits du contenu
+  isAnonymous     Boolean   @default(false) // mode Spark
+  parentPostId    String?                  // Echo/remix d'un autre post
+
   // Compteurs dénormalisés
   likesCount      Int       @default(0)
   commentsCount   Int       @default(0)
@@ -3703,6 +3738,9 @@ model WallPost {
   reactions       WallReaction[]
   comments        WallComment[]
   shares          WallShare[]
+  hashtags        PostHashtag[]
+  parentPost      WallPost?    @relation("PostEcho", fields: [parentPostId], references: [id], onDelete: SetNull)
+  echoes          WallPost[]   @relation("PostEcho")
 
   @@index([organizationId, visibility, createdAt])
   @@index([organizationId, createdAt])
@@ -3941,4 +3979,341 @@ model CallParticipant {
 
   @@unique([callId, userId])
   @@index([userId, status])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SPACEFLOW — RÉSEAU SOCIAL NOUVELLE GÉNÉRATION
+// ═══════════════════════════════════════════════════════════════
+
+// ── FOLLOW (asymétrique, parallèle au système Friendship) ──
+
+model Follow {
+  id          String   @id @default(uuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower    User @relation("UserFollowers", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User @relation("UserFollowing", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+}
+
+// ── STORIES (contenu éphémère 24h) ──
+
+model Story {
+  id             String    @id @default(uuid())
+  authorId       String
+  organizationId String?
+  mediaUrl       String                    // URL image/vidéo
+  mediaType      String    @default("image") // image, video
+  caption        String?
+  musicUrl       String?
+  duration       Int       @default(5)     // secondes d'affichage
+  isHighlight    Boolean   @default(false) // garder en "à la une"
+  highlightName  String?                   // nom du highlight
+  expiresAt      DateTime                  // maintenant + 24h
+  createdAt      DateTime  @default(now())
+
+  author         User       @relation("StoryAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  views          StoryView[]
+
+  @@index([authorId, createdAt])
+  @@index([expiresAt])
+  @@index([organizationId])
+}
+
+model StoryView {
+  id        String   @id @default(uuid())
+  storyId   String
+  viewerId  String
+  createdAt DateTime @default(now())
+
+  story     Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  viewer    User  @relation("StoryViewer", fields: [viewerId], references: [id], onDelete: Cascade)
+
+  @@unique([storyId, viewerId])
+  @@index([storyId])
+  @@index([viewerId])
+}
+
+// ── HASHTAGS ──
+
+model Hashtag {
+  id         String   @id @default(uuid())
+  name       String   @unique  // stocké en minuscule sans #
+  postCount  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  posts      PostHashtag[]
+
+  @@index([postCount])
+}
+
+model PostHashtag {
+  id        String   @id @default(uuid())
+  postId    String
+  hashtagId String
+  createdAt DateTime @default(now())
+
+  post      WallPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  hashtag   Hashtag  @relation(fields: [hashtagId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, hashtagId])
+  @@index([hashtagId])
+}
+
+// ── SPARK (posts anonymes avec révélation) ──
+
+model Spark {
+  id             String    @id @default(uuid())
+  authorId       String
+  organizationId String?
+  content        String?
+  mediaUrl       String?
+  mediaType      String?             // image, video
+  sparkCount     Int       @default(0) // votes "spark"
+  revealThreshold Int      @default(100)
+  isRevealed     Boolean   @default(false)
+  revealedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  author         User         @relation("SparkAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  votes          SparkVote[]
+
+  @@index([isRevealed, sparkCount])
+  @@index([createdAt])
+  @@index([organizationId])
+}
+
+model SparkVote {
+  id        String   @id @default(uuid())
+  sparkId   String
+  voterId   String
+  createdAt DateTime @default(now())
+
+  spark     Spark @relation(fields: [sparkId], references: [id], onDelete: Cascade)
+  voter     User  @relation("SparkVoter", fields: [voterId], references: [id], onDelete: Cascade)
+
+  @@unique([sparkId, voterId])
+  @@index([sparkId])
+}
+
+// ── BATTLES (duels créatifs) ──
+
+model Battle {
+  id             String    @id @default(uuid())
+  organizationId String?
+  title          String                   // "Meilleure photo du jour"
+  description    String?
+  challengerId   String
+  opponentId     String?                  // null = ouvert à tous
+  status         String    @default("open") // open, active, voting, ended
+  startsAt       DateTime  @default(now())
+  endsAt         DateTime                 // deadline
+  winnerId       String?
+  createdAt      DateTime  @default(now())
+
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  challenger     User          @relation("BattleChallenger", fields: [challengerId], references: [id], onDelete: Cascade)
+  opponent       User?         @relation("BattleOpponent", fields: [opponentId], references: [id], onDelete: Cascade)
+  winner         User?         @relation("BattleWinner", fields: [winnerId], references: [id], onDelete: Cascade)
+  entries        BattleEntry[]
+
+  @@index([status, endsAt])
+  @@index([createdAt])
+}
+
+model BattleEntry {
+  id        String   @id @default(uuid())
+  battleId  String
+  userId    String
+  content   String?
+  mediaUrl  String?
+  mediaType String?
+  votes     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  battle    Battle @relation(fields: [battleId], references: [id], onDelete: Cascade)
+  user      User   @relation("BattleEntryUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([battleId, userId])
+  @@index([battleId, votes])
+}
+
+// ── TIME CAPSULES ──
+
+model TimeCapsule {
+  id             String    @id @default(uuid())
+  authorId       String
+  organizationId String?
+  content        String?
+  mediaUrl       String?
+  mediaType      String?
+  unlocksAt      DateTime         // date d'ouverture
+  isOpened       Boolean   @default(false)
+  recipientId    String?          // null = public, sinon destinataire
+  createdAt      DateTime  @default(now())
+
+  author         User          @relation("CapsuleAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  recipient      User?         @relation("CapsuleRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([unlocksAt, isOpened])
+  @@index([authorId])
+  @@index([recipientId])
+}
+
+// ── QUESTS (missions gamifiées) ──
+
+model Quest {
+  id             String    @id @default(uuid())
+  organizationId String?            // null = quests globales SpaceFlow
+  sponsorId      String?            // entreprise qui sponsorise
+  title          String
+  description    String?
+  icon           String    @default("🎯")
+  questType      String    @default("daily") // daily, weekly, monthly, special
+  actionType     String                     // post_photo, comment, react, visit, share
+  targetCount    Int       @default(1)      // combien de fois
+  rewardPoints   Int       @default(10)
+  isActive       Boolean   @default(true)
+  startsAt       DateTime  @default(now())
+  endsAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sponsor        User?         @relation("QuestSponsor", fields: [sponsorId], references: [id])
+  progress       QuestProgress[]
+
+  @@index([isActive, questType])
+  @@index([organizationId])
+}
+
+model QuestProgress {
+  id           String    @id @default(uuid())
+  questId      String
+  userId       String
+  currentCount Int       @default(0)
+  isCompleted  Boolean   @default(false)
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  quest        Quest @relation(fields: [questId], references: [id], onDelete: Cascade)
+  user         User  @relation("QuestProgressUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([questId, userId])
+  @@index([userId, isCompleted])
+}
+
+// ── GAMIFICATION (badges, niveaux, streaks) ──
+
+model BadgeDefinition {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  icon        String                  // emoji ou URL
+  category    String   @default("social") // social, creator, pro, loyalty
+  criteria    String                  // ex: "posts_count >= 10"
+  threshold   Int      @default(1)
+  createdAt   DateTime @default(now())
+
+  userBadges  UserBadge[]
+}
+
+model UserBadge {
+  id        String   @id @default(uuid())
+  userId    String
+  badgeId   String
+  earnedAt  DateTime @default(now())
+
+  user      User            @relation("UserBadges", fields: [userId], references: [id], onDelete: Cascade)
+  badge     BadgeDefinition @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId])
+  @@index([userId])
+}
+
+model UserStreak {
+  id            String    @id @default(uuid())
+  userId        String    @unique
+  currentStreak Int       @default(0)
+  longestStreak Int       @default(0)
+  lastActiveAt  DateTime  @default(now())
+  totalPoints   Int       @default(0)
+  level         Int       @default(1)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user          User @relation("UserStreakData", fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ── CONTENT MODERATION ──
+
+model ContentReport {
+  id             String    @id @default(uuid())
+  reporterId     String
+  targetType     String              // post, comment, spark, reel, user
+  targetId       String
+  reason         String              // spam, harassment, nudity, violence, other
+  description    String?
+  status         String    @default("pending") // pending, reviewed, resolved, dismissed
+  reviewedBy     String?
+  reviewedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  reporter       User  @relation("ContentReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reviewer       User? @relation("ContentReviewer", fields: [reviewedBy], references: [id])
+
+  @@index([status, createdAt])
+  @@index([targetType, targetId])
+  @@index([reporterId])
+}
+
+// ── ÉVÉNEMENTS SOCIAUX ──
+
+model SocialEvent {
+  id             String    @id @default(uuid())
+  organizationId String?
+  creatorId      String
+  title          String
+  description    String?
+  coverUrl       String?
+  location       String?
+  latitude       Float?
+  longitude      Float?
+  eventType      String    @default("meetup") // meetup, workshop, jobfair, openday, concert
+  startsAt       DateTime
+  endsAt         DateTime?
+  maxAttendees   Int?
+  isPublic       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator        User          @relation("EventCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  attendees      EventAttendee[]
+
+  @@index([startsAt])
+  @@index([organizationId])
+  @@index([eventType, isPublic])
+}
+
+model EventAttendee {
+  id        String   @id @default(uuid())
+  eventId   String
+  userId    String
+  status    String   @default("going") // going, interested, declined
+  createdAt DateTime @default(now())
+
+  event     SocialEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User        @relation("EventAttendees", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([userId])
 }
