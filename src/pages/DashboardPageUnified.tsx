@@ -2334,8 +2334,8 @@ export default function DashboardPageUnified() {
           )}
         </div>
 
-      {/* Feed content — hidden when a module is embedded */}
-      {!activeModule && (<>
+      {/* Feed content — hidden when a module or SpaceFlow app is active in center */}
+      {!activeModule && !centerApp && (<>
       {/* Feed header — single compact line with filter dropdown */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0 4px", marginBottom: 4, position: "relative" }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: FB.text }}>Fil</span>
