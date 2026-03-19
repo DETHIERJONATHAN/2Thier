@@ -519,14 +519,14 @@ router.get('/capsules', authenticateToken, async (req: Request, res: Response) =
     const capsules = await db.timeCapsule.findMany({
       where: {
         OR: [
-          { creatorId: userId },
+          { authorId: userId },
           { recipientId: userId },
         ],
       },
       orderBy: { unlocksAt: 'asc' },
       take: limit,
       include: {
-        creator: { select: { firstName: true, lastName: true, avatarUrl: true } },
+        author: { select: { firstName: true, lastName: true, avatarUrl: true } },
         recipient: { select: { firstName: true, lastName: true } },
       },
     });
@@ -534,11 +534,11 @@ router.get('/capsules', authenticateToken, async (req: Request, res: Response) =
     res.json({
       capsules: capsules.map(c => ({
         id: c.id,
-        title: c.title,
-        creatorName: `${c.creator.firstName} ${c.creator.lastName}`.trim(),
-        creatorAvatar: c.creator.avatarUrl,
+        content: c.content,
+        creatorName: `${c.author.firstName} ${c.author.lastName}`.trim(),
+        creatorAvatar: c.author.avatarUrl,
         unlocksAt: c.unlocksAt,
-        isUnlocked: c.isUnlocked || new Date(c.unlocksAt) <= new Date(),
+        isUnlocked: c.isOpened || new Date(c.unlocksAt) <= new Date(),
         recipientName: c.recipient ? `${c.recipient.firstName} ${c.recipient.lastName}`.trim() : undefined,
       })),
     });
@@ -550,16 +550,15 @@ router.get('/capsules', authenticateToken, async (req: Request, res: Response) =
 router.post('/capsules', authenticateToken, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.id;
-    const { title, content, mediaUrl, mediaType, unlocksAt, recipientId } = req.body;
+    const { content, mediaUrl, mediaType, unlocksAt, recipientId } = req.body;
 
-    if (!title) return res.status(400).json({ error: 'Titre requis' });
     if (!unlocksAt) return res.status(400).json({ error: 'Date de déverrouillage requise' });
 
     const capsule = await db.timeCapsule.create({
       data: {
-        title, content, mediaUrl, mediaType,
+        content, mediaUrl, mediaType,
         unlocksAt: new Date(unlocksAt),
-        creatorId: userId,
+        authorId: userId,
         recipientId: recipientId || null,
       },
     });
@@ -579,16 +578,16 @@ router.get('/orbit', authenticateToken, async (req: Request, res: Response) => {
     const friendships = await db.friendship.findMany({
       where: {
         status: 'accepted',
-        OR: [{ requesterId: userId }, { receiverId: userId }],
+        OR: [{ requesterId: userId }, { addresseeId: userId }],
       },
       include: {
         requester: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
-        receiver: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+        addressee: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
       },
     });
 
     const friends = friendships.map(f => {
-      const friend = f.requesterId === userId ? f.receiver : f.requester;
+      const friend = f.requesterId === userId ? f.addressee : f.requester;
       return {
         id: friend.id,
         name: `${friend.firstName} ${friend.lastName}`.trim(),
