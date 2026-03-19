@@ -8,8 +8,7 @@
  */
 
 import React from 'react';
-import { Card, Typography, Tooltip, Button } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { Card, Typography, Tooltip } from 'antd';
 import { useDraggable } from '@dnd-kit/core';
 // (icônes inutilisées supprimées)
 import type { NodeTypeKey, TreeBranchLeafRegistry } from '../../types';
@@ -92,29 +91,32 @@ const PaletteItem: React.FC<PaletteItemProps> = ({
             backgroundColor: isDragging ? '#f0f0f0' : 'white',
             filter: readOnly ? 'grayscale(100%)' : 'none',
             textAlign: 'center',
-            minHeight: '45px'
+            width: '100%',
           }}
           styles={{ body: { 
-            padding: '6px',
+            padding: '6px 4px',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            justifyContent: 'center'
+            justifyContent: 'center',
           }}}
         >
           <div style={{ 
             fontSize: '18px',
             color: readOnly ? '#ccc' : color,
-            marginBottom: '4px'
+            lineHeight: 1,
           }}>
             {emoji}
           </div>
-          <div style={{ 
-            fontSize: '10px', 
-            fontWeight: 500, 
-            color: readOnly ? '#ccc' : '#333',
-            textAlign: 'center',
-            lineHeight: '1.1'
+          <div style={{
+            fontSize: '9px',
+            lineHeight: 1.1,
+            marginTop: 2,
+            color: '#666',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            width: '100%',
           }}>
             {label}
           </div>
@@ -158,39 +160,25 @@ const Palette: React.FC<PaletteProps> = ({
         overscrollBehavior: 'contain'
       }}
     >
-      {/* Titre et instructions */}
-      <div style={{ marginBottom: '16px', padding: '8px' }}>
-        <Text type="secondary" style={{ fontSize: '12px' }}>
-          🖱️ Glisser ces éléments dans la Structure pour créer votre arbre
-        </Text>
-      </div>
-
       {/* Catégories d'éléments */}
       {categories.map(category => (
-        <div key={category.key} style={{ marginBottom: '20px' }}>
+        <div key={category.key} style={{ marginBottom: '12px' }}>
           <div style={{ 
-            marginBottom: '12px', 
-            padding: '4px 8px',
+            marginBottom: '6px', 
+            padding: '2px 4px',
             backgroundColor: '#f5f5f5',
-            borderRadius: '4px'
+            borderRadius: '4px',
+            textAlign: 'center'
           }}>
-            <Text strong style={{ fontSize: '13px' }}>
+            <Text strong style={{ fontSize: '11px' }}>
               {category.label}
             </Text>
           </div>
 
-          {category.items.map(nodeType => (
-            <div 
-              key={`wrap-${nodeType.key}`} 
-              style={{ 
-                display: 'flex', 
-                alignItems: 'stretch', 
-                gap: 4, 
-                marginBottom: 8 
-              }}
-            >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {category.items.map(nodeType => (
               <div 
-                style={{ flex: 1 }}
+                key={`wrap-${nodeType.key}`}
                 onDoubleClick={() => !readOnly && onItemCreate(nodeType.key)}
               >
                 <PaletteItem
@@ -204,48 +192,10 @@ const Palette: React.FC<PaletteProps> = ({
                   readOnly={readOnly}
                 />
               </div>
-              {/* Bouton + pour ajouter rapidement (utile sur mobile) */}
-              <Tooltip title={`Ajouter ${nodeType.label}`} placement="right">
-                <Button
-                  type="primary"
-                  ghost
-                  size="small"
-                  icon={<PlusOutlined />}
-                  onClick={() => !readOnly && onItemCreate(nodeType.key)}
-                  disabled={readOnly}
-                  style={{ 
-                    minWidth: 32,
-                    height: 'auto',
-                    borderColor: nodeType.color,
-                    color: nodeType.color
-                  }}
-                />
-              </Tooltip>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       ))}
-
-      {/* Instructions détaillées */}
-      <Card size="small" style={{ marginTop: '20px' }}>
-        <div style={{ fontSize: '12px', color: '#666' }}>
-          <div style={{ marginBottom: '8px', fontWeight: 500 }}>
-            💡 Mode d'emploi :
-          </div>
-          <div style={{ lineHeight: '1.4' }}>
-            • <strong>🌿 Branche</strong> : Conteneur hiérarchique<br />
-            • <strong>📋 Section</strong> : Zone calculatrice avec champs d'affichage<br />
-            • <strong>○ Option (O)</strong> : Choix simple<br />
-            • <strong>◐ Option+Champ (O+C)</strong> : Choix + saisie<br />
-            • <strong>● Champ (C)</strong> : Saisie pure<br /><br />
-            
-            <Text type="secondary">
-              Déposez <strong>entre</strong> deux éléments pour créer un frère, 
-              <strong>sur</strong> un élément pour créer un enfant.
-            </Text>
-          </div>
-        </div>
-      </Card>
 
       {readOnly && (
         <div style={{ 

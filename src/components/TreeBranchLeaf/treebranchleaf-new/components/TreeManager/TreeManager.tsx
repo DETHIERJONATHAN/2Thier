@@ -352,20 +352,15 @@ const TreeManager: React.FC<TreeManagerProps> = ({
           alignItems: 'center',
           justifyContent: 'space-between',
           width: '100%',
-          padding: '8px 16px',
-          backgroundColor: '#fafafa',
-          borderRadius: '6px',
-          border: '1px solid #f0f0f0',
-          minHeight: '60px'
+          padding: '6px 0',
         }}
       >
-        <Space align="center" size="middle">
+        <div>
           {trees.length > 0 && (
             <Select
               value={tree?.id}
               placeholder="Sélectionner un arbre..."
-              style={{ minWidth: 200 }}
-              size="middle"
+              style={{ minWidth: 200, height: 32 }}
               showSearch
               optionFilterProp="label"
               onChange={handleTreeSelection}
@@ -378,21 +373,19 @@ const TreeManager: React.FC<TreeManagerProps> = ({
               ))}
             </Select>
           )}
-        </Space>
+        </div>
 
-        <Space size="small">
-          <Tooltip title="Créer un nouvel arbre">
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              size="middle"
-              onClick={openCreateModal}
-              disabled={readOnly}
-            >
-              Nouveau
-            </Button>
-          </Tooltip>
-        </Space>
+        <Tooltip title="Créer un nouvel arbre">
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            style={{ height: 32 }}
+            onClick={openCreateModal}
+            disabled={readOnly}
+          >
+            Nouveau
+          </Button>
+        </Tooltip>
       </div>
 
       {createModalVisible && (

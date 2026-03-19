@@ -11,7 +11,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Row, Col, Layout, Card, Spin, Space, Segmented, Grid } from 'antd';
+import { Row, Col, Layout, Card, Spin, Segmented, Grid } from 'antd';
 import { DndContext } from '@dnd-kit/core';
 
 // Composants
@@ -1834,23 +1834,21 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <Layout style={{ minHeight: '100vh', background: '#f0f2f5' }}>
+      <Layout style={{ minHeight: '100vh', background: 'white' }}>
         
         {/* � EN-TÊTE LEAD - Si leadId fourni */}
         {/* EN-TÊTE LEAD - Temporairement désactivé */}
         
         
         {/* �🎛️ GESTIONNAIRE D'ARBRES - En haut */}
-        <Layout.Header
+        <div
           style={{
             background: 'white',
-            padding: isMobile ? '0 12px' : '0 24px',
-            borderBottom: '1px solid #f0f0f0',
+            padding: isMobile ? '0 12px' : '0 12px',
             display: 'flex',
             flexWrap: isMobile ? 'wrap' : 'nowrap',
             alignItems: isMobile ? 'stretch' : 'center',
             justifyContent: isMobile ? 'center' : 'space-between',
-            gap: isMobile ? 12 : 0
           }}
         >
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -1866,22 +1864,13 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
               }}
             />
           </div>
-          <Space
-            size={isMobile ? 8 : 12}
-            wrap
-            style={{
-              alignSelf: isMobile ? 'flex-end' : 'center',
-              flexShrink: 0
-            }}
-          >
-          </Space>
-        </Layout.Header>
+        </div>
 
         {/* 🏗️ CONTENU PRINCIPAL - 3 colonnes */}
-        <Content style={{ padding: isMobile ? '12px' : '16px' }}>
+        <Content style={{ padding: isMobile ? '12px' : '0 16px 16px' }}>
           {isDesktop ? (
             <Row gutter={[16, 16]} style={{ height: 'calc(100vh - 120px)' }} wrap={false}>
-              <Col flex="0 0 280px" style={{ minWidth: 240 }}>
+              <Col flex="0 0 auto" style={{ minWidth: 72, maxWidth: 120 }}>
                 {paletteCard}
               </Col>
               <Col flex="1 1 0px">
