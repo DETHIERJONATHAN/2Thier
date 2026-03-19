@@ -68,8 +68,9 @@ const INVOICE_TYPES = [
   { value: 'CUSTOM', label: '📄 Personnalisé' },
 ];
 
-const ChantierWorkflowSettingsPage: React.FC = () => {
+const ChantierWorkflowSettingsPage: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
   const navigate = useNavigate();
+  const goBack = onBack || (() => navigate('/chantiers/settings'));
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, [apiHook.api]);
   const { statuses } = useChantierStatuses();
@@ -362,7 +363,7 @@ const ChantierWorkflowSettingsPage: React.FC = () => {
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', padding: 'clamp(10px, 3vw, 24px)' }}>
       <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/chantiers/settings')} size="middle">
+        <Button icon={<ArrowLeftOutlined />} onClick={goBack} size="middle">
           Retour aux paramètres
         </Button>
         <Title level={4} style={{ margin: 0, fontSize: 'clamp(16px, 4vw, 22px)' }}>⚙️ Workflow Chantiers</Title>

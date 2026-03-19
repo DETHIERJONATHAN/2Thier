@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Drawer, Modal, message, Grid } from 'antd';
+import React, { useState, lazy, Suspense } from 'react';
+import { Drawer, Modal, message, Grid, Spin } from 'antd';
 
 // Composants existants du CRM
 import LeadsKanban from './LeadsKanban';
@@ -9,6 +9,8 @@ import { EmailComposer } from '../../components/EmailComposer';
 import CallModule from './CallModule';
 import CalendarWidget from '../../components/leads/CalendarWidget';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+
+const LazyLeadsSettingsPage = lazy(() => import('./LeadsSettingsPage'));
 
 /**
  * Wrapper pour le Kanban avec intégration des modules
@@ -27,6 +29,7 @@ const LeadsKanbanWrapper: React.FC = () => {
   const [isCallModuleOpen, setIsCallModuleOpen] = useState(false);
   const [isEmailModuleOpen, setIsEmailModuleOpen] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Handlers pour ouvrir les modules
@@ -84,6 +87,7 @@ const LeadsKanbanWrapper: React.FC = () => {
         onScheduleLead={handleScheduleLead}
         onEditLead={handleEditLead}
         onDeleteLead={handleDeleteLead}
+        onSettings={() => setIsSettingsOpen(true)}
         refreshTrigger={refreshTrigger}
         onLeadUpdated={() => setRefreshTrigger(prev => prev + 1)}
       />
@@ -222,6 +226,20 @@ const LeadsKanbanWrapper: React.FC = () => {
           />
         )}
       </Modal>
+
+      {/* ⚙️ MODULE PARAMÈTRES LEADS - Drawer */}
+      <Drawer
+        title="⚙️ Paramètres Leads"
+        placement="right"
+        width={isMobile ? '100%' : 900}
+        open={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        destroyOnHidden
+      >
+        <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
+          <LazyLeadsSettingsPage />
+        </Suspense>
+      </Drawer>
     </>
   );
 };

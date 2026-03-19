@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useModuleNavigation } from '../../contexts/WallNavigationContext';
 import {
   Card, Tabs, Descriptions, Tag, Button, Spin, Avatar, Input, Modal,
   Select, Empty, Typography, Space, Divider, Tooltip, Alert, DatePicker, App,
@@ -42,11 +43,14 @@ import ChantierPointageTab from './ChantierPointageTab';
 const { TextArea } = Input;
 const { Text, Title } = Typography;
 
-const ChantierDetailPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }> = ({ chantierId: propId, onBack }) => {
+  const params = useParams<{ id: string }>();
+  const id = propId || params.id;
   const navigate = useNavigate();
+  const { moduleNavigate } = useModuleNavigation();
   const [searchParams] = useSearchParams();
   const initialTab = searchParams.get('tab') || 'info';
+  const goBack = onBack || (() => navigate('/chantiers'));
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, [apiHook.api]);
   const { statuses: chantierStatuses } = useChantierStatuses();
@@ -233,7 +237,7 @@ const ChantierDetailPage: React.FC = () => {
   if (!chantier) {
     return (
       <div className="p-6">
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/chantiers')} className="mb-4">
+        <Button icon={<ArrowLeftOutlined />} onClick={() => goBack()} className="mb-4">
           Retour
         </Button>
         <Empty description="Chantier non trouvé" />
@@ -306,13 +310,13 @@ const ChantierDetailPage: React.FC = () => {
     || null;
 
   return (
-    <div style={{ padding: '12px 12px', maxWidth: '1200px', margin: '0 auto', backgroundColor: '#FFFFFF', minHeight: '100vh' }}>
+    <div style={{ padding: '12px 12px', width: '100%', backgroundColor: '#FFFFFF', minHeight: '100vh' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: 1 }}>
           <Button 
             icon={<ArrowLeftOutlined />}
-            onClick={() => navigate('/chantiers')}
+            onClick={() => goBack()}
             type="text"
           />
           <div>
@@ -343,7 +347,7 @@ const ChantierDetailPage: React.FC = () => {
             <Tooltip title="Ouvrir le formulaire TBL">
               <Button
                 icon={<PartitionOutlined />}
-                onClick={() => tblUrl && navigate(tblUrl)}
+                onClick={() => tblUrl && moduleNavigate('/tbl')}
                 style={{ borderColor: '#722ed1', color: '#722ed1' }}
               >
                 Ouvrir TBL
@@ -698,7 +702,7 @@ const ChantierDetailPage: React.FC = () => {
                       type="link"
                       size="small"
                       icon={<LinkOutlined />}
-                      onClick={() => navigate(`/leads/${chantier.leadId}`)}
+                      onClick={() => moduleNavigate('/leads')}
                     >
                       Voir le lead
                     </Button>
@@ -1012,7 +1016,7 @@ const ChantierDetailPage: React.FC = () => {
                     type="primary"
                     size="large"
                     icon={<PartitionOutlined />}
-                    onClick={() => tblUrl && navigate(tblUrl)}
+                    onClick={() => tblUrl && moduleNavigate('/tbl')}
                     style={{ backgroundColor: '#722ed1', borderColor: '#722ed1' }}
                   >
                     Ouvrir le TBL

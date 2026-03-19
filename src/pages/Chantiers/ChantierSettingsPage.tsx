@@ -155,8 +155,10 @@ const SortableStatusRow: React.FC<{
 };
 
 // ═══ Main Settings Page ═══
-const ChantierSettingsPage: React.FC = () => {
+const ChantierSettingsPage: React.FC<{ onBack?: () => void; onWorkflowSettings?: () => void }> = ({ onBack, onWorkflowSettings }) => {
   const navigate = useNavigate();
+  const goBack = onBack || (() => navigate('/chantiers'));
+  const goToWorkflow = onWorkflowSettings || (() => navigate('/chantiers/settings/workflow'));
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, [apiHook.api]);
   const { statuses, refetch } = useChantierStatuses();
@@ -234,7 +236,7 @@ const ChantierSettingsPage: React.FC = () => {
   return (
     <div style={{ maxWidth: 700, margin: '0 auto', padding: 'clamp(10px, 3vw, 24px)' }}>
       <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/chantiers')} size="middle">
+        <Button icon={<ArrowLeftOutlined />} onClick={goBack} size="middle">
           Retour
         </Button>
         <Title level={4} style={{ margin: 0, fontSize: 'clamp(16px, 4vw, 22px)' }}>⚙️ Paramètres Chantiers</Title>
@@ -302,7 +304,7 @@ const ChantierSettingsPage: React.FC = () => {
             <Text strong><ThunderboltOutlined /> Workflow & Facturation</Text>
             <div><Text type="secondary" style={{ fontSize: 12 }}>Transitions, déclencheurs automatiques, templates de factures</Text></div>
           </div>
-          <Button type="primary" ghost onClick={() => navigate('/chantiers/settings/workflow')}>
+          <Button type="primary" ghost onClick={goToWorkflow}>
             Configurer
           </Button>
         </div>

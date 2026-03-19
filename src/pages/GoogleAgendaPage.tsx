@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useModuleNavigation } from '../contexts/WallNavigationContext';
 import { useAuth } from '../auth/useAuth';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import {
@@ -137,6 +138,7 @@ const GoogleAgendaPage: React.FC = () => {
   const { user } = useAuth();
   const { api } = useAuthenticatedApi();
   const navigate = useNavigate();
+  const { moduleNavigate } = useModuleNavigation();
   const { token } = theme.useToken();
   const calendarRef = useRef<FullCalendar>(null);
   const screens = Grid.useBreakpoint();
@@ -1111,9 +1113,9 @@ const GoogleAgendaPage: React.FC = () => {
                   block
                   onClick={() => {
                     const props = selectedEvent!.event.extendedProps;
-                    if (props.linkedChantierId) navigate(`/chantiers/${props.linkedChantierId}`);
-                    else if (props.linkedLeadId) navigate(`/leads/details/${props.linkedLeadId}`);
-                    else if (props.linkedClientId) navigate(`/clients`);
+                    if (props.linkedChantierId) moduleNavigate('/chantiers');
+                    else if (props.linkedLeadId) moduleNavigate('/leads');
+                    else if (props.linkedClientId) moduleNavigate('/clients');
                     setIsDetailsDrawerVisible(false);
                   }}
                 >

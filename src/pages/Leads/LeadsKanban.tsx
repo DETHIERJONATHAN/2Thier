@@ -91,6 +91,7 @@ interface LeadsKanbanProps {
   onScheduleLead: (leadId: string) => void;
   onEditLead?: (leadId: string) => void;
   onDeleteLead?: (leadId: string) => void;
+  onSettings?: () => void;
   refreshTrigger?: number;
   onLeadUpdated?: () => void;
 }
@@ -671,6 +672,7 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
   onScheduleLead,
   onEditLead,
   onDeleteLead,
+  onSettings,
   refreshTrigger = 0,
   onLeadUpdated
 }) => {
@@ -1325,7 +1327,7 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
               <Button 
                 size="small" 
                 icon={<SettingOutlined />}
-                onClick={() => window.location.href = '/leads/settings'}
+                onClick={() => onSettings?.()}
                 style={{ color: '#ff4d4f' }}
                 type="text"
               >

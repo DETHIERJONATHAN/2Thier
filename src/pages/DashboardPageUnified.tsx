@@ -1,8 +1,103 @@
-import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import React, { useEffect, useState, useMemo, useCallback, useRef, Suspense } from "react";
 import { useAuthenticatedApi } from "../hooks/useAuthenticatedApi";
 import { useAuth } from "../auth/useAuth";
 import { useLeadStatuses } from "../hooks/useLeadStatuses";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { WallNavigationProvider } from "../contexts/WallNavigationContext";
+
+/* ═══════════════════════════════════════════════════════════════
+   LAZY-LOADED MODULE COMPONENTS (embedded in dashboard)
+   ═══════════════════════════════════════════════════════════════ */
+const LazyLeadsKanbanWrapper = React.lazy(() => import('./Leads/LeadsKanbanWrapper'));
+const LazyCRMPage = React.lazy(() => import('./CRMPage'));
+const LazyGestionSAVPage = React.lazy(() => import('./GestionSAVPage'));
+const LazyFacturePage = React.lazy(() => import('./FacturePage'));
+const LazyTechniquePage = React.lazy(() => import('./TechniquePage'));
+const LazyGestionTableauxPage = React.lazy(() => import('./GestionTableauxPage'));
+const LazyFormulairePage = React.lazy(() => import('./FormulairePage'));
+const LazyAgendaWrapper = React.lazy(() => import('./AgendaWrapper'));
+const LazyDevisPage = React.lazy(() => import('./DevisPage'));
+const LazyProductDocumentsPage = React.lazy(() => import('./ProductDocumentsPage'));
+const LazyTreeBranchLeafWrapper = React.lazy(() => import('./Formulaire/TreeBranchLeafWrapper-Fixed'));
+const LazyTBLPage = React.lazy(() => import('../components/TreeBranchLeaf/treebranchleaf-new/TBL/TBL'));
+const LazyGoogleGmailPageV2 = React.lazy(() => import('./UnifiedMailPage'));
+const LazyGoogleAgendaPage = React.lazy(() => import('./GoogleAgendaPage'));
+const LazyGoogleContactsPage = React.lazy(() => import('./GoogleContactsPage'));
+const LazyGoogleDrivePage = React.lazy(() => import('./GoogleDrivePage'));
+const LazyGoogleFormsPage = React.lazy(() => import('./GoogleFormsPage'));
+const LazyGoogleGroupsPage = React.lazy(() => import('./GoogleGroupsPage'));
+const LazyGoogleMeetPage = React.lazy(() => import('./GoogleMeetPage'));
+const LazyGoogleMapsPage = React.lazy(() => import('./GoogleMapsPage'));
+const LazyGoogleGeminiPage = React.lazy(() => import('./GoogleGeminiPage'));
+const LazyTelnyxPage = React.lazy(() => import('./TelnyxPage'));
+const LazyChantiersPage = React.lazy(() => import('./Chantiers/ChantiersPage'));
+const LazyMarketplacePage = React.lazy(() => import('./devis1minute/MarketplacePage'));
+const LazyLeadGenerationPage = React.lazy(() => import('./devis1minute/LeadGenerationPage'));
+const LazyCampaignAnalyticsPage = React.lazy(() => import('./devis1minute/CampaignAnalyticsPage'));
+const LazyPublicFormsPage = React.lazy(() => import('./devis1minute/PublicFormsPage'));
+const LazyLandingPagesPage = React.lazy(() => import('./devis1minute/LandingPagesPage'));
+const LazyAdvancedAnalyticsPage = React.lazy(() => import('./AdvancedAnalyticsPage'));
+const LazyModulesAdminPage = React.lazy(() => import('./admin/ModulesAdminPage'));
+const LazyRolesAdminPage = React.lazy(() => import('./admin/RolesAdminPage'));
+const LazyUsersAdminPage = React.lazy(() => import('./admin/UsersAdminPageNew'));
+const LazyOrganizationsAdminPage = React.lazy(() => import('./admin/OrganizationsAdminPageNew'));
+const LazyPermissionsAdminPage = React.lazy(() => import('./admin/PermissionsAdminPageNew'));
+const LazyIntegrationsAdminPage = React.lazy(() => import('./admin/IntegrationsAdminPage'));
+const LazyTreesAdminPage = React.lazy(() => import('./admin/TreesAdminPage'));
+const LazyProfilePage = React.lazy(() => import('./ProfilePage'));
+const LazySettingsPageEmbedded = React.lazy(() => import('./SettingsPageEmbedded'));
+
+/** Maps route paths to their lazy-loaded component */
+const MODULE_COMPONENTS: Record<string, React.LazyExoticComponent<any>> = {
+  '/leads': LazyLeadsKanbanWrapper,
+  '/my-leads': LazyLeadsKanbanWrapper,
+  '/clients': LazyCRMPage,
+  '/gestion_sav': LazyGestionSAVPage,
+  '/gestion-sav': LazyGestionSAVPage,
+  '/facture': LazyFacturePage,
+  '/technique': LazyTechniquePage,
+  '/gestion-tableaux': LazyGestionTableauxPage,
+  '/tableaux': LazyGestionTableauxPage,
+  '/formulaire': LazyFormulairePage,
+  '/agenda': LazyAgendaWrapper,
+  '/devis': LazyDevisPage,
+  '/fiches-techniques': LazyProductDocumentsPage,
+  '/tbl': LazyTBLPage,
+  '/module-tbl': LazyTBLPage,
+  '/formulaire/treebranchleaf': LazyTreeBranchLeafWrapper,
+  '/chantiers': LazyChantiersPage,
+  '/google-gmail': LazyGoogleGmailPageV2,
+  '/mail': LazyGoogleGmailPageV2,
+  '/google-agenda': LazyGoogleAgendaPage,
+  '/google-contacts': LazyGoogleContactsPage,
+  '/google-drive': LazyGoogleDrivePage,
+  '/google-forms': LazyGoogleFormsPage,
+  '/forms': LazyPublicFormsPage,
+  '/google-groups': LazyGoogleGroupsPage,
+  '/google-meet': LazyGoogleMeetPage,
+  '/google-maps': LazyGoogleMapsPage,
+  '/gemini': LazyGoogleGeminiPage,
+  '/telnyx': LazyTelnyxPage,
+  '/telnyx-communications': LazyTelnyxPage,
+  '/marketplace': LazyMarketplacePage,
+  '/lead-generation': LazyLeadGenerationPage,
+  '/campaign-analytics': LazyCampaignAnalyticsPage,
+  '/public-forms': LazyPublicFormsPage,
+  '/landing-pages': LazyLandingPagesPage,
+  '/analytics': LazyAdvancedAnalyticsPage,
+  '/admin/modules': LazyModulesAdminPage,
+  '/admin/roles': LazyRolesAdminPage,
+  '/admin/users': LazyUsersAdminPage,
+  '/admin/organizations': LazyOrganizationsAdminPage,
+  '/admin/permissions': LazyPermissionsAdminPage,
+  '/admin/integrations': LazyIntegrationsAdminPage,
+  '/admin/trees': LazyTreesAdminPage,
+  '/profile': LazyProfilePage,
+  '/settings': LazySettingsPageEmbedded,
+};
+
+/** Routes that should NOT be embedded (navigate normally) */
+const FULL_PAGE_ROUTES = ['/premium-test', '/diagnostic-complet'];
 import { Avatar, Spin, Tooltip as AntTooltip, Select } from "antd";
 import {
   UserOutlined,
@@ -289,12 +384,23 @@ const ShortcutItem: React.FC<{
   label: string;
   to: string;
   color?: string;
-}> = ({ icon, label, to, color }) => {
+  onClick?: (route: string) => void;
+}> = ({ icon, label, to, color, onClick }) => {
   const [hovered, setHovered] = useState(false);
   const location = useLocation();
-  const isActive = location.pathname === to || (to !== '/' && location.pathname.startsWith(to + '/'));
+  const sp = new URLSearchParams(location.search);
+  const activeModParam = sp.get('module');
+  const isActive = activeModParam === to || location.pathname === to || (to !== '/' && location.pathname.startsWith(to + '/'));
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (onClick) {
+      e.preventDefault();
+      onClick(to);
+    }
+  };
+
   return (
-    <Link to={to} style={{ textDecoration: "none" }}>
+    <Link to={to} style={{ textDecoration: "none" }} onClick={handleClick}>
       <div
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
@@ -1087,6 +1193,26 @@ export default function DashboardPageUnified() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Embedded module navigation
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeModule = searchParams.get('module'); // e.g. /leads, /tbl, /chantiers
+  const ActiveModuleComponent = activeModule ? MODULE_COMPONENTS[activeModule] || null : null;
+
+  const openModule = useCallback((route: string) => {
+    if (FULL_PAGE_ROUTES.some(r => route.startsWith(r))) {
+      navigate(route);
+      return;
+    }
+    // Always embed — even if not in MODULE_COMPONENTS, set the param
+    // so the dashboard stays visible with the module rendered inside
+    setSearchParams({ module: route }, { replace: true });
+  }, [navigate, setSearchParams]);
+
+  const goHome = useCallback(() => {
+    setSearchParams({}, { replace: true });
+  }, [setSearchParams]);
+
   // Scroll-snap handlers (must be before early returns to preserve hooks order)
   const handleMobileScroll = useCallback(() => {
     const el = scrollContainerRef.current;
@@ -1415,7 +1541,7 @@ export default function DashboardPageUnified() {
     clients: '/clients', google_forms: '/google-forms', formulaire: '/formulaire',
     google_agenda: '/google-agenda', google_drive: '/google-drive',
     fiches_techniques: '/fiches-techniques', admin_trees: '/admin/trees',
-    tbl: '/tbl', devis: '/devis', tableaux: '/gestion-tableaux',
+    tbl: '/tbl', treebranchleaf: '/tbl', devis: '/devis', tableaux: '/gestion-tableaux',
     marketplace: '/marketplace', lead_generation: '/lead-generation',
     campaign_analytics: '/campaign-analytics', public_forms: '/public-forms',
     landing_pages: '/landing-pages', telnyx: '/telnyx',
@@ -1478,7 +1604,17 @@ export default function DashboardPageUnified() {
      LEFT SIDEBAR
      ═══════════════════════════════════════════════════════════ */
   const renderLeftSidebar = () => (
-    <div style={{ position: "fixed", left: 0, top: 56, width: 280, height: "calc(100vh - 56px)", overflowY: "auto", paddingTop: 16, paddingLeft: 8, paddingRight: 8, paddingBottom: 16, scrollbarWidth: "none", background: FB.bg, zIndex: 10 }}>
+    <div style={{ position: "fixed", left: 0, top: 56, width: 280, height: "calc(100vh - 56px)", overflowY: "auto", paddingTop: 8, paddingLeft: 8, paddingRight: 8, paddingBottom: 16, scrollbarWidth: "none", background: FB.bg, zIndex: 10 }}>
+      {/* Home / feed button */}
+      <div onClick={goHome} style={{ cursor: 'pointer' }}>
+        <ShortcutItem
+          icon={<DashboardOutlined style={{ fontSize: 18 }} />}
+          label="Accueil"
+          to="/dashboard"
+          color={FB.blue}
+        />
+      </div>
+
       <ShortcutItem
         icon={
           <Avatar size={36} src={user?.avatarUrl}
@@ -1486,6 +1622,7 @@ export default function DashboardPageUnified() {
             style={{ background: !user?.avatarUrl ? FB.blue : undefined }} />
         }
         label={userName} to="/profile"
+        onClick={openModule}
       />
 
       {/* Dynamic modules grouped by section */}
@@ -1501,6 +1638,7 @@ export default function DashboardPageUnified() {
               label={mod.label || mod.name || mod.key || ''}
               to={getModuleRoute(mod)}
               color={getModuleColor(mod)}
+              onClick={openModule}
             />
           ))}
         </div>
@@ -1508,7 +1646,7 @@ export default function DashboardPageUnified() {
 
       {/* Fixed items: Paramètres */}
       <div style={{ height: 1, background: FB.border, margin: "12px 8px" }} />
-      <ShortcutItem icon={<SettingOutlined />} label="Paramètres" to="/settings" color={FB.textSecondary} />
+      <ShortcutItem icon={<SettingOutlined />} label="Paramètres" to="/settings" color={FB.textSecondary} onClick={openModule} />
 
       <div style={{ height: 1, background: FB.border, margin: "12px 8px" }} />
       {currentOrganization && (
@@ -1542,7 +1680,7 @@ export default function DashboardPageUnified() {
   const isTechRole = ["technicien", "chef_equipe", "contremaitre", "sous_traitant"].includes(user?.role || "");
 
   const renderRightSidebar = () => (
-    <div style={{ position: "fixed", right: 0, top: 56, width: 300, height: "calc(100vh - 56px)", overflowY: "auto", paddingTop: 12, paddingRight: 8, paddingLeft: 8, paddingBottom: 16, scrollbarWidth: "none", background: FB.bg, zIndex: 10 }}>
+    <div style={{ position: "fixed", right: 0, top: 56, width: 300, height: "calc(100vh - 56px)", overflowY: "auto", paddingTop: 8, paddingRight: 8, paddingLeft: 8, paddingBottom: 16, scrollbarWidth: "none", background: FB.bg, zIndex: 10 }}>
 
       {/* === SÉLECTEUR DE COLLABORATEUR (admin) === */}
       {isAdminRole && analytics?.collaborators?.length > 0 && (
@@ -1758,10 +1896,10 @@ export default function DashboardPageUnified() {
         <FBCard>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
             <span style={{ fontSize: 14, fontWeight: 700, color: FB.text }}>Top Leads</span>
-            <Link to="/leads/list" style={{ fontSize: 12, color: FB.blue, textDecoration: "none" }}>Voir tous</Link>
+            <span onClick={() => openModule('/leads')} style={{ fontSize: 12, color: FB.blue, textDecoration: "none", cursor: "pointer" }}>Voir tous</span>
           </div>
           {topLeads.slice(0, 4).map(lead => (
-            <Link key={lead.id} to={"/leads/" + lead.id} style={{ textDecoration: "none" }}>
+            <div key={lead.id} onClick={() => openModule('/leads')} style={{ textDecoration: "none", cursor: "pointer" }}>
               <div style={{
                 display: "flex", alignItems: "center", gap: 8, padding: "5px 2px",
                 borderRadius: 6, cursor: "pointer", transition: "background 0.15s",
@@ -1784,7 +1922,7 @@ export default function DashboardPageUnified() {
                   {lead.score}%
                 </div>
               </div>
-            </Link>
+            </div>
           ))}
         </FBCard>
       )}
@@ -1934,7 +2072,7 @@ export default function DashboardPageUnified() {
         <FBCard>
           <span style={{ fontSize: 13, fontWeight: 700, color: FB.text, display: "block", marginBottom: 6 }}>Top Leads</span>
           {topLeads.slice(0, 5).map(lead => (
-            <Link key={lead.id} to={"/leads/" + lead.id} style={{ textDecoration: "none" }}>
+            <div key={lead.id} onClick={() => openModule('/leads')} style={{ textDecoration: "none", cursor: "pointer" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0" }}>
                 <Avatar size={24} style={{ background: lead.statusColor || FB.blue, fontSize: 10 }}>
                   {(lead.prenom[0] || lead.nom[0] || "?")}
@@ -1944,7 +2082,7 @@ export default function DashboardPageUnified() {
                 </div>
                 <span style={{ fontSize: 10, fontWeight: 700, color: lead.score > 80 ? FB.green : lead.score > 60 ? FB.orange : FB.textSecondary }}>{lead.score}%</span>
               </div>
-            </Link>
+            </div>
           ))}
         </FBCard>
       )}
@@ -1955,7 +2093,7 @@ export default function DashboardPageUnified() {
      CENTER FEED
      ═══════════════════════════════════════════════════════════ */
   const renderFeed = () => (
-    <div style={{ flex: 1, minWidth: 0, maxWidth: isMobile ? "100%" : 680, margin: "0 auto", paddingTop: isMobile ? 0 : 4 }}>
+    <div style={{ flex: 1, minWidth: 0, margin: "0 auto", paddingTop: isMobile ? 0 : 8 }}>
 
       {/* "Quoi de neuf" — Twitter-style single line */}
       <FBCard>
@@ -2093,27 +2231,45 @@ export default function DashboardPageUnified() {
           display: "flex", gap: 4, overflowX: "auto", marginBottom: 4,
           WebkitOverflowScrolling: "touch", scrollbarWidth: "none",
         }}>
-          {sectionsWithModules.flatMap(s => s.modules).map((mod, i) => (
-            <Link key={mod.key || mod.id || i} to={getModuleRoute(mod)} style={{ textDecoration: "none" }}>
-              <div style={{
-                flex: "0 0 auto", display: "flex", alignItems: "center",
-                gap: 4, padding: "4px 8px",
-                borderRadius: 14, background: FB.white, boxShadow: FB.shadow,
-              }}>
+          {/* Home pill */}
+          <div onClick={goHome} style={{ cursor: 'pointer' }}>
+            <div style={{
+              flex: "0 0 auto", display: "flex", alignItems: "center",
+              gap: 4, padding: "4px 8px",
+              borderRadius: 14, background: !activeModule ? FB.blue : FB.white, boxShadow: FB.shadow,
+            }}>
+              <DashboardOutlined style={{ fontSize: 14, color: !activeModule ? '#fff' : FB.text }} />
+              <span style={{ fontSize: 10, fontWeight: 600, color: !activeModule ? '#fff' : FB.text, whiteSpace: "nowrap" }}>Accueil</span>
+            </div>
+          </div>
+          {sectionsWithModules.flatMap(s => s.modules).map((mod, i) => {
+            const route = getModuleRoute(mod);
+            const isActive = activeModule === route;
+            return (
+              <div key={mod.key || mod.id || i} onClick={() => openModule(route)} style={{ cursor: 'pointer' }}>
                 <div style={{
-                  width: 22, height: 22, borderRadius: "50%", background: getModuleColor(mod),
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 11, color: FB.white,
+                  flex: "0 0 auto", display: "flex", alignItems: "center",
+                  gap: 4, padding: "4px 8px",
+                  borderRadius: 14, background: isActive ? '#e7f3ff' : FB.white, boxShadow: FB.shadow,
+                  border: isActive ? '1.5px solid #1877f2' : '1.5px solid transparent',
                 }}>
-                  {getModuleIcon(mod)}
+                  <div style={{
+                    width: 22, height: 22, borderRadius: "50%", background: getModuleColor(mod),
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 11, color: FB.white,
+                  }}>
+                    {getModuleIcon(mod)}
+                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: isActive ? '#1877f2' : FB.text, whiteSpace: "nowrap" }}>{mod.label || mod.name || mod.key}</span>
                 </div>
-                <span style={{ fontSize: 10, fontWeight: 600, color: FB.text, whiteSpace: "nowrap" }}>{mod.label || mod.name || mod.key}</span>
               </div>
-            </Link>
-          ))}
+            );
+          })}
         </div>
       )}
 
+      {/* Feed content — hidden when a module is embedded */}
+      {!activeModule && (<>
       {/* Feed header — single compact line with filter dropdown */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0 4px", marginBottom: 4, position: "relative" }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: FB.text }}>Fil</span>
@@ -2240,83 +2396,127 @@ export default function DashboardPageUnified() {
           Vous êtes à jour ! Aucune nouvelle activité.
         </div>
       )}
+      </>)}
     </div>
   );
 
   /* ═══════════════════════════════════════════════════════════
-     MAIN RENDER — 3-COLUMN LAYOUT / MOBILE SWIPE
+     MAIN RENDER — 3-COLUMN LAYOUT / MOBILE SWIPE / EMBEDDED MODULE
      ═══════════════════════════════════════════════════════════ */
+
+  /** Renders the embedded module component inside the dashboard shell */
+  const renderEmbeddedModule = () => {
+    if (!activeModule) return null;
+    if (!ActiveModuleComponent) {
+      // Module route not mapped — show fallback message
+      return (
+        <div style={{ textAlign: 'center', padding: '60px 16px', color: FB.textSecondary }}>
+          <Spin size="large" />
+          <div style={{ marginTop: 16, fontSize: 14 }}>Chargement du module...</div>
+        </div>
+      );
+    }
+    return (
+      <Suspense fallback={
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 0' }}>
+          <Spin size="large" />
+        </div>
+      }>
+        <WallNavigationProvider value={{ isInWall: true, openModule, goHome }}>
+          <div style={{
+            marginTop: 4,
+            minHeight: 'calc(100vh - 200px)',
+          }}>
+            <ActiveModuleComponent />
+          </div>
+        </WallNavigationProvider>
+      </Suspense>
+    );
+  };
+
   return (
     <div style={{ minHeight: "100vh", background: FB.bg }}>
       {/* Hide scrollbar for webkit browsers on swipe container */}
       <style>{`.mobile-swipe::-webkit-scrollbar { display: none; }`}</style>
       {!isMobile && !isTablet && renderLeftSidebar()}
+      {/* Right sidebar — always visible on desktop */}
       {!isMobile && !isTablet && renderRightSidebar()}
 
       {isMobile ? (
-        /* ── MOBILE: horizontal scroll-snap feed ↔ analytics ── */
-        <>
-          <div
-            ref={scrollContainerRef}
-            onScroll={handleMobileScroll}
-            className="mobile-swipe"
-            style={{
-              display: "flex", overflowX: "auto", overflowY: "hidden",
-              scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch",
-              scrollbarWidth: "none", msOverflowStyle: "none" as any,
-              height: "calc(100vh - 56px)",
-            }}
-          >
-            {/* Page 1: Feed */}
-            <div style={{
-              flex: "0 0 100%", width: "100%", scrollSnapAlign: "start",
-              overflowY: "auto", padding: "4px 8px",
-            }}>
-              {renderFeed()}
-            </div>
-            {/* Page 2: Analytics */}
-            <div style={{
-              flex: "0 0 100%", width: "100%", scrollSnapAlign: "start",
-              overflowY: "auto", padding: "4px 8px",
-            }}>
-              {renderMobileAnalytics()}
-            </div>
+        activeModule ? (
+          /* ── MOBILE: Module embedded below compose + pills ── */
+          <div style={{ overflowY: "auto", padding: "4px 8px", height: "calc(100vh - 56px)" }}>
+            {renderFeed()}
+            {renderEmbeddedModule()}
           </div>
-          {/* Dot indicator + swipe hint */}
-          <div style={{
-            position: "fixed", bottom: 12, left: "50%", transform: "translateX(-50%)",
-            display: "flex", gap: 6, alignItems: "center", zIndex: 50,
-            background: "rgba(0,0,0,0.5)", borderRadius: 12, padding: "4px 10px",
-          }}>
-            {["Fil", "Stats"].map((label, i) => (
-              <div key={i} onClick={() => scrollToPanel(i)} style={{
-                display: "flex", alignItems: "center", gap: 3, cursor: "pointer",
-                padding: "2px 6px", borderRadius: 8,
-                background: mobilePanel === i ? "rgba(255,255,255,0.25)" : "transparent",
-                transition: "all 0.2s",
+        ) : (
+          /* ── MOBILE: horizontal scroll-snap feed ↔ analytics ── */
+          <>
+            <div
+              ref={scrollContainerRef}
+              onScroll={handleMobileScroll}
+              className="mobile-swipe"
+              style={{
+                display: "flex", overflowX: "auto", overflowY: "hidden",
+                scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch",
+                scrollbarWidth: "none", msOverflowStyle: "none" as any,
+                height: "calc(100vh - 56px)",
+              }}
+            >
+              {/* Page 1: Feed */}
+              <div style={{
+                flex: "0 0 100%", width: "100%", scrollSnapAlign: "start",
+                overflowY: "auto", padding: "4px 8px",
               }}>
-                <div style={{
-                  width: mobilePanel === i ? 8 : 6, height: mobilePanel === i ? 8 : 6,
-                  borderRadius: "50%",
-                  background: mobilePanel === i ? "#fff" : "rgba(255,255,255,0.4)",
-                  transition: "all 0.2s",
-                }} />
-                <span style={{ fontSize: 10, color: mobilePanel === i ? "#fff" : "rgba(255,255,255,0.5)", fontWeight: 600 }}>
-                  {label}
-                </span>
+                {renderFeed()}
               </div>
-            ))}
-          </div>
-        </>
+              {/* Page 2: Analytics */}
+              <div style={{
+                flex: "0 0 100%", width: "100%", scrollSnapAlign: "start",
+                overflowY: "auto", padding: "4px 8px",
+              }}>
+                {renderMobileAnalytics()}
+              </div>
+            </div>
+            {/* Dot indicator + swipe hint */}
+            <div style={{
+              position: "fixed", bottom: 12, left: "50%", transform: "translateX(-50%)",
+              display: "flex", gap: 6, alignItems: "center", zIndex: 50,
+              background: "rgba(0,0,0,0.5)", borderRadius: 12, padding: "4px 10px",
+            }}>
+              {["Fil", "Stats"].map((label, i) => (
+                <div key={i} onClick={() => scrollToPanel(i)} style={{
+                  display: "flex", alignItems: "center", gap: 3, cursor: "pointer",
+                  padding: "2px 6px", borderRadius: 8,
+                  background: mobilePanel === i ? "rgba(255,255,255,0.25)" : "transparent",
+                  transition: "all 0.2s",
+                }}>
+                  <div style={{
+                    width: mobilePanel === i ? 8 : 6, height: mobilePanel === i ? 8 : 6,
+                    borderRadius: "50%",
+                    background: mobilePanel === i ? "#fff" : "rgba(255,255,255,0.4)",
+                    transition: "all 0.2s",
+                  }} />
+                  <span style={{ fontSize: 10, color: mobilePanel === i ? "#fff" : "rgba(255,255,255,0.5)", fontWeight: 600 }}>
+                    {label}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )
       ) : (
-        /* ── DESKTOP / TABLET: classic centered feed ── */
+        /* ── DESKTOP / TABLET ── */
         <div style={{
-          marginLeft: isTablet ? 0 : 300,
-          marginRight: isTablet ? 0 : 320,
-          padding: "8px 16px",
+          marginLeft: isTablet ? 0 : 288,
+          marginRight: isTablet ? 0 : 308,
+          padding: 0,
           display: "flex", justifyContent: "center",
         }}>
-          {renderFeed()}
+          <div style={{ flex: 1, minWidth: 0, margin: "0 auto" }}>
+            {renderFeed()}
+            {activeModule && renderEmbeddedModule()}
+          </div>
         </div>
       )}
       <MessengerChat />

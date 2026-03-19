@@ -9,7 +9,7 @@ import {
   ExclamationCircleOutlined, FileProtectOutlined, SearchOutlined,
   LeftOutlined, RightOutlined,
 } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
+import { useModuleNavigation } from '../../contexts/WallNavigationContext';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
 import dayjs, { Dayjs } from 'dayjs';
@@ -100,7 +100,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
   const isAdminOrAbove = isSuperAdmin || userRole === 'admin' || userRole === 'comptable';
   const canEdit = canEditProp ?? isAdminOrAbove;
   const { message, modal } = App.useApp();
-  const navigate = useNavigate();
+  const { moduleNavigate } = useModuleNavigation();
 
   const [events, setEvents] = useState<ChantierEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -528,8 +528,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                           type="primary"
                           icon={<SearchOutlined />}
                           onClick={() => {
-                            const url = `/tbl/${leadId}${submissionId ? `?devisId=${submissionId}&mode=review` : '?mode=review'}&eventId=${event.id}`;
-                            navigate(url);
+                            moduleNavigate('/tbl');
                           }}
                           style={{ minHeight: 36, background: '#1890ff', fontWeight: 600 }}
                         >

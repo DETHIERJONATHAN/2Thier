@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../auth/useAuth';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { useNavigate } from 'react-router-dom';
+import { useModuleNavigation } from '../contexts/WallNavigationContext';
 import { Avatar, Spin, message } from 'antd';
 import {
   UserOutlined, CameraOutlined, MailOutlined, PhoneOutlined,
@@ -187,6 +188,7 @@ const ProfilePage = () => {
   const { user, loading: userLoading, refetchUser, isSuperAdmin, currentOrganization, organizations, selectOrganization } = useAuth();
   const { api } = useAuthenticatedApi();
   const navigate = useNavigate();
+  const { moduleNavigate } = useModuleNavigation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const { isMobile, width } = useScreenSize();
@@ -534,10 +536,10 @@ const ProfilePage = () => {
 
               {/* Mobile action row */}
               <div style={{ display: 'flex', gap: 8, marginTop: 12, marginBottom: 12, width: '100%', justifyContent: 'center' }}>
-                <FBButton primary icon={<SettingOutlined />} onClick={() => navigate('/settings')} isMobile={isMobile} mobileIconOnly>
+                <FBButton primary icon={<SettingOutlined />} onClick={() => moduleNavigate('/settings')} isMobile={isMobile} mobileIconOnly>
                   Paramètres
                 </FBButton>
-                <FBButton icon={<EditOutlined />} onClick={() => navigate('/settings/profile')} isMobile={isMobile} mobileIconOnly>
+                <FBButton icon={<EditOutlined />} onClick={() => moduleNavigate('/settings')} isMobile={isMobile} mobileIconOnly>
                   Modifier
                 </FBButton>
                 <FBButton icon={<EllipsisOutlined />} />
@@ -586,8 +588,8 @@ const ProfilePage = () => {
               </div>
 
               <div style={{ display: 'flex', gap: 8, paddingBottom: 16, alignItems: 'flex-end' }}>
-                <FBButton primary icon={<SettingOutlined />} onClick={() => navigate('/settings')}>Paramètres</FBButton>
-                <FBButton icon={<EditOutlined />} onClick={() => navigate('/settings/profile')}>Modifier</FBButton>
+                <FBButton primary icon={<SettingOutlined />} onClick={() => moduleNavigate('/settings')}>Paramètres</FBButton>
+                <FBButton icon={<EditOutlined />} onClick={() => moduleNavigate('/settings')}>Modifier</FBButton>
                 <FBButton icon={<EllipsisOutlined />} />
               </div>
             </div>
@@ -649,7 +651,7 @@ const ProfilePage = () => {
               alignSelf: 'flex-start',
             }}>
               {/* Informations personnelles */}
-              <FBCard title="Informations personnelles" onEdit={() => navigate('/settings/profile')}>
+              <FBCard title="Informations personnelles" onEdit={() => moduleNavigate('/settings')}>
                 {profile.firstName && <InfoLine icon={<UserOutlined />}>{profile.firstName}</InfoLine>}
                 {profile.lastName && <InfoLine icon={<UserOutlined />}>{profile.lastName}</InfoLine>}
                 {profile.address && <InfoLine icon={<HomeOutlined />}>{profile.address}</InfoLine>}
@@ -657,7 +659,7 @@ const ProfilePage = () => {
                   <div style={{ padding: '12px 0', color: FB.textSecondary, fontSize: 14 }}>
                     Aucune information renseignée.
                     <span
-                      onClick={() => navigate('/settings/profile')}
+                      onClick={() => moduleNavigate('/settings')}
                       style={{ color: FB.blue, cursor: 'pointer', marginLeft: 4, fontWeight: 500 }}
                     >
                       Ajouter
@@ -667,7 +669,7 @@ const ProfilePage = () => {
               </FBCard>
 
               {/* Liens */}
-              <FBCard title="Liens" onEdit={() => navigate('/settings/profile')}>
+              <FBCard title="Liens" onEdit={() => moduleNavigate('/settings')}>
                 {currentOrganization?.name && (
                   <InfoLine icon={<LinkOutlined />}>
                     <span style={{ color: FB.blue }}>{currentOrganization.name.toLowerCase().replace(/\s+/g, '')}.be</span>
@@ -682,7 +684,7 @@ const ProfilePage = () => {
               </FBCard>
 
               {/* Coordonnées */}
-              <FBCard title="Coordonnées" onEdit={() => navigate('/settings/profile')}>
+              <FBCard title="Coordonnées" onEdit={() => moduleNavigate('/settings')}>
                 <InfoLine icon={<MailOutlined />}>
                   <span>E-mail : <span style={{ color: FB.blue }}>{user?.email}</span></span>
                 </InfoLine>
