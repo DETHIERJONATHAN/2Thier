@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useEffect, useState } from 'react';
 import { Layout, Dropdown, Button, Input, Drawer, Collapse, Avatar } from 'antd';
 import NotificationsBell from '../../components/NotificationsBell';
 import type { CollapseProps, MenuProps } from 'antd';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { 
   MenuOutlined, 
   SearchOutlined,
@@ -46,6 +46,7 @@ import { useAuth } from '../../auth/useAuth';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useSharedSections } from '../../hooks/useSharedSections';
 import { organizeModulesInSections } from '../../utils/modulesSections';
+import { useSpaceFlowNav, SpaceFlowNavProvider } from '../../contexts/SpaceFlowNavContext';
 
 const { Header, Content } = Layout;
 
@@ -121,6 +122,92 @@ const getModuleRoute = (mod: { key?: string; id?: string; route?: string; name?:
   const moduleKey = mod.name || mod.label;
   if (moduleKey && MODULE_ROUTES[moduleKey]) return MODULE_ROUTES[moduleKey];
   return `/${mod.id || mod.key || 'unknown'}`;
+};
+
+// ── SpaceFlow Header Tabs Component ──
+const SF_TAB_CONFIG = [
+  { id: 'explore', label: 'Explore', icon: '🔍' },
+  { id: 'flow', label: 'Flow', icon: '🌊' },
+  { id: 'reels', label: 'Reels', icon: '🎬' },
+  { id: 'mur', label: 'Mur', icon: '🏠' },
+  { id: 'universe', label: 'Universe', icon: '🌌' },
+  { id: 'stats', label: 'Stats', icon: '📊' },
+];
+
+const SpaceFlowHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { centerApp, setCenterApp, tabOrder, reorderTabs } = useSpaceFlowNav();
+  const [dragId, setDragId] = useState<string | null>(null);
+  const isDashboard = location.pathname === '/dashboard' || location.pathname === '/';
+  const activeModule = searchParams.get('module');
+  const navigate = useNavigate();
+
+  const orderedTabs = useMemo(() => {
+    return tabOrder
+      .map(id => SF_TAB_CONFIG.find(t => t.id === id))
+      .filter((t): t is typeof SF_TAB_CONFIG[0] => !!t);
+  }, [tabOrder]);
+
+  const handleTabClick = useCallback((tabId: string) => {
+    if (!isDashboard) {
+      navigate('/dashboard');
+    }
+    if (tabId === 'mur') {
+      // Mur — go home, clear any active module + centerApp
+      setCenterApp(null);
+      setSearchParams({}, { replace: true });
+    } else {
+      // Set this app as the center app
+      setCenterApp(tabId as any);
+      // Clear any CRM module
+      if (activeModule) setSearchParams({}, { replace: true });
+    }
+  }, [isDashboard, navigate, setCenterApp, setSearchParams, activeModule]);
+
+  if (isMobile) return null;
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 2,
+      flex: 1, justifyContent: 'center',
+      overflow: 'hidden', margin: '0 8px',
+    }}>
+      {orderedTabs.map(tab => {
+        const isActive = isDashboard && (
+          tab.id === 'mur'
+            ? !activeModule && !centerApp
+            : centerApp === tab.id
+        );
+        return (
+          <div
+            key={tab.id}
+            draggable={tab.id !== 'mur'}
+            onDragStart={() => setDragId(tab.id)}
+            onDragEnd={() => setDragId(null)}
+            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+            onDrop={(e) => { e.preventDefault(); if (dragId) reorderTabs(dragId, tab.id); setDragId(null); }}
+            onClick={() => handleTabClick(tab.id)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              padding: '5px 12px', borderRadius: 8,
+              cursor: tab.id === 'mur' ? 'pointer' : 'grab',
+              fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap',
+              background: isActive ? 'rgba(255,255,255,0.18)' : dragId === tab.id ? 'rgba(255,255,255,0.1)' : 'transparent',
+              color: isActive ? '#fff' : 'rgba(255,255,255,0.55)',
+              borderBottom: isActive ? '2px solid #fff' : '2px solid transparent',
+              transition: 'all 0.2s',
+              opacity: dragId === tab.id ? 0.4 : 1,
+              userSelect: 'none',
+            }}
+          >
+            <span style={{ fontSize: 15 }}>{tab.icon}</span>
+            <span>{tab.label}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
 };
 
 const MainLayout: React.FC<MainLayoutProps> = ({ 
@@ -844,13 +931,16 @@ const MainLayout: React.FC<MainLayoutProps> = ({
           size={isMobile ? 'middle' : 'large'}
           style={{ 
             marginLeft: isMobile ? '0' : '12px',
-            marginRight: isMobile ? '0' : 'auto',
             maxWidth: isMobile ? '100%' : `${DESKTOP_SEARCH_MAX_WIDTH}px`,
             height: `${headerHeight - 14}px`,
             display: isMobile ? 'none' : 'flex',
-            alignItems: 'center'
+            alignItems: 'center',
+            flexShrink: 0,
           }}
         />
+
+        {/* ── SpaceFlow Navigation Tabs (centré dans header) ── */}
+        <SpaceFlowHeaderTabs isMobile={isMobile} />
 
     {/* Icônes à droite */}
     <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '6px' : '8px', marginLeft: isMobile ? '8px' : 'auto', flexShrink: 0 }}>
@@ -962,4 +1052,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({
   );
 };
 
-export default MainLayout;
+// Wrap with SpaceFlowNavProvider so Header tabs & Dashboard share state
+const MainLayoutWithNav: React.FC<MainLayoutProps> = (props) => (
+  <SpaceFlowNavProvider>
+    <MainLayout {...props} />
+  </SpaceFlowNavProvider>
+);
+
+export default MainLayoutWithNav;

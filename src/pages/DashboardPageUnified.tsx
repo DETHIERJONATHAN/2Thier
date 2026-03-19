@@ -4,6 +4,7 @@ import { useAuth } from "../auth/useAuth";
 import { useLeadStatuses } from "../hooks/useLeadStatuses";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { WallNavigationProvider } from "../contexts/WallNavigationContext";
+import { useSpaceFlowNav } from "../contexts/SpaceFlowNavContext";
 
 /* ═══════════════════════════════════════════════════════════════
    LAZY-LOADED MODULE COMPONENTS (embedded in dashboard)
@@ -54,6 +55,7 @@ const LazyExplorePanel = React.lazy(() => import('../components/spaceflow/Explor
 const LazyFlowPanel = React.lazy(() => import('../components/spaceflow/FlowPanel'));
 const LazyUniversePanel = React.lazy(() => import('../components/spaceflow/UniversePanel'));
 const LazyStoriesBar = React.lazy(() => import('../components/spaceflow/StoriesBar'));
+const LazyReelsPanel = React.lazy(() => import('../components/spaceflow/ReelsPanel'));
 
 /** Maps route paths to their lazy-loaded component */
 const MODULE_COMPONENTS: Record<string, React.LazyExoticComponent<any>> = {
@@ -1197,9 +1199,12 @@ export default function DashboardPageUnified() {
   const [postMood, setPostMood] = useState<string | null>(null);
   const [showMoodPicker, setShowMoodPicker] = useState(false);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
-  const [mobilePanel, setMobilePanel] = useState(2); // SpaceFlow: 0=Explore, 1=Flow, 2=Mur(centre), 3=Universe, 4=Dashboard
+  const [mobilePanel, setMobilePanel] = useState(2); // SpaceFlow: 0=Explore, 1=Flow, 2=Mur(centre), 3=Universe, 4=Reels, 5=Stats
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // SpaceFlow navigation (shared with header tabs via context)
+  const { centerApp, setCenterApp, leftSidebarApp, rightSidebarApp } = useSpaceFlowNav();
 
   // Embedded module navigation
   const navigate = useNavigate();
@@ -2246,28 +2251,27 @@ export default function DashboardPageUnified() {
         )}
       </FBCard>
 
-      {/* Mobile: shortcuts — ultra compact pill style */}
-      {isMobile && (
-        <div style={{
-          display: "flex", gap: 4, overflowX: "auto", marginBottom: 4,
-          WebkitOverflowScrolling: "touch", scrollbarWidth: "none",
-        }}>
+      {/* Module shortcuts — compact pill style (CRM + SpaceFlow apps) */}
+      <div style={{
+        display: "flex", gap: 4, overflowX: "auto", marginBottom: 4,
+        WebkitOverflowScrolling: "touch", scrollbarWidth: "none",
+      }}>
           {/* Home pill */}
-          <div onClick={goHome} style={{ cursor: 'pointer' }}>
+          <div onClick={() => { goHome(); setCenterApp(null); }} style={{ cursor: 'pointer' }}>
             <div style={{
               flex: "0 0 auto", display: "flex", alignItems: "center",
               gap: 4, padding: "4px 8px",
-              borderRadius: 14, background: !activeModule ? FB.blue : FB.white, boxShadow: FB.shadow,
+              borderRadius: 14, background: !activeModule && !centerApp ? FB.blue : FB.white, boxShadow: FB.shadow,
             }}>
-              <DashboardOutlined style={{ fontSize: 14, color: !activeModule ? '#fff' : FB.text }} />
-              <span style={{ fontSize: 10, fontWeight: 600, color: !activeModule ? '#fff' : FB.text, whiteSpace: "nowrap" }}>Accueil</span>
+              <DashboardOutlined style={{ fontSize: 14, color: !activeModule && !centerApp ? '#fff' : FB.text }} />
+              <span style={{ fontSize: 10, fontWeight: 600, color: !activeModule && !centerApp ? '#fff' : FB.text, whiteSpace: "nowrap" }}>Accueil</span>
             </div>
           </div>
           {sectionsWithModules.flatMap(s => s.modules).map((mod, i) => {
             const route = getModuleRoute(mod);
             const isActive = activeModule === route;
             return (
-              <div key={mod.key || mod.id || i} onClick={() => openModule(route)} style={{ cursor: 'pointer' }}>
+              <div key={mod.key || mod.id || i} onClick={() => { openModule(route); setCenterApp(null); }} style={{ cursor: 'pointer' }}>
                 <div style={{
                   flex: "0 0 auto", display: "flex", alignItems: "center",
                   gap: 4, padding: "4px 8px",
@@ -2286,8 +2290,49 @@ export default function DashboardPageUnified() {
               </div>
             );
           })}
+
+          {/* SpaceFlow app pills — same style as CRM modules */}
+          {!isMobile && ([
+            { id: 'explore' as const, label: 'Explore', icon: '🔍', color: '#00CEC9' },
+            { id: 'flow' as const, label: 'Flow', icon: '🌊', color: '#6C5CE7' },
+            { id: 'reels' as const, label: 'Reels', icon: '🎬', color: '#FD79A8' },
+            { id: 'universe' as const, label: 'Universe', icon: '🌌', color: '#E17055' },
+            { id: 'stats' as const, label: 'Stats', icon: '📊', color: '#FDCB6E' },
+          ].map(sf => {
+            const isActive = centerApp === sf.id && !activeModule;
+            return (
+              <div key={sf.id} onClick={() => { setCenterApp(sf.id); if (activeModule) goHome(); }} style={{ cursor: 'pointer' }}>
+                <div style={{
+                  flex: "0 0 auto", display: "flex", alignItems: "center",
+                  gap: 4, padding: "4px 8px",
+                  borderRadius: 14, background: isActive ? sf.color + '15' : FB.white, boxShadow: FB.shadow,
+                  border: isActive ? `1.5px solid ${sf.color}` : '1.5px solid transparent',
+                }}>
+                  <div style={{
+                    width: 22, height: 22, borderRadius: "50%", background: sf.color,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 11,
+                  }}>
+                    {sf.icon}
+                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: isActive ? sf.color : FB.text, whiteSpace: "nowrap" }}>{sf.label}</span>
+                </div>
+              </div>
+            );
+          }))}
+          {!isMobile && (
+            <div onClick={() => { goHome(); setCenterApp(null); }} style={{ cursor: 'pointer' }}>
+              <AntTooltip title="Rechercher modules">
+                <div style={{
+                  flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 28, height: 28, borderRadius: 14, background: FB.white, boxShadow: FB.shadow,
+                }}>
+                  🔎
+                </div>
+              </AntTooltip>
+            </div>
+          )}
         </div>
-      )}
 
       {/* Feed content — hidden when a module is embedded */}
       {!activeModule && (<>
@@ -2457,23 +2502,27 @@ export default function DashboardPageUnified() {
 
   return (
     <div style={{ minHeight: "100vh", background: FB.bg }}>
-      {/* Hide scrollbar for webkit browsers on swipe container */}
-      <style>{`.mobile-swipe::-webkit-scrollbar { display: none; }`}</style>
+      <style>{`.mobile-swipe::-webkit-scrollbar { display: none; }
+        .sf-sidebar::-webkit-scrollbar { display: none; }
+        .sf-sidebar-panel::-webkit-scrollbar { display: none; }
+      `}</style>
 
       {activeModule ? (
-        /* ── MODULE ACTIVE: Single view (no carousel) ── */
-        <div style={{
-          overflowY: "auto", padding: "4px 8px", height: "calc(100vh - 56px)",
-          maxWidth: isMobile ? '100%' : 900, margin: '0 auto',
-        }}>
-          {renderFeed()}
-          {renderEmbeddedModule()}
-        </div>
-      ) : (
+        /* ── MODULE ACTIVE on MOBILE: Single view ── */
+        isMobile ? (
+          <div style={{
+            overflowY: "auto", padding: "4px 8px", height: "calc(100vh - 56px)",
+          }}>
+            {renderFeed()}
+            {renderEmbeddedModule()}
+          </div>
+        ) : null /* Desktop handles activeModule in 3-column layout below */
+      ) : null}
+
+      {!activeModule && isMobile ? (
         /* ═══════════════════════════════════════════════════════
-           SPACEFLOW — 5-PANEL CAROUSEL
-           Explore ← Flow ← LE MUR → Universe → Dashboard
-           Same layout on ALL devices (mobile, tablet, desktop)
+           MOBILE — 5-PANEL CAROUSEL (swipe)
+           Explore ← Flow ← LE MUR → Universe → Stats
            ═══════════════════════════════════════════════════════ */
         <>
           <div
@@ -2487,68 +2536,44 @@ export default function DashboardPageUnified() {
               height: "calc(100vh - 56px)",
             }}
           >
-            {/* ── Panel 0: EXPLORE ── */}
-            <div style={{
-              flex: "0 0 100%", width: "100%", scrollSnapAlign: "start",
-              overflowY: "auto",
-            }}>
-              <div style={{ maxWidth: isMobile ? '100%' : 600, margin: '0 auto' }}>
-                <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
-                  <LazyExplorePanel api={api} openModule={openModule} />
-                </Suspense>
-              </div>
+            {/* Panel 0: EXPLORE */}
+            <div style={{ flex: "0 0 100%", width: "100%", scrollSnapAlign: "start", overflowY: "auto" }}>
+              <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
+                <LazyExplorePanel api={api} openModule={openModule} />
+              </Suspense>
             </div>
-
-            {/* ── Panel 1: FLOW ── */}
-            <div style={{
-              flex: "0 0 100%", width: "100%", scrollSnapAlign: "start",
-              overflowY: "auto",
-            }}>
-              <div style={{ maxWidth: isMobile ? '100%' : 600, margin: '0 auto' }}>
-                <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
-                  <LazyFlowPanel api={api} currentUser={user} />
-                </Suspense>
-              </div>
+            {/* Panel 1: FLOW */}
+            <div style={{ flex: "0 0 100%", width: "100%", scrollSnapAlign: "start", overflowY: "auto" }}>
+              <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
+                <LazyFlowPanel api={api} currentUser={user} />
+              </Suspense>
             </div>
-
-            {/* ── Panel 2: LE MUR (centre) ── */}
-            <div style={{
-              flex: "0 0 100%", width: "100%", scrollSnapAlign: "start",
-              overflowY: "auto", padding: "4px 8px",
-            }}>
-              <div style={{ maxWidth: isMobile ? '100%' : 600, margin: '0 auto' }}>
-                {/* StoriesBar */}
-                <Suspense fallback={null}>
-                  <LazyStoriesBar api={api} currentUser={user} />
-                </Suspense>
-                {renderFeed()}
-              </div>
+            {/* Panel 2: LE MUR (centre) */}
+            <div style={{ flex: "0 0 100%", width: "100%", scrollSnapAlign: "start", overflowY: "auto", padding: "4px 8px" }}>
+              <Suspense fallback={null}>
+                <LazyStoriesBar api={api} currentUser={user} />
+              </Suspense>
+              {renderFeed()}
             </div>
-
-            {/* ── Panel 3: UNIVERSE ── */}
-            <div style={{
-              flex: "0 0 100%", width: "100%", scrollSnapAlign: "start",
-              overflowY: "auto",
-            }}>
-              <div style={{ maxWidth: isMobile ? '100%' : 600, margin: '0 auto' }}>
-                <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
-                  <LazyUniversePanel api={api} currentUser={user} />
-                </Suspense>
-              </div>
+            {/* Panel 3: UNIVERSE */}
+            <div style={{ flex: "0 0 100%", width: "100%", scrollSnapAlign: "start", overflowY: "auto" }}>
+              <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
+                <LazyUniversePanel api={api} currentUser={user} />
+              </Suspense>
             </div>
-
-            {/* ── Panel 4: DASHBOARD / STATS ── */}
-            <div style={{
-              flex: "0 0 100%", width: "100%", scrollSnapAlign: "start",
-              overflowY: "auto", padding: "4px 8px",
-            }}>
-              <div style={{ maxWidth: isMobile ? '100%' : 600, margin: '0 auto' }}>
-                {renderMobileAnalytics()}
-              </div>
+            {/* Panel 4: REELS */}
+            <div style={{ flex: "0 0 100%", width: "100%", scrollSnapAlign: "start", overflowY: "hidden" }}>
+              <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
+                <LazyReelsPanel api={api} currentUser={user} />
+              </Suspense>
+            </div>
+            {/* Panel 5: STATS */}
+            <div style={{ flex: "0 0 100%", width: "100%", scrollSnapAlign: "start", overflowY: "auto", padding: "4px 8px" }}>
+              {renderMobileAnalytics()}
             </div>
           </div>
 
-          {/* ── SpaceFlow Navigation Bar ── */}
+          {/* Mobile Navigation Bar */}
           <div style={{
             position: "fixed", bottom: 12, left: "50%", transform: "translateX(-50%)",
             display: "flex", gap: 2, alignItems: "center", zIndex: 50,
@@ -2560,6 +2585,7 @@ export default function DashboardPageUnified() {
               { icon: "🌊", label: "Flow", color: "#6C5CE7" },
               { icon: "🏠", label: "Mur", color: "#1877F2" },
               { icon: "🌌", label: "Universe", color: "#FD79A8" },
+              { icon: "🎬", label: "Reels", color: "#e84393" },
               { icon: "📊", label: "Stats", color: "#FDCB6E" },
             ].map((panel, i) => (
               <div key={i} onClick={() => scrollToPanel(i)} style={{
@@ -2586,6 +2612,86 @@ export default function DashboardPageUnified() {
             ))}
           </div>
         </>
+      ) : null}
+
+      {!isMobile && (
+        /* ═══════════════════════════════════════════════════════
+           DESKTOP — 3-Column Layout (always visible)
+           SpaceFlow tabs are in the MainLayoutNew header
+           Left sidebar: auto-computed from context
+           Center: Wall, CRM module, or SpaceFlow app
+           Right sidebar: auto-computed from context
+           ═══════════════════════════════════════════════════════ */
+        <div style={{ display: "flex", height: "calc(100vh - 48px)" }}>
+
+          {/* ── LEFT SIDEBAR (280px) ── */}
+          <div style={{
+            width: 280, minWidth: 280, height: "100%",
+            display: "flex", flexDirection: "column",
+            borderRight: `1px solid ${FB.border}`, background: FB.bg,
+          }}>
+            <div className="sf-sidebar" style={{ flex: 1, overflowY: leftSidebarApp === 'reels' ? "hidden" : "auto", scrollbarWidth: "none" }}>
+              <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spin /></div>}>
+                {leftSidebarApp === 'explore' ? (
+                  <LazyExplorePanel api={api} openModule={openModule} />
+                ) : leftSidebarApp === 'flow' ? (
+                  <LazyFlowPanel api={api} currentUser={user} />
+                ) : (
+                  <LazyReelsPanel api={api} currentUser={user} />
+                )}
+              </Suspense>
+            </div>
+          </div>
+
+          {/* ── CENTER (flex: 1) — Wall, CRM module, or SpaceFlow app ── */}
+          <div style={{
+            flex: 1, minWidth: 0, overflowY: "auto", padding: "4px 16px",
+          }}>
+            <div style={{ maxWidth: '100%', margin: "0 auto" }}>
+              {activeModule ? (
+                <>
+                  {renderFeed()}
+                  {renderEmbeddedModule()}
+                </>
+              ) : centerApp ? (
+                <>
+                  {renderFeed()}
+                  <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spin /></div>}>
+                    {centerApp === 'explore' && <LazyExplorePanel api={api} openModule={openModule} />}
+                    {centerApp === 'flow' && <LazyFlowPanel api={api} currentUser={user} />}
+                    {centerApp === 'reels' && <LazyReelsPanel api={api} currentUser={user} />}
+                    {centerApp === 'universe' && <LazyUniversePanel api={api} currentUser={user} />}
+                    {centerApp === 'stats' && <div style={{ padding: 16 }}>{renderMobileAnalytics()}</div>}
+                  </Suspense>
+                </>
+              ) : (
+                <>
+                  <Suspense fallback={null}>
+                    <LazyStoriesBar api={api} currentUser={user} />
+                  </Suspense>
+                  {renderFeed()}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* ── RIGHT SIDEBAR (300px) ── */}
+          <div style={{
+            width: 300, minWidth: 300, height: "100%",
+            display: "flex", flexDirection: "column",
+            borderLeft: `1px solid ${FB.border}`, background: FB.bg,
+          }}>
+            <div className="sf-sidebar" style={{ flex: 1, overflowY: "auto", scrollbarWidth: "none" }}>
+              {rightSidebarApp === 'universe' ? (
+                <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spin /></div>}>
+                  <LazyUniversePanel api={api} currentUser={user} />
+                </Suspense>
+              ) : (
+                renderMobileAnalytics()
+              )}
+            </div>
+          </div>
+        </div>
       )}
       <MessengerChat />
     </div>
