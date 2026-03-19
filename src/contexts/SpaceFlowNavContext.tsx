@@ -2,9 +2,10 @@ import { createContext, useContext, useState, ReactNode, useCallback, useMemo } 
 
 export type SpaceFlowApp = 'explore' | 'flow' | 'reels' | 'universe' | 'stats';
 
-// All SpaceFlow apps grouped by default sidebar position
-const LEFT_APPS: SpaceFlowApp[] = ['explore', 'flow', 'reels'];
-const RIGHT_APPS: SpaceFlowApp[] = ['universe', 'stats'];
+// Sequence ordered by proximity to Mur (closest first)
+// Header order: Explore ← Flow ← Reels ← MUR → Universe → Stats
+const LEFT_SEQUENCE: SpaceFlowApp[] = ['reels', 'flow', 'explore'];
+const RIGHT_SEQUENCE: SpaceFlowApp[] = ['universe', 'stats'];
 
 interface SpaceFlowNavContextType {
   /** Which SpaceFlow app is currently displayed in the CENTER column (null = Wall/Mur) */
@@ -33,7 +34,7 @@ function loadTabOrder(): string[] {
 
 const SpaceFlowNavContext = createContext<SpaceFlowNavContextType>({
   centerApp: null, setCenterApp: () => {},
-  leftSidebarApp: 'explore', rightSidebarApp: 'universe',
+  leftSidebarApp: 'reels', rightSidebarApp: 'universe',
   tabOrder: defaultTabOrder, reorderTabs: () => {},
 });
 
@@ -41,23 +42,26 @@ export const SpaceFlowNavProvider = ({ children }: { children: ReactNode }) => {
   const [centerApp, setCenterApp] = useState<SpaceFlowApp | null>(null);
   const [tabOrder, setTabOrder] = useState<string[]>(loadTabOrder);
 
-  // Auto-compute sidebar apps based on what's in the center
+  // Left sidebar: by default shows Reels (closest to Mur).
+  // If a left-group app moves to center, show the NEXT one outward.
+  // Reels→center: show Flow. Flow→center: show Explore. Explore→center: show Reels (wrap).
   const leftSidebarApp = useMemo<SpaceFlowApp>(() => {
-    // If center has a left-group app, pick the next available from left group
-    if (centerApp && LEFT_APPS.includes(centerApp)) {
-      const remaining = LEFT_APPS.filter(a => a !== centerApp);
-      return remaining[0] || 'explore';
+    if (centerApp && LEFT_SEQUENCE.includes(centerApp)) {
+      const idx = LEFT_SEQUENCE.indexOf(centerApp);
+      return LEFT_SEQUENCE[(idx + 1) % LEFT_SEQUENCE.length];
     }
-    return 'explore';
+    return 'reels'; // default: closest to Mur
   }, [centerApp]);
 
+  // Right sidebar: by default shows Universe (closest to Mur).
+  // If a right-group app moves to center, show the OTHER one.
+  // Universe→center: show Stats. Stats→center: show Universe.
   const rightSidebarApp = useMemo<SpaceFlowApp>(() => {
-    // If center has a right-group app, pick the next available from right group
-    if (centerApp && RIGHT_APPS.includes(centerApp)) {
-      const remaining = RIGHT_APPS.filter(a => a !== centerApp);
-      return remaining[0] || 'universe';
+    if (centerApp && RIGHT_SEQUENCE.includes(centerApp)) {
+      const idx = RIGHT_SEQUENCE.indexOf(centerApp);
+      return RIGHT_SEQUENCE[(idx + 1) % RIGHT_SEQUENCE.length];
     }
-    return 'universe';
+    return 'universe'; // default: closest to Mur
   }, [centerApp]);
 
   const reorderTabs = useCallback((dragId: string, dropId: string) => {
