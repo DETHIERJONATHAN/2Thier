@@ -1631,16 +1631,6 @@ export default function DashboardPageUnified() {
      ═══════════════════════════════════════════════════════════ */
   const _renderLeftSidebar = () => (
     <div style={{ position: "fixed", left: 0, top: 56, width: 280, height: "calc(100vh - 56px)", overflowY: "auto", paddingTop: 8, paddingLeft: 8, paddingRight: 8, paddingBottom: 16, scrollbarWidth: "none", background: FB.bg, zIndex: 10 }}>
-      {/* Home / feed button */}
-      <div onClick={goHome} style={{ cursor: 'pointer' }}>
-        <ShortcutItem
-          icon={<DashboardOutlined style={{ fontSize: 18 }} />}
-          label="Accueil"
-          to="/dashboard"
-          color={FB.blue}
-        />
-      </div>
-
       <ShortcutItem
         icon={
           <Avatar size={36} src={user?.avatarUrl}
@@ -2256,17 +2246,6 @@ export default function DashboardPageUnified() {
         display: "flex", gap: 4, overflowX: "auto", marginBottom: 4,
         WebkitOverflowScrolling: "touch", scrollbarWidth: "none",
       }}>
-          {/* Home pill */}
-          <div onClick={() => { goHome(); setCenterApp(null); }} style={{ cursor: 'pointer' }}>
-            <div style={{
-              flex: "0 0 auto", display: "flex", alignItems: "center",
-              gap: 4, padding: "4px 8px",
-              borderRadius: 14, background: !activeModule && !centerApp ? FB.blue : FB.white, boxShadow: FB.shadow,
-            }}>
-              <DashboardOutlined style={{ fontSize: 14, color: !activeModule && !centerApp ? '#fff' : FB.text }} />
-              <span style={{ fontSize: 10, fontWeight: 600, color: !activeModule && !centerApp ? '#fff' : FB.text, whiteSpace: "nowrap" }}>Accueil</span>
-            </div>
-          </div>
           {sectionsWithModules.flatMap(s => s.modules).map((mod, i) => {
             const route = getModuleRoute(mod);
             const isActive = activeModule === route;
