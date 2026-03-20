@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Avatar, Spin, message, Modal, Input, Dropdown } from 'antd';
+import { Avatar, Spin, message, Modal, Input } from 'antd';
 import {
   HeartOutlined, HeartFilled, MessageOutlined, ShareAltOutlined,
   SoundOutlined, PauseCircleOutlined, PlayCircleOutlined,
   PlusOutlined, UserOutlined, VideoCameraOutlined, PictureOutlined,
-  CloseOutlined, SendOutlined, LoadingOutlined, DeleteOutlined, MoreOutlined,
+  CloseOutlined, SendOutlined, LoadingOutlined, DeleteOutlined,
+  BookOutlined, BookFilled, RetweetOutlined, CopyOutlined,
 } from '@ant-design/icons';
 
 const SF = {
@@ -62,6 +63,14 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
   const [comments, setComments] = useState<any[]>([]);
   const [commentText, setCommentText] = useState('');
   const [commentLoading, setCommentLoading] = useState(false);
+
+  // === Partage et enregistrement ===
+  const [shareSheetOpen, setShareSheetOpen] = useState(false);
+  const [shareReel, setShareReel] = useState<Reel | null>(null);
+  const [savedSet, setSavedSet] = useState<Set<string>>(new Set());
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState('');
+  const [likedComments, setLikedComments] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadReels();
@@ -146,14 +155,60 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
   };
 
   const handleShare = (reel: Reel) => {
-    if (navigator.share) {
-      navigator.share({
-        title: `Reel de @${reel.authorName}`,
-        text: reel.caption || 'Regardez ce reel !',
-      }).catch(() => {});
-    } else {
-      message.info('Lien copié !');
-    }
+    setShareReel(reel);
+    setShareSheetOpen(true);
+  };
+
+  const handleCopyLink = () => {
+    const text = `Reel de @${shareReel?.authorName}: ${shareReel?.caption || 'Regardez ce reel !'}`;
+    navigator.clipboard?.writeText(text).then(() => message.success('Lien copié !')).catch(() => message.info('Copié !'));
+    setShareSheetOpen(false);
+  };
+
+  const handleRepost = async () => {
+    if (!shareReel || shareReel.id.startsWith('d')) { setShareSheetOpen(false); return; }
+    try {
+      await api.post('/api/wall/posts', {
+        content: `🔄 Republié : ${shareReel.caption || ''}`.trim(),
+        mediaUrls: shareReel.mediaUrl ? [shareReel.mediaUrl] : [],
+        mediaType: shareReel.mediaType,
+        visibility: 'ALL',
+      });
+      message.success('Reel republié sur votre mur ! 🔄');
+    } catch { message.error('Erreur lors de la republication'); }
+    setShareSheetOpen(false);
+  };
+
+  const handleSendReel = () => {
+    if (navigator.share && shareReel) {
+      navigator.share({ title: `Reel de @${shareReel.authorName}`, text: shareReel.caption || 'Regardez ce reel !' }).catch(() => {});
+    } else { handleCopyLink(); }
+    setShareSheetOpen(false);
+  };
+
+  const handleSaveReel = (reelId: string) => {
+    setSavedSet(prev => {
+      const next = new Set(prev);
+      if (next.has(reelId)) { next.delete(reelId); message.success('Retiré des enregistrements'); }
+      else { next.add(reelId); message.success('Reel enregistré ! 📌'); }
+      return next;
+    });
+  };
+
+  const handleCommentLike = (commentId: string) => {
+    setLikedComments(prev => { const next = new Set(prev); if (next.has(commentId)) next.delete(commentId); else next.add(commentId); return next; });
+  };
+
+  const timeAgo = (dateStr: string) => {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'maintenant';
+    if (mins < 60) return `${mins} min`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs} h`;
+    const days = Math.floor(hrs / 24);
+    if (days < 7) return `${days} j`;
+    return `${Math.floor(days / 7)} sem`;
   };
 
   // === Création de Reel ===
@@ -238,9 +293,11 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
     setCommentReelId(reelId);
     setCommentModalOpen(true);
     setCommentLoading(true);
+    setReplyingTo(null);
+    setReplyText('');
     try {
       const data = await api.get(`/api/wall/posts/${reelId}/comments`);
-      setComments(data?.comments || []);
+      setComments(Array.isArray(data) ? data : (data?.comments || []));
     } catch {
       setComments([]);
     } finally {
@@ -248,15 +305,21 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
     }
   };
 
-  const handlePostComment = async () => {
-    if (!commentText.trim() || !commentReelId) return;
+  const handlePostComment = async (parentCommentId?: string) => {
+    const text = parentCommentId ? replyText : commentText;
+    if (!text.trim() || !commentReelId) return;
     try {
-      await api.post(`/api/wall/posts/${commentReelId}/comments`, { content: commentText.trim() });
-      setCommentText('');
-      // Recharger les commentaires
-      const data = await api.get(`/api/wall/posts/${commentReelId}/comments`);
-      setComments(data?.comments || []);
-      // Mettre à jour le compteur
+      const body: Record<string, string> = { content: text.trim() };
+      if (parentCommentId) body.parentCommentId = parentCommentId;
+      const newComment = await api.post(`/api/wall/posts/${commentReelId}/comments`, body);
+      if (parentCommentId) {
+        setComments(prev => prev.map(c => c.id === parentCommentId ? { ...c, replies: [...(c.replies || []), newComment] } : c));
+        setReplyText('');
+        setReplyingTo(null);
+      } else {
+        setComments(prev => [...prev, newComment]);
+        setCommentText('');
+      }
       setReels(prev => prev.map(r => r.id === commentReelId ? { ...r, commentsCount: r.commentsCount + 1 } : r));
     } catch {
       message.error('Erreur lors de l\'envoi du commentaire');
@@ -369,18 +432,24 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               position: 'absolute', right: 12, bottom: 120, display: 'flex',
               flexDirection: 'column', alignItems: 'center', gap: 20,
             }}>
-              {/* Author avatar */}
+              {/* Author avatar + follow */}
               <div style={{ position: 'relative', marginBottom: 8 }}>
                 <Avatar size={44} src={reel.authorAvatar}
                   icon={!reel.authorAvatar ? <UserOutlined /> : undefined}
                   style={{ border: '2px solid #fff', background: SF.primary }} />
-                <div style={{
-                  position: 'absolute', bottom: -6, left: '50%', transform: 'translateX(-50%)',
-                  width: 20, height: 20, borderRadius: '50%', background: SF.accent,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <PlusOutlined style={{ fontSize: 10, color: '#fff' }} />
-                </div>
+                {reel.authorId && reel.authorId !== currentUser?.id && (
+                  <div onClick={(e) => { e.stopPropagation(); handleFollow(reel.authorId, reel.authorName); }}
+                    style={{
+                      position: 'absolute', bottom: -6, left: '50%', transform: 'translateX(-50%)',
+                      width: 20, height: 20, borderRadius: '50%',
+                      background: followedSet.has(reel.authorId) ? '#4CAF50' : SF.accent,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                    }}>
+                    {followedSet.has(reel.authorId)
+                      ? <span style={{ fontSize: 10, color: '#fff', lineHeight: 1 }}>✓</span>
+                      : <PlusOutlined style={{ fontSize: 10, color: '#fff' }} />}
+                  </div>
+                )}
               </div>
 
               {/* Like */}
@@ -407,21 +476,33 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               <div onClick={() => handleShare(reel)} style={{ cursor: 'pointer', textAlign: 'center' }}>
                 <ShareAltOutlined style={{ fontSize: 26, color: SF.text }} />
                 <div style={{ fontSize: 11, color: SF.text, fontWeight: 600, marginTop: 2 }}>
-                  {reel.sharesCount}
+                  Partager
                 </div>
               </div>
 
-              {/* Delete (own posts only) */}
-              {reel.authorId && currentUser?.id === reel.authorId && (
-                <Dropdown
-                  menu={{ items: [{ key: 'delete', label: 'Supprimer', icon: <DeleteOutlined />, danger: true, onClick: () => Modal.confirm({ title: 'Supprimer ce reel ?', okText: 'Supprimer', cancelText: 'Annuler', okButtonProps: { danger: true }, onOk: () => handleDeleteReel(reel.id) }) }] }}
-                  trigger={['click']}
-                  placement="topRight"
-                >
-                  <div style={{ cursor: 'pointer', textAlign: 'center' }}>
-                    <MoreOutlined style={{ fontSize: 26, color: SF.text }} />
-                  </div>
-                </Dropdown>
+              {/* Save/Bookmark */}
+              <div onClick={() => handleSaveReel(reel.id)} style={{ cursor: 'pointer', textAlign: 'center' }}>
+                {savedSet.has(reel.id) ? (
+                  <BookFilled style={{ fontSize: 26, color: '#FDCB6E' }} />
+                ) : (
+                  <BookOutlined style={{ fontSize: 26, color: SF.text }} />
+                )}
+                <div style={{ fontSize: 11, color: SF.text, fontWeight: 600, marginTop: 2 }}>
+                  {savedSet.has(reel.id) ? 'Enregistré' : 'Enregistrer'}
+                </div>
+              </div>
+
+              {/* Delete (own posts or admin) */}
+              {reel.authorId && !reel.id.startsWith('d') && (currentUser?.id === reel.authorId || currentUser?.isSuperAdmin || currentUser?.role === 'admin') && (
+                <div onClick={() => Modal.confirm({
+                  title: 'Supprimer ce reel ?',
+                  content: 'Cette action est irréversible.',
+                  okText: 'Supprimer', cancelText: 'Annuler',
+                  okButtonProps: { danger: true },
+                  onOk: () => handleDeleteReel(reel.id),
+                })} style={{ cursor: 'pointer', textAlign: 'center' }}>
+                  <DeleteOutlined style={{ fontSize: 22, color: 'rgba(255,255,255,0.5)' }} />
+                </div>
               )}
 
               {/* Mute toggle */}
@@ -522,6 +603,10 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
+        }
+        @keyframes slideUp {
+          from { transform: translateY(100%); }
+          to { transform: translateY(0); }
         }
       `}</style>
 
@@ -654,56 +739,190 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
         </div>
       </Modal>
 
-      {/* Modal de commentaires */}
+      {/* Modal de commentaires - style Mur */}
       <Modal
         open={commentModalOpen}
-        onCancel={() => { setCommentModalOpen(false); setComments([]); setCommentText(''); }}
+        onCancel={() => { setCommentModalOpen(false); setComments([]); setCommentText(''); setReplyingTo(null); setReplyText(''); }}
         footer={null}
-        title="💬 Commentaires"
+        title={null}
+        closable={false}
         centered
-        width={380}
+        width={400}
+        styles={{ body: { padding: 0 }, content: { borderRadius: 16, overflow: 'hidden' } }}
       >
-        <div style={{ maxHeight: 350, overflowY: 'auto', marginBottom: 12 }}>
+        {/* Header */}
+        <div style={{ padding: '14px 16px', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 16, fontWeight: 700 }}>💬 Commentaires</span>
+          <CloseOutlined onClick={() => { setCommentModalOpen(false); setComments([]); setCommentText(''); setReplyingTo(null); }}
+            style={{ fontSize: 16, cursor: 'pointer', color: '#999' }} />
+        </div>
+
+        {/* Comments list */}
+        <div style={{ maxHeight: 400, overflowY: 'auto', padding: '12px 16px' }}>
           {commentLoading ? (
-            <div style={{ textAlign: 'center', padding: 20 }}><Spin /></div>
+            <div style={{ textAlign: 'center', padding: 30 }}><Spin /></div>
           ) : comments.length > 0 ? comments.map((c: any) => (
-            <div key={c.id} style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-              <Avatar size={28} src={c.author?.avatarUrl} icon={<UserOutlined />} />
-              <div>
-                <span style={{ fontWeight: 600, fontSize: 13 }}>
-                  {c.author?.firstName} {c.author?.lastName}
-                </span>
-                <div style={{ fontSize: 13, color: '#333' }}>{c.content}</div>
-                <div style={{ fontSize: 10, color: '#999' }}>
-                  {new Date(c.createdAt).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+            <div key={c.id} style={{ marginBottom: 16 }}>
+              {/* Main comment */}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                <Avatar size={32} src={c.author?.avatarUrl}
+                  icon={!c.author?.avatarUrl ? <UserOutlined /> : undefined}
+                  style={{ flexShrink: 0, background: '#ddd' }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ background: '#f0f2f5', borderRadius: 12, padding: '8px 12px', width: 'fit-content', maxWidth: '90%' }}>
+                    <span style={{ fontWeight: 600, fontSize: 13, color: '#1a1a2e', display: 'block' }}>
+                      {[c.author?.firstName, c.author?.lastName].filter(Boolean).join(' ') || 'Utilisateur'}
+                    </span>
+                    <div style={{ fontSize: 14, color: '#333', marginTop: 2, wordBreak: 'break-word' }}>{c.content}</div>
+                  </div>
+                  {/* Actions */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingLeft: 4, marginTop: 4 }}>
+                    <span style={{ fontSize: 11, color: '#999' }}>{timeAgo(c.createdAt)}</span>
+                    <span onClick={() => handleCommentLike(c.id)}
+                      style={{ fontSize: 12, fontWeight: 600, cursor: 'pointer', color: likedComments.has(c.id) ? '#e74c3c' : '#65676b' }}>
+                      {likedComments.has(c.id) ? '❤️ Aimé' : "J'aime"}
+                    </span>
+                    <span onClick={() => { setReplyingTo(replyingTo === c.id ? null : c.id); setReplyText(''); }}
+                      style={{ fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#65676b' }}>
+                      Répondre
+                    </span>
+                  </div>
+
+                  {/* Replies */}
+                  {c.replies && c.replies.length > 0 && (
+                    <div style={{ marginTop: 8, marginLeft: 8 }}>
+                      {c.replies.map((reply: any) => (
+                        <div key={reply.id} style={{ display: 'flex', gap: 6, alignItems: 'flex-start', marginBottom: 8 }}>
+                          <Avatar size={24} src={reply.author?.avatarUrl}
+                            icon={!reply.author?.avatarUrl ? <UserOutlined /> : undefined}
+                            style={{ flexShrink: 0, background: '#ddd' }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ background: '#f0f2f5', borderRadius: 10, padding: '6px 10px', width: 'fit-content', maxWidth: '85%' }}>
+                              <span style={{ fontWeight: 600, fontSize: 12, color: '#1a1a2e' }}>
+                                {[reply.author?.firstName, reply.author?.lastName].filter(Boolean).join(' ')}
+                              </span>
+                              <div style={{ fontSize: 13, color: '#333', wordBreak: 'break-word' }}>{reply.content}</div>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingLeft: 4, marginTop: 2 }}>
+                              <span style={{ fontSize: 10, color: '#999' }}>{timeAgo(reply.createdAt)}</span>
+                              <span onClick={() => handleCommentLike(reply.id)}
+                                style={{ fontSize: 11, fontWeight: 600, cursor: 'pointer', color: likedComments.has(reply.id) ? '#e74c3c' : '#65676b' }}>
+                                {likedComments.has(reply.id) ? '❤️' : "J'aime"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Reply input */}
+                  {replyingTo === c.id && (
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, marginLeft: 8 }}>
+                      <Avatar size={24} src={currentUser?.avatarUrl}
+                        icon={!currentUser?.avatarUrl ? <UserOutlined /> : undefined}
+                        style={{ flexShrink: 0, background: '#ddd' }} />
+                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', background: '#f0f2f5', borderRadius: 20, padding: '4px 12px' }}>
+                        <input
+                          value={replyText}
+                          onChange={e => setReplyText(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && handlePostComment(c.id)}
+                          placeholder={`Répondre à ${c.author?.firstName || 'ce commentaire'}...`}
+                          style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', fontSize: 13 }}
+                          autoFocus
+                        />
+                        <div onClick={() => handlePostComment(c.id)}
+                          style={{ cursor: replyText.trim() ? 'pointer' : 'default', color: replyText.trim() ? SF.primary : '#999', padding: '0 4px' }}>
+                          <SendOutlined style={{ fontSize: 14 }} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           )) : (
-            <div style={{ textAlign: 'center', color: '#999', padding: 20 }}>Aucun commentaire</div>
+            <div style={{ textAlign: 'center', color: '#999', padding: 30 }}>
+              <MessageOutlined style={{ fontSize: 32, marginBottom: 8, display: 'block' }} />
+              Aucun commentaire. Soyez le premier !
+            </div>
           )}
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Input
-            value={commentText}
-            onChange={e => setCommentText(e.target.value)}
-            placeholder="Écrire un commentaire..."
-            onPressEnter={handlePostComment}
-            style={{ flex: 1 }}
-          />
-          <div
-            onClick={handlePostComment}
-            style={{
-              width: 36, height: 36, borderRadius: '50%', display: 'flex',
-              alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-              background: commentText.trim() ? SF.primary : '#eee',
-              color: commentText.trim() ? '#fff' : '#999',
-            }}
-          >
-            <SendOutlined style={{ fontSize: 14 }} />
+
+        {/* New comment input */}
+        <div style={{ borderTop: '1px solid #eee', padding: '10px 16px', display: 'flex', gap: 8, alignItems: 'center' }}>
+          <Avatar size={28} src={currentUser?.avatarUrl}
+            icon={!currentUser?.avatarUrl ? <UserOutlined /> : undefined}
+            style={{ flexShrink: 0, background: '#ddd' }} />
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', background: '#f0f2f5', borderRadius: 20, padding: '6px 12px' }}>
+            <input
+              value={commentText}
+              onChange={e => setCommentText(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handlePostComment()}
+              placeholder="Écrire un commentaire..."
+              style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', fontSize: 14 }}
+            />
+            <div onClick={() => handlePostComment()}
+              style={{ cursor: commentText.trim() ? 'pointer' : 'default', color: commentText.trim() ? SF.primary : '#999', padding: '0 4px' }}>
+              <SendOutlined style={{ fontSize: 16 }} />
+            </div>
           </div>
         </div>
       </Modal>
+
+      {/* Share bottom sheet - 100% mobile */}
+      {shareSheetOpen && (
+        <>
+          <div onClick={() => setShareSheetOpen(false)}
+            style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 50 }} />
+          <div style={{
+            position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 51,
+            background: '#fff', borderRadius: '16px 16px 0 0',
+            animation: 'slideUp 0.3s ease',
+          }}>
+            <div style={{ padding: '12px 0' }}>
+              {/* Drag handle */}
+              <div style={{ width: 40, height: 4, borderRadius: 2, background: '#ddd', margin: '0 auto 16px' }} />
+              <div style={{ fontSize: 16, fontWeight: 700, textAlign: 'center', marginBottom: 16 }}>Partager</div>
+
+              {/* Share options grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, padding: '0 16px', marginBottom: 16 }}>
+                <div onClick={handleRepost} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer', padding: 8 }}>
+                  <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#E8F5E9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <RetweetOutlined style={{ fontSize: 22, color: '#4CAF50' }} />
+                  </div>
+                  <span style={{ fontSize: 11, color: '#333', textAlign: 'center' }}>Republier</span>
+                </div>
+                <div onClick={handleSendReel} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer', padding: 8 }}>
+                  <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#E3F2FD', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <SendOutlined style={{ fontSize: 22, color: '#2196F3' }} />
+                  </div>
+                  <span style={{ fontSize: 11, color: '#333', textAlign: 'center' }}>Envoyer</span>
+                </div>
+                <div onClick={() => { if (shareReel) handleSaveReel(shareReel.id); setShareSheetOpen(false); }}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer', padding: 8 }}>
+                  <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#FFF3E0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <BookOutlined style={{ fontSize: 22, color: '#FF9800' }} />
+                  </div>
+                  <span style={{ fontSize: 11, color: '#333', textAlign: 'center' }}>Enregistrer</span>
+                </div>
+                <div onClick={handleCopyLink} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer', padding: 8 }}>
+                  <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#F3E5F5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <CopyOutlined style={{ fontSize: 22, color: '#9C27B0' }} />
+                  </div>
+                  <span style={{ fontSize: 11, color: '#333', textAlign: 'center' }}>Copier le lien</span>
+                </div>
+              </div>
+
+              {/* Cancel */}
+              <div onClick={() => setShareSheetOpen(false)}
+                style={{ textAlign: 'center', padding: '12px 16px', borderTop: '1px solid #eee', fontSize: 15, fontWeight: 600, color: '#999', cursor: 'pointer' }}>
+                Annuler
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };
