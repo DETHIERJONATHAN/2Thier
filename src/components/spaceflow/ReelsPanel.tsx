@@ -108,6 +108,16 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
         musicName: undefined,
       }));
       setReels(posts.length > 0 ? posts : getDemoReels());
+      // Nettoyer les IDs sauvegardés qui ne correspondent plus à aucun reel
+      setSavedSet(prev => {
+        const loadedIds = new Set(posts.map((p: any) => p.id));
+        const cleaned = new Set([...prev].filter(id => loadedIds.has(id)));
+        if (cleaned.size !== prev.size) {
+          localStorage.setItem('sf_saved_reels', JSON.stringify([...cleaned]));
+          return cleaned;
+        }
+        return prev;
+      });
     } catch {
       setReels(getDemoReels());
     } finally {
@@ -399,9 +409,11 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
       </div>
 
       {/* Saved reels gallery */}
-      {showSaved ? (
+      {showSaved ? (() => {
+        const savedReels = reels.filter(r => savedSet.has(r.id));
+        return (
         <div style={{ paddingTop: 56, height: '100%', overflowY: 'auto' }}>
-          {savedSet.size === 0 ? (
+          {savedReels.length === 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '70%', color: SF.textMuted }}>
               <BookOutlined style={{ fontSize: 48, marginBottom: 12 }} />
               <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>Aucun reel enregistré</div>
@@ -410,10 +422,10 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
           ) : (
             <div style={{ padding: '4px 4px 80px' }}>
               <div style={{ padding: '0 12px 12px', color: SF.textMuted, fontSize: 13 }}>
-                {savedSet.size} reel{savedSet.size > 1 ? 's' : ''} enregistré{savedSet.size > 1 ? 's' : ''}
+                {savedReels.length} reel{savedReels.length > 1 ? 's' : ''} enregistré{savedReels.length > 1 ? 's' : ''}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
-                {reels.filter(r => savedSet.has(r.id)).map(reel => (
+                {savedReels.map(reel => (
                   <div key={reel.id}
                     onClick={() => {
                       const idx = reels.findIndex(r => r.id === reel.id);
@@ -456,7 +468,8 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
             </div>
           )}
         </div>
-      ) : (
+        );
+      })() : (
       <>
       {/* Vertical scroll snap container */}
       <div
