@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Avatar, Progress, Tag, Badge } from 'antd';
+import { Avatar, Progress, Tag, Badge, Modal, Input, message, DatePicker } from 'antd';
 import {
   ThunderboltOutlined, EyeInvisibleOutlined, TrophyOutlined,
   UserOutlined, LikeOutlined, DislikeOutlined,
@@ -10,22 +10,22 @@ import { SF } from './SpaceFlowTheme';
 interface SparkPost {
   id: string;
   content: string;
-  votesCount: number;
+  sparkCount: number;
   revealThreshold: number;
   isRevealed: boolean;
   authorName?: string;
   authorAvatar?: string;
   createdAt: string;
-  userVote?: 'UP' | 'DOWN' | null;
+  hasVoted: boolean;
 }
 
 interface BattleData {
   id: string;
   title: string;
-  theme: string;
-  status: 'OPEN' | 'ACTIVE' | 'VOTING' | 'ENDED';
-  creatorName: string;
-  creatorAvatar?: string;
+  description: string;
+  status: string;
+  challengerName: string;
+  challengerAvatar?: string;
   opponentName?: string;
   opponentAvatar?: string;
   endsAt: string;
@@ -36,7 +36,7 @@ interface QuestData {
   id: string;
   title: string;
   description: string;
-  type: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'SPECIAL';
+  type: string;
   rewardPoints: number;
   progress: number;
   maxProgress: number;
@@ -54,6 +54,16 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
   const [battles, setBattles] = useState<BattleData[]>([]);
   const [quests, setQuests] = useState<QuestData[]>([]);
   const [_loading, setLoading] = useState(true);
+
+  // Modals
+  const [sparkModalOpen, setSparkModalOpen] = useState(false);
+  const [sparkContent, setSparkContent] = useState('');
+  const [sparkSubmitting, setSparkSubmitting] = useState(false);
+  const [battleModalOpen, setBattleModalOpen] = useState(false);
+  const [battleTitle, setBattleTitle] = useState('');
+  const [battleDesc, setBattleDesc] = useState('');
+  const [battleEndsAt, setBattleEndsAt] = useState<any>(null);
+  const [battleSubmitting, setBattleSubmitting] = useState(false);
 
   const fetchFlow = useCallback(async () => {
     try {
@@ -73,6 +83,71 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
   }, [api]);
 
   useEffect(() => { fetchFlow(); }, [fetchFlow]);
+
+  // ── SPARK ACTIONS ──
+  const handleCreateSpark = async () => {
+    if (!sparkContent.trim()) return;
+    setSparkSubmitting(true);
+    try {
+      await api.post('/api/spaceflow/sparks', { content: sparkContent.trim() });
+      message.success('Spark publié anonymement ! ⚡');
+      setSparkContent('');
+      setSparkModalOpen(false);
+      fetchFlow();
+    } catch {
+      message.error('Erreur lors de la création du Spark');
+    } finally {
+      setSparkSubmitting(false);
+    }
+  };
+
+  const handleVoteSpark = async (sparkId: string) => {
+    try {
+      const res = await api.post(`/api/spaceflow/sparks/${sparkId}/vote`);
+      setSparks(prev => prev.map(s => s.id === sparkId ? {
+        ...s,
+        sparkCount: res.sparkCount ?? s.sparkCount + 1,
+        isRevealed: res.isRevealed ?? s.isRevealed,
+        hasVoted: true,
+      } : s));
+      message.success('Vote enregistré ! ⚡');
+    } catch {
+      message.warning('Vous avez déjà voté pour ce Spark');
+    }
+  };
+
+  // ── BATTLE ACTIONS ──
+  const handleCreateBattle = async () => {
+    if (!battleTitle.trim()) return;
+    setBattleSubmitting(true);
+    try {
+      await api.post('/api/spaceflow/battles', {
+        title: battleTitle.trim(),
+        description: battleDesc.trim(),
+        endsAt: battleEndsAt?.toISOString(),
+      });
+      message.success('Battle lancé ! ⚔️');
+      setBattleTitle('');
+      setBattleDesc('');
+      setBattleEndsAt(null);
+      setBattleModalOpen(false);
+      fetchFlow();
+    } catch {
+      message.error('Erreur lors de la création du Battle');
+    } finally {
+      setBattleSubmitting(false);
+    }
+  };
+
+  const handleJoinBattle = async (battleId: string) => {
+    try {
+      await api.post(`/api/spaceflow/battles/${battleId}/join`);
+      message.success('Défi relevé ! 🥊');
+      fetchFlow();
+    } catch {
+      message.warning('Impossible de rejoindre ce battle');
+    }
+  };
 
   const sections = [
     { key: 'spark' as const, label: 'Spark', icon: <ThunderboltOutlined />, color: SF.gold },
@@ -148,7 +223,9 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
             <div style={{ fontSize: 11, color: SF.textSecondary, marginTop: 2, marginBottom: 10 }}>
               À 100 votes, votre identité est révélée !
             </div>
-            <div style={{
+            <div
+              onClick={() => setSparkModalOpen(true)}
+              style={{
               padding: '8px 20px', borderRadius: 20, display: 'inline-block',
               background: SF.gradientGold, color: SF.text, fontWeight: 700,
               fontSize: 13, cursor: 'pointer',
@@ -156,6 +233,27 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
               ⚡ Créer un Spark
             </div>
           </div>
+
+          {/* Spark creation modal */}
+          <Modal
+            open={sparkModalOpen}
+            onCancel={() => setSparkModalOpen(false)}
+            onOk={handleCreateSpark}
+            confirmLoading={sparkSubmitting}
+            title="⚡ Nouveau Spark anonyme"
+            okText="Publier"
+            cancelText="Annuler"
+          >
+            <Input.TextArea
+              value={sparkContent}
+              onChange={e => setSparkContent(e.target.value)}
+              placeholder="Partagez quelque chose anonymement... votre identité sera révélée à 100 votes !"
+              maxLength={3000}
+              rows={4}
+              showCount
+              style={{ marginTop: 8 }}
+            />
+          </Modal>
 
           {/* Sparks list */}
           {sparks.length > 0 ? sparks.map(spark => (
@@ -173,13 +271,13 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
                     {spark.isRevealed ? spark.authorName : 'Anonyme'}
                   </div>
                   <div style={{ fontSize: 10, color: SF.textMuted }}>
-                    {spark.isRevealed ? '✨ Identité révélée !' : `⚡ ${spark.votesCount}/${spark.revealThreshold} votes`}
+                    {spark.isRevealed ? '✨ Identité révélée !' : `⚡ ${spark.sparkCount}/${spark.revealThreshold} votes`}
                   </div>
                 </div>
                 {!spark.isRevealed && (
                   <Progress
                     type="circle"
-                    percent={Math.round((spark.votesCount / spark.revealThreshold) * 100)}
+                    percent={Math.round((spark.sparkCount / spark.revealThreshold) * 100)}
                     size={32}
                     strokeColor={SF.gold}
                     trailColor={SF.border}
@@ -197,18 +295,21 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
               {/* Vote buttons */}
               {!spark.isRevealed && (
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <div style={{
+                  <div
+                    onClick={() => !spark.hasVoted && handleVoteSpark(spark.id)}
+                    style={{
                     flex: 1, padding: '6px 0', textAlign: 'center', borderRadius: 20,
-                    background: spark.userVote === 'UP' ? SF.success + '20' : SF.bg,
-                    color: spark.userVote === 'UP' ? SF.success : SF.textSecondary,
-                    cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                    background: spark.hasVoted ? SF.success + '20' : SF.bg,
+                    color: spark.hasVoted ? SF.success : SF.textSecondary,
+                    cursor: spark.hasVoted ? 'default' : 'pointer', fontSize: 13, fontWeight: 600,
+                    opacity: spark.hasVoted ? 0.7 : 1,
                   }}>
-                    <LikeOutlined /> Voter
+                    <LikeOutlined /> {spark.hasVoted ? 'Voté ✓' : 'Voter'}
                   </div>
                   <div style={{
                     flex: 1, padding: '6px 0', textAlign: 'center', borderRadius: 20,
-                    background: spark.userVote === 'DOWN' ? SF.fire + '20' : SF.bg,
-                    color: spark.userVote === 'DOWN' ? SF.fire : SF.textSecondary,
+                    background: SF.bg,
+                    color: SF.textSecondary,
                     cursor: 'pointer', fontSize: 13, fontWeight: 600,
                   }}>
                     <DislikeOutlined /> Passer
@@ -239,13 +340,48 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
             <div style={{ fontSize: 11, opacity: 0.9, marginTop: 2, marginBottom: 10 }}>
               Défiez quelqu'un dans un duel créatif
             </div>
-            <div style={{
+            <div
+              onClick={() => setBattleModalOpen(true)}
+              style={{
               padding: '8px 20px', borderRadius: 20, display: 'inline-block',
               background: 'rgba(255,255,255,0.25)', fontWeight: 700, fontSize: 13, cursor: 'pointer',
             }}>
               ⚔️ Lancer un Battle
             </div>
           </div>
+
+          {/* Battle creation modal */}
+          <Modal
+            open={battleModalOpen}
+            onCancel={() => setBattleModalOpen(false)}
+            onOk={handleCreateBattle}
+            confirmLoading={battleSubmitting}
+            title="⚔️ Lancer un Battle"
+            okText="Lancer"
+            cancelText="Annuler"
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
+              <Input
+                value={battleTitle}
+                onChange={e => setBattleTitle(e.target.value)}
+                placeholder="Titre du Battle (ex: Meilleure photo du jour)"
+                maxLength={200}
+              />
+              <Input.TextArea
+                value={battleDesc}
+                onChange={e => setBattleDesc(e.target.value)}
+                placeholder="Description / thème du défi..."
+                rows={3}
+              />
+              <DatePicker
+                value={battleEndsAt}
+                onChange={setBattleEndsAt}
+                showTime
+                placeholder="Date de fin (48h par défaut)"
+                style={{ width: '100%' }}
+              />
+            </div>
+          </Modal>
 
           {/* Battles list */}
           {battles.length > 0 ? battles.map(battle => {
@@ -262,17 +398,17 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
                   </Tag>
                 </div>
                 <div style={{ fontSize: 11, color: SF.textSecondary, marginBottom: 10 }}>
-                  Thème : {battle.theme}
+                  Thème : {battle.description}
                 </div>
 
                 {/* VS display */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,  padding: '8px 0' }}>
                   <div style={{ textAlign: 'center' }}>
-                    <Avatar size={40} src={battle.creatorAvatar}
-                      icon={!battle.creatorAvatar ? <UserOutlined /> : undefined}
-                      style={{ background: !battle.creatorAvatar ? SF.primary : undefined }} />
+                    <Avatar size={40} src={battle.challengerAvatar}
+                      icon={!battle.challengerAvatar ? <UserOutlined /> : undefined}
+                      style={{ background: !battle.challengerAvatar ? SF.primary : undefined }} />
                     <div style={{ fontSize: 11, fontWeight: 600, color: SF.text, marginTop: 4 }}>
-                      {battle.creatorName}
+                      {battle.challengerName}
                     </div>
                   </div>
                   <div style={{
@@ -292,7 +428,9 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
                 </div>
 
                 {battle.status === 'OPEN' && (
-                  <div style={{
+                  <div
+                    onClick={() => handleJoinBattle(battle.id)}
+                    style={{
                     marginTop: 8, padding: '6px 0', textAlign: 'center', borderRadius: 20,
                     background: SF.gradientHot, color: 'white', fontWeight: 700,
                     fontSize: 12, cursor: 'pointer',

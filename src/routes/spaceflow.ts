@@ -79,10 +79,9 @@ router.get('/stories/feed', authenticateToken, async (req: Request, res: Respons
       where: {
         organizationId: orgId,
         OR: [
-          { expiresAt: { gt: new Date() } },
+          { createdAt: { gt: twentyFourHoursAgo }, expiresAt: { gt: new Date() } },
           { isHighlight: true },
         ],
-        createdAt: { gt: twentyFourHoursAgo },
       },
       include: {
         author: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
@@ -147,21 +146,42 @@ router.post('/stories/:storyId/view', authenticateToken, async (req: Request, re
   }
 });
 
+router.delete('/stories/:storyId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+    const storyId = req.params.storyId;
+    const story = await db.story.findUnique({ where: { id: storyId } });
+    if (!story) return res.status(404).json({ error: 'Story non trouvée' });
+    if (story.authorId !== userId) return res.status(403).json({ error: 'Non autorisé' });
+    await db.storyView.deleteMany({ where: { storyId } });
+    await db.story.delete({ where: { id: storyId } });
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── EXPLORE ────────────────────────────────────────────────────
 
 router.get('/explore/posts', authenticateToken, async (req: Request, res: Response) => {
   try {
+    const user = (req as any).user;
+    const orgId = user.organizationId;
     const limit = Math.min(parseInt(req.query.limit as string) || 30, 100);
     const posts = await db.wallPost.findMany({
       where: {
-        mediaUrls: { not: null },
+        organizationId: orgId,
+        isPublished: true,
+        mediaUrls: { not: { equals: [] as any } },
         visibility: { in: ['ALL', 'IN'] },
       },
       orderBy: [{ likesCount: 'desc' }, { createdAt: 'desc' }],
       take: limit,
       select: {
         id: true, mediaUrls: true, mediaType: true, likesCount: true, commentsCount: true,
-        author: { select: { firstName: true, lastName: true, avatarUrl: true } },
+        content: true,
+        author: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+        reactions: { where: { userId: user.id }, select: { type: true }, take: 1 },
       },
     });
 
@@ -174,8 +194,11 @@ router.get('/explore/posts', authenticateToken, async (req: Request, res: Respon
           mediaType: p.mediaType || 'image',
           likesCount: p.likesCount,
           commentsCount: p.commentsCount,
+          caption: p.content || '',
+          authorId: p.author.id,
           authorName: `${p.author.firstName} ${p.author.lastName}`.trim(),
           authorAvatar: p.author.avatarUrl,
+          isLiked: p.reactions.length > 0,
         };
       }),
     });
@@ -385,6 +408,28 @@ router.post('/battles', authenticateToken, async (req: Request, res: Response) =
   }
 });
 
+router.post('/battles/:id/join', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+    const battleId = req.params.id;
+    const battle = await db.battle.findUnique({ where: { id: battleId } });
+    if (!battle) return res.status(404).json({ error: 'Battle non trouvé' });
+    if (battle.challengerId === userId) return res.status(400).json({ error: 'Vous êtes le créateur de ce battle' });
+
+    const existing = await db.battleEntry.findUnique({
+      where: { battleId_userId: { battleId, userId } },
+    });
+    if (existing) return res.status(409).json({ error: 'Vous participez déjà' });
+
+    const entry = await db.battleEntry.create({
+      data: { battleId, userId },
+    });
+    res.json({ success: true, entry });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── QUESTS (Gamified Missions) ────────────────────────────────
 
 router.get('/quests/available', authenticateToken, async (req: Request, res: Response) => {
@@ -413,7 +458,7 @@ router.get('/quests/available', authenticateToken, async (req: Request, res: Res
         description: q.description || '',
         type: q.questType,
         rewardPoints: q.rewardPoints,
-        progress: q.progress[0]?.currentProgress || 0,
+        progress: q.progress[0]?.currentCount || 0,
         maxProgress: q.targetCount,
         expiresAt: q.endsAt,
       })),
@@ -503,6 +548,17 @@ router.post('/events/:eventId/rsvp', authenticateToken, async (req: Request, res
     } else {
       await db.eventAttendee.create({ data: { eventId, userId, status } });
     }
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.delete('/events/:eventId/rsvp', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+    const eventId = req.params.eventId;
+    await db.eventAttendee.deleteMany({ where: { eventId, userId } });
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -631,7 +687,6 @@ router.get('/gamification/me', authenticateToken, async (req: Request, res: Resp
         description: ub.badge.description,
         icon: ub.badge.icon,
         category: ub.badge.category,
-        rarity: ub.badge.rarity,
         earnedAt: ub.earnedAt,
       })),
       allBadges: allBadges.map(b => ({
@@ -640,7 +695,6 @@ router.get('/gamification/me', authenticateToken, async (req: Request, res: Resp
         description: b.description,
         icon: b.icon,
         category: b.category,
-        rarity: b.rarity,
         earned: badges.some(ub => ub.badgeId === b.id),
       })),
     });

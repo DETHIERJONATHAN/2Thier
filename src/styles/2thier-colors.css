@@ -3,19 +3,19 @@
    ========================================================================== */
 
 :root {
-  /* Couleurs officielles 2Thier extraites du logo */
-  --2thier-orange: #D67D35;
-  --2thier-orange-light: #E89956;
-  --2thier-orange-dark: #B86A2D;
-  --2thier-orange-hover: #E67B3D;
-  --2thier-orange-10: rgba(214, 125, 53, 0.1);
-  --2thier-orange-20: rgba(214, 125, 53, 0.2);
-  --2thier-orange-30: rgba(214, 125, 53, 0.3);
+  /* Couleurs SpaceFlow */
+  --2thier-orange: #6C5CE7;
+  --2thier-orange-light: #A29BFE;
+  --2thier-orange-dark: #5A4BD1;
+  --2thier-orange-hover: #7B6CF0;
+  --2thier-orange-10: rgba(108, 92, 231, 0.1);
+  --2thier-orange-20: rgba(108, 92, 231, 0.2);
+  --2thier-orange-30: rgba(108, 92, 231, 0.3);
   
-  /* Couleur teal du logo (pour compléter la palette) */
-  --2thier-teal: #1F3B53;
-  --2thier-teal-light: #2A4E68;
-  --2thier-teal-dark: #18304A;
+  /* Couleur secondaire SpaceFlow */
+  --2thier-teal: #0B0E2A;
+  --2thier-teal-light: #1a1e4e;
+  --2thier-teal-dark: #06081A;
 }
 
 /* ==========================================================================
@@ -78,7 +78,7 @@
 .notifications-2thier-bell:hover {
   background-color: var(--2thier-orange) !important;
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(214, 125, 53, 0.3);
+  box-shadow: 0 2px 8px rgba(108, 92, 231, 0.3);
 }
 
 .notifications-2thier-bell .notification-badge {
@@ -89,8 +89,8 @@
 
 @keyframes pulse-2thier {
   0% { box-shadow: 0 0 0 0 var(--2thier-orange-30); }
-  70% { box-shadow: 0 0 0 10px rgba(214, 125, 53, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(214, 125, 53, 0); }
+  70% { box-shadow: 0 0 0 10px rgba(108, 92, 231, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(108, 92, 231, 0); }
 }
 
 /* Enlever tous les contours indésirables */
@@ -120,7 +120,7 @@ button:active {
 .profile-2thier-menu:hover {
   background-color: var(--2thier-orange) !important;
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(214, 125, 53, 0.3);
+  box-shadow: 0 2px 8px rgba(108, 92, 231, 0.3);
 }
 
 .profile-2thier-menu:hover .profile-icon,
@@ -143,7 +143,7 @@ button:active {
   border-color: var(--2thier-orange) !important;
   color: white !important;
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(214, 125, 53, 0.3);
+  box-shadow: 0 2px 8px rgba(108, 92, 231, 0.3);
 }
 
 .org-selector-2thier:hover .org-icon,

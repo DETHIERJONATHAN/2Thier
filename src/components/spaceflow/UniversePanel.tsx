@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Avatar } from 'antd';
+import { Avatar, Modal, Input, DatePicker, Select, message } from 'antd';
 import {
   TeamOutlined, CalendarOutlined, UserOutlined,
   EnvironmentOutlined, ClockCircleOutlined, HeartOutlined,
@@ -24,7 +24,7 @@ interface SocialEventData {
 
 interface TimeCapsuleData {
   id: string;
-  title: string;
+  content: string;
   creatorName: string;
   creatorAvatar?: string;
   unlocksAt: string;
@@ -54,6 +54,24 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
   const [_loading, setLoading] = useState(true);
   const pulseCanvasRef = useRef<HTMLCanvasElement>(null);
 
+  // Event modal
+  const [eventModalOpen, setEventModalOpen] = useState(false);
+  const [eventTitle, setEventTitle] = useState('');
+  const [eventDesc, setEventDesc] = useState('');
+  const [eventType, setEventType] = useState('meetup');
+  const [eventLocation, setEventLocation] = useState('');
+  const [eventStartDate, setEventStartDate] = useState<any>(null);
+  const [eventSubmitting, setEventSubmitting] = useState(false);
+
+  // Capsule modal
+  const [capsuleModalOpen, setCapsuleModalOpen] = useState(false);
+  const [capsuleContent, setCapsuleContent] = useState('');
+  const [capsuleUnlocksAt, setCapsuleUnlocksAt] = useState<any>(null);
+  const [capsuleSubmitting, setCapsuleSubmitting] = useState(false);
+
+  // RSVP tracking
+  const [rsvpSet, setRsvpSet] = useState<Set<string>>(new Set());
+
   const fetchData = useCallback(async () => {
     try {
       const [eventsRes, capsulesRes, orbitRes] = await Promise.all([
@@ -72,6 +90,81 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
   }, [api]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // ── EVENT ACTIONS ──
+  const handleCreateEvent = async () => {
+    if (!eventTitle.trim() || !eventStartDate) return;
+    setEventSubmitting(true);
+    try {
+      await api.post('/api/spaceflow/events', {
+        title: eventTitle.trim(),
+        description: eventDesc.trim(),
+        type: eventType,
+        location: eventLocation.trim(),
+        startDate: eventStartDate.toISOString(),
+      });
+      message.success('Événement créé ! 📅');
+      setEventTitle(''); setEventDesc(''); setEventLocation('');
+      setEventStartDate(null); setEventModalOpen(false);
+      fetchData();
+    } catch {
+      message.error('Erreur lors de la création');
+    } finally {
+      setEventSubmitting(false);
+    }
+  };
+
+  const handleRSVP = async (eventId: string) => {
+    try {
+      if (rsvpSet.has(eventId)) {
+        await api.delete(`/api/spaceflow/events/${eventId}/rsvp`);
+        setRsvpSet(prev => { const next = new Set(prev); next.delete(eventId); return next; });
+        message.success('Inscription annulée');
+      } else {
+        await api.post(`/api/spaceflow/events/${eventId}/rsvp`, { status: 'going' });
+        setRsvpSet(prev => new Set(prev).add(eventId));
+        message.success('Participation confirmée ! 🎉');
+      }
+    } catch {
+      message.error('Erreur lors de l\'inscription');
+    }
+  };
+
+  // ── CAPSULE ACTIONS ──
+  const handleCreateCapsule = async () => {
+    if (!capsuleContent.trim() || !capsuleUnlocksAt) return;
+    setCapsuleSubmitting(true);
+    try {
+      await api.post('/api/spaceflow/capsules', {
+        content: capsuleContent.trim(),
+        unlocksAt: capsuleUnlocksAt.toISOString(),
+      });
+      message.success('Capsule temporelle créée ! ⏳');
+      setCapsuleContent(''); setCapsuleUnlocksAt(null);
+      setCapsuleModalOpen(false);
+      fetchData();
+    } catch {
+      message.error('Erreur lors de la création');
+    } finally {
+      setCapsuleSubmitting(false);
+    }
+  };
+
+  const handleOpenCapsule = (capsule: TimeCapsuleData) => {
+    Modal.info({
+      title: '🎁 Capsule Temporelle Ouverte !',
+      content: (
+        <div style={{ marginTop: 12 }}>
+          <p style={{ color: SF.textSecondary, marginBottom: 8 }}>De : {capsule.creatorName}</p>
+          <div style={{ padding: 16, background: SF.bg, borderRadius: 12, fontSize: 14, lineHeight: 1.6 }}>
+            {capsule.content || '(Contenu vide)'}
+          </div>
+        </div>
+      ),
+      okText: 'Fermer',
+      width: 400,
+    });
+  };
 
   // Pulse animation — simple animated sphere
   useEffect(() => {
@@ -255,13 +348,40 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
             <div style={{ fontSize: 11, opacity: 0.9, marginTop: 2, marginBottom: 8 }}>
               Meetups, ateliers, job fairs...
             </div>
-            <div style={{
+            <div
+              onClick={() => setEventModalOpen(true)}
+              style={{
               padding: '6px 18px', borderRadius: 20, display: 'inline-block',
               background: 'rgba(255,255,255,0.25)', fontWeight: 700, fontSize: 12, cursor: 'pointer',
             }}>
               📅 Créer
             </div>
           </div>
+
+          {/* Event creation modal */}
+          <Modal
+            open={eventModalOpen}
+            onCancel={() => setEventModalOpen(false)}
+            onOk={handleCreateEvent}
+            confirmLoading={eventSubmitting}
+            title="📅 Créer un événement"
+            okText="Créer"
+            cancelText="Annuler"
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
+              <Input value={eventTitle} onChange={e => setEventTitle(e.target.value)} placeholder="Titre de l'événement" />
+              <Input.TextArea value={eventDesc} onChange={e => setEventDesc(e.target.value)} placeholder="Description..." rows={3} />
+              <Select value={eventType} onChange={setEventType} style={{ width: '100%' }} options={[
+                { value: 'meetup', label: '🤝 Meetup' },
+                { value: 'workshop', label: '🎓 Atelier' },
+                { value: 'jobfair', label: '💼 Job Fair' },
+                { value: 'openday', label: '🏠 Portes ouvertes' },
+                { value: 'other', label: '📅 Autre' },
+              ]} />
+              <Input value={eventLocation} onChange={e => setEventLocation(e.target.value)} prefix={<EnvironmentOutlined />} placeholder="Lieu" />
+              <DatePicker value={eventStartDate} onChange={setEventStartDate} showTime placeholder="Date et heure" style={{ width: '100%' }} />
+            </div>
+          </Modal>
 
           {events.length > 0 ? events.map(event => (
             <div key={event.id} style={{
@@ -288,12 +408,16 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
                   <div><TeamOutlined /> {event.attendeesCount} participant(s){event.maxAttendees ? ` / ${event.maxAttendees}` : ''}</div>
                 </div>
 
-                <div style={{
+                <div
+                  onClick={() => handleRSVP(event.id)}
+                  style={{
                   padding: '6px 0', textAlign: 'center', borderRadius: 20,
-                  background: SF.gradientSecondary, color: 'white', fontWeight: 700,
+                  background: rsvpSet.has(event.id) ? SF.success + '20' : SF.gradientSecondary,
+                  color: rsvpSet.has(event.id) ? SF.success : 'white',
+                  fontWeight: 700,
                   fontSize: 12, cursor: 'pointer',
                 }}>
-                  Participer
+                  {rsvpSet.has(event.id) ? '✓ Inscrit(e) (annuler)' : 'Participer'}
                 </div>
               </div>
             </div>
@@ -316,7 +440,9 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
             <div style={{ fontSize: 11, color: SF.text, opacity: 0.7, marginTop: 2, marginBottom: 8 }}>
               Envoyez un message vers le futur !
             </div>
-            <div style={{
+            <div
+              onClick={() => setCapsuleModalOpen(true)}
+              style={{
               padding: '6px 18px', borderRadius: 20, display: 'inline-block',
               background: 'rgba(255,255,255,0.5)', fontWeight: 700, fontSize: 12,
               cursor: 'pointer', color: SF.text,
@@ -324,6 +450,34 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
               ⏳ Créer une capsule
             </div>
           </div>
+
+          {/* Capsule creation modal */}
+          <Modal
+            open={capsuleModalOpen}
+            onCancel={() => setCapsuleModalOpen(false)}
+            onOk={handleCreateCapsule}
+            confirmLoading={capsuleSubmitting}
+            title="⏳ Nouvelle Capsule Temporelle"
+            okText="Sceller"
+            cancelText="Annuler"
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
+              <Input.TextArea
+                value={capsuleContent}
+                onChange={e => setCapsuleContent(e.target.value)}
+                placeholder="Votre message pour le futur..."
+                rows={4}
+                maxLength={5000}
+                showCount
+              />
+              <DatePicker
+                value={capsuleUnlocksAt}
+                onChange={setCapsuleUnlocksAt}
+                placeholder="Date de déverrouillage"
+                style={{ width: '100%' }}
+              />
+            </div>
+          </Modal>
 
           {capsules.length > 0 ? capsules.map(cap => {
             const now = new Date();
@@ -346,7 +500,7 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
                     {cap.isUnlocked ? '🎁' : '🔒'}
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: SF.text }}>{cap.title}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: SF.text }}>{cap.content ? (cap.content.length > 40 ? cap.content.substring(0, 40) + '...' : cap.content) : 'Capsule mystère'}</div>
                     <div style={{ fontSize: 11, color: SF.textSecondary }}>
                       De {cap.creatorName}
                       {cap.recipientName && ` → ${cap.recipientName}`}
@@ -360,7 +514,9 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
                 </div>
 
                 {cap.isUnlocked && (
-                  <div style={{
+                  <div
+                    onClick={() => handleOpenCapsule(cap)}
+                    style={{
                     marginTop: 8, padding: '6px 0', textAlign: 'center', borderRadius: 20,
                     background: SF.gradientGold, color: SF.text, fontWeight: 700,
                     fontSize: 12, cursor: 'pointer',

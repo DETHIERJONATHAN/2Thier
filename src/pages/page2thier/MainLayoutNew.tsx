@@ -845,7 +845,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
     <Layout className="min-h-screen">
       <Header 
         style={{ 
-          backgroundColor: '#1a4951', 
+          background: 'linear-gradient(135deg, #0B0E2A 0%, #1a1e4e 50%, #0B0E2A 100%)', 
           height: `${headerHeight}px`,
           minHeight: `${headerHeight}px`,
           padding: isMobile ? '0 10px' : '0 16px',
@@ -879,31 +879,40 @@ const MainLayout: React.FC<MainLayoutProps> = ({
           onClick={() => setIsMenuOpen(!isMenuOpen)}
         />
 
-        {/* Logo 2THIER CRM */}
+        {/* Logo SpaceFlow */}
         <div 
           className="header-2thier-item" 
           style={{ 
             fontWeight: 'bold', 
-            fontSize: isMobile ? '16px' : '18px', 
+            fontSize: isMobile ? '15px' : '17px', 
             marginLeft: isMobile ? '4px' : '16px', 
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
             flex: isMobile ? '1 1 auto' : '0 0 auto',
-            minWidth: 0
+            minWidth: 0,
+            color: 'white',
+            letterSpacing: '0.5px'
           }}
           onClick={() => navigate('/dashboard')}
         >
-          <img 
-            src="/2thier-logo.png" 
-            alt="2Thier Logo" 
-            style={{ 
-              height: '22px', 
-              width: 'auto'
-            }}
-          />
-          {!isMobile && '2THIER CRM'}
+          <svg width="28" height="28" viewBox="0 0 100 100" style={{ flexShrink: 0 }}>
+            <defs>
+              <linearGradient id="sf-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#4F8EF7" />
+                <stop offset="100%" stopColor="#6C5CE7" />
+              </linearGradient>
+              <linearGradient id="sf-s" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#ffffff" />
+                <stop offset="100%" stopColor="#e0e0ff" />
+              </linearGradient>
+            </defs>
+            <rect x="5" y="5" width="90" height="90" rx="20" fill="url(#sf-bg)" />
+            <path d="M65 30C55 30 48 35 48 42C48 52 65 48 65 56C65 61 58 65 48 65" stroke="url(#sf-s)" strokeWidth="8" strokeLinecap="round" fill="none" />
+            <path d="M42 28C42 28 35 32 35 38C35 44 50 44 55 35" stroke="#A29BFE" strokeWidth="4" strokeLinecap="round" fill="none" opacity="0.6" />
+          </svg>
+          {!isMobile && <span style={{ fontStyle: 'italic', fontWeight: 700 }}>SpaceFlow</span>}
         </div>
 
         {/* Icône Home */}

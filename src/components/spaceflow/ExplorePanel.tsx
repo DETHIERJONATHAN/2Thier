@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Avatar, Input, Tag } from 'antd';
-import { SearchOutlined, UserOutlined, FireOutlined, CompassOutlined, TeamOutlined, RiseOutlined } from '@ant-design/icons';
+import { Avatar, Input, Tag, message } from 'antd';
+import { SearchOutlined, UserOutlined, FireOutlined, CompassOutlined, TeamOutlined, RiseOutlined, HeartOutlined, HeartFilled } from '@ant-design/icons';
 import { SF } from './SpaceFlowTheme';
 
 interface ExplorePost {
@@ -41,6 +41,30 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
   const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>([]);
   const [loading, setLoading] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [followingSet, setFollowingSet] = useState<Set<string>>(new Set());
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [likedSet, setLikedSet] = useState<Set<string>>(new Set());
+
+  const handleLikePost = async (postId: string) => {
+    const wasLiked = likedSet.has(postId);
+    setLikedSet(prev => {
+      const next = new Set(prev);
+      if (wasLiked) next.delete(postId); else next.add(postId);
+      return next;
+    });
+    setPosts(prev => prev.map(p => p.id === postId ? { ...p, likesCount: p.likesCount + (wasLiked ? -1 : 1) } : p));
+    try {
+      await api.post(`/api/wall/posts/${postId}/reactions`, { type: 'LIKE' });
+    } catch {
+      // Revert on error
+      setLikedSet(prev => {
+        const next = new Set(prev);
+        if (wasLiked) next.add(postId); else next.delete(postId);
+        return next;
+      });
+      setPosts(prev => prev.map(p => p.id === postId ? { ...p, likesCount: p.likesCount + (wasLiked ? 1 : -1) } : p));
+    }
+  };
 
   const fetchExplore = useCallback(async () => {
     try {
@@ -60,6 +84,33 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
   }, [api]);
 
   useEffect(() => { fetchExplore(); }, [fetchExplore]);
+
+  const handleFollow = async (userId: string) => {
+    try {
+      if (followingSet.has(userId)) {
+        await api.delete(`/api/spaceflow/follow/${userId}`);
+        setFollowingSet(prev => { const next = new Set(prev); next.delete(userId); return next; });
+        message.success('Abonnement retiré');
+      } else {
+        await api.post(`/api/spaceflow/follow/${userId}`);
+        setFollowingSet(prev => new Set(prev).add(userId));
+        message.success('Suivi avec succès ! 🎉');
+      }
+    } catch {
+      message.error('Erreur lors du suivi');
+    }
+  };
+
+  const filteredPosts = posts; // Categories filter à implémenter quand le backend le supporte
+  const filteredUsers = searchQuery
+    ? suggestedUsers.filter(u =>
+        `${u.firstName} ${u.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        u.role.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : suggestedUsers;
+  const filteredHashtags = searchQuery
+    ? hashtags.filter(h => h.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : hashtags;
 
   const tabs = [
     { key: 'trending' as const, label: 'Tendances', icon: <FireOutlined /> },
@@ -101,9 +152,13 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
       {/* Category pills */}
       <div style={{ display: 'flex', gap: 6, overflowX: 'auto', marginBottom: 12, scrollbarWidth: 'none', paddingBottom: 2 }}>
         {categories.map(cat => (
-          <Tag key={cat.label} style={{
+          <Tag key={cat.label}
+            onClick={() => setActiveCategory(activeCategory === cat.label ? null : cat.label)}
+            style={{
             borderRadius: 20, padding: '4px 12px', cursor: 'pointer', border: 'none',
-            background: SF.cardBg, fontSize: 12, flexShrink: 0, boxShadow: SF.shadow,
+            background: activeCategory === cat.label ? SF.primary + '20' : SF.cardBg,
+            color: activeCategory === cat.label ? SF.primary : SF.text,
+            fontSize: 12, flexShrink: 0, boxShadow: SF.shadow,
           }}>
             {cat.emoji} {cat.label}
           </Tag>
@@ -143,9 +198,9 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                 }} />
               ))}
             </div>
-          ) : posts.length > 0 ? (
+          ) : filteredPosts.length > 0 ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
-              {posts.map((post, i) => (
+              {filteredPosts.map((post, i) => (
                 <div key={post.id} style={{
                   position: 'relative', cursor: 'pointer',
                   aspectRatio: i % 7 === 0 ? '1/2' : '1/1',
@@ -165,7 +220,15 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                     padding: '16px 6px 4px', display: 'flex', gap: 8,
                     color: 'white', fontSize: 10,
                   }}>
-                    <span>❤️ {post.likesCount}</span>
+                    <span
+                      onClick={(e) => { e.stopPropagation(); handleLikePost(post.id); }}
+                      style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 2 }}
+                    >
+                      {likedSet.has(post.id)
+                        ? <HeartFilled style={{ color: '#ff2d55', fontSize: 12 }} />
+                        : <HeartOutlined style={{ fontSize: 12 }} />}
+                      {' '}{post.likesCount}
+                    </span>
                     <span>💬 {post.commentsCount}</span>
                   </div>
                 </div>
@@ -184,7 +247,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
       {/* People tab */}
       {activeTab === 'people' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {suggestedUsers.length > 0 ? suggestedUsers.map(su => (
+          {filteredUsers.length > 0 ? filteredUsers.map(su => (
             <div key={su.id} style={{
               display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
               background: SF.cardBg, borderRadius: SF.radiusSm, boxShadow: SF.shadow,
@@ -199,11 +262,16 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                   <div style={{ fontSize: 10, color: SF.textMuted }}>{su.mutualFriends} ami(s) en commun</div>
                 )}
               </div>
-              <div style={{
+              <div
+                onClick={() => handleFollow(su.id)}
+                style={{
                 padding: '4px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600,
-                background: SF.gradientPrimary, color: 'white', cursor: 'pointer',
+                background: followingSet.has(su.id) ? SF.bg : SF.gradientPrimary,
+                color: followingSet.has(su.id) ? SF.textSecondary : 'white',
+                cursor: 'pointer',
+                border: followingSet.has(su.id) ? `1px solid ${SF.border}` : 'none',
               }}>
-                Suivre
+                {followingSet.has(su.id) ? 'Suivi ✓' : 'Suivre'}
               </div>
             </div>
           )) : (
@@ -219,7 +287,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
       {/* Hashtags tab */}
       {activeTab === 'hashtags' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {hashtags.length > 0 ? hashtags.map((ht, i) => (
+          {filteredHashtags.length > 0 ? filteredHashtags.map((ht, i) => (
             <div key={ht.id} style={{
               display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
               background: SF.cardBg, borderRadius: SF.radiusSm, boxShadow: SF.shadow,

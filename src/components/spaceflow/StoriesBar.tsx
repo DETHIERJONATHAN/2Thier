@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Avatar, Tooltip } from 'antd';
-import { PlusOutlined, UserOutlined } from '@ant-design/icons';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Avatar, Tooltip, Modal, Input, message } from 'antd';
+import { PlusOutlined, UserOutlined, CameraOutlined, LoadingOutlined } from '@ant-design/icons';
 import { SF } from './SpaceFlowTheme';
 
 interface Story {
@@ -22,6 +22,17 @@ interface StoriesBarProps {
 const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
   const [stories, setStories] = useState<Story[]>([]);
   const [loading, setLoading] = useState(true);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [storyText, setStoryText] = useState('');
+  const [storyMediaUrl, setStoryMediaUrl] = useState('');
+  const [storySubmitting, setStorySubmitting] = useState(false);
+  const [viewingStory, setViewingStory] = useState<Story | null>(null);
+  const [viewingStoryList, setViewingStoryList] = useState<Story[]>([]);
+  const [viewingStoryIndex, setViewingStoryIndex] = useState(0);
+  const [storyFile, setStoryFile] = useState<File | null>(null);
+  const [storyPreview, setStoryPreview] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchStories = useCallback(async () => {
     try {
@@ -52,7 +63,123 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
     avatarUrl: stories[0].avatarUrl,
     count: stories.length,
     allViewed: stories.every(s => s.viewed),
+    latestMedia: stories[0].mediaUrl,
   }));
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+      message.error('Seules les images et vidéos sont acceptées');
+      return;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      message.error('Fichier trop volumineux (max 50 Mo)');
+      return;
+    }
+    setStoryFile(file);
+    if (storyPreview) URL.revokeObjectURL(storyPreview);
+    setStoryPreview(URL.createObjectURL(file));
+    setStoryMediaUrl('');
+    e.target.value = '';
+  };
+
+  const removeStoryFile = () => {
+    if (storyPreview) URL.revokeObjectURL(storyPreview);
+    setStoryFile(null);
+    setStoryPreview(null);
+  };
+
+  const handleCreateStory = async () => {
+    if (!storyText.trim() && !storyMediaUrl.trim() && !storyFile) return;
+    setStorySubmitting(true);
+    try {
+      let mediaUrl = storyMediaUrl.trim();
+      let mediaType: string = 'image';
+
+      // Upload file if selected
+      if (storyFile) {
+        setUploading(true);
+        const formData = new FormData();
+        formData.append('files', storyFile);
+        const uploadResult = await api.post('/api/wall/upload', formData) as { urls?: string[] };
+        setUploading(false);
+        const urls = uploadResult?.urls || [];
+        if (urls.length === 0) {
+          message.error('Échec de l\'upload');
+          setStorySubmitting(false);
+          return;
+        }
+        mediaUrl = urls[0];
+        mediaType = storyFile.type.startsWith('video/') ? 'video' : 'image';
+      }
+
+      await api.post('/api/spaceflow/stories', {
+        text: storyText.trim(),
+        mediaUrl: mediaUrl || undefined,
+        mediaType,
+      });
+      message.success('Story publiée ! 🎉');
+      setStoryText(''); setStoryMediaUrl('');
+      removeStoryFile();
+      setCreateModalOpen(false);
+      fetchStories();
+    } catch {
+      message.error('Erreur lors de la création de la story');
+    } finally {
+      setStorySubmitting(false);
+      setUploading(false);
+    }
+  };
+
+  const handleViewStory = async (userId: string) => {
+    const userStoriesList = userStories.get(userId);
+    if (!userStoriesList?.length) return;
+    setViewingStoryList(userStoriesList);
+    setViewingStoryIndex(0);
+    setViewingStory(userStoriesList[0]);
+    try {
+      await api.post(`/api/spaceflow/stories/${userStoriesList[0].id}/view`);
+      setStories(prev => prev.map(s => s.id === userStoriesList[0].id ? { ...s, viewed: true } : s));
+    } catch {
+      // Non-blocking
+    }
+  };
+
+  const handleNextStory = async () => {
+    const nextIndex = viewingStoryIndex + 1;
+    if (nextIndex < viewingStoryList.length) {
+      setViewingStoryIndex(nextIndex);
+      setViewingStory(viewingStoryList[nextIndex]);
+      try {
+        await api.post(`/api/spaceflow/stories/${viewingStoryList[nextIndex].id}/view`);
+        setStories(prev => prev.map(s => s.id === viewingStoryList[nextIndex].id ? { ...s, viewed: true } : s));
+      } catch { /* */ }
+    } else {
+      setViewingStory(null);
+      setViewingStoryList([]);
+    }
+  };
+
+  const handlePrevStory = () => {
+    const prevIndex = viewingStoryIndex - 1;
+    if (prevIndex >= 0) {
+      setViewingStoryIndex(prevIndex);
+      setViewingStory(viewingStoryList[prevIndex]);
+    }
+  };
+
+  const handleDeleteStory = async (storyId: string) => {
+    try {
+      await api.delete(`/api/spaceflow/stories/${storyId}`);
+      setStories(prev => prev.filter(s => s.id !== storyId));
+      setViewingStory(null);
+      setViewingStoryList([]);
+      message.success('Story supprimée');
+    } catch {
+      message.error('Erreur lors de la suppression');
+    }
+  };
 
   const ringStyle = (viewed: boolean): React.CSSProperties => ({
     padding: 2,
@@ -72,7 +199,9 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
       {/* My Story — Add button */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flexShrink: 0 }}>
         <Tooltip title="Ajouter une story">
-          <div style={{
+          <div
+            onClick={() => setCreateModalOpen(true)}
+            style={{
             width: 56, height: 56, borderRadius: '50%',
             background: SF.bg, display: 'flex', alignItems: 'center', justifyContent: 'center',
             cursor: 'pointer', position: 'relative',
@@ -106,7 +235,7 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
         ))
       ) : (
         storyUsers.map(su => (
-          <div key={su.userId} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+          <div key={su.userId} onClick={() => handleViewStory(su.userId)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flexShrink: 0 }}>
             <div style={ringStyle(su.allViewed)}>
               <Avatar size={50} src={su.avatarUrl}
                 icon={!su.avatarUrl ? <UserOutlined /> : undefined}
@@ -125,6 +254,153 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
           Aucune story active — soyez le premier ! 🚀
         </div>
       )}
+
+      {/* Create story modal */}
+      <Modal
+        open={createModalOpen}
+        onCancel={() => { if (!storySubmitting) { setCreateModalOpen(false); removeStoryFile(); } }}
+        onOk={handleCreateStory}
+        confirmLoading={storySubmitting}
+        title="📸 Nouvelle Story"
+        okText={uploading ? 'Upload...' : 'Publier'}
+        cancelText="Annuler"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
+          <Input.TextArea
+            value={storyText}
+            onChange={e => setStoryText(e.target.value)}
+            placeholder="Votre message (optionnel)..."
+            rows={3}
+            maxLength={500}
+          />
+
+          {/* File upload zone */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,video/*"
+            style={{ display: 'none' }}
+            onChange={handleFileSelect}
+          />
+
+          {storyPreview ? (
+            <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden' }}>
+              {storyFile?.type.startsWith('video/') ? (
+                <video src={storyPreview} style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 12 }} controls muted />
+              ) : (
+                <img src={storyPreview} alt="Aperçu" style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 12 }} />
+              )}
+              <div
+                onClick={removeStoryFile}
+                style={{
+                  position: 'absolute', top: 6, right: 6, width: 24, height: 24,
+                  borderRadius: '50%', background: 'rgba(0,0,0,0.6)', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#fff', fontSize: 12, fontWeight: 700,
+                }}
+              >✕</div>
+            </div>
+          ) : (
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                border: '2px dashed #d9d9d9', borderRadius: 12, padding: '20px 16px',
+                textAlign: 'center', cursor: 'pointer', background: '#fafafa',
+                transition: 'border-color 0.2s',
+              }}
+            >
+              <CameraOutlined style={{ fontSize: 28, color: '#999', marginBottom: 4 }} />
+              <div style={{ fontSize: 13, color: '#666' }}>Cliquez pour ajouter une photo ou vidéo</div>
+              <div style={{ fontSize: 11, color: '#999' }}>max 50 Mo</div>
+            </div>
+          )}
+
+          <div style={{ fontSize: 11, color: '#999', textAlign: 'center' }}>ou collez une URL :</div>
+          <Input
+            value={storyMediaUrl}
+            onChange={e => { setStoryMediaUrl(e.target.value); if (storyFile) removeStoryFile(); }}
+            placeholder="URL de l'image ou vidéo (optionnel)"
+            prefix="🖼️"
+            disabled={!!storyFile}
+          />
+        </div>
+      </Modal>
+
+      {/* View story modal */}
+      <Modal
+        open={!!viewingStory}
+        onCancel={() => { setViewingStory(null); setViewingStoryList([]); }}
+        footer={null}
+        closable
+        width={360}
+        styles={{ body: { padding: 0 } }}
+      >
+        {viewingStory && (
+          <div style={{ textAlign: 'center', padding: 16 }}>
+            {/* Progress bar */}
+            {viewingStoryList.length > 1 && (
+              <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
+                {viewingStoryList.map((_, i) => (
+                  <div key={i} style={{
+                    flex: 1, height: 3, borderRadius: 2,
+                    background: i <= viewingStoryIndex ? SF.primary : SF.border,
+                  }} />
+                ))}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <Avatar size={32} icon={<UserOutlined />} />
+              <span style={{ fontWeight: 600 }}>{viewingStory.userName}</span>
+              <span style={{ fontSize: 10, color: SF.textMuted, marginLeft: 'auto' }}>
+                {new Date(viewingStory.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+              {/* Delete button for own stories */}
+              {currentUser?.id === viewingStory.userId && (
+                <span
+                  onClick={() => handleDeleteStory(viewingStory.id)}
+                  style={{ fontSize: 12, color: '#ff4d4f', cursor: 'pointer', fontWeight: 600 }}
+                >🗑️</span>
+              )}
+            </div>
+            {viewingStory.mediaUrl ? (
+              viewingStory.mediaType === 'VIDEO' ? (
+                <video src={viewingStory.mediaUrl} controls autoPlay muted style={{ width: '100%', borderRadius: 12, maxHeight: 400 }} />
+              ) : (
+                <img src={viewingStory.mediaUrl} alt="" style={{ width: '100%', borderRadius: 12, maxHeight: 400, objectFit: 'cover' }} />
+              )
+            ) : (
+              <div style={{ padding: 40, background: SF.gradientPrimary, borderRadius: 12, color: 'white', fontSize: 18, fontWeight: 600 }}>
+                📸 Story
+              </div>
+            )}
+
+            {/* Navigation arrows */}
+            {viewingStoryList.length > 1 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
+                <div
+                  onClick={handlePrevStory}
+                  style={{
+                    padding: '6px 16px', borderRadius: 20, cursor: viewingStoryIndex > 0 ? 'pointer' : 'default',
+                    background: viewingStoryIndex > 0 ? SF.primary : SF.border,
+                    color: viewingStoryIndex > 0 ? 'white' : SF.textMuted, fontSize: 12, fontWeight: 600,
+                  }}
+                >← Précédent</div>
+                <span style={{ fontSize: 11, color: SF.textMuted, alignSelf: 'center' }}>
+                  {viewingStoryIndex + 1} / {viewingStoryList.length}
+                </span>
+                <div
+                  onClick={handleNextStory}
+                  style={{
+                    padding: '6px 16px', borderRadius: 20, cursor: 'pointer',
+                    background: SF.primary, color: 'white', fontSize: 12, fontWeight: 600,
+                  }}
+                >{viewingStoryIndex < viewingStoryList.length - 1 ? 'Suivant →' : 'Fermer ✓'}</div>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };
