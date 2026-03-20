@@ -6,7 +6,7 @@ import {
   CalendarOutlined, FileProtectOutlined, TeamOutlined, DollarOutlined,
   RobotOutlined, MessageOutlined, AlertOutlined, RocketOutlined,
   CheckCircleOutlined, CloseCircleOutlined, EyeOutlined,
-  EllipsisOutlined
+  EllipsisOutlined, ArrowLeftOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 
@@ -84,6 +84,13 @@ const NotificationsBell = () => {
   const [hasNew, setHasNew] = useState(false);
   const lastCountRef = useRef(0);
   const isOpenRef = useRef(false);
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 480 : false);
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 480);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -258,14 +265,29 @@ const NotificationsBell = () => {
 
   const panelContent = (
     <div style={{
-      width: 360, maxHeight: '85vh', display: 'flex', flexDirection: 'column',
-      backgroundColor: '#fff', borderRadius: 8,
-      boxShadow: '0 2px 12px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05)',
+      width: isMobile ? '100vw' : 360,
+      maxHeight: isMobile ? '100vh' : '85vh',
+      height: isMobile ? '100vh' : undefined,
+      display: 'flex', flexDirection: 'column',
+      backgroundColor: '#fff', borderRadius: isMobile ? 0 : 8,
+      boxShadow: isMobile ? 'none' : '0 2px 12px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05)',
     }}>
       {/* Header Facebook-style */}
       <div style={{ padding: '12px 16px 4px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ fontSize: 24, fontWeight: 700, color: '#050505', margin: 0 }}>Notifications</h2>
+          {isMobile && (
+            <div
+              onClick={() => setIsOpen(false)}
+              style={{
+                width: 36, height: 36, borderRadius: '50%', display: 'flex',
+                alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                marginRight: 8,
+              }}
+            >
+              <ArrowLeftOutlined style={{ fontSize: 18, color: '#050505' }} />
+            </div>
+          )}
+          <h2 style={{ fontSize: 24, fontWeight: 700, color: '#050505', margin: 0, flex: 1 }}>Notifications</h2>
           <Tooltip title="Options">
             <div
               onClick={e => { e.stopPropagation(); if (unreadCount > 0) markAllAsRead(); }}
@@ -331,7 +353,7 @@ const NotificationsBell = () => {
       {/* Liste */}
       <div style={{
         flex: 1, overflowY: 'auto', padding: '4px 8px 8px',
-        maxHeight: 'calc(85vh - 140px)',
+        maxHeight: isMobile ? undefined : 'calc(85vh - 140px)',
       }}>
         {filtered.length > 0 ? (
           filtered.map(renderItem)
@@ -355,6 +377,53 @@ const NotificationsBell = () => {
       </div>
     </div>
   );
+
+  // On mobile, render as a fixed full-screen overlay instead of a Popover
+  if (isMobile) {
+    return (
+      <>
+        <div
+          className="header-2thier-item"
+          onClick={() => setIsOpen(!isOpen)}
+          style={{
+            position: 'relative', cursor: 'pointer', display: 'inline-flex',
+            alignItems: 'center', justifyContent: 'center',
+            padding: 6, border: 'none',
+          }}
+        >
+          <BellOutlined style={{ fontSize: 16 }} />
+          {unreadCount > 0 && (
+            <div style={{
+              position: 'absolute', top: 0, right: -2,
+              minWidth: 16, height: 16, padding: '0 4px',
+              borderRadius: 8, backgroundColor: '#D67D35',
+              color: '#fff', fontSize: 10, fontWeight: 700,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              border: '2px solid #1F3B53',
+              animation: hasNew ? 'notif-pop 0.3s ease' : undefined,
+            }}>
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </div>
+          )}
+        </div>
+        {isOpen && (
+          <div style={{
+            position: 'fixed', inset: 0, zIndex: 1050,
+            backgroundColor: '#fff',
+          }}>
+            {panelContent}
+          </div>
+        )}
+        <style>{`
+          @keyframes notif-pop {
+            0% { transform: scale(0.5); }
+            50% { transform: scale(1.3); }
+            100% { transform: scale(1); }
+          }
+        `}</style>
+      </>
+    );
+  }
 
   return (
     <Popover
