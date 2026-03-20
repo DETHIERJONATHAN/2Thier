@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../auth/useAuth';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useModuleNavigation } from '../contexts/WallNavigationContext';
 import { Avatar, Spin, message } from 'antd';
 import {
@@ -188,6 +188,8 @@ const ProfilePage = () => {
   const { user, loading: userLoading, refetchUser, isSuperAdmin, currentOrganization, organizations, selectOrganization } = useAuth();
   const { api } = useAuthenticatedApi();
   const navigate = useNavigate();
+  const { userId: viewUserId } = useParams<{ userId?: string }>();
+  const isViewingOther = !!viewUserId && viewUserId !== user?.id;
   const { moduleNavigate } = useModuleNavigation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
@@ -217,12 +219,13 @@ const ProfilePage = () => {
   useEffect(() => {
     if (!user) return;
     setLoading(true);
-    api.get('/api/profile').then((r: any) => {
+    const endpoint = isViewingOther ? `/api/profile/user/${viewUserId}` : '/api/profile';
+    api.get(endpoint).then((r: any) => {
       setProfile(r);
       setCoverPosY(r.coverPositionY ?? 50);
       setLoading(false);
     }).catch(() => { message.error('Impossible de charger le profil.'); setLoading(false); });
-  }, [user, api]);
+  }, [user, api, viewUserId, isViewingOther]);
 
   /* ── Fetch photos when Photos tab is activated ──────────── */
   const fetchPhotos = useCallback(async () => {
@@ -444,7 +447,7 @@ const ProfilePage = () => {
             )}
 
             {/* Bottom action buttons */}
-            <div style={{
+            {!isViewingOther && <div style={{
               position: 'absolute', bottom: isMobile ? 8 : 16, right: isMobile ? 8 : 16,
               display: 'flex', gap: 8,
             }}>
@@ -481,8 +484,8 @@ const ProfilePage = () => {
                   }}>{coverUploading ? <Spin size="small" /> : <CameraOutlined />}{!isMobile && ' Modifier la couverture'}</div>
                 </>
               )}
-            </div>
-            <input type="file" accept="image/*" onChange={handleCoverChange} ref={coverInputRef} style={{ display: 'none' }} />
+            </div>}
+            {!isViewingOther && <input type="file" accept="image/*" onChange={handleCoverChange} ref={coverInputRef} style={{ display: 'none' }} />}
           </div>
 
           {/* ─── MOBILE: avatar centré au-dessus du nom ─── */}
@@ -499,7 +502,7 @@ const ProfilePage = () => {
                     boxShadow: '0 2px 8px rgba(0,0,0,0.15)', fontSize: 48,
                   }}
                 />
-                <span
+                {!isViewingOther && <span
                   onClick={() => fileInputRef.current?.click()}
                   style={{
                     position: 'absolute', bottom: 4, right: 4,
@@ -511,8 +514,8 @@ const ProfilePage = () => {
                   }}
                 >
                   {avatarUploading ? <Spin size="small" /> : <CameraOutlined style={{ fontSize: 14, color: FB.text }} />}
-                </span>
-                <input type="file" accept="image/*" onChange={handleAvatarChange} ref={fileInputRef} style={{ display: 'none' }} />
+                </span>}
+                {!isViewingOther && <input type="file" accept="image/*" onChange={handleAvatarChange} ref={fileInputRef} style={{ display: 'none' }} />}
               </div>
 
               {/* Nom + rôle centré */}
@@ -535,7 +538,7 @@ const ProfilePage = () => {
               </div>
 
               {/* Mobile action row */}
-              <div style={{ display: 'flex', gap: 8, marginTop: 12, marginBottom: 12, width: '100%', justifyContent: 'center' }}>
+              {!isViewingOther && <div style={{ display: 'flex', gap: 8, marginTop: 12, marginBottom: 12, width: '100%', justifyContent: 'center' }}>
                 <FBButton primary icon={<SettingOutlined />} onClick={() => moduleNavigate('/settings')} isMobile={isMobile} mobileIconOnly>
                   Paramètres
                 </FBButton>
@@ -543,7 +546,7 @@ const ProfilePage = () => {
                   Modifier
                 </FBButton>
                 <FBButton icon={<EllipsisOutlined />} />
-              </div>
+              </div>}
             </div>
           ) : (
             /* ─── DESKTOP: avatar à gauche, nom à côté ─── */
@@ -558,7 +561,7 @@ const ProfilePage = () => {
                     boxShadow: '0 2px 8px rgba(0,0,0,0.15)', fontSize: 64,
                   }}
                 />
-                <span
+                {!isViewingOther && <span
                   onClick={() => fileInputRef.current?.click()}
                   style={{
                     position: 'absolute', bottom: 12, right: 12,
@@ -570,8 +573,8 @@ const ProfilePage = () => {
                   }}
                 >
                   {avatarUploading ? <Spin size="small" /> : <CameraOutlined style={{ fontSize: 16, color: FB.text }} />}
-                </span>
-                <input type="file" accept="image/*" onChange={handleAvatarChange} ref={fileInputRef} style={{ display: 'none' }} />
+                </span>}
+                {!isViewingOther && <input type="file" accept="image/*" onChange={handleAvatarChange} ref={fileInputRef} style={{ display: 'none' }} />}
               </div>
 
               <div style={{ marginLeft: 16, paddingBottom: 16, flex: 1, minWidth: 200 }}>
@@ -587,11 +590,11 @@ const ProfilePage = () => {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: 8, paddingBottom: 16, alignItems: 'flex-end' }}>
+              {!isViewingOther && <div style={{ display: 'flex', gap: 8, paddingBottom: 16, alignItems: 'flex-end' }}>
                 <FBButton primary icon={<SettingOutlined />} onClick={() => moduleNavigate('/settings')}>Paramètres</FBButton>
                 <FBButton icon={<EditOutlined />} onClick={() => moduleNavigate('/settings')}>Modifier</FBButton>
                 <FBButton icon={<EllipsisOutlined />} />
-              </div>
+              </div>}
             </div>
           )}
 

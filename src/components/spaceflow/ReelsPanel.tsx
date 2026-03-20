@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Avatar, Spin, Modal, Input } from 'antd';
 import {
   HeartOutlined, HeartFilled, MessageOutlined, ShareAltOutlined,
@@ -75,6 +76,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
   const [likedComments, setLikedComments] = useState<Set<string>>(new Set());
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [showSaved, setShowSaved] = useState(false);
+  const navigate = useNavigate();
   const [toast, setToast] = useState<{ text: string; type: 'ok' | 'err' } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
   const showToast = useCallback((text: string, type: 'ok' | 'err' = 'ok') => {
@@ -493,7 +495,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                 src={reel.mediaUrl}
                 loop muted={muted} playsInline
                 onClick={togglePause}
-                style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }}
+                style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000', cursor: 'pointer' }}
               />
             ) : (
               /* Gradient placeholder for reels without video */
@@ -535,7 +537,8 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               <div style={{ position: 'relative', marginBottom: 8 }}>
                 <Avatar size={44} src={reel.authorAvatar}
                   icon={!reel.authorAvatar ? <UserOutlined /> : undefined}
-                  style={{ border: '2px solid #fff', background: SF.primary }} />
+                  onClick={(e) => { e.stopPropagation(); if (reel.authorId) navigate(`/profile/${reel.authorId}`); }}
+                  style={{ border: '2px solid #fff', background: SF.primary, cursor: 'pointer' }} />
                 {reel.authorId && reel.authorId !== currentUser?.id && (
                   <div onClick={(e) => { e.stopPropagation(); handleFollow(reel.authorId, reel.authorName); }}
                     style={{

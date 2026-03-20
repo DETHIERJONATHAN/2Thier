@@ -387,6 +387,50 @@ router.put('/', (async (req: any, res: Response) => {
   }
 }) as any);
 
+// GET /api/profile/user/:userId - View another user's public profile
+router.get('/user/:userId', async (req: AuthenticatedRequest, res: Response): Promise<any> => {
+  try {
+    const { userId } = req.params;
+    if (!userId) {
+      return res.status(400).json({ error: 'userId requis' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        UserOrganization: {
+          include: {
+            Organization: true,
+            Role: true
+          }
+        }
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'Utilisateur non trouvé' });
+    }
+
+    return res.json({
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName || '',
+      lastName: user.lastName || '',
+      role: user.role || 'user',
+      avatarUrl: buildAvatarUrl(req, user.avatarUrl),
+      coverUrl: buildAvatarUrl(req, (user as any).coverUrl),
+      coverPositionY: (user as any).coverPositionY ?? 50,
+      organization: user.UserOrganization?.length > 0 ? {
+        id: user.UserOrganization[0].Organization.id,
+        name: user.UserOrganization[0].Organization.name
+      } : null
+    });
+  } catch (error) {
+    console.error('Error fetching user profile:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/profile/photos - Fetch user photos grouped by category
 router.get('/photos', async (req: AuthenticatedRequest, res: Response): Promise<any> => {
   try {

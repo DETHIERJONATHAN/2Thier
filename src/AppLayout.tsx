@@ -343,6 +343,7 @@ export default function AppLayout() {
               {isSuperAdmin && <Route path="integrations" element={<IntegrationsAdminPage />} />}
             </Route>
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/profile/:userId" element={<ProfilePage />} />
 
             {/* Fallback pour les routes non trouvées */}
             <Route path="*" element={<div>Page non trouvée</div>} />
