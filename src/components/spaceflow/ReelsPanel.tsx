@@ -74,6 +74,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
   const [replyText, setReplyText] = useState('');
   const [likedComments, setLikedComments] = useState<Set<string>>(new Set());
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [showSaved, setShowSaved] = useState(false);
 
   useEffect(() => {
     loadReels();
@@ -365,17 +366,88 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
         padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         background: 'linear-gradient(180deg, rgba(0,0,0,0.6) 0%, transparent 100%)',
       }}>
-        <span style={{ fontSize: 18, fontWeight: 800, color: SF.text, letterSpacing: -0.5 }}>
-          🎬 Reels
+        <span onClick={() => showSaved && setShowSaved(false)} style={{ fontSize: 18, fontWeight: 800, color: SF.text, letterSpacing: -0.5, cursor: showSaved ? 'pointer' : 'default' }}>
+          {showSaved ? '← Reels' : '🎬 Reels'}
         </span>
-        <div onClick={openCreateModal} style={{
-          width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,0.2)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-        }}>
-          <PlusOutlined style={{ color: SF.text, fontSize: 16 }} />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <div onClick={() => setShowSaved(!showSaved)} style={{
+            width: 32, height: 32, borderRadius: '50%',
+            background: showSaved ? SF.primary : 'rgba(255,255,255,0.2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+          }}>
+            {showSaved ? <BookFilled style={{ color: '#FDCB6E', fontSize: 16 }} /> : <BookOutlined style={{ color: SF.text, fontSize: 16 }} />}
+          </div>
+          {!showSaved && (
+            <div onClick={openCreateModal} style={{
+              width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,0.2)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+            }}>
+              <PlusOutlined style={{ color: SF.text, fontSize: 16 }} />
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Saved reels gallery */}
+      {showSaved ? (
+        <div style={{ paddingTop: 56, height: '100%', overflowY: 'auto' }}>
+          {savedSet.size === 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '70%', color: SF.textMuted }}>
+              <BookOutlined style={{ fontSize: 48, marginBottom: 12 }} />
+              <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>Aucun reel enregistré</div>
+              <div style={{ fontSize: 13 }}>Appuyez sur 📌 Enregistrer sur un reel pour le retrouver ici</div>
+            </div>
+          ) : (
+            <div style={{ padding: '4px 4px 80px' }}>
+              <div style={{ padding: '0 12px 12px', color: SF.textMuted, fontSize: 13 }}>
+                {savedSet.size} reel{savedSet.size > 1 ? 's' : ''} enregistré{savedSet.size > 1 ? 's' : ''}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
+                {reels.filter(r => savedSet.has(r.id)).map(reel => (
+                  <div key={reel.id}
+                    onClick={() => {
+                      const idx = reels.findIndex(r => r.id === reel.id);
+                      if (idx >= 0) { setActiveIndex(idx); setShowSaved(false); }
+                    }}
+                    style={{
+                      aspectRatio: '9/16', position: 'relative', cursor: 'pointer',
+                      borderRadius: 4, overflow: 'hidden', background: '#222',
+                    }}>
+                    {reel.mediaUrl && reel.mediaType === 'video' ? (
+                      <video src={reel.mediaUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} muted />
+                    ) : reel.mediaUrl ? (
+                      <img src={reel.mediaUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{
+                        width: '100%', height: '100%',
+                        background: 'linear-gradient(135deg, #6C5CE7 0%, #FD79A8 100%)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        padding: 8,
+                      }}>
+                        <div style={{ fontSize: 11, color: '#fff', textAlign: 'center', lineHeight: 1.3 }}>
+                          {reel.caption?.slice(0, 60) || '🎬'}
+                        </div>
+                      </div>
+                    )}
+                    <div style={{
+                      position: 'absolute', bottom: 0, left: 0, right: 0,
+                      background: 'linear-gradient(transparent, rgba(0,0,0,0.7))',
+                      padding: '12px 4px 4px', display: 'flex', alignItems: 'center', gap: 4,
+                    }}>
+                      <span style={{ fontSize: 10, color: '#fff' }}>❤️ {reel.likesCount}</span>
+                    </div>
+                    <div onClick={(e) => { e.stopPropagation(); handleSaveReel(reel.id); }}
+                      style={{ position: 'absolute', top: 4, right: 4, cursor: 'pointer' }}>
+                      <BookFilled style={{ fontSize: 14, color: '#FDCB6E' }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+      <>
       {/* Vertical scroll snap container */}
       <div
         ref={containerRef}
@@ -616,6 +688,8 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
         style={{ display: 'none' }}
         onChange={handleFileSelect}
       />
+      </>
+      )}
 
       {/* Modal de création de Reel */}
       <Modal
