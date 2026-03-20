@@ -1532,6 +1532,20 @@ export default function DashboardPageUnified() {
 
   // Hooks must be called before any early return to respect Rules of Hooks
   const { sections: sharedSections } = useSharedSections();
+
+  // Module favorites (double-click to toggle, persisted in localStorage)
+  const [favModules, setFavModules] = useState<Set<string>>(() => {
+    try { const s = localStorage.getItem('crm_fav_modules'); return s ? new Set(JSON.parse(s)) : new Set(); } catch { return new Set(); }
+  });
+  const toggleFavModule = useCallback((route: string) => {
+    setFavModules(prev => {
+      const next = new Set(prev);
+      if (next.has(route)) next.delete(route); else next.add(route);
+      localStorage.setItem('crm_fav_modules', JSON.stringify([...next]));
+      return next;
+    });
+  }, []);
+
   const sectionsWithModules = useMemo(() => {
     const activeSections = sharedSections.filter(s => s.active);
     return organizeModulesInSections(activeSections, modules as any || []);
@@ -2246,25 +2260,38 @@ export default function DashboardPageUnified() {
         display: "flex", gap: 4, overflowX: "auto", marginBottom: 4,
         WebkitOverflowScrolling: "touch", scrollbarWidth: "none",
       }}>
-          {sectionsWithModules.flatMap(s => s.modules).map((mod, i) => {
+          {sectionsWithModules.flatMap(s => s.modules)
+            .sort((a, b) => {
+              const aFav = favModules.has(getModuleRoute(a)) ? 0 : 1;
+              const bFav = favModules.has(getModuleRoute(b)) ? 0 : 1;
+              return aFav - bFav;
+            })
+            .map((mod, i) => {
             const route = getModuleRoute(mod);
             const isActive = activeModule === route;
+            const isFav = favModules.has(route);
             return (
-              <div key={mod.key || mod.id || i} onClick={() => { openModule(route); setCenterApp(null); }} style={{ cursor: 'pointer' }}>
+              <div key={mod.key || mod.id || i}
+                onClick={() => { openModule(route); setCenterApp(null); }}
+                onDoubleClick={(e) => { e.preventDefault(); toggleFavModule(route); }}
+                style={{ cursor: 'pointer', userSelect: 'none' }}>
                 <div style={{
                   flex: "0 0 auto", display: "flex", alignItems: "center",
                   gap: 4, padding: "4px 8px",
-                  borderRadius: 14, background: isActive ? '#e7f3ff' : FB.white, boxShadow: FB.shadow,
-                  border: isActive ? '1.5px solid #1877f2' : '1.5px solid transparent',
+                  borderRadius: 14,
+                  background: isActive ? '#e7f3ff' : isFav ? 'linear-gradient(135deg, #FFF8E1, #FFF3CD)' : FB.white,
+                  boxShadow: isFav ? '0 1px 4px rgba(218,165,32,0.3)' : FB.shadow,
+                  border: isActive ? '1.5px solid #1877f2' : isFav ? '1.5px solid #DAA520' : '1.5px solid transparent',
                 }}>
                   <div style={{
-                    width: 22, height: 22, borderRadius: "50%", background: getModuleColor(mod),
+                    width: 22, height: 22, borderRadius: "50%",
+                    background: isFav ? 'linear-gradient(135deg, #DAA520, #F4C430)' : getModuleColor(mod),
                     display: "flex", alignItems: "center", justifyContent: "center",
                     fontSize: 11, color: FB.white,
                   }}>
-                    {getModuleIcon(mod)}
+                    {isFav ? '⭐' : getModuleIcon(mod)}
                   </div>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: isActive ? '#1877f2' : FB.text, whiteSpace: "nowrap" }}>{mod.label || mod.name || mod.key}</span>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: isActive ? '#1877f2' : isFav ? '#B8860B' : FB.text, whiteSpace: "nowrap" }}>{mod.label || mod.name || mod.key}</span>
                 </div>
               </div>
             );
