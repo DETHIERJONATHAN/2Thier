@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Avatar, Spin, message, Modal, Input } from 'antd';
+import { Avatar, Spin, Modal, Input } from 'antd';
 import {
   HeartOutlined, HeartFilled, MessageOutlined, ShareAltOutlined,
   SoundOutlined, PauseCircleOutlined, PlayCircleOutlined,
@@ -75,6 +75,13 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
   const [likedComments, setLikedComments] = useState<Set<string>>(new Set());
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [showSaved, setShowSaved] = useState(false);
+  const [toast, setToast] = useState<{ text: string; type: 'ok' | 'err' } | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout>>();
+  const showToast = useCallback((text: string, type: 'ok' | 'err' = 'ok') => {
+    clearTimeout(toastTimer.current);
+    setToast({ text, type });
+    toastTimer.current = setTimeout(() => setToast(null), 2500);
+  }, []);
 
   useEffect(() => {
     loadReels();
@@ -147,14 +154,14 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
       if (followedSet.has(authorId)) {
         await api.delete(`/api/spaceflow/follow/${authorId}`);
         setFollowedSet(prev => { const next = new Set(prev); next.delete(authorId); return next; });
-        message.success(`Désabonné de @${authorName.replace(/\s+/g, '').toLowerCase()}`);
+        showToast(`Désabonné de @${authorName.replace(/\s+/g, '').toLowerCase()}`);
       } else {
         await api.post(`/api/spaceflow/follow/${authorId}`);
         setFollowedSet(prev => new Set(prev).add(authorId));
-        message.success(`Suivi @${authorName.replace(/\s+/g, '').toLowerCase()} ! 🎉`);
+        showToast(`Suivi @${authorName.replace(/\s+/g, '').toLowerCase()} ! 🎉`);
       }
     } catch {
-      message.error('Erreur lors du suivi');
+      showToast('Erreur lors du suivi', 'err');
     }
   };
 
@@ -165,7 +172,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
 
   const handleCopyLink = () => {
     const text = `Reel de @${shareReel?.authorName}: ${shareReel?.caption || 'Regardez ce reel !'}`;
-    navigator.clipboard?.writeText(text).then(() => message.success('Lien copié !')).catch(() => message.info('Copié !'));
+    navigator.clipboard?.writeText(text).then(() => showToast('Lien copié !')).catch(() => showToast('Copié !'));
     setShareSheetOpen(false);
   };
 
@@ -178,8 +185,8 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
         mediaType: shareReel.mediaType,
         visibility: 'ALL',
       });
-      message.success('Reel republié sur votre mur ! 🔄');
-    } catch { message.error('Erreur lors de la republication'); }
+      showToast('Reel republié sur votre mur ! 🔄');
+    } catch { showToast('Erreur lors de la republication', 'err'); }
     setShareSheetOpen(false);
   };
 
@@ -193,8 +200,8 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
   const handleSaveReel = (reelId: string) => {
     setSavedSet(prev => {
       const next = new Set(prev);
-      if (next.has(reelId)) { next.delete(reelId); message.success('Retiré des enregistrements'); }
-      else { next.add(reelId); message.success('Reel enregistré ! 📌'); }
+      if (next.has(reelId)) { next.delete(reelId); showToast('Retiré des enregistrements'); }
+      else { next.add(reelId); showToast('Reel enregistré ! 📌'); }
       try { localStorage.setItem('sf_saved_reels', JSON.stringify([...next])); } catch {}
       return next;
     });
@@ -232,11 +239,11 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
     const isVideo = file.type.startsWith('video/');
     const isImage = file.type.startsWith('image/');
     if (!isVideo && !isImage) {
-      message.error('Seules les vidéos et images sont acceptées');
+      showToast('Seules les vidéos et images sont acceptées', 'err');
       return;
     }
     if (file.size > 100 * 1024 * 1024) {
-      message.error('Fichier trop volumineux (max 100 Mo)');
+      showToast('Fichier trop volumineux (max 100 Mo)', 'err');
       return;
     }
 
@@ -258,7 +265,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
       const mediaUrls = uploadResult?.urls || [];
 
       if (mediaUrls.length === 0) {
-        message.error('Échec de l\'upload du fichier');
+        showToast('Échec de l\'upload du fichier', 'err');
         setSubmitting(false);
         return;
       }
@@ -271,7 +278,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
         visibility: 'ALL',
       });
 
-      message.success('Reel publié ! 🎬');
+      showToast('Reel publié ! 🎬');
       setCreateModalOpen(false);
       if (reelPreview) URL.revokeObjectURL(reelPreview);
       setReelFile(null);
@@ -281,7 +288,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
       loadReels();
     } catch (err) {
       console.error('[REELS] Erreur publication:', err);
-      message.error('Erreur lors de la publication du reel');
+      showToast('Erreur lors de la publication du reel', 'err');
     } finally {
       setSubmitting(false);
     }
@@ -327,7 +334,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
       }
       setReels(prev => prev.map(r => r.id === commentReelId ? { ...r, commentsCount: r.commentsCount + 1 } : r));
     } catch {
-      message.error('Erreur lors de l\'envoi du commentaire');
+      showToast('Erreur lors de l\'envoi du commentaire', 'err');
     }
   };
 
@@ -335,11 +342,14 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
   const handleDeleteReel = async (reelId: string) => {
     try {
       await api.delete(`/api/wall/posts/${reelId}`);
-      setReels(prev => prev.filter(r => r.id !== reelId));
-      message.success('Reel supprimé');
-    } catch {
-      message.error('Erreur lors de la suppression');
+    } catch (err: any) {
+      if (err?.status !== 404 && err?.response?.status !== 404) {
+        showToast('Erreur lors de la suppression', 'err');
+        return;
+      }
     }
+    setReels(prev => prev.filter(r => r.id !== reelId));
+    showToast('Reel supprimé');
   };
 
   const togglePause = () => {
@@ -1022,6 +1032,22 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
           </div>
         </>
       )}
+
+      {/* Toast notification */}
+      {toast && (
+        <div style={{
+          position: 'absolute', top: 60, left: '50%', transform: 'translateX(-50%)',
+          background: toast.type === 'err' ? '#ff4d4f' : 'rgba(0,0,0,0.85)',
+          color: '#fff', padding: '8px 20px', borderRadius: 20, fontSize: 13,
+          fontWeight: 600, zIndex: 9999, whiteSpace: 'nowrap',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          animation: 'fadeInToast 0.2s ease-out',
+        }}>
+          {toast.text}
+        </div>
+      )}
+
+      <style>{`@keyframes fadeInToast { from { opacity: 0; transform: translateX(-50%) translateY(-8px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }`}</style>
     </div>
   );
 };
