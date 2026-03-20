@@ -569,7 +569,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               </div>
 
               {/* Delete (own posts or admin) */}
-              {reel.authorId && !reel.id.startsWith('d') && (currentUser?.id === reel.authorId || currentUser?.isSuperAdmin || currentUser?.role === 'admin') && (
+              {!['d1','d2','d3'].includes(reel.id) && (currentUser?.id === reel.authorId || currentUser?.isSuperAdmin || currentUser?.role === 'admin') && (
                 <div onClick={() => setDeleteConfirmId(reel.id)} style={{ cursor: 'pointer', textAlign: 'center' }}>
                   <DeleteOutlined style={{ fontSize: 22, color: 'rgba(255,255,255,0.5)' }} />
                 </div>
