@@ -67,10 +67,13 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
   // === Partage et enregistrement ===
   const [shareSheetOpen, setShareSheetOpen] = useState(false);
   const [shareReel, setShareReel] = useState<Reel | null>(null);
-  const [savedSet, setSavedSet] = useState<Set<string>>(new Set());
+  const [savedSet, setSavedSet] = useState<Set<string>>(() => {
+    try { const s = localStorage.getItem('sf_saved_reels'); return s ? new Set(JSON.parse(s)) : new Set(); } catch { return new Set(); }
+  });
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
   const [likedComments, setLikedComments] = useState<Set<string>>(new Set());
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   useEffect(() => {
     loadReels();
@@ -191,6 +194,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
       const next = new Set(prev);
       if (next.has(reelId)) { next.delete(reelId); message.success('Retiré des enregistrements'); }
       else { next.add(reelId); message.success('Reel enregistré ! 📌'); }
+      try { localStorage.setItem('sf_saved_reels', JSON.stringify([...next])); } catch {}
       return next;
     });
   };
@@ -494,13 +498,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
 
               {/* Delete (own posts or admin) */}
               {reel.authorId && !reel.id.startsWith('d') && (currentUser?.id === reel.authorId || currentUser?.isSuperAdmin || currentUser?.role === 'admin') && (
-                <div onClick={() => Modal.confirm({
-                  title: 'Supprimer ce reel ?',
-                  content: 'Cette action est irréversible.',
-                  okText: 'Supprimer', cancelText: 'Annuler',
-                  okButtonProps: { danger: true },
-                  onOk: () => handleDeleteReel(reel.id),
-                })} style={{ cursor: 'pointer', textAlign: 'center' }}>
+                <div onClick={() => setDeleteConfirmId(reel.id)} style={{ cursor: 'pointer', textAlign: 'center' }}>
                   <DeleteOutlined style={{ fontSize: 22, color: 'rgba(255,255,255,0.5)' }} />
                 </div>
               )}
@@ -865,6 +863,33 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
             <div onClick={() => handlePostComment()}
               style={{ cursor: commentText.trim() ? 'pointer' : 'default', color: commentText.trim() ? SF.primary : '#999', padding: '0 4px' }}>
               <SendOutlined style={{ fontSize: 16 }} />
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal de confirmation de suppression (state-based, pas Modal.confirm) */}
+      <Modal
+        open={!!deleteConfirmId}
+        onCancel={() => setDeleteConfirmId(null)}
+        centered
+        width={320}
+        footer={null}
+        closable={false}
+        styles={{ body: { padding: 0 }, content: { borderRadius: 16, overflow: 'hidden' } }}
+      >
+        <div style={{ padding: 24, textAlign: 'center' }}>
+          <DeleteOutlined style={{ fontSize: 36, color: '#ff4d4f', marginBottom: 12 }} />
+          <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Supprimer ce reel ?</div>
+          <div style={{ fontSize: 13, color: '#666', marginBottom: 20 }}>Cette action est irréversible.</div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div onClick={() => setDeleteConfirmId(null)}
+              style={{ flex: 1, padding: '10px 0', borderRadius: 8, background: '#f0f2f5', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
+              Annuler
+            </div>
+            <div onClick={async () => { if (deleteConfirmId) { await handleDeleteReel(deleteConfirmId); setDeleteConfirmId(null); } }}
+              style={{ flex: 1, padding: '10px 0', borderRadius: 8, background: '#ff4d4f', color: '#fff', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
+              Supprimer
             </div>
           </div>
         </div>
