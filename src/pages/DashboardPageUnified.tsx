@@ -1546,6 +1546,9 @@ export default function DashboardPageUnified() {
     });
   }, []);
 
+  // Mobile double-tap detection for module favorites
+  const lastTapRef = useRef<{ route: string; time: number }>({ route: '', time: 0 });
+
   // Drag-to-scroll for module pills bar (desktop mouse + mobile touch)
   const pillsRef = useRef<HTMLDivElement>(null);
   const pillsDrag = useRef({ active: false, startX: 0, scrollLeft: 0, moved: false });
@@ -2298,7 +2301,19 @@ export default function DashboardPageUnified() {
             const isFav = favModules.has(route);
             return (
               <div key={mod.key || mod.id || i}
-                onClick={() => { if (!pillsDrag.current.moved) { openModule(route); setCenterApp(null); } }}
+                onClick={() => {
+                  if (pillsDrag.current.moved) return;
+                  const now = Date.now();
+                  const last = lastTapRef.current;
+                  if (last.route === route && now - last.time < 400) {
+                    // Double-tap detected (works on mobile + desktop)
+                    toggleFavModule(route);
+                    lastTapRef.current = { route: '', time: 0 };
+                    return;
+                  }
+                  lastTapRef.current = { route, time: now };
+                  openModule(route); setCenterApp(null);
+                }}
                 onDoubleClick={(e) => { e.preventDefault(); toggleFavModule(route); }}
                 style={{ cursor: 'pointer', userSelect: 'none' }}>
                 <div style={{
