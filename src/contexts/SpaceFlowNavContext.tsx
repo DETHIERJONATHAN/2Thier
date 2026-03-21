@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode, useCallback, useMemo } from 'react';
+import { createContext, useContext, useState, useRef, ReactNode, useCallback, useMemo } from 'react';
 
 export type SpaceFlowApp = 'explore' | 'flow' | 'reels' | 'universe' | 'stats';
 
@@ -17,6 +17,12 @@ interface SpaceFlowNavContextType {
   rightSidebarApp: SpaceFlowApp;
   tabOrder: string[];
   reorderTabs: (dragId: string, dropId: string) => void;
+  /** Active mobile panel index (syncs with header tabs) */
+  mobilePanel: number;
+  setMobilePanel: (panel: number) => void;
+  /** Scroll callback registered by DashboardPageUnified for mobile carousel */
+  registerMobileScroll: (fn: ((panel: number) => void) | null) => void;
+  scrollMobileToPanel: (panel: number) => void;
 }
 
 const defaultTabOrder = ['explore', 'flow', 'reels', 'mur', 'universe', 'stats'];
@@ -36,11 +42,24 @@ const SpaceFlowNavContext = createContext<SpaceFlowNavContextType>({
   centerApp: null, setCenterApp: () => {},
   leftSidebarApp: 'reels', rightSidebarApp: 'universe',
   tabOrder: defaultTabOrder, reorderTabs: () => {},
+  mobilePanel: 2, setMobilePanel: () => {},
+  registerMobileScroll: () => {}, scrollMobileToPanel: () => {},
 });
 
 export const SpaceFlowNavProvider = ({ children }: { children: ReactNode }) => {
   const [centerApp, setCenterApp] = useState<SpaceFlowApp | null>(null);
   const [tabOrder, setTabOrder] = useState<string[]>(loadTabOrder);
+  const [mobilePanel, setMobilePanel] = useState(2); // default: Mur (index 2)
+  const mobileScrollRef = useRef<((panel: number) => void) | null>(null);
+
+  const registerMobileScroll = useCallback((fn: ((panel: number) => void) | null) => {
+    mobileScrollRef.current = fn;
+  }, []);
+
+  const scrollMobileToPanel = useCallback((panel: number) => {
+    setMobilePanel(panel);
+    if (mobileScrollRef.current) mobileScrollRef.current(panel);
+  }, []);
 
   // Left sidebar: by default shows Reels (closest to Mur).
   // If a left-group app moves to center, show the NEXT one outward.
@@ -79,7 +98,7 @@ export const SpaceFlowNavProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   return (
-    <SpaceFlowNavContext.Provider value={{ centerApp, setCenterApp, leftSidebarApp, rightSidebarApp, tabOrder, reorderTabs }}>
+    <SpaceFlowNavContext.Provider value={{ centerApp, setCenterApp, leftSidebarApp, rightSidebarApp, tabOrder, reorderTabs, mobilePanel, setMobilePanel, registerMobileScroll, scrollMobileToPanel }}>
       {children}
     </SpaceFlowNavContext.Provider>
   );

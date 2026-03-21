@@ -24,19 +24,19 @@ interface MainLayoutProps {
 }
 
 // ── SpaceFlow Header Tabs Component ──
-const SF_TAB_CONFIG = [
-  { id: 'explore', label: 'Explore', icon: '🔍' },
-  { id: 'flow', label: 'Flow', icon: '🌊' },
-  { id: 'reels', label: 'Reels', icon: '🎬' },
-  { id: 'mur', label: 'Mur', icon: '🏠' },
-  { id: 'universe', label: 'Universe', icon: '🌌' },
-  { id: 'stats', label: 'Stats', icon: '📊' },
+const SF_TAB_CONFIG: { id: string; label: string; icon: string; color: string; panelIndex: number }[] = [
+  { id: 'explore', label: 'Explore', icon: '🔍', color: '#00CEC9', panelIndex: 0 },
+  { id: 'flow', label: 'Flow', icon: '🌊', color: '#6C5CE7', panelIndex: 1 },
+  { id: 'reels', label: 'Reels', icon: '🎬', color: '#e84393', panelIndex: 4 },
+  { id: 'mur', label: 'Mur', icon: '🏠', color: '#1877F2', panelIndex: 2 },
+  { id: 'universe', label: 'Universe', icon: '🌌', color: '#FD79A8', panelIndex: 3 },
+  { id: 'stats', label: 'Stats', icon: '📊', color: '#FDCB6E', panelIndex: 5 },
 ];
 
 const SpaceFlowHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { centerApp, setCenterApp, tabOrder, reorderTabs } = useSpaceFlowNav();
+  const { centerApp, setCenterApp, tabOrder, reorderTabs, mobilePanel, scrollMobileToPanel } = useSpaceFlowNav();
   const [dragId, setDragId] = useState<string | null>(null);
   const isDashboard = location.pathname === '/dashboard' || location.pathname === '/';
   const activeModule = searchParams.get('module');
@@ -56,6 +56,11 @@ const SpaceFlowHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
     if (!isDashboard) {
       navigate('/dashboard');
     }
+    // On mobile, scroll the carousel to the matching panel
+    if (isMobile) {
+      const tab = SF_TAB_CONFIG.find(t => t.id === tabId);
+      if (tab) scrollMobileToPanel(tab.panelIndex);
+    }
     if (tabId === 'mur') {
       setCenterApp(null);
       setSearchParams({}, { replace: true });
@@ -63,17 +68,15 @@ const SpaceFlowHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
       setCenterApp(tabId as any);
       if (activeModule) setSearchParams({}, { replace: true });
     }
-  }, [isDashboard, navigate, setCenterApp, setSearchParams, activeModule]);
+  }, [isDashboard, navigate, setCenterApp, setSearchParams, activeModule, isMobile, scrollMobileToPanel]);
 
   // Mobile: long press to start drag, then slide to reorder
   const onTouchStart = useCallback((tabId: string, e: React.TouchEvent) => {
     const touch = e.touches[0];
     touchState.current = { id: tabId, startX: touch.clientX, startY: touch.clientY, timer: null, active: false };
-    // Long press: 400ms to activate drag mode
     touchState.current.timer = setTimeout(() => {
       touchState.current.active = true;
       setDragId(tabId);
-      // Haptic feedback if available
       if (navigator.vibrate) navigator.vibrate(30);
     }, 400);
   }, []);
@@ -84,18 +87,13 @@ const SpaceFlowHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
     const touch = e.touches[0];
     const dx = Math.abs(touch.clientX - ts.startX);
     const dy = Math.abs(touch.clientY - ts.startY);
-
-    // If moved too much before long press, cancel
     if (!ts.active && (dx > 10 || dy > 10)) {
       if (ts.timer) clearTimeout(ts.timer);
       ts.timer = null;
       return;
     }
-
     if (!ts.active) return;
     e.preventDefault();
-
-    // Find which tab we're over
     for (const [id, el] of tabRefs.current) {
       if (id === ts.id) continue;
       const rect = el.getBoundingClientRect();
@@ -109,56 +107,53 @@ const SpaceFlowHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
   const onTouchEnd = useCallback(() => {
     const ts = touchState.current;
     if (ts.timer) clearTimeout(ts.timer);
-    if (ts.active) {
-      setDragId(null);
-    }
+    if (ts.active) setDragId(null);
     touchState.current = { id: '', startX: 0, startY: 0, timer: null, active: false };
   }, []);
 
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: isMobile ? 1 : 2,
+      display: 'flex', alignItems: 'center', gap: isMobile ? 0 : 2,
       flex: 1, justifyContent: 'center',
       overflow: 'hidden', margin: '0 4px',
     }}>
       {orderedTabs.map(tab => {
+        // Desktop: active via centerApp context. Mobile: active via mobilePanel index.
         const isActive = isDashboard && (
-          tab.id === 'mur'
-            ? !activeModule && !centerApp
-            : centerApp === tab.id
+          isMobile
+            ? mobilePanel === tab.panelIndex
+            : tab.id === 'mur'
+              ? !activeModule && !centerApp
+              : centerApp === tab.id
         );
         return (
           <div
             key={tab.id}
             ref={(el) => { if (el) tabRefs.current.set(tab.id, el); }}
-            // Desktop drag
             draggable={!isMobile}
             onDragStart={() => setDragId(tab.id)}
             onDragEnd={() => setDragId(null)}
             onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
             onDrop={(e) => { e.preventDefault(); if (dragId) reorderTabs(dragId, tab.id); setDragId(null); }}
-            // Mobile touch
             onTouchStart={(e) => onTouchStart(tab.id, e)}
             onTouchMove={onTouchMove}
             onTouchEnd={onTouchEnd}
             onClick={() => { if (!touchState.current.active) handleTabClick(tab.id); }}
             style={{
               display: 'flex', flexDirection: isMobile ? 'column' : 'row',
-              alignItems: 'center', gap: isMobile ? 1 : 5,
-              padding: isMobile ? '2px 6px' : '5px 12px', borderRadius: 8,
+              alignItems: 'center', gap: isMobile ? 0 : 5,
+              padding: isMobile ? '4px 6px' : '5px 12px', borderRadius: 8,
               cursor: 'pointer',
-              fontSize: isMobile ? 9 : 13, fontWeight: 600, whiteSpace: 'nowrap',
-              background: 'none',
-              color: isActive ? '#fff' : 'rgba(255,255,255,0.7)',
-              borderBottom: isActive ? '2px solid #60a5fa' : '2px solid transparent',
+              fontSize: isMobile ? 9 : 13, fontWeight: isActive ? 700 : 500, whiteSpace: 'nowrap',
+              background: 'transparent',
               transition: 'all 0.2s',
               opacity: dragId === tab.id ? 0.4 : 1,
               userSelect: 'none',
               transform: dragId === tab.id ? 'scale(1.1)' : 'scale(1)',
             }}
           >
-            <span style={{ fontSize: isMobile ? 16 : 15 }}>{tab.icon}</span>
-            <span style={{ fontSize: isMobile ? 8 : 13 }}>{tab.label}</span>
+            <span style={{ fontSize: isMobile ? 20 : 15, filter: 'none' }}>{tab.icon}</span>
+            {!isMobile && <span style={{ fontSize: 13, color: isActive ? '#fff' : 'rgba(255,255,255,0.6)' }}>{tab.label}</span>}
           </div>
         );
       })}

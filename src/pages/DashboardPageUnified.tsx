@@ -1204,7 +1204,7 @@ export default function DashboardPageUnified() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // SpaceFlow navigation (shared with header tabs via context)
-  const { centerApp, setCenterApp, leftSidebarApp, rightSidebarApp } = useSpaceFlowNav();
+  const { centerApp, setCenterApp, leftSidebarApp, rightSidebarApp, registerMobileScroll, setMobilePanel: setContextMobilePanel } = useSpaceFlowNav();
 
   // Embedded module navigation
   const navigate = useNavigate();
@@ -1232,13 +1232,22 @@ export default function DashboardPageUnified() {
     if (!el) return;
     const page = Math.round(el.scrollLeft / el.offsetWidth);
     setMobilePanel(page);
-  }, []);
+    setContextMobilePanel(page);
+  }, [setContextMobilePanel]);
 
   const scrollToPanel = useCallback((panel: number) => {
     const el = scrollContainerRef.current;
     if (!el) return;
     el.scrollTo({ left: panel * el.offsetWidth, behavior: "smooth" });
   }, []);
+
+  // Register scrollToPanel so header tabs can control the mobile carousel
+  useEffect(() => {
+    if (isMobile) {
+      registerMobileScroll(scrollToPanel);
+      return () => registerMobileScroll(null);
+    }
+  }, [isMobile, registerMobileScroll, scrollToPanel]);
 
   // SpaceFlow: scroll to center panel (index 2) on mount
   const hasScrolledToCenter = useRef(false);
@@ -2618,45 +2627,6 @@ export default function DashboardPageUnified() {
             <div style={{ flex: "0 0 100%", width: "100%", scrollSnapAlign: "start", overflowY: "auto", padding: "4px 8px" }}>
               {renderMobileAnalytics()}
             </div>
-          </div>
-
-          {/* Mobile Navigation Bar */}
-          <div style={{
-            position: "fixed", bottom: 12, left: "50%", transform: "translateX(-50%)",
-            display: "flex", gap: 2, alignItems: "center", zIndex: 50,
-            background: "rgba(0,0,0,0.65)", borderRadius: 20, padding: "4px 8px",
-            backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)",
-          }}>
-            {[
-              { icon: "🔍", label: "Explore", color: "#00CEC9" },
-              { icon: "🌊", label: "Flow", color: "#6C5CE7" },
-              { icon: "🏠", label: "Mur", color: "#1877F2" },
-              { icon: "🌌", label: "Universe", color: "#FD79A8" },
-              { icon: "🎬", label: "Reels", color: "#e84393" },
-              { icon: "📊", label: "Stats", color: "#FDCB6E" },
-            ].map((panel, i) => (
-              <div key={i} onClick={() => scrollToPanel(i)} style={{
-                display: "flex", flexDirection: "column", alignItems: "center", gap: 1,
-                cursor: "pointer", padding: "4px 8px", borderRadius: 14,
-                background: mobilePanel === i ? panel.color + "30" : "transparent",
-                transition: "all 0.25s", minWidth: 44,
-              }}>
-                <span style={{
-                  fontSize: mobilePanel === i ? 18 : 14,
-                  transition: "font-size 0.2s",
-                  filter: mobilePanel === i ? "none" : "grayscale(0.5)",
-                }}>
-                  {panel.icon}
-                </span>
-                <span style={{
-                  fontSize: 9, fontWeight: 700, letterSpacing: 0.3,
-                  color: mobilePanel === i ? panel.color : "rgba(255,255,255,0.5)",
-                  transition: "color 0.2s",
-                }}>
-                  {panel.label}
-                </span>
-              </div>
-            ))}
           </div>
         </>
       ) : null}
