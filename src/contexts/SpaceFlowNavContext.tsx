@@ -91,7 +91,8 @@ export const SpaceFlowNavProvider = ({ children }: { children: ReactNode }) => {
       const to = arr.indexOf(dropId);
       if (from < 0 || to < 0) return prev;
       arr.splice(from, 1);
-      arr.splice(to, 0, dragId);
+      const newTo = from < to ? to - 1 : to;
+      arr.splice(newTo, 0, dragId);
       localStorage.setItem('sf_tab_order', JSON.stringify(arr));
       return arr;
     });

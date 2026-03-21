@@ -1198,13 +1198,15 @@ export default function DashboardPageUnified() {
   const [postMediaPreviews, setPostMediaPreviews] = useState<{ file: File; preview: string; type: string }[]>([]);
   const [postMood, setPostMood] = useState<string | null>(null);
   const [showMoodPicker, setShowMoodPicker] = useState(false);
+  const [postCategory, setPostCategory] = useState<string | null>(null);
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [mobilePanel, setMobilePanel] = useState(2); // SpaceFlow: 0=Explore, 1=Flow, 2=Mur(centre), 3=Universe, 4=Reels, 5=Stats
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // SpaceFlow navigation (shared with header tabs via context)
-  const { centerApp, setCenterApp, leftSidebarApp, rightSidebarApp, registerMobileScroll, setMobilePanel: setContextMobilePanel } = useSpaceFlowNav();
+  const { centerApp, setCenterApp, leftSidebarApp, rightSidebarApp, registerMobileScroll, setMobilePanel: setContextMobilePanel, tabOrder } = useSpaceFlowNav();
 
   // Embedded module navigation
   const navigate = useNavigate();
@@ -1249,15 +1251,17 @@ export default function DashboardPageUnified() {
     }
   }, [isMobile, registerMobileScroll, scrollToPanel]);
 
-  // SpaceFlow: scroll to center panel (index 2) on mount
+  // SpaceFlow: scroll to "mur" panel position on mount (follows tabOrder)
   const hasScrolledToCenter = useRef(false);
   useEffect(() => {
     if (hasScrolledToCenter.current) return;
     const el = scrollContainerRef.current;
     if (!el) return;
+    const murIndex = tabOrder.indexOf('mur');
+    const initialPanel = murIndex >= 0 ? murIndex : 0;
     // Use instant scroll (no animation) for initial position
     requestAnimationFrame(() => {
-      el.scrollTo({ left: 2 * el.offsetWidth, behavior: "instant" as ScrollBehavior });
+      el.scrollTo({ left: initialPanel * el.offsetWidth, behavior: "instant" as ScrollBehavior });
       hasScrolledToCenter.current = true;
     });
   });
@@ -1509,6 +1513,7 @@ export default function DashboardPageUnified() {
         visibility: newPostVisibility,
         mediaUrls: mediaUrls.length > 0 ? mediaUrls : undefined,
         mediaType,
+        category: postCategory || undefined,
       });
       const enriched: WallPostData = {
         ...(newPost as WallPostData),
@@ -1522,6 +1527,7 @@ export default function DashboardPageUnified() {
       setWallPosts(prev => [enriched, ...prev]);
       setNewPostContent("");
       setPostMood(null);
+      setPostCategory(null);
       postMediaPreviews.forEach(m => URL.revokeObjectURL(m.preview));
       setPostMediaPreviews([]);
       NotificationManager.success("Post publié !");
@@ -1530,7 +1536,7 @@ export default function DashboardPageUnified() {
       NotificationManager.error("Erreur lors de la publication");
     }
     setPostSubmitting(false);
-  }, [api, newPostContent, newPostVisibility, postSubmitting, postMediaPreviews, postMood]);
+  }, [api, newPostContent, newPostVisibility, postSubmitting, postMediaPreviews, postMood, postCategory]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -2253,6 +2259,33 @@ export default function DashboardPageUnified() {
           </div>
         )}
 
+        {/* Category selector — only when composing */}
+        {(newPostContent.trim() || postMediaPreviews.length > 0) && (
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6, marginLeft: 36 }}>
+            {[
+              { value: 'projet', label: '📋 Projet', color: '#3b82f6' },
+              { value: 'chantier_realise', label: '🔨 Chantier', color: '#f59e0b' },
+              { value: 'promotion', label: '📢 Promo', color: '#ef4444' },
+              { value: 'conseil', label: '💡 Conseil', color: '#10b981' },
+              { value: 'actualite', label: '📰 Actu', color: '#8b5cf6' },
+              { value: 'emploi', label: '💼 Emploi', color: '#0ea5e9' },
+              { value: 'market', label: '🛒 Market', color: '#f97316' },
+            ].map(cat => (
+              <div key={cat.value}
+                onClick={() => setPostCategory(postCategory === cat.value ? null : cat.value)}
+                style={{
+                  padding: '2px 8px', borderRadius: 12, fontSize: 11, cursor: 'pointer',
+                  background: postCategory === cat.value ? cat.color + '20' : FB.btnGray,
+                  color: postCategory === cat.value ? cat.color : FB.textSecondary,
+                  border: postCategory === cat.value ? `1px solid ${cat.color}` : '1px solid transparent',
+                  fontWeight: postCategory === cat.value ? 600 : 400,
+                }}>
+                {cat.label}
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Visibility selector + Post button — only when composing */}
         {(newPostContent.trim() || postMediaPreviews.length > 0) && (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6 }}>
@@ -2577,8 +2610,8 @@ export default function DashboardPageUnified() {
 
       {!activeModule && isMobile ? (
         /* ═══════════════════════════════════════════════════════
-           MOBILE — 5-PANEL CAROUSEL (swipe)
-           Explore ← Flow ← LE MUR → Universe → Stats
+           MOBILE — DYNAMIC CAROUSEL (swipe)
+           Order follows tabOrder from user's drag-and-drop
            ═══════════════════════════════════════════════════════ */
         <>
           <div
@@ -2592,41 +2625,59 @@ export default function DashboardPageUnified() {
               height: "calc(100vh - 56px)",
             }}
           >
-            {/* Panel 0: EXPLORE */}
-            <div style={{ flex: "0 0 100%", width: "100%", scrollSnapAlign: "start", overflowY: "auto" }}>
-              <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
-                <LazyExplorePanel api={api} openModule={openModule} />
-              </Suspense>
-            </div>
-            {/* Panel 1: FLOW */}
-            <div style={{ flex: "0 0 100%", width: "100%", scrollSnapAlign: "start", overflowY: "auto" }}>
-              <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
-                <LazyFlowPanel api={api} currentUser={user} />
-              </Suspense>
-            </div>
-            {/* Panel 2: LE MUR (centre) */}
-            <div style={{ flex: "0 0 100%", width: "100%", scrollSnapAlign: "start", overflowY: "auto", padding: "4px 8px" }}>
-              <Suspense fallback={null}>
-                <LazyStoriesBar api={api} currentUser={user} />
-              </Suspense>
-              {renderFeed()}
-            </div>
-            {/* Panel 3: UNIVERSE */}
-            <div style={{ flex: "0 0 100%", width: "100%", scrollSnapAlign: "start", overflowY: "auto" }}>
-              <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
-                <LazyUniversePanel api={api} currentUser={user} />
-              </Suspense>
-            </div>
-            {/* Panel 4: REELS */}
-            <div style={{ flex: "0 0 100%", width: "100%", scrollSnapAlign: "start", overflowY: "hidden" }}>
-              <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
-                <LazyReelsPanel api={api} currentUser={user} />
-              </Suspense>
-            </div>
-            {/* Panel 5: STATS */}
-            <div style={{ flex: "0 0 100%", width: "100%", scrollSnapAlign: "start", overflowY: "auto", padding: "4px 8px" }}>
-              {renderMobileAnalytics()}
-            </div>
+            {tabOrder.map(tabId => {
+              switch (tabId) {
+                case 'explore':
+                  return (
+                    <div key="explore" style={{ flex: "0 0 100%", width: "100%", scrollSnapAlign: "start", overflowY: "auto" }}>
+                      <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
+                        <LazyExplorePanel api={api} openModule={openModule} />
+                      </Suspense>
+                    </div>
+                  );
+                case 'flow':
+                  return (
+                    <div key="flow" style={{ flex: "0 0 100%", width: "100%", scrollSnapAlign: "start", overflowY: "auto" }}>
+                      <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
+                        <LazyFlowPanel api={api} currentUser={user} />
+                      </Suspense>
+                    </div>
+                  );
+                case 'mur':
+                  return (
+                    <div key="mur" style={{ flex: "0 0 100%", width: "100%", scrollSnapAlign: "start", overflowY: "auto", padding: "4px 8px" }}>
+                      <Suspense fallback={null}>
+                        <LazyStoriesBar api={api} currentUser={user} />
+                      </Suspense>
+                      {renderFeed()}
+                    </div>
+                  );
+                case 'universe':
+                  return (
+                    <div key="universe" style={{ flex: "0 0 100%", width: "100%", scrollSnapAlign: "start", overflowY: "auto" }}>
+                      <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
+                        <LazyUniversePanel api={api} currentUser={user} />
+                      </Suspense>
+                    </div>
+                  );
+                case 'reels':
+                  return (
+                    <div key="reels" style={{ flex: "0 0 100%", width: "100%", scrollSnapAlign: "start", overflowY: "hidden" }}>
+                      <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
+                        <LazyReelsPanel api={api} currentUser={user} />
+                      </Suspense>
+                    </div>
+                  );
+                case 'stats':
+                  return (
+                    <div key="stats" style={{ flex: "0 0 100%", width: "100%", scrollSnapAlign: "start", overflowY: "auto", padding: "4px 8px" }}>
+                      {renderMobileAnalytics()}
+                    </div>
+                  );
+                default:
+                  return null;
+              }
+            })}
           </div>
         </>
       ) : null}

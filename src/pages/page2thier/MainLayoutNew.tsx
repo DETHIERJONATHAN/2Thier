@@ -10,7 +10,10 @@ import {
   UserOutlined,
   SettingOutlined,
   CloseOutlined,
+  CompassOutlined,
+  BarChartOutlined,
 } from '@ant-design/icons';
+import Icon from '@ant-design/icons';
 import { useAuth } from '../../auth/useAuth';
 import { useSpaceFlowNav, SpaceFlowNavProvider } from '../../contexts/SpaceFlowNavContext';
 
@@ -23,14 +26,57 @@ interface MainLayoutProps {
   children: React.ReactNode;
 }
 
+// ── Custom SVG icons ──
+const ClapperboardSvg = () => (
+  <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 20h16a1 1 0 001-1V7H3v12a1 1 0 001 1z" />
+    <path d="M3 7l1.5-4h15L21 7H3z" />
+    <path d="M7 3l-1.5 4M12 3l-1.5 4M17 3l-1.5 4" />
+  </svg>
+);
+
+const WallSvg = () => (
+  <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="1" />
+    <line x1="3" y1="9" x2="21" y2="9" />
+    <line x1="3" y1="15" x2="21" y2="15" />
+    <line x1="12" y1="3" x2="12" y2="9" />
+    <line x1="7" y1="9" x2="7" y2="15" />
+    <line x1="17" y1="9" x2="17" y2="15" />
+    <line x1="12" y1="15" x2="12" y2="21" />
+  </svg>
+);
+
+const FlowWaveSvg = () => (
+  <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M2 12c2-3 4-3 6 0s4 3 6 0 4-3 6 0" />
+    <path d="M2 7c2-3 4-3 6 0s4 3 6 0 4-3 6 0" />
+    <path d="M2 17c2-3 4-3 6 0s4 3 6 0 4-3 6 0" />
+  </svg>
+);
+
+const UniverseSvg = () => (
+  <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3" />
+    <ellipse cx="12" cy="12" rx="10" ry="4" />
+    <ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(60 12 12)" />
+    <ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(120 12 12)" />
+  </svg>
+);
+
+const ClapperboardIcon = (props: any) => <Icon component={ClapperboardSvg} {...props} />;
+const WallIcon = (props: any) => <Icon component={WallSvg} {...props} />;
+const FlowWaveIcon = (props: any) => <Icon component={FlowWaveSvg} {...props} />;
+const UniverseIcon = (props: any) => <Icon component={UniverseSvg} {...props} />;
+
 // ── SpaceFlow Header Tabs Component ──
-const SF_TAB_CONFIG: { id: string; label: string; icon: string; color: string; panelIndex: number }[] = [
-  { id: 'explore', label: 'Explore', icon: '🔍', color: '#00CEC9', panelIndex: 0 },
-  { id: 'flow', label: 'Flow', icon: '🌊', color: '#6C5CE7', panelIndex: 1 },
-  { id: 'reels', label: 'Reels', icon: '🎬', color: '#e84393', panelIndex: 4 },
-  { id: 'mur', label: 'Mur', icon: '🏠', color: '#1877F2', panelIndex: 2 },
-  { id: 'universe', label: 'Universe', icon: '🌌', color: '#FD79A8', panelIndex: 3 },
-  { id: 'stats', label: 'Stats', icon: '📊', color: '#FDCB6E', panelIndex: 5 },
+const SF_TAB_CONFIG: { id: string; label: string; icon: React.ComponentType<{ style?: React.CSSProperties }>; color: string }[] = [
+  { id: 'explore', label: 'Explore', icon: CompassOutlined, color: '#00CEC9' },
+  { id: 'flow', label: 'Flow', icon: FlowWaveIcon, color: '#6C5CE7' },
+  { id: 'reels', label: 'Reels', icon: ClapperboardIcon, color: '#e84393' },
+  { id: 'mur', label: 'Mur', icon: WallIcon, color: '#1877F2' },
+  { id: 'universe', label: 'Universe', icon: UniverseIcon, color: '#FD79A8' },
+  { id: 'stats', label: 'Stats', icon: BarChartOutlined, color: '#FDCB6E' },
 ];
 
 const SpaceFlowHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
@@ -42,9 +88,12 @@ const SpaceFlowHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
   const activeModule = searchParams.get('module');
   const navigate = useNavigate();
 
+  const [hoveredTab, setHoveredTab] = useState<string | null>(null);
+
   // Touch drag state for mobile reorder
   const touchState = useRef<{ id: string; startX: number; startY: number; timer: ReturnType<typeof setTimeout> | null; active: boolean }>({ id: '', startX: 0, startY: 0, timer: null, active: false });
   const tabRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const orderedTabs = useMemo(() => {
     return tabOrder
@@ -56,10 +105,10 @@ const SpaceFlowHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
     if (!isDashboard) {
       navigate('/dashboard');
     }
-    // On mobile, scroll the carousel to the matching panel
+    // On mobile, scroll the carousel to the matching position in tabOrder
     if (isMobile) {
-      const tab = SF_TAB_CONFIG.find(t => t.id === tabId);
-      if (tab) scrollMobileToPanel(tab.panelIndex);
+      const panelPosition = tabOrder.indexOf(tabId);
+      if (panelPosition >= 0) scrollMobileToPanel(panelPosition);
     }
     if (tabId === 'mur') {
       setCenterApp(null);
@@ -68,7 +117,7 @@ const SpaceFlowHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
       setCenterApp(tabId as any);
       if (activeModule) setSearchParams({}, { replace: true });
     }
-  }, [isDashboard, navigate, setCenterApp, setSearchParams, activeModule, isMobile, scrollMobileToPanel]);
+  }, [isDashboard, navigate, setCenterApp, setSearchParams, activeModule, isMobile, scrollMobileToPanel, tabOrder]);
 
   // Mobile: long press to start drag, then slide to reorder
   const onTouchStart = useCallback((tabId: string, e: React.TouchEvent) => {
@@ -77,51 +126,67 @@ const SpaceFlowHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
     touchState.current.timer = setTimeout(() => {
       touchState.current.active = true;
       setDragId(tabId);
-      if (navigator.vibrate) navigator.vibrate(30);
+      try { navigator.vibrate?.(30); } catch { /* ignore */ }
     }, 400);
   }, []);
 
-  const onTouchMove = useCallback((e: React.TouchEvent) => {
-    const ts = touchState.current;
-    if (!ts.id) return;
-    const touch = e.touches[0];
-    const dx = Math.abs(touch.clientX - ts.startX);
-    const dy = Math.abs(touch.clientY - ts.startY);
-    if (!ts.active && (dx > 10 || dy > 10)) {
-      if (ts.timer) clearTimeout(ts.timer);
-      ts.timer = null;
-      return;
-    }
-    if (!ts.active) return;
-    e.preventDefault();
-    for (const [id, el] of tabRefs.current) {
-      if (id === ts.id) continue;
-      const rect = el.getBoundingClientRect();
-      if (touch.clientX >= rect.left && touch.clientX <= rect.right) {
-        reorderTabs(ts.id, id);
-        break;
+  // Register native (non-passive) touchmove/touchend on the container to allow preventDefault
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleTouchMove = (e: TouchEvent) => {
+      const ts = touchState.current;
+      if (!ts.id) return;
+      const touch = e.touches[0];
+      const dx = Math.abs(touch.clientX - ts.startX);
+      const dy = Math.abs(touch.clientY - ts.startY);
+      if (!ts.active && (dx > 10 || dy > 10)) {
+        if (ts.timer) clearTimeout(ts.timer);
+        ts.timer = null;
+        return;
       }
-    }
+      if (!ts.active) return;
+      e.preventDefault();
+      e.stopPropagation();
+      for (const [id, el] of tabRefs.current) {
+        if (id === ts.id) continue;
+        const rect = el.getBoundingClientRect();
+        if (touch.clientX >= rect.left && touch.clientX <= rect.right) {
+          reorderTabs(ts.id, id);
+          break;
+        }
+      }
+    };
+
+    const handleTouchEnd = () => {
+      const ts = touchState.current;
+      if (ts.timer) clearTimeout(ts.timer);
+      if (ts.active) setDragId(null);
+      touchState.current = { id: '', startX: 0, startY: 0, timer: null, active: false };
+    };
+
+    container.addEventListener('touchmove', handleTouchMove, { passive: false });
+    container.addEventListener('touchend', handleTouchEnd);
+
+    return () => {
+      container.removeEventListener('touchmove', handleTouchMove);
+      container.removeEventListener('touchend', handleTouchEnd);
+    };
   }, [reorderTabs]);
 
-  const onTouchEnd = useCallback(() => {
-    const ts = touchState.current;
-    if (ts.timer) clearTimeout(ts.timer);
-    if (ts.active) setDragId(null);
-    touchState.current = { id: '', startX: 0, startY: 0, timer: null, active: false };
-  }, []);
-
   return (
-    <div style={{
+    <div ref={containerRef} style={{
       display: 'flex', alignItems: 'center', gap: isMobile ? 0 : 2,
       flex: 1, justifyContent: 'center',
       overflow: 'hidden', margin: '0 4px',
+      touchAction: dragId ? 'none' : 'auto',
     }}>
       {orderedTabs.map(tab => {
-        // Desktop: active via centerApp context. Mobile: active via mobilePanel index.
+        // Desktop: active via centerApp context. Mobile: active via position in tabOrder.
         const isActive = isDashboard && (
           isMobile
-            ? mobilePanel === tab.panelIndex
+            ? mobilePanel === tabOrder.indexOf(tab.id)
             : tab.id === 'mur'
               ? !activeModule && !centerApp
               : centerApp === tab.id
@@ -136,24 +201,24 @@ const SpaceFlowHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
             onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
             onDrop={(e) => { e.preventDefault(); if (dragId) reorderTabs(dragId, tab.id); setDragId(null); }}
             onTouchStart={(e) => onTouchStart(tab.id, e)}
-            onTouchMove={onTouchMove}
-            onTouchEnd={onTouchEnd}
             onClick={() => { if (!touchState.current.active) handleTabClick(tab.id); }}
+            onMouseEnter={() => setHoveredTab(tab.id)}
+            onMouseLeave={() => setHoveredTab(null)}
             style={{
               display: 'flex', flexDirection: isMobile ? 'column' : 'row',
               alignItems: 'center', gap: isMobile ? 0 : 5,
               padding: isMobile ? '4px 6px' : '5px 12px', borderRadius: 8,
               cursor: 'pointer',
               fontSize: isMobile ? 9 : 13, fontWeight: isActive ? 700 : 500, whiteSpace: 'nowrap',
-              background: 'transparent',
+              background: (isActive || hoveredTab === tab.id) ? 'rgba(255,255,255,0.08)' : 'transparent',
               transition: 'all 0.2s',
               opacity: dragId === tab.id ? 0.4 : 1,
               userSelect: 'none',
               transform: dragId === tab.id ? 'scale(1.1)' : 'scale(1)',
             }}
           >
-            <span style={{ fontSize: isMobile ? 20 : 15, filter: 'none' }}>{tab.icon}</span>
-            {!isMobile && <span style={{ fontSize: 13, color: isActive ? '#fff' : 'rgba(255,255,255,0.6)' }}>{tab.label}</span>}
+            <tab.icon style={{ fontSize: isMobile ? 20 : 17, color: (isActive || hoveredTab === tab.id) ? tab.color : '#ffffff', transition: 'color 0.2s' }} />
+            {!isMobile && <span style={{ fontSize: 13, color: isActive ? '#fff' : hoveredTab === tab.id ? '#fff' : 'rgba(255,255,255,0.7)', transition: 'color 0.2s' }}>{tab.label}</span>}
           </div>
         );
       })}

@@ -459,6 +459,83 @@ router.get('/photos', async (req: AuthenticatedRequest, res: Response): Promise<
   }
 });
 
+// GET /api/profile/media - Fetch all user media (photos + videos) from WallPosts
+router.get('/media', async (req: AuthenticatedRequest, res: Response): Promise<any> => {
+  try {
+    const userId = req.user?.userId;
+    const targetUserId = (req.query.userId as string) || userId;
+    if (!userId) {
+      return res.status(401).json({ error: "Utilisateur non authentifié" });
+    }
+
+    const mediaType = req.query.type as string | undefined; // 'image', 'video', or undefined for all
+    const category = req.query.category as string | undefined;
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+
+    // Fetch WallPosts with media from this user
+    const where: any = {
+      authorId: targetUserId,
+      isPublished: true,
+      NOT: { mediaUrls: { equals: null } },
+    };
+
+    if (mediaType) {
+      where.mediaType = mediaType;
+    }
+    if (category) {
+      where.category = category;
+    }
+
+    // If viewing another user, only show visible posts
+    if (targetUserId !== userId) {
+      where.visibility = { in: ['ALL', 'IN'] };
+    }
+
+    const posts = await prisma.wallPost.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: limit * 2,
+      select: {
+        id: true,
+        mediaUrls: true,
+        mediaType: true,
+        content: true,
+        category: true,
+        likesCount: true,
+        commentsCount: true,
+        createdAt: true,
+      },
+    });
+
+    // Flatten: each media URL becomes one item
+    const media = posts
+      .filter(p => {
+        const urls = Array.isArray(p.mediaUrls) ? p.mediaUrls as string[] : [];
+        return urls.length > 0 && urls[0];
+      })
+      .flatMap(p => {
+        const urls = p.mediaUrls as string[];
+        return urls.map((url: string, idx: number) => ({
+          id: `${p.id}-${idx}`,
+          postId: p.id,
+          url,
+          mediaType: p.mediaType || 'image',
+          category: p.category || null,
+          caption: p.content || '',
+          likesCount: p.likesCount,
+          commentsCount: p.commentsCount,
+          createdAt: p.createdAt,
+        }));
+      })
+      .slice(0, limit);
+
+    return res.json({ media });
+  } catch (error) {
+    console.error("Error fetching user media:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // DELETE /api/profile/photos/:id - Delete a user photo
 router.delete('/photos/:id', async (req: AuthenticatedRequest, res: Response): Promise<any> => {
   try {

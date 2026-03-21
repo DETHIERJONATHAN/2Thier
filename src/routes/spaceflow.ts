@@ -163,23 +163,42 @@ router.delete('/stories/:storyId', authenticateToken, async (req: Request, res: 
 
 // ── EXPLORE ────────────────────────────────────────────────────
 
+// Legacy endpoint kept for compatibility
 router.get('/explore/posts', authenticateToken, async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
     const orgId = user.organizationId;
     const limit = Math.min(parseInt(req.query.limit as string) || 30, 100);
+    const category = req.query.category as string | undefined;
+    const search = req.query.search as string | undefined;
+
+    const where: any = {
+      organizationId: orgId,
+      isPublished: true,
+      visibility: { in: ['ALL', 'IN'] },
+    };
+
+    if (category) {
+      where.category = category;
+    }
+
+    if (search && search.trim().length >= 2) {
+      const term = search.trim();
+      where.OR = [
+        { content: { contains: term, mode: 'insensitive' } },
+        { author: { firstName: { contains: term, mode: 'insensitive' } } },
+        { author: { lastName: { contains: term, mode: 'insensitive' } } },
+        { tags: { has: term.toLowerCase().replace('#', '') } },
+      ];
+    }
+
     const posts = await db.wallPost.findMany({
-      where: {
-        organizationId: orgId,
-        isPublished: true,
-        mediaUrls: { not: { equals: [] as any } },
-        visibility: { in: ['ALL', 'IN'] },
-      },
+      where,
       orderBy: [{ likesCount: 'desc' }, { createdAt: 'desc' }],
       take: limit,
       select: {
         id: true, mediaUrls: true, mediaType: true, likesCount: true, commentsCount: true,
-        content: true,
+        content: true, category: true,
         author: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
         reactions: { where: { userId: user.id }, select: { type: true }, take: 1 },
       },
@@ -192,6 +211,265 @@ router.get('/explore/posts', authenticateToken, async (req: Request, res: Respon
           id: p.id,
           mediaUrl: urls[0] || '',
           mediaType: p.mediaType || 'image',
+          likesCount: p.likesCount,
+          commentsCount: p.commentsCount,
+          caption: p.content || '',
+          category: p.category || null,
+          authorId: p.author.id,
+          authorName: `${p.author.firstName} ${p.author.lastName}`.trim(),
+          authorAvatar: p.author.avatarUrl,
+          isLiked: p.reactions.length > 0,
+        };
+      }),
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── EXPLORE GALLERY (Instagram-style) ──────────────────────────
+// Unified media gallery: WallPost photos + videos + Stories
+// Filters: scope (friends/org/all), type (photo/video/all), sort (popular/recent), category, search
+
+router.get('/explore/gallery', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const orgId = user.organizationId;
+    const userId = user.id;
+    const limit = Math.min(parseInt(req.query.limit as string) || 40, 100);
+    const mediaFilter = (req.query.type as string) || 'all'; // 'photo' | 'video' | 'all'
+    const scope = (req.query.scope as string) || 'all'; // 'friends' | 'org' | 'all'
+    const sort = (req.query.sort as string) || 'popular'; // 'popular' | 'recent'
+    const category = req.query.category as string | undefined;
+    const search = req.query.search as string | undefined;
+
+    // ── Build WallPost query ──
+    const postWhere: any = {
+      isPublished: true,
+      NOT: { mediaUrls: { equals: null } },
+    };
+
+    // Media type filter
+    if (mediaFilter === 'photo') {
+      postWhere.mediaType = 'image';
+    } else if (mediaFilter === 'video') {
+      postWhere.mediaType = 'video';
+    } else {
+      postWhere.mediaType = { in: ['image', 'video'] };
+    }
+
+    // Scope filter
+    if (scope === 'friends') {
+      const friendships = await db.friendship.findMany({
+        where: { status: 'accepted', OR: [{ requesterId: userId }, { addresseeId: userId }] },
+        select: { requesterId: true, addresseeId: true },
+      });
+      const friendIds = friendships.map(f => f.requesterId === userId ? f.addresseeId : f.requesterId);
+      friendIds.push(userId); // Include own posts
+      postWhere.authorId = { in: friendIds };
+      postWhere.visibility = { in: ['ALL', 'IN'] };
+    } else if (scope === 'org') {
+      postWhere.organizationId = orgId;
+      postWhere.visibility = { in: ['ALL', 'IN'] };
+    } else {
+      // 'all' — public posts from all orgs + own org internal
+      postWhere.OR = [
+        { visibility: 'ALL' },
+        { organizationId: orgId, visibility: { in: ['ALL', 'IN'] } },
+      ];
+    }
+
+    // Category filter
+    if (category) {
+      postWhere.category = category;
+    }
+
+    // Search filter
+    if (search && search.trim().length >= 2) {
+      const term = search.trim();
+      const searchConditions = [
+        { content: { contains: term, mode: 'insensitive' as const } },
+        { author: { firstName: { contains: term, mode: 'insensitive' as const } } },
+        { author: { lastName: { contains: term, mode: 'insensitive' as const } } },
+        { tags: { has: term.toLowerCase().replace('#', '') } },
+      ];
+      // Merge search OR with scope OR if both exist
+      if (postWhere.OR) {
+        const scopeOR = postWhere.OR;
+        delete postWhere.OR;
+        postWhere.AND = [
+          { OR: scopeOR },
+          { OR: searchConditions },
+        ];
+      } else {
+        postWhere.OR = searchConditions;
+      }
+    }
+
+    // Order
+    const orderBy = sort === 'recent'
+      ? [{ createdAt: 'desc' as const }]
+      : [{ likesCount: 'desc' as const }, { createdAt: 'desc' as const }];
+
+    const posts = await db.wallPost.findMany({
+      where: postWhere,
+      orderBy,
+      take: limit * 2, // Fetch extra to compensate for empty mediaUrls filtering
+      select: {
+        id: true, mediaUrls: true, mediaType: true, likesCount: true, commentsCount: true,
+        content: true, category: true, createdAt: true,
+        author: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+        reactions: { where: { userId }, select: { type: true }, take: 1 },
+      },
+    });
+
+    // Flatten: each media URL becomes a gallery item, filter out empty
+    const galleryItems: any[] = [];
+    for (const p of posts) {
+      const urls = Array.isArray(p.mediaUrls) ? p.mediaUrls as string[] : [];
+      if (urls.length === 0 || !urls[0]) continue;
+      galleryItems.push({
+        id: p.id,
+        source: 'post' as const,
+        mediaUrl: urls[0],
+        mediaType: p.mediaType || 'image',
+        likesCount: p.likesCount,
+        commentsCount: p.commentsCount,
+        caption: p.content || '',
+        category: p.category || null,
+        authorId: p.author.id,
+        authorName: `${p.author.firstName} ${p.author.lastName}`.trim(),
+        authorAvatar: p.author.avatarUrl,
+        isLiked: p.reactions.length > 0,
+        createdAt: p.createdAt,
+      });
+      if (galleryItems.length >= limit) break;
+    }
+
+    // ── Fetch Stories (only if not filtering video-only) ──
+    let storyItems: any[] = [];
+    if (mediaFilter !== 'video') {
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const storyWhere: any = {
+        OR: [
+          { createdAt: { gt: twentyFourHoursAgo }, expiresAt: { gt: new Date() } },
+          { isHighlight: true },
+        ],
+      };
+
+      if (scope === 'friends') {
+        const friendships = await db.friendship.findMany({
+          where: { status: 'accepted', OR: [{ requesterId: userId }, { addresseeId: userId }] },
+          select: { requesterId: true, addresseeId: true },
+        });
+        const friendIds = friendships.map(f => f.requesterId === userId ? f.addresseeId : f.requesterId);
+        friendIds.push(userId);
+        storyWhere.authorId = { in: friendIds };
+      } else if (scope === 'org') {
+        storyWhere.organizationId = orgId;
+      } else {
+        storyWhere.OR = [
+          ...(storyWhere.OR || []),
+          { organizationId: orgId },
+        ];
+        // For 'all' scope, only show org stories (stories are inherently org-scoped)
+        storyWhere.organizationId = orgId;
+      }
+
+      if (mediaFilter === 'photo') {
+        storyWhere.mediaType = 'image';
+      }
+
+      const stories = await db.story.findMany({
+        where: storyWhere,
+        orderBy: sort === 'recent' ? { createdAt: 'desc' } : { createdAt: 'desc' },
+        take: 20,
+        include: {
+          author: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+          _count: { select: { views: true } },
+        },
+      });
+
+      storyItems = stories
+        .filter(s => s.mediaUrl && s.mediaUrl.length > 0)
+        .map(s => ({
+          id: `story-${s.id}`,
+          source: 'story' as const,
+          mediaUrl: s.mediaUrl,
+          mediaType: s.mediaType || 'image',
+          likesCount: s._count.views, // Use views as "popularity" for stories
+          commentsCount: 0,
+          caption: s.caption || '',
+          category: null,
+          authorId: s.author.id,
+          authorName: `${s.author.firstName} ${s.author.lastName}`.trim(),
+          authorAvatar: s.author.avatarUrl,
+          isLiked: false,
+          createdAt: s.createdAt,
+          isStory: true,
+          isHighlight: s.isHighlight,
+        }));
+    }
+
+    // ── Merge and sort ──
+    const allItems = [...galleryItems, ...storyItems];
+
+    if (sort === 'popular') {
+      allItems.sort((a, b) => b.likesCount - a.likesCount || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    } else {
+      allItems.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+
+    res.json({
+      items: allItems.slice(0, limit),
+      total: allItems.length,
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── REELS (video-only feed) ────────────────────────────────────
+
+router.get('/reels', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const orgId = user.organizationId;
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+
+    const posts = await db.wallPost.findMany({
+      where: {
+        organizationId: orgId,
+        isPublished: true,
+        visibility: { in: ['ALL', 'IN'] },
+        mediaType: 'video',
+        NOT: { mediaUrls: { equals: null } },
+      },
+      orderBy: [{ likesCount: 'desc' }, { createdAt: 'desc' }],
+      take: limit * 2, // Fetch extra to compensate for empty mediaUrls filtering
+      select: {
+        id: true, mediaUrls: true, mediaType: true, likesCount: true, commentsCount: true,
+        content: true,
+        author: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+        reactions: { where: { userId: user.id }, select: { type: true }, take: 1 },
+      },
+    });
+
+    // Filter out posts with empty mediaUrls arrays (Json field can be [] or null)
+    const videoPosts = posts
+      .filter(p => {
+        const urls = Array.isArray(p.mediaUrls) ? p.mediaUrls as string[] : [];
+        return urls.length > 0 && urls[0];
+      })
+      .slice(0, limit);
+
+    res.json({
+      reels: videoPosts.map(p => {
+        const urls = p.mediaUrls as string[];
+        return {
+          id: p.id,
+          mediaUrl: urls[0],
+          mediaType: 'video' as const,
           likesCount: p.likesCount,
           commentsCount: p.commentsCount,
           caption: p.content || '',
@@ -210,7 +488,15 @@ router.get('/explore/posts', authenticateToken, async (req: Request, res: Respon
 router.get('/explore/hashtags', authenticateToken, async (req: Request, res: Response) => {
   try {
     const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+    const search = req.query.search as string | undefined;
+
+    const where: any = {};
+    if (search && search.trim().length >= 1) {
+      where.name = { contains: search.trim().toLowerCase().replace('#', ''), mode: 'insensitive' };
+    }
+
     const hashtags = await db.hashtag.findMany({
+      where,
       orderBy: { postCount: 'desc' },
       take: limit,
     });
@@ -244,16 +530,40 @@ router.get('/explore/suggested-users', authenticateToken, async (req: Request, r
       take: limit,
     });
 
-    res.json({
-      users: users.map(u => ({
+    // Compute mutual friends for each suggested user
+    const userFriendships = await db.friendship.findMany({
+      where: {
+        status: 'accepted',
+        OR: [{ requesterId: userId }, { addresseeId: userId }],
+      },
+      select: { requesterId: true, addresseeId: true },
+    });
+    const myFriendIds = new Set(userFriendships.map(f => f.requesterId === userId ? f.addresseeId : f.requesterId));
+
+    const usersWithMutual = await Promise.all(users.map(async (u) => {
+      let mutualCount = 0;
+      if (myFriendIds.size > 0) {
+        mutualCount = await db.friendship.count({
+          where: {
+            status: 'accepted',
+            OR: [
+              { requesterId: u.id, addresseeId: { in: Array.from(myFriendIds) } },
+              { addresseeId: u.id, requesterId: { in: Array.from(myFriendIds) } },
+            ],
+          },
+        });
+      }
+      return {
         id: u.id,
         firstName: u.firstName,
         lastName: u.lastName,
         avatarUrl: u.avatarUrl,
         role: u.role,
-        mutualFriends: 0, // TODO: compute from Friendship table
-      })),
-    });
+        mutualFriends: mutualCount,
+      };
+    }));
+
+    res.json({ users: usersWithMutual });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -642,17 +952,39 @@ router.get('/orbit', authenticateToken, async (req: Request, res: Response) => {
       },
     });
 
-    const friends = friendships.map(f => {
+    // Compute real interaction scores based on reactions and comments
+    const friends = await Promise.all(friendships.map(async (f) => {
       const friend = f.requesterId === userId ? f.addressee : f.requester;
+
+      // Count mutual interactions: reactions on each other's posts + comments
+      const [reactionsGiven, reactionsReceived, commentsGiven, commentsReceived] = await Promise.all([
+        db.wallReaction.count({
+          where: { userId, post: { authorId: friend.id } },
+        }).catch(() => 0),
+        db.wallReaction.count({
+          where: { userId: friend.id, post: { authorId: userId } },
+        }).catch(() => 0),
+        db.wallComment.count({
+          where: { authorId: userId, post: { authorId: friend.id } },
+        }).catch(() => 0),
+        db.wallComment.count({
+          where: { authorId: friend.id, post: { authorId: userId } },
+        }).catch(() => 0),
+      ]);
+
+      const totalInteractions = reactionsGiven + reactionsReceived + (commentsGiven + commentsReceived) * 2;
+      // Normalize to 0-100 score (cap at 50 interactions = 100)
+      const interactionScore = Math.min(100, Math.round((totalInteractions / 50) * 100));
+
       return {
         id: friend.id,
         name: `${friend.firstName} ${friend.lastName}`.trim(),
         avatarUrl: friend.avatarUrl,
-        interactionScore: Math.floor(Math.random() * 100), // TODO: real interaction scoring
+        interactionScore,
         lastInteraction: f.updatedAt || f.createdAt,
-        online: false, // TODO: WebSocket presence
+        online: false,
       };
-    });
+    }));
 
     // Sort by interaction score (most active first)
     friends.sort((a, b) => b.interactionScore - a.interactionScore);

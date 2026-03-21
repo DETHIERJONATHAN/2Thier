@@ -10,7 +10,7 @@ import {
   SettingOutlined, EditOutlined,
   LinkOutlined, SafetyCertificateOutlined, SwapOutlined,
   EllipsisOutlined, DragOutlined, CheckOutlined, CloseOutlined,
-  DeleteOutlined,
+  DeleteOutlined, PlayCircleOutlined, VideoCameraOutlined, PictureOutlined,
 } from '@ant-design/icons';
 import { WallPostCard, WallPostData } from './DashboardPageUnified';
 
@@ -214,7 +214,12 @@ const ProfilePage = () => {
   const [userPhotos, setUserPhotos] = useState<{ id: string; url: string; category: string; createdAt: string }[]>([]);
   const [photosLoading, setPhotosLoading] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [lightboxIsVideo, setLightboxIsVideo] = useState(false);
   const [photosTab, setPhotosTab] = useState<string>('all');
+  const [userMedia, setUserMedia] = useState<{ id: string; postId: string; url: string; mediaType: string; category: string | null; caption: string; likesCount: number; commentsCount: number; createdAt: string }[]>([]);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [mediaFilter, setMediaFilter] = useState<string>('all'); // 'all', 'image', 'video'
+  const [mediaCategoryFilter, setMediaCategoryFilter] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -248,6 +253,24 @@ const ProfilePage = () => {
       message.success('Photo supprimée');
     } catch { message.error('Erreur lors de la suppression'); }
   };
+
+  /* ── Fetch media (images + videos from WallPosts) ────────── */
+  const fetchMedia = useCallback(async () => {
+    setMediaLoading(true);
+    try {
+      const params = new URLSearchParams({ limit: '100' });
+      if (isViewingOther && viewUserId) params.set('userId', viewUserId);
+      if (mediaFilter !== 'all') params.set('type', mediaFilter);
+      if (mediaCategoryFilter) params.set('category', mediaCategoryFilter);
+      const r: any = await api.get(`/api/profile/media?${params}`);
+      setUserMedia(r.media || []);
+    } catch { /* silently fail */ }
+    finally { setMediaLoading(false); }
+  }, [api, mediaFilter, mediaCategoryFilter, isViewingOther, viewUserId]);
+
+  useEffect(() => {
+    if (activeTab === 'media' && user) fetchMedia();
+  }, [activeTab, user, fetchMedia]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Cover drag-to-reposition ────────────────────────────── */
   const handleCoverDragStart = useCallback((clientY: number) => {
@@ -381,6 +404,7 @@ const ProfilePage = () => {
   const tabs = [
     { key: 'about', label: 'À propos' },
     { key: 'publications', label: 'Publications' },
+    { key: 'media', label: 'Médias' },
     { key: 'photos', label: 'Photos' },
   ];
 
@@ -888,6 +912,187 @@ const ProfilePage = () => {
           </div>
         )}
 
+        {activeTab === 'media' && (
+          <div style={{ maxWidth: 900, margin: '0 auto' }}>
+            {/* Header + type filter */}
+            <div style={{
+              background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow,
+              padding: '12px 16px', marginBottom: 12,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <span style={{ fontSize: 20, fontWeight: 700, color: FB.text }}>Médias</span>
+                <span style={{ fontSize: 13, color: FB.textSecondary }}>
+                  {userMedia.length} élément{userMedia.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              {/* Type filter: Tout / Images / Vidéos */}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {[
+                  { key: 'all', label: 'Tout', icon: <PictureOutlined /> },
+                  { key: 'image', label: 'Images', icon: <PictureOutlined /> },
+                  { key: 'video', label: 'Vidéos', icon: <VideoCameraOutlined /> },
+                ].map(f => (
+                  <button
+                    key={f.key}
+                    type="button"
+                    onClick={() => setMediaFilter(f.key)}
+                    style={{
+                      padding: '6px 16px', borderRadius: 20, border: 'none', cursor: 'pointer',
+                      fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
+                      background: mediaFilter === f.key ? FB.activeBlue : FB.btnGray,
+                      color: mediaFilter === f.key ? FB.blue : FB.text,
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {f.icon} {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Category filter pills */}
+            <div style={{
+              background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow,
+              padding: '10px 16px', marginBottom: 16,
+              display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none',
+            }}>
+              <button
+                type="button"
+                onClick={() => setMediaCategoryFilter(null)}
+                style={{
+                  padding: '4px 14px', borderRadius: 16, border: 'none', cursor: 'pointer',
+                  fontSize: 12, fontWeight: 600, flexShrink: 0,
+                  background: !mediaCategoryFilter ? FB.activeBlue : FB.btnGray,
+                  color: !mediaCategoryFilter ? FB.blue : FB.textSecondary,
+                }}
+              >
+                Toutes catégories
+              </button>
+              {[
+                { key: 'projet', label: '💼 Projet' },
+                { key: 'chantier_realise', label: '🏗️ Chantier' },
+                { key: 'promotion', label: '📣 Promo' },
+                { key: 'conseil', label: '🎨 Conseil' },
+                { key: 'actualite', label: '📰 Actu' },
+                { key: 'emploi', label: '🧑‍💼 Emploi' },
+                { key: 'market', label: '🛒 Market' },
+              ].map(cat => (
+                <button
+                  key={cat.key}
+                  type="button"
+                  onClick={() => setMediaCategoryFilter(mediaCategoryFilter === cat.key ? null : cat.key)}
+                  style={{
+                    padding: '4px 14px', borderRadius: 16, border: 'none', cursor: 'pointer',
+                    fontSize: 12, fontWeight: 600, flexShrink: 0,
+                    background: mediaCategoryFilter === cat.key ? FB.activeBlue : FB.btnGray,
+                    color: mediaCategoryFilter === cat.key ? FB.blue : FB.textSecondary,
+                  }}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Media grid */}
+            {mediaLoading ? (
+              <div style={{ textAlign: 'center', padding: 40 }}><Spin size="large" /></div>
+            ) : userMedia.length === 0 ? (
+              <div style={{
+                background: FB.white, borderRadius: 8, boxShadow: FB.shadow,
+                padding: 40, textAlign: 'center',
+              }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>
+                  {mediaFilter === 'video' ? '🎬' : mediaFilter === 'image' ? '📷' : '🖼️'}
+                </div>
+                <div style={{ fontSize: 17, fontWeight: 600, color: FB.text }}>
+                  Aucun{mediaFilter === 'video' ? 'e vidéo' : mediaFilter === 'image' ? 'e image' : ' média'}
+                </div>
+                <div style={{ fontSize: 15, color: FB.textSecondary, marginTop: 8 }}>
+                  {mediaCategoryFilter
+                    ? 'Aucune publication avec média dans cette catégorie.'
+                    : 'Les images et vidéos de vos publications apparaîtront ici.'}
+                </div>
+              </div>
+            ) : (
+              <div style={{
+                background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow,
+                padding: 8,
+              }}>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
+                  gap: 4,
+                }}>
+                  {userMedia.map(item => (
+                    <div
+                      key={item.id}
+                      style={{
+                        position: 'relative', paddingBottom: '100%', overflow: 'hidden',
+                        borderRadius: 4, cursor: 'pointer',
+                        background: '#f0f0f0',
+                      }}
+                      onClick={() => { setLightboxUrl(item.url); setLightboxIsVideo(item.mediaType === 'video'); }}
+                    >
+                      {item.mediaType === 'video' ? (
+                        <>
+                          <video
+                            src={item.url}
+                            style={{
+                              position: 'absolute', top: 0, left: 0,
+                              width: '100%', height: '100%', objectFit: 'cover',
+                            }}
+                            muted
+                            preload="metadata"
+                          />
+                          <div style={{
+                            position: 'absolute', top: '50%', left: '50%',
+                            transform: 'translate(-50%, -50%)',
+                            width: 40, height: 40, borderRadius: '50%',
+                            background: 'rgba(0,0,0,0.5)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}>
+                            <PlayCircleOutlined style={{ color: '#fff', fontSize: 22 }} />
+                          </div>
+                        </>
+                      ) : (
+                        <img
+                          src={item.url}
+                          alt=""
+                          loading="lazy"
+                          style={{
+                            position: 'absolute', top: 0, left: 0,
+                            width: '100%', height: '100%', objectFit: 'cover',
+                          }}
+                        />
+                      )}
+                      {/* Overlay with stats */}
+                      <div style={{
+                        position: 'absolute', bottom: 0, left: 0, right: 0,
+                        background: 'linear-gradient(transparent, rgba(0,0,0,0.6))',
+                        padding: '12px 6px 4px',
+                        display: 'flex', gap: 8, color: '#fff', fontSize: 11,
+                      }}>
+                        <span>❤️ {item.likesCount}</span>
+                        <span>💬 {item.commentsCount}</span>
+                      </div>
+                      {/* Category badge */}
+                      {item.category && (
+                        <div style={{
+                          position: 'absolute', top: 4, left: 4,
+                          background: 'rgba(0,0,0,0.55)', color: '#fff',
+                          padding: '2px 8px', borderRadius: 10, fontSize: 10, fontWeight: 600,
+                        }}>
+                          {item.category === 'projet' ? '💼' : item.category === 'chantier_realise' ? '🏗️' : item.category === 'promotion' ? '📣' : item.category === 'conseil' ? '🎨' : item.category === 'actualite' ? '📰' : item.category === 'emploi' ? '🧑‍💼' : item.category === 'market' ? '🛒' : '📌'} {item.category.replace('_', ' ')}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === 'photos' && (
           <div style={{ maxWidth: 900, margin: '0 auto' }}>
             {/* Category sub-tabs */}
@@ -1025,7 +1230,7 @@ const ProfilePage = () => {
             {/* Lightbox overlay */}
             {lightboxUrl && (
               <div
-                onClick={() => setLightboxUrl(null)}
+                onClick={() => { setLightboxUrl(null); setLightboxIsVideo(false); }}
                 style={{
                   position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
                   background: 'rgba(0,0,0,0.9)', zIndex: 10000,
@@ -1033,19 +1238,33 @@ const ProfilePage = () => {
                   cursor: 'zoom-out',
                 }}
               >
-                <img
-                  src={lightboxUrl}
-                  alt=""
-                  onClick={e => e.stopPropagation()}
-                  style={{
-                    maxWidth: '90vw', maxHeight: '90vh',
-                    objectFit: 'contain', borderRadius: 8,
-                    cursor: 'default',
-                  }}
-                />
+                {lightboxIsVideo ? (
+                  <video
+                    src={lightboxUrl}
+                    controls
+                    autoPlay
+                    onClick={e => e.stopPropagation()}
+                    style={{
+                      maxWidth: '90vw', maxHeight: '90vh',
+                      objectFit: 'contain', borderRadius: 8,
+                      cursor: 'default',
+                    }}
+                  />
+                ) : (
+                  <img
+                    src={lightboxUrl}
+                    alt=""
+                    onClick={e => e.stopPropagation()}
+                    style={{
+                      maxWidth: '90vw', maxHeight: '90vh',
+                      objectFit: 'contain', borderRadius: 8,
+                      cursor: 'default',
+                    }}
+                  />
+                )}
                 <button
                   type="button"
-                  onClick={() => setLightboxUrl(null)}
+                  onClick={() => { setLightboxUrl(null); setLightboxIsVideo(false); }}
                   style={{
                     position: 'absolute', top: 20, right: 20,
                     width: 40, height: 40, borderRadius: '50%',

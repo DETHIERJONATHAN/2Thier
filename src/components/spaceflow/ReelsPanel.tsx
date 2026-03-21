@@ -4,7 +4,7 @@ import { Avatar, Spin, Modal, Input } from 'antd';
 import {
   HeartOutlined, HeartFilled, MessageOutlined, ShareAltOutlined,
   SoundOutlined, PauseCircleOutlined, PlayCircleOutlined,
-  PlusOutlined, UserOutlined, VideoCameraOutlined, PictureOutlined,
+  PlusOutlined, UserOutlined, VideoCameraOutlined,
   CloseOutlined, SendOutlined, LoadingOutlined, DeleteOutlined,
   BookOutlined, BookFilled, RetweetOutlined, CopyOutlined,
 } from '@ant-design/icons';
@@ -54,7 +54,6 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
   const [reelCaption, setReelCaption] = useState('');
   const [reelFile, setReelFile] = useState<File | null>(null);
   const [reelPreview, setReelPreview] = useState<string | null>(null);
-  const [reelMediaType, setReelMediaType] = useState<'video' | 'image'>('video');
   const [submitting, setSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -78,7 +77,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
   const [showSaved, setShowSaved] = useState(false);
   const navigate = useNavigate();
   const [toast, setToast] = useState<{ text: string; type: 'ok' | 'err' } | null>(null);
-  const toastTimer = useRef<ReturnType<typeof setTimeout>>();
+  const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const showToast = useCallback((text: string, type: 'ok' | 'err' = 'ok') => {
     clearTimeout(toastTimer.current);
     setToast({ text, type });
@@ -87,21 +86,22 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
 
   useEffect(() => {
     loadReels();
+    return () => { if (reelPreview) URL.revokeObjectURL(reelPreview); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadReels = async () => {
     try {
       setLoading(true);
-      const data = await api.get('/api/spaceflow/explore/posts?limit=20');
-      const posts = (data?.posts || []).map((p: any, i: number) => ({
-        id: p.id || `reel-${i}`,
+      const data = await api.get('/api/spaceflow/reels?limit=20');
+      const videos = (data?.reels || []).map((p: any) => ({
+        id: p.id,
         authorId: p.authorId || '',
         authorName: p.authorName || 'Utilisateur',
         authorAvatar: p.authorAvatar,
         caption: p.caption || '',
-        mediaUrl: p.mediaUrl || '',
-        mediaType: (p.mediaType === 'video' ? 'video' : 'image') as 'video' | 'image',
+        mediaUrl: p.mediaUrl,
+        mediaType: 'video' as const,
         likesCount: p.likesCount || 0,
         commentsCount: p.commentsCount || 0,
         sharesCount: 0,
@@ -109,10 +109,10 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
         hashtags: [],
         musicName: undefined,
       }));
-      setReels(posts.length > 0 ? posts : getDemoReels());
+      setReels(videos);
       // Nettoyer les IDs sauvegardés qui ne correspondent plus à aucun reel
       setSavedSet(prev => {
-        const loadedIds = new Set(posts.map((p: any) => p.id));
+        const loadedIds = new Set(videos.map((p: any) => p.id));
         const cleaned = new Set([...prev].filter(id => loadedIds.has(id)));
         if (cleaned.size !== prev.size) {
           localStorage.setItem('sf_saved_reels', JSON.stringify([...cleaned]));
@@ -121,17 +121,11 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
         return prev;
       });
     } catch {
-      setReels(getDemoReels());
+      setReels([]);
     } finally {
       setLoading(false);
     }
   };
-
-  const getDemoReels = (): Reel[] => [
-    { id: 'd1', authorId: '', authorName: 'SpaceFlow', caption: '🚀 Bienvenue sur les Reels SpaceFlow ! Partagez vos moments créatifs en vidéo courte.', mediaUrl: '', mediaType: 'image', likesCount: 234, commentsCount: 18, sharesCount: 5, isLiked: false, hashtags: ['SpaceFlow', 'Reels'], musicName: '🎵 Trending Sound' },
-    { id: 'd2', authorId: '', authorName: 'Créateur Pro', caption: '💡 Montrez votre savoir-faire ! Chantiers, installations, tutoriels...', mediaUrl: '', mediaType: 'image', likesCount: 156, commentsCount: 12, sharesCount: 3, isLiked: false, hashtags: ['Pro', 'Tutoriel'], musicName: '🎵 Creative Vibes' },
-    { id: 'd3', authorId: '', authorName: 'L\'équipe', caption: '🎬 Filmez vos réalisations et inspirez la communauté !', mediaUrl: '', mediaType: 'image', likesCount: 89, commentsCount: 7, sharesCount: 2, isLiked: false, hashtags: ['Motivation', 'Team'] },
-  ];
 
   const handleScroll = useCallback(() => {
     const el = containerRef.current;
@@ -155,7 +149,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
       likesCount: r.likesCount + (r.isLiked ? -1 : 1),
     } : r));
     // Persist like to API (fire and forget)
-    if (reel?.id && !reel.id.startsWith('d')) {
+    if (reel?.id) {
       api.post(`/api/wall/posts/${reel.id}/reactions`, { type: 'LIKE' }).catch(() => {});
     }
   };
@@ -189,7 +183,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
   };
 
   const handleRepost = async () => {
-    if (!shareReel || shareReel.id.startsWith('d')) { setShareSheetOpen(false); return; }
+    if (!shareReel) { setShareSheetOpen(false); return; }
     try {
       await api.post('/api/wall/posts', {
         content: `🔄 Republié : ${shareReel.caption || ''}`.trim(),
@@ -240,7 +234,6 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
     setReelCaption('');
     setReelFile(null);
     setReelPreview(null);
-    setReelMediaType('video');
     setCreateModalOpen(true);
   };
 
@@ -248,10 +241,8 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const isVideo = file.type.startsWith('video/');
-    const isImage = file.type.startsWith('image/');
-    if (!isVideo && !isImage) {
-      showToast('Seules les vidéos et images sont acceptées', 'err');
+    if (!file.type.startsWith('video/')) {
+      showToast('Seules les vidéos sont acceptées pour les Reels', 'err');
       return;
     }
     if (file.size > 100 * 1024 * 1024) {
@@ -260,7 +251,6 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
     }
 
     setReelFile(file);
-    setReelMediaType(isVideo ? 'video' : 'image');
     if (reelPreview) URL.revokeObjectURL(reelPreview);
     setReelPreview(URL.createObjectURL(file));
     e.target.value = '';
@@ -282,11 +272,11 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
         return;
       }
 
-      // 2. Créer le post avec les médias
+      // 2. Créer le post vidéo (Reel = toujours vidéo)
       await api.post('/api/wall/posts', {
         content: reelCaption.trim() || undefined,
         mediaUrls,
-        mediaType: reelMediaType,
+        mediaType: 'video',
         visibility: 'ALL',
       });
 
@@ -437,20 +427,15 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                       aspectRatio: '9/16', position: 'relative', cursor: 'pointer',
                       borderRadius: 4, overflow: 'hidden', background: '#222',
                     }}>
-                    {reel.mediaUrl && reel.mediaType === 'video' ? (
+                    {reel.mediaUrl ? (
                       <video src={reel.mediaUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} muted />
-                    ) : reel.mediaUrl ? (
-                      <img src={reel.mediaUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : (
                       <div style={{
                         width: '100%', height: '100%',
                         background: 'linear-gradient(135deg, #6C5CE7 0%, #FD79A8 100%)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        padding: 8,
                       }}>
-                        <div style={{ fontSize: 11, color: '#fff', textAlign: 'center', lineHeight: 1.3 }}>
-                          {reel.caption?.slice(0, 60) || '🎬'}
-                        </div>
+                        <VideoCameraOutlined style={{ fontSize: 24, color: '#fff' }} />
                       </div>
                     )}
                     <div style={{
@@ -473,6 +458,30 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
         );
       })() : (
       <>
+      {reels.length === 0 ? (
+        <div style={{
+          height: '100%', display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', color: SF.textMuted,
+          paddingTop: 56,
+        }}>
+          <VideoCameraOutlined style={{ fontSize: 56, marginBottom: 16, opacity: 0.5 }} />
+          <div style={{ fontSize: 18, fontWeight: 700, color: SF.text, marginBottom: 8 }}>Aucun reel pour le moment</div>
+          <div style={{ fontSize: 13, marginBottom: 20, textAlign: 'center', maxWidth: 260 }}>
+            Soyez le premier à publier un reel ! Partagez vos meilleurs moments en vidéo.
+          </div>
+          <div
+            onClick={openCreateModal}
+            style={{
+              padding: '10px 28px', borderRadius: 24,
+              background: 'linear-gradient(135deg, #6C5CE7 0%, #FD79A8 100%)',
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+            }}
+          >
+            <PlusOutlined /> Créer un reel
+          </div>
+        </div>
+      ) : (
+      <>
       {/* Vertical scroll snap container */}
       <div
         ref={containerRef}
@@ -488,8 +497,8 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             background: SF.dark,
           }}>
-            {/* Media (video or image placeholder) */}
-            {reel.mediaUrl && reel.mediaType === 'video' ? (
+            {/* Media — always video */}
+            {reel.mediaUrl ? (
               <video
                 ref={el => { videoRefs.current[index] = el; }}
                 src={reel.mediaUrl}
@@ -498,22 +507,15 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                 style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000', cursor: 'pointer' }}
               />
             ) : (
-              /* Gradient placeholder for reels without video */
+              /* Fallback if video URL is missing */
               <div onClick={togglePause} style={{
                 width: '100%', height: '100%', cursor: 'pointer',
-                background: [
-                  'linear-gradient(135deg, #6C5CE7 0%, #FD79A8 50%, #FDCB6E 100%)',
-                  'linear-gradient(135deg, #00CEC9 0%, #6C5CE7 50%, #e84393 100%)',
-                  'linear-gradient(135deg, #0984e3 0%, #00CEC9 50%, #55efc4 100%)',
-                  'linear-gradient(135deg, #fd79a8 0%, #fdcb6e 50%, #6c5ce7 100%)',
-                ][index % 4],
+                background: 'linear-gradient(135deg, #6C5CE7 0%, #FD79A8 50%, #FDCB6E 100%)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
                 <div style={{ textAlign: 'center', padding: 32 }}>
-                  <div style={{ fontSize: 48, marginBottom: 16 }}>🎬</div>
-                  <div style={{ fontSize: 16, color: SF.text, fontWeight: 600, lineHeight: 1.5, maxWidth: 280 }}>
-                    {reel.caption}
-                  </div>
+                  <VideoCameraOutlined style={{ fontSize: 48, marginBottom: 16, color: '#fff' }} />
+                  <div style={{ fontSize: 14, color: SF.text, fontWeight: 600 }}>Vidéo indisponible</div>
                 </div>
               </div>
             )}
@@ -710,7 +712,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
       <input
         ref={fileInputRef}
         type="file"
-        accept="video/*,image/*"
+        accept="video/*"
         style={{ display: 'none' }}
         onChange={handleFileSelect}
       />
@@ -754,31 +756,22 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
             >
               <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginBottom: 16 }}>
                 <VideoCameraOutlined style={{ fontSize: 36, color: SF.primary }} />
-                <PictureOutlined style={{ fontSize: 36, color: SF.secondary }} />
               </div>
               <div style={{ fontSize: 15, color: SF.text, fontWeight: 600, marginBottom: 4 }}>
-                Tapez pour sélectionner
+                Tapez pour sélectionner une vidéo
               </div>
               <div style={{ fontSize: 12, color: SF.textMuted }}>
-                Vidéo ou image (max 100 Mo)
+                Vidéo uniquement (max 100 Mo)
               </div>
             </div>
           ) : (
             <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', marginBottom: 16 }}>
-              {reelMediaType === 'video' ? (
-                <video
-                  src={reelPreview}
-                  style={{ width: '100%', maxHeight: 300, objectFit: 'cover', borderRadius: 16 }}
-                  controls
-                  muted
-                />
-              ) : (
-                <img
-                  src={reelPreview}
-                  alt="Aperçu"
-                  style={{ width: '100%', maxHeight: 300, objectFit: 'cover', borderRadius: 16 }}
-                />
-              )}
+              <video
+                src={reelPreview}
+                style={{ width: '100%', maxHeight: 300, objectFit: 'cover', borderRadius: 16 }}
+                controls
+                muted
+              />
               <div
                 onClick={removeSelectedFile}
                 style={{
@@ -1046,6 +1039,9 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               </div>
             </div>
           </div>
+        </>
+      )}
+
         </>
       )}
 

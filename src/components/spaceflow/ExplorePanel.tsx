@@ -1,16 +1,29 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Avatar, Input, Tag, message } from 'antd';
-import { SearchOutlined, UserOutlined, FireOutlined, CompassOutlined, TeamOutlined, RiseOutlined, HeartOutlined, HeartFilled } from '@ant-design/icons';
+import { Avatar, Input, Tag, message, Modal } from 'antd';
+import {
+  SearchOutlined, UserOutlined, FireOutlined, CompassOutlined,
+  TeamOutlined, RiseOutlined, HeartOutlined, HeartFilled,
+  CloseOutlined, MessageOutlined, SendOutlined,
+  PictureOutlined, VideoCameraOutlined, PlayCircleOutlined,
+  AppstoreOutlined, ClockCircleOutlined,
+} from '@ant-design/icons';
 import { SF } from './SpaceFlowTheme';
 
-interface ExplorePost {
+interface GalleryItem {
   id: string;
+  source: 'post' | 'story';
   mediaUrl: string;
   mediaType: 'image' | 'video';
   likesCount: number;
   commentsCount: number;
   authorName: string;
   authorAvatar?: string;
+  caption?: string;
+  authorId?: string;
+  category?: string | null;
+  isStory?: boolean;
+  isHighlight?: boolean;
+  createdAt?: string;
 }
 
 interface TrendingHashtag {
@@ -34,9 +47,10 @@ interface ExplorePanelProps {
 }
 
 const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
+  // ── State ──
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'trending' | 'people' | 'hashtags'>('trending');
-  const [posts, setPosts] = useState<ExplorePost[]>([]);
+  const [activeTab, setActiveTab] = useState<'gallery' | 'people' | 'hashtags'>('gallery');
+  const [items, setItems] = useState<GalleryItem[]>([]);
   const [hashtags, setHashtags] = useState<TrendingHashtag[]>([]);
   const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,36 +58,122 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
   const [followingSet, setFollowingSet] = useState<Set<string>>(new Set());
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [likedSet, setLikedSet] = useState<Set<string>>(new Set());
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [selectedPost, setSelectedPost] = useState<GalleryItem | null>(null);
+  const [commentText, setCommentText] = useState('');
+  const [postComments, setPostComments] = useState<{ id: string; authorName: string; authorAvatar?: string; content: string; createdAt: string }[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
 
+  // ── NEW: Gallery filters ──
+  const [mediaFilter, setMediaFilter] = useState<'all' | 'photo' | 'video'>('all');
+  const [scope, setScope] = useState<'all' | 'friends' | 'org'>('all');
+  const [sortMode, setSortMode] = useState<'popular' | 'recent'>('popular');
+
+  // ── Like ──
   const handleLikePost = async (postId: string) => {
+    // Stories can't be liked via wall reactions
+    if (postId.startsWith('story-')) return;
     const wasLiked = likedSet.has(postId);
     setLikedSet(prev => {
       const next = new Set(prev);
       if (wasLiked) next.delete(postId); else next.add(postId);
       return next;
     });
-    setPosts(prev => prev.map(p => p.id === postId ? { ...p, likesCount: p.likesCount + (wasLiked ? -1 : 1) } : p));
+    setItems(prev => prev.map(p => p.id === postId ? { ...p, likesCount: p.likesCount + (wasLiked ? -1 : 1) } : p));
     try {
       await api.post(`/api/wall/posts/${postId}/reactions`, { type: 'LIKE' });
     } catch {
-      // Revert on error
       setLikedSet(prev => {
         const next = new Set(prev);
         if (wasLiked) next.add(postId); else next.delete(postId);
         return next;
       });
-      setPosts(prev => prev.map(p => p.id === postId ? { ...p, likesCount: p.likesCount + (wasLiked ? 1 : -1) } : p));
+      setItems(prev => prev.map(p => p.id === postId ? { ...p, likesCount: p.likesCount + (wasLiked ? 1 : -1) } : p));
     }
   };
 
-  const fetchExplore = useCallback(async () => {
+  // ── Post Detail Modal ──
+  const openPostDetail = async (item: GalleryItem) => {
+    setSelectedPost(item);
+    setPostComments([]);
+    setCommentText('');
+    if (item.source === 'story') return; // No comments on stories
+    setCommentsLoading(true);
     try {
-      const [postsRes, hashtagsRes, usersRes] = await Promise.all([
-        api.get('/api/spaceflow/explore/posts?limit=30').catch(() => ({ posts: [] })),
-        api.get('/api/spaceflow/explore/hashtags?limit=20').catch(() => ({ hashtags: [] })),
+      const res = await api.get(`/api/wall/posts/${item.id}/comments?limit=20`);
+      if (res?.comments) setPostComments(res.comments);
+    } catch {
+      // Non-blocking
+    } finally {
+      setCommentsLoading(false);
+    }
+  };
+
+  // ── Add Comment ──
+  const handleAddComment = async () => {
+    if (!commentText.trim() || !selectedPost || selectedPost.source === 'story') return;
+    try {
+      const res = await api.post(`/api/wall/posts/${selectedPost.id}/comments`, { content: commentText.trim() });
+      if (res) {
+        setPostComments(prev => [...prev, res]);
+        setCommentText('');
+        setItems(prev => prev.map(p => p.id === selectedPost.id ? { ...p, commentsCount: p.commentsCount + 1 } : p));
+        setSelectedPost(prev => prev ? { ...prev, commentsCount: prev.commentsCount + 1 } : null);
+      }
+    } catch {
+      message.error('Erreur lors du commentaire');
+    }
+  };
+
+  // Category label → DB category value mapping
+  const categoryMap: Record<string, string> = {
+    'Populaire': 'promotion',
+    'Créatif': 'conseil',
+    'Chantiers': 'chantier_realise',
+    'Business': 'projet',
+    'Formation': 'actualite',
+    'Local': 'actualite',
+    'Emploi': 'emploi',
+    'Market': 'market',
+  };
+
+  // ── Fetch Gallery Data ──
+  const fetchGallery = useCallback(async (search?: string, category?: string | null) => {
+    try {
+      setLoading(true);
+
+      // Gallery params
+      const galleryParams = new URLSearchParams({
+        limit: '40',
+        type: mediaFilter,
+        scope,
+        sort: sortMode,
+      });
+      if (category) {
+        const dbCategory = categoryMap[category] || category;
+        galleryParams.set('category', dbCategory);
+      }
+      if (search && search.trim().length >= 2) {
+        galleryParams.set('search', search.trim());
+      }
+
+      // Hashtags params
+      const hashtagsParams = new URLSearchParams({ limit: '20' });
+      if (search && search.trim().length >= 1) {
+        hashtagsParams.set('search', search.trim());
+      }
+
+      const [galleryRes, hashtagsRes, usersRes] = await Promise.all([
+        api.get(`/api/spaceflow/explore/gallery?${galleryParams}`).catch(() => ({ items: [] })),
+        api.get(`/api/spaceflow/explore/hashtags?${hashtagsParams}`).catch(() => ({ hashtags: [] })),
         api.get('/api/spaceflow/explore/suggested-users?limit=10').catch(() => ({ users: [] })),
       ]);
-      if (postsRes?.posts) setPosts(postsRes.posts);
+      if (galleryRes?.items) {
+        setItems(galleryRes.items);
+        const liked = new Set<string>();
+        galleryRes.items.forEach((p: any) => { if (p.isLiked) liked.add(p.id); });
+        setLikedSet(liked);
+      }
       if (hashtagsRes?.hashtags) setHashtags(hashtagsRes.hashtags);
       if (usersRes?.users) setSuggestedUsers(usersRes.users);
     } catch {
@@ -81,9 +181,31 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
     } finally {
       setLoading(false);
     }
-  }, [api]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api, mediaFilter, scope, sortMode]);
 
-  useEffect(() => { fetchExplore(); }, [fetchExplore]);
+  // Initial load
+  useEffect(() => { fetchGallery(); }, [fetchGallery]);
+
+  // Cleanup debounce timer
+  useEffect(() => {
+    return () => { clearTimeout(searchTimerRef.current); };
+  }, []);
+
+  // Re-fetch when category changes
+  useEffect(() => {
+    fetchGallery(searchQuery, activeCategory);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCategory]);
+
+  // Debounced search
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      fetchGallery(value, activeCategory);
+    }, 400);
+  };
 
   const handleFollow = async (userId: string) => {
     try {
@@ -101,19 +223,15 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
     }
   };
 
-  const filteredPosts = posts; // Categories filter à implémenter quand le backend le supporte
   const filteredUsers = searchQuery
     ? suggestedUsers.filter(u =>
         `${u.firstName} ${u.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
         u.role.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : suggestedUsers;
-  const filteredHashtags = searchQuery
-    ? hashtags.filter(h => h.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    : hashtags;
 
   const tabs = [
-    { key: 'trending' as const, label: 'Tendances', icon: <FireOutlined /> },
+    { key: 'gallery' as const, label: 'Galerie', icon: <AppstoreOutlined /> },
     { key: 'people' as const, label: 'Personnes', icon: <TeamOutlined /> },
     { key: 'hashtags' as const, label: 'Hashtags', icon: <RiseOutlined /> },
   ];
@@ -125,6 +243,8 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
     { emoji: '💼', label: 'Business' },
     { emoji: '🎓', label: 'Formation' },
     { emoji: '🌍', label: 'Local' },
+    { emoji: '🧑‍💼', label: 'Emploi' },
+    { emoji: '🛒', label: 'Market' },
   ];
 
   return (
@@ -135,38 +255,23 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: 12, paddingTop: 4 }}>
         <span style={{ fontSize: 20, fontWeight: 800, background: SF.gradientSecondary, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-          🔍 Explore
+          � Explorer
         </span>
       </div>
 
       {/* Search */}
       <Input
         prefix={<SearchOutlined style={{ color: SF.textMuted }} />}
-        placeholder="Rechercher personnes, hashtags, posts..."
+        placeholder="Rechercher personnes, hashtags, médias..."
         value={searchQuery}
-        onChange={e => setSearchQuery(e.target.value)}
-        style={{ borderRadius: 20, background: SF.cardBg, border: 'none', marginBottom: 12 }}
+        onChange={e => handleSearchChange(e.target.value)}
+        allowClear
+        style={{ borderRadius: 20, background: SF.cardBg, border: 'none', marginBottom: 10 }}
         size="large"
       />
 
-      {/* Category pills */}
-      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', marginBottom: 12, scrollbarWidth: 'none', paddingBottom: 2 }}>
-        {categories.map(cat => (
-          <Tag key={cat.label}
-            onClick={() => setActiveCategory(activeCategory === cat.label ? null : cat.label)}
-            style={{
-            borderRadius: 20, padding: '4px 12px', cursor: 'pointer', border: 'none',
-            background: activeCategory === cat.label ? SF.primary + '20' : SF.cardBg,
-            color: activeCategory === cat.label ? SF.primary : SF.text,
-            fontSize: 12, flexShrink: 0, boxShadow: SF.shadow,
-          }}>
-            {cat.emoji} {cat.label}
-          </Tag>
-        ))}
-      </div>
-
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 0, marginBottom: 12, background: SF.cardBg, borderRadius: SF.radiusSm, overflow: 'hidden', boxShadow: SF.shadow }}>
+      <div style={{ display: 'flex', gap: 0, marginBottom: 10, background: SF.cardBg, borderRadius: SF.radiusSm, overflow: 'hidden', boxShadow: SF.shadow }}>
         {tabs.map(tab => (
           <div
             key={tab.key}
@@ -184,52 +289,182 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
         ))}
       </div>
 
-      {/* Trending Posts — Masonry grid */}
-      {activeTab === 'trending' && (
+      {/* ═══════════════════════════════════════════════════════════ */}
+      {/* GALLERY TAB — Instagram-style media grid */}
+      {/* ═══════════════════════════════════════════════════════════ */}
+      {activeTab === 'gallery' && (
         <>
+          {/* ── Scope filter: Amis / Organisation / Tout le monde ── */}
+          <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+            {([
+              { key: 'all' as const, label: '🌍 Tous', },
+              { key: 'friends' as const, label: '👥 Amis' },
+              { key: 'org' as const, label: '🏢 Organisation' },
+            ]).map(s => (
+              <div
+                key={s.key}
+                onClick={() => setScope(s.key)}
+                style={{
+                  flex: 1, padding: '6px 0', textAlign: 'center', cursor: 'pointer',
+                  borderRadius: 20, fontSize: 11, fontWeight: 600,
+                  background: scope === s.key ? SF.gradientPrimary : SF.cardBg,
+                  color: scope === s.key ? '#fff' : SF.textSecondary,
+                  boxShadow: scope === s.key ? SF.shadowMd : SF.shadow,
+                  transition: 'all 0.2s',
+                }}
+              >
+                {s.label}
+              </div>
+            ))}
+          </div>
+
+          {/* ── Type + Sort filters ── */}
+          <div style={{ display: 'flex', gap: 4, marginBottom: 8, alignItems: 'center' }}>
+            {/* Type filters */}
+            <div style={{ display: 'flex', gap: 3, flex: 1 }}>
+              {([
+                { key: 'all' as const, label: 'Tout', icon: <AppstoreOutlined style={{ fontSize: 11 }} /> },
+                { key: 'photo' as const, label: 'Photos', icon: <PictureOutlined style={{ fontSize: 11 }} /> },
+                { key: 'video' as const, label: 'Vidéos', icon: <VideoCameraOutlined style={{ fontSize: 11 }} /> },
+              ]).map(t => (
+                <Tag
+                  key={t.key}
+                  onClick={() => setMediaFilter(t.key)}
+                  style={{
+                    borderRadius: 16, padding: '3px 10px', cursor: 'pointer', border: 'none',
+                    background: mediaFilter === t.key ? SF.secondary + '25' : SF.cardBg,
+                    color: mediaFilter === t.key ? SF.secondary : SF.textSecondary,
+                    fontSize: 11, fontWeight: 600, margin: 0,
+                  }}
+                >
+                  {t.icon} {t.label}
+                </Tag>
+              ))}
+            </div>
+
+            {/* Sort toggle */}
+            <div
+              onClick={() => setSortMode(sortMode === 'popular' ? 'recent' : 'popular')}
+              style={{
+                padding: '4px 10px', borderRadius: 16, cursor: 'pointer',
+                background: SF.cardBg, fontSize: 11, fontWeight: 600,
+                color: SF.textSecondary, boxShadow: SF.shadow,
+                display: 'flex', alignItems: 'center', gap: 4,
+              }}
+            >
+              {sortMode === 'popular'
+                ? <><RiseOutlined style={{ color: SF.fire, fontSize: 12 }} /> Tendances</>
+                : <><ClockCircleOutlined style={{ color: SF.primary, fontSize: 12 }} /> Récent</>
+              }
+            </div>
+          </div>
+
+          {/* ── Category pills ── */}
+          <div style={{ display: 'flex', gap: 5, overflowX: 'auto', marginBottom: 10, scrollbarWidth: 'none', paddingBottom: 2 }}>
+            {categories.map(cat => (
+              <Tag key={cat.label}
+                onClick={() => setActiveCategory(activeCategory === cat.label ? null : cat.label)}
+                style={{
+                  borderRadius: 20, padding: '3px 10px', cursor: 'pointer', border: 'none',
+                  background: activeCategory === cat.label ? SF.primary + '20' : SF.cardBg,
+                  color: activeCategory === cat.label ? SF.primary : SF.text,
+                  fontSize: 11, flexShrink: 0, boxShadow: SF.shadow, margin: 0,
+                }}>
+                {cat.emoji} {cat.label}
+              </Tag>
+            ))}
+          </div>
+
+          {/* ── Gallery Grid ── */}
           {loading ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 3 }}>
               {Array.from({ length: 9 }).map((_, i) => (
                 <div key={i} style={{
-                  aspectRatio: i % 5 === 0 ? '1/2' : '1/1',
-                  gridRow: i % 5 === 0 ? 'span 2' : 'span 1',
-                  background: SF.border, borderRadius: SF.radiusSm,
+                  aspectRatio: '1/1', background: SF.border, borderRadius: 4,
                   animation: 'pulse 1.5s infinite',
                 }} />
               ))}
             </div>
-          ) : filteredPosts.length > 0 ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
-              {filteredPosts.map((post, i) => (
-                <div key={post.id} style={{
+          ) : items.length > 0 ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 3 }}>
+              {items.map((item) => (
+                <div key={item.id} onClick={() => openPostDetail(item)} style={{
                   position: 'relative', cursor: 'pointer',
-                  aspectRatio: i % 7 === 0 ? '1/2' : '1/1',
-                  gridRow: i % 7 === 0 ? 'span 2' : 'span 1',
-                  borderRadius: SF.radiusSm, overflow: 'hidden',
-                  background: SF.border,
+                  aspectRatio: '1/1',
+                  borderRadius: 4, overflow: 'hidden',
+                  background: '#000',
                 }}>
-                  <img
-                    src={post.mediaUrl}
-                    alt=""
-                    loading="lazy"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  />
+                  {/* Thumbnail */}
+                  {item.mediaType === 'video' ? (
+                    <video
+                      src={item.mediaUrl}
+                      muted
+                      preload="metadata"
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  ) : (
+                    <img
+                      src={item.mediaUrl}
+                      alt=""
+                      loading="lazy"
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  )}
+
+                  {/* Video icon overlay */}
+                  {item.mediaType === 'video' && (
+                    <div style={{
+                      position: 'absolute', top: 6, right: 6,
+                      color: '#fff', fontSize: 14, textShadow: '0 1px 3px rgba(0,0,0,0.8)',
+                    }}>
+                      <PlayCircleOutlined />
+                    </div>
+                  )}
+
+                  {/* Story badge */}
+                  {item.isStory && (
+                    <div style={{
+                      position: 'absolute', top: 6, left: 6,
+                      background: SF.gradientStory, padding: '1px 6px',
+                      borderRadius: 8, fontSize: 9, color: '#fff', fontWeight: 700,
+                    }}>
+                      {item.isHighlight ? '⭐' : '◉'} Story
+                    </div>
+                  )}
+
+                  {/* Hover overlay with stats */}
+                  <div style={{
+                    position: 'absolute', inset: 0,
+                    background: 'rgba(0,0,0,0.3)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    gap: 12, opacity: 0, transition: 'opacity 0.2s',
+                    color: '#fff', fontSize: 13, fontWeight: 700,
+                  }}
+                    onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                    onMouseLeave={e => (e.currentTarget.style.opacity = '0')}
+                  >
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <HeartFilled /> {item.likesCount}
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <MessageOutlined /> {item.commentsCount}
+                    </span>
+                  </div>
+
+                  {/* Bottom gradient for mobile (always visible) */}
                   <div style={{
                     position: 'absolute', bottom: 0, left: 0, right: 0,
-                    background: 'linear-gradient(transparent, rgba(0,0,0,0.6))',
-                    padding: '16px 6px 4px', display: 'flex', gap: 8,
-                    color: 'white', fontSize: 10,
+                    background: 'linear-gradient(transparent, rgba(0,0,0,0.5))',
+                    padding: '10px 5px 3px', display: 'flex', gap: 6,
+                    color: 'white', fontSize: 9,
                   }}>
-                    <span
-                      onClick={(e) => { e.stopPropagation(); handleLikePost(post.id); }}
-                      style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 2 }}
-                    >
-                      {likedSet.has(post.id)
-                        ? <HeartFilled style={{ color: '#ff2d55', fontSize: 12 }} />
-                        : <HeartOutlined style={{ fontSize: 12 }} />}
-                      {' '}{post.likesCount}
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      {likedSet.has(item.id)
+                        ? <HeartFilled style={{ color: '#ff2d55', fontSize: 10 }} />
+                        : <HeartOutlined style={{ fontSize: 10 }} />}
+                      {item.likesCount}
                     </span>
-                    <span>💬 {post.commentsCount}</span>
+                    <span>💬 {item.commentsCount}</span>
                   </div>
                 </div>
               ))}
@@ -237,8 +472,11 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
           ) : (
             <EmptyState
               icon={<CompassOutlined style={{ fontSize: 40, color: SF.secondary }} />}
-              title="Explorez le réseau"
-              subtitle="Les posts populaires apparaîtront ici. Commencez par publier du contenu !"
+              title="Aucun média trouvé"
+              subtitle={scope === 'friends'
+                ? "Vos amis n'ont pas encore publié de médias. Changez le scope !"
+                : "Publiez des photos et vidéos sur le Mur pour les voir ici."
+              }
             />
           )}
         </>
@@ -287,7 +525,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
       {/* Hashtags tab */}
       {activeTab === 'hashtags' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {filteredHashtags.length > 0 ? filteredHashtags.map((ht, i) => (
+          {hashtags.length > 0 ? hashtags.map((ht, i) => (
             <div key={ht.id} style={{
               display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
               background: SF.cardBg, borderRadius: SF.radiusSm, boxShadow: SF.shadow,
@@ -315,6 +553,113 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
           )}
         </div>
       )}
+      
+      {/* Post / Story Detail Modal */}
+      <Modal
+        open={!!selectedPost}
+        onCancel={() => setSelectedPost(null)}
+        footer={null}
+        width="95vw"
+        style={{ maxWidth: 500, top: 20 }}
+        styles={{ body: { padding: 0 } }}
+        closeIcon={<CloseOutlined style={{ color: '#fff', fontSize: 16 }} />}
+      >
+        {selectedPost && (
+          <div style={{ background: SF.bg, borderRadius: 12, overflow: 'hidden' }}>
+            {/* Media */}
+            {selectedPost.mediaType === 'video' ? (
+              <video src={selectedPost.mediaUrl} controls autoPlay muted
+                style={{ width: '100%', maxHeight: '60vh', objectFit: 'contain', background: '#000' }} />
+            ) : (
+              <img src={selectedPost.mediaUrl} alt=""
+                style={{ width: '100%', maxHeight: '60vh', objectFit: 'contain', background: '#000' }} />
+            )}
+
+            {/* Author & Actions */}
+            <div style={{ padding: '12px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <Avatar size={36} src={selectedPost.authorAvatar}
+                  icon={!selectedPost.authorAvatar ? <UserOutlined /> : undefined}
+                  style={{ background: !selectedPost.authorAvatar ? SF.primary : undefined }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: SF.text }}>{selectedPost.authorName}</div>
+                  {selectedPost.isStory && (
+                    <div style={{ fontSize: 11, color: SF.accent, fontWeight: 600 }}>
+                      {selectedPost.isHighlight ? '⭐ Highlight' : '◉ Story'}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {selectedPost.caption && (
+                <div style={{ fontSize: 13, color: SF.text, marginBottom: 10, lineHeight: 1.5 }}>
+                  {selectedPost.caption}
+                </div>
+              )}
+
+              {/* Action bar — only for posts, not stories */}
+              {selectedPost.source === 'post' && (
+                <>
+                  <div style={{ display: 'flex', gap: 16, padding: '8px 0', borderTop: `1px solid ${SF.border}`, borderBottom: `1px solid ${SF.border}` }}>
+                    <span
+                      onClick={() => handleLikePost(selectedPost.id)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 13, color: likedSet.has(selectedPost.id) ? '#ff2d55' : SF.textSecondary }}>
+                      {likedSet.has(selectedPost.id) ? <HeartFilled style={{ fontSize: 18 }} /> : <HeartOutlined style={{ fontSize: 18 }} />}
+                      {selectedPost.likesCount}
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: SF.textSecondary }}>
+                      <MessageOutlined style={{ fontSize: 18 }} /> {selectedPost.commentsCount}
+                    </span>
+                  </div>
+
+                  {/* Comments */}
+                  <div style={{ maxHeight: 200, overflowY: 'auto', marginTop: 8, scrollbarWidth: 'thin' }}>
+                    {commentsLoading ? (
+                      <div style={{ textAlign: 'center', padding: 12, color: SF.textMuted, fontSize: 12 }}>Chargement...</div>
+                    ) : postComments.length > 0 ? (
+                      postComments.map(c => (
+                        <div key={c.id} style={{ display: 'flex', gap: 8, padding: '6px 0' }}>
+                          <Avatar size={24} src={c.authorAvatar} icon={!c.authorAvatar ? <UserOutlined /> : undefined}
+                            style={{ background: !c.authorAvatar ? SF.primary : undefined, flexShrink: 0 }} />
+                          <div>
+                            <span style={{ fontWeight: 600, fontSize: 12, color: SF.text }}>{c.authorName} </span>
+                            <span style={{ fontSize: 12, color: SF.text }}>{c.content}</span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div style={{ textAlign: 'center', padding: 12, color: SF.textMuted, fontSize: 12 }}>Aucun commentaire</div>
+                    )}
+                  </div>
+
+                  {/* Comment input */}
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
+                    <Input
+                      value={commentText}
+                      onChange={e => setCommentText(e.target.value)}
+                      onPressEnter={handleAddComment}
+                      placeholder="Ajouter un commentaire..."
+                      style={{ borderRadius: 20, flex: 1, background: SF.cardBg, border: 'none' }}
+                      size="small"
+                    />
+                    <SendOutlined
+                      onClick={handleAddComment}
+                      style={{ fontSize: 16, color: commentText.trim() ? SF.primary : SF.textMuted, cursor: commentText.trim() ? 'pointer' : 'default' }}
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Story info */}
+              {selectedPost.source === 'story' && (
+                <div style={{ padding: '8px 0', borderTop: `1px solid ${SF.border}`, fontSize: 12, color: SF.textMuted, textAlign: 'center' }}>
+                  👁 {selectedPost.likesCount} vue{selectedPost.likesCount !== 1 ? 's' : ''}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };
