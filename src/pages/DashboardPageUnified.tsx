@@ -1546,6 +1546,28 @@ export default function DashboardPageUnified() {
     });
   }, []);
 
+  // Drag-to-scroll for module pills bar (desktop mouse + mobile touch)
+  const pillsRef = useRef<HTMLDivElement>(null);
+  const pillsDrag = useRef({ active: false, startX: 0, scrollLeft: 0, moved: false });
+  const onPillsMouseDown = useCallback((e: React.MouseEvent) => {
+    const el = pillsRef.current; if (!el) return;
+    pillsDrag.current = { active: true, startX: e.pageX - el.offsetLeft, scrollLeft: el.scrollLeft, moved: false };
+    el.style.cursor = 'grabbing';
+  }, []);
+  const onPillsMouseMove = useCallback((e: React.MouseEvent) => {
+    const d = pillsDrag.current; if (!d.active) return;
+    const el = pillsRef.current; if (!el) return;
+    e.preventDefault();
+    const x = e.pageX - el.offsetLeft;
+    const walk = x - d.startX;
+    if (Math.abs(walk) > 3) d.moved = true;
+    el.scrollLeft = d.scrollLeft - walk;
+  }, []);
+  const onPillsMouseUp = useCallback(() => {
+    const el = pillsRef.current; if (el) el.style.cursor = 'grab';
+    pillsDrag.current.active = false;
+  }, []);
+
   const sectionsWithModules = useMemo(() => {
     const activeSections = sharedSections.filter(s => s.active);
     return organizeModulesInSections(activeSections, modules as any || []);
@@ -2256,9 +2278,13 @@ export default function DashboardPageUnified() {
       </FBCard>
 
       {/* Module shortcuts — compact pill style (CRM + SpaceFlow apps) */}
-      <div style={{
+      <div ref={pillsRef}
+        onMouseDown={onPillsMouseDown} onMouseMove={onPillsMouseMove}
+        onMouseUp={onPillsMouseUp} onMouseLeave={onPillsMouseUp}
+        style={{
         display: "flex", gap: 4, overflowX: "auto", marginBottom: 4,
         WebkitOverflowScrolling: "touch", scrollbarWidth: "none",
+        cursor: "grab",
       }}>
           {sectionsWithModules.flatMap(s => s.modules)
             .sort((a, b) => {
@@ -2272,7 +2298,7 @@ export default function DashboardPageUnified() {
             const isFav = favModules.has(route);
             return (
               <div key={mod.key || mod.id || i}
-                onClick={() => { openModule(route); setCenterApp(null); }}
+                onClick={() => { if (!pillsDrag.current.moved) { openModule(route); setCenterApp(null); } }}
                 onDoubleClick={(e) => { e.preventDefault(); toggleFavModule(route); }}
                 style={{ cursor: 'pointer', userSelect: 'none' }}>
                 <div style={{
@@ -2307,7 +2333,7 @@ export default function DashboardPageUnified() {
           ].map(sf => {
             const isActive = centerApp === sf.id && !activeModule;
             return (
-              <div key={sf.id} onClick={() => { setCenterApp(sf.id); if (activeModule) goHome(); }} style={{ cursor: 'pointer' }}>
+              <div key={sf.id} onClick={() => { if (!pillsDrag.current.moved) { setCenterApp(sf.id); if (activeModule) goHome(); } }} style={{ cursor: 'pointer' }}>
                 <div style={{
                   flex: "0 0 auto", display: "flex", alignItems: "center",
                   gap: 4, padding: "4px 8px",
@@ -2327,7 +2353,7 @@ export default function DashboardPageUnified() {
             );
           }))}
           {!isMobile && (
-            <div onClick={() => { goHome(); setCenterApp(null); }} style={{ cursor: 'pointer' }}>
+            <div onClick={() => { if (!pillsDrag.current.moved) { goHome(); setCenterApp(null); } }} style={{ cursor: 'pointer' }}>
               <AntTooltip title="Rechercher modules">
                 <div style={{
                   flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "center",

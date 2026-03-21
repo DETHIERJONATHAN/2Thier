@@ -101,6 +101,8 @@ const Sidebar = ({ modules }: { modules: Array<ModuleNav> }) => {
     { key: 'admin-permissions', label: 'Permissions', icon: 'FaShieldAlt', route: '/admin/permissions', permission: 'admin_panel:view' },
     { key: 'admin-rights-summary', label: 'Synthèse des droits', icon: 'FaFileContract', route: '/admin/rights-summary', permission: 'admin_panel:view' },
     { key: 'admin-orgs', label: 'Organisations', icon: 'FaBuilding', route: '/admin/organizations', permission: 'super_admin' },
+    { key: 'admin-sites', label: 'Sites Web', icon: 'FaGlobe', route: '/admin/sites-web', permission: 'admin_panel:view' },
+    { key: 'admin-documents', label: 'Documents', icon: 'FaFileAlt', route: '/admin/documents', permission: 'admin_panel:view' },
   ], []);
 
 
