@@ -20,7 +20,7 @@ import { logSecurityEvent } from '../security/securityLogger.js';
  * 
  * PRIORITÉ DE DÉTECTION :
  * 1. Codespaces → https://<codespace-name>-4000.app.github.dev/api/google-auth/callback
- * 2. Production → https://app.2thier.be/api/google-auth/callback
+ * 2. Production → https://www.zhiive.com/api/google-auth/callback
  * 3. Local → http://localhost:4000/api/google-auth/callback
  * 
  * ⚠️ TOUS ces URIs doivent être enregistrés dans Google Cloud Console !
@@ -40,8 +40,8 @@ const GOOGLE_SCOPES = GOOGLE_SCOPES_LIST.join(' ');
  * 
  * Ordre de priorité:
  * 1. Codespaces → https://<codespace-name>-5173.app.github.dev
- * 2. FRONTEND_URL explicite (production: https://app.2thier.be)
- * 3. Production sans FRONTEND_URL → https://app.2thier.be
+ * 2. FRONTEND_URL explicite (production: https://www.zhiive.com)
+ * 3. Production sans FRONTEND_URL → https://www.zhiive.com
  * 4. Local → http://localhost:5173
  */
 function getFrontendUrl(): string {
@@ -61,10 +61,10 @@ function getFrontendUrl(): string {
     return frontendUrl;
   }
   
-  // PRIORITÉ 3: Production → https://app.2thier.be
+  // PRIORITÉ 3: Production → https://www.zhiive.com
   if (process.env.NODE_ENV === 'production') {
-    console.log('[GOOGLE-AUTH] 🌐 Production détectée, FRONTEND_URL: https://app.2thier.be');
-    return 'https://app.2thier.be';
+    console.log('[GOOGLE-AUTH] 🌐 Production détectée, FRONTEND_URL: https://www.zhiive.com');
+    return 'https://www.zhiive.com';
   }
   
   // PRIORITÉ 4: Fallback local
@@ -78,7 +78,7 @@ function getFrontendUrl(): string {
  * 
  * Ordre de priorité:
  * 1. Codespaces → https://<codespace-name>-4000.app.github.dev/api/google-auth/callback (backend direct)
- * 2. Production → https://app.2thier.be/api/google-auth/callback
+ * 2. Production → https://www.zhiive.com/api/google-auth/callback
  * 3. Local → http://localhost:4000/api/google-auth/callback
  * 
  * ⚠️ IMPORTANT: Tous ces URIs doivent être enregistrés dans Google Cloud Console !
@@ -112,9 +112,9 @@ function getOAuthRedirectUri(hostHeader?: string): string {
     return redirectUri;
   }
   
-  // CAS 2: Production (app.2thier.be)
-  if (host.includes('app.2thier.be') || host.includes('2thier.be')) {
-    const redirectUri = 'https://app.2thier.be/api/google-auth/callback';
+  // CAS 2: Production (www.zhiive.com ou app.2thier.be)
+  if (host.includes('zhiive.com') || host.includes('app.2thier.be') || host.includes('2thier.be')) {
+    const redirectUri = 'https://www.zhiive.com/api/google-auth/callback';
     console.log('[GOOGLE-AUTH] 🌐 Production détectée:', { host, redirectUri });
     return redirectUri;
   }

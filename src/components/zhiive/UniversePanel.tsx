@@ -5,7 +5,9 @@ import {
   EnvironmentOutlined, ClockCircleOutlined, HeartOutlined,
   LockOutlined, GiftOutlined,
 } from '@ant-design/icons';
-import { SF } from './SpaceFlowTheme';
+import { SF } from './ZhiiveTheme';
+import { useZhiiveNav } from '../../contexts/ZhiiveNavContext';
+import { useAuth } from '../../auth/useAuth';
 
 interface SocialEventData {
   id: string;
@@ -47,6 +49,10 @@ interface UniversePanelProps {
 }
 
 const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
+  const { feedMode } = useZhiiveNav();
+  const { currentOrganization } = useAuth();
+  const isOrgMode = feedMode === 'org' && !!currentOrganization;
+  const orgLogo = (currentOrganization as any)?.logoUrl || null;
   const [activeSection, setActiveSection] = useState<'pulse' | 'events' | 'capsules' | 'orbit'>('pulse');
   const [events, setEvents] = useState<SocialEventData[]>([]);
   const [capsules, setCapsules] = useState<TimeCapsuleData[]>([]);
@@ -62,6 +68,7 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
   const [eventLocation, setEventLocation] = useState('');
   const [eventStartDate, setEventStartDate] = useState<any>(null);
   const [eventSubmitting, setEventSubmitting] = useState(false);
+  const [eventVisibility, setEventVisibility] = useState<string>(currentOrganization ? 'IN' : 'ALL');
 
   // Capsule modal
   const [capsuleModalOpen, setCapsuleModalOpen] = useState(false);
@@ -75,9 +82,9 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
   const fetchData = useCallback(async () => {
     try {
       const [eventsRes, capsulesRes, orbitRes] = await Promise.all([
-        api.get('/api/spaceflow/events?limit=10').catch(() => ({ events: [] })),
-        api.get('/api/spaceflow/capsules?limit=10').catch(() => ({ capsules: [] })),
-        api.get('/api/spaceflow/orbit').catch(() => ({ friends: [] })),
+        api.get(`/api/zhiive/events?limit=10&mode=${feedMode}`).catch(() => ({ events: [] })),
+        api.get(`/api/zhiive/capsules?limit=10&mode=${feedMode}`).catch(() => ({ capsules: [] })),
+        api.get(`/api/zhiive/orbit?mode=${feedMode}`).catch(() => ({ friends: [] })),
       ]);
       if (eventsRes?.events) setEvents(eventsRes.events);
       if (capsulesRes?.capsules) setCapsules(capsulesRes.capsules);
@@ -87,7 +94,7 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
     } finally {
       setLoading(false);
     }
-  }, [api]);
+  }, [api, feedMode]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -96,12 +103,14 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
     if (!eventTitle.trim() || !eventStartDate) return;
     setEventSubmitting(true);
     try {
-      await api.post('/api/spaceflow/events', {
+      await api.post('/api/zhiive/events', {
         title: eventTitle.trim(),
         description: eventDesc.trim(),
         type: eventType,
         location: eventLocation.trim(),
         startDate: eventStartDate.toISOString(),
+        visibility: eventVisibility,
+        publishAsOrg: isOrgMode ? true : undefined,
       });
       message.success('Événement créé ! 📅');
       setEventTitle(''); setEventDesc(''); setEventLocation('');
@@ -117,11 +126,11 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
   const handleRSVP = async (eventId: string) => {
     try {
       if (rsvpSet.has(eventId)) {
-        await api.delete(`/api/spaceflow/events/${eventId}/rsvp`);
+        await api.delete(`/api/zhiive/events/${eventId}/rsvp`);
         setRsvpSet(prev => { const next = new Set(prev); next.delete(eventId); return next; });
         message.success('Inscription annulée');
       } else {
-        await api.post(`/api/spaceflow/events/${eventId}/rsvp`, { status: 'going' });
+        await api.post(`/api/zhiive/events/${eventId}/rsvp`, { status: 'going' });
         setRsvpSet(prev => new Set(prev).add(eventId));
         message.success('Participation confirmée ! 🎉');
       }
@@ -135,7 +144,7 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
     if (!capsuleContent.trim() || !capsuleUnlocksAt) return;
     setCapsuleSubmitting(true);
     try {
-      await api.post('/api/spaceflow/capsules', {
+      await api.post('/api/zhiive/capsules', {
         content: capsuleContent.trim(),
         unlocksAt: capsuleUnlocksAt.toISOString(),
       });
@@ -380,6 +389,31 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
               ]} />
               <Input value={eventLocation} onChange={e => setEventLocation(e.target.value)} prefix={<EnvironmentOutlined />} placeholder="Lieu" />
               <DatePicker value={eventStartDate} onChange={setEventStartDate} showTime placeholder="Date et heure" style={{ width: '100%' }} />
+
+              {/* Visibility selector */}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {(currentOrganization ? ['IN', 'ALL', 'OUT'] : ['ALL', 'OUT']).map(v => {
+                  const labels: Record<string, { icon: string; label: string; color: string }> = {
+                    IN: { icon: '👥', label: 'Organisation', color: '#1890ff' },
+                    ALL: { icon: '🌐', label: 'Public', color: '#52c41a' },
+                    OUT: { icon: '🔒', label: 'Privé', color: '#8c8c8c' },
+                  };
+                  const opt = labels[v];
+                  const active = eventVisibility === v;
+                  return (
+                    <div key={v} onClick={() => setEventVisibility(v)} style={{
+                      display: 'flex', alignItems: 'center', gap: 4, padding: '3px 10px',
+                      borderRadius: 14, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                      background: active ? opt.color + '18' : '#f5f5f5',
+                      color: active ? opt.color : '#999',
+                      border: active ? `1px solid ${opt.color}` : '1px solid transparent',
+                      transition: 'all 0.15s',
+                    }}>
+                      <span>{opt.icon}</span> <span>{opt.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </Modal>
 
@@ -541,15 +575,17 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
             position: 'relative', overflow: 'hidden',
           }}>
             {/* Central user */}
-            <Avatar size={48} src={currentUser?.avatarUrl}
-              icon={!currentUser?.avatarUrl ? <UserOutlined /> : undefined}
+            <Avatar size={48} src={isOrgMode ? (orgLogo || undefined) : (currentUser?.avatarUrl || undefined)}
+              icon={!isOrgMode && !currentUser?.avatarUrl ? <UserOutlined /> : undefined}
               style={{
-                background: !currentUser?.avatarUrl ? SF.primary : undefined,
-                border: `2px solid ${SF.primary}`,
+                background: isOrgMode ? (orgLogo ? 'transparent' : '#6C5CE7') : (!currentUser?.avatarUrl ? SF.primary : undefined),
+                border: `2px solid ${isOrgMode ? '#6C5CE7' : SF.primary}`,
                 position: 'relative', zIndex: 2,
               }}
-            />
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'white', marginTop: 4 }}>Vous</div>
+            >
+              {isOrgMode && !orgLogo && (currentOrganization?.name?.[0]?.toUpperCase() || 'O')}
+            </Avatar>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'white', marginTop: 4 }}>{isOrgMode ? currentOrganization?.name : 'Vous'}</div>
 
             {/* Orbital friends */}
             {orbitFriends.slice(0, 8).map((f, i) => {

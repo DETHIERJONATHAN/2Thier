@@ -26,10 +26,17 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     const includeRead = req.query.includeRead === 'true';
     const statusFilter = includeRead ? { status: { in: ['PENDING', 'READ'] } } : { status: 'PENDING' as const };
 
-    // SuperAdmin logic: can see ALL notifications
+    // SuperAdmin logic: can see ALL notifications BUT filter personal social notifications
     if (user.role === 'super_admin') {
         const notifications = await prisma.notification.findMany({
-            where: statusFilter,
+            where: {
+              ...statusFilter,
+              // Don't show other users' personal social notifications
+              OR: [
+                { type: { notIn: ['FRIEND_REQUEST_RECEIVED', 'FRIEND_REQUEST_ACCEPTED'] } },
+                { userId: userId },
+              ],
+            },
             orderBy: { createdAt: 'desc' },
             take: 100,
             include: { Organization: true }

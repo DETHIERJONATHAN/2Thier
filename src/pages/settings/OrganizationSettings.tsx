@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../auth/useAuth';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { Spin, message } from 'antd';
@@ -18,6 +18,7 @@ import {
   FileTextOutlined,
   TableOutlined,
   RightOutlined,
+  CameraOutlined,
 } from '@ant-design/icons';
 
 const FB = {
@@ -224,13 +225,37 @@ const OrganizationSettings: React.FC = () => {
   const { api } = useAuthenticatedApi();
   const [name, setName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   const userRole = user?.role;
   const isAdmin = userRole === 'admin' || userRole === 'super_admin';
 
+  const orgLogo = (currentOrganization as any)?.logoUrl || null;
+
   useEffect(() => {
     if (currentOrganization) setName(currentOrganization.name);
   }, [currentOrganization]);
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentOrganization) return;
+    setLogoUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('logo', file);
+      const resp: any = await api.post(`/api/organizations/${currentOrganization.id}/logo`, formData);
+      if (resp.success) {
+        message.success('Logo mis à jour !');
+        if (refetchUser) await refetchUser();
+      }
+    } catch {
+      message.error("Erreur lors de l'upload du logo.");
+    } finally {
+      setLogoUploading(false);
+      if (logoInputRef.current) logoInputRef.current.value = '';
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -266,12 +291,41 @@ const OrganizationSettings: React.FC = () => {
       {/* Header */}
       <FBCard>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{
-            width: 48, height: 48, borderRadius: '50%', background: FB.blue,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-          }}>
-            <BankOutlined style={{ fontSize: 22, color: FB.white }} />
+          <div
+            style={{
+              width: 64, height: 64, borderRadius: '50%', position: 'relative',
+              background: orgLogo ? 'transparent' : FB.blue,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              overflow: 'hidden', cursor: isAdmin ? 'pointer' : 'default',
+            }}
+            onClick={() => isAdmin && logoInputRef.current?.click()}
+            title={isAdmin ? 'Cliquer pour changer le logo' : undefined}
+          >
+            {orgLogo ? (
+              <img src={orgLogo} alt={currentOrganization.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+            ) : (
+              <BankOutlined style={{ fontSize: 28, color: FB.white }} />
+            )}
+            {isAdmin && (
+              <div style={{
+                position: 'absolute', inset: 0, borderRadius: '50%',
+                background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                opacity: 0, transition: 'opacity 0.2s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.opacity = '1'; }}
+              onMouseLeave={e => { e.currentTarget.style.opacity = '0'; }}
+              >
+                {logoUploading ? <LoadingOutlined style={{ color: '#fff', fontSize: 20 }} /> : <CameraOutlined style={{ color: '#fff', fontSize: 20 }} />}
+              </div>
+            )}
           </div>
+          <input
+            ref={logoInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml"
+            style={{ display: 'none' }}
+            onChange={handleLogoUpload}
+          />
           <div>
             <div style={{ fontSize: 20, fontWeight: 700, color: FB.text }}>Paramètres de l'organisation</div>
             <div style={{ fontSize: 14, color: FB.textSecondary }}>Configurez les informations de {currentOrganization.name}</div>

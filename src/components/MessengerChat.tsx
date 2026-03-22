@@ -89,7 +89,7 @@ const LIST_HEIGHT = 500;
 
 const MessengerChat: React.FC = () => {
   const { api } = useAuthenticatedApi();
-  const { user } = useAuth();
+  const { user, currentOrganization } = useAuth();
 
   // Panel & chat state
   const [isListOpen, setIsListOpen] = useState(false);
@@ -98,6 +98,11 @@ const MessengerChat: React.FC = () => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [friends, setFriends] = useState<Friend[]>([]);
   const [totalUnread, setTotalUnread] = useState(0);
+
+  // Mettre à jour le badge PWA quand les messages non lus changent
+  useEffect(() => {
+    import('../lib/pwaBadge').then(({ setMessageBadgeCount }) => setMessageBadgeCount(totalUnread));
+  }, [totalUnread]);
   const [inlineMessages, setInlineMessages] = useState<Message[]>([]);
   const [inlineNewMessage, setInlineNewMessage] = useState('');
   const [inlineSending, setInlineSending] = useState(false);
@@ -137,11 +142,13 @@ const MessengerChat: React.FC = () => {
   // Sync org friends on first load
   useEffect(() => {
     if (!user) return;
-    api.post('/api/friends/sync-org', {}).catch(() => {});
+    if (currentOrganization) {
+      api.post('/api/friends/sync-org', {}).catch(() => {});
+    }
     fetchConversations();
     fetchFriends();
     fetchUnread();
-  }, [user, api, fetchConversations, fetchFriends, fetchUnread]);
+  }, [user, api, currentOrganization, fetchConversations, fetchFriends, fetchUnread]);
 
   // ─── SERVICE WORKER + WEB PUSH REGISTRATION ────────────────
   useEffect(() => {
@@ -223,6 +230,23 @@ const MessengerChat: React.FC = () => {
     }, 5000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [isListOpen, openChats, activeConversationId, fetchUnread, fetchConversations, fetchInlineMessages]);
+
+  // Listen for open-messenger custom events (from ExplorePanel People tab, etc.)
+  useEffect(() => {
+    const handleOpenMessenger = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.conversationId) {
+        setIsListOpen(true);
+        setActiveConversationId(detail.conversationId);
+        setInlineMessages([]);
+        setInlineNewMessage('');
+        fetchInlineMessages(detail.conversationId);
+        api.post(`/api/messenger/conversations/${detail.conversationId}/read`, {}).catch(() => {});
+      }
+    };
+    window.addEventListener('open-messenger', handleOpenMessenger);
+    return () => window.removeEventListener('open-messenger', handleOpenMessenger);
+  }, [api, fetchInlineMessages]);
 
   // Auto-scroll inline messages
   useEffect(() => {

@@ -154,7 +154,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           />
         </Dropdown>
         
-        {/* Logo 2THIER CRM */}
+        {/* Logo Zhiive */}
         <div style={{ 
           color: 'white', 
           fontSize: '20px', 
@@ -162,7 +162,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           letterSpacing: '0.5px',
           marginRight: '40px'
         }}>
-          2THIER CRM
+          Zhiive
         </div>
         
         {/* Icône Maison */}

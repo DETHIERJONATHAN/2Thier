@@ -66,9 +66,9 @@ export class GoogleOAuthService {
         const codespaceName = match ? match[1] : hostHeader.replace('.app.github.dev', '').split(':')[0];
         redirectUri = `https://${codespaceName}-4000.app.github.dev/api/google-auth/callback`;
         console.log('[GoogleOAuthService] Codespaces détecté:', { codespaceName, redirectUri });
-      } else if (hostHeader.includes('2thier.be')) {
+      } else if (hostHeader.includes('zhiive.com') || hostHeader.includes('2thier.be')) {
         // Production
-        redirectUri = 'https://app.2thier.be/api/google-auth/callback';
+        redirectUri = 'https://www.zhiive.com/api/google-auth/callback';
         console.log('[GoogleOAuthService] Production détectée:', { redirectUri });
       } else {
         // Local

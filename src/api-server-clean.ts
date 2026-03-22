@@ -185,7 +185,9 @@ app.use(anomalyDetection);
 // ⚡ Configuration CORS sécurisée (Google Cloud Run + domaines 2thier.be + GitHub Codespaces)
 const FRONTEND_URL = process.env.FRONTEND_URL;
 const prodOrigins = [
-  FRONTEND_URL || 'https://app.2thier.be',
+  FRONTEND_URL || 'https://www.zhiive.com',
+  'https://www.zhiive.com',
+  'https://app.2thier.be',
   'https://www.2thier.be',
   'https://crm.2thier.be',
   'http://localhost:4000',  // Mode production local
@@ -431,9 +433,9 @@ if (process.env.NODE_ENV === 'production') {
     const dynamicManifestHandler = (req: express.Request, res: express.Response) => {
       // Fallback = CRM (app.2thier.be, localhost, etc.)
       let manifest: Record<string, unknown> = {
-        name: '2Thier CRM',
-        short_name: '2Thier',
-        description: 'CRM 2Thier - Gestion de Formulaires',
+        name: 'Zhiive',
+        short_name: 'Zhiive',
+        description: 'Zhiive - CRM & Réseau Social Professionnel',
         start_url: '/',
         scope: '/',
         display: 'standalone',

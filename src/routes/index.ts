@@ -90,7 +90,7 @@ import friendsRoutes from './friends'; // 👥 Routes Amis
 import messengerRoutes from './messenger'; // 💬 Routes Messenger
 import callsRoutes from './calls'; // 📹 Routes Appels Vidéo/Audio
 import pushRoutes from './push'; // 🔔 Routes Push Notifications
-import spaceflowRoutes from './spaceflow'; // 🌊 Routes SpaceFlow — Réseau Social Nouvelle Génération
+import zhiiveRoutes from './zhiive'; // 🌊 Routes Zhiive — Réseau Social Nouvelle Génération
 import { authenticateToken, fetchFullUser } from '../middleware/auth'; // 🔐 Middleware auth pour TBL
 
 const apiRouter = Router();
@@ -429,8 +429,8 @@ apiRouter.use('/messenger', messengerRoutes);
 apiRouter.use('/calls', callsRoutes);
 apiRouter.use('/push', pushRoutes);
 
-// 🌊 SPACEFLOW — RÉSEAU SOCIAL NOUVELLE GÉNÉRATION
-apiRouter.use('/spaceflow', spaceflowRoutes);
+// 🌊 ZHIIVE — RÉSEAU SOCIAL NOUVELLE GÉNÉRATION
+apiRouter.use('/zhiive', zhiiveRoutes);
 
 // apiRouter.use('/auth/google', googleAuthRouter); // NOUVEAU: Authentification Google OAuth - Commenté car non défini
 

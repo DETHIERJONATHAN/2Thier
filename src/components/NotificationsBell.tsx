@@ -9,6 +9,7 @@ import {
   EllipsisOutlined, ArrowLeftOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
+import { setNotificationBadgeCount } from '../lib/pwaBadge';
 
 interface NotificationItem {
   id: string;
@@ -56,6 +57,8 @@ const NOTIF_CONFIG: Record<string, { icon: React.ReactNode; color: string; label
   TASK_COMPLETED:             { icon: <CheckOutlined />,         color: '#52c41a', label: 'Tâche terminée' },
   ROLE_UPDATE_AVAILABLE:      { icon: <TeamOutlined />,          color: '#722ed1', label: 'Rôle mis à jour' },
   AI_DAILY_DIGEST:            { icon: <RobotOutlined />,         color: '#722ed1', label: 'Résumé IA' },
+  FRIEND_REQUEST_RECEIVED:    { icon: <UserAddOutlined />,       color: '#13c2c2', label: 'Demande d\'ami' },
+  FRIEND_REQUEST_ACCEPTED:    { icon: <TeamOutlined />,          color: '#52c41a', label: 'Ami accepté' },
 };
 
 function getRelativeTime(dateStr: string): string {
@@ -140,6 +143,27 @@ const NotificationsBell = () => {
     }
   }, [markAsRead]);
 
+  const handleFriendRequestAction = useCallback(async (notif: NotificationItem, action: 'accept' | 'reject' | 'block') => {
+    const friendshipId = notif.data?.friendshipId;
+    if (!friendshipId) return;
+    try {
+      if (action === 'accept') {
+        await api.post(`/api/friends/${friendshipId}/accept`);
+        setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, data: { ...n.data, handled: 'accepted' }, status: 'READ' } : n));
+      } else if (action === 'block') {
+        await api.post(`/api/friends/${friendshipId}/block`);
+        setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, data: { ...n.data, handled: 'blocked' }, status: 'READ' } : n));
+      } else {
+        await api.delete(`/api/friends/${friendshipId}`);
+        setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, data: { ...n.data, handled: 'rejected' }, status: 'READ' } : n));
+      }
+      // Persist handled state in notification data via PATCH
+      try {
+        await api.patch(`/api/notifications/${notif.id}/read`);
+      } catch (_) {}
+    } catch (_) {}
+  }, [api]);
+
   useEffect(() => {
     fetchNotifications();
     const interval = setInterval(fetchNotifications, 15000);
@@ -149,6 +173,11 @@ const NotificationsBell = () => {
   useEffect(() => { if (isOpen) setHasNew(false); }, [isOpen]);
 
   const unreadCount = useMemo(() => notifications.filter(n => n.status === 'PENDING').length, [notifications]);
+
+  // Mettre à jour le badge PWA (icône écran d'accueil) quand le compteur change
+  useEffect(() => {
+    setNotificationBadgeCount(unreadCount);
+  }, [unreadCount]);
 
   const filtered = useMemo(() => {
     const list = tab === 'unread' ? notifications.filter(n => n.status === 'PENDING') : notifications;
@@ -218,6 +247,50 @@ const NotificationsBell = () => {
           }}>
             {getRelativeTime(notif.createdAt)}
           </div>
+          {/* Accept/Reject buttons for friend requests */}
+          {notif.type === 'FRIEND_REQUEST_RECEIVED' && !notif.data?.handled && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+              <div
+                onClick={e => { e.stopPropagation(); handleFriendRequestAction(notif, 'accept'); }}
+                style={{
+                  padding: '4px 16px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                  background: '#0866FF', color: 'white', cursor: 'pointer',
+                  transition: 'opacity 0.15s',
+                }}
+              >
+                Accepter
+              </div>
+              <div
+                onClick={e => { e.stopPropagation(); handleFriendRequestAction(notif, 'reject'); }}
+                style={{
+                  padding: '4px 16px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                  background: '#E4E6EB', color: '#050505', cursor: 'pointer',
+                  transition: 'opacity 0.15s',
+                }}
+              >
+                Refuser
+              </div>
+              <div
+                onClick={e => { e.stopPropagation(); handleFriendRequestAction(notif, 'block'); }}
+                style={{
+                  padding: '4px 16px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                  background: '#ffccc7', color: '#cf1322', cursor: 'pointer',
+                  transition: 'opacity 0.15s',
+                }}
+              >
+                Bloquer
+              </div>
+            </div>
+          )}
+          {notif.type === 'FRIEND_REQUEST_RECEIVED' && notif.data?.handled === 'accepted' && (
+            <div style={{ fontSize: 11, marginTop: 4, color: '#52c41a', fontWeight: 600 }}>Demande acceptée ✅</div>
+          )}
+          {notif.type === 'FRIEND_REQUEST_RECEIVED' && notif.data?.handled === 'rejected' && (
+            <div style={{ fontSize: 11, marginTop: 4, color: '#ff4d4f', fontWeight: 600 }}>Demande refusée</div>
+          )}
+          {notif.type === 'FRIEND_REQUEST_RECEIVED' && notif.data?.handled === 'blocked' && (
+            <div style={{ fontSize: 11, marginTop: 4, color: '#cf1322', fontWeight: 600 }}>Utilisateur bloqué 🚫</div>
+          )}
         </div>
 
         {/* Point bleu non-lu + actions hover */}

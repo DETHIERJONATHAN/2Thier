@@ -987,7 +987,7 @@ router.get('/:slug/qrcode', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Formulaire introuvable' });
     }
 
-    const url = `https://app.2thier.be/form/${slug}`;
+    const url = `https://www.zhiive.com/form/${slug}`;
 
     if (format === 'svg') {
       const svg = await QRCode.toString(url, { type: 'svg', width: size, margin: 2 });

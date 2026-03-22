@@ -1020,7 +1020,7 @@ const TelnyxConfig: React.FC<TelnyxConfigProps> = ({
                 : []
             }
           >
-            <Input placeholder="https://app.2thier.be/api/telnyx/webhooks" />
+            <Input placeholder="https://www.zhiive.com/api/telnyx/webhooks" />
           </Form.Item>
 
           <Form.Item

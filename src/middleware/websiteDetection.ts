@@ -23,6 +23,8 @@ const isProduction = process.env.NODE_ENV === 'production';
 
 // Domaines réservés pour le CRM (ne sont PAS des sites vitrines)
 const CRM_DOMAINS = [
+  'www.zhiive.com',
+  'zhiive.com',
   'app.2thier.be',
   'api.2thier.be',
   'crm.2thier.be',

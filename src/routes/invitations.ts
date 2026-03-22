@@ -50,7 +50,16 @@ router.post('/', authMiddleware, requireRole(['admin', 'super_admin']), async (r
       return;
     }
 
-    // 2. Trouver le rôle (soit spécifique à l'organisation, soit global)
+    // 2. Vérifier si l'e-mail appartient déjà à un utilisateur existant du réseau
+    const existingNetworkUser = await prisma.user.findUnique({ where: { email } });
+    if (existingNetworkUser) {
+      res.status(409).json({ 
+        message: "Cette adresse e-mail est déjà utilisée par un utilisateur du réseau Zhiive. L'invité doit utiliser une adresse e-mail différente."
+      });
+      return;
+    }
+
+    // 3. Trouver le rôle (soit spécifique à l'organisation, soit global)
     const role = await prisma.role.findFirst({
       where: { 
         name: roleName, 
@@ -65,7 +74,7 @@ router.post('/', authMiddleware, requireRole(['admin', 'super_admin']), async (r
       return;
     }
 
-    // 3. Gérer les invitations existantes pour ce couple email/organisation
+    // 4. Gérer les invitations existantes pour ce couple email/organisation
     const existingInvitation = await prisma.invitation.findUnique({
       where: { email_organizationId: { email, organizationId } },
     });
@@ -79,11 +88,7 @@ router.post('/', authMiddleware, requireRole(['admin', 'super_admin']), async (r
       await prisma.invitation.delete({ where: { id: existingInvitation.id } });
     }
 
-    // 4. Vérifier si l'e-mail correspond à un utilisateur existant
-    const targetUser = await prisma.user.findUnique({
-      where: { email },
-    });
-
+    // 5. Générer le token d'invitation
     const token = uuidv4();
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
@@ -103,12 +108,6 @@ router.post('/', authMiddleware, requireRole(['admin', 'super_admin']), async (r
       status: 'PENDING',
       createWorkspaceAccount: createWorkspaceAccount || false,
     };
-
-    // Si un utilisateur existe (quel que soit son statut ou ses organisations), on lie l'invitation
-    if (targetUser) {
-      // Relation "Invitation_targetUserIdToUser" côté Invitation
-  invitationData.User_Invitation_targetUserIdToUser = { connect: { id: targetUser.id } } as unknown as Prisma.User_Invitation_targetUserIdToUserCreateNestedOneWithoutInvitationInput;
-    }
 
     const newInvitation = await prisma.invitation.create({
       data: invitationData,

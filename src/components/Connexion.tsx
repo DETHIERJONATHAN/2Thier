@@ -37,44 +37,44 @@ export default function Connexion() {
   return (
     <>
       <style>{`
-        .zhivv-login-root { display: flex; min-height: 100vh; font-family: 'Inter', 'Segoe UI', -apple-system, sans-serif; }
-        .zhivv-brand-panel { display: none; }
-        .zhivv-form-panel { display: flex; align-items: center; justify-content: center; width: 100%; padding: 24px; background: #f8fafc; }
-        .zhivv-mobile-logo { text-align: center; margin-bottom: 32px; }
+        .zhiive-login-root { display: flex; min-height: 100vh; font-family: 'Inter', 'Segoe UI', -apple-system, sans-serif; }
+        .zhiive-brand-panel { display: none; }
+        .zhiive-form-panel { display: flex; align-items: center; justify-content: center; width: 100%; padding: 24px; background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #2563eb 100%); flex-direction: column; }
+        .zhiive-mobile-logo { text-align: center; margin-bottom: 32px; }
         @media (min-width: 1024px) {
-          .zhivv-brand-panel { display: flex; flex-direction: column; justify-content: space-between; width: 50%; padding: 48px; position: relative; overflow: hidden; }
-          .zhivv-form-panel { width: 50%; padding: 48px; }
-          .zhivv-mobile-logo { display: none; }
+          .zhiive-brand-panel { display: flex; flex-direction: column; justify-content: space-between; width: 50%; padding: 48px; position: relative; overflow: hidden; }
+          .zhiive-form-panel { width: 50%; padding: 48px; background: #f8fafc; flex-direction: column; }
+          .zhiive-mobile-logo { display: none; }
         }
-        @keyframes zhivvPulse {
+        @keyframes zhiivePulse {
           0%, 100% { opacity: 0.3; transform: scale(1); }
           50% { opacity: 0.8; transform: scale(1.6); }
         }
-        .zhivv-dot { position: absolute; border-radius: 50%; animation: zhivvPulse 3s ease-in-out infinite; }
+        .zhiive-dot { position: absolute; border-radius: 50%; animation: zhiivePulse 3s ease-in-out infinite; }
       `}</style>
 
-      <div className="zhivv-login-root">
+      <div className="zhiive-login-root">
         {/* === PANNEAU GAUCHE — Branding === */}
-        <div className="zhivv-brand-panel" style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #2563eb 100%)' }}>
+        <div className="zhiive-brand-panel" style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #2563eb 100%)' }}>
           {/* Cercles décoratifs */}
           <div style={{ position: 'absolute', top: 0, right: 0, width: 380, height: 380, borderRadius: '50%', opacity: 0.08, background: 'radial-gradient(circle, #60a5fa 0%, transparent 70%)', transform: 'translate(30%, -30%)' }} />
           <div style={{ position: 'absolute', bottom: 0, left: 0, width: 280, height: 280, borderRadius: '50%', opacity: 0.08, background: 'radial-gradient(circle, #3b82f6 0%, transparent 70%)', transform: 'translate(-20%, 20%)' }} />
           {/* Points lumineux animés */}
-          <div className="zhivv-dot" style={{ top: '25%', right: '25%', width: 6, height: 6, background: '#60a5fa' }} />
-          <div className="zhivv-dot" style={{ top: '60%', right: '35%', width: 8, height: 8, background: '#93c5fd', animationDelay: '1s', animationDuration: '4s' }} />
-          <div className="zhivv-dot" style={{ top: '45%', left: '20%', width: 5, height: 5, background: '#38bdf8', animationDelay: '0.5s', animationDuration: '3.5s' }} />
+          <div className="zhiive-dot" style={{ top: '25%', right: '25%', width: 6, height: 6, background: '#60a5fa' }} />
+          <div className="zhiive-dot" style={{ top: '60%', right: '35%', width: 8, height: 8, background: '#93c5fd', animationDelay: '1s', animationDuration: '4s' }} />
+          <div className="zhiive-dot" style={{ top: '45%', left: '20%', width: 5, height: 5, background: '#38bdf8', animationDelay: '0.5s', animationDuration: '3.5s' }} />
 
           {/* Logo + Nom */}
-          <div style={{ position: 'relative', zIndex: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 8 }}>
-              <img src="/zhivv-logo.png" alt="Zhivv" style={{ width: 48, height: 48, borderRadius: 14, objectFit: 'contain' }} />
-              <span style={{ fontSize: 30, fontWeight: 700, color: '#fff', letterSpacing: -0.5 }}>Zhivv</span>
+          <div style={{ position: 'relative', zIndex: 10, textAlign: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 8, justifyContent: 'center' }}>
+              <img src="/zhiive-logo.png" alt="Zhiive" style={{ width: 56, height: 56, borderRadius: 14, objectFit: 'contain' }} />
+              <img src="/zhiive-ecrit.png" alt="Zhiive" style={{ height: 44, objectFit: 'contain' }} />
             </div>
-            <p style={{ color: '#93c5fd', fontSize: 16, margin: 0 }}>Votre réseau business, vivant.</p>
+            <p style={{ color: '#93c5fd', fontSize: 16, margin: 0, textAlign: 'center' }}>Votre ruche vivante.</p>
           </div>
 
           {/* Features */}
-          <div style={{ position: 'relative', zIndex: 10, display: 'flex', flexDirection: 'column', gap: 28 }}>
+          <div style={{ position: 'relative', zIndex: 10, display: 'flex', flexDirection: 'column', gap: 28, textAlign: 'left' }}>
             {features.map((f, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
                 <div style={{ width: 46, height: 46, borderRadius: 12, background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -89,18 +89,21 @@ export default function Connexion() {
           </div>
 
           {/* Footer */}
-          <div style={{ position: 'relative', zIndex: 10 }}>
-            <p style={{ color: 'rgba(147,197,253,0.6)', fontSize: 12, margin: 0 }}>© 2026 Zhivv — Vivant par nature.</p>
+          <div style={{ position: 'relative', zIndex: 10, textAlign: 'left' }}>
+            <p style={{ color: 'rgba(147,197,253,0.6)', fontSize: 12, margin: 0 }}>© 2026 <a href="https://www.zhiive.com" target="_blank" rel="noopener noreferrer" style={{ color: 'rgba(147,197,253,0.8)' }}>Zhiive</a> — Vivant par nature.</p>
           </div>
         </div>
 
         {/* === PANNEAU DROIT — Formulaire === */}
-        <div className="zhivv-form-panel">
+        <div className="zhiive-form-panel">
           <div style={{ width: '100%', maxWidth: 420 }}>
             {/* Logo mobile */}
-            <div className="zhivv-mobile-logo">
-              <img src="/zhivv-logo.png" alt="Zhivv" style={{ width: 56, height: 56, borderRadius: 16, objectFit: 'contain', marginBottom: 12, boxShadow: '0 4px 14px rgba(37,99,235,0.3)' }} />
-              <Title level={3} style={{ margin: 0 }}>Zhivv</Title>
+            <div className="zhiive-mobile-logo">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, justifyContent: 'center', marginBottom: 8 }}>
+                <img src="/zhiive-logo.png" alt="Zhiive" style={{ width: 56, height: 56, borderRadius: 16, objectFit: 'contain', boxShadow: '0 4px 14px rgba(37,99,235,0.3)' }} />
+                <img src="/zhiive-ecrit.png" alt="Zhiive" style={{ height: 40, objectFit: 'contain' }} />
+              </div>
+              <p style={{ color: '#93c5fd', fontSize: 15, margin: 0 }}>Votre ruche vivante.</p>
             </div>
 
             <div style={{ background: '#fff', borderRadius: 20, padding: '40px 36px', boxShadow: '0 4px 24px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9' }}>

@@ -8,6 +8,8 @@ import {
   CloseOutlined, SendOutlined, LoadingOutlined, DeleteOutlined,
   BookOutlined, BookFilled, RetweetOutlined, CopyOutlined,
 } from '@ant-design/icons';
+import { useZhiiveNav } from '../../contexts/ZhiiveNavContext';
+import { useAuth } from '../../auth/useAuth';
 
 const SF = {
   primary: '#6C5CE7',
@@ -40,6 +42,11 @@ interface ReelsPanelProps {
 }
 
 const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
+  const { feedMode } = useZhiiveNav();
+  const { currentOrganization } = useAuth();
+  const isOrgMode = feedMode === 'org' && !!currentOrganization;
+  const orgLogo = (currentOrganization as any)?.logoUrl || null;
+  const commentAvatarSrc = isOrgMode ? (orgLogo || undefined) : (currentUser?.avatarUrl || undefined);
   const [reels, setReels] = useState<Reel[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -56,6 +63,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
   const [reelPreview, setReelPreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [reelVisibility, setReelVisibility] = useState<string>(currentOrganization ? 'IN' : 'ALL');
 
   // === Commentaires ===
   const [commentModalOpen, setCommentModalOpen] = useState(false);
@@ -88,12 +96,12 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
     loadReels();
     return () => { if (reelPreview) URL.revokeObjectURL(reelPreview); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [feedMode]);
 
   const loadReels = async () => {
     try {
       setLoading(true);
-      const data = await api.get('/api/spaceflow/reels?limit=20');
+      const data = await api.get(`/api/zhiive/reels?limit=20&mode=${feedMode}`);
       const videos = (data?.reels || []).map((p: any) => ({
         id: p.id,
         authorId: p.authorId || '',
@@ -158,11 +166,11 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
     if (!authorId) return;
     try {
       if (followedSet.has(authorId)) {
-        await api.delete(`/api/spaceflow/follow/${authorId}`);
+        await api.delete(`/api/zhiive/follow/${authorId}`);
         setFollowedSet(prev => { const next = new Set(prev); next.delete(authorId); return next; });
         showToast(`Désabonné de @${authorName.replace(/\s+/g, '').toLowerCase()}`);
       } else {
-        await api.post(`/api/spaceflow/follow/${authorId}`);
+        await api.post(`/api/zhiive/follow/${authorId}`);
         setFollowedSet(prev => new Set(prev).add(authorId));
         showToast(`Suivi @${authorName.replace(/\s+/g, '').toLowerCase()} ! 🎉`);
       }
@@ -277,7 +285,8 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
         content: reelCaption.trim() || undefined,
         mediaUrls,
         mediaType: 'video',
-        visibility: 'ALL',
+        visibility: reelVisibility,
+        publishAsOrg: isOrgMode ? true : undefined,
       });
 
       showToast('Reel publié ! 🎬');
@@ -323,8 +332,9 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
     const text = parentCommentId ? replyText : commentText;
     if (!text.trim() || !commentReelId) return;
     try {
-      const body: Record<string, string> = { content: text.trim() };
+      const body: Record<string, any> = { content: text.trim() };
       if (parentCommentId) body.parentCommentId = parentCommentId;
+      if (isOrgMode) body.publishAsOrg = true;
       const newComment = await api.post(`/api/wall/posts/${commentReelId}/comments`, body);
       if (parentCommentId) {
         setComments(prev => prev.map(c => c.id === parentCommentId ? { ...c, replies: [...(c.replies || []), newComment] } : c));
@@ -708,7 +718,10 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
         }
       `}</style>
 
-      {/* Input file caché */}
+      </>
+      )}
+
+      {/* Input file caché — toujours dans le DOM pour que le ref fonctionne */}
       <input
         ref={fileInputRef}
         type="file"
@@ -716,8 +729,6 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
         style={{ display: 'none' }}
         onChange={handleFileSelect}
       />
-      </>
-      )}
 
       {/* Modal de création de Reel */}
       <Modal
@@ -803,6 +814,31 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
             }}
           />
 
+          {/* Visibility selector */}
+          <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+            {(currentOrganization ? ['IN', 'ALL', 'OUT'] : ['ALL', 'OUT']).map(v => {
+              const labels: Record<string, { icon: string; label: string }> = {
+                IN: { icon: '👥', label: 'Organisation' },
+                ALL: { icon: '🌐', label: 'Public' },
+                OUT: { icon: '🔒', label: 'Privé' },
+              };
+              const opt = labels[v];
+              const active = reelVisibility === v;
+              return (
+                <div key={v} onClick={() => setReelVisibility(v)} style={{
+                  display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px',
+                  borderRadius: 16, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                  background: active ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.06)',
+                  color: active ? '#fff' : 'rgba(255,255,255,0.5)',
+                  border: active ? '1px solid rgba(255,255,255,0.4)' : '1px solid transparent',
+                  transition: 'all 0.15s',
+                }}>
+                  <span>{opt.icon}</span> <span>{opt.label}</span>
+                </div>
+              );
+            })}
+          </div>
+
           {/* Bouton publier */}
           <div
             onClick={handlePublishReel}
@@ -852,17 +888,21 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
         <div style={{ maxHeight: 400, overflowY: 'auto', padding: '12px 16px' }}>
           {commentLoading ? (
             <div style={{ textAlign: 'center', padding: 30 }}><Spin /></div>
-          ) : comments.length > 0 ? comments.map((c: any) => (
+          ) : comments.length > 0 ? comments.map((c: any) => {
+            const cIsOrg = c.publishAsOrg && c.organization;
+            const cAvatar = cIsOrg ? (c.organization?.logoUrl || null) : c.author?.avatarUrl;
+            const cName = cIsOrg ? c.organization.name : [c.author?.firstName, c.author?.lastName].filter(Boolean).join(' ') || 'Utilisateur';
+            return (
             <div key={c.id} style={{ marginBottom: 16 }}>
               {/* Main comment */}
               <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                <Avatar size={32} src={c.author?.avatarUrl}
-                  icon={!c.author?.avatarUrl ? <UserOutlined /> : undefined}
-                  style={{ flexShrink: 0, background: '#ddd' }} />
+                <Avatar size={32} src={cAvatar}
+                  icon={!cAvatar ? <UserOutlined /> : undefined}
+                  style={{ flexShrink: 0, background: cIsOrg ? '#6C5CE7' : '#ddd' }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ background: '#f0f2f5', borderRadius: 12, padding: '8px 12px', width: 'fit-content', maxWidth: '90%' }}>
                     <span style={{ fontWeight: 600, fontSize: 13, color: '#1a1a2e', display: 'block' }}>
-                      {[c.author?.firstName, c.author?.lastName].filter(Boolean).join(' ') || 'Utilisateur'}
+                      {cName}
                     </span>
                     <div style={{ fontSize: 14, color: '#333', marginTop: 2, wordBreak: 'break-word' }}>{c.content}</div>
                   </div>
@@ -882,15 +922,19 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                   {/* Replies */}
                   {c.replies && c.replies.length > 0 && (
                     <div style={{ marginTop: 8, marginLeft: 8 }}>
-                      {c.replies.map((reply: any) => (
+                      {c.replies.map((reply: any) => {
+                        const rrIsOrg = reply.publishAsOrg && reply.organization;
+                        const rrAvatar = rrIsOrg ? (reply.organization?.logoUrl || null) : reply.author?.avatarUrl;
+                        const rrName = rrIsOrg ? reply.organization.name : [reply.author?.firstName, reply.author?.lastName].filter(Boolean).join(' ');
+                        return (
                         <div key={reply.id} style={{ display: 'flex', gap: 6, alignItems: 'flex-start', marginBottom: 8 }}>
-                          <Avatar size={24} src={reply.author?.avatarUrl}
-                            icon={!reply.author?.avatarUrl ? <UserOutlined /> : undefined}
-                            style={{ flexShrink: 0, background: '#ddd' }} />
+                          <Avatar size={24} src={rrAvatar}
+                            icon={!rrAvatar ? <UserOutlined /> : undefined}
+                            style={{ flexShrink: 0, background: rrIsOrg ? '#6C5CE7' : '#ddd' }} />
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ background: '#f0f2f5', borderRadius: 10, padding: '6px 10px', width: 'fit-content', maxWidth: '85%' }}>
                               <span style={{ fontWeight: 600, fontSize: 12, color: '#1a1a2e' }}>
-                                {[reply.author?.firstName, reply.author?.lastName].filter(Boolean).join(' ')}
+                                {rrName}
                               </span>
                               <div style={{ fontSize: 13, color: '#333', wordBreak: 'break-word' }}>{reply.content}</div>
                             </div>
@@ -903,16 +947,18 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                             </div>
                           </div>
                         </div>
-                      ))}
+                      ); })}
                     </div>
                   )}
 
                   {/* Reply input */}
                   {replyingTo === c.id && (
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, marginLeft: 8 }}>
-                      <Avatar size={24} src={currentUser?.avatarUrl}
-                        icon={!currentUser?.avatarUrl ? <UserOutlined /> : undefined}
-                        style={{ flexShrink: 0, background: '#ddd' }} />
+                      <Avatar size={24} src={commentAvatarSrc}
+                        icon={!isOrgMode && !currentUser?.avatarUrl ? <UserOutlined /> : undefined}
+                        style={{ flexShrink: 0, background: isOrgMode && !orgLogo ? '#6C5CE7' : '#ddd' }}>
+                        {isOrgMode && !orgLogo && (currentOrganization?.name?.[0]?.toUpperCase() || 'O')}
+                      </Avatar>
                       <div style={{ flex: 1, display: 'flex', alignItems: 'center', background: '#f0f2f5', borderRadius: 20, padding: '4px 12px' }}>
                         <input
                           value={replyText}
@@ -932,7 +978,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                 </div>
               </div>
             </div>
-          )) : (
+          ); }) : (
             <div style={{ textAlign: 'center', color: '#999', padding: 30 }}>
               <MessageOutlined style={{ fontSize: 32, marginBottom: 8, display: 'block' }} />
               Aucun commentaire. Soyez le premier !
@@ -942,9 +988,11 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
 
         {/* New comment input */}
         <div style={{ borderTop: '1px solid #eee', padding: '10px 16px', display: 'flex', gap: 8, alignItems: 'center' }}>
-          <Avatar size={28} src={currentUser?.avatarUrl}
-            icon={!currentUser?.avatarUrl ? <UserOutlined /> : undefined}
-            style={{ flexShrink: 0, background: '#ddd' }} />
+          <Avatar size={28} src={commentAvatarSrc}
+            icon={!isOrgMode && !currentUser?.avatarUrl ? <UserOutlined /> : undefined}
+            style={{ flexShrink: 0, background: isOrgMode && !orgLogo ? '#6C5CE7' : '#ddd' }}>
+            {isOrgMode && !orgLogo && (currentOrganization?.name?.[0]?.toUpperCase() || 'O')}
+          </Avatar>
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', background: '#f0f2f5', borderRadius: 20, padding: '6px 12px' }}>
             <input
               value={commentText}

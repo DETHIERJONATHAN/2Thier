@@ -7,7 +7,10 @@ import {
   PictureOutlined, VideoCameraOutlined, PlayCircleOutlined,
   AppstoreOutlined, ClockCircleOutlined,
 } from '@ant-design/icons';
-import { SF } from './SpaceFlowTheme';
+import { SF } from './ZhiiveTheme';
+import { useZhiiveNav } from '../../contexts/ZhiiveNavContext';
+import { useAuth } from '../../auth/useAuth';
+import { useNavigate } from 'react-router-dom';
 
 interface GalleryItem {
   id: string;
@@ -18,6 +21,7 @@ interface GalleryItem {
   commentsCount: number;
   authorName: string;
   authorAvatar?: string;
+  publishAsOrg?: boolean;
   caption?: string;
   authorId?: string;
   category?: string | null;
@@ -39,6 +43,11 @@ interface SuggestedUser {
   avatarUrl?: string;
   role: string;
   mutualFriends: number;
+  isFollowing?: boolean;
+  friendStatus?: string | null; // null | 'pending' | 'accepted' | 'blocked'
+  friendDirection?: 'sent' | 'received' | null;
+  friendshipId?: string | null;
+  sameOrg?: boolean;
 }
 
 interface ExplorePanelProps {
@@ -48,6 +57,10 @@ interface ExplorePanelProps {
 
 const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
   // ── State ──
+  const { feedMode } = useZhiiveNav();
+  const { currentOrganization, user } = useAuth();
+  const navigate = useNavigate();
+  const isOrgMode = feedMode === 'org' && !!currentOrganization;
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'gallery' | 'people' | 'hashtags'>('gallery');
   const [items, setItems] = useState<GalleryItem[]>([]);
@@ -61,12 +74,15 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [selectedPost, setSelectedPost] = useState<GalleryItem | null>(null);
   const [commentText, setCommentText] = useState('');
-  const [postComments, setPostComments] = useState<{ id: string; authorName: string; authorAvatar?: string; content: string; createdAt: string }[]>([]);
+  const [postComments, setPostComments] = useState<any[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
+
+  // ── People tab filters ──
+  const [peopleScope, setPeopleScope] = useState<'all' | 'friends' | 'org'>('all');
 
   // ── NEW: Gallery filters ──
   const [mediaFilter, setMediaFilter] = useState<'all' | 'photo' | 'video'>('all');
-  const [scope, setScope] = useState<'all' | 'friends' | 'org'>('all');
+  const [scope, setScope] = useState<'all' | 'friends' | 'org' | 'private'>('all');
   const [sortMode, setSortMode] = useState<'popular' | 'recent'>('popular');
 
   // ── Like ──
@@ -113,7 +129,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
   const handleAddComment = async () => {
     if (!commentText.trim() || !selectedPost || selectedPost.source === 'story') return;
     try {
-      const res = await api.post(`/api/wall/posts/${selectedPost.id}/comments`, { content: commentText.trim() });
+      const res = await api.post(`/api/wall/posts/${selectedPost.id}/comments`, { content: commentText.trim(), publishAsOrg: isOrgMode ? true : undefined });
       if (res) {
         setPostComments(prev => [...prev, res]);
         setCommentText('');
@@ -148,6 +164,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
         type: mediaFilter,
         scope,
         sort: sortMode,
+        mode: feedMode,
       });
       if (category) {
         const dbCategory = categoryMap[category] || category;
@@ -164,9 +181,9 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
       }
 
       const [galleryRes, hashtagsRes, usersRes] = await Promise.all([
-        api.get(`/api/spaceflow/explore/gallery?${galleryParams}`).catch(() => ({ items: [] })),
-        api.get(`/api/spaceflow/explore/hashtags?${hashtagsParams}`).catch(() => ({ hashtags: [] })),
-        api.get('/api/spaceflow/explore/suggested-users?limit=10').catch(() => ({ users: [] })),
+        api.get(`/api/zhiive/explore/gallery?${galleryParams}`).catch(() => ({ items: [] })),
+        api.get(`/api/zhiive/explore/hashtags?${hashtagsParams}`).catch(() => ({ hashtags: [] })),
+        api.get(`/api/zhiive/explore/suggested-users?limit=30&scope=${peopleScope}`).catch(() => ({ users: [] })),
       ]);
       if (galleryRes?.items) {
         setItems(galleryRes.items);
@@ -175,14 +192,19 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
         setLikedSet(liked);
       }
       if (hashtagsRes?.hashtags) setHashtags(hashtagsRes.hashtags);
-      if (usersRes?.users) setSuggestedUsers(usersRes.users);
+      if (usersRes?.users) {
+        setSuggestedUsers(usersRes.users);
+        const fSet = new Set<string>();
+        usersRes.users.forEach((u: any) => { if (u.isFollowing) fSet.add(u.id); });
+        setFollowingSet(fSet);
+      }
     } catch {
       // Non-blocking
     } finally {
       setLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api, mediaFilter, scope, sortMode]);
+  }, [api, mediaFilter, scope, sortMode, feedMode, peopleScope]);
 
   // Initial load
   useEffect(() => { fetchGallery(); }, [fetchGallery]);
@@ -210,16 +232,71 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
   const handleFollow = async (userId: string) => {
     try {
       if (followingSet.has(userId)) {
-        await api.delete(`/api/spaceflow/follow/${userId}`);
+        await api.delete(`/api/zhiive/follow/${userId}`);
         setFollowingSet(prev => { const next = new Set(prev); next.delete(userId); return next; });
         message.success('Abonnement retiré');
       } else {
-        await api.post(`/api/spaceflow/follow/${userId}`);
+        await api.post(`/api/zhiive/follow/${userId}`);
         setFollowingSet(prev => new Set(prev).add(userId));
         message.success('Suivi avec succès ! 🎉');
       }
     } catch {
       message.error('Erreur lors du suivi');
+    }
+  };
+
+  const handleFriendAction = async (userId: string, currentStatus: string | null | undefined, direction?: 'sent' | 'received' | null, friendshipId?: string | null) => {
+    try {
+      if (currentStatus === 'accepted') {
+        // Remove friend — need friendshipId
+        const u = suggestedUsers.find(u => u.id === userId);
+        const fId = friendshipId || u?.friendshipId;
+        if (fId) {
+          await api.delete(`/api/friends/${fId}`);
+          setSuggestedUsers(prev => prev.map(u => u.id === userId ? { ...u, friendStatus: null, friendDirection: null, friendshipId: null } : u));
+          message.success('Ami retiré');
+        }
+      } else if (currentStatus === 'pending' && direction === 'received') {
+        // Accept received request
+        const u = suggestedUsers.find(u => u.id === userId);
+        const fId = friendshipId || u?.friendshipId;
+        if (fId) {
+          await api.post(`/api/friends/${fId}/accept`);
+          setSuggestedUsers(prev => prev.map(u => u.id === userId ? { ...u, friendStatus: 'accepted', friendDirection: null } : u));
+          message.success('Demande acceptée ! Vous êtes maintenant amis 🎉');
+        }
+      } else if (currentStatus === 'pending' && direction === 'sent') {
+        // Cancel sent request
+        const u = suggestedUsers.find(u => u.id === userId);
+        const fId = friendshipId || u?.friendshipId;
+        if (fId) {
+          await api.delete(`/api/friends/${fId}`);
+          setSuggestedUsers(prev => prev.map(u => u.id === userId ? { ...u, friendStatus: null, friendDirection: null, friendshipId: null } : u));
+          message.success('Demande annulée');
+        }
+      } else {
+        // Send friend request
+        const res = await api.post('/api/friends/request', { userId });
+        setSuggestedUsers(prev => prev.map(u => u.id === userId ? { ...u, friendStatus: 'pending', friendDirection: 'sent', friendshipId: res?.friendship?.id || null } : u));
+        message.success('Demande d\'ami envoyée ! 🤝');
+      }
+    } catch {
+      message.error('Erreur');
+    }
+  };
+
+  const handleOpenMessenger = async (userId: string) => {
+    try {
+      const res = await api.post('/api/messenger/conversations', { participantIds: [userId] });
+      const convId = res?.conversation?.id || res?.id;
+      if (convId) {
+        window.dispatchEvent(new CustomEvent('open-messenger', { detail: { conversationId: convId } }));
+        message.success('Chat ouvert 💬');
+      } else {
+        message.error('Impossible d\'ouvrir le chat');
+      }
+    } catch {
+      message.error('Erreur lors de l\'ouverture du chat');
     }
   };
 
@@ -258,7 +335,6 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
           � Explorer
         </span>
       </div>
-
       {/* Search */}
       <Input
         prefix={<SearchOutlined style={{ color: SF.textMuted }} />}
@@ -294,12 +370,13 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
       {/* ═══════════════════════════════════════════════════════════ */}
       {activeTab === 'gallery' && (
         <>
-          {/* ── Scope filter: Amis / Organisation / Tout le monde ── */}
+          {/* ── Scope filter: Amis / Organisation / Privé / Tout le monde ── */}
           <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
             {([
               { key: 'all' as const, label: '🌍 Tous', },
               { key: 'friends' as const, label: '👥 Amis' },
-              { key: 'org' as const, label: '🏢 Organisation' },
+              ...(currentOrganization ? [{ key: 'org' as const, label: '🏢 Organisation' }] : []),
+              { key: 'private' as const, label: '🔒 Privé' },
             ]).map(s => (
               <div
                 key={s.key}
@@ -484,39 +561,118 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
 
       {/* People tab */}
       {activeTab === 'people' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {filteredUsers.length > 0 ? filteredUsers.map(su => (
-            <div key={su.id} style={{
-              display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
-              background: SF.cardBg, borderRadius: SF.radiusSm, boxShadow: SF.shadow,
-              cursor: 'pointer',
-            }}>
-              <Avatar size={44} src={su.avatarUrl} icon={!su.avatarUrl ? <UserOutlined /> : undefined}
-                style={{ background: !su.avatarUrl ? SF.primary : undefined, flexShrink: 0 }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: SF.text }}>{su.firstName} {su.lastName}</div>
-                <div style={{ fontSize: 11, color: SF.textSecondary }}>{su.role}</div>
-                {su.mutualFriends > 0 && (
-                  <div style={{ fontSize: 10, color: SF.textMuted }}>{su.mutualFriends} ami(s) en commun</div>
-                )}
-              </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {/* ── Scope filter: Tous / Amis / Organisation ── */}
+          <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+            {([
+              { key: 'all' as const, label: '🌍 Tous' },
+              { key: 'friends' as const, label: '💚 Amis' },
+              ...(currentOrganization ? [{ key: 'org' as const, label: '🏢 Organisation' }] : []),
+            ]).map(s => (
               <div
-                onClick={() => handleFollow(su.id)}
+                key={s.key}
+                onClick={() => setPeopleScope(s.key)}
                 style={{
-                padding: '4px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600,
-                background: followingSet.has(su.id) ? SF.bg : SF.gradientPrimary,
-                color: followingSet.has(su.id) ? SF.textSecondary : 'white',
-                cursor: 'pointer',
-                border: followingSet.has(su.id) ? `1px solid ${SF.border}` : 'none',
-              }}>
-                {followingSet.has(su.id) ? 'Suivi ✓' : 'Suivre'}
+                  flex: 1, padding: '6px 0', textAlign: 'center', cursor: 'pointer',
+                  borderRadius: 20, fontSize: 11, fontWeight: 600,
+                  background: peopleScope === s.key ? SF.gradientPrimary : SF.cardBg,
+                  color: peopleScope === s.key ? '#fff' : SF.textSecondary,
+                  boxShadow: peopleScope === s.key ? SF.shadowMd : SF.shadow,
+                  transition: 'all 0.2s',
+                }}
+              >
+                {s.label}
               </div>
-            </div>
-          )) : (
+            ))}
+          </div>
+
+          {/* ── Users list ── */}
+          {filteredUsers.length > 0 ? filteredUsers.map(su => {
+            const isFriend = su.friendStatus === 'accepted';
+            const isPending = su.friendStatus === 'pending';
+            const isFollowed = followingSet.has(su.id);
+
+            return (
+              <div key={su.id} style={{
+                display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+                background: SF.cardBg, borderRadius: SF.radiusSm, boxShadow: SF.shadow,
+              }}>
+                {/* Avatar — clickable to open profile */}
+                <Avatar size={48} src={su.avatarUrl} icon={!su.avatarUrl ? <UserOutlined /> : undefined}
+                  style={{ background: !su.avatarUrl ? SF.primary : undefined, flexShrink: 0, cursor: 'pointer' }}
+                  onClick={() => navigate(`/profile/${su.id}`)}
+                />
+
+                {/* Info — clickable */}
+                <div style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+                  onClick={() => navigate(`/profile/${su.id}`)}
+                >
+                  <div style={{ fontSize: 14, fontWeight: 600, color: SF.text }}>
+                    {su.firstName} {su.lastName}
+                    {isFriend && <span style={{ marginLeft: 4, fontSize: 11, color: '#52c41a' }}>✓ Ami</span>}
+                    {su.sameOrg && <span style={{ marginLeft: 4, fontSize: 9, background: SF.primary + '20', color: SF.primary, padding: '1px 5px', borderRadius: 6 }}>Org</span>}
+                  </div>
+                  <div style={{ fontSize: 11, color: SF.textSecondary }}>{su.role}</div>
+                  {su.mutualFriends > 0 && (
+                    <div style={{ fontSize: 10, color: SF.textMuted }}>{su.mutualFriends} ami(s) en commun</div>
+                  )}
+                </div>
+
+                {/* Action buttons */}
+                <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                  {/* Messenger button */}
+                  <div
+                    onClick={() => handleOpenMessenger(su.id)}
+                    title="Envoyer un message"
+                    style={{
+                      width: 32, height: 32, borderRadius: '50%', display: 'flex',
+                      alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                      background: '#e6f7ff', color: '#1890ff', fontSize: 14,
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    <MessageOutlined />
+                  </div>
+
+                  {/* Add friend / Friend status button */}
+                  <div
+                    onClick={() => handleFriendAction(su.id, su.friendStatus, su.friendDirection, su.friendshipId)}
+                    title={isFriend ? 'Ami ✓' : (isPending && su.friendDirection === 'received') ? 'Accepter la demande' : isPending ? 'En attente (annuler)' : 'Ajouter en ami'}
+                    style={{
+                      width: 32, height: 32, borderRadius: '50%', display: 'flex',
+                      alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                      background: isFriend ? '#f6ffed' : (isPending && su.friendDirection === 'received') ? '#e6f7ff' : isPending ? '#fff7e6' : '#f0f0f0',
+                      color: isFriend ? '#52c41a' : (isPending && su.friendDirection === 'received') ? '#1890ff' : isPending ? '#fa8c16' : '#666',
+                      fontSize: 14, transition: 'all 0.15s',
+                      border: isFriend ? '1px solid #b7eb8f' : (isPending && su.friendDirection === 'received') ? '2px solid #1890ff' : isPending ? '1px solid #ffd591' : '1px solid #d9d9d9',
+                      animation: (isPending && su.friendDirection === 'received') ? 'pulse 1.5s infinite' : 'none',
+                    }}
+                  >
+                    {isFriend ? '🤝' : (isPending && su.friendDirection === 'received') ? '✅' : isPending ? '⏳' : <TeamOutlined />}
+                  </div>
+
+                  {/* Follow button */}
+                  <div
+                    onClick={() => handleFollow(su.id)}
+                    style={{
+                      padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+                      background: isFollowed ? SF.bg : SF.gradientPrimary,
+                      color: isFollowed ? SF.textSecondary : 'white',
+                      cursor: 'pointer', display: 'flex', alignItems: 'center',
+                      border: isFollowed ? `1px solid ${SF.border}` : 'none',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {isFollowed ? 'Suivi ✓' : 'Suivre'}
+                  </div>
+                </div>
+              </div>
+            );
+          }) : (
             <EmptyState
               icon={<TeamOutlined style={{ fontSize: 40, color: SF.primary }} />}
-              title="Suggestions bientôt !"
-              subtitle="Plus vous interagissez, plus nos suggestions s'affinent."
+              title={peopleScope === 'friends' ? 'Aucun ami pour le moment' : 'Aucune personne trouvée'}
+              subtitle={peopleScope === 'friends' ? 'Ajoutez des amis depuis l\'onglet "Tous" !' : 'Plus vous interagissez, plus nos suggestions s\'affinent.'}
             />
           )}
         </div>
@@ -617,16 +773,20 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                     {commentsLoading ? (
                       <div style={{ textAlign: 'center', padding: 12, color: SF.textMuted, fontSize: 12 }}>Chargement...</div>
                     ) : postComments.length > 0 ? (
-                      postComments.map(c => (
+                      postComments.map((c: any) => {
+                        const cIsOrg = c.publishAsOrg && c.organization;
+                        const cAvatar = cIsOrg ? (c.organization?.logoUrl || null) : (c.authorAvatar || c.author?.avatarUrl || null);
+                        const cName = cIsOrg ? c.organization.name : (c.authorName || [c.author?.firstName, c.author?.lastName].filter(Boolean).join(' ') || 'Utilisateur');
+                        return (
                         <div key={c.id} style={{ display: 'flex', gap: 8, padding: '6px 0' }}>
-                          <Avatar size={24} src={c.authorAvatar} icon={!c.authorAvatar ? <UserOutlined /> : undefined}
-                            style={{ background: !c.authorAvatar ? SF.primary : undefined, flexShrink: 0 }} />
+                          <Avatar size={24} src={cAvatar} icon={!cAvatar ? <UserOutlined /> : undefined}
+                            style={{ background: !cAvatar ? (cIsOrg ? '#6C5CE7' : SF.primary) : undefined, flexShrink: 0 }} />
                           <div>
-                            <span style={{ fontWeight: 600, fontSize: 12, color: SF.text }}>{c.authorName} </span>
+                            <span style={{ fontWeight: 600, fontSize: 12, color: SF.text }}>{cName} </span>
                             <span style={{ fontSize: 12, color: SF.text }}>{c.content}</span>
                           </div>
                         </div>
-                      ))
+                      ); })
                     ) : (
                       <div style={{ textAlign: 'center', padding: 12, color: SF.textMuted, fontSize: 12 }}>Aucun commentaire</div>
                     )}

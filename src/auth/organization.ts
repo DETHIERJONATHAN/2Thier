@@ -5,4 +5,5 @@ export interface AuthOrganization {
   status: string;
   role: string;
   permissions: string[];
+  logoUrl?: string | null;
 }

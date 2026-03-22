@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Avatar, Tooltip, Modal, Input, message } from 'antd';
 import { PlusOutlined, UserOutlined, CameraOutlined, LoadingOutlined } from '@ant-design/icons';
-import { SF } from './SpaceFlowTheme';
+import { SF } from './ZhiiveTheme';
+import { useZhiiveNav } from '../../contexts/ZhiiveNavContext';
+import { useAuth } from '../../auth/useAuth';
 
 interface Story {
   id: string;
@@ -20,12 +22,19 @@ interface StoriesBarProps {
 }
 
 const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
+  const { feedMode } = useZhiiveNav();
+  const { currentOrganization } = useAuth();
+  const isOrgMode = feedMode === 'org' && !!currentOrganization;
+  const orgLogo = (currentOrganization as any)?.logoUrl || null;
+  const storyAvatarSrc = isOrgMode ? (orgLogo || undefined) : (currentUser?.avatarUrl || undefined);
+  const storyLabel = isOrgMode ? (currentOrganization?.name?.substring(0, 8) || 'Org') : 'Ma Story';
   const [stories, setStories] = useState<Story[]>([]);
   const [loading, setLoading] = useState(true);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [storyText, setStoryText] = useState('');
   const [storyMediaUrl, setStoryMediaUrl] = useState('');
   const [storySubmitting, setStorySubmitting] = useState(false);
+  const [storyVisibility, setStoryVisibility] = useState<string>(currentOrganization ? 'IN' : 'ALL');
   const [viewingStory, setViewingStory] = useState<Story | null>(null);
   const [viewingStoryList, setViewingStoryList] = useState<Story[]>([]);
   const [viewingStoryIndex, setViewingStoryIndex] = useState(0);
@@ -36,7 +45,7 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
 
   const fetchStories = useCallback(async () => {
     try {
-      const data = await api.get('/api/spaceflow/stories/feed');
+      const data = await api.get('/api/zhiive/stories/feed');
       if (data?.stories) setStories(data.stories);
     } catch {
       // Stories failed to load — non-blocking
@@ -114,10 +123,12 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
         mediaType = storyFile.type.startsWith('video/') ? 'video' : 'image';
       }
 
-      await api.post('/api/spaceflow/stories', {
+      await api.post('/api/zhiive/stories', {
         text: storyText.trim(),
         mediaUrl: mediaUrl || undefined,
         mediaType,
+        visibility: storyVisibility,
+        publishAsOrg: isOrgMode ? true : undefined,
       });
       message.success('Story publiée ! 🎉');
       setStoryText(''); setStoryMediaUrl('');
@@ -139,7 +150,7 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
     setViewingStoryIndex(0);
     setViewingStory(userStoriesList[0]);
     try {
-      await api.post(`/api/spaceflow/stories/${userStoriesList[0].id}/view`);
+      await api.post(`/api/zhiive/stories/${userStoriesList[0].id}/view`);
       setStories(prev => prev.map(s => s.id === userStoriesList[0].id ? { ...s, viewed: true } : s));
     } catch {
       // Non-blocking
@@ -152,7 +163,7 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
       setViewingStoryIndex(nextIndex);
       setViewingStory(viewingStoryList[nextIndex]);
       try {
-        await api.post(`/api/spaceflow/stories/${viewingStoryList[nextIndex].id}/view`);
+        await api.post(`/api/zhiive/stories/${viewingStoryList[nextIndex].id}/view`);
         setStories(prev => prev.map(s => s.id === viewingStoryList[nextIndex].id ? { ...s, viewed: true } : s));
       } catch { /* */ }
     } else {
@@ -171,7 +182,7 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
 
   const handleDeleteStory = async (storyId: string) => {
     try {
-      await api.delete(`/api/spaceflow/stories/${storyId}`);
+      await api.delete(`/api/zhiive/stories/${storyId}`);
       setStories(prev => prev.filter(s => s.id !== storyId));
       setViewingStory(null);
       setViewingStoryList([]);
@@ -206,10 +217,12 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
             background: SF.bg, display: 'flex', alignItems: 'center', justifyContent: 'center',
             cursor: 'pointer', position: 'relative',
           }}>
-            <Avatar size={50} src={currentUser?.avatarUrl}
-              icon={!currentUser?.avatarUrl ? <UserOutlined /> : undefined}
-              style={{ background: !currentUser?.avatarUrl ? SF.primary : undefined }}
-            />
+            <Avatar size={50} src={storyAvatarSrc}
+              icon={!isOrgMode && !currentUser?.avatarUrl ? <UserOutlined /> : undefined}
+              style={{ background: isOrgMode ? (orgLogo ? undefined : '#6C5CE7') : (!currentUser?.avatarUrl ? SF.primary : undefined) }}
+            >
+              {isOrgMode && !orgLogo && (currentOrganization?.name?.[0]?.toUpperCase() || 'O')}
+            </Avatar>
             <div style={{
               position: 'absolute', bottom: -2, right: -2,
               width: 20, height: 20, borderRadius: '50%',
@@ -221,7 +234,7 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
           </div>
         </Tooltip>
         <span style={{ fontSize: 10, color: SF.textSecondary, maxWidth: 60, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          Ma Story
+          {storyLabel}
         </span>
       </div>
 
@@ -323,6 +336,31 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
             prefix="🖼️"
             disabled={!!storyFile}
           />
+
+          {/* Visibility selector */}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {(currentOrganization ? ['IN', 'ALL', 'OUT'] : ['ALL', 'OUT']).map(v => {
+              const labels: Record<string, { icon: string; label: string; color: string }> = {
+                IN: { icon: '👥', label: 'Organisation', color: '#1890ff' },
+                ALL: { icon: '🌐', label: 'Public', color: '#52c41a' },
+                OUT: { icon: '🔒', label: 'Privé', color: '#8c8c8c' },
+              };
+              const opt = labels[v];
+              const active = storyVisibility === v;
+              return (
+                <div key={v} onClick={() => setStoryVisibility(v)} style={{
+                  display: 'flex', alignItems: 'center', gap: 4, padding: '3px 10px',
+                  borderRadius: 14, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                  background: active ? opt.color + '18' : '#f5f5f5',
+                  color: active ? opt.color : '#999',
+                  border: active ? `1px solid ${opt.color}` : '1px solid transparent',
+                  transition: 'all 0.15s',
+                }}>
+                  <span>{opt.icon}</span> <span>{opt.label}</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </Modal>
 
@@ -350,7 +388,9 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
             )}
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <Avatar size={32} icon={<UserOutlined />} />
+              <Avatar size={32} src={viewingStory.avatarUrl || undefined}
+                icon={!viewingStory.avatarUrl ? <UserOutlined /> : undefined}
+                style={{ background: viewingStory.publishAsOrg && !viewingStory.avatarUrl ? '#6C5CE7' : undefined }} />
               <span style={{ fontWeight: 600 }}>{viewingStory.userName}</span>
               <span style={{ fontSize: 10, color: SF.textMuted, marginLeft: 'auto' }}>
                 {new Date(viewingStory.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}

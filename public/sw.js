@@ -40,7 +40,12 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title || '2Thier CRM', options)
+    self.registration.showNotification(data.title || '2Thier CRM', options).then(() => {
+      // Mettre à jour le badge sur l'icône PWA
+      if (navigator.setAppBadge) {
+        navigator.setAppBadge().catch(() => {});
+      }
+    })
   );
 });
 

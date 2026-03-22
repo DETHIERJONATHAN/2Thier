@@ -2924,7 +2924,7 @@ router.post('/chantiers/:chantierId/reception/send-to-client', authenticateToken
           auth: { user: smtpConfig.user, pass: decryptedPassword },
         });
 
-        const receptionUrl = `${req.headers.origin || 'https://app.2thier.be'}/reception/${reception.clientAccessToken}`;
+        const receptionUrl = `${req.headers.origin || 'https://www.zhiive.com'}/reception/${reception.clientAccessToken}`;
 
         await transporter.sendMail({
           from: smtpConfig.from || smtpConfig.user,

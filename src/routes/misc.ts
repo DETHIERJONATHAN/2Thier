@@ -1,5 +1,5 @@
 import { Router, Response, Request, RequestHandler } from "express";
-import { Prisma, UserOrganizationStatus, JoinRequestStatus } from "@prisma/client";
+import { Prisma, UserOrganizationStatus } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { authMiddleware } from "../middlewares/auth";
@@ -29,10 +29,9 @@ const userWithOrgsArgs = {
 type UserWithOrgs = Prisma.UserGetPayload<typeof userWithOrgsArgs>;
 
 // ============================================================================
-// POST /api/register - Inscription avec support de 3 types
-// - freelance: Créer un compte utilisateur libre (attendre une invitation)
-// - createOrg: Créer un compte ET une organisation (devenir admin)
-// - joinOrg: Créer un compte ET envoyer une demande à une organisation existante
+// POST /api/register - Inscription avec 2 types
+// - freelance: Créer un compte utilisateur réseau (gratuit)
+// - createOrg: Créer un compte ET une organisation (devenir admin, payant)
 // ============================================================================
 router.post("/register", async (req: Request, res: Response) => {
   const { 
@@ -40,11 +39,9 @@ router.post("/register", async (req: Request, res: Response) => {
     password, 
     firstName, 
     lastName,
-    registrationType = 'freelance', // Par défaut: utilisateur libre
+    registrationType = 'freelance',
     organizationName,  // Pour createOrg
     domain,            // Pour createOrg (optionnel)
-    organizationId,    // Pour joinOrg
-    message            // Pour joinOrg (message de demande)
   } = req.body;
 
   // Validation de base
@@ -55,10 +52,6 @@ router.post("/register", async (req: Request, res: Response) => {
   // Validation selon le type
   if (registrationType === 'createOrg' && !organizationName) {
     return res.status(400).json({ error: "Le nom de l'organisation est requis pour créer une organisation" });
-  }
-
-  if (registrationType === 'joinOrg' && !organizationId) {
-    return res.status(400).json({ error: "L'ID de l'organisation est requis pour rejoindre une organisation" });
   }
 
   try {
@@ -77,11 +70,11 @@ router.post("/register", async (req: Request, res: Response) => {
           lastName,
           status: 'active',
           role: 'user',
+          updatedAt: new Date(),
         },
       });
 
       let organization = null;
-      let joinRequest = null;
 
       // 2. Actions selon le type d'inscription
       if (registrationType === 'createOrg') {
@@ -94,6 +87,7 @@ router.post("/register", async (req: Request, res: Response) => {
             name: organizationName.trim(),
             description: domain ? `Domaine: ${domain}` : undefined,
             status: 'active',
+            updatedAt: new Date(),
           }
         });
 
@@ -104,6 +98,7 @@ router.post("/register", async (req: Request, res: Response) => {
             name: 'admin',
             label: 'Administrateur',
             organizationId: orgId,
+            updatedAt: new Date(),
           }
         });
 
@@ -114,6 +109,7 @@ router.post("/register", async (req: Request, res: Response) => {
             name: 'user',
             label: 'Utilisateur',
             organizationId: orgId,
+            updatedAt: new Date(),
           }
         });
 
@@ -125,53 +121,24 @@ router.post("/register", async (req: Request, res: Response) => {
             organizationId: orgId,
             roleId: adminRole.id,
             status: UserOrganizationStatus.ACTIVE,
+            updatedAt: new Date(),
           }
         });
 
         console.log(`[Register] Utilisateur ${email} a créé l'organisation "${organizationName}" (${orgId})`);
 
-      } else if (registrationType === 'joinOrg') {
-        // === TYPE: DEMANDE D'ADHÉSION ===
-        
-        // Vérifier que l'organisation existe
-        const targetOrg = await tx.organization.findUnique({
-          where: { id: organizationId }
-        });
-
-        if (!targetOrg) {
-          throw new Error("Organisation non trouvée");
-        }
-
-        // Créer la demande d'adhésion
-        joinRequest = await tx.joinRequest.create({
-          data: {
-            id: randomUUID(),
-            userId: user.id,
-            organizationId: organizationId,
-            message: message?.trim() || null,
-            status: JoinRequestStatus.PENDING,
-          },
-          include: {
-            Organization: { select: { name: true } }
-          }
-        });
-
-        console.log(`[Register] Utilisateur ${email} a envoyé une demande à "${targetOrg.name}" (${organizationId})`);
-
       } else {
-        // === TYPE: UTILISATEUR LIBRE (freelance) ===
-        console.log(`[Register] Nouvel utilisateur libre: ${email}`);
+        // === TYPE: UTILISATEUR RÉSEAU (freelance) ===
+        console.log(`[Register] Nouvel utilisateur réseau: ${email}`);
       }
 
-      return { user, organization, joinRequest };
+      return { user, organization };
     });
 
     // Message de succès adapté
-    let successMessage = 'Inscription réussie !';
+    let successMessage = 'Inscription réussie ! Bienvenue sur le réseau Zhiive.';
     if (registrationType === 'createOrg') {
       successMessage = `Organisation "${organizationName}" créée avec succès. Vous en êtes l'administrateur.`;
-    } else if (registrationType === 'joinOrg') {
-      successMessage = `Demande d'adhésion envoyée. En attente d'approbation de l'organisation.`;
     }
 
     res.status(201).json({ 
@@ -180,7 +147,6 @@ router.post("/register", async (req: Request, res: Response) => {
       email: result.user.email,
       registrationType,
       organization: result.organization ? { id: result.organization.id, name: result.organization.name } : null,
-      joinRequest: result.joinRequest ? { id: result.joinRequest.id, status: result.joinRequest.status } : null,
       message: successMessage
     });
 

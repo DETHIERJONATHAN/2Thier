@@ -353,7 +353,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         // 🚀 CONNEXION AUTOMATIQUE GOOGLE WORKSPACE après authentification réussie
-        if (currentUser.id) {
+        // (uniquement si l'utilisateur a une organisation — les users réseau n'en ont pas besoin)
+        if (currentUser.id && selectedOrg) {
           const now = Date.now();
           // Cooldown anti-boucle (évite tentatives répétées)
           if (window.__googleAutoConnectCooldownUntil && now < window.__googleAutoConnectCooldownUntil) {

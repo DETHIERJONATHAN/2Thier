@@ -4,7 +4,7 @@ import { useAuth } from "../auth/useAuth";
 import { useLeadStatuses } from "../hooks/useLeadStatuses";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { WallNavigationProvider } from "../contexts/WallNavigationContext";
-import { useSpaceFlowNav } from "../contexts/SpaceFlowNavContext";
+import { useZhiiveNav } from "../contexts/ZhiiveNavContext";
 
 /* ═══════════════════════════════════════════════════════════════
    LAZY-LOADED MODULE COMPONENTS (embedded in dashboard)
@@ -45,17 +45,18 @@ const LazyOrganizationsAdminPage = React.lazy(() => import('./admin/Organization
 const LazyPermissionsAdminPage = React.lazy(() => import('./admin/PermissionsAdminPageNew'));
 const LazyIntegrationsAdminPage = React.lazy(() => import('./admin/IntegrationsAdminPage'));
 const LazyTreesAdminPage = React.lazy(() => import('./admin/TreesAdminPage'));
+const LazyWebsitesAdminPage = React.lazy(() => import('./admin/WebsitesAdminPage'));
 const LazyProfilePage = React.lazy(() => import('./ProfilePage'));
 const LazySettingsPageEmbedded = React.lazy(() => import('./SettingsPageEmbedded'));
 
 /* ═══════════════════════════════════════════════════════════════
-   SPACEFLOW — Lazy-loaded panel components
+   ZHIIVE — Lazy-loaded panel components
    ═══════════════════════════════════════════════════════════════ */
-const LazyExplorePanel = React.lazy(() => import('../components/spaceflow/ExplorePanel'));
-const LazyFlowPanel = React.lazy(() => import('../components/spaceflow/FlowPanel'));
-const LazyUniversePanel = React.lazy(() => import('../components/spaceflow/UniversePanel'));
-const LazyStoriesBar = React.lazy(() => import('../components/spaceflow/StoriesBar'));
-const LazyReelsPanel = React.lazy(() => import('../components/spaceflow/ReelsPanel'));
+const LazyExplorePanel = React.lazy(() => import('../components/zhiive/ExplorePanel'));
+const LazyFlowPanel = React.lazy(() => import('../components/zhiive/FlowPanel'));
+const LazyUniversePanel = React.lazy(() => import('../components/zhiive/UniversePanel'));
+const LazyStoriesBar = React.lazy(() => import('../components/zhiive/StoriesBar'));
+const LazyReelsPanel = React.lazy(() => import('../components/zhiive/ReelsPanel'));
 
 /** Maps route paths to their lazy-loaded component */
 const MODULE_COMPONENTS: Record<string, React.LazyExoticComponent<any>> = {
@@ -102,13 +103,14 @@ const MODULE_COMPONENTS: Record<string, React.LazyExoticComponent<any>> = {
   '/admin/permissions': LazyPermissionsAdminPage,
   '/admin/integrations': LazyIntegrationsAdminPage,
   '/admin/trees': LazyTreesAdminPage,
+  '/admin/sites-web': LazyWebsitesAdminPage,
   '/profile': LazyProfilePage,
   '/settings': LazySettingsPageEmbedded,
 };
 
 /** Routes that should NOT be embedded (navigate normally) */
 const FULL_PAGE_ROUTES = ['/premium-test', '/diagnostic-complet'];
-import { Avatar, Spin, Tooltip as AntTooltip, Select } from "antd";
+import { Avatar, Spin, Tooltip as AntTooltip, Select, Modal, Input } from "antd";
 import {
   UserOutlined,
   TeamOutlined,
@@ -171,7 +173,7 @@ import {
   Area,
 } from "recharts";
 import { NotificationManager } from "../components/Notifications";
-import MessengerChat, { FriendsWidget } from "../components/MessengerChat";
+import { FriendsWidget } from "../components/MessengerChat";
 
 /* ═══════════════════════════════════════════════════════════════
    FACEBOOK COLORS — exactement les mêmes tokens
@@ -267,6 +269,8 @@ export interface WallPostComment {
   mediaUrl?: string;
   createdAt: string;
   author: WallPostAuthor;
+  publishAsOrg?: boolean;
+  organization?: { id: string; name: string; logoUrl?: string | null };
   replies?: WallPostComment[];
 }
 export interface WallPostData {
@@ -283,6 +287,8 @@ export interface WallPostData {
   commentsCount: number;
   sharesCount: number;
   isPinned: boolean;
+  publishAsOrg?: boolean;
+  organization?: { id: string; name: string; logoUrl?: string | null };
   createdAt: string;
   author: WallPostAuthor;
   targetLead?: { id: string; firstName?: string; lastName?: string; company?: string };
@@ -292,6 +298,16 @@ export interface WallPostData {
   totalComments: number;
   totalReactions: number;
   totalShares: number;
+  parentPost?: {
+    id: string;
+    content?: string;
+    mediaUrls?: string[];
+    mediaType?: string;
+    publishAsOrg?: boolean;
+    createdAt: string;
+    author: { id: string; firstName?: string; lastName?: string; avatarUrl?: string };
+    organization?: { id: string; name: string; logoUrl?: string | null };
+  };
 }
 
 type WallVisibility = 'OUT' | 'IN' | 'ALL' | 'CLIENT';
@@ -450,9 +466,12 @@ export const WallPostCard: React.FC<{
   post: WallPostData;
   isMobile: boolean;
   currentUserId: string;
+  currentUser?: { id: string; firstName?: string; lastName?: string; avatarUrl?: string };
   api: any;
   onUpdate: () => void;
-}> = ({ post, isMobile, currentUserId: _uid, api, onUpdate: _onUpdate }) => {
+  feedMode?: string;
+  currentOrganization?: any;
+}> = ({ post, isMobile, currentUserId: _uid, currentUser, api, onUpdate: _onUpdate, feedMode, currentOrganization }) => {
   const [myReaction, setMyReaction] = useState(post.myReaction);
   const [likesCount, setLikesCount] = useState(post.totalReactions);
   const [commentsCount, setCommentsCount] = useState(post.totalComments);
@@ -470,8 +489,22 @@ export const WallPostCard: React.FC<{
   const [commentReactions, setCommentReactions] = useState<Record<string, string>>({}); // commentId → emoji
   const [hoverReactionCommentId, setHoverReactionCommentId] = useState<string | null>(null);
   const hoverReactionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareComment, setShareComment] = useState("");
+  const [sharingPost, setSharingPost] = useState(false);
+  const [shareVisibility, setShareVisibility] = useState<string>('IN');
+  const [shareIncludeOriginal, setShareIncludeOriginal] = useState(true);
+  const [shareAsOrg, setShareAsOrg] = useState(false);
 
-  const authorName = [post.author.firstName, post.author.lastName].filter(Boolean).join(" ") || "Système";
+  const authorName = post.publishAsOrg && post.organization?.name
+    ? post.organization.name
+    : [post.author.firstName, post.author.lastName].filter(Boolean).join(" ") || "Système";
+  const authorAvatar = post.publishAsOrg && post.organization?.logoUrl
+    ? post.organization.logoUrl
+    : post.author.avatarUrl;
+  const authorInitial = post.publishAsOrg && post.organization?.name
+    ? post.organization.name[0]?.toUpperCase()
+    : (post.author.firstName?.[0] || '?').toUpperCase();
   const vis = visibilityLabel[post.visibility] || visibilityLabel.IN;
 
   const reactionTypes = [
@@ -509,8 +542,9 @@ export const WallPostCard: React.FC<{
     if (!text.trim() || submittingComment) return;
     setSubmittingComment(true);
     try {
-      const body: Record<string, string> = { content: text.trim() };
+      const body: Record<string, any> = { content: text.trim() };
       if (parentCommentId) body.parentCommentId = parentCommentId;
+      if (feedMode === 'org' && !!currentOrganization) body.publishAsOrg = true;
       const newComment = await api.post(`/api/wall/posts/${post.id}/comments`, body);
       if (parentCommentId) {
         // Add reply under its parent
@@ -567,6 +601,15 @@ export const WallPostCard: React.FC<{
   const handleShare = async (targetType = 'LINK') => {
     const url = `${window.location.origin}/wall/post/${post.id}`;
     const text = post.content ? post.content.substring(0, 200) : `Post de ${authorName}`;
+    if (targetType === 'WALL') {
+      setShowShareMenu(false);
+      setShareComment("");
+      setShareVisibility(currentOrganization ? 'IN' : 'ALL');
+      setShareIncludeOriginal(true);
+      setShareAsOrg(feedMode === 'org' && !!currentOrganization);
+      setShowShareModal(true);
+      return;
+    }
     try {
       await api.post(`/api/wall/posts/${post.id}/share`, { targetType });
     } catch { /* ignore tracking error */ }
@@ -609,6 +652,23 @@ export const WallPostCard: React.FC<{
     } catch (e) { console.error("[WALL] Share error:", e); }
   };
 
+  const handleConfirmShareToWall = async () => {
+    setSharingPost(true);
+    try {
+      await api.post('/api/wall/posts', {
+        content: shareComment.trim() || undefined,
+        parentPostId: shareIncludeOriginal ? post.id : undefined,
+        visibility: shareVisibility,
+        publishAsOrg: shareAsOrg && !!currentOrganization,
+      });
+      NotificationManager.success("Partagé sur votre mur !");
+      setShowShareModal(false);
+      setShareComment("");
+      _onUpdate();
+    } catch (e) { console.error("[WALL] Repost error:", e); }
+    setSharingPost(false);
+  };
+
   const handleToggleComments = () => {
     if (!showComments) loadComments();
     setShowComments(!showComments);
@@ -620,12 +680,17 @@ export const WallPostCard: React.FC<{
     <FBCard noPadding>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", padding: "12px 16px 0", gap: 8 }}>
-        <Avatar size={40} src={post.author.avatarUrl}
-          icon={!post.author.avatarUrl ? <UserOutlined /> : undefined}
-          style={{ backgroundColor: !post.author.avatarUrl ? FB.blue : undefined, flexShrink: 0 }} />
+        <Avatar size={40} src={authorAvatar}
+          icon={!authorAvatar ? <UserOutlined /> : undefined}
+          style={{ backgroundColor: !authorAvatar ? (post.publishAsOrg ? '#6C5CE7' : FB.blue) : undefined, flexShrink: 0 }}>
+          {!authorAvatar && authorInitial}
+        </Avatar>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div>
             <span style={{ fontWeight: 600, fontSize: 14, color: FB.text }}>{authorName}</span>
+            {post.parentPost && (
+              <span style={{ color: FB.textSecondary, fontSize: 13, fontWeight: 400 }}> a partagé une publication</span>
+            )}
             {post.crmEventType && (
               <span style={{ color: FB.textSecondary, fontSize: 14 }}>
                 {" "}{crmEventIcon(post.crmEventType)}
@@ -655,9 +720,10 @@ export const WallPostCard: React.FC<{
       </div>
 
       {/* Content */}
-      <div style={{ padding: "12px 16px" }}>
+      {(post.content || post.crmEventType) && (
+      <div style={{ padding: "12px 16px", textAlign: 'left' }}>
         {post.content && (
-          <div style={{ fontSize: 15, color: FB.text, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{post.content}</div>
+          <div style={{ fontSize: 15, color: FB.text, lineHeight: 1.5, whiteSpace: "pre-wrap", textAlign: 'left' }}>{post.content}</div>
         )}
         {post.crmEventType && (
           <div style={{
@@ -670,13 +736,68 @@ export const WallPostCard: React.FC<{
           </div>
         )}
       </div>
+      )}
+
+      {/* Shared / Reposted post embed */}
+      {post.parentPost && (() => {
+        const pp = post.parentPost;
+        const ppName = pp.publishAsOrg && pp.organization?.name
+          ? pp.organization.name
+          : [pp.author.firstName, pp.author.lastName].filter(Boolean).join(" ") || "Utilisateur";
+        const ppAvatar = pp.publishAsOrg && pp.organization?.logoUrl
+          ? pp.organization.logoUrl
+          : pp.author.avatarUrl;
+        const ppInitial = pp.publishAsOrg && pp.organization?.name
+          ? pp.organization.name[0]?.toUpperCase()
+          : (pp.author.firstName?.[0] || '?').toUpperCase();
+        return (
+          <div style={{
+            margin: "0 16px 8px", border: `1px solid ${FB.divider}`, borderRadius: 8,
+            overflow: "hidden", background: FB.bgGray,
+          }}>
+            {/* Original post header */}
+            <div style={{ display: "flex", alignItems: "center", padding: "10px 12px", gap: 8 }}>
+              <Avatar size={32} src={ppAvatar}
+                style={!ppAvatar ? { background: pp.publishAsOrg ? '#6C5CE7' : FB.blue, fontSize: 14 } : undefined}>
+                {!ppAvatar && ppInitial}
+              </Avatar>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 13, color: FB.text }}>{ppName}</div>
+                <div style={{ fontSize: 11, color: FB.textSecondary }}>
+                  {new Date(pp.createdAt).toLocaleDateString('fr-BE', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </div>
+              </div>
+            </div>
+            {/* Original post content */}
+            {pp.content && (
+              <div style={{ padding: "0 12px 8px", fontSize: 14, color: FB.text, whiteSpace: "pre-wrap", textAlign: 'left' }}>
+                {pp.content}
+              </div>
+            )}
+            {/* Original post media */}
+            {pp.mediaUrls && (pp.mediaUrls as string[]).length > 0 && (
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                {(pp.mediaUrls as string[]).slice(0, 4).map((url: string, i: number) => {
+                  const isSingle = (pp.mediaUrls as string[]).length === 1;
+                  const isVideo = /\.(mp4|webm|ogg|mov|avi|mkv)$/i.test(url);
+                  if (isVideo) {
+                    return <video key={i} src={url} controls style={{ width: isSingle ? "100%" : "calc(50% - 2px)", maxHeight: 300, objectFit: "contain", background: "#000" }} />;
+                  }
+                  return <img key={i} src={url} alt="" onClick={() => setLightboxUrl(url)} style={{ width: isSingle ? "100%" : "calc(50% - 2px)", maxHeight: 300, objectFit: isSingle ? "contain" : "cover", cursor: "pointer", background: isSingle ? "#f0f0f0" : "transparent" }} />;
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Media */}
       {post.mediaUrls && Array.isArray(post.mediaUrls) && (post.mediaUrls as string[]).length > 0 && (
-        <div style={{ padding: "0 16px 12px" }}>
+        <div>
           <div style={{
-            display: "flex", gap: 4, flexWrap: "wrap",
+            display: "flex", gap: (post.mediaUrls as string[]).length === 1 ? 0 : 4, flexWrap: "wrap",
             justifyContent: (post.mediaUrls as string[]).length === 1 ? "center" : "flex-start",
+            padding: (post.mediaUrls as string[]).length === 1 ? 0 : "0 4px",
           }}>
             {(post.mediaUrls as string[]).slice(0, 4).map((url: string, i: number) => {
               const isSingle = (post.mediaUrls as string[]).length === 1;
@@ -688,7 +809,7 @@ export const WallPostCard: React.FC<{
                     style={{
                       width: isSingle ? "100%" : "calc(50% - 2px)",
                       maxHeight: isSingle ? 500 : 300,
-                      borderRadius: 8,
+                      borderRadius: isSingle ? 0 : 8,
                       background: "#000",
                       objectFit: "contain",
                     }} />
@@ -701,7 +822,7 @@ export const WallPostCard: React.FC<{
                     width: isSingle ? "100%" : "calc(50% - 2px)",
                     maxHeight: isSingle ? 500 : 300,
                     objectFit: isSingle ? "contain" : "cover",
-                    borderRadius: 8,
+                    borderRadius: isSingle ? 0 : 8,
                     cursor: "pointer",
                     background: isSingle ? "#f0f0f0" : "transparent",
                   }} />
@@ -880,6 +1001,7 @@ export const WallPostCard: React.FC<{
               padding: 4, minWidth: 180, zIndex: 100,
             }}>
               {[
+                { type: "WALL", icon: "📝", label: "Partager sur mon mur" },
                 { type: "LINK", icon: "🔗", label: "Copier le lien" },
                 { type: "FACEBOOK", icon: "📘", label: "Facebook" },
                 { type: "LINKEDIN", icon: "💼", label: "LinkedIn" },
@@ -910,20 +1032,24 @@ export const WallPostCard: React.FC<{
       {showComments && (
         <div style={{ padding: "4px 16px 12px 8px", textAlign: 'left' }}>
           {/* Existing comments */}
-          {allComments.map((comment) => (
+          {allComments.map((comment) => {
+            const cIsOrg = comment.publishAsOrg && comment.organization;
+            const cAvatar = cIsOrg ? (comment.organization?.logoUrl || null) : comment.author.avatarUrl;
+            const cName = cIsOrg ? comment.organization!.name : [comment.author.firstName, comment.author.lastName].filter(Boolean).join(" ");
+            return (
             <div key={comment.id} style={{ marginBottom: 8, marginLeft: 0, paddingLeft: 0 }}>
               {/* Main comment — flush left */}
               <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                <Avatar size={28} src={comment.author.avatarUrl}
-                  icon={!comment.author.avatarUrl ? <UserOutlined /> : undefined}
-                  style={{ backgroundColor: !comment.author.avatarUrl ? FB.blue : undefined, flexShrink: 0 }} />
+                <Avatar size={28} src={cAvatar}
+                  icon={!cAvatar ? <UserOutlined /> : undefined}
+                  style={{ backgroundColor: !cAvatar ? (cIsOrg ? '#6C5CE7' : FB.blue) : undefined, flexShrink: 0 }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{
                     background: FB.btnGray, borderRadius: 12, padding: "8px 12px",
                     width: 'fit-content', maxWidth: '85%', textAlign: 'left',
                   }}>
                     <span style={{ fontWeight: 600, fontSize: 13, color: FB.text }}>
-                      {[comment.author.firstName, comment.author.lastName].filter(Boolean).join(" ")}
+                      {cName}
                     </span>
                     <div style={{ fontSize: 14, color: FB.text, marginTop: 2 }}>{comment.content}</div>
                   </div>
@@ -974,19 +1100,23 @@ export const WallPostCard: React.FC<{
                   {/* Replies — staircase indent */}
                   {comment.replies && comment.replies.length > 0 && (
                     <div style={{ marginTop: 6 }}>
-                      {comment.replies.map((reply, replyIdx) => (
+                      {comment.replies.map((reply, replyIdx) => {
+                        const rIsOrg = reply.publishAsOrg && reply.organization;
+                        const rAvatar = rIsOrg ? (reply.organization?.logoUrl || null) : reply.author.avatarUrl;
+                        const rName = rIsOrg ? reply.organization!.name : [reply.author.firstName, reply.author.lastName].filter(Boolean).join(" ");
+                        return (
                         <div key={reply.id} style={{ marginBottom: 6, marginLeft: 12 + replyIdx * 8 }}>
                           <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
-                            <Avatar size={24} src={reply.author.avatarUrl}
-                              icon={!reply.author.avatarUrl ? <UserOutlined /> : undefined}
-                              style={{ backgroundColor: !reply.author.avatarUrl ? "#bbb" : undefined, flexShrink: 0 }} />
+                            <Avatar size={24} src={rAvatar}
+                              icon={!rAvatar ? <UserOutlined /> : undefined}
+                              style={{ backgroundColor: !rAvatar ? (rIsOrg ? '#6C5CE7' : "#bbb") : undefined, flexShrink: 0 }} />
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{
                                 background: FB.btnGray, borderRadius: 10, padding: "6px 10px",
                                 width: 'fit-content', maxWidth: '85%', textAlign: 'left',
                               }}>
                                 <span style={{ fontWeight: 600, fontSize: 12, color: FB.text }}>
-                                  {[reply.author.firstName, reply.author.lastName].filter(Boolean).join(" ")}
+                                  {rName}
                                 </span>
                                 <div style={{ fontSize: 13, color: FB.text }}>{reply.content}</div>
                               </div>
@@ -1034,14 +1164,18 @@ export const WallPostCard: React.FC<{
                             </div>
                           </div>
                         </div>
-                      ))}
+                      ); })}
                     </div>
                   )}
 
                   {/* Reply input (shown when replying to this comment) */}
                   {replyingTo === comment.id && (
                     <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 6, marginLeft: 12 }}>
-                      <Avatar size={24} icon={<UserOutlined />} />
+                      {(() => { const inputIsOrg = feedMode === 'org' && currentOrganization; const inputAvatar = inputIsOrg ? ((currentOrganization as any)?.logoUrl || null) : null; return (
+                      <Avatar size={24} src={inputAvatar || undefined}
+                        icon={!inputAvatar ? <UserOutlined /> : undefined}
+                        style={{ backgroundColor: !inputAvatar && inputIsOrg ? '#6C5CE7' : undefined }} />
+                      ); })()}
                       <div style={{
                         flex: 1, display: "flex", alignItems: "center",
                         background: FB.btnGray, borderRadius: 20, padding: "2px 4px 2px 10px",
@@ -1072,11 +1206,15 @@ export const WallPostCard: React.FC<{
                 </div>
               </div>
             </div>
-          ))}
+          ); })}
 
           {/* New comment input */}
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 4 }}>
-            <Avatar size={28} icon={<UserOutlined />} />
+            {(() => { const inputIsOrg = feedMode === 'org' && currentOrganization; const inputAvatar = inputIsOrg ? ((currentOrganization as any)?.logoUrl || null) : null; return (
+            <Avatar size={28} src={inputAvatar || undefined}
+              icon={!inputAvatar ? <UserOutlined /> : undefined}
+              style={{ backgroundColor: !inputAvatar && inputIsOrg ? '#6C5CE7' : undefined }} />
+            ); })()}
             <div style={{
               flex: 1, display: "flex", alignItems: "center",
               background: FB.btnGray, borderRadius: 20, padding: "2px 4px 2px 12px",
@@ -1103,6 +1241,156 @@ export const WallPostCard: React.FC<{
           </div>
         </div>
       )}
+
+      {/* Share to wall modal — Facebook style */}
+      <Modal
+        open={showShareModal}
+        onCancel={() => { setShowShareModal(false); setShareComment(""); }}
+        footer={null}
+        width={500}
+        closable
+        centered
+        styles={{ body: { padding: 0 } }}
+        title={
+          <div style={{ textAlign: 'center', fontSize: 20, fontWeight: 700, padding: '4px 0' }}>
+            Écrire une publication
+          </div>
+        }
+      >
+        {/* Current user profile + visibility */}
+        <div style={{ padding: '12px 16px', borderTop: `1px solid ${FB.divider}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Avatar size={40}
+              src={shareAsOrg && currentOrganization?.logoUrl ? currentOrganization.logoUrl : currentUser?.avatarUrl}
+              style={!(shareAsOrg ? currentOrganization?.logoUrl : currentUser?.avatarUrl)
+                ? { background: shareAsOrg ? '#6C5CE7' : FB.blue, fontSize: 16 } : undefined}
+            >
+              {!(shareAsOrg ? currentOrganization?.logoUrl : currentUser?.avatarUrl) &&
+                ((shareAsOrg ? currentOrganization?.name?.[0] : currentUser?.firstName?.[0]) || '?').toUpperCase()}
+            </Avatar>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 15, color: FB.text }}>
+                {shareAsOrg && currentOrganization?.name ? currentOrganization.name
+                  : [currentUser?.firstName, currentUser?.lastName].filter(Boolean).join(' ') || 'Moi'}
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                {/* Visibility selector */}
+                <select
+                  value={shareVisibility}
+                  onChange={e => setShareVisibility(e.target.value)}
+                  style={{
+                    fontSize: 12, fontWeight: 600, padding: '2px 8px', borderRadius: 6,
+                    border: `1px solid ${FB.divider}`, background: FB.btnGray, color: FB.text,
+                    cursor: 'pointer', outline: 'none',
+                  }}
+                >
+                  <option value="ALL">🌐 Public</option>
+                  {currentOrganization && <option value="IN">👥 Organisation</option>}
+                  <option value="OUT">🔒 Privé</option>
+                </select>
+                {/* Publish as org toggle */}
+                {currentOrganization && (
+                  <label style={{
+                    fontSize: 12, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4,
+                    padding: '2px 8px', borderRadius: 6, border: `1px solid ${FB.divider}`,
+                    background: shareAsOrg ? '#6C5CE715' : FB.btnGray, color: shareAsOrg ? '#6C5CE7' : FB.text,
+                    cursor: 'pointer',
+                  }}>
+                    <input type="checkbox" checked={shareAsOrg} onChange={e => setShareAsOrg(e.target.checked)}
+                      style={{ width: 14, height: 14, accentColor: '#6C5CE7' }} />
+                    En tant que {currentOrganization.name}
+                  </label>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Text area */}
+        <div style={{ padding: '0 16px 12px' }}>
+          <textarea
+            value={shareComment}
+            onChange={e => setShareComment(e.target.value)}
+            placeholder={`Quoi de neuf, ${shareAsOrg && currentOrganization?.name ? currentOrganization.name : currentUser?.firstName || ''} ?`}
+            maxLength={5000}
+            style={{
+              width: '100%', minHeight: 80, border: 'none', outline: 'none', resize: 'none',
+              fontSize: 15, color: FB.text, fontFamily: 'inherit', lineHeight: 1.5,
+              background: 'transparent',
+            }}
+          />
+        </div>
+
+        {/* Include original toggle */}
+        <div style={{ padding: '0 16px 12px' }}>
+          <label style={{
+            display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px',
+            borderRadius: 8, border: `1px solid ${FB.divider}`, cursor: 'pointer',
+            background: shareIncludeOriginal ? FB.blue + '08' : 'transparent',
+          }}>
+            <input type="checkbox" checked={shareIncludeOriginal}
+              onChange={e => setShareIncludeOriginal(e.target.checked)}
+              style={{ width: 18, height: 18, accentColor: FB.blue }} />
+            <span style={{ fontSize: 14, fontWeight: 500, color: FB.text }}>Inclure la publication d'origine</span>
+          </label>
+        </div>
+
+        {/* Original post preview */}
+        {shareIncludeOriginal && (
+          <div style={{
+            margin: '0 16px 12px', border: `1px solid ${FB.divider}`, borderRadius: 8,
+            overflow: 'hidden', background: FB.bgGray,
+          }}>
+            {/* Original post media (full width at top like Facebook) */}
+            {post.mediaUrls && (post.mediaUrls as string[]).length > 0 && (
+              <div>
+                {(post.mediaUrls as string[]).slice(0, 1).map((url: string, i: number) => {
+                  const isVideo = /\.(mp4|webm|ogg|mov|avi|mkv)$/i.test(url);
+                  if (isVideo) {
+                    return <video key={i} src={url} controls style={{ width: '100%', maxHeight: 300, objectFit: 'contain', background: '#000' }} />;
+                  }
+                  return <img key={i} src={url} alt="" style={{ width: '100%', maxHeight: 300, objectFit: 'cover' }} />;
+                })}
+              </div>
+            )}
+            {/* Original post author + content */}
+            <div style={{ padding: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <Avatar size={28} src={authorAvatar}
+                  style={!authorAvatar ? { background: post.publishAsOrg ? '#6C5CE7' : FB.blue, fontSize: 12 } : undefined}>
+                  {!authorAvatar && authorInitial}
+                </Avatar>
+                <div>
+                  <span style={{ fontWeight: 600, fontSize: 13, color: FB.text }}>{authorName}</span>
+                  <span style={{ fontSize: 11, color: FB.textSecondary, marginLeft: 6 }}>{timeAgo(post.createdAt)}</span>
+                </div>
+              </div>
+              {post.content && (
+                <div style={{ fontSize: 14, color: FB.text, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>
+                  {post.content.length > 300 ? post.content.substring(0, 300) + '...' : post.content}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Bottom bar — action button */}
+        <div style={{ padding: '8px 16px 16px' }}>
+          <button
+            onClick={handleConfirmShareToWall}
+            disabled={sharingPost || (!shareComment.trim() && !shareIncludeOriginal)}
+            style={{
+              width: '100%', padding: '10px 0', borderRadius: 8, border: 'none',
+              background: (sharingPost || (!shareComment.trim() && !shareIncludeOriginal)) ? FB.btnGray : FB.blue,
+              color: (sharingPost || (!shareComment.trim() && !shareIncludeOriginal)) ? FB.textSecondary : '#fff',
+              fontSize: 16, fontWeight: 600, cursor: sharingPost ? 'wait' : 'pointer',
+              transition: 'background 0.2s',
+            }}
+          >
+            {sharingPost ? 'Publication...' : 'Publier'}
+          </button>
+        </div>
+      </Modal>
     </FBCard>
   );
 };
@@ -1192,21 +1480,22 @@ export default function DashboardPageUnified() {
   const [wallLoading, setWallLoading] = useState(false);
   const [wallCursor, setWallCursor] = useState<string | null>(null);
   const [newPostContent, setNewPostContent] = useState("");
-  const [newPostVisibility, setNewPostVisibility] = useState<WallVisibility>("IN");
+  const [newPostVisibility, setNewPostVisibility] = useState<WallVisibility>("ALL");
   const [postSubmitting, setPostSubmitting] = useState(false);
   const [feedFilter, setFeedFilter] = useState<string>(""); // category filter
+  // feedMode is now in ZhiiveNavContext (global across all social apps)
   const [postMediaPreviews, setPostMediaPreviews] = useState<{ file: File; preview: string; type: string }[]>([]);
   const [postMood, setPostMood] = useState<string | null>(null);
   const [showMoodPicker, setShowMoodPicker] = useState(false);
   const [postCategory, setPostCategory] = useState<string | null>(null);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
-  const [mobilePanel, setMobilePanel] = useState(2); // SpaceFlow: 0=Explore, 1=Flow, 2=Mur(centre), 3=Universe, 4=Reels, 5=Stats
+  const [mobilePanel, setMobilePanel] = useState(2); // Zhiive: 0=Explore, 1=Flow, 2=Mur(centre), 3=Universe, 4=Reels, 5=Stats
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // SpaceFlow navigation (shared with header tabs via context)
-  const { centerApp, setCenterApp, leftSidebarApp, rightSidebarApp, registerMobileScroll, setMobilePanel: setContextMobilePanel, tabOrder } = useSpaceFlowNav();
+  // Zhiive navigation (shared with header tabs via context)
+  const { centerApp, setCenterApp, leftSidebarApp, rightSidebarApp, registerMobileScroll, setMobilePanel: setContextMobilePanel, tabOrder, feedMode } = useZhiiveNav();
 
   // Embedded module navigation
   const navigate = useNavigate();
@@ -1251,7 +1540,7 @@ export default function DashboardPageUnified() {
     }
   }, [isMobile, registerMobileScroll, scrollToPanel]);
 
-  // SpaceFlow: scroll to "mur" panel position on mount (follows tabOrder)
+  // Zhiive: scroll to "mur" panel position on mount (follows tabOrder)
   const hasScrolledToCenter = useRef(false);
   useEffect(() => {
     if (hasScrolledToCenter.current) return;
@@ -1428,6 +1717,7 @@ export default function DashboardPageUnified() {
       if (!reset && wallCursor) params.set("cursor", wallCursor);
       if (feedFilter) params.set("category", feedFilter);
       params.set("limit", "20");
+      params.set("mode", feedMode);
 
       const result = await api.get(`/api/wall/feed?${params.toString()}`) as { posts?: WallPostData[]; nextCursor?: string };
       const posts = result?.posts || [];
@@ -1444,7 +1734,7 @@ export default function DashboardPageUnified() {
     } finally {
       setWallLoading(false);
     }
-  }, [api, wallCursor, feedFilter]);
+  }, [api, wallCursor, feedFilter, feedMode]);
 
   /* ─── CREATE POST ──────────────────────────────────────────── */
   const handleMediaSelect = useCallback((accept: string) => {
@@ -1514,6 +1804,7 @@ export default function DashboardPageUnified() {
         mediaUrls: mediaUrls.length > 0 ? mediaUrls : undefined,
         mediaType,
         category: postCategory || undefined,
+        publishAsOrg: feedMode === 'org' && !!currentOrganization ? true : undefined,
       });
       const enriched: WallPostData = {
         ...(newPost as WallPostData),
@@ -1593,14 +1884,19 @@ export default function DashboardPageUnified() {
 
   useEffect(() => {
     if (!user) return;
-    if (!currentOrganization && !isSuperAdmin) return;
+    // Pour les utilisateurs réseau (libres) : charger uniquement le wall feed
+    if (!currentOrganization && !isSuperAdmin) {
+      fetchWallFeed(true);
+      return;
+    }
     fetchDashboardData();
     fetchWallFeed(true);
   }, [user, currentOrganization, isSuperAdmin, fetchDashboardData, fetchWallFeed]);
 
-  if (!currentOrganization && !isSuperAdmin) return <CreateOrganizationPrompt />;
+  // Les utilisateurs réseau (libres) accèdent au réseau social — la bannière est dans AppLayout
+  const isFreeUser = !currentOrganization && !isSuperAdmin;
 
-  if (loading) {
+  if (loading && !isFreeUser) {
     return (
       <div style={{ minHeight: "100vh", background: FB.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <Spin size="large" />
@@ -2176,13 +2472,18 @@ export default function DashboardPageUnified() {
           </div>
         )}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <Avatar size={30} src={user?.avatarUrl}
-            icon={!user?.avatarUrl ? <UserOutlined /> : undefined}
-            style={{ background: !user?.avatarUrl ? FB.blue : undefined, flexShrink: 0 }} />
+          {(() => {
+            const isOrgMode = feedMode === 'org' && currentOrganization;
+            const orgLogo = (currentOrganization as any)?.logoUrl;
+            const avatarSrc = isOrgMode ? (orgLogo || undefined) : (user?.avatarUrl || undefined);
+            const avatarFallback = isOrgMode ? (!orgLogo ? (currentOrganization?.name?.[0]?.toUpperCase() || 'O') : undefined) : (!user?.avatarUrl ? <UserOutlined /> : undefined);
+            const avatarBg = isOrgMode ? (orgLogo ? undefined : '#6C5CE7') : (!user?.avatarUrl ? FB.blue : undefined);
+            return <Avatar size={30} src={avatarSrc} icon={!isOrgMode && !user?.avatarUrl ? <UserOutlined /> : undefined} style={{ background: avatarBg, flexShrink: 0 }}>{isOrgMode && !orgLogo && avatarFallback}</Avatar>;
+          })()}
           <textarea
             value={newPostContent}
             onChange={e => setNewPostContent(e.target.value)}
-            placeholder={"Quoi de neuf, " + (user?.firstName || "collègue") + " ?"}
+            placeholder={feedMode === 'org' && currentOrganization ? "Quoi de neuf, " + currentOrganization.name + " ?" : "Quoi de neuf, " + (user?.firstName || "collègue") + " ?"}
             rows={1}
             style={{
               flex: 1, background: FB.btnGray, borderRadius: 20, padding: "6px 12px",
@@ -2290,7 +2591,7 @@ export default function DashboardPageUnified() {
         {(newPostContent.trim() || postMediaPreviews.length > 0) && (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6 }}>
             <div style={{ display: "flex", gap: 4 }}>
-              {(["IN", "ALL", "OUT"] as WallVisibility[]).map(v => {
+              {(currentOrganization ? ["IN", "ALL", "OUT"] as WallVisibility[] : ["ALL", "OUT"] as WallVisibility[]).map(v => {
                 const vis = visibilityLabel[v];
                 const active = newPostVisibility === v;
                 return (
@@ -2322,8 +2623,8 @@ export default function DashboardPageUnified() {
         )}
       </FBCard>
 
-      {/* Module shortcuts — compact pill style (CRM + SpaceFlow apps) */}
-      <div ref={pillsRef}
+      {/* Module shortcuts — compact pill style (CRM modules only, org users) */}
+      {currentOrganization && <div ref={pillsRef}
         onMouseDown={onPillsMouseDown} onMouseMove={onPillsMouseMove}
         onMouseUp={onPillsMouseUp} onMouseLeave={onPillsMouseUp}
         style={{
@@ -2379,51 +2680,9 @@ export default function DashboardPageUnified() {
               </div>
             );
           })}
+        </div>}
 
-          {/* SpaceFlow app pills — same style as CRM modules */}
-          {!isMobile && ([
-            { id: 'explore' as const, label: 'Explore', icon: '🔍', color: '#00CEC9' },
-            { id: 'flow' as const, label: 'Flow', icon: '🌊', color: '#6C5CE7' },
-            { id: 'reels' as const, label: 'Reels', icon: '🎬', color: '#FD79A8' },
-            { id: 'universe' as const, label: 'Universe', icon: '🌌', color: '#E17055' },
-            { id: 'stats' as const, label: 'Stats', icon: '📊', color: '#FDCB6E' },
-          ].map(sf => {
-            const isActive = centerApp === sf.id && !activeModule;
-            return (
-              <div key={sf.id} onClick={() => { if (!pillsDrag.current.moved) { setCenterApp(sf.id); if (activeModule) goHome(); } }} style={{ cursor: 'pointer' }}>
-                <div style={{
-                  flex: "0 0 auto", display: "flex", alignItems: "center",
-                  gap: 4, padding: "4px 8px",
-                  borderRadius: 14, background: isActive ? sf.color + '15' : FB.white, boxShadow: FB.shadow,
-                  border: isActive ? `1.5px solid ${sf.color}` : '1.5px solid transparent',
-                }}>
-                  <div style={{
-                    width: 22, height: 22, borderRadius: "50%", background: sf.color,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 11,
-                  }}>
-                    {sf.icon}
-                  </div>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: isActive ? sf.color : FB.text, whiteSpace: "nowrap" }}>{sf.label}</span>
-                </div>
-              </div>
-            );
-          }))}
-          {!isMobile && (
-            <div onClick={() => { if (!pillsDrag.current.moved) { goHome(); setCenterApp(null); } }} style={{ cursor: 'pointer' }}>
-              <AntTooltip title="Rechercher modules">
-                <div style={{
-                  flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "center",
-                  width: 28, height: 28, borderRadius: 14, background: FB.white, boxShadow: FB.shadow,
-                }}>
-                  🔎
-                </div>
-              </AntTooltip>
-            </div>
-          )}
-        </div>
-
-      {/* Feed content — hidden when a module or SpaceFlow app is active in center */}
+      {/* Feed content — hidden when a module or Zhiive app is active in center */}
       {!activeModule && !centerApp && (<>
       {/* Feed header — single compact line with filter dropdown */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0 4px", marginBottom: 4, position: "relative" }}>
@@ -2485,7 +2744,8 @@ export default function DashboardPageUnified() {
         <>
           {wallPosts.map(post => (
             <WallPostCard key={post.id} post={post} isMobile={isMobile}
-              currentUserId={user?.id || ""} api={api} onUpdate={() => fetchWallFeed(true)} />
+              currentUserId={user?.id || ""} currentUser={user} api={api} onUpdate={() => fetchWallFeed(true)}
+              feedMode={feedMode} currentOrganization={currentOrganization} />
           ))}
           {wallCursor && (
             <div style={{ textAlign: "center", padding: "12px 0" }}>
@@ -2669,7 +2929,7 @@ export default function DashboardPageUnified() {
                     </div>
                   );
                 case 'stats':
-                  return (
+                  return isFreeUser ? null : (
                     <div key="stats" style={{ flex: "0 0 100%", width: "100%", scrollSnapAlign: "start", overflowY: "auto", padding: "4px 8px" }}>
                       {renderMobileAnalytics()}
                     </div>
@@ -2685,9 +2945,9 @@ export default function DashboardPageUnified() {
       {!isMobile && (
         /* ═══════════════════════════════════════════════════════
            DESKTOP — 3-Column Layout (always visible)
-           SpaceFlow tabs are in the MainLayoutNew header
+           Zhiive tabs are in the MainLayoutNew header
            Left sidebar: auto-computed from context
-           Center: Wall, CRM module, or SpaceFlow app
+           Center: Wall, CRM module, or Zhiive app
            Right sidebar: auto-computed from context
            ═══════════════════════════════════════════════════════ */
         <div style={{ display: "flex", height: "calc(100vh - 48px)" }}>
@@ -2711,7 +2971,7 @@ export default function DashboardPageUnified() {
             </div>
           </div>
 
-          {/* ── CENTER (flex: 1) — Wall, CRM module, or SpaceFlow app ── */}
+          {/* ── CENTER (flex: 1) — Wall, CRM module, or Zhiive app ── */}
           <div style={{
             flex: 1, minWidth: 0, overflowY: "auto", padding: "4px 16px",
           }}>
@@ -2729,7 +2989,7 @@ export default function DashboardPageUnified() {
                     {centerApp === 'flow' && <LazyFlowPanel api={api} currentUser={user} />}
                     {centerApp === 'reels' && <LazyReelsPanel api={api} currentUser={user} />}
                     {centerApp === 'universe' && <LazyUniversePanel api={api} currentUser={user} />}
-                    {centerApp === 'stats' && <div style={{ padding: 16 }}>{renderMobileAnalytics()}</div>}
+                    {centerApp === 'stats' && !isFreeUser && <div style={{ padding: 16 }}>{renderMobileAnalytics()}</div>}
                   </Suspense>
                 </>
               ) : (
@@ -2755,13 +3015,12 @@ export default function DashboardPageUnified() {
                   <LazyUniversePanel api={api} currentUser={user} />
                 </Suspense>
               ) : (
-                renderMobileAnalytics()
+                !isFreeUser && renderMobileAnalytics()
               )}
             </div>
           </div>
         </div>
       )}
-      <MessengerChat />
     </div>
   );
 }

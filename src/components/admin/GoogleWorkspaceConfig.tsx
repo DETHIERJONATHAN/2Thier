@@ -68,7 +68,7 @@ function getAllRedirectUris(): RedirectUriConfig[] {
   const currentHostname = typeof window !== 'undefined' ? window.location.hostname : '';
   const isLocal = currentHostname === 'localhost' || currentHostname === '127.0.0.1';
   const isCodespaces = currentHostname.includes('.app.github.dev');
-  const isProduction = currentHostname === 'app.2thier.be';
+  const isProduction = currentHostname === 'www.zhiive.com' || currentHostname === 'app.2thier.be';
   
   const uris: RedirectUriConfig[] = [
     {
@@ -83,7 +83,7 @@ function getAllRedirectUris(): RedirectUriConfig[] {
       environment: 'production',
       label: 'Production',
       icon: <CloudServerOutlined />,
-      uri: 'https://app.2thier.be/api/google-auth/callback',
+      uri: 'https://www.zhiive.com/api/google-auth/callback',
       description: 'Pour l\'application en production (Cloud Run)',
       isCurrent: isProduction
     }
@@ -187,7 +187,7 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
   // 🔗 Calculer l'URI de redirection correcte pour l'environnement actuel
   const currentRedirectUri = useMemo(() => {
     const currentUri = getAllRedirectUris().find(u => u.isCurrent);
-    return currentUri?.uri || 'https://app.2thier.be/api/google-auth/callback';
+    return currentUri?.uri || 'https://www.zhiive.com/api/google-auth/callback';
   }, []);
 
   // Définir loadConfig en premier pour éviter l'erreur de référence
@@ -780,7 +780,7 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
           rules={[{ required: true, message: 'L\'URI de redirection est requise' }]}
         >
           <Input 
-            placeholder="https://app.2thier.be/api/google-auth/callback"
+            placeholder="https://www.zhiive.com/api/google-auth/callback"
             readOnly
             style={{ background: '#f5f5f5' }}
           />

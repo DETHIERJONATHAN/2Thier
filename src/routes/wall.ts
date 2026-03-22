@@ -23,12 +23,15 @@ const createPostSchema = z.object({
   crmEntityType: z.string().optional(),
   crmEntityId: z.string().optional(),
   isPinned: z.boolean().optional(),
+  publishAsOrg: z.boolean().optional(),
+  parentPostId: z.string().optional(),
 });
 
 const createCommentSchema = z.object({
   content: z.string().min(1).max(2000),
   parentCommentId: z.string().optional(),
   mediaUrl: z.string().optional(),
+  publishAsOrg: z.boolean().optional(),
 });
 
 const reactionSchema = z.object({
@@ -48,6 +51,7 @@ router.get('/feed', authenticateToken, async (req: Request, res: Response) => {
       targetLeadId,
       cursor,
       limit = '20',
+      mode, // 'personal' | 'org' — pour les users avec org qui veulent filtrer
     } = req.query;
 
     const take = Math.min(parseInt(limit as string) || 20, 50);
@@ -55,12 +59,12 @@ router.get('/feed', authenticateToken, async (req: Request, res: Response) => {
     // Construire le filtre
     const where: any = {
       isPublished: true,
-      organizationId: orgId || undefined,
     };
 
     // Filtrage par visibilité
     if (visibility) {
       where.visibility = visibility;
+      if (orgId) where.organizationId = orgId;
     } else if (user.role === 'client') {
       // Client voit : ses posts CLIENT + posts IN/ALL de son org
       where.OR = [
@@ -68,19 +72,28 @@ router.get('/feed', authenticateToken, async (req: Request, res: Response) => {
         { visibility: 'ALL' },
         { visibility: 'CLIENT', targetLeadId: user.linkedLeadId },
       ];
-      delete where.organizationId;
     } else if (!orgId && user.isSuperAdmin) {
       // Super admin sans org → tout
-      delete where.organizationId;
+    } else if (!orgId) {
+      // Free user sans org → posts ALL publics + ses propres posts
+      where.OR = [
+        { visibility: 'ALL' },
+        { authorId: user.id },
+      ];
+    } else if (mode === 'personal') {
+      // User avec org en mode personnel → posts ALL de tout le monde + ses propres posts
+      where.OR = [
+        { visibility: 'ALL' },
+        { authorId: user.id },
+      ];
     } else {
-      // Employé normal → IN + ALL + ses propres OUT
+      // User avec org en mode org (défaut) → IN + ALL de son org + ses propres OUT
       where.OR = [
         { visibility: 'IN', organizationId: orgId },
         { visibility: 'ALL', organizationId: orgId },
         { visibility: 'OUT', authorId: user.id },
         { visibility: 'CLIENT', organizationId: orgId },
       ];
-      delete where.organizationId;
     }
 
     if (category) where.category = category;
@@ -98,8 +111,17 @@ router.get('/feed', authenticateToken, async (req: Request, res: Response) => {
         author: {
           select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true },
         },
+        organization: {
+          select: { id: true, name: true, logoUrl: true },
+        },
         targetLead: {
           select: { id: true, firstName: true, lastName: true, company: true },
+        },
+        parentPost: {
+          include: {
+            author: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+            organization: { select: { id: true, name: true, logoUrl: true } },
+          },
         },
         reactions: {
           select: { id: true, userId: true, type: true },
@@ -161,6 +183,15 @@ router.get('/my-feed', authenticateToken, async (req: Request, res: Response) =>
       include: {
         author: {
           select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true },
+        },
+        organization: {
+          select: { id: true, name: true, logoUrl: true },
+        },
+        parentPost: {
+          include: {
+            author: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+            organization: { select: { id: true, name: true, logoUrl: true } },
+          },
         },
         reactions: {
           select: { id: true, userId: true, type: true },
@@ -269,8 +300,9 @@ router.post('/posts', authenticateToken, async (req: Request, res: Response) => 
     const orgId = user.organizationId || req.headers['x-organization-id'] as string;
     const data = createPostSchema.parse(req.body);
 
-    if (!orgId) {
-      return res.status(400).json({ error: 'Organisation requise' });
+    // Free users (sans org) ne peuvent poster qu'en visibilité ALL
+    if (!orgId && data.visibility && data.visibility !== 'ALL') {
+      data.visibility = 'ALL';
     }
 
     // Validation : si CLIENT, targetLeadId obligatoire
@@ -278,14 +310,14 @@ router.post('/posts', authenticateToken, async (req: Request, res: Response) => 
       return res.status(400).json({ error: 'targetLeadId requis pour les posts CLIENT' });
     }
 
-    // Au moins du contenu ou des médias
-    if (!data.content && (!data.mediaUrls || data.mediaUrls.length === 0)) {
+    // Au moins du contenu ou des médias ou un partage
+    if (!data.content && (!data.mediaUrls || data.mediaUrls.length === 0) && !data.parentPostId) {
       return res.status(400).json({ error: 'Contenu ou média requis' });
     }
 
     const post = await db.wallPost.create({
       data: {
-        organizationId: orgId,
+        organizationId: orgId || null,
         authorId: user.id,
         content: data.content,
         mediaUrls: data.mediaUrls || undefined,
@@ -297,16 +329,32 @@ router.post('/posts', authenticateToken, async (req: Request, res: Response) => 
         crmEntityType: data.crmEntityType,
         crmEntityId: data.crmEntityId,
         isPinned: data.isPinned || false,
+        publishAsOrg: data.publishAsOrg && !!orgId ? true : false,
+        parentPostId: data.parentPostId || null,
         publishedAt: new Date(),
       },
       include: {
         author: {
           select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true },
         },
+        organization: {
+          select: { id: true, name: true, logoUrl: true },
+        },
+        parentPost: {
+          include: {
+            author: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+            organization: { select: { id: true, name: true, logoUrl: true } },
+          },
+        },
       },
     });
 
     console.log(`[WALL] ✅ Post créé par ${user.id} | visibility=${data.visibility} | org=${orgId}`);
+
+    // Incrémenter le compteur de partages du post parent
+    if (data.parentPostId) {
+      await db.wallPost.update({ where: { id: data.parentPostId }, data: { sharesCount: { increment: 1 } } });
+    }
 
     // Save image media to UserPhoto collection
     if (data.mediaUrls?.length) {
@@ -418,11 +466,17 @@ router.get('/posts/:id/comments', authenticateToken, async (req: Request, res: R
         author: {
           select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true },
         },
+        organization: {
+          select: { id: true, name: true, logoUrl: true },
+        },
         replies: {
           orderBy: { createdAt: 'asc' },
           include: {
             author: {
               select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true },
+            },
+            organization: {
+              select: { id: true, name: true, logoUrl: true },
             },
           },
         },
@@ -456,10 +510,15 @@ router.post('/posts/:id/comments', authenticateToken, async (req: Request, res: 
         content: data.content,
         parentCommentId: data.parentCommentId,
         mediaUrl: data.mediaUrl,
+        publishAsOrg: data.publishAsOrg && !!(user.organizationId || req.headers['x-organization-id']) ? true : false,
+        organizationId: data.publishAsOrg ? (user.organizationId || req.headers['x-organization-id'] as string || null) : null,
       },
       include: {
         author: {
           select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true },
+        },
+        organization: {
+          select: { id: true, name: true, logoUrl: true },
         },
       },
     });

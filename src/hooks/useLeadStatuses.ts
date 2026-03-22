@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
+import { useAuth } from '../auth/useAuth';
 import { LeadStatus } from '../types/leads';
 
 // Interface pour la compatibilité avec l'ancien format
@@ -16,11 +17,16 @@ export function useLeadStatuses() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
+  const { currentOrganization } = useAuth();
   // Stabiliser l'API selon les instructions du projet
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, [apiHook.api]);
 
   const fetchLeadStatuses = useCallback(async () => {
+    if (!currentOrganization) {
+      setIsLoading(false);
+      return;
+    }
     try {
       setIsLoading(true);
       setError(null);
@@ -79,7 +85,7 @@ export function useLeadStatuses() {
     } finally {
       setIsLoading(false);
     }
-  }, [api]);
+  }, [api, currentOrganization]);
 
   useEffect(() => {
     fetchLeadStatuses();

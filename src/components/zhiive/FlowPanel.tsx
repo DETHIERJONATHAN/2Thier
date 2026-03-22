@@ -5,7 +5,9 @@ import {
   UserOutlined, LikeOutlined, DislikeOutlined,
   ClockCircleOutlined, StarOutlined,
 } from '@ant-design/icons';
-import { SF } from './SpaceFlowTheme';
+import { SF } from './ZhiiveTheme';
+import { useZhiiveNav } from '../../contexts/ZhiiveNavContext';
+import { useAuth } from '../../auth/useAuth';
 
 interface SparkPost {
   id: string;
@@ -49,6 +51,9 @@ interface FlowPanelProps {
 }
 
 const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
+  const { feedMode } = useZhiiveNav();
+  const { currentOrganization } = useAuth();
+  const isOrgMode = feedMode === 'org' && !!currentOrganization;
   const [activeSection, setActiveSection] = useState<'spark' | 'battles' | 'quests'>('spark');
   const [sparks, setSparks] = useState<SparkPost[]>([]);
   const [battles, setBattles] = useState<BattleData[]>([]);
@@ -59,6 +64,7 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
   const [sparkModalOpen, setSparkModalOpen] = useState(false);
   const [sparkContent, setSparkContent] = useState('');
   const [sparkSubmitting, setSparkSubmitting] = useState(false);
+  const [sparkVisibility, setSparkVisibility] = useState<string>(currentOrganization ? 'IN' : 'ALL');
   const [battleModalOpen, setBattleModalOpen] = useState(false);
   const [battleTitle, setBattleTitle] = useState('');
   const [battleDesc, setBattleDesc] = useState('');
@@ -68,9 +74,9 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
   const fetchFlow = useCallback(async () => {
     try {
       const [sparksRes, battlesRes, questsRes] = await Promise.all([
-        api.get('/api/spaceflow/sparks?limit=20').catch(() => ({ sparks: [] })),
-        api.get('/api/spaceflow/battles?limit=10').catch(() => ({ battles: [] })),
-        api.get('/api/spaceflow/quests/available').catch(() => ({ quests: [] })),
+        api.get(`/api/zhiive/sparks?limit=20&mode=${feedMode}`).catch(() => ({ sparks: [] })),
+        api.get(`/api/zhiive/battles?limit=10&mode=${feedMode}`).catch(() => ({ battles: [] })),
+        api.get(`/api/zhiive/quests/available?mode=${feedMode}`).catch(() => ({ quests: [] })),
       ]);
       if (sparksRes?.sparks) setSparks(sparksRes.sparks);
       if (battlesRes?.battles) setBattles(battlesRes.battles);
@@ -80,7 +86,7 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
     } finally {
       setLoading(false);
     }
-  }, [api]);
+  }, [api, feedMode]);
 
   useEffect(() => { fetchFlow(); }, [fetchFlow]);
 
@@ -89,7 +95,7 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
     if (!sparkContent.trim()) return;
     setSparkSubmitting(true);
     try {
-      await api.post('/api/spaceflow/sparks', { content: sparkContent.trim() });
+      await api.post('/api/zhiive/sparks', { content: sparkContent.trim(), visibility: sparkVisibility, publishAsOrg: isOrgMode ? true : undefined });
       message.success('Spark publié anonymement ! ⚡');
       setSparkContent('');
       setSparkModalOpen(false);
@@ -103,7 +109,7 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
 
   const handleVoteSpark = async (sparkId: string) => {
     try {
-      const res = await api.post(`/api/spaceflow/sparks/${sparkId}/vote`);
+      const res = await api.post(`/api/zhiive/sparks/${sparkId}/vote`);
       setSparks(prev => prev.map(s => s.id === sparkId ? {
         ...s,
         sparkCount: res.sparkCount ?? s.sparkCount + 1,
@@ -121,7 +127,7 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
     if (!battleTitle.trim()) return;
     setBattleSubmitting(true);
     try {
-      await api.post('/api/spaceflow/battles', {
+      await api.post('/api/zhiive/battles', {
         title: battleTitle.trim(),
         description: battleDesc.trim(),
         endsAt: battleEndsAt?.toISOString(),
@@ -141,7 +147,7 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
 
   const handleJoinBattle = async (battleId: string) => {
     try {
-      await api.post(`/api/spaceflow/battles/${battleId}/join`);
+      await api.post(`/api/zhiive/battles/${battleId}/join`);
       message.success('Défi relevé ! 🥊');
       fetchFlow();
     } catch {
@@ -186,6 +192,7 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
           Exister, Créer, Gagner !
         </div>
       </div>
+
 
       {/* Section tabs */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
@@ -253,6 +260,30 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
               showCount
               style={{ marginTop: 8 }}
             />
+            {/* Visibility selector */}
+            <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+              {(currentOrganization ? ['IN', 'ALL', 'OUT'] : ['ALL', 'OUT']).map(v => {
+                const labels: Record<string, { icon: string; label: string; color: string }> = {
+                  IN: { icon: '👥', label: 'Organisation', color: '#1890ff' },
+                  ALL: { icon: '🌐', label: 'Public', color: '#52c41a' },
+                  OUT: { icon: '🔒', label: 'Privé', color: '#8c8c8c' },
+                };
+                const opt = labels[v];
+                const active = sparkVisibility === v;
+                return (
+                  <div key={v} onClick={() => setSparkVisibility(v)} style={{
+                    display: 'flex', alignItems: 'center', gap: 4, padding: '3px 10px',
+                    borderRadius: 14, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                    background: active ? opt.color + '18' : '#f5f5f5',
+                    color: active ? opt.color : '#999',
+                    border: active ? `1px solid ${opt.color}` : '1px solid transparent',
+                    transition: 'all 0.15s',
+                  }}>
+                    <span>{opt.icon}</span> <span>{opt.label}</span>
+                  </div>
+                );
+              })}
+            </div>
           </Modal>
 
           {/* Sparks list */}
@@ -459,7 +490,7 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
             textAlign: 'center', color: 'white',
           }}>
             <StarOutlined style={{ fontSize: 28 }} />
-            <div style={{ fontSize: 14, fontWeight: 700, marginTop: 6 }}>Quêtes SpaceFlow</div>
+            <div style={{ fontSize: 14, fontWeight: 700, marginTop: 6 }}>Quêtes Zhiive</div>
             <div style={{ fontSize: 11, opacity: 0.9, marginTop: 2 }}>
               Complétez des missions, gagnez des points et des badges !
             </div>

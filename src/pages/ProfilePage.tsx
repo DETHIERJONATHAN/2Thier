@@ -3,7 +3,7 @@ import { useAuth } from '../auth/useAuth';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useModuleNavigation } from '../contexts/WallNavigationContext';
-import { Avatar, Spin, message } from 'antd';
+import { Avatar, Spin, message, Modal, Form, Input } from 'antd';
 import {
   UserOutlined, CameraOutlined, MailOutlined, PhoneOutlined,
   HomeOutlined, BankOutlined, TeamOutlined, CrownOutlined,
@@ -11,6 +11,7 @@ import {
   LinkOutlined, SafetyCertificateOutlined, SwapOutlined,
   EllipsisOutlined, DragOutlined, CheckOutlined, CloseOutlined,
   DeleteOutlined, PlayCircleOutlined, VideoCameraOutlined, PictureOutlined,
+  ShopOutlined,
 } from '@ant-design/icons';
 import { WallPostCard, WallPostData } from './DashboardPageUnified';
 
@@ -193,6 +194,8 @@ const ProfilePage = () => {
   const { moduleNavigate } = useModuleNavigation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
+  const orgLogoInputRef = useRef<HTMLInputElement>(null);
+  const orgLogoTargetId = useRef<string | null>(null);
   const { isMobile, width } = useScreenSize();
 
   const [profile, setProfile] = useState({ firstName: '', lastName: '', avatarUrl: '', coverUrl: '', coverPositionY: 50, address: '', vatNumber: '', phoneNumber: '' });
@@ -220,6 +223,58 @@ const ProfilePage = () => {
   const [mediaLoading, setMediaLoading] = useState(false);
   const [mediaFilter, setMediaFilter] = useState<string>('all'); // 'all', 'image', 'video'
   const [mediaCategoryFilter, setMediaCategoryFilter] = useState<string | null>(null);
+
+  // Business: créer une organisation (visible uniquement pour les utilisateurs libres)
+  const isFreeUser = !currentOrganization && !isSuperAdmin;
+  const [isCreateOrgModalVisible, setIsCreateOrgModalVisible] = useState(false);
+  const [isCreatingOrg, setIsCreatingOrg] = useState(false);
+  const [orgForm] = Form.useForm();
+
+  const handleCreateOrganization = async (values: { name: string; address: string; vatNumber: string; phone: string; email: string; description?: string }) => {
+    setIsCreatingOrg(true);
+    try {
+      await api.post('/api/organizations/create-my-org', {
+        name: values.name,
+        address: values.address,
+        vatNumber: values.vatNumber,
+        phone: values.phone,
+        email: values.email,
+        description: values.description || '',
+      });
+      message.success(`Organisation "${values.name}" créée avec succès !`);
+      setIsCreateOrgModalVisible(false);
+      orgForm.resetFields();
+      window.location.reload();
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.data?.message || "Erreur lors de la création de l'organisation";
+      message.error(msg);
+    } finally {
+      setIsCreatingOrg(false);
+    }
+  };
+
+  // Upload logo organisation
+  const [orgLogoUploading, setOrgLogoUploading] = useState(false);
+  const handleOrgLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const orgId = orgLogoTargetId.current;
+    if (!file || !orgId) return;
+    setOrgLogoUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('logo', file);
+      const resp: any = await api.post(`/api/organizations/${orgId}/logo`, formData);
+      if (resp.success) {
+        message.success('Logo mis à jour !');
+        if (refetchUser) await refetchUser();
+      }
+    } catch {
+      message.error("Erreur lors de l'upload du logo.");
+    } finally {
+      setOrgLogoUploading(false);
+      if (orgLogoInputRef.current) orgLogoInputRef.current.value = '';
+    }
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -416,6 +471,7 @@ const ProfilePage = () => {
   const cameraBtnSize = isMobile ? 32 : 36;
 
   return (
+    <>
     <div style={{ background: FB.bg, minHeight: '100vh' }}>
 
       {/* ════════ TOP WHITE SECTION (cover + name + tabs) ════════ */}
@@ -569,6 +625,10 @@ const ProfilePage = () => {
                 <FBButton icon={<EditOutlined />} onClick={() => moduleNavigate('/settings')} isMobile={isMobile} mobileIconOnly>
                   Modifier
                 </FBButton>
+                {isFreeUser && <FBButton icon={<ShopOutlined />} onClick={() => setIsCreateOrgModalVisible(true)} isMobile={isMobile} mobileIconOnly
+                  style={{ background: '#0f766e', color: '#fff' }}>
+                  Business
+                </FBButton>}
                 <FBButton icon={<EllipsisOutlined />} />
               </div>}
             </div>
@@ -617,6 +677,8 @@ const ProfilePage = () => {
               {!isViewingOther && <div style={{ display: 'flex', gap: 8, paddingBottom: 16, alignItems: 'flex-end' }}>
                 <FBButton primary icon={<SettingOutlined />} onClick={() => moduleNavigate('/settings')}>Paramètres</FBButton>
                 <FBButton icon={<EditOutlined />} onClick={() => moduleNavigate('/settings')}>Modifier</FBButton>
+                {isFreeUser && <FBButton icon={<ShopOutlined />} onClick={() => setIsCreateOrgModalVisible(true)}
+                  style={{ background: '#0f766e', color: '#fff' }}>Business</FBButton>}
                 <FBButton icon={<EllipsisOutlined />} />
               </div>}
             </div>
@@ -742,6 +804,7 @@ const ProfilePage = () => {
                 <FBCard title="Mes Organisations">
                   {organizations.map(org => {
                     const isActive = currentOrganization?.id === org.id;
+                    const orgLogo = (org as any).logoUrl;
                     return (
                       <div
                         key={org.id}
@@ -756,14 +819,36 @@ const ProfilePage = () => {
                         onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = FB.bg; }}
                         onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
                       >
-                        <div style={{
-                          width: 32, height: 32, borderRadius: '50%',
-                          background: isActive ? FB.blue : FB.btnGray,
-                          color: isActive ? '#fff' : FB.textSecondary,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: 13, fontWeight: 700,
-                        }}>
-                          {org.name?.[0]?.toUpperCase() || <SwapOutlined />}
+                        <div
+                          style={{
+                            width: 36, height: 36, borderRadius: '50%', position: 'relative',
+                            background: orgLogo ? 'transparent' : (isActive ? FB.blue : FB.btnGray),
+                            color: isActive ? '#fff' : FB.textSecondary,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 13, fontWeight: 700, overflow: 'hidden', flexShrink: 0,
+                          }}
+                          onClick={e => {
+                            e.stopPropagation();
+                            orgLogoTargetId.current = org.id;
+                            orgLogoInputRef.current?.click();
+                          }}
+                          title="Cliquer pour changer le logo"
+                        >
+                          {orgLogo ? (
+                            <img src={orgLogo} alt={org.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                          ) : (
+                            org.name?.[0]?.toUpperCase() || <SwapOutlined />
+                          )}
+                          <div style={{
+                            position: 'absolute', inset: 0, borderRadius: '50%',
+                            background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            opacity: 0, transition: 'opacity 0.2s', cursor: 'pointer',
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.opacity = '1'; }}
+                          onMouseLeave={e => { e.currentTarget.style.opacity = '0'; }}
+                          >
+                            <CameraOutlined style={{ color: '#fff', fontSize: 14 }} />
+                          </div>
                         </div>
                         <span style={{ fontSize: 15, fontWeight: isActive ? 600 : 400, color: isActive ? FB.blue : FB.text }}>
                           {org.name}
@@ -772,6 +857,19 @@ const ProfilePage = () => {
                       </div>
                     );
                   })}
+                  {/* Hidden file input pour upload logo org */}
+                  <input
+                    ref={orgLogoInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml"
+                    style={{ display: 'none' }}
+                    onChange={handleOrgLogoUpload}
+                  />
+                  {orgLogoUploading && (
+                    <div style={{ textAlign: 'center', padding: 8 }}>
+                      <Spin size="small" /> <span style={{ fontSize: 13, color: FB.textSecondary, marginLeft: 8 }}>Upload en cours...</span>
+                    </div>
+                  )}
                 </FBCard>
               )}
             </div>
@@ -1281,6 +1379,83 @@ const ProfilePage = () => {
         )}
       </div>
     </div>
+
+    {/* Modal création d'organisation (Business) */}
+    <Modal
+      title="Créer votre organisation"
+      open={isCreateOrgModalVisible}
+      onCancel={() => setIsCreateOrgModalVisible(false)}
+      footer={null}
+      destroyOnClose
+    >
+      <Form form={orgForm} layout="vertical" onFinish={handleCreateOrganization}>
+        <Form.Item
+          label="Nom de l'organisation"
+          name="name"
+          rules={[
+            { required: true, message: "Le nom de l'organisation est requis" },
+            { min: 2, message: 'Le nom doit faire au moins 2 caractères' }
+          ]}
+        >
+          <Input placeholder="Ex: Mon Entreprise SARL" />
+        </Form.Item>
+        <Form.Item
+          label="Adresse postale"
+          name="address"
+          rules={[
+            { required: true, message: "L'adresse est requise" },
+            { min: 5, message: 'Adresse minimum 5 caractères' }
+          ]}
+        >
+          <Input placeholder="Ex: Rue de la Loi 16, 1000 Bruxelles" />
+        </Form.Item>
+        <Form.Item
+          label="Numéro de TVA"
+          name="vatNumber"
+          rules={[
+            { required: true, message: 'Le numéro de TVA est requis' },
+            { min: 2, message: 'TVA minimum 2 caractères' }
+          ]}
+        >
+          <Input placeholder="Ex: BE0123456789" />
+        </Form.Item>
+        <Form.Item
+          label="Téléphone"
+          name="phone"
+          rules={[
+            { required: true, message: 'Le téléphone est requis' },
+            { min: 5, message: 'Téléphone minimum 5 caractères' },
+            { pattern: /^[\d\s\-+().]+$/, message: 'Format de téléphone invalide' }
+          ]}
+        >
+          <Input placeholder="Ex: +32 2 123 45 67" />
+        </Form.Item>
+        <Form.Item
+          label="Email de contact"
+          name="email"
+          rules={[
+            { required: true, message: "L'email est requis" },
+            { type: 'email', message: 'Adresse email invalide' }
+          ]}
+        >
+          <Input placeholder="Ex: contact@monentreprise.be" />
+        </Form.Item>
+        <Form.Item label="Description (optionnel)" name="description">
+          <Input.TextArea rows={2} placeholder="Décrivez brièvement votre organisation..." />
+        </Form.Item>
+        <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
+          <button type="button" onClick={() => setIsCreateOrgModalVisible(false)}
+            style={{ marginRight: 8, padding: '6px 16px', borderRadius: 6, border: `1px solid ${FB.border}`, background: FB.btnGray, cursor: 'pointer', fontSize: 14 }}>
+            Annuler
+          </button>
+          <button type="submit" disabled={isCreatingOrg}
+            style={{ padding: '6px 16px', borderRadius: 6, border: 'none', background: '#0f766e', color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600, opacity: isCreatingOrg ? 0.7 : 1 }}>
+            {isCreatingOrg ? 'Création...' : "Créer l'organisation"}
+          </button>
+        </Form.Item>
+      </Form>
+    </Modal>
+    </>
   );
 };
 

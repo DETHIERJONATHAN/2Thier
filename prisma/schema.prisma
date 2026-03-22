@@ -983,7 +983,7 @@ model Module {
 
 model Notification {
   id             String             @id
-  organizationId String
+  organizationId String?
   type           NotificationType
   data           Json
   status         NotificationStatus @default(PENDING)
@@ -993,7 +993,7 @@ model Notification {
   priority       String             @default("normal")  // low, normal, high, urgent
   actionUrl      String?                                 // lien vers l'élément source
   readAt         DateTime?
-  Organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Organization   Organization?      @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   User           User?              @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([organizationId])
@@ -1040,8 +1040,11 @@ model Organization {
   status                     String                                   @default("active")
   address                    String?
   description                String?
+  email                      String?
   phone                      String?
+  vatNumber                  String?
   website                    String?
+  logoUrl                    String?
   AIRecommendation           AIRecommendation[]
   AdCampaign                 AdCampaign[]
   AdPlatformIntegration      AdPlatformIntegration[]
@@ -1112,6 +1115,7 @@ model Organization {
 
   // Wall / Réseau social
   WallPost                   WallPost[]
+  WallComments               WallComment[] @relation("WallCommentOrg")
   ClientAccount              ClientAccount[]
 
   // SpaceFlow
@@ -3016,6 +3020,9 @@ enum NotificationType {
   INCOMING_SMS
   // IA
   AI_DAILY_DIGEST
+  // Social / Amis
+  FRIEND_REQUEST_RECEIVED
+  FRIEND_REQUEST_ACCEPTED
 }
 
 enum OperationSource {
@@ -3693,7 +3700,7 @@ model ElectronicSignature {
 
 model WallPost {
   id              String    @id @default(uuid())
-  organizationId  String
+  organizationId  String?
   authorId        String
 
   // Contenu
@@ -3716,6 +3723,9 @@ model WallPost {
   // Catégorie pour filtrage
   category        String?             // "projet", "actualite", "chantier_realise", "conseil", "promotion"
 
+  // Publication en tant qu'organisation
+  publishAsOrg    Boolean   @default(false)
+
   // SpaceFlow
   tags            String[]  @default([])  // hashtags extraits du contenu
   isAnonymous     Boolean   @default(false) // mode Spark
@@ -3732,7 +3742,7 @@ model WallPost {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization    Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   author          User         @relation("WallPostAuthor", fields: [authorId], references: [id])
   targetLead      Lead?        @relation("WallPostTargetLead", fields: [targetLeadId], references: [id])
   reactions       WallReaction[]
@@ -3770,9 +3780,11 @@ model WallComment {
   postId          String
   authorId        String
   parentCommentId String?
+  organizationId  String?
 
   content         String
   mediaUrl        String?
+  publishAsOrg    Boolean   @default(false)
 
   isEdited        Boolean   @default(false)
   createdAt       DateTime  @default(now())
@@ -3780,6 +3792,7 @@ model WallComment {
 
   post            WallPost     @relation(fields: [postId], references: [id], onDelete: Cascade)
   author          User         @relation("WallCommentAuthor", fields: [authorId], references: [id])
+  organization    Organization? @relation("WallCommentOrg", fields: [organizationId], references: [id], onDelete: Cascade)
   parentComment   WallComment? @relation("CommentReplies", fields: [parentCommentId], references: [id])
   replies         WallComment[] @relation("CommentReplies")
 
@@ -4012,6 +4025,8 @@ model Story {
   caption        String?
   musicUrl       String?
   duration       Int       @default(5)     // secondes d'affichage
+  visibility     String    @default("ALL") // ALL, IN, OUT
+  publishAsOrg   Boolean   @default(false)
   isHighlight    Boolean   @default(false) // garder en "à la une"
   highlightName  String?                   // nom du highlight
   expiresAt      DateTime                  // maintenant + 24h
@@ -4078,6 +4093,8 @@ model Spark {
   sparkCount     Int       @default(0) // votes "spark"
   revealThreshold Int      @default(100)
   isRevealed     Boolean   @default(false)
+  visibility     String    @default("ALL") // ALL, IN, OUT
+  publishAsOrg   Boolean   @default(false)
   revealedAt     DateTime?
   createdAt      DateTime  @default(now())
 
@@ -4288,6 +4305,8 @@ model SocialEvent {
   latitude       Float?
   longitude      Float?
   eventType      String    @default("meetup") // meetup, workshop, jobfair, openday, concert
+  visibility     String    @default("ALL") // ALL, IN, OUT
+  publishAsOrg   Boolean   @default(false)
   startsAt       DateTime
   endsAt         DateTime?
   maxAttendees   Int?

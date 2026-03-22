@@ -274,6 +274,7 @@ const Sidebar = ({ modules, hasFeature }: { modules: Array<{ key?: string; id?: 
     { key: 'admin-orgs', label: 'Organisations', icon: 'FaBuilding', route: '/admin/organizations', permission: 'super_admin' },
     { key: 'admin-trees', label: 'Gestion des Arbres', icon: 'FaCodeBranch', route: '/admin/trees', permission: 'super_admin' },
     { key: 'admin-telnyx', label: 'Telnyx Communications', icon: 'FaPhone', route: '/telnyx', permission: 'admin_panel:view' },
+    { key: 'admin-sites-web', label: 'Gestion Sites Web', icon: 'FaGlobe', route: '/admin/sites-web', permission: 'admin_panel:view' },
   ], []);
 
   // 🚀 MODULES DEVIS1MINUTE - SÉPARATION INTELLIGENTE SUPER ADMIN vs ORGANISATIONS

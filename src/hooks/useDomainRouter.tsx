@@ -5,7 +5,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
  * Hook pour router automatiquement selon le domaine
  * - 2thier.be → /site-vitrine-2thier (Site Vitrine)
  * - devis1min.be → /devis1minute (Marketplace)
- * - app.2thier.be → /connexion ou /dashboard (CRM)
+ * - www.zhiive.com / app.2thier.be → /connexion ou /dashboard (CRM)
  */
 export const useDomainRouter = () => {
   const navigate = useNavigate();
@@ -24,7 +24,7 @@ export const useDomainRouter = () => {
       // Marketplace Devis1Minute
       navigate('/devis1minute', { replace: true });
     }
-    // app.2thier.be reste sur "/" pour le routing authentifié normal
+    // www.zhiive.com / app.2thier.be reste sur "/" pour le routing authentifié normal
   }, [hostname, location.pathname, navigate]);
 };
 

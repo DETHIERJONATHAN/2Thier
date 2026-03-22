@@ -138,11 +138,41 @@ router.post('/request', async (req: Request, res: Response): Promise<void> => {
     if (existing) {
       if (existing.status === 'accepted') { res.json({ message: 'Déjà amis' }); return; }
       if (existing.status === 'pending') { res.json({ message: 'Demande déjà envoyée' }); return; }
+      if (existing.status === 'blocked') { res.status(403).json({ error: 'Action impossible' }); return; }
     }
 
     const friendship = await db.friendship.create({
       data: { requesterId: user.id, addresseeId: userId, status: 'pending', source: 'manual' },
     });
+
+    // Get requester name for notification
+    const requester = await db.user.findUnique({
+      where: { id: user.id },
+      select: { firstName: true, lastName: true, avatarUrl: true },
+    });
+    const requesterName = requester ? `${requester.firstName} ${requester.lastName}`.trim() : 'Quelqu\'un';
+
+    // Create notification for the addressee
+    try {
+      await db.notification.create({
+        data: {
+          id: crypto.randomUUID(),
+          userId: userId,
+          organizationId: null,
+          type: 'FRIEND_REQUEST_RECEIVED',
+          data: {
+            friendshipId: friendship.id,
+            requesterId: user.id,
+            requesterName,
+            requesterAvatar: requester?.avatarUrl || null,
+            message: `${requesterName} vous a envoyé une demande d'ami`,
+          },          actionUrl: `/profile/${user.id}`,          priority: 'normal',
+          updatedAt: new Date(),
+        },
+      });
+    } catch (notifErr) {
+      console.error('[FRIENDS] Notification error (non-blocking):', notifErr);
+    }
 
     res.json({ success: true, friendship });
   } catch (err) {
@@ -164,14 +194,125 @@ router.post('/:id/accept', async (req: Request, res: Response): Promise<void> =>
       res.status(404).json({ error: 'Demande non trouvée' }); return;
     }
 
+    // Already accepted? Return success without creating duplicate notification
+    if (friendship.status === 'accepted') {
+      res.json({ success: true, alreadyAccepted: true }); return;
+    }
+
     await db.friendship.update({
       where: { id: req.params.id },
       data: { status: 'accepted' },
     });
 
+    // Mark the original FRIEND_REQUEST_RECEIVED notification as handled
+    try {
+      const originalNotif = await db.notification.findFirst({
+        where: {
+          type: 'FRIEND_REQUEST_RECEIVED',
+          userId: user.id,
+          data: { path: ['friendshipId'], equals: friendship.id },
+        },
+      });
+      if (originalNotif) {
+        await db.notification.update({
+          where: { id: originalNotif.id },
+          data: {
+            status: 'READ',
+            readAt: new Date(),
+            updatedAt: new Date(),
+            data: { ...(originalNotif.data as any), handled: 'accepted' },
+          },
+        });
+      }
+    } catch (updateErr) {
+      console.error('[FRIENDS] Update original notif error (non-blocking):', updateErr);
+    }
+
+    // Send notification to the requester that their request was accepted
+    try {
+      const acceptor = await db.user.findUnique({
+        where: { id: user.id },
+        select: { firstName: true, lastName: true, avatarUrl: true },
+      });
+      await db.notification.create({
+        data: {
+          id: crypto.randomUUID(),
+          userId: friendship.requesterId,
+          organizationId: null,
+          type: 'FRIEND_REQUEST_ACCEPTED',
+          data: {
+            friendshipId: friendship.id,
+            acceptorId: user.id,
+            acceptorName: `${acceptor?.firstName || ''} ${acceptor?.lastName || ''}`.trim(),
+            acceptorAvatar: acceptor?.avatarUrl || null,
+            message: `${acceptor?.firstName || ''} ${acceptor?.lastName || ''}`.trim() + ' a accepté votre demande d\'ami',
+          },
+          actionUrl: `/profile/${user.id}`,
+          priority: 'normal',
+          updatedAt: new Date(),
+        },
+      });
+    } catch (notifErr) {
+      console.error('[FRIENDS] Notification error (non-blocking):', notifErr);
+    }
+
     res.json({ success: true });
   } catch (err) {
     console.error('[FRIENDS] Error accepting:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// POST /friends/:id/block — Block a user
+// ═══════════════════════════════════════════════════════════════
+router.post('/:id/block', async (req: Request, res: Response): Promise<void> => {
+  const user = (req as any).user;
+  if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
+
+  try {
+    const friendship = await db.friendship.findUnique({ where: { id: req.params.id } });
+    if (!friendship || (friendship.requesterId !== user.id && friendship.addresseeId !== user.id)) {
+      res.status(404).json({ error: 'Relation non trouvée' }); return;
+    }
+
+    // Already blocked? Skip
+    if (friendship.status === 'blocked') {
+      res.json({ success: true, alreadyBlocked: true }); return;
+    }
+
+    await db.friendship.update({
+      where: { id: req.params.id },
+      data: { status: 'blocked' },
+    });
+
+    // Mark the notification as handled
+    try {
+      const originalNotif = await db.notification.findFirst({
+        where: {
+          type: 'FRIEND_REQUEST_RECEIVED',
+          userId: user.id,
+          data: { path: ['friendshipId'], equals: friendship.id },
+        },
+      });
+      if (originalNotif) {
+        await db.notification.update({
+          where: { id: originalNotif.id },
+          data: {
+            status: 'READ',
+            readAt: new Date(),
+            updatedAt: new Date(),
+            data: { ...(originalNotif.data as any), handled: 'blocked' },
+          },
+        });
+      }
+    } catch (updateErr) {
+      console.error('[FRIENDS] Update notif on block error (non-blocking):', updateErr);
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[FRIENDS] Error blocking:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -187,6 +328,30 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
     const friendship = await db.friendship.findUnique({ where: { id: req.params.id } });
     if (!friendship || (friendship.requesterId !== user.id && friendship.addresseeId !== user.id)) {
       res.status(404).json({ error: 'Amitié non trouvée' }); return;
+    }
+
+    // Mark FRIEND_REQUEST_RECEIVED notification as handled (rejected)
+    try {
+      const originalNotif = await db.notification.findFirst({
+        where: {
+          type: 'FRIEND_REQUEST_RECEIVED',
+          userId: user.id,
+          data: { path: ['friendshipId'], equals: friendship.id },
+        },
+      });
+      if (originalNotif) {
+        await db.notification.update({
+          where: { id: originalNotif.id },
+          data: {
+            status: 'READ',
+            readAt: new Date(),
+            updatedAt: new Date(),
+            data: { ...(originalNotif.data as any), handled: 'rejected' },
+          },
+        });
+      }
+    } catch (updateErr) {
+      console.error('[FRIENDS] Update notif on reject error (non-blocking):', updateErr);
     }
 
     await db.friendship.delete({ where: { id: req.params.id } });

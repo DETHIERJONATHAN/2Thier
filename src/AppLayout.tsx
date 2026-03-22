@@ -4,7 +4,7 @@ import { useAuth } from './auth/useAuth';
 import MainLayoutNew from './pages/page2thier/MainLayoutNew';
 import StoreInitializer from './components/StoreInitializer';
 import { NotificationsContainer } from './components/Notifications';
-import FreeUserPage from './pages/FreeUserPage';
+
 
 // 🚀 LAZY IMPORTS POUR RÉDUIRE LE BUNDLE INITIAL
 // Pages principales (chargement à la demande)
@@ -148,19 +148,17 @@ export default function AppLayout() {
     return <div className="flex items-center justify-center h-screen text-red-600 font-bold">Erreur de session. Veuillez vous reconnecter.</div>;
   }
 
-  // 🆓 Gestion des utilisateurs libres (sans organisation)
-  if (!currentOrganization && !isSuperAdmin) {
-    console.log('[AppLayout] PROBLÈME: Utilisateur libre détecté - currentOrganization:', currentOrganization, 'isSuperAdmin:', isSuperAdmin);
-    return <FreeUserPage />;
-  }
+  // 🆓 Utilisateur réseau (libre) = accès au réseau social, pas de CRM
+  const isFreeUser = !currentOrganization && !isSuperAdmin;
 
-  console.log('[AppLayout] ✅ Layout complet initialisé');
+  if (isFreeUser) {
+    console.log('[AppLayout] Utilisateur réseau (libre) détecté - accès réseau social uniquement');
+  } else {
+    console.log('[AppLayout] ✅ Layout complet initialisé');
+  }
   console.log('[AppLayout] User:', user?.firstName, user?.lastName, 'ID:', user?.id);
-  console.log('[AppLayout] Organization:', currentOrganization?.name, 'ID:', currentOrganization?.id);
+  console.log('[AppLayout] Organization:', currentOrganization?.name || '(libre)', 'ID:', currentOrganization?.id || 'none');
   console.log('[AppLayout] Modules visibles:', visibleModules.length);
-  console.log('[AppLayout] Loading:', loading);
-  console.log('[AppLayout] IsSuperAdmin:', isSuperAdmin);
-  console.log('[AppLayout] Modules sample:', visibleModules.slice(0, 3).map(m => m.key));
 
   return (
     <>

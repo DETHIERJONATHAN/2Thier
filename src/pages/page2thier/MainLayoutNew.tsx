@@ -1,6 +1,7 @@
-import React, { useCallback, useMemo, useEffect, useState, useRef } from 'react';
+import React, { useCallback, useMemo, useEffect, useState, useRef, lazy, Suspense } from 'react';
 import { Layout, Dropdown, Input, Avatar } from 'antd';
 import NotificationsBell from '../../components/NotificationsBell';
+const MessengerChat = lazy(() => import('../../components/MessengerChat'));
 import type { MenuProps } from 'antd';
 import { NavLink, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { 
@@ -15,7 +16,7 @@ import {
 } from '@ant-design/icons';
 import Icon from '@ant-design/icons';
 import { useAuth } from '../../auth/useAuth';
-import { useSpaceFlowNav, SpaceFlowNavProvider } from '../../contexts/SpaceFlowNavContext';
+import { useZhiiveNav, ZhiiveNavProvider } from '../../contexts/ZhiiveNavContext';
 
 const { Header, Content } = Layout;
 
@@ -69,7 +70,7 @@ const WallIcon = (props: any) => <Icon component={WallSvg} {...props} />;
 const FlowWaveIcon = (props: any) => <Icon component={FlowWaveSvg} {...props} />;
 const UniverseIcon = (props: any) => <Icon component={UniverseSvg} {...props} />;
 
-// ── SpaceFlow Header Tabs Component ──
+// ── Zhiive Header Tabs Component ──
 const SF_TAB_CONFIG: { id: string; label: string; icon: React.ComponentType<{ style?: React.CSSProperties }>; color: string }[] = [
   { id: 'explore', label: 'Explore', icon: CompassOutlined, color: '#00CEC9' },
   { id: 'flow', label: 'Flow', icon: FlowWaveIcon, color: '#6C5CE7' },
@@ -79,10 +80,12 @@ const SF_TAB_CONFIG: { id: string; label: string; icon: React.ComponentType<{ st
   { id: 'stats', label: 'Stats', icon: BarChartOutlined, color: '#FDCB6E' },
 ];
 
-const SpaceFlowHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
+const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { centerApp, setCenterApp, tabOrder, reorderTabs, mobilePanel, scrollMobileToPanel } = useSpaceFlowNav();
+  const { centerApp, setCenterApp, tabOrder, reorderTabs, mobilePanel, scrollMobileToPanel } = useZhiiveNav();
+  const { currentOrganization, isSuperAdmin } = useAuth();
+  const isFreeUser = !currentOrganization && !isSuperAdmin;
   const [dragId, setDragId] = useState<string | null>(null);
   const isDashboard = location.pathname === '/dashboard' || location.pathname === '/';
   const activeModule = searchParams.get('module');
@@ -98,8 +101,9 @@ const SpaceFlowHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
   const orderedTabs = useMemo(() => {
     return tabOrder
       .map(id => SF_TAB_CONFIG.find(t => t.id === id))
-      .filter((t): t is typeof SF_TAB_CONFIG[0] => !!t);
-  }, [tabOrder]);
+      .filter((t): t is typeof SF_TAB_CONFIG[0] => !!t)
+      .filter(t => !(isFreeUser && t.id === 'stats'));
+  }, [tabOrder, isFreeUser]);
 
   const handleTabClick = useCallback((tabId: string) => {
     if (!isDashboard) {
@@ -229,7 +233,7 @@ const SpaceFlowHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { setCenterApp } = useSpaceFlowNav();
+  const { setCenterApp } = useZhiiveNav();
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [showSearch, setShowSearch] = useState(false);
   const searchInputRef = useRef<any>(null);
@@ -243,11 +247,24 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   }, []);
 
   const { logout, user, currentOrganization } = useAuth();
+  const { feedMode, setFeedMode } = useZhiiveNav();
 
   const userInitial = useMemo(() => {
     const source = user?.firstName || (user as any)?.firstname || user?.email || currentOrganization?.name || 'C';
     return (source?.charAt?.(0) || 'C').toUpperCase();
   }, [user?.firstName, (user as any)?.firstname, user?.email, currentOrganization?.name]);
+
+  const orgLogo = (currentOrganization as any)?.logoUrl || null;
+  const orgInitial = useMemo(() => (currentOrganization?.name?.charAt(0) || 'O').toUpperCase(), [currentOrganization?.name]);
+
+  // Determine which avatar to show based on feed mode
+  const showOrgAvatar = feedMode === 'org' && currentOrganization;
+  const headerAvatarSrc = showOrgAvatar ? (orgLogo || undefined) : (user?.avatarUrl || undefined);
+  const headerAvatarFallback = showOrgAvatar ? (!orgLogo && orgInitial) : (!user?.avatarUrl && userInitial);
+  const headerAvatarBg = showOrgAvatar
+    ? (orgLogo ? 'transparent' : '#6C5CE7')
+    : (user?.avatarUrl ? 'transparent' : '#1890ff');
+  const headerAvatarBorder = showOrgAvatar ? '2px solid rgba(108,92,231,0.5)' : '2px solid rgba(255,255,255,0.3)';
 
   const handleLogout = useCallback(() => { 
     logout(); 
@@ -284,6 +301,38 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         icon: <SettingOutlined />,
         label: <NavLink to="/settings">Paramètres</NavLink>
       },
+      ...(currentOrganization ? [
+        { type: 'divider' as const },
+        {
+          key: 'feed-mode',
+          label: (
+            <div style={{ display: 'flex', gap: 4, padding: '2px 0' }} onClick={e => e.stopPropagation()}>
+              {([
+                { key: 'personal' as const, label: '👤 Personnel', color: '#00CEC9' },
+                { key: 'org' as const, label: '🏢 Organisation', color: '#6C5CE7' },
+              ]).map(m => (
+                <div
+                  key={m.key}
+                  onClick={(e) => { e.stopPropagation(); setFeedMode(m.key); }}
+                  style={{
+                    padding: '4px 12px', borderRadius: 16, fontSize: 12, fontWeight: feedMode === m.key ? 600 : 400,
+                    cursor: 'pointer', transition: 'all 0.2s',
+                    background: feedMode === m.key ? m.color + '20' : 'transparent',
+                    color: feedMode === m.key ? m.color : '#636E72',
+                  }}
+                >
+                  {m.label}
+                </div>
+              ))}
+            </div>
+          ),
+        },
+      ] : []),
+      { type: 'divider' },
+      {
+        key: 'zhiive',
+        label: <a href="https://www.zhiive.com" target="_blank" rel="noopener noreferrer" style={{ color: '#1890ff' }}>www.zhiive.com</a>
+      },
       { type: 'divider' },
       {
         key: 'logout',
@@ -292,7 +341,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         onClick: handleLogout
       }
     ]
-  }), [handleLogout]);
+  }), [handleLogout, currentOrganization, feedMode, setFeedMode]);
 
   return (
     <Layout className="min-h-screen">
@@ -316,7 +365,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           zIndex: 1000
         }}
       >
-        {/* Logo SpaceFlow */}
+        {/* Logo Zhiive */}
         <div 
           className="header-2thier-item" 
           style={{ 
@@ -332,8 +381,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           }}
           onClick={() => { navigate('/dashboard'); setCenterApp(null); setSearchParams({}, { replace: true }); }}
         >
-          <img src="/zhivv-logo.png" alt="Zhivv" style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'contain', flexShrink: 0 }} />
-          {!isMobile && <span style={{ fontStyle: 'italic', fontWeight: 700 }}>Zhivv</span>}
+          <img src="/zhiive-logo.png" alt="Zhiive" style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'contain', flexShrink: 0 }} />
+          {!isMobile && <img src="/zhiive-ecrit.png" alt="Zhiive" style={{ height: 20, objectFit: 'contain' }} />}
         </div>
 
         {/* Loupe — ouvre la barre de recherche */}
@@ -356,15 +405,15 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           <SearchOutlined style={{ fontSize: '18px', color: 'white' }} />
         </div>
 
-        {/* ── SpaceFlow Navigation Tabs (centré dans header) ── */}
-        <SpaceFlowHeaderTabs isMobile={isMobile} />
+        {/* ── Zhiive Navigation Tabs (centré dans header) ── */}
+        <ZhiiveHeaderTabs isMobile={isMobile} />
 
         {/* Icônes à droite */}
         <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '6px' : '8px', marginLeft: isMobile ? '8px' : 'auto', flexShrink: 0 }}>
           {/* Notifications */}
           <NotificationsBell />
 
-          {/* Profil utilisateur — avatar avec photo */}
+          {/* Profil utilisateur — avatar avec photo (ou logo org si feedMode=org) */}
           <Dropdown menu={userProfileMenu} trigger={['click']}>
             <div
               className="header-2thier-item"
@@ -376,14 +425,14 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             >
               <Avatar 
                 size={isMobile ? 30 : 32} 
-                src={user?.avatarUrl || undefined}
+                src={headerAvatarSrc}
                 style={{ 
-                  backgroundColor: user?.avatarUrl ? 'transparent' : '#1890ff',
+                  backgroundColor: headerAvatarBg,
                   cursor: 'pointer',
-                  border: '2px solid rgba(255,255,255,0.3)',
+                  border: headerAvatarBorder,
                 }}
               >
-                {!user?.avatarUrl && userInitial}
+                {headerAvatarFallback}
               </Avatar>
             </div>
           </Dropdown>
@@ -429,15 +478,18 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       }}>
         {children}
       </Content>
+      <Suspense fallback={null}>
+        <MessengerChat />
+      </Suspense>
     </Layout>
   );
 };
 
-// Wrap with SpaceFlowNavProvider so Header tabs & Dashboard share state
+// Wrap with ZhiiveNavProvider so Header tabs & Dashboard share state
 const MainLayoutWithNav: React.FC<MainLayoutProps> = (props) => (
-  <SpaceFlowNavProvider>
+  <ZhiiveNavProvider>
     <MainLayout {...props} />
-  </SpaceFlowNavProvider>
+  </ZhiiveNavProvider>
 );
 
 export default MainLayoutWithNav;

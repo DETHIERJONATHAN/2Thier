@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.js';
 import { requireRole } from '../middlewares/requireRole.js';
 import { db, Prisma } from '../lib/database';
+import { UserOrganizationStatus } from '@prisma/client';
 import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
 import { randomUUID } from 'crypto';
@@ -260,6 +261,13 @@ const organizationCreateSchema = z.object({
     .optional(),
   address: z.string()
     .max(500, 'Adresse maximum 500 caractères')
+    .optional(),
+  vatNumber: z.string()
+    .max(30, 'Numéro de TVA maximum 30 caractères')
+    .optional(),
+  email: z.string()
+    .email('Email invalide')
+    .max(255, 'Email maximum 255 caractères')
     .optional(),
   // 🌟 GOOGLE WORKSPACE CONFIGURATION
   googleWorkspace: z.object({
@@ -689,10 +697,12 @@ router.post('/', organizationsCreateRateLimit, requireRole(['super_admin']), asy
       name: sanitizeString(data.name),
       description: data.description ? sanitizeString(data.description) : null,
       status: (data.status || 'ACTIVE').toUpperCase(),
-      // 📞 NOUVEAUX CHAMPS DE CONTACT
+      // 📞 CHAMPS DE CONTACT
       website: data.website ? sanitizeString(data.website) : null,
       phone: data.phone ? sanitizeString(data.phone) : null,
-      address: data.address ? sanitizeString(data.address) : null
+      address: data.address ? sanitizeString(data.address) : null,
+      vatNumber: data.vatNumber ? sanitizeString(data.vatNumber) : null,
+      email: data.email ? sanitizeString(data.email) : null,
     };
 
     console.log('[ORGANIZATIONS] Données sanitisées:', sanitizedData);
@@ -728,6 +738,8 @@ router.post('/', organizationsCreateRateLimit, requireRole(['super_admin']), asy
           website: sanitizedData.website,
           phone: sanitizedData.phone,
           address: sanitizedData.address,
+          vatNumber: sanitizedData.vatNumber,
+          email: sanitizedData.email,
           createdAt: now,
           updatedAt: now
         }
@@ -1356,6 +1368,238 @@ router.get('/:id/google-workspace/domain-status', requireRole(['admin', 'super_a
       success: false,
       message: 'Erreur serveur lors de la vérification du domaine'
     });
+  }
+});
+
+// ============================================================================
+// POST /api/organizations/create-my-org — Free user crée sa propre organisation
+// Accessible à tout utilisateur authentifié qui n'a PAS encore d'organisation
+// ============================================================================
+const createMyOrgSchema = z.object({
+  name: z.string()
+    .min(2, 'Nom organisation minimum 2 caractères')
+    .max(100, 'Nom organisation maximum 100 caractères')
+    .regex(/^[a-zA-ZÀ-ÿ0-9\s\-_'.&(),]+$/, 'Nom organisation contient des caractères non autorisés'),
+  address: z.string()
+    .min(5, 'Adresse minimum 5 caractères')
+    .max(500, 'Adresse maximum 500 caractères'),
+  vatNumber: z.string()
+    .min(2, 'Numéro de TVA minimum 2 caractères')
+    .max(30, 'Numéro de TVA maximum 30 caractères'),
+  phone: z.string()
+    .min(5, 'Téléphone minimum 5 caractères')
+    .max(20, 'Téléphone maximum 20 caractères')
+    .regex(/^[\d\s\-+().]+$/, 'Numéro de téléphone contient des caractères non autorisés'),
+  email: z.string()
+    .email('Adresse email invalide')
+    .max(255, 'Email maximum 255 caractères'),
+  description: z.string()
+    .max(500, 'Description maximum 500 caractères')
+    .optional(),
+});
+
+const createMyOrgRateLimit = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 heure
+  max: 3, // 3 tentatives par heure
+  skipSuccessfulRequests: false,
+  handler: (_req, res) => {
+    res.status(429).json({
+      success: false,
+      message: 'Trop de tentatives. Réessayez dans 1 heure.'
+    });
+  }
+});
+
+router.post('/create-my-org', createMyOrgRateLimit, async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Non authentifié' });
+    }
+
+    // Vérifier que l'utilisateur n'a PAS déjà une organisation
+    const existingMembership = await prisma.userOrganization.findFirst({
+      where: { userId }
+    });
+    if (existingMembership) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vous êtes déjà membre d\'une organisation'
+      });
+    }
+
+    // Validation
+    const validation = createMyOrgSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: validation.error.errors.map(e => e.message).join(', ')
+      });
+    }
+
+    const data = validation.data;
+
+    // Vérification unicité du nom
+    const existingOrg = await prisma.organization.findFirst({
+      where: { name: { equals: sanitizeString(data.name), mode: 'insensitive' } }
+    });
+    if (existingOrg) {
+      return res.status(409).json({
+        success: false,
+        message: 'Une organisation avec ce nom existe déjà'
+      });
+    }
+
+    const now = new Date();
+    const orgId = randomUUID();
+
+    // Transaction : créer l'org + rôles + associer l'utilisateur comme admin
+    const result = await prisma.$transaction(async (tx) => {
+      const org = await tx.organization.create({
+        data: {
+          id: orgId,
+          name: sanitizeString(data.name),
+          address: sanitizeString(data.address),
+          vatNumber: sanitizeString(data.vatNumber),
+          phone: sanitizeString(data.phone),
+          email: sanitizeString(data.email),
+          description: data.description ? sanitizeString(data.description) : null,
+          status: 'active',
+          createdAt: now,
+          updatedAt: now,
+        }
+      });
+
+      // Créer le rôle admin pour cette organisation
+      const adminRole = await tx.role.create({
+        data: {
+          id: randomUUID(),
+          name: 'admin',
+          label: 'Administrateur',
+          organizationId: orgId,
+          updatedAt: now,
+        }
+      });
+
+      // Créer le rôle user par défaut
+      await tx.role.create({
+        data: {
+          id: randomUUID(),
+          name: 'user',
+          label: 'Utilisateur',
+          organizationId: orgId,
+          updatedAt: now,
+        }
+      });
+
+      // Associer l'utilisateur à l'organisation en tant qu'admin
+      await tx.userOrganization.create({
+        data: {
+          id: randomUUID(),
+          userId,
+          organizationId: orgId,
+          roleId: adminRole.id,
+          status: UserOrganizationStatus.ACTIVE,
+          updatedAt: now,
+        }
+      });
+
+      return org;
+    });
+
+    console.log(`[ORGANIZATIONS] Free user ${userId} a créé l'organisation "${result.name}" (${result.id})`);
+
+    res.status(201).json({
+      success: true,
+      message: `Organisation "${result.name}" créée avec succès. Vous en êtes l'administrateur.`,
+      organization: { id: result.id, name: result.name }
+    });
+
+  } catch (error) {
+    console.error('[ORGANIZATIONS] Erreur create-my-org:', error);
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return res.status(409).json({
+        success: false,
+        message: 'Une organisation avec ce nom existe déjà'
+      });
+    }
+    res.status(500).json({
+      success: false,
+      message: 'Erreur serveur lors de la création de l\'organisation'
+    });
+  }
+});
+
+// 📸 POST /api/organizations/:id/logo - Upload logo de l'organisation
+router.post('/:id/logo', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ success: false, message: 'Non authentifié' });
+
+    // Vérifier que l'utilisateur a accès à cette organisation
+    const userOrg = await prisma.userOrganization.findFirst({
+      where: { userId, organizationId: id },
+      include: { Role: true },
+    });
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+    const isSuperAdmin = user?.role === 'super_admin';
+    if (!userOrg && !isSuperAdmin) {
+      return res.status(403).json({ success: false, message: 'Accès refusé' });
+    }
+
+    const files = (req as any).files;
+    if (!files || !files.logo) {
+      return res.status(400).json({ success: false, message: 'Aucun fichier uploadé. Envoyez un champ "logo".' });
+    }
+
+    const file = files.logo;
+    // Valider le type MIME
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+    if (!allowedTypes.includes(file.mimetype)) {
+      return res.status(400).json({ success: false, message: 'Type de fichier non supporté. Utilisez JPG, PNG, GIF, WEBP ou SVG.' });
+    }
+    // Limite 5MB
+    if (file.size > 5 * 1024 * 1024) {
+      return res.status(400).json({ success: false, message: 'Le fichier ne doit pas dépasser 5 Mo.' });
+    }
+
+    const path = await import('path');
+    const fs = await import('fs');
+    const { uploadExpressFile } = await import('../lib/storage');
+
+    const ext = path.default.extname(file.name);
+    const finalName = `${id}_${Date.now()}${ext}`;
+    const key = `org-logos/${finalName}`;
+
+    // Nettoyer les anciens logos en dev
+    if (process.env.NODE_ENV !== 'production') {
+      const destDir = path.default.join('public', 'uploads', 'org-logos');
+      try {
+        if (fs.default.existsSync(destDir)) {
+          const existing = fs.default.readdirSync(destDir);
+          for (const f of existing) {
+            if (f.startsWith(id + '_') || f.startsWith(id + '.')) {
+              fs.default.unlinkSync(path.default.join(destDir, f));
+            }
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
+    const logoUrl = await uploadExpressFile(file, key);
+
+    const updatedOrg = await prisma.organization.update({
+      where: { id },
+      data: { logoUrl },
+      select: { id: true, name: true, logoUrl: true },
+    });
+
+    console.log(`✅ [POST /api/organizations/${id}/logo] Logo mis à jour: ${logoUrl}`);
+    res.json({ success: true, data: updatedOrg });
+  } catch (error) {
+    console.error('❌ [POST /api/organizations/:id/logo] Erreur:', error);
+    res.status(500).json({ success: false, message: 'Erreur serveur lors de l\'upload du logo' });
   }
 });
 

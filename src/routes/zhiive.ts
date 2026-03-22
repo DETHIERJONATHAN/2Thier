@@ -85,27 +85,22 @@ router.get('/stories/feed', authenticateToken, async (req: Request, res: Respons
       },
       include: {
         author: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
-        organization: { select: { id: true, name: true, logoUrl: true } },
         views: { where: { viewerId: userId }, select: { id: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
 
     res.json({
-      stories: stories.map(s => {
-        const isOrg = s.publishAsOrg && s.organization;
-        return {
-          id: s.id,
-          userId: s.authorId,
-          userName: isOrg ? s.organization!.name : `${s.author.firstName} ${s.author.lastName}`.trim(),
-          avatarUrl: isOrg ? (s.organization!.logoUrl || null) : s.author.avatarUrl,
-          publishAsOrg: s.publishAsOrg,
-          mediaUrl: s.mediaUrl,
-          mediaType: s.mediaType,
-          viewed: s.views.length > 0,
-          createdAt: s.createdAt,
-        };
-      }),
+      stories: stories.map(s => ({
+        id: s.id,
+        userId: s.authorId,
+        userName: `${s.author.firstName} ${s.author.lastName}`.trim(),
+        avatarUrl: s.author.avatarUrl,
+        mediaUrl: s.mediaUrl,
+        mediaType: s.mediaType,
+        viewed: s.views.length > 0,
+        createdAt: s.createdAt,
+      })),
     });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -116,7 +111,7 @@ router.post('/stories', authenticateToken, async (req: Request, res: Response) =
   try {
     const userId = (req as any).user.id;
     const orgId = (req as any).user.organizationId;
-    const { mediaUrl, mediaType, text } = req.body;
+    const { mediaUrl, mediaType, text, visibility } = req.body;
 
     const story = await db.story.create({
       data: {
@@ -125,7 +120,7 @@ router.post('/stories', authenticateToken, async (req: Request, res: Response) =
         mediaUrl: mediaUrl || '',
         mediaType: mediaType || 'image',
         caption: text,
-        publishAsOrg: req.body.publishAsOrg && !!orgId ? true : false,
+        visibility: ['ALL', 'IN', 'OUT'].includes(visibility) ? visibility : 'ALL',
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       },
     });
@@ -246,6 +241,7 @@ router.get('/explore/gallery', authenticateToken, async (req: Request, res: Resp
     const mediaFilter = (req.query.type as string) || 'all'; // 'photo' | 'video' | 'all'
     const scope = (req.query.scope as string) || 'all'; // 'friends' | 'org' | 'all'
     const sort = (req.query.sort as string) || 'popular'; // 'popular' | 'recent'
+    const mode = (req.query.mode as string) || 'org'; // 'personal' | 'org'
     const category = req.query.category as string | undefined;
     const search = req.query.search as string | undefined;
 
@@ -265,7 +261,11 @@ router.get('/explore/gallery', authenticateToken, async (req: Request, res: Resp
     }
 
     // Scope filter
-    if (scope === 'friends') {
+    if (scope === 'private') {
+      // Only show user's own private posts
+      postWhere.authorId = userId;
+      postWhere.visibility = 'OUT';
+    } else if (scope === 'friends') {
       const friendships = await db.friendship.findMany({
         where: { status: 'accepted', OR: [{ requesterId: userId }, { addresseeId: userId }] },
         select: { requesterId: true, addresseeId: true },
@@ -277,11 +277,17 @@ router.get('/explore/gallery', authenticateToken, async (req: Request, res: Resp
     } else if (scope === 'org') {
       postWhere.organizationId = orgId;
       postWhere.visibility = { in: ['ALL', 'IN'] };
-    } else {
-      // 'all' — public posts from all orgs + own org internal
+    } else if (mode === 'personal') {
+      // Personal mode: only public posts from the whole network + own posts
       postWhere.OR = [
         { visibility: 'ALL' },
-        { organizationId: orgId, visibility: { in: ['ALL', 'IN'] } },
+        { authorId: userId },
+      ];
+    } else {
+      // 'all' scope + org mode — public posts from all orgs + own org internal
+      postWhere.OR = [
+        { visibility: 'ALL' },
+        ...(orgId ? [{ organizationId: orgId, visibility: { in: ['ALL', 'IN'] } }] : []),
       ];
     }
 
@@ -323,8 +329,9 @@ router.get('/explore/gallery', authenticateToken, async (req: Request, res: Resp
       take: limit * 2, // Fetch extra to compensate for empty mediaUrls filtering
       select: {
         id: true, mediaUrls: true, mediaType: true, likesCount: true, commentsCount: true,
-        content: true, category: true, createdAt: true,
+        content: true, category: true, createdAt: true, publishAsOrg: true,
         author: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+        organization: { select: { id: true, name: true, logoUrl: true } },
         reactions: { where: { userId }, select: { type: true }, take: 1 },
       },
     });
@@ -334,6 +341,7 @@ router.get('/explore/gallery', authenticateToken, async (req: Request, res: Resp
     for (const p of posts) {
       const urls = Array.isArray(p.mediaUrls) ? p.mediaUrls as string[] : [];
       if (urls.length === 0 || !urls[0]) continue;
+      const isOrg = p.publishAsOrg && p.organization;
       galleryItems.push({
         id: p.id,
         source: 'post' as const,
@@ -344,8 +352,9 @@ router.get('/explore/gallery', authenticateToken, async (req: Request, res: Resp
         caption: p.content || '',
         category: p.category || null,
         authorId: p.author.id,
-        authorName: `${p.author.firstName} ${p.author.lastName}`.trim(),
-        authorAvatar: p.author.avatarUrl,
+        authorName: isOrg ? p.organization!.name : `${p.author.firstName} ${p.author.lastName}`.trim(),
+        authorAvatar: isOrg ? (p.organization!.logoUrl || null) : p.author.avatarUrl,
+        publishAsOrg: p.publishAsOrg,
         isLiked: p.reactions.length > 0,
         createdAt: p.createdAt,
       });
@@ -392,29 +401,34 @@ router.get('/explore/gallery', authenticateToken, async (req: Request, res: Resp
         take: 20,
         include: {
           author: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+          organization: { select: { id: true, name: true, logoUrl: true } },
           _count: { select: { views: true } },
         },
       });
 
       storyItems = stories
         .filter(s => s.mediaUrl && s.mediaUrl.length > 0)
-        .map(s => ({
-          id: `story-${s.id}`,
-          source: 'story' as const,
-          mediaUrl: s.mediaUrl,
-          mediaType: s.mediaType || 'image',
-          likesCount: s._count.views, // Use views as "popularity" for stories
-          commentsCount: 0,
-          caption: s.caption || '',
-          category: null,
-          authorId: s.author.id,
-          authorName: `${s.author.firstName} ${s.author.lastName}`.trim(),
-          authorAvatar: s.author.avatarUrl,
-          isLiked: false,
-          createdAt: s.createdAt,
-          isStory: true,
-          isHighlight: s.isHighlight,
-        }));
+        .map(s => {
+          const isOrg = s.publishAsOrg && s.organization;
+          return {
+            id: `story-${s.id}`,
+            source: 'story' as const,
+            mediaUrl: s.mediaUrl,
+            mediaType: s.mediaType || 'image',
+            likesCount: s._count.views,
+            commentsCount: 0,
+            caption: s.caption || '',
+            category: null,
+            authorId: s.author.id,
+            authorName: isOrg ? s.organization!.name : `${s.author.firstName} ${s.author.lastName}`.trim(),
+            authorAvatar: isOrg ? (s.organization!.logoUrl || null) : s.author.avatarUrl,
+            publishAsOrg: s.publishAsOrg,
+            isLiked: false,
+            createdAt: s.createdAt,
+            isStory: true,
+            isHighlight: s.isHighlight,
+          };
+        });
     }
 
     // ── Merge and sort ──
@@ -442,21 +456,35 @@ router.get('/reels', authenticateToken, async (req: Request, res: Response) => {
     const user = (req as any).user;
     const orgId = user.organizationId;
     const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+    const mode = (req.query.mode as string) || 'org';
+
+    const whereClause: any = {
+      isPublished: true,
+      mediaType: 'video',
+      NOT: { mediaUrls: { equals: null } },
+    };
+
+    if (mode === 'personal' || !orgId) {
+      // Personal mode or free user: public videos + own posts
+      whereClause.OR = [
+        { visibility: 'ALL' },
+        { authorId: user.id },
+      ];
+    } else {
+      // Org mode: videos from own org
+      whereClause.organizationId = orgId;
+      whereClause.visibility = { in: ['ALL', 'IN'] };
+    }
 
     const posts = await db.wallPost.findMany({
-      where: {
-        organizationId: orgId,
-        isPublished: true,
-        visibility: { in: ['ALL', 'IN'] },
-        mediaType: 'video',
-        NOT: { mediaUrls: { equals: null } },
-      },
+      where: whereClause,
       orderBy: [{ likesCount: 'desc' }, { createdAt: 'desc' }],
       take: limit * 2, // Fetch extra to compensate for empty mediaUrls filtering
       select: {
         id: true, mediaUrls: true, mediaType: true, likesCount: true, commentsCount: true,
-        content: true,
+        content: true, publishAsOrg: true,
         author: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+        organization: { select: { id: true, name: true, logoUrl: true } },
         reactions: { where: { userId: user.id }, select: { type: true }, take: 1 },
       },
     });
@@ -472,6 +500,7 @@ router.get('/reels', authenticateToken, async (req: Request, res: Response) => {
     res.json({
       reels: videoPosts.map(p => {
         const urls = p.mediaUrls as string[];
+        const isOrg = p.publishAsOrg && p.organization;
         return {
           id: p.id,
           mediaUrl: urls[0],
@@ -480,8 +509,10 @@ router.get('/reels', authenticateToken, async (req: Request, res: Response) => {
           commentsCount: p.commentsCount,
           caption: p.content || '',
           authorId: p.author.id,
-          authorName: `${p.author.firstName} ${p.author.lastName}`.trim(),
-          authorAvatar: p.author.avatarUrl,
+          authorName: isOrg ? p.organization!.name : `${p.author.firstName} ${p.author.lastName}`.trim(),
+          authorAvatar: isOrg ? (p.organization!.logoUrl || null) : p.author.avatarUrl,
+          publishAsOrg: p.publishAsOrg,
+          organizationName: p.organization?.name || null,
           isLiked: p.reactions.length > 0,
         };
       }),
@@ -518,34 +549,49 @@ router.get('/explore/suggested-users', authenticateToken, async (req: Request, r
     const orgId = (req as any).user.organizationId;
     const limit = Math.min(parseInt(req.query.limit as string) || 10, 30);
 
-    // Users from same org that the current user doesn't follow yet
-    const alreadyFollowing = await db.follow.findMany({
-      where: { followerId: userId },
-      select: { followingId: true },
-    });
+    const scopeFilter = (req.query.scope as string) || 'all'; // 'all' | 'friends' | 'org'
+
+    // Get follow/friendship data for current user
+    const [alreadyFollowing, userFriendships] = await Promise.all([
+      db.follow.findMany({ where: { followerId: userId }, select: { followingId: true } }),
+      db.friendship.findMany({
+        where: { OR: [{ requesterId: userId }, { addresseeId: userId }] },
+        select: { id: true, requesterId: true, addresseeId: true, status: true },
+      }),
+    ]);
     const followingIds = new Set(alreadyFollowing.map(f => f.followingId));
-    followingIds.add(userId); // Exclude self
+    const blockedIds = new Set(
+      userFriendships.filter(f => f.status === 'blocked').map(f => f.requesterId === userId ? f.addresseeId : f.requesterId)
+    );
+    const myFriendIds = new Set(
+      userFriendships.filter(f => f.status === 'accepted').map(f => f.requesterId === userId ? f.addresseeId : f.requesterId)
+    );
+
+    // Build friendship status map for current user (status + direction + id)
+    const friendshipInfoMap = new Map<string, { status: string; direction: 'sent' | 'received'; friendshipId: string }>();
+    userFriendships.forEach(f => {
+      const otherId = f.requesterId === userId ? f.addresseeId : f.requesterId;
+      const direction = f.requesterId === userId ? 'sent' : 'received';
+      friendshipInfoMap.set(otherId, { status: f.status, direction, friendshipId: f.id });
+    });
+
+    // Build user query based on scope
+    const userWhere: any = { status: 'active', id: { not: userId, notIn: Array.from(blockedIds) } };
+    if (scopeFilter === 'friends') {
+      userWhere.id = { in: Array.from(myFriendIds) };
+    } else if (scopeFilter === 'org' && orgId) {
+      userWhere.organizationId = orgId;
+    }
+    // 'all' = no additional filter
 
     const users = await db.user.findMany({
-      where: {
-        organizationId: orgId,
-        status: 'active',
-        id: { notIn: Array.from(followingIds) },
-      },
-      select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true },
+      where: userWhere,
+      select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true, organizationId: true },
       take: limit,
+      orderBy: { firstName: 'asc' },
     });
 
-    // Compute mutual friends for each suggested user
-    const userFriendships = await db.friendship.findMany({
-      where: {
-        status: 'accepted',
-        OR: [{ requesterId: userId }, { addresseeId: userId }],
-      },
-      select: { requesterId: true, addresseeId: true },
-    });
-    const myFriendIds = new Set(userFriendships.map(f => f.requesterId === userId ? f.addresseeId : f.requesterId));
-
+    // Compute mutual friends for each user
     const usersWithMutual = await Promise.all(users.map(async (u) => {
       let mutualCount = 0;
       if (myFriendIds.size > 0) {
@@ -559,6 +605,7 @@ router.get('/explore/suggested-users', authenticateToken, async (req: Request, r
           },
         });
       }
+      const friendInfo = friendshipInfoMap.get(u.id) || null;
       return {
         id: u.id,
         firstName: u.firstName,
@@ -566,6 +613,11 @@ router.get('/explore/suggested-users', authenticateToken, async (req: Request, r
         avatarUrl: u.avatarUrl,
         role: u.role,
         mutualFriends: mutualCount,
+        isFollowing: followingIds.has(u.id),
+        friendStatus: friendInfo?.status || null,
+        friendDirection: friendInfo?.direction || null,
+        friendshipId: friendInfo?.friendshipId || null,
+        sameOrg: !!orgId && u.organizationId === orgId,
       };
     }));
 
@@ -586,29 +638,46 @@ router.get('/sparks', authenticateToken, async (req: Request, res: Response) => 
     const userId = (req as any).user.id;
     const orgId = (req as any).user.organizationId;
     const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+    const mode = (req.query.mode as string) || 'org';
+
+    const whereClause: any = {};
+    if (mode === 'personal' || !orgId) {
+      // Personal mode: all sparks (public network) + own sparks
+      whereClause.OR = [
+        { organizationId: null },
+        { authorId: userId },
+      ];
+    } else {
+      whereClause.organizationId = orgId;
+    }
 
     const sparks = await db.spark.findMany({
-      where: { organizationId: orgId },
+      where: whereClause,
       orderBy: { createdAt: 'desc' },
       take: limit,
       include: {
         author: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+        organization: { select: { id: true, name: true, logoUrl: true } },
         votes: { where: { voterId: userId }, select: { id: true } },
       },
     });
 
     res.json({
-      sparks: sparks.map(s => ({
-        id: s.id,
-        content: s.content,
-        sparkCount: s.sparkCount,
-        revealThreshold: s.revealThreshold,
-        isRevealed: s.isRevealed,
-        authorName: s.isRevealed ? `${s.author.firstName} ${s.author.lastName}`.trim() : undefined,
-        authorAvatar: s.isRevealed ? s.author.avatarUrl : undefined,
-        createdAt: s.createdAt,
-        hasVoted: s.votes.length > 0,
-      })),
+      sparks: sparks.map(s => {
+        const isOrg = s.isRevealed && s.publishAsOrg && s.organization;
+        return {
+          id: s.id,
+          content: s.content,
+          sparkCount: s.sparkCount,
+          revealThreshold: s.revealThreshold,
+          isRevealed: s.isRevealed,
+          authorName: s.isRevealed ? (isOrg ? s.organization!.name : `${s.author.firstName} ${s.author.lastName}`.trim()) : undefined,
+          authorAvatar: s.isRevealed ? (isOrg ? (s.organization!.logoUrl || null) : s.author.avatarUrl) : undefined,
+          publishAsOrg: s.publishAsOrg,
+          createdAt: s.createdAt,
+          hasVoted: s.votes.length > 0,
+        };
+      }),
     });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -622,7 +691,7 @@ router.post('/sparks', authenticateToken, async (req: Request, res: Response) =>
     const { content } = createSparkSchema.parse(req.body);
 
     const spark = await db.spark.create({
-      data: { content, authorId: userId, organizationId: orgId },
+      data: { content, authorId: userId, organizationId: orgId, visibility: ['ALL', 'IN', 'OUT'].includes(req.body.visibility) ? req.body.visibility : 'ALL', publishAsOrg: req.body.publishAsOrg && !!orgId ? true : false },
     });
     res.json({ spark });
   } catch (e: any) {
@@ -669,9 +738,20 @@ router.get('/battles', authenticateToken, async (req: Request, res: Response) =>
   try {
     const orgId = (req as any).user.organizationId;
     const limit = Math.min(parseInt(req.query.limit as string) || 10, 30);
+    const mode = (req.query.mode as string) || 'org';
+
+    const whereClause: any = {};
+    if (mode === 'personal' || !orgId) {
+      whereClause.OR = [
+        { organizationId: null },
+        { challengerId: (req as any).user.id },
+      ];
+    } else {
+      whereClause.organizationId = orgId;
+    }
 
     const battles = await db.battle.findMany({
-      where: { organizationId: orgId },
+      where: whereClause,
       orderBy: { createdAt: 'desc' },
       take: limit,
       include: {
@@ -790,35 +870,51 @@ router.get('/events', authenticateToken, async (req: Request, res: Response) => 
   try {
     const orgId = (req as any).user.organizationId;
     const limit = Math.min(parseInt(req.query.limit as string) || 10, 30);
+    const mode = (req.query.mode as string) || 'org';
+
+    const whereClause: any = {
+      startsAt: { gte: new Date() },
+    };
+
+    if (mode === 'personal' || !orgId) {
+      whereClause.OR = [
+        { organizationId: null },
+        ...(orgId ? [{ organizationId: orgId }] : []),
+      ];
+    } else {
+      whereClause.organizationId = orgId;
+    }
 
     const events = await db.socialEvent.findMany({
-      where: {
-        organizationId: orgId,
-        startsAt: { gte: new Date() },
-      },
+      where: whereClause,
       orderBy: { startsAt: 'asc' },
       take: limit,
       include: {
         creator: { select: { firstName: true, lastName: true, avatarUrl: true } },
+        organization: { select: { id: true, name: true, logoUrl: true } },
         _count: { select: { attendees: true } },
       },
     });
 
     res.json({
-      events: events.map(e => ({
-        id: e.id,
-        title: e.title,
-        description: e.description || '',
-        type: e.eventType,
-        location: e.location,
-        startDate: e.startsAt,
-        endDate: e.endsAt,
-        attendeesCount: e._count.attendees,
-        maxAttendees: e.maxAttendees,
-        organizerName: `${e.creator.firstName} ${e.creator.lastName}`.trim(),
-        organizerAvatar: e.creator.avatarUrl,
-        coverImage: e.coverUrl,
-      })),
+      events: events.map(e => {
+        const isOrg = e.publishAsOrg && e.organization;
+        return {
+          id: e.id,
+          title: e.title,
+          description: e.description || '',
+          type: e.eventType,
+          location: e.location,
+          startDate: e.startsAt,
+          endDate: e.endsAt,
+          attendeesCount: e._count.attendees,
+          maxAttendees: e.maxAttendees,
+          organizerName: isOrg ? e.organization!.name : `${e.creator.firstName} ${e.creator.lastName}`.trim(),
+          organizerAvatar: isOrg ? (e.organization!.logoUrl || null) : e.creator.avatarUrl,
+          publishAsOrg: e.publishAsOrg,
+          coverImage: e.coverUrl,
+        };
+      }),
     });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -841,6 +937,8 @@ router.post('/events', authenticateToken, async (req: Request, res: Response) =>
         endsAt: endDate ? new Date(endDate) : null,
         maxAttendees, coverUrl: coverImage,
         creatorId: userId, organizationId: orgId,
+        visibility: ['ALL', 'IN', 'OUT'].includes(req.body.visibility) ? req.body.visibility : 'ALL',
+        publishAsOrg: req.body.publishAsOrg && !!orgId ? true : false,
       },
     });
     res.json({ event });

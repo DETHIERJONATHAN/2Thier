@@ -1,5 +1,5 @@
-// SpaceFlow — "Exister, Créer, Gagner!"
-// Theme constants for the SpaceFlow social network panels
+// Zhiive — "Exister, Créer, Gagner!"
+// Theme constants for the Zhiive social network panels
 
 export const SF = {
   // Brand

@@ -268,7 +268,7 @@ export async function renderWebsite(req: WebsiteRequest, res: Response) {
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <title>${website.name || '2Thier Energy'}</title>
           <meta name="description" content="${website.config?.metaDescription || 'Votre partenaire en transition énergétique'}">
-          <link rel="icon" type="image/png" href="/2thier-logo.png">
+          <link rel="icon" type="image/png" href="/zhiive-logo.png">
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
