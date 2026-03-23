@@ -302,7 +302,7 @@ var init_googleConfig = __esm({
   "src/auth/googleConfig.ts"() {
     import_meta = {};
     envCache = /* @__PURE__ */ new Map();
-    DEFAULT_PROD_API_BASE = "https://app.2thier.be";
+    DEFAULT_PROD_API_BASE = "https://www.zhiive.com";
     DEFAULT_DEV_API_BASE = "http://localhost:4000";
     GOOGLE_OAUTH_SCOPES = [
       "https://www.googleapis.com/auth/userinfo.email",
@@ -2454,6 +2454,105 @@ var init_google_auth = __esm({
     init_GoogleDriveService();
     init_GoogleOAuthCore();
     init_GoogleOAuthCore();
+  }
+});
+
+// src/lib/storage.ts
+var storage_exports = {};
+__export(storage_exports, {
+  deleteFile: () => deleteFile,
+  uploadExpressFile: () => uploadExpressFile,
+  uploadFile: () => uploadFile
+});
+function getStorage() {
+  if (!storage) {
+    storage = new import_storage.Storage();
+  }
+  return storage;
+}
+async function uploadFile(buffer, key2, mimeType) {
+  if (isProduction2) {
+    return uploadToGCS(buffer, key2, mimeType);
+  }
+  return uploadToLocal(buffer, key2);
+}
+async function uploadExpressFile(file, key2) {
+  if (isProduction2) {
+    let buffer = file.data;
+    if ((!buffer || buffer.length === 0) && file.tempFilePath) {
+      buffer = await import_promises.default.readFile(file.tempFilePath);
+    }
+    return uploadToGCS(buffer, key2, file.mimetype);
+  }
+  const localPath = import_path.default.join(process.cwd(), "public", "uploads", key2);
+  const dir = import_path.default.dirname(localPath);
+  await import_promises.default.mkdir(dir, { recursive: true });
+  await file.mv(localPath);
+  return `/uploads/${key2}`;
+}
+async function deleteFile(keyOrUrl) {
+  const key2 = extractKey(keyOrUrl);
+  if (!key2) return;
+  if (isProduction2) {
+    try {
+      await getStorage().bucket(GCS_BUCKET).file(key2).delete();
+    } catch {
+    }
+  } else {
+    const localPath = import_path.default.join(process.cwd(), "public", "uploads", key2);
+    try {
+      await import_promises.default.unlink(localPath);
+    } catch {
+    }
+  }
+}
+async function uploadToGCS(buffer, key2, mimeType) {
+  try {
+    const bucket = getStorage().bucket(GCS_BUCKET);
+    const blob = bucket.file(key2);
+    await blob.save(buffer, {
+      contentType: mimeType,
+      resumable: false,
+      metadata: {
+        cacheControl: "public, max-age=3600"
+      }
+    });
+    const url = `https://storage.googleapis.com/${GCS_BUCKET}/${key2}`;
+    console.log(`\u{1F4E6} [Storage] \u2705 GCS upload OK: ${key2} (${(buffer.length / 1024).toFixed(1)} KB)`);
+    return url;
+  } catch (error) {
+    console.error(`\u{1F4E6} [Storage] \u274C GCS upload FAILED for ${key2}:`, error);
+    throw error;
+  }
+}
+async function uploadToLocal(buffer, key2) {
+  const localPath = import_path.default.join(process.cwd(), "public", "uploads", key2);
+  const dir = import_path.default.dirname(localPath);
+  await import_promises.default.mkdir(dir, { recursive: true });
+  await import_promises.default.writeFile(localPath, buffer);
+  return `/uploads/${key2}`;
+}
+function extractKey(keyOrUrl) {
+  if (!keyOrUrl) return null;
+  const gcsPrefix = `https://storage.googleapis.com/${GCS_BUCKET}/`;
+  if (keyOrUrl.startsWith(gcsPrefix)) {
+    return keyOrUrl.slice(gcsPrefix.length);
+  }
+  if (keyOrUrl.startsWith("/uploads/")) {
+    return keyOrUrl.slice("/uploads/".length);
+  }
+  return keyOrUrl;
+}
+var import_storage, import_path, import_promises, isProduction2, GCS_BUCKET, storage;
+var init_storage = __esm({
+  "src/lib/storage.ts"() {
+    import_storage = require("@google-cloud/storage");
+    import_path = __toESM(require("path"), 1);
+    import_promises = __toESM(require("fs/promises"), 1);
+    isProduction2 = process.env.NODE_ENV === "production";
+    GCS_BUCKET = process.env.GCS_BUCKET || "crm-2thier-uploads";
+    console.log(`\u{1F4E6} [Storage] Mode: ${isProduction2 ? "PRODUCTION (GCS)" : "DEV (local)"} | Bucket: ${GCS_BUCKET}`);
+    storage = null;
   }
 });
 
@@ -7205,9 +7304,9 @@ __export(api_server_clean_exports, {
 });
 module.exports = __toCommonJS(api_server_clean_exports);
 var import_dotenv = __toESM(require("dotenv"), 1);
-var import_express108 = __toESM(require("express"), 1);
-var import_path11 = __toESM(require("path"), 1);
-var import_fs11 = __toESM(require("fs"), 1);
+var import_express114 = __toESM(require("express"), 1);
+var import_path10 = __toESM(require("path"), 1);
+var import_fs9 = __toESM(require("fs"), 1);
 var import_cors = __toESM(require("cors"), 1);
 var import_express_session = __toESM(require("express-session"), 1);
 var import_cookie_parser = __toESM(require("cookie-parser"), 1);
@@ -7218,7 +7317,7 @@ var import_compression = __toESM(require("compression"), 1);
 var import_express_winston = __toESM(require("express-winston"), 1);
 
 // src/routes/index.ts
-var import_express86 = require("express");
+var import_express92 = require("express");
 
 // src/routes/authRoutes.ts
 var import_express = require("express");
@@ -7323,10 +7422,10 @@ var login = async (req2, res) => {
       getJWTSecret(),
       { expiresIn: "24h" }
     );
-    const isProduction4 = process.env.NODE_ENV === "production";
+    const isProduction6 = process.env.NODE_ENV === "production";
     const isCodespaces2 = process.env.CODESPACES === "true";
-    const needsSecureCookie = isProduction4 || isCodespaces2;
-    console.log(`[AUTH] \u{1F36A} Cookie config: isProduction=${isProduction4}, isCodespaces=${isCodespaces2}, needsSecure=${needsSecureCookie}`);
+    const needsSecureCookie = isProduction6 || isCodespaces2;
+    console.log(`[AUTH] \u{1F36A} Cookie config: isProduction=${isProduction6}, isCodespaces=${isCodespaces2}, needsSecure=${needsSecureCookie}`);
     res.cookie("token", token, {
       httpOnly: true,
       secure: needsSecureCookie,
@@ -7372,6 +7471,7 @@ var getMe = async (req2, res) => {
     const organizations = user.UserOrganization.map((uo) => ({
       id: uo.Organization.id,
       name: uo.Organization.name,
+      logoUrl: uo.Organization.logoUrl || null,
       status: uo.status,
       role: uo.Role.name,
       roleLabel: uo.Role.label,
@@ -8374,24 +8474,16 @@ router2.post("/register", async (req2, res) => {
     firstName,
     lastName,
     registrationType = "freelance",
-    // Par défaut: utilisateur libre
     organizationName,
     // Pour createOrg
-    domain,
+    domain
     // Pour createOrg (optionnel)
-    organizationId,
-    // Pour joinOrg
-    message
-    // Pour joinOrg (message de demande)
   } = req2.body;
   if (!email || !password || !firstName) {
     return res.status(400).json({ error: "Email, mot de passe et pr\xE9nom sont requis" });
   }
   if (registrationType === "createOrg" && !organizationName) {
     return res.status(400).json({ error: "Le nom de l'organisation est requis pour cr\xE9er une organisation" });
-  }
-  if (registrationType === "joinOrg" && !organizationId) {
-    return res.status(400).json({ error: "L'ID de l'organisation est requis pour rejoindre une organisation" });
   }
   try {
     const hashedPassword = await import_bcryptjs3.default.hash(password, 10);
@@ -8405,11 +8497,11 @@ router2.post("/register", async (req2, res) => {
           firstName,
           lastName,
           status: "active",
-          role: "user"
+          role: "user",
+          updatedAt: /* @__PURE__ */ new Date()
         }
       });
       let organization = null;
-      let joinRequest = null;
       if (registrationType === "createOrg") {
         const orgId = (0, import_crypto3.randomUUID)();
         organization = await tx.organization.create({
@@ -8417,7 +8509,8 @@ router2.post("/register", async (req2, res) => {
             id: orgId,
             name: organizationName.trim(),
             description: domain ? `Domaine: ${domain}` : void 0,
-            status: "active"
+            status: "active",
+            updatedAt: /* @__PURE__ */ new Date()
           }
         });
         const adminRole = await tx.role.create({
@@ -8425,7 +8518,8 @@ router2.post("/register", async (req2, res) => {
             id: (0, import_crypto3.randomUUID)(),
             name: "admin",
             label: "Administrateur",
-            organizationId: orgId
+            organizationId: orgId,
+            updatedAt: /* @__PURE__ */ new Date()
           }
         });
         await tx.role.create({
@@ -8433,7 +8527,8 @@ router2.post("/register", async (req2, res) => {
             id: (0, import_crypto3.randomUUID)(),
             name: "user",
             label: "Utilisateur",
-            organizationId: orgId
+            organizationId: orgId,
+            updatedAt: /* @__PURE__ */ new Date()
           }
         });
         await tx.userOrganization.create({
@@ -8442,40 +8537,19 @@ router2.post("/register", async (req2, res) => {
             userId: user.id,
             organizationId: orgId,
             roleId: adminRole.id,
-            status: import_client2.UserOrganizationStatus.ACTIVE
+            status: import_client2.UserOrganizationStatus.ACTIVE,
+            updatedAt: /* @__PURE__ */ new Date()
           }
         });
         console.log(`[Register] Utilisateur ${email} a cr\xE9\xE9 l'organisation "${organizationName}" (${orgId})`);
-      } else if (registrationType === "joinOrg") {
-        const targetOrg = await tx.organization.findUnique({
-          where: { id: organizationId }
-        });
-        if (!targetOrg) {
-          throw new Error("Organisation non trouv\xE9e");
-        }
-        joinRequest = await tx.joinRequest.create({
-          data: {
-            id: (0, import_crypto3.randomUUID)(),
-            userId: user.id,
-            organizationId,
-            message: message?.trim() || null,
-            status: import_client2.JoinRequestStatus.PENDING
-          },
-          include: {
-            Organization: { select: { name: true } }
-          }
-        });
-        console.log(`[Register] Utilisateur ${email} a envoy\xE9 une demande \xE0 "${targetOrg.name}" (${organizationId})`);
       } else {
-        console.log(`[Register] Nouvel utilisateur libre: ${email}`);
+        console.log(`[Register] Nouvel utilisateur r\xE9seau: ${email}`);
       }
-      return { user, organization, joinRequest };
+      return { user, organization };
     });
-    let successMessage = "Inscription r\xE9ussie !";
+    let successMessage = "Inscription r\xE9ussie ! Bienvenue sur le r\xE9seau Zhiive.";
     if (registrationType === "createOrg") {
       successMessage = `Organisation "${organizationName}" cr\xE9\xE9e avec succ\xE8s. Vous en \xEAtes l'administrateur.`;
-    } else if (registrationType === "joinOrg") {
-      successMessage = `Demande d'adh\xE9sion envoy\xE9e. En attente d'approbation de l'organisation.`;
     }
     res.status(201).json({
       success: true,
@@ -8483,7 +8557,6 @@ router2.post("/register", async (req2, res) => {
       email: result.user.email,
       registrationType,
       organization: result.organization ? { id: result.organization.id, name: result.organization.name } : null,
-      joinRequest: result.joinRequest ? { id: result.joinRequest.id, status: result.joinRequest.status } : null,
       message: successMessage
     });
   } catch (error) {
@@ -8555,9 +8628,9 @@ router2.post("/login", async (req2, res) => {
       // Ajout du statut de la relation
     }));
     console.log("\u{1F36A} [LOGIN] D\xE9finition du cookie d'authentification...");
-    const isProduction4 = process.env.NODE_ENV === "production";
+    const isProduction6 = process.env.NODE_ENV === "production";
     const isCodespaces2 = process.env.CODESPACES === "true";
-    const needsSecureCookie = isProduction4 || isCodespaces2;
+    const needsSecureCookie = isProduction6 || isCodespaces2;
     res.cookie("token", token, {
       httpOnly: true,
       secure: needsSecureCookie,
@@ -8650,9 +8723,9 @@ router2.get(
 );
 router2.post("/logout", (_req, res) => {
   console.log("\u{1F6AA} [LOGOUT] Demande de d\xE9connexion re\xE7ue");
-  const isProduction4 = process.env.NODE_ENV === "production";
+  const isProduction6 = process.env.NODE_ENV === "production";
   const isCodespaces2 = process.env.CODESPACES === "true" || process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN;
-  const needsSecureCookie = isProduction4 || isCodespaces2;
+  const needsSecureCookie = isProduction6 || isCodespaces2;
   res.clearCookie("token", {
     httpOnly: true,
     secure: needsSecureCookie,
@@ -8790,24 +8863,19 @@ var misc_default = router2;
 // src/routes/profile.ts
 var import_express4 = require("express");
 init_database();
-var import_multer = __toESM(require("multer"), 1);
-var import_path = __toESM(require("path"), 1);
+var import_path2 = __toESM(require("path"), 1);
 var import_fs3 = __toESM(require("fs"), 1);
+init_storage();
 var prisma4 = db;
 var router3 = (0, import_express4.Router)();
-var buildAvatarUrl = (req2, avatarPath) => {
+var buildAvatarUrl = (_req, avatarPath) => {
   if (!avatarPath) {
     return "";
   }
   if (avatarPath.startsWith("http://") || avatarPath.startsWith("https://")) {
     return avatarPath;
   }
-  const host = req2.get("host");
-  if (!host) {
-    return avatarPath;
-  }
-  const normalizedPath = avatarPath.startsWith("/") ? avatarPath : `/${avatarPath}`;
-  return `${req2.protocol}://${host}${normalizedPath}`;
+  return avatarPath.startsWith("/") ? avatarPath : `/${avatarPath}`;
 };
 var sanitizeText = (value) => {
   if (typeof value !== "string") {
@@ -8816,21 +8884,27 @@ var sanitizeText = (value) => {
   const trimmed = value.trim();
   return trimmed.length === 0 ? null : trimmed;
 };
-var storage = import_multer.default.diskStorage({
-  destination: function(_req, _file, cb) {
-    const dir = "public/uploads/avatars";
-    if (!import_fs3.default.existsSync(dir)) {
-      import_fs3.default.mkdirSync(dir, { recursive: true });
+var saveUploadedFileToStorage = async (file, folder, filename) => {
+  const ext = import_path2.default.extname(file.name);
+  const finalName = `${filename}_${Date.now()}${ext}`;
+  const key2 = `${folder}/${finalName}`;
+  if (process.env.NODE_ENV !== "production") {
+    const destDir = import_path2.default.join("public", "uploads", folder);
+    try {
+      if (import_fs3.default.existsSync(destDir)) {
+        const existing = import_fs3.default.readdirSync(destDir);
+        for (const f of existing) {
+          if (f.startsWith(filename + "_") || f.startsWith(filename + ".")) {
+            import_fs3.default.unlinkSync(import_path2.default.join(destDir, f));
+          }
+        }
+      }
+    } catch {
     }
-    cb(null, dir);
-  },
-  filename: function(req2, file, cb) {
-    const authReq = req2;
-    const userId = authReq.user?.userId;
-    cb(null, userId + import_path.default.extname(file.originalname));
   }
-});
-var upload = (0, import_multer.default)({ storage });
+  const url = await uploadExpressFile(file, key2);
+  return url;
+};
 router3.use(authMiddleware, impersonationMiddleware);
 router3.get("/", async (req2, res) => {
   try {
@@ -8867,6 +8941,8 @@ router3.get("/", async (req2, res) => {
       // Ajouter le numéro de téléphone
       role: user.role || "user",
       avatarUrl: buildAvatarUrl(req2, user.avatarUrl),
+      coverUrl: buildAvatarUrl(req2, user.coverUrl),
+      coverPositionY: user.coverPositionY ?? 50,
       createdAt: user.createdAt.toISOString(),
       updatedAt: user.updatedAt.toISOString(),
       organizationId: req2.user?.organizationId || null,
@@ -8883,18 +8959,24 @@ router3.get("/", async (req2, res) => {
     return res.status(500).json({ error: "Internal server error" });
   }
 });
-router3.post("/avatar", upload.single("avatar"), async (req2, res) => {
+router3.post("/avatar", async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     if (!userId) {
-      res.status(400).json({ error: "User ID not found in token" });
-      return;
+      return res.status(400).json({ error: "User ID not found in token" });
     }
-    if (!req2.file) {
-      res.status(400).json({ error: "Aucun fichier n'a \xE9t\xE9 t\xE9l\xE9vers\xE9." });
-      return;
+    const files = req2.files;
+    if (!files || !files.avatar) {
+      return res.status(400).json({ error: "Aucun fichier n'a \xE9t\xE9 t\xE9l\xE9vers\xE9." });
     }
-    const avatarUrl = `/uploads/avatars/${req2.file.filename}`;
+    const file = files.avatar;
+    const avatarUrl = await saveUploadedFileToStorage(file, "avatars", userId);
+    try {
+      await prisma4.userPhoto.create({
+        data: { userId, url: avatarUrl, category: "profile" }
+      });
+    } catch {
+    }
     const updatedUser = await prisma4.user.update({
       where: { id: userId },
       data: { avatarUrl },
@@ -8938,6 +9020,53 @@ router3.post("/avatar", upload.single("avatar"), async (req2, res) => {
     });
   } catch (error) {
     console.error("Erreur lors du t\xE9l\xE9versement de l'avatar:", error);
+    res.status(500).json({ error: "Erreur interne du serveur" });
+  }
+});
+router3.post("/cover", async (req2, res) => {
+  try {
+    const userId = req2.user?.userId;
+    if (!userId) {
+      return res.status(400).json({ error: "User ID not found in token" });
+    }
+    const files = req2.files;
+    if (!files || !files.cover) {
+      return res.status(400).json({ error: "Aucun fichier n'a \xE9t\xE9 t\xE9l\xE9vers\xE9." });
+    }
+    const file = files.cover;
+    const coverUrl = await saveUploadedFileToStorage(file, "covers", userId);
+    try {
+      await prisma4.userPhoto.create({
+        data: { userId, url: coverUrl, category: "cover" }
+      });
+    } catch {
+    }
+    const updatedUser = await prisma4.user.update({
+      where: { id: userId },
+      data: { coverUrl, coverPositionY: 50 },
+      select: { id: true, coverUrl: true }
+    });
+    res.json({ coverUrl: buildAvatarUrl(req2, updatedUser.coverUrl) });
+  } catch (error) {
+    console.error("Erreur lors du t\xE9l\xE9versement de la couverture:", error);
+    res.status(500).json({ error: "Erreur interne du serveur" });
+  }
+});
+router3.put("/cover-position", async (req2, res) => {
+  try {
+    const userId = req2.user?.userId;
+    if (!userId) return res.status(400).json({ error: "User ID not found" });
+    const posY = Number(req2.body?.positionY);
+    if (isNaN(posY) || posY < 0 || posY > 100) {
+      return res.status(400).json({ error: "positionY must be between 0 and 100" });
+    }
+    await prisma4.user.update({
+      where: { id: userId },
+      data: { coverPositionY: posY }
+    });
+    res.json({ positionY: posY });
+  } catch (error) {
+    console.error("Erreur cover-position:", error);
     res.status(500).json({ error: "Erreur interne du serveur" });
   }
 });
@@ -9068,6 +9197,150 @@ router3.put("/", (async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 }));
+router3.get("/user/:userId", async (req2, res) => {
+  try {
+    const { userId } = req2.params;
+    if (!userId) {
+      return res.status(400).json({ error: "userId requis" });
+    }
+    const user = await prisma4.user.findUnique({
+      where: { id: userId },
+      include: {
+        UserOrganization: {
+          include: {
+            Organization: true,
+            Role: true
+          }
+        }
+      }
+    });
+    if (!user) {
+      return res.status(404).json({ error: "Utilisateur non trouv\xE9" });
+    }
+    return res.json({
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName || "",
+      lastName: user.lastName || "",
+      role: user.role || "user",
+      avatarUrl: buildAvatarUrl(req2, user.avatarUrl),
+      coverUrl: buildAvatarUrl(req2, user.coverUrl),
+      coverPositionY: user.coverPositionY ?? 50,
+      organization: user.UserOrganization?.length > 0 ? {
+        id: user.UserOrganization[0].Organization.id,
+        name: user.UserOrganization[0].Organization.name
+      } : null
+    });
+  } catch (error) {
+    console.error("Error fetching user profile:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+router3.get("/photos", async (req2, res) => {
+  try {
+    const userId = req2.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ error: "Utilisateur non authentifi\xE9" });
+    }
+    const photos = await prisma4.userPhoto.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" }
+    });
+    const grouped = {};
+    for (const p of photos) {
+      const cat = p.category || "other";
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push(p);
+    }
+    return res.json({ photos, grouped });
+  } catch (error) {
+    console.error("Error fetching user photos:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+router3.get("/media", async (req2, res) => {
+  try {
+    const userId = req2.user?.userId;
+    const targetUserId = req2.query.userId || userId;
+    if (!userId) {
+      return res.status(401).json({ error: "Utilisateur non authentifi\xE9" });
+    }
+    const mediaType = req2.query.type;
+    const category = req2.query.category;
+    const limit = Math.min(parseInt(req2.query.limit) || 50, 200);
+    const where = {
+      authorId: targetUserId,
+      isPublished: true,
+      NOT: { mediaUrls: { equals: null } }
+    };
+    if (mediaType) {
+      where.mediaType = mediaType;
+    }
+    if (category) {
+      where.category = category;
+    }
+    if (targetUserId !== userId) {
+      where.visibility = { in: ["ALL", "IN"] };
+    }
+    const posts = await prisma4.wallPost.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: limit * 2,
+      select: {
+        id: true,
+        mediaUrls: true,
+        mediaType: true,
+        content: true,
+        category: true,
+        likesCount: true,
+        commentsCount: true,
+        createdAt: true
+      }
+    });
+    const media = posts.filter((p) => {
+      const urls = Array.isArray(p.mediaUrls) ? p.mediaUrls : [];
+      return urls.length > 0 && urls[0];
+    }).flatMap((p) => {
+      const urls = p.mediaUrls;
+      return urls.map((url, idx) => ({
+        id: `${p.id}-${idx}`,
+        postId: p.id,
+        url,
+        mediaType: p.mediaType || "image",
+        category: p.category || null,
+        caption: p.content || "",
+        likesCount: p.likesCount,
+        commentsCount: p.commentsCount,
+        createdAt: p.createdAt
+      }));
+    }).slice(0, limit);
+    return res.json({ media });
+  } catch (error) {
+    console.error("Error fetching user media:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+router3.delete("/photos/:id", async (req2, res) => {
+  try {
+    const userId = req2.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ error: "Utilisateur non authentifi\xE9" });
+    }
+    const photo = await prisma4.userPhoto.findUnique({ where: { id: req2.params.id } });
+    if (!photo || photo.userId !== userId) {
+      return res.status(404).json({ error: "Photo non trouv\xE9e" });
+    }
+    const filePath = import_path2.default.join("public", photo.url);
+    if (import_fs3.default.existsSync(filePath)) {
+      import_fs3.default.unlinkSync(filePath);
+    }
+    await prisma4.userPhoto.delete({ where: { id: req2.params.id } });
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting photo:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
 var profile_default = router3;
 
 // src/routes/modules.ts
@@ -11252,6 +11525,13 @@ router9.post("/", authMiddleware, requireRole2(["admin", "super_admin"]), async 
       res.status(409).json({ message: "Un utilisateur avec cet e-mail est d\xE9j\xE0 membre de cette organisation." });
       return;
     }
+    const existingNetworkUser = await db.user.findUnique({ where: { email } });
+    if (existingNetworkUser) {
+      res.status(409).json({
+        message: "Cette adresse e-mail est d\xE9j\xE0 utilis\xE9e par un utilisateur du r\xE9seau Zhiive. L'invit\xE9 doit utiliser une adresse e-mail diff\xE9rente."
+      });
+      return;
+    }
     const role = await db.role.findFirst({
       where: {
         name: roleName,
@@ -11277,9 +11557,6 @@ router9.post("/", authMiddleware, requireRole2(["admin", "super_admin"]), async 
     if (existingInvitation) {
       await db.invitation.delete({ where: { id: existingInvitation.id } });
     }
-    const targetUser = await db.user.findUnique({
-      where: { email }
-    });
     const token = (0, import_uuid2.v4)();
     const expiresAt = /* @__PURE__ */ new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
@@ -11297,9 +11574,6 @@ router9.post("/", authMiddleware, requireRole2(["admin", "super_admin"]), async 
       status: "PENDING",
       createWorkspaceAccount: createWorkspaceAccount || false
     };
-    if (targetUser) {
-      invitationData.User_Invitation_targetUserIdToUser = { connect: { id: targetUser.id } };
-    }
     const newInvitation = await db.invitation.create({
       data: invitationData,
       include: {
@@ -11771,6 +12045,7 @@ var invitations_default = router9;
 // src/routes/organizations.ts
 var import_express11 = require("express");
 init_database();
+var import_client4 = require("@prisma/client");
 var import_zod2 = require("zod");
 var import_express_rate_limit = __toESM(require("express-rate-limit"), 1);
 var import_crypto5 = require("crypto");
@@ -11938,6 +12213,8 @@ var organizationCreateSchema = import_zod2.z.object({
   website: import_zod2.z.string().url("Site web doit \xEAtre une URL valide").max(255, "Site web maximum 255 caract\xE8res").optional(),
   phone: import_zod2.z.string().max(20, "T\xE9l\xE9phone maximum 20 caract\xE8res").regex(/^[\d\s\-+().]+$/, "Num\xE9ro de t\xE9l\xE9phone contient des caract\xE8res non autoris\xE9s").optional(),
   address: import_zod2.z.string().max(500, "Adresse maximum 500 caract\xE8res").optional(),
+  vatNumber: import_zod2.z.string().max(30, "Num\xE9ro de TVA maximum 30 caract\xE8res").optional(),
+  email: import_zod2.z.string().email("Email invalide").max(255, "Email maximum 255 caract\xE8res").optional(),
   // 🌟 GOOGLE WORKSPACE CONFIGURATION
   googleWorkspace: import_zod2.z.object({
     enabled: import_zod2.z.boolean().default(false),
@@ -12278,10 +12555,12 @@ router10.post("/", organizationsCreateRateLimit, requireRole2(["super_admin"]), 
       name: sanitizeString(data.name),
       description: data.description ? sanitizeString(data.description) : null,
       status: (data.status || "ACTIVE").toUpperCase(),
-      // 📞 NOUVEAUX CHAMPS DE CONTACT
+      // 📞 CHAMPS DE CONTACT
       website: data.website ? sanitizeString(data.website) : null,
       phone: data.phone ? sanitizeString(data.phone) : null,
-      address: data.address ? sanitizeString(data.address) : null
+      address: data.address ? sanitizeString(data.address) : null,
+      vatNumber: data.vatNumber ? sanitizeString(data.vatNumber) : null,
+      email: data.email ? sanitizeString(data.email) : null
     };
     console.log("[ORGANIZATIONS] Donn\xE9es sanitis\xE9es:", sanitizedData);
     const existingOrg = await prisma7.organization.findFirst({
@@ -12310,6 +12589,8 @@ router10.post("/", organizationsCreateRateLimit, requireRole2(["super_admin"]), 
           website: sanitizedData.website,
           phone: sanitizedData.phone,
           address: sanitizedData.address,
+          vatNumber: sanitizedData.vatNumber,
+          email: sanitizedData.email,
           createdAt: now,
           updatedAt: now
         }
@@ -12779,6 +13060,185 @@ router10.get("/:id/google-workspace/domain-status", requireRole2(["admin", "supe
     });
   }
 });
+var createMyOrgSchema = import_zod2.z.object({
+  name: import_zod2.z.string().min(2, "Nom organisation minimum 2 caract\xE8res").max(100, "Nom organisation maximum 100 caract\xE8res").regex(/^[a-zA-ZÀ-ÿ0-9\s\-_'.&(),]+$/, "Nom organisation contient des caract\xE8res non autoris\xE9s"),
+  address: import_zod2.z.string().min(5, "Adresse minimum 5 caract\xE8res").max(500, "Adresse maximum 500 caract\xE8res"),
+  vatNumber: import_zod2.z.string().min(2, "Num\xE9ro de TVA minimum 2 caract\xE8res").max(30, "Num\xE9ro de TVA maximum 30 caract\xE8res"),
+  phone: import_zod2.z.string().min(5, "T\xE9l\xE9phone minimum 5 caract\xE8res").max(20, "T\xE9l\xE9phone maximum 20 caract\xE8res").regex(/^[\d\s\-+().]+$/, "Num\xE9ro de t\xE9l\xE9phone contient des caract\xE8res non autoris\xE9s"),
+  email: import_zod2.z.string().email("Adresse email invalide").max(255, "Email maximum 255 caract\xE8res"),
+  description: import_zod2.z.string().max(500, "Description maximum 500 caract\xE8res").optional()
+});
+var createMyOrgRateLimit = (0, import_express_rate_limit.default)({
+  windowMs: 60 * 60 * 1e3,
+  // 1 heure
+  max: 3,
+  // 3 tentatives par heure
+  skipSuccessfulRequests: false,
+  handler: (_req, res) => {
+    res.status(429).json({
+      success: false,
+      message: "Trop de tentatives. R\xE9essayez dans 1 heure."
+    });
+  }
+});
+router10.post("/create-my-org", createMyOrgRateLimit, async (req2, res) => {
+  try {
+    const userId = req2.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Non authentifi\xE9" });
+    }
+    const existingMembership = await prisma7.userOrganization.findFirst({
+      where: { userId }
+    });
+    if (existingMembership) {
+      return res.status(400).json({
+        success: false,
+        message: "Vous \xEAtes d\xE9j\xE0 membre d'une organisation"
+      });
+    }
+    const validation = createMyOrgSchema.safeParse(req2.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: validation.error.errors.map((e) => e.message).join(", ")
+      });
+    }
+    const data = validation.data;
+    const existingOrg = await prisma7.organization.findFirst({
+      where: { name: { equals: sanitizeString(data.name), mode: "insensitive" } }
+    });
+    if (existingOrg) {
+      return res.status(409).json({
+        success: false,
+        message: "Une organisation avec ce nom existe d\xE9j\xE0"
+      });
+    }
+    const now = /* @__PURE__ */ new Date();
+    const orgId = (0, import_crypto5.randomUUID)();
+    const result = await prisma7.$transaction(async (tx) => {
+      const org = await tx.organization.create({
+        data: {
+          id: orgId,
+          name: sanitizeString(data.name),
+          address: sanitizeString(data.address),
+          vatNumber: sanitizeString(data.vatNumber),
+          phone: sanitizeString(data.phone),
+          email: sanitizeString(data.email),
+          description: data.description ? sanitizeString(data.description) : null,
+          status: "active",
+          createdAt: now,
+          updatedAt: now
+        }
+      });
+      const adminRole = await tx.role.create({
+        data: {
+          id: (0, import_crypto5.randomUUID)(),
+          name: "admin",
+          label: "Administrateur",
+          organizationId: orgId,
+          updatedAt: now
+        }
+      });
+      await tx.role.create({
+        data: {
+          id: (0, import_crypto5.randomUUID)(),
+          name: "user",
+          label: "Utilisateur",
+          organizationId: orgId,
+          updatedAt: now
+        }
+      });
+      await tx.userOrganization.create({
+        data: {
+          id: (0, import_crypto5.randomUUID)(),
+          userId,
+          organizationId: orgId,
+          roleId: adminRole.id,
+          status: import_client4.UserOrganizationStatus.ACTIVE,
+          updatedAt: now
+        }
+      });
+      return org;
+    });
+    console.log(`[ORGANIZATIONS] Free user ${userId} a cr\xE9\xE9 l'organisation "${result.name}" (${result.id})`);
+    res.status(201).json({
+      success: true,
+      message: `Organisation "${result.name}" cr\xE9\xE9e avec succ\xE8s. Vous en \xEAtes l'administrateur.`,
+      organization: { id: result.id, name: result.name }
+    });
+  } catch (error) {
+    console.error("[ORGANIZATIONS] Erreur create-my-org:", error);
+    if (error instanceof import_client.Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return res.status(409).json({
+        success: false,
+        message: "Une organisation avec ce nom existe d\xE9j\xE0"
+      });
+    }
+    res.status(500).json({
+      success: false,
+      message: "Erreur serveur lors de la cr\xE9ation de l'organisation"
+    });
+  }
+});
+router10.post("/:id/logo", async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const userId = req2.user?.userId;
+    if (!userId) return res.status(401).json({ success: false, message: "Non authentifi\xE9" });
+    const userOrg = await prisma7.userOrganization.findFirst({
+      where: { userId, organizationId: id },
+      include: { Role: true }
+    });
+    const user = await prisma7.user.findUnique({ where: { id: userId }, select: { role: true } });
+    const isSuperAdmin2 = user?.role === "super_admin";
+    if (!userOrg && !isSuperAdmin2) {
+      return res.status(403).json({ success: false, message: "Acc\xE8s refus\xE9" });
+    }
+    const files = req2.files;
+    if (!files || !files.logo) {
+      return res.status(400).json({ success: false, message: 'Aucun fichier upload\xE9. Envoyez un champ "logo".' });
+    }
+    const file = files.logo;
+    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml"];
+    if (!allowedTypes.includes(file.mimetype)) {
+      return res.status(400).json({ success: false, message: "Type de fichier non support\xE9. Utilisez JPG, PNG, GIF, WEBP ou SVG." });
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      return res.status(400).json({ success: false, message: "Le fichier ne doit pas d\xE9passer 5 Mo." });
+    }
+    const path13 = await import("path");
+    const fs14 = await import("fs");
+    const { uploadExpressFile: uploadExpressFile2 } = await Promise.resolve().then(() => (init_storage(), storage_exports));
+    const ext = path13.default.extname(file.name);
+    const finalName = `${id}_${Date.now()}${ext}`;
+    const key2 = `org-logos/${finalName}`;
+    if (process.env.NODE_ENV !== "production") {
+      const destDir = path13.default.join("public", "uploads", "org-logos");
+      try {
+        if (fs14.default.existsSync(destDir)) {
+          const existing = fs14.default.readdirSync(destDir);
+          for (const f of existing) {
+            if (f.startsWith(id + "_") || f.startsWith(id + ".")) {
+              fs14.default.unlinkSync(path13.default.join(destDir, f));
+            }
+          }
+        }
+      } catch {
+      }
+    }
+    const logoUrl = await uploadExpressFile2(file, key2);
+    const updatedOrg = await prisma7.organization.update({
+      where: { id },
+      data: { logoUrl },
+      select: { id: true, name: true, logoUrl: true }
+    });
+    console.log(`\u2705 [POST /api/organizations/${id}/logo] Logo mis \xE0 jour: ${logoUrl}`);
+    res.json({ success: true, data: updatedOrg });
+  } catch (error) {
+    console.error("\u274C [POST /api/organizations/:id/logo] Erreur:", error);
+    res.status(500).json({ success: false, message: "Erreur serveur lors de l'upload du logo" });
+  }
+});
 var organizations_default = router10;
 
 // src/routes/autoGoogleAuthRoutes.ts
@@ -13083,7 +13543,7 @@ init_GoogleOAuthCore();
 var import_express13 = require("express");
 var import_formidable = __toESM(require("formidable"), 1);
 var import_fs4 = __toESM(require("fs"), 1);
-var import_path2 = __toESM(require("path"), 1);
+var import_path3 = __toESM(require("path"), 1);
 var formidableMiddleware = (req2, res, next) => {
   console.log("[DEBUG FORMIDABLE] ==================== D\xC9BUT ANALYSE REQU\xCATE ====================");
   console.log("[DEBUG FORMIDABLE] \u{1F4E5} Headers re\xE7us:", JSON.stringify(req2.headers, null, 2));
@@ -13107,12 +13567,12 @@ var formidableMiddleware = (req2, res, next) => {
     multiples: true,
     keepExtensions: true,
     encoding: "utf-8",
-    uploadDir: import_path2.default.join(process.cwd(), "uploads"),
+    uploadDir: import_path3.default.join(process.cwd(), "uploads"),
     // Dossier temporaire
     hashAlgorithm: false
     // Pas de hash pour la performance
   });
-  const uploadDir = import_path2.default.join(process.cwd(), "uploads");
+  const uploadDir = import_path3.default.join(process.cwd(), "uploads");
   if (!import_fs4.default.existsSync(uploadDir)) {
     import_fs4.default.mkdirSync(uploadDir, { recursive: true });
   }
@@ -13211,8 +13671,8 @@ var gmail_default = router12;
 // src/security/securityLogger.ts
 var import_winston = __toESM(require("winston"), 1);
 var import_winston_daily_rotate_file = __toESM(require("winston-daily-rotate-file"), 1);
-var import_path3 = __toESM(require("path"), 1);
-var isProduction2 = process.env.NODE_ENV === "production";
+var import_path4 = __toESM(require("path"), 1);
+var isProduction3 = process.env.NODE_ENV === "production";
 var transports = [
   // Console pour tous les environnements
   new import_winston.default.transports.Console({
@@ -13226,11 +13686,11 @@ var transports = [
     )
   })
 ];
-if (!isProduction2) {
+if (!isProduction3) {
   transports.push(
     // Fichier de log rotatif pour la sécurité
     new import_winston_daily_rotate_file.default({
-      filename: import_path3.default.join(process.cwd(), "logs", "security-%DATE%.log"),
+      filename: import_path4.default.join(process.cwd(), "logs", "security-%DATE%.log"),
       datePattern: "YYYY-MM-DD",
       zippedArchive: true,
       maxSize: "20m",
@@ -13240,7 +13700,7 @@ if (!isProduction2) {
     }),
     // Fichier séparé pour les erreurs critiques
     new import_winston_daily_rotate_file.default({
-      filename: import_path3.default.join(process.cwd(), "logs", "security-errors-%DATE%.log"),
+      filename: import_path4.default.join(process.cwd(), "logs", "security-errors-%DATE%.log"),
       datePattern: "YYYY-MM-DD",
       level: "error",
       zippedArchive: true,
@@ -13332,8 +13792,8 @@ function getFrontendUrl() {
     return frontendUrl;
   }
   if (process.env.NODE_ENV === "production") {
-    console.log("[GOOGLE-AUTH] \u{1F310} Production d\xE9tect\xE9e, FRONTEND_URL: https://app.2thier.be");
-    return "https://app.2thier.be";
+    console.log("[GOOGLE-AUTH] \u{1F310} Production d\xE9tect\xE9e, FRONTEND_URL: https://www.zhiive.com");
+    return "https://www.zhiive.com";
   }
   console.log("[GOOGLE-AUTH] \u{1F3E0} Local d\xE9tect\xE9, FRONTEND_URL: http://localhost:5173");
   return "http://localhost:5173";
@@ -13354,8 +13814,8 @@ function getOAuthRedirectUri(hostHeader) {
     });
     return redirectUri2;
   }
-  if (host.includes("app.2thier.be") || host.includes("2thier.be")) {
-    const redirectUri2 = "https://app.2thier.be/api/google-auth/callback";
+  if (host.includes("zhiive.com") || host.includes("app.2thier.be") || host.includes("2thier.be")) {
+    const redirectUri2 = "https://www.zhiive.com/api/google-auth/callback";
     console.log("[GOOGLE-AUTH] \u{1F310} Production d\xE9tect\xE9e:", { host, redirectUri: redirectUri2 });
     return redirectUri2;
   }
@@ -15042,7 +15502,7 @@ router16.get("/users/:userId/status", requireRole2(["admin", "super_admin"]), as
   try {
     const { userId } = req2.params;
     const requestingUser = req2.user;
-    const targetUser = await prisma8.user.findUnique({
+    const targetUser2 = await prisma8.user.findUnique({
       where: { id: userId },
       include: {
         UserOrganization: {
@@ -15056,13 +15516,13 @@ router16.get("/users/:userId/status", requireRole2(["admin", "super_admin"]), as
         }
       }
     });
-    if (!targetUser) {
+    if (!targetUser2) {
       return res.status(404).json({
         success: false,
         message: "Utilisateur non trouv\xE9"
       });
     }
-    const userOrg = targetUser.UserOrganization?.[0];
+    const userOrg = targetUser2.UserOrganization?.[0];
     if (requestingUser?.role !== "super_admin" && requestingUser?.organizationId !== userOrg?.organizationId) {
       return res.status(403).json({
         success: false,
@@ -15083,7 +15543,7 @@ router16.get("/users/:userId/status", requireRole2(["admin", "super_admin"]), as
     };
     let suggestedEmail = "";
     if (googleConfig?.domain) {
-      suggestedEmail = generateEmail(targetUser.firstName, targetUser.lastName, googleConfig.domain);
+      suggestedEmail = generateEmail(targetUser2.firstName, targetUser2.lastName, googleConfig.domain);
     }
     const status = {
       hasGoogleAccount: !!googleUserStatus,
@@ -15121,7 +15581,7 @@ router16.post("/users/create", requireRole2(["admin", "super_admin"]), async (re
         message: "userId et email sont requis"
       });
     }
-    const targetUser = await prisma8.user.findUnique({
+    const targetUser2 = await prisma8.user.findUnique({
       where: { id: userId },
       include: {
         UserOrganization: {
@@ -15135,13 +15595,13 @@ router16.post("/users/create", requireRole2(["admin", "super_admin"]), async (re
         }
       }
     });
-    if (!targetUser) {
+    if (!targetUser2) {
       return res.status(404).json({
         success: false,
         message: "Utilisateur non trouv\xE9"
       });
     }
-    const userOrg = targetUser.UserOrganization?.[0];
+    const userOrg = targetUser2.UserOrganization?.[0];
     if (requestingUser?.role !== "super_admin" && requestingUser?.organizationId !== userOrg?.organizationId) {
       return res.status(403).json({
         success: false,
@@ -16473,7 +16933,14 @@ router18.get("/", async (req2, res) => {
     const statusFilter = includeRead ? { status: { in: ["PENDING", "READ"] } } : { status: "PENDING" };
     if (user.role === "super_admin") {
       const notifications2 = await db.notification.findMany({
-        where: statusFilter,
+        where: {
+          ...statusFilter,
+          // Don't show other users' personal social notifications
+          OR: [
+            { type: { notIn: ["FRIEND_REQUEST_RECEIVED", "FRIEND_REQUEST_ACCEPTED"] } },
+            { userId }
+          ]
+        },
         orderBy: { createdAt: "desc" },
         take: 100,
         include: { Organization: true }
@@ -18159,8 +18626,6 @@ var settingsRoutes_default = router20;
 
 // src/routes/leadsRoutes.ts
 var import_express22 = require("express");
-var import_fs5 = __toESM(require("fs"), 1);
-var import_path4 = __toESM(require("path"), 1);
 init_prisma();
 
 // src/services/formResponsePdfGenerator.ts
@@ -18266,6 +18731,7 @@ async function generateFormResponsePdf(data) {
 }
 
 // src/routes/leadsRoutes.ts
+init_storage();
 var router21 = (0, import_express22.Router)();
 router21.use(authMiddleware);
 router21.get("/", async (req2, res) => {
@@ -18669,14 +19135,9 @@ router21.post("/:id/form-pdf/regenerate", async (req2, res) => {
       leadNumber: lead.leadNumber || void 0
     };
     const pdfBuffer = await generateFormResponsePdf(pdfData);
-    const uploadsDir2 = import_path4.default.join(process.cwd(), "public", "uploads", "form-responses");
-    if (!import_fs5.default.existsSync(uploadsDir2)) {
-      import_fs5.default.mkdirSync(uploadsDir2, { recursive: true });
-    }
     const pdfFileName = `formulaire-${form.slug}-${lead.id.substring(0, 8)}-${Date.now()}.pdf`;
-    const pdfPath = import_path4.default.join(uploadsDir2, pdfFileName);
-    import_fs5.default.writeFileSync(pdfPath, pdfBuffer);
-    const pdfUrl = `/uploads/form-responses/${pdfFileName}`;
+    const key2 = `form-responses/${pdfFileName}`;
+    const pdfUrl = await uploadFile(pdfBuffer, key2, "application/pdf");
     const existingData = typeof lead.data === "object" && lead.data ? lead.data : {};
     const updatedLead = await db.lead.update({
       where: { id: lead.id },
@@ -18977,7 +19438,7 @@ var leadsRoutes_default = router21;
 var import_express24 = require("express");
 init_database();
 var import_zod5 = require("zod");
-var import_fs6 = __toESM(require("fs"), 1);
+var import_fs5 = __toESM(require("fs"), 1);
 var import_path5 = __toESM(require("path"), 1);
 var import_crypto13 = __toESM(require("crypto"), 1);
 
@@ -21357,7 +21818,7 @@ router22.post("/chantiers/:chantierId/reception/send-to-client", authenticateTok
           secure: smtpConfig.secure || false,
           auth: { user: smtpConfig.user, pass: decryptedPassword }
         });
-        const receptionUrl = `${req2.headers.origin || "https://app.2thier.be"}/reception/${reception.clientAccessToken}`;
+        const receptionUrl = `${req2.headers.origin || "https://www.zhiive.com"}/reception/${reception.clientAccessToken}`;
         await transporter.sendMail({
           from: smtpConfig.from || smtpConfig.user,
           to: reception.clientEmail,
@@ -21628,6 +22089,7 @@ router22.post("/events/:id/submit-commercial-correction", authenticateToken, asy
 var chantier_workflow_default = router22;
 
 // src/routes/chantiersRoutes.ts
+init_storage();
 var router23 = (0, import_express24.Router)();
 var createChantierSchema = import_zod5.z.object({
   leadId: import_zod5.z.string().optional(),
@@ -22331,11 +22793,8 @@ router23.post("/from-lead-document", authenticateToken, async (req2, res) => {
       const timestamp = Date.now();
       const safeName = uploadedFile.name.replace(/[^a-zA-Z0-9.-]/g, "_");
       const filename = `${timestamp}-${safeName}`;
-      const uploadDir = import_path5.default.join(process.cwd(), "public", "uploads", "chantiers");
-      import_fs6.default.mkdirSync(uploadDir, { recursive: true });
-      const filePath = import_path5.default.join(uploadDir, filename);
-      await uploadedFile.mv(filePath);
-      documentUrl = `/uploads/chantiers/${filename}`;
+      const key2 = `chantiers/${filename}`;
+      documentUrl = await uploadExpressFile(uploadedFile, key2);
       documentName = uploadedFile.name;
     }
     let statusId;
@@ -22735,8 +23194,8 @@ router23.delete("/:id", authenticateToken, isAdmin, async (req2, res) => {
     }
     if (existing.documentUrl) {
       const filePath = import_path5.default.join(process.cwd(), "public", existing.documentUrl);
-      if (import_fs6.default.existsSync(filePath)) {
-        import_fs6.default.unlinkSync(filePath);
+      if (import_fs5.default.existsSync(filePath)) {
+        import_fs5.default.unlinkSync(filePath);
       }
     }
     await db.chantier.delete({ where: { id } });
@@ -28829,9 +29288,9 @@ router25.post("/generated/:id/send-email", async (req2, res) => {
             if (doc.storageType === "GOOGLE_DRIVE" && doc.driveFileId) {
               fileBuffer = await downloadDriveFileAsBuffer(organizationId, doc.driveFileId, userId);
             } else if (doc.localPath) {
-              const fs16 = await import("fs/promises");
+              const fs14 = await import("fs/promises");
               try {
-                fileBuffer = await fs16.readFile(doc.localPath);
+                fileBuffer = await fs14.readFile(doc.localPath);
               } catch {
               }
             } else if (doc.externalUrl) {
@@ -30385,8 +30844,7 @@ var e_signature_default = router26;
 var import_express28 = require("express");
 init_database();
 var import_zod8 = require("zod");
-var import_fs7 = __toESM(require("fs"), 1);
-var import_path6 = __toESM(require("path"), 1);
+init_storage();
 var router27 = (0, import_express28.Router)();
 function getOrgId(req2) {
   return req2.headers["x-organization-id"] || null;
@@ -30407,25 +30865,13 @@ function endOfWeek() {
   end.setHours(23, 59, 59, 999);
   return end;
 }
-var POINTAGE_UPLOADS_DIR = process.env.NODE_ENV === "production" ? import_path6.default.resolve("/tmp", "uploads", "pointages") : import_path6.default.resolve(process.cwd(), "public", "uploads", "pointages");
-try {
-  if (!import_fs7.default.existsSync(POINTAGE_UPLOADS_DIR)) {
-    import_fs7.default.mkdirSync(POINTAGE_UPLOADS_DIR, { recursive: true });
-  }
-} catch (err) {
-  console.warn("[Teams] \u26A0\uFE0F Impossible de cr\xE9er le dossier pointages:", err.message);
-}
-function savePointagePhoto(base64Data, prefix) {
+async function savePointagePhoto(base64Data, prefix) {
   const cleanBase64 = base64Data.replace(/^data:image\/\w+;base64,/, "");
   const buffer = Buffer.from(cleanBase64, "base64");
   const filename = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
-  const filepath = import_path6.default.join(POINTAGE_UPLOADS_DIR, filename);
-  try {
-    import_fs7.default.writeFileSync(filepath, buffer);
-  } catch (err) {
-    console.error("[Teams] \u274C Erreur sauvegarde photo pointage:", err.message);
-  }
-  return `/uploads/pointages/${filename}`;
+  const key2 = `pointages/${filename}`;
+  const url = await uploadFile(buffer, key2, "image/jpeg");
+  return url;
 }
 function haversineDistance(lat1, lon1, lat2, lon2) {
   const R = 6371e3;
@@ -31066,7 +31512,7 @@ router27.post("/time-entries", authenticateToken, requireChantierAction("pointag
     let clockInPhotoUrl = null;
     if (photo) {
       try {
-        clockInPhotoUrl = savePointagePhoto(photo, "in");
+        clockInPhotoUrl = await savePointagePhoto(photo, "in");
       } catch (e) {
         console.error("[Pointage] Erreur sauvegarde photo:", e);
       }
@@ -31226,7 +31672,7 @@ router27.put("/time-entries/:id/clock-out", authenticateToken, requireChantierAc
     let clockOutPhotoUrl = null;
     if (photo) {
       try {
-        clockOutPhotoUrl = savePointagePhoto(photo, "out");
+        clockOutPhotoUrl = await savePointagePhoto(photo, "out");
       } catch (e) {
         console.error("[Pointage] Erreur sauvegarde photo sortie:", e);
       }
@@ -32386,33 +32832,52 @@ var usersRoutes_default = router29;
 
 // src/routes/adminPasswordRoutes.ts
 var import_express31 = require("express");
+init_database();
 var router30 = (0, import_express31.Router)();
 router30.use(authenticateToken);
-router30.get("/users-emails", (_req, res) => {
+router30.get("/users-emails", async (req2, res) => {
   console.log("[ADMIN-PASSWORD] GET /admin-password/users-emails - R\xE9cup\xE9ration des emails");
-  const defaultUsersEmails = [
-    {
-      id: "1",
-      userId: "1",
-      firstName: "Admin",
-      lastName: "System",
-      email: "admin@2thier.be",
-      organization: "2thier.be",
-      hasEmailConfig: true,
-      lastEmailCheck: (/* @__PURE__ */ new Date()).toISOString()
-    },
-    {
-      id: "2",
-      userId: "2",
-      firstName: "John",
-      lastName: "Doe",
-      email: "john.doe@example.com",
-      organization: "Example Corp",
-      hasEmailConfig: false,
-      lastEmailCheck: null
+  try {
+    const organizationId = req2.query.organizationId;
+    if (!organizationId) {
+      return res.json({ success: true, data: [] });
     }
-  ];
-  res.json(defaultUsersEmails);
+    const usersInOrg = await db.user.findMany({
+      where: {
+        UserOrganization: {
+          some: { organizationId }
+        }
+      },
+      include: {
+        UserOrganization: {
+          where: { organizationId },
+          include: {
+            Organization: { select: { id: true, name: true } },
+            Role: { select: { id: true, name: true, label: true } }
+          }
+        }
+      },
+      orderBy: { lastName: "asc" }
+    });
+    const data = usersInOrg.map((u) => {
+      const uo = u.UserOrganization[0];
+      return {
+        id: u.id,
+        userId: u.id,
+        firstName: u.firstName || "",
+        lastName: u.lastName || "",
+        email: u.email,
+        organization: uo?.Organization || { id: organizationId, name: "" },
+        role: uo?.Role || null,
+        hasEmailConfig: !!u.EmailAccount,
+        status: uo?.status || "ACTIVE"
+      };
+    });
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error("[ADMIN-PASSWORD] Erreur:", error);
+    res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
 });
 router30.get("/users-services", (_req, res) => {
   console.log("[ADMIN-PASSWORD] GET /admin-password/users-services - R\xE9cup\xE9ration des utilisateurs et services");
@@ -32453,6 +32918,19 @@ router30.post("/configure-email", (_req, res) => {
     message: "Configuration email mise \xE0 jour avec succ\xE8s",
     configuredAt: (/* @__PURE__ */ new Date()).toISOString()
   });
+});
+router30.post("/update-email-config", async (req2, res) => {
+  console.log("[ADMIN-PASSWORD] POST /admin-password/update-email-config");
+  try {
+    const { userId, generatedEmail } = req2.body;
+    if (!userId) {
+      return res.status(400).json({ success: false, message: "userId requis" });
+    }
+    res.json({ success: true, message: "Configuration email mise \xE0 jour" });
+  } catch (error) {
+    console.error("[ADMIN-PASSWORD] Erreur update-email-config:", error);
+    res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
 });
 router30.put("/update-password", (_req, res) => {
   console.log("[ADMIN-PASSWORD] PUT /admin-password/update-password - Mise \xE0 jour mot de passe");
@@ -34772,9 +35250,9 @@ function getBackendBaseUrl(options = {}) {
   }
   throw new Error("BACKEND_URL/APP_URL/API_URL non configur\xE9e (impossible de construire une URL en production)");
 }
-function joinUrl(base, path15) {
+function joinUrl(base, path13) {
   const cleanBase = base.endsWith("/") ? base.slice(0, -1) : base;
-  const cleanPath = path15.startsWith("/") ? path15 : `/${path15}`;
+  const cleanPath = path13.startsWith("/") ? path13 : `/${path13}`;
   return `${cleanBase}${cleanPath}`;
 }
 
@@ -37652,12 +38130,12 @@ var telnyx_default = router40;
 // src/routes/telnyx.ts
 var router41 = (0, import_express42.Router)();
 router41.use((req2, res, next) => {
-  const path15 = req2.path || "";
+  const path13 = req2.path || "";
   const originalUrl = req2.originalUrl || "";
-  const isWebhook = path15 === "/webhooks" || path15.startsWith("/webhooks/") || originalUrl.includes("/api/telnyx/webhooks");
+  const isWebhook = path13 === "/webhooks" || path13.startsWith("/webhooks/") || originalUrl.includes("/api/telnyx/webhooks");
   if (isWebhook) {
     if (process.env.TELNYX_DEBUG_WEBHOOKS === "1") {
-      console.log("\u{1F9F7} [Telnyx Webhook Debug] bypass auth", { path: path15, originalUrl });
+      console.log("\u{1F9F7} [Telnyx Webhook Debug] bypass auth", { path: path13, originalUrl });
     }
     return next();
   }
@@ -38713,8 +39191,8 @@ var analytics_default = router45;
 
 // src/routes/ai.ts
 var import_express47 = __toESM(require("express"), 1);
-var import_fs8 = __toESM(require("fs"), 1);
-var import_path7 = __toESM(require("path"), 1);
+var import_fs6 = __toESM(require("fs"), 1);
+var import_path6 = __toESM(require("path"), 1);
 init_prisma();
 var import_crypto21 = require("crypto");
 var geminiSingleton = getGeminiService();
@@ -39370,10 +39848,10 @@ function buildChatPrompt({ message, context, conversationHistory, analysis, memo
       if (source) parts.push(`\u{1F4CD} Source: ${source}`);
       if (createdAt) parts.push(`\u{1F550} Contact depuis: ${new Date(createdAt).toLocaleDateString("fr-FR")}`);
       if (Array.isArray(formSubmissions) && formSubmissions.length > 0) {
-        const formData = formSubmissions.map((fs16) => {
-          const formTitle = fs16.formTitle || "Formulaire";
-          const data = fs16.data;
-          if (!data || typeof data !== "object") return `${formTitle} (${new Date(fs16.createdAt).toLocaleDateString("fr-FR")})`;
+        const formData = formSubmissions.map((fs14) => {
+          const formTitle = fs14.formTitle || "Formulaire";
+          const data = fs14.data;
+          if (!data || typeof data !== "object") return `${formTitle} (${new Date(fs14.createdAt).toLocaleDateString("fr-FR")})`;
           const dataObj = data;
           const allFields = Object.entries(dataObj).map(([k, v]) => {
             const cleanKey = k.replace(/([A-Z])/g, " $1").toLowerCase().trim().split(" ").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
@@ -39381,7 +39859,7 @@ function buildChatPrompt({ message, context, conversationHistory, analysis, memo
             val = val.slice(0, 80);
             return `${cleanKey}: ${val}`;
           }).join(" | ");
-          return `${formTitle} (${new Date(fs16.createdAt).toLocaleDateString("fr-FR")}): ${allFields}`;
+          return `${formTitle} (${new Date(fs14.createdAt).toLocaleDateString("fr-FR")}): ${allFields}`;
         }).join("\n");
         parts.push(`\u{1F4CB} FORMULAIRES REMPLIS (\xC0 UTILISER SP\xC9CIFIQUEMENT!):
 ${formData}`);
@@ -39537,22 +40015,22 @@ var __AI_FILE_SUMMARY_CACHE = {};
 var __AI_FILE_SUMMARY_TTL = 9e4;
 function __aiBuildCodeIndex() {
   if (__AI_CODE_INDEX) return __AI_CODE_INDEX;
-  const base = import_path7.default.join(process.cwd(), "src");
+  const base = import_path6.default.join(process.cwd(), "src");
   const acc = [];
   function walk(dir, depth = 0) {
     if (depth > 6) return;
     let entries = [];
     try {
-      entries = import_fs8.default.readdirSync(dir);
+      entries = import_fs6.default.readdirSync(dir);
     } catch {
       return;
     }
     for (const e of entries) {
-      const full = import_path7.default.join(dir, e);
+      const full = import_path6.default.join(dir, e);
       if (/node_modules|\.git|dist|build/.test(full)) continue;
       let st;
       try {
-        st = import_fs8.default.statSync(full);
+        st = import_fs6.default.statSync(full);
       } catch {
         continue;
       }
@@ -39570,8 +40048,8 @@ function __aiBuildSymbolIndex() {
   const m = {};
   for (const rel of idx.slice(0, 1200)) {
     try {
-      const abs2 = import_path7.default.join(process.cwd(), "src", rel);
-      const content = import_fs8.default.readFileSync(abs2, "utf8");
+      const abs2 = import_path6.default.join(process.cwd(), "src", rel);
+      const content = import_fs6.default.readFileSync(abs2, "utf8");
       const regexes = [
         /export\s+class\s+([A-Za-z0-9_]+)/g,
         /export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)/g,
@@ -39627,9 +40105,9 @@ function __aiSummarizeFile(rel) {
     const now = Date.now();
     const cached = __AI_FILE_SUMMARY_CACHE[rel];
     if (cached && now - cached.ts < __AI_FILE_SUMMARY_TTL) return cached.summary;
-    const abs2 = import_path7.default.join(process.cwd(), "src", rel);
-    if (!import_fs8.default.existsSync(abs2)) return null;
-    const content = import_fs8.default.readFileSync(abs2, "utf8");
+    const abs2 = import_path6.default.join(process.cwd(), "src", rel);
+    if (!import_fs6.default.existsSync(abs2)) return null;
+    const content = import_fs6.default.readFileSync(abs2, "utf8");
     const lines = content.split(/\r?\n/);
     const first = lines.slice(0, 80).join("\n");
     const importMatches = Array.from(content.matchAll(/import\s+[^;]+from\s+['"]([^'".][^'"/]*)['"]/g)).map((m) => m[1]).slice(0, 8);
@@ -39741,12 +40219,12 @@ Restitue: Points forts, Probl\xE8mes, Am\xE9liorations, Ajouts \xE0 envisager, \
     try {
       let resolvePageFile = function(name) {
         if (!name) return null;
-        const base = import_path7.default.join(process.cwd(), "src", "pages");
-        if (name.endsWith(".tsx") && import_fs8.default.existsSync(import_path7.default.join(process.cwd(), "src", name))) return name;
-        const candidate = import_path7.default.join(base, name.endsWith(".tsx") ? name : name + ".tsx");
-        if (import_fs8.default.existsSync(candidate)) return "pages/" + import_path7.default.basename(candidate);
+        const base = import_path6.default.join(process.cwd(), "src", "pages");
+        if (name.endsWith(".tsx") && import_fs6.default.existsSync(import_path6.default.join(process.cwd(), "src", name))) return name;
+        const candidate = import_path6.default.join(base, name.endsWith(".tsx") ? name : name + ".tsx");
+        if (import_fs6.default.existsSync(candidate)) return "pages/" + import_path6.default.basename(candidate);
         try {
-          const entries = import_fs8.default.readdirSync(base);
+          const entries = import_fs6.default.readdirSync(base);
           const hit = entries.find((e) => e.toLowerCase() === (name.toLowerCase().endsWith(".tsx") ? name.toLowerCase() : name.toLowerCase() + ".tsx"));
           if (hit) return "pages/" + hit;
         } catch {
@@ -39759,11 +40237,11 @@ Restitue: Points forts, Probl\xE8mes, Am\xE9liorations, Ajouts \xE0 envisager, \
       const lowerMsg = message.toLowerCase();
       const wantAnalysis = /(analyse|audite|qualité|amélior|refactor|optimis|structure|complexité|lisibilité|accessibilité|ux|ui)/i.test(message);
       let featureKey = null;
-      const featureMapPath = import_path7.default.join(process.cwd(), "src", "feature-map.json");
+      const featureMapPath = import_path6.default.join(process.cwd(), "src", "feature-map.json");
       let featureMap = null;
-      if (import_fs8.default.existsSync(featureMapPath)) {
+      if (import_fs6.default.existsSync(featureMapPath)) {
         try {
-          featureMap = JSON.parse(import_fs8.default.readFileSync(featureMapPath, "utf8"));
+          featureMap = JSON.parse(import_fs6.default.readFileSync(featureMapPath, "utf8"));
         } catch {
         }
       }
@@ -39784,14 +40262,14 @@ Restitue: Points forts, Probl\xE8mes, Am\xE9liorations, Ajouts \xE0 envisager, \
       if (maybePage) pagePath = resolvePageFile(maybePage);
       if (!pagePath && /(page|mailpage|googlemailpage|inbox)/i.test(message)) {
         const guess = ["pages/GoogleMailPageFixed_New.tsx", "pages/GoogleMailPageFixed.tsx", "pages/GoogleMailPage.tsx", "pages/MailPage.tsx"];
-        pagePath = guess.find((g) => import_fs8.default.existsSync(import_path7.default.join(process.cwd(), "src", g))) || null;
+        pagePath = guess.find((g) => import_fs6.default.existsSync(import_path6.default.join(process.cwd(), "src", g))) || null;
       }
       if ((wantAnalysis || featureKey || pagePath) && (featureKey || pagePath)) {
         autoAnalysis = {};
-        if (pagePath && import_fs8.default.existsSync(import_path7.default.join(process.cwd(), "src", pagePath))) {
+        if (pagePath && import_fs6.default.existsSync(import_path6.default.join(process.cwd(), "src", pagePath))) {
           try {
-            const absPage = import_path7.default.join(process.cwd(), "src", pagePath);
-            const content = import_fs8.default.readFileSync(absPage, "utf8");
+            const absPage = import_path6.default.join(process.cwd(), "src", pagePath);
+            const content = import_fs6.default.readFileSync(absPage, "utf8");
             const linesArr = content.split(/\r?\n/);
             const hooksCount = (content.match(/\buse(State|Effect|Memo|Callback|Ref|Context|Reducer)\b/g) || []).length;
             const useEffectCount = (content.match(/\buseEffect\b/g) || []).length;
@@ -39830,10 +40308,10 @@ Restitue: Points forts, Probl\xE8mes, Am\xE9liorations, Ajouts \xE0 envisager, \
             const files = [...def.primaryPages || [], ...def.relatedServices || []].filter(Boolean).slice(0, 30);
             let totalLines = 0, totalHooks = 0, i18nYes = 0, antdYes = 0, tailwindYes = 0, count = 0;
             for (const f of files) {
-              const absF = import_path7.default.join(process.cwd(), f);
-              if (!import_fs8.default.existsSync(absF)) continue;
+              const absF = import_path6.default.join(process.cwd(), f);
+              if (!import_fs6.default.existsSync(absF)) continue;
               count++;
-              const content = import_fs8.default.readFileSync(absF, "utf8");
+              const content = import_fs6.default.readFileSync(absF, "utf8");
               const linesArr = content.split(/\r?\n/);
               totalLines += linesArr.length;
               const hooksCount = (content.match(/\buse(State|Effect|Memo|Callback|Ref|Context|Reducer)\b/g) || []).length;
@@ -40303,12 +40781,12 @@ router46.get("/context/lead/:id", async (req2, res) => {
         messages: wanted.has("messages") ? messages : void 0,
         upcomingEvents: wanted.has("events") ? upcomingEvents : void 0,
         timeline: wanted.has("timeline") ? timeline : void 0,
-        formSubmissions: formSubmissions.length > 0 ? formSubmissions.map((fs16) => ({
-          id: fs16.id,
-          formTitle: fs16.PublicForm?.title || fs16.PublicForm?.name || "Formulaire",
-          data: fs16.data,
-          createdAt: fs16.createdAt,
-          status: fs16.status
+        formSubmissions: formSubmissions.length > 0 ? formSubmissions.map((fs14) => ({
+          id: fs14.id,
+          formTitle: fs14.PublicForm?.title || fs14.PublicForm?.name || "Formulaire",
+          data: fs14.data,
+          createdAt: fs14.createdAt,
+          status: fs14.status
         })) : void 0,
         metrics: { activityScore, formCount: formSubmissions.length },
         meta: { generatedAt: (/* @__PURE__ */ new Date()).toISOString(), version: 1, filtered: Array.from(wanted) }
@@ -40584,8 +41062,8 @@ var ai_default = router46;
 
 // src/routes/ai-code.ts
 var import_express48 = __toESM(require("express"), 1);
-var import_fs9 = __toESM(require("fs"), 1);
-var import_path8 = __toESM(require("path"), 1);
+var import_fs7 = __toESM(require("fs"), 1);
+var import_path7 = __toESM(require("path"), 1);
 var import_crypto22 = __toESM(require("crypto"), 1);
 var router47 = import_express48.default.Router();
 router47.use(authenticateToken);
@@ -40620,13 +41098,13 @@ function ensureSuper(req2, res) {
 }
 function sanitizeRelative(p) {
   if (!p) return null;
-  const norm = import_path8.default.posix.normalize(p.replace(/\\/g, "/")).replace(/^\/+/, "");
+  const norm = import_path7.default.posix.normalize(p.replace(/\\/g, "/")).replace(/^\/+/, "");
   const base = norm.split("/")[0];
   if (!ALLOWED_ROOTS.includes(base)) return null;
   return norm;
 }
 function abs(rel) {
-  return import_path8.default.join(REPO_ROOT, rel);
+  return import_path7.default.join(REPO_ROOT, rel);
 }
 router47.get("/code/tree", (req2, res) => {
   if (!ensureSuper(req2, res)) return;
@@ -40634,16 +41112,16 @@ router47.get("/code/tree", (req2, res) => {
   if (!rel) return res.status(400).json({ success: false, error: "Chemin non autoris\xE9" });
   const depth = Math.min(4, Math.max(0, parseInt(String(req2.query.depth || "2"), 10) || 0));
   const target = abs(rel);
-  if (!import_fs9.default.existsSync(target)) return res.status(404).json({ success: false, error: "Chemin introuvable" });
+  if (!import_fs7.default.existsSync(target)) return res.status(404).json({ success: false, error: "Chemin introuvable" });
   function build(p, d) {
-    const stat = import_fs9.default.statSync(p);
-    const name = import_path8.default.basename(p);
+    const stat = import_fs7.default.statSync(p);
+    const name = import_path7.default.basename(p);
     const relPath = p.substring(REPO_ROOT.length + 1).replace(/\\/g, "/");
     if (stat.isDirectory()) {
       if (d >= depth) return { type: "dir", name, path: relPath };
       let children = [];
       try {
-        children = import_fs9.default.readdirSync(p).slice(0, 200).map((f) => build(import_path8.default.join(p, f), d + 1));
+        children = import_fs7.default.readdirSync(p).slice(0, 200).map((f) => build(import_path7.default.join(p, f), d + 1));
       } catch {
         children = [];
       }
@@ -40663,11 +41141,11 @@ router47.get("/code/file", (req2, res) => {
   const rel = sanitizeRelative(String(req2.query.path || ""));
   if (!rel) return res.status(400).json({ success: false, error: "Chemin non autoris\xE9" });
   const target = abs(rel);
-  if (!import_fs9.default.existsSync(target) || !import_fs9.default.statSync(target).isFile()) return res.status(404).json({ success: false, error: "Fichier introuvable" });
+  if (!import_fs7.default.existsSync(target) || !import_fs7.default.statSync(target).isFile()) return res.status(404).json({ success: false, error: "Fichier introuvable" });
   const offset = Math.max(0, parseInt(String(req2.query.offset || "0"), 10) || 0);
   const limit = Math.min(800, Math.max(50, parseInt(String(req2.query.limit || "400"), 10) || 400));
   try {
-    const content = import_fs9.default.readFileSync(target, "utf8");
+    const content = import_fs7.default.readFileSync(target, "utf8");
     const totalBytes = Buffer.byteLength(content, "utf8");
     const lines = content.split(/\r?\n/);
     const etag = 'W/"' + import_crypto22.default.createHash("sha256").update(content).digest("hex").slice(0, 16) + '"';
@@ -40691,10 +41169,10 @@ function buildFileIndex() {
   const acc = [];
   function walk(rel) {
     const full = abs(rel);
-    if (!import_fs9.default.existsSync(full)) return;
-    const stat = import_fs9.default.statSync(full);
+    if (!import_fs7.default.existsSync(full)) return;
+    const stat = import_fs7.default.statSync(full);
     if (stat.isDirectory()) {
-      const entries = import_fs9.default.readdirSync(full).slice(0, 500);
+      const entries = import_fs7.default.readdirSync(full).slice(0, 500);
       for (const e of entries) {
         const childRel = rel + "/" + e;
         if (/node_modules|\.git|dist|build/.test(childRel)) continue;
@@ -40720,7 +41198,7 @@ router47.get("/code/search", (req2, res) => {
   for (const f of files) {
     if (results.length >= max) break;
     try {
-      const content = import_fs9.default.readFileSync(abs(f), "utf8");
+      const content = import_fs7.default.readFileSync(abs(f), "utf8");
       const lines = content.split(/\r?\n/);
       for (let idx = 0; idx < lines.length && results.length < max; idx++) {
         const line = lines[idx];
@@ -40736,9 +41214,9 @@ router47.get("/code/summary", (req2, res) => {
   const rel = sanitizeRelative(String(req2.query.path || ""));
   if (!rel) return res.status(400).json({ success: false, error: "Chemin non autoris\xE9" });
   const target = abs(rel);
-  if (!import_fs9.default.existsSync(target) || !import_fs9.default.statSync(target).isFile()) return res.status(404).json({ success: false, error: "Fichier introuvable" });
+  if (!import_fs7.default.existsSync(target) || !import_fs7.default.statSync(target).isFile()) return res.status(404).json({ success: false, error: "Fichier introuvable" });
   try {
-    const content = import_fs9.default.readFileSync(target, "utf8");
+    const content = import_fs7.default.readFileSync(target, "utf8");
     const lines = content.split(/\r?\n/);
     const totalBytes = Buffer.byteLength(content, "utf8");
     const importRegex = /import\s+[^;]*?from\s+['"]([^'";]+)['"]/g;
@@ -40771,7 +41249,7 @@ router47.get("/code/summary", (req2, res) => {
       exports: named.slice(0, 50),
       dependencies: deps.slice(0, 100),
       sizeCategory: totalBytes > MAX_FILE_SIZE_BYTES ? "large" : "normal",
-      lastModified: import_fs9.default.statSync(target).mtime
+      lastModified: import_fs7.default.statSync(target).mtime
     };
     recordRecent({ path: rel, at: Date.now(), lines: lines.length });
     res.json({ success: true, data: summary });
@@ -40786,11 +41264,11 @@ router47.get("/code/diff", (req2, res) => {
   if (!oldRel || !newRel) return res.status(400).json({ success: false, error: "Param\xE8tres old et new requis" });
   const oldPath = abs(oldRel);
   const newPath = abs(newRel);
-  if (!import_fs9.default.existsSync(oldPath) || !import_fs9.default.statSync(oldPath).isFile()) return res.status(404).json({ success: false, error: "Ancien fichier introuvable" });
-  if (!import_fs9.default.existsSync(newPath) || !import_fs9.default.statSync(newPath).isFile()) return res.status(404).json({ success: false, error: "Nouveau fichier introuvable" });
+  if (!import_fs7.default.existsSync(oldPath) || !import_fs7.default.statSync(oldPath).isFile()) return res.status(404).json({ success: false, error: "Ancien fichier introuvable" });
+  if (!import_fs7.default.existsSync(newPath) || !import_fs7.default.statSync(newPath).isFile()) return res.status(404).json({ success: false, error: "Nouveau fichier introuvable" });
   try {
-    const oldLines = import_fs9.default.readFileSync(oldPath, "utf8").split(/\r?\n/);
-    const newLines = import_fs9.default.readFileSync(newPath, "utf8").split(/\r?\n/);
+    const oldLines = import_fs7.default.readFileSync(oldPath, "utf8").split(/\r?\n/);
+    const newLines = import_fs7.default.readFileSync(newPath, "utf8").split(/\r?\n/);
     const diffs = [];
     const max = Math.max(oldLines.length, newLines.length);
     const maxOutput = 800;
@@ -40822,14 +41300,14 @@ router47.get("/code/analyze", (req2, res) => {
   const rel = sanitizeRelative(String(req2.query.path || ""));
   if (!rel) return res.status(400).json({ success: false, error: "Chemin non autoris\xE9" });
   const target = abs(rel);
-  if (!import_fs9.default.existsSync(target) || !import_fs9.default.statSync(target).isFile()) return res.status(404).json({ success: false, error: "Fichier introuvable" });
+  if (!import_fs7.default.existsSync(target) || !import_fs7.default.statSync(target).isFile()) return res.status(404).json({ success: false, error: "Fichier introuvable" });
   try {
     const cached = ANALYZE_CACHE[rel];
     const now = Date.now();
     if (cached && now - cached.ts < ANALYZE_TTL_MS) {
       return res.json({ success: true, data: cached.data, meta: { cached: true, ageMs: now - cached.ts } });
     }
-    const content = import_fs9.default.readFileSync(target, "utf8");
+    const content = import_fs7.default.readFileSync(target, "utf8");
     const lines = content.split(/\r?\n/);
     const size = lines.length;
     const jsx = /<[^>]+>/g.test(content) || rel.endsWith(".tsx");
@@ -40936,15 +41414,15 @@ router47.get("/code/feature/analyze", (req2, res) => {
   const feature = String(req2.query.feature || "").trim();
   if (!feature) return res.status(400).json({ success: false, error: "Param\xE8tre feature requis" });
   const fmapPath = abs("src/feature-map.json");
-  if (!import_fs9.default.existsSync(fmapPath)) return res.status(500).json({ success: false, error: "feature-map.json manquant" });
+  if (!import_fs7.default.existsSync(fmapPath)) return res.status(500).json({ success: false, error: "feature-map.json manquant" });
   try {
     let analyzeFile = function(rel) {
       const target = abs(rel);
-      if (!import_fs9.default.existsSync(target) || !import_fs9.default.statSync(target).isFile()) {
+      if (!import_fs7.default.existsSync(target) || !import_fs7.default.statSync(target).isFile()) {
         errors.push({ path: rel, error: "introuvable" });
         return;
       }
-      const content = import_fs9.default.readFileSync(target, "utf8");
+      const content = import_fs7.default.readFileSync(target, "utf8");
       const lines = content.split(/\r?\n/);
       const jsx = /<[^>]+>/g.test(content) || rel.endsWith(".tsx");
       const hooksCount = (content.match(/\buse(State|Effect|Memo|Callback|Ref|Context|Reducer)\b/g) || []).length;
@@ -40968,7 +41446,7 @@ router47.get("/code/feature/analyze", (req2, res) => {
         importAntd
       });
     };
-    const fmap = JSON.parse(import_fs9.default.readFileSync(fmapPath, "utf8"));
+    const fmap = JSON.parse(import_fs7.default.readFileSync(fmapPath, "utf8"));
     const def = fmap[feature];
     if (!def) return res.status(404).json({ success: false, error: "Feature inconnue" });
     const files = [...def.primaryPages || [], ...def.relatedServices || []].filter(Boolean);
@@ -41012,7 +41490,7 @@ router47.post("/code/analyze/batch", (req2, res) => {
       return;
     }
     const full = abs(safe);
-    if (!import_fs9.default.existsSync(full) || !import_fs9.default.statSync(full).isFile()) {
+    if (!import_fs7.default.existsSync(full) || !import_fs7.default.statSync(full).isFile()) {
       errors.push({ path: rel, error: "introuvable" });
       return;
     }
@@ -41022,7 +41500,7 @@ router47.post("/code/analyze/batch", (req2, res) => {
       return;
     }
     try {
-      const content = import_fs9.default.readFileSync(full, "utf8");
+      const content = import_fs7.default.readFileSync(full, "utf8");
       const lines = content.split(/\r?\n/);
       const hooksCount = (content.match(/\buse(State|Effect|Memo|Callback|Ref|Context|Reducer)\b/g) || []).length;
       const useEffectCount = (content.match(/\buseEffect\b/g) || []).length;
@@ -45547,6 +46025,240 @@ router61.get("/tasks", authMiddleware, async (req2, res) => {
     });
   }
 });
+router61.get("/analytics", authMiddleware, async (req2, res) => {
+  try {
+    const organizationId = req2.user?.organizationId;
+    const isSuperAdmin2 = req2.user?.role === "super_admin";
+    const userRole = req2.user?.role || "user";
+    const userId = req2.user?.id;
+    const targetUserId = req2.query.userId || null;
+    if (!organizationId && !isSuperAdmin2) {
+      return res.status(400).json({ success: false, message: "Organisation ID requis" });
+    }
+    const isAdmin2 = isSuperAdmin2 || userRole === "admin" || userRole === "super_admin";
+    const orgWhere = isSuperAdmin2 ? {} : { organizationId };
+    let viewUserId = isAdmin2 && targetUserId ? targetUserId : userId;
+    const [totalLeads, totalChantiers, chantierRevenue, convertedLeads, newLeadsThisMonth, newLeadsLastMonth] = await Promise.all([
+      prisma29.lead.count({ where: orgWhere }),
+      prisma29.chantier.count({ where: orgWhere }),
+      prisma29.chantier.aggregate({ where: orgWhere, _sum: { amount: true } }),
+      prisma29.lead.count({
+        where: {
+          ...orgWhere,
+          LeadStatus: { name: { in: ["Gagn\xE9", "Converti", "Client", "gagn\xE9", "converti", "client"] } }
+        }
+      }),
+      prisma29.lead.count({
+        where: {
+          ...orgWhere,
+          createdAt: { gte: new Date((/* @__PURE__ */ new Date()).getFullYear(), (/* @__PURE__ */ new Date()).getMonth(), 1) }
+        }
+      }),
+      prisma29.lead.count({
+        where: {
+          ...orgWhere,
+          createdAt: {
+            gte: new Date((/* @__PURE__ */ new Date()).getFullYear(), (/* @__PURE__ */ new Date()).getMonth() - 1, 1),
+            lt: new Date((/* @__PURE__ */ new Date()).getFullYear(), (/* @__PURE__ */ new Date()).getMonth(), 1)
+          }
+        }
+      })
+    ]);
+    const conversionRate = totalLeads > 0 ? Math.round(convertedLeads / totalLeads * 1e3) / 10 : 0;
+    const monthlyGrowth = newLeadsLastMonth > 0 ? Math.round((newLeadsThisMonth - newLeadsLastMonth) / newLeadsLastMonth * 100) : newLeadsThisMonth > 0 ? 100 : 0;
+    const totalRevenue = chantierRevenue._sum.amount || 0;
+    const sixMonthsAgo = /* @__PURE__ */ new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+    sixMonthsAgo.setDate(1);
+    sixMonthsAgo.setHours(0, 0, 0, 0);
+    const recentChantiers = await prisma29.chantier.findMany({
+      where: { ...orgWhere, createdAt: { gte: sixMonthsAgo } },
+      select: { createdAt: true, amount: true }
+    });
+    const monthlyData = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = /* @__PURE__ */ new Date();
+      d.setMonth(d.getMonth() - i);
+      const monthKey = d.toLocaleString("fr-FR", { month: "short" });
+      const year = d.getFullYear();
+      const month = d.getMonth();
+      const filtered = recentChantiers.filter((c) => {
+        const cd = new Date(c.createdAt);
+        return cd.getFullYear() === year && cd.getMonth() === month;
+      });
+      monthlyData.push({
+        month: monthKey,
+        chantiers: filtered.length,
+        revenue: filtered.reduce((sum, c) => sum + (c.amount || 0), 0)
+      });
+    }
+    let roleStats = {};
+    if (isAdmin2 || userRole === "comptable") {
+      const [totalUsers, chantiersByStatus, topCommercials] = await Promise.all([
+        prisma29.user.count({ where: { ...orgWhere, status: "active" } }),
+        prisma29.chantier.groupBy({
+          by: ["statusId"],
+          where: orgWhere,
+          _count: true,
+          _sum: { amount: true }
+        }),
+        prisma29.lead.groupBy({
+          by: ["assignedToId"],
+          where: {
+            ...orgWhere,
+            assignedToId: { not: null }
+          },
+          _count: true,
+          orderBy: { _count: { assignedToId: "desc" } },
+          take: 5
+        })
+      ]);
+      const statusNames = await prisma29.chantierStatus.findMany({
+        where: orgWhere,
+        select: { id: true, name: true, color: true }
+      });
+      const enrichedStatuses = chantiersByStatus.map((s) => {
+        const status = statusNames.find((st) => st.id === s.statusId);
+        return {
+          name: status?.name || "Sans statut",
+          color: status?.color || "#999",
+          count: s._count,
+          amount: s._sum.amount || 0
+        };
+      });
+      const commercialIds = topCommercials.map((c) => c.assignedToId).filter(Boolean);
+      const commercialUsers = await prisma29.user.findMany({
+        where: { id: { in: commercialIds } },
+        select: { id: true, firstName: true, lastName: true, avatarUrl: true }
+      });
+      const enrichedCommercials = topCommercials.map((c) => {
+        const u = commercialUsers.find((u2) => u2.id === c.assignedToId);
+        return {
+          userId: c.assignedToId,
+          name: u ? `${u.firstName || ""} ${u.lastName || ""}`.trim() : "Inconnu",
+          avatarUrl: u?.avatarUrl,
+          leadCount: c._count
+        };
+      });
+      roleStats = {
+        type: "admin",
+        totalUsers,
+        chantiersByStatus: enrichedStatuses,
+        topCommercials: enrichedCommercials
+      };
+    }
+    if (userRole === "commercial" || userRole === "user") {
+      const [myLeads, myConvertedLeads, myChantiers, myRevenue] = await Promise.all([
+        prisma29.lead.count({ where: { ...orgWhere, assignedToId: viewUserId } }),
+        prisma29.lead.count({
+          where: {
+            ...orgWhere,
+            assignedToId: viewUserId,
+            LeadStatus: { name: { in: ["Gagn\xE9", "Converti", "Client", "gagn\xE9", "converti", "client"] } }
+          }
+        }),
+        prisma29.chantier.count({ where: { ...orgWhere, commercialId: viewUserId } }),
+        prisma29.chantier.aggregate({
+          where: { ...orgWhere, commercialId: viewUserId },
+          _sum: { amount: true }
+        })
+      ]);
+      roleStats = {
+        ...roleStats,
+        type: roleStats.type || "commercial",
+        myLeads,
+        myConvertedLeads,
+        myConversion: myLeads > 0 ? Math.round(myConvertedLeads / myLeads * 1e3) / 10 : 0,
+        myChantiers,
+        myRevenue: myRevenue._sum.amount || 0
+      };
+    }
+    if (userRole === "technicien" || userRole === "chef_equipe" || userRole === "contremaitre" || userRole === "sous_traitant") {
+      const technician = await prisma29.technician.findFirst({
+        where: { userId: viewUserId, ...orgWhere },
+        select: { id: true }
+      });
+      if (technician) {
+        const now = /* @__PURE__ */ new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const [assignedChantiers, timeEntries, totalTimeThisMonth] = await Promise.all([
+          prisma29.chantierAssignment.count({ where: { technicianId: technician.id } }),
+          prisma29.timeEntry.findMany({
+            where: { technicianId: technician.id, date: { gte: startOfMonth } },
+            select: { durationMinutes: true, startTime: true, endTime: true, breakMinutes: true }
+          }),
+          prisma29.timeEntry.aggregate({
+            where: { technicianId: technician.id, date: { gte: startOfMonth } },
+            _sum: { durationMinutes: true },
+            _count: true
+          })
+        ]);
+        let totalMinutes = totalTimeThisMonth._sum.durationMinutes || 0;
+        if (totalMinutes === 0) {
+          totalMinutes = timeEntries.reduce((sum, e) => {
+            if (e.durationMinutes) return sum + e.durationMinutes;
+            if (e.startTime && e.endTime) {
+              const diff = (new Date(e.endTime).getTime() - new Date(e.startTime).getTime()) / 6e4;
+              return sum + diff - (e.breakMinutes || 0);
+            }
+            return sum;
+          }, 0);
+        }
+        roleStats = {
+          ...roleStats,
+          type: roleStats.type || "technicien",
+          assignedChantiers,
+          hoursThisMonth: Math.round(totalMinutes / 60 * 10) / 10,
+          daysWorkedThisMonth: totalTimeThisMonth._count,
+          technicianId: technician.id
+        };
+      }
+    }
+    let collaborators = [];
+    if (isAdmin2) {
+      const users = await prisma29.user.findMany({
+        where: { ...orgWhere, status: "active" },
+        select: { id: true, firstName: true, lastName: true, role: true, avatarUrl: true },
+        orderBy: [{ role: "asc" }, { firstName: "asc" }]
+      });
+      collaborators = users.map((u) => ({
+        id: u.id,
+        name: `${u.firstName || ""} ${u.lastName || ""}`.trim() || "Sans nom",
+        role: u.role,
+        avatarUrl: u.avatarUrl
+      }));
+    }
+    res.json({
+      success: true,
+      data: {
+        // Globaux
+        totalLeads,
+        convertedLeads,
+        conversionRate,
+        totalChantiers,
+        totalRevenue,
+        monthlyGrowth,
+        newLeadsThisMonth,
+        // Graphiques
+        monthlyData,
+        // Rôle
+        roleStats,
+        // Collaborateurs
+        collaborators,
+        // Meta
+        viewUserId,
+        viewerRole: userRole
+      }
+    });
+  } catch (error) {
+    console.error("\u274C [DASHBOARD] Erreur analytics:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur lors de la r\xE9cup\xE9ration des analytics",
+      error: process.env.NODE_ENV === "development" ? error.message : void 0
+    });
+  }
+});
 var dashboard_default = router61;
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/treebranchleaf-routes.ts
@@ -46432,7 +47144,7 @@ function logCapacityEvent(payload) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/sum-display-field-routes.ts
-var import_client4 = require("@prisma/client");
+var import_client5 = require("@prisma/client");
 init_database();
 var import_crypto23 = require("crypto");
 var prisma30 = db;
@@ -46441,8 +47153,8 @@ function getOrgId2(req2) {
   const headerOrg = req2.headers?.["x-organization-id"] || req2.headers?.["x-organization"] || req2.headers?.["organization-id"];
   return user.organizationId || headerOrg || null;
 }
-function registerSumDisplayFieldRoutes(router105) {
-  router105.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+function registerSumDisplayFieldRoutes(router111) {
+  router111.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
     try {
       const { treeId, nodeId } = req2.params;
       const organizationId = getOrgId2(req2);
@@ -46680,7 +47392,7 @@ function registerSumDisplayFieldRoutes(router105) {
             }
           });
         } catch (err) {
-          if (err instanceof import_client4.Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+          if (err instanceof import_client5.Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
             await prisma30.treeBranchLeafNode.update({ where: { id: sumFieldNodeId }, data: sumNodeData });
             console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F [SUM DISPLAY] N\xC3\u2026\xE2\u20AC\u0153ud Total d\xC3\u0192\xC2\xA9j\xC3\u0192\xC2\xA0 existant, mise \xC3\u0192\xC2\xA0 jour forc\xC3\u0192\xC2\xA9e: ${sumFieldNodeId}`);
           } else {
@@ -46726,7 +47438,7 @@ function registerSumDisplayFieldRoutes(router105) {
             }
           });
         } catch (err) {
-          if (err instanceof import_client4.Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+          if (err instanceof import_client5.Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
             await prisma30.treeBranchLeafNodeVariable.update({ where: { nodeId: sumFieldNodeId }, data: sumVariableData });
             console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F [SUM DISPLAY] Variable Total d\xC3\u0192\xC2\xA9j\xC3\u0192\xC2\xA0 existante, mise \xC3\u0192\xC2\xA0 jour forc\xC3\u0192\xC2\xA9e: ${sumFieldNodeId}`);
           } else {
@@ -46768,7 +47480,7 @@ function registerSumDisplayFieldRoutes(router105) {
             }
           });
         } catch (err) {
-          if (err instanceof import_client4.Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+          if (err instanceof import_client5.Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
             await prisma30.treeBranchLeafNodeFormula.deleteMany({ where: { nodeId: sumFieldNodeId } });
             await prisma30.treeBranchLeafNodeFormula.create({
               data: {
@@ -46814,7 +47526,7 @@ function registerSumDisplayFieldRoutes(router105) {
       res.status(500).json({ error: "Erreur lors de la cr\xC3\u0192\xC2\xA9ation du champ Total", details: errMsg });
     }
   });
-  router105.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+  router111.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
     try {
       const { treeId, nodeId } = req2.params;
       const organizationId = getOrgId2(req2);
@@ -54502,7 +55214,7 @@ var tbl_submission_evaluator_default = router62;
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/table-routes-new.ts
 var import_express64 = require("express");
-var import_client5 = require("@prisma/client");
+var import_client6 = require("@prisma/client");
 init_database();
 var import_crypto25 = require("crypto");
 var router63 = (0, import_express64.Router)();
@@ -54560,7 +55272,7 @@ async function syncTableReferences(oldTableId, newTableId, ownerNodeId, tableNam
     }
     const allTables = await prisma32.treeBranchLeafNodeTable.findMany({
       where: {
-        meta: { path: [], not: import_client5.Prisma.DbNull }
+        meta: { path: [], not: import_client6.Prisma.DbNull }
       },
       select: { id: true, name: true, meta: true }
     });
@@ -54969,13 +55681,13 @@ router63.post("/nodes/:nodeId/tables", async (req2, res) => {
     });
   } catch (error) {
     console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [NEW POST /tables] Erreur lors de la cr\xC3\u0192\xC2\xA9ation de la table:`, error);
-    if (error instanceof import_client5.Prisma.PrismaClientValidationError) {
+    if (error instanceof import_client6.Prisma.PrismaClientValidationError) {
       return res.status(400).json({
         error: "Requ\xC3\xAAte invalide pour la cr\xC3\u0192\xC2\xA9ation de la table.",
         details: error.message
       });
     }
-    if (error instanceof import_client5.Prisma.PrismaClientKnownRequestError) {
+    if (error instanceof import_client6.Prisma.PrismaClientKnownRequestError) {
       if (error.code === "P2002") {
         return res.status(409).json({
           error: "Une table avec ce nom existe d\xC3\u0192\xC2\xA9j\xC3\u0192\xC2\xA0 pour ce champ. Veuillez choisir un autre nom.",
@@ -75261,8 +75973,9 @@ var publicLeads_default = router81;
 // src/routes/product-documents.ts
 var import_express83 = require("express");
 init_database();
-var import_path9 = __toESM(require("path"), 1);
-var import_fs10 = __toESM(require("fs"), 1);
+var import_path8 = __toESM(require("path"), 1);
+var import_fs8 = __toESM(require("fs"), 1);
+init_storage();
 var router82 = (0, import_express83.Router)();
 function getUser(req2) {
   const headerUserId = req2.headers["x-user-id"];
@@ -75560,7 +76273,11 @@ router82.post("/upload", async (req2, res) => {
     const fileName = file.name;
     const mimeType = file.mimetype;
     const fileSize = file.size;
-    const fileBuffer = file.data;
+    let fileBuffer = file.data;
+    if ((!fileBuffer || fileBuffer.length === 0) && file.tempFilePath) {
+      const fsP = await import("fs/promises");
+      fileBuffer = await fsP.readFile(file.tempFilePath);
+    }
     const resolvedStorageType = storageType || "LOCAL";
     let localPath = null;
     let driveFileId = null;
@@ -75605,14 +76322,9 @@ router82.post("/upload", async (req2, res) => {
         });
       }
     } else {
-      const uploadsDir2 = import_path9.default.join(process.cwd(), "public", "uploads", "product-documents", organizationId);
-      if (!import_fs10.default.existsSync(uploadsDir2)) {
-        import_fs10.default.mkdirSync(uploadsDir2, { recursive: true });
-      }
       const uniqueName = `${Date.now()}-${fileName.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-      const filePath = import_path9.default.join(uploadsDir2, uniqueName);
-      import_fs10.default.writeFileSync(filePath, fileBuffer);
-      localPath = `/uploads/product-documents/${organizationId}/${uniqueName}`;
+      const key2 = `product-documents/${organizationId}/${uniqueName}`;
+      localPath = await uploadFile(fileBuffer, key2, file.mimetype || "application/octet-stream");
     }
     const documents = [];
     if (nodeIds.length > 0) {
@@ -75876,9 +76588,9 @@ router82.delete("/:id", async (req2, res) => {
         console.warn("[ProductDocuments] \u26A0\uFE0F Impossible de supprimer le fichier Drive:", error);
       }
     } else if (document.localPath) {
-      const fullPath = import_path9.default.join(process.cwd(), "public", document.localPath);
-      if (import_fs10.default.existsSync(fullPath)) {
-        import_fs10.default.unlinkSync(fullPath);
+      const fullPath = import_path8.default.join(process.cwd(), "public", document.localPath);
+      if (import_fs8.default.existsSync(fullPath)) {
+        import_fs8.default.unlinkSync(fullPath);
         console.log(`[ProductDocuments] \u{1F5D1}\uFE0F Fichier local supprim\xE9: ${document.localPath}`);
       }
     }
@@ -76001,7 +76713,7 @@ var sync_temp_default = router83;
 // src/routes/join-requests.ts
 var import_express85 = require("express");
 init_database();
-var import_client6 = require("@prisma/client");
+var import_client7 = require("@prisma/client");
 var router84 = (0, import_express85.Router)();
 router84.post("/", authMiddleware, async (req2, res) => {
   try {
@@ -76043,7 +76755,7 @@ router84.post("/", authMiddleware, async (req2, res) => {
         userId,
         organizationId,
         message: message?.trim() || null,
-        status: import_client6.JoinRequestStatus.PENDING
+        status: import_client7.JoinRequestStatus.PENDING
       },
       include: {
         Organization: { select: { id: true, name: true } }
@@ -76088,7 +76800,7 @@ router84.get("/pending", authMiddleware, requireRole2(["admin", "super_admin"]),
   try {
     const organizationId = req2.user?.organizationId;
     const isSuperAdmin2 = req2.user?.role === "super_admin";
-    const whereClause = isSuperAdmin2 ? { status: import_client6.JoinRequestStatus.PENDING } : { organizationId, status: import_client6.JoinRequestStatus.PENDING };
+    const whereClause = isSuperAdmin2 ? { status: import_client7.JoinRequestStatus.PENDING } : { organizationId, status: import_client7.JoinRequestStatus.PENDING };
     if (!isSuperAdmin2 && !organizationId) {
       return res.status(403).json({ success: false, error: "Organisation requise" });
     }
@@ -76123,7 +76835,7 @@ router84.post("/:id/approve", authMiddleware, requireRole2(["admin", "super_admi
     if (!isSuperAdmin2 && joinRequest.organizationId !== adminOrgId) {
       return res.status(403).json({ success: false, error: "Non autoris\xE9" });
     }
-    if (joinRequest.status !== import_client6.JoinRequestStatus.PENDING) {
+    if (joinRequest.status !== import_client7.JoinRequestStatus.PENDING) {
       return res.status(400).json({
         success: false,
         error: `Demande d\xE9j\xE0 trait\xE9e (${joinRequest.status})`
@@ -76150,7 +76862,7 @@ router84.post("/:id/approve", authMiddleware, requireRole2(["admin", "super_admi
       const updatedRequest = await tx.joinRequest.update({
         where: { id },
         data: {
-          status: import_client6.JoinRequestStatus.APPROVED,
+          status: import_client7.JoinRequestStatus.APPROVED,
           reviewedBy: adminId,
           reviewedAt: /* @__PURE__ */ new Date()
         }
@@ -76161,7 +76873,7 @@ router84.post("/:id/approve", authMiddleware, requireRole2(["admin", "super_admi
           userId: joinRequest.userId,
           organizationId: joinRequest.organizationId,
           roleId: finalRoleId,
-          status: import_client6.UserOrganizationStatus.ACTIVE,
+          status: import_client7.UserOrganizationStatus.ACTIVE,
           updatedAt: /* @__PURE__ */ new Date()
         }
       });
@@ -76199,7 +76911,7 @@ router84.post("/:id/reject", authMiddleware, requireRole2(["admin", "super_admin
     if (!isSuperAdmin2 && joinRequest.organizationId !== adminOrgId) {
       return res.status(403).json({ success: false, error: "Non autoris\xE9" });
     }
-    if (joinRequest.status !== import_client6.JoinRequestStatus.PENDING) {
+    if (joinRequest.status !== import_client7.JoinRequestStatus.PENDING) {
       return res.status(400).json({
         success: false,
         error: `Demande d\xE9j\xE0 trait\xE9e (${joinRequest.status})`
@@ -76208,7 +76920,7 @@ router84.post("/:id/reject", authMiddleware, requireRole2(["admin", "super_admin
     const updatedRequest = await db.joinRequest.update({
       where: { id },
       data: {
-        status: import_client6.JoinRequestStatus.REJECTED,
+        status: import_client7.JoinRequestStatus.REJECTED,
         reviewedBy: adminId,
         reviewedAt: /* @__PURE__ */ new Date()
       }
@@ -76242,7 +76954,7 @@ router84.delete("/:id", authMiddleware, async (req2, res) => {
     if (joinRequest.userId !== userId) {
       return res.status(403).json({ success: false, error: "Non autoris\xE9" });
     }
-    if (joinRequest.status !== import_client6.JoinRequestStatus.PENDING) {
+    if (joinRequest.status !== import_client7.JoinRequestStatus.PENDING) {
       return res.status(400).json({
         success: false,
         error: "Impossible d'annuler une demande d\xE9j\xE0 trait\xE9e"
@@ -76257,8 +76969,2624 @@ router84.delete("/:id", authMiddleware, async (req2, res) => {
 });
 var join_requests_default = router84;
 
+// src/routes/wall.ts
+var import_express86 = require("express");
+init_database();
+var import_zod14 = require("zod");
+init_storage();
+var router85 = (0, import_express86.Router)();
+var createPostSchema = import_zod14.z.object({
+  content: import_zod14.z.string().min(1).max(5e3).optional(),
+  mediaUrls: import_zod14.z.array(import_zod14.z.string()).optional(),
+  mediaType: import_zod14.z.enum(["image", "video", "document", "gallery"]).optional(),
+  visibility: import_zod14.z.enum(["OUT", "IN", "ALL", "CLIENT"]).default("IN"),
+  targetLeadId: import_zod14.z.string().optional(),
+  category: import_zod14.z.string().optional(),
+  crmEventType: import_zod14.z.string().optional(),
+  crmEntityType: import_zod14.z.string().optional(),
+  crmEntityId: import_zod14.z.string().optional(),
+  isPinned: import_zod14.z.boolean().optional(),
+  publishAsOrg: import_zod14.z.boolean().optional(),
+  parentPostId: import_zod14.z.string().optional()
+});
+var createCommentSchema = import_zod14.z.object({
+  content: import_zod14.z.string().min(1).max(2e3),
+  parentCommentId: import_zod14.z.string().optional(),
+  mediaUrl: import_zod14.z.string().optional(),
+  publishAsOrg: import_zod14.z.boolean().optional()
+});
+var reactionSchema = import_zod14.z.object({
+  type: import_zod14.z.enum(["LIKE", "LOVE", "BRAVO", "UTILE", "WOW"]).default("LIKE")
+});
+router85.get("/feed", authenticateToken, async (req2, res) => {
+  try {
+    const user = req2.user;
+    const orgId = user.organizationId || req2.headers["x-organization-id"];
+    const {
+      visibility,
+      category,
+      targetLeadId,
+      cursor,
+      limit = "20",
+      mode
+      // 'personal' | 'org' — pour les users avec org qui veulent filtrer
+    } = req2.query;
+    const take = Math.min(parseInt(limit) || 20, 50);
+    const where = {
+      isPublished: true
+    };
+    if (visibility) {
+      where.visibility = visibility;
+      if (orgId) where.organizationId = orgId;
+    } else if (user.role === "client") {
+      where.OR = [
+        { visibility: "IN", organizationId: orgId },
+        { visibility: "ALL" },
+        { visibility: "CLIENT", targetLeadId: user.linkedLeadId }
+      ];
+    } else if (!orgId && user.isSuperAdmin) {
+    } else if (!orgId) {
+      where.OR = [
+        { visibility: "ALL" },
+        { authorId: user.id }
+      ];
+    } else if (mode === "personal") {
+      where.OR = [
+        { visibility: "ALL" },
+        { authorId: user.id }
+      ];
+    } else {
+      where.OR = [
+        { visibility: "IN", organizationId: orgId },
+        { visibility: "ALL", organizationId: orgId },
+        { visibility: "OUT", authorId: user.id },
+        { visibility: "CLIENT", organizationId: orgId }
+      ];
+    }
+    if (category) where.category = category;
+    if (targetLeadId) where.targetLeadId = targetLeadId;
+    if (cursor) where.createdAt = { lt: new Date(cursor) };
+    const posts = await db.wallPost.findMany({
+      where,
+      orderBy: [
+        { isPinned: "desc" },
+        { createdAt: "desc" }
+      ],
+      take,
+      include: {
+        author: {
+          select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true }
+        },
+        organization: {
+          select: { id: true, name: true, logoUrl: true }
+        },
+        targetLead: {
+          select: { id: true, firstName: true, lastName: true, company: true }
+        },
+        parentPost: {
+          include: {
+            author: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+            organization: { select: { id: true, name: true, logoUrl: true } }
+          }
+        },
+        reactions: {
+          select: { id: true, userId: true, type: true }
+        },
+        comments: {
+          orderBy: { createdAt: "asc" },
+          take: 3,
+          include: {
+            author: {
+              select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true }
+            }
+          }
+        },
+        _count: {
+          select: { comments: true, reactions: true, shares: true }
+        }
+      }
+    });
+    const enriched = posts.map((post) => ({
+      ...post,
+      myReaction: post.reactions.find((r) => r.userId === user.id) || null,
+      totalComments: post._count.comments,
+      totalReactions: post._count.reactions,
+      totalShares: post._count.shares
+    }));
+    res.json({
+      posts: enriched,
+      nextCursor: posts.length === take ? posts[posts.length - 1].createdAt.toISOString() : null
+    });
+  } catch (error) {
+    console.error("[WALL] Erreur feed:", error);
+    res.status(500).json({ error: "Erreur lors du chargement du fil" });
+  }
+});
+router85.get("/my-feed", authenticateToken, async (req2, res) => {
+  try {
+    const user = req2.user;
+    const { cursor, limit = "20" } = req2.query;
+    const take = Math.min(parseInt(limit) || 20, 50);
+    const where = {
+      isPublished: true,
+      authorId: user.id
+    };
+    if (cursor) where.createdAt = { lt: new Date(cursor) };
+    const posts = await db.wallPost.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take,
+      include: {
+        author: {
+          select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true }
+        },
+        organization: {
+          select: { id: true, name: true, logoUrl: true }
+        },
+        parentPost: {
+          include: {
+            author: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+            organization: { select: { id: true, name: true, logoUrl: true } }
+          }
+        },
+        reactions: {
+          select: { id: true, userId: true, type: true }
+        },
+        comments: {
+          orderBy: { createdAt: "asc" },
+          take: 3,
+          include: {
+            author: {
+              select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true }
+            }
+          }
+        },
+        _count: {
+          select: { comments: true, reactions: true, shares: true }
+        }
+      }
+    });
+    const enriched = posts.map((post) => ({
+      ...post,
+      myReaction: post.reactions.find((r) => r.userId === user.id) || null,
+      totalComments: post._count.comments,
+      totalReactions: post._count.reactions,
+      totalShares: post._count.shares
+    }));
+    res.json({
+      posts: enriched,
+      nextCursor: posts.length === take ? posts[posts.length - 1].createdAt.toISOString() : null
+    });
+  } catch (error) {
+    console.error("[WALL] Erreur my-feed:", error);
+    res.status(500).json({ error: "Erreur lors du chargement de votre mur" });
+  }
+});
+router85.get("/client-feed/:leadId", authenticateToken, async (req2, res) => {
+  try {
+    const user = req2.user;
+    const { leadId } = req2.params;
+    const { cursor, limit = "20" } = req2.query;
+    const take = Math.min(parseInt(limit) || 20, 50);
+    const where = {
+      isPublished: true,
+      targetLeadId: leadId,
+      visibility: "CLIENT"
+    };
+    if (cursor) where.createdAt = { lt: new Date(cursor) };
+    const posts = await db.wallPost.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take,
+      include: {
+        author: {
+          select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true }
+        },
+        reactions: {
+          select: { id: true, userId: true, type: true }
+        },
+        comments: {
+          orderBy: { createdAt: "asc" },
+          take: 5,
+          include: {
+            author: {
+              select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true }
+            }
+          }
+        },
+        _count: {
+          select: { comments: true, reactions: true, shares: true }
+        }
+      }
+    });
+    const enriched = posts.map((post) => ({
+      ...post,
+      myReaction: post.reactions.find((r) => r.userId === user.id) || null,
+      totalComments: post._count.comments,
+      totalReactions: post._count.reactions,
+      totalShares: post._count.shares
+    }));
+    res.json({
+      posts: enriched,
+      nextCursor: posts.length === take ? posts[posts.length - 1].createdAt.toISOString() : null
+    });
+  } catch (error) {
+    console.error("[WALL] Erreur client-feed:", error);
+    res.status(500).json({ error: "Erreur lors du chargement du mur client" });
+  }
+});
+router85.post("/posts", authenticateToken, async (req2, res) => {
+  try {
+    const user = req2.user;
+    const orgId = user.organizationId || req2.headers["x-organization-id"];
+    const data = createPostSchema.parse(req2.body);
+    if (!orgId && data.visibility && data.visibility !== "ALL") {
+      data.visibility = "ALL";
+    }
+    if (data.visibility === "CLIENT" && !data.targetLeadId) {
+      return res.status(400).json({ error: "targetLeadId requis pour les posts CLIENT" });
+    }
+    if (!data.content && (!data.mediaUrls || data.mediaUrls.length === 0) && !data.parentPostId) {
+      return res.status(400).json({ error: "Contenu ou m\xE9dia requis" });
+    }
+    const post = await db.wallPost.create({
+      data: {
+        organizationId: orgId || null,
+        authorId: user.id,
+        content: data.content,
+        mediaUrls: data.mediaUrls || void 0,
+        mediaType: data.mediaType,
+        visibility: data.visibility,
+        targetLeadId: data.targetLeadId,
+        category: data.category,
+        crmEventType: data.crmEventType,
+        crmEntityType: data.crmEntityType,
+        crmEntityId: data.crmEntityId,
+        isPinned: data.isPinned || false,
+        publishAsOrg: data.publishAsOrg && !!orgId ? true : false,
+        parentPostId: data.parentPostId || null,
+        publishedAt: /* @__PURE__ */ new Date()
+      },
+      include: {
+        author: {
+          select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true }
+        },
+        organization: {
+          select: { id: true, name: true, logoUrl: true }
+        },
+        parentPost: {
+          include: {
+            author: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+            organization: { select: { id: true, name: true, logoUrl: true } }
+          }
+        }
+      }
+    });
+    console.log(`[WALL] \u2705 Post cr\xE9\xE9 par ${user.id} | visibility=${data.visibility} | org=${orgId}`);
+    if (data.parentPostId) {
+      await db.wallPost.update({ where: { id: data.parentPostId }, data: { sharesCount: { increment: 1 } } });
+    }
+    if (data.mediaUrls?.length) {
+      try {
+        const imageUrls = data.mediaUrls.filter((u) => /\.(jpe?g|png|gif|webp|bmp)$/i.test(u));
+        if (imageUrls.length) {
+          await db.userPhoto.createMany({
+            data: imageUrls.map((url) => ({ userId: user.id, url, category: "wall" }))
+          });
+        }
+      } catch {
+      }
+    }
+    res.status(201).json(post);
+  } catch (error) {
+    if (error instanceof import_zod14.z.ZodError) {
+      return res.status(400).json({ error: "Donn\xE9es invalides", details: error.errors });
+    }
+    console.error("[WALL] Erreur cr\xE9ation post:", error);
+    res.status(500).json({ error: "Erreur lors de la cr\xE9ation du post" });
+  }
+});
+router85.delete("/posts/:id", authenticateToken, async (req2, res) => {
+  try {
+    const user = req2.user;
+    const { id } = req2.params;
+    const post = await db.wallPost.findUnique({ where: { id } });
+    if (!post) return res.status(404).json({ error: "Post non trouv\xE9" });
+    if (post.authorId !== user.id && !user.isSuperAdmin && user.role !== "admin") {
+      return res.status(403).json({ error: "Non autoris\xE9" });
+    }
+    await db.wallPost.delete({ where: { id } });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("[WALL] Erreur suppression post:", error);
+    res.status(500).json({ error: "Erreur lors de la suppression" });
+  }
+});
+router85.post("/posts/:id/reactions", authenticateToken, async (req2, res) => {
+  try {
+    const user = req2.user;
+    const { id } = req2.params;
+    const { type } = reactionSchema.parse(req2.body);
+    const post = await db.wallPost.findUnique({ where: { id } });
+    if (!post) return res.status(404).json({ error: "Post non trouv\xE9" });
+    const existing = await db.wallReaction.findUnique({
+      where: { postId_userId: { postId: id, userId: user.id } }
+    });
+    if (existing) {
+      if (existing.type === type) {
+        await db.wallReaction.delete({ where: { id: existing.id } });
+        await db.wallPost.update({ where: { id }, data: { likesCount: { decrement: 1 } } });
+        return res.json({ action: "removed", reaction: null });
+      } else {
+        const updated = await db.wallReaction.update({
+          where: { id: existing.id },
+          data: { type }
+        });
+        return res.json({ action: "updated", reaction: updated });
+      }
+    } else {
+      const reaction = await db.wallReaction.create({
+        data: { postId: id, userId: user.id, type }
+      });
+      await db.wallPost.update({ where: { id }, data: { likesCount: { increment: 1 } } });
+      return res.json({ action: "added", reaction });
+    }
+  } catch (error) {
+    if (error instanceof import_zod14.z.ZodError) {
+      return res.status(400).json({ error: "Type de r\xE9action invalide" });
+    }
+    console.error("[WALL] Erreur r\xE9action:", error);
+    res.status(500).json({ error: "Erreur lors de la r\xE9action" });
+  }
+});
+router85.get("/posts/:id/comments", authenticateToken, async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const comments = await db.wallComment.findMany({
+      where: { postId: id, parentCommentId: null },
+      orderBy: { createdAt: "asc" },
+      include: {
+        author: {
+          select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true }
+        },
+        organization: {
+          select: { id: true, name: true, logoUrl: true }
+        },
+        replies: {
+          orderBy: { createdAt: "asc" },
+          include: {
+            author: {
+              select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true }
+            },
+            organization: {
+              select: { id: true, name: true, logoUrl: true }
+            }
+          }
+        }
+      }
+    });
+    res.json(comments);
+  } catch (error) {
+    console.error("[WALL] Erreur commentaires:", error);
+    res.status(500).json({ error: "Erreur lors du chargement des commentaires" });
+  }
+});
+router85.post("/posts/:id/comments", authenticateToken, async (req2, res) => {
+  try {
+    const user = req2.user;
+    const { id } = req2.params;
+    const data = createCommentSchema.parse(req2.body);
+    const post = await db.wallPost.findUnique({ where: { id } });
+    if (!post) return res.status(404).json({ error: "Post non trouv\xE9" });
+    const comment = await db.wallComment.create({
+      data: {
+        postId: id,
+        authorId: user.id,
+        content: data.content,
+        parentCommentId: data.parentCommentId,
+        mediaUrl: data.mediaUrl,
+        publishAsOrg: data.publishAsOrg && !!(user.organizationId || req2.headers["x-organization-id"]) ? true : false,
+        organizationId: data.publishAsOrg ? user.organizationId || req2.headers["x-organization-id"] || null : null
+      },
+      include: {
+        author: {
+          select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true }
+        },
+        organization: {
+          select: { id: true, name: true, logoUrl: true }
+        }
+      }
+    });
+    await db.wallPost.update({ where: { id }, data: { commentsCount: { increment: 1 } } });
+    res.status(201).json(comment);
+  } catch (error) {
+    if (error instanceof import_zod14.z.ZodError) {
+      return res.status(400).json({ error: "Donn\xE9es invalides", details: error.errors });
+    }
+    console.error("[WALL] Erreur commentaire:", error);
+    res.status(500).json({ error: "Erreur lors de la cr\xE9ation du commentaire" });
+  }
+});
+router85.delete("/comments/:id", authenticateToken, async (req2, res) => {
+  try {
+    const user = req2.user;
+    const { id } = req2.params;
+    const comment = await db.wallComment.findUnique({ where: { id } });
+    if (!comment) return res.status(404).json({ error: "Commentaire non trouv\xE9" });
+    if (comment.authorId !== user.id && !user.isSuperAdmin && user.role !== "admin") {
+      return res.status(403).json({ error: "Non autoris\xE9" });
+    }
+    await db.wallPost.update({
+      where: { id: comment.postId },
+      data: { commentsCount: { decrement: 1 } }
+    });
+    await db.wallComment.delete({ where: { id } });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("[WALL] Erreur suppression commentaire:", error);
+    res.status(500).json({ error: "Erreur lors de la suppression" });
+  }
+});
+router85.post("/posts/:id/share", authenticateToken, async (req2, res) => {
+  try {
+    const user = req2.user;
+    const { id } = req2.params;
+    const { targetType = "LINK" } = req2.body;
+    const post = await db.wallPost.findUnique({ where: { id } });
+    if (!post) return res.status(404).json({ error: "Post non trouv\xE9" });
+    const allowedTypes = ["INTERNAL", "FACEBOOK", "LINKEDIN", "WHATSAPP", "EMAIL", "LINK"];
+    if (!allowedTypes.includes(targetType)) {
+      return res.status(400).json({ error: "Type de partage invalide" });
+    }
+    const share = await db.wallShare.create({
+      data: { postId: id, userId: user.id, targetType }
+    });
+    await db.wallPost.update({ where: { id }, data: { sharesCount: { increment: 1 } } });
+    res.status(201).json(share);
+  } catch (error) {
+    console.error("[WALL] Erreur partage:", error);
+    res.status(500).json({ error: "Erreur lors du partage" });
+  }
+});
+router85.get("/stats", authenticateToken, async (req2, res) => {
+  try {
+    const user = req2.user;
+    const orgId = user.organizationId || req2.headers["x-organization-id"];
+    const [totalPosts, totalReactions, totalComments, totalShares] = await Promise.all([
+      db.wallPost.count({ where: { organizationId: orgId } }),
+      db.wallReaction.count({ where: { post: { organizationId: orgId } } }),
+      db.wallComment.count({ where: { post: { organizationId: orgId } } }),
+      db.wallShare.count({ where: { post: { organizationId: orgId } } })
+    ]);
+    res.json({ totalPosts, totalReactions, totalComments, totalShares });
+  } catch (error) {
+    console.error("[WALL] Erreur stats:", error);
+    res.status(500).json({ error: "Erreur lors du chargement des stats" });
+  }
+});
+router85.post("/upload", authenticateToken, async (req2, res) => {
+  try {
+    const uploadedFiles = req2.files;
+    if (!uploadedFiles || Object.keys(uploadedFiles).length === 0) {
+      return res.status(400).json({ error: "Aucun fichier fourni" });
+    }
+    const fileList = Array.isArray(uploadedFiles.files) ? uploadedFiles.files : uploadedFiles.files ? [uploadedFiles.files] : Object.values(uploadedFiles).flat();
+    const allowedMime = /^(image|video)\//;
+    const urls = [];
+    for (const file of fileList) {
+      if (!allowedMime.test(file.mimetype) && file.mimetype !== "application/pdf") {
+        continue;
+      }
+      const safeName = file.name.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_.-]/g, "");
+      const filename = `${Date.now()}_${safeName}`;
+      const key2 = `wall/${filename}`;
+      const url = await uploadExpressFile(file, key2);
+      urls.push(url);
+    }
+    if (urls.length === 0) {
+      return res.status(400).json({ error: "Aucun fichier valide" });
+    }
+    console.log(`[WALL] \u2705 Upload ${urls.length} fichier(s):`, urls);
+    res.json({ urls });
+  } catch (error) {
+    console.error("[WALL] Erreur upload:", error);
+    res.status(500).json({ error: "Erreur upload" });
+  }
+});
+var wall_default = router85;
+
+// src/routes/friends.ts
+var import_express87 = require("express");
+init_database();
+var router86 = (0, import_express87.Router)();
+router86.use(authenticateToken);
+router86.get("/", async (req2, res) => {
+  const user = req2.user;
+  if (!user?.id) {
+    res.status(401).json({ error: "Non authentifi\xE9" });
+    return;
+  }
+  try {
+    const friendships = await db.friendship.findMany({
+      where: {
+        OR: [
+          { requesterId: user.id, status: "accepted" },
+          { addresseeId: user.id, status: "accepted" }
+        ]
+      },
+      include: {
+        requester: { select: { id: true, firstName: true, lastName: true, avatarUrl: true, email: true, organizationId: true, role: true } },
+        addressee: { select: { id: true, firstName: true, lastName: true, avatarUrl: true, email: true, organizationId: true, role: true } }
+      },
+      orderBy: { updatedAt: "desc" }
+    });
+    const friends = friendships.map((f) => {
+      const friend = f.requesterId === user.id ? f.addressee : f.requester;
+      return {
+        friendshipId: f.id,
+        source: f.source,
+        ...friend,
+        isOrgMember: friend.organizationId === user.organizationId
+      };
+    });
+    const pendingReceived = await db.friendship.findMany({
+      where: { addresseeId: user.id, status: "pending" },
+      include: {
+        requester: { select: { id: true, firstName: true, lastName: true, avatarUrl: true, email: true, organizationId: true } }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+    const pendingSent = await db.friendship.findMany({
+      where: { requesterId: user.id, status: "pending" },
+      include: {
+        addressee: { select: { id: true, firstName: true, lastName: true, avatarUrl: true, email: true, organizationId: true } }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+    res.json({
+      friends,
+      pendingReceived: pendingReceived.map((p) => ({ friendshipId: p.id, ...p.requester })),
+      pendingSent: pendingSent.map((p) => ({ friendshipId: p.id, ...p.addressee }))
+    });
+  } catch (err) {
+    console.error("[FRIENDS] Error fetching friends:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router86.post("/sync-org", async (req2, res) => {
+  const user = req2.user;
+  if (!user?.id || !user.organizationId) {
+    res.status(400).json({ error: "Organisation requise" });
+    return;
+  }
+  try {
+    const orgMembers = await db.user.findMany({
+      where: { organizationId: user.organizationId, id: { not: user.id } },
+      select: { id: true }
+    });
+    let added = 0;
+    for (const member of orgMembers) {
+      const existing = await db.friendship.findFirst({
+        where: {
+          OR: [
+            { requesterId: user.id, addresseeId: member.id },
+            { requesterId: member.id, addresseeId: user.id }
+          ]
+        }
+      });
+      if (!existing) {
+        await db.friendship.create({
+          data: {
+            requesterId: user.id,
+            addresseeId: member.id,
+            status: "accepted",
+            // Auto-accepted for org members
+            source: "organization"
+          }
+        });
+        added++;
+      }
+    }
+    res.json({ success: true, added, total: orgMembers.length });
+  } catch (err) {
+    console.error("[FRIENDS] Error syncing org:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router86.post("/request", async (req2, res) => {
+  const user = req2.user;
+  const { userId } = req2.body;
+  if (!user?.id) {
+    res.status(401).json({ error: "Non authentifi\xE9" });
+    return;
+  }
+  if (!userId || userId === user.id) {
+    res.status(400).json({ error: "userId invalide" });
+    return;
+  }
+  try {
+    const existing = await db.friendship.findFirst({
+      where: {
+        OR: [
+          { requesterId: user.id, addresseeId: userId },
+          { requesterId: userId, addresseeId: user.id }
+        ]
+      }
+    });
+    if (existing) {
+      if (existing.status === "accepted") {
+        res.json({ message: "D\xE9j\xE0 amis" });
+        return;
+      }
+      if (existing.status === "pending") {
+        res.json({ message: "Demande d\xE9j\xE0 envoy\xE9e" });
+        return;
+      }
+      if (existing.status === "blocked") {
+        res.status(403).json({ error: "Action impossible" });
+        return;
+      }
+    }
+    const friendship = await db.friendship.create({
+      data: { requesterId: user.id, addresseeId: userId, status: "pending", source: "manual" }
+    });
+    const requester = await db.user.findUnique({
+      where: { id: user.id },
+      select: { firstName: true, lastName: true, avatarUrl: true }
+    });
+    const requesterName = requester ? `${requester.firstName} ${requester.lastName}`.trim() : "Quelqu'un";
+    try {
+      await db.notification.create({
+        data: {
+          id: crypto.randomUUID(),
+          userId,
+          organizationId: null,
+          type: "FRIEND_REQUEST_RECEIVED",
+          data: {
+            friendshipId: friendship.id,
+            requesterId: user.id,
+            requesterName,
+            requesterAvatar: requester?.avatarUrl || null,
+            message: `${requesterName} vous a envoy\xE9 une demande d'ami`
+          },
+          actionUrl: `/profile/${user.id}`,
+          priority: "normal",
+          updatedAt: /* @__PURE__ */ new Date()
+        }
+      });
+    } catch (notifErr) {
+      console.error("[FRIENDS] Notification error (non-blocking):", notifErr);
+    }
+    res.json({ success: true, friendship });
+  } catch (err) {
+    console.error("[FRIENDS] Error sending request:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router86.post("/:id/accept", async (req2, res) => {
+  const user = req2.user;
+  if (!user?.id) {
+    res.status(401).json({ error: "Non authentifi\xE9" });
+    return;
+  }
+  try {
+    const friendship = await db.friendship.findUnique({ where: { id: req2.params.id } });
+    if (!friendship || friendship.addresseeId !== user.id) {
+      res.status(404).json({ error: "Demande non trouv\xE9e" });
+      return;
+    }
+    if (friendship.status === "accepted") {
+      res.json({ success: true, alreadyAccepted: true });
+      return;
+    }
+    await db.friendship.update({
+      where: { id: req2.params.id },
+      data: { status: "accepted" }
+    });
+    try {
+      const originalNotif = await db.notification.findFirst({
+        where: {
+          type: "FRIEND_REQUEST_RECEIVED",
+          userId: user.id,
+          data: { path: ["friendshipId"], equals: friendship.id }
+        }
+      });
+      if (originalNotif) {
+        await db.notification.update({
+          where: { id: originalNotif.id },
+          data: {
+            status: "READ",
+            readAt: /* @__PURE__ */ new Date(),
+            updatedAt: /* @__PURE__ */ new Date(),
+            data: { ...originalNotif.data, handled: "accepted" }
+          }
+        });
+      }
+    } catch (updateErr) {
+      console.error("[FRIENDS] Update original notif error (non-blocking):", updateErr);
+    }
+    try {
+      const acceptor = await db.user.findUnique({
+        where: { id: user.id },
+        select: { firstName: true, lastName: true, avatarUrl: true }
+      });
+      await db.notification.create({
+        data: {
+          id: crypto.randomUUID(),
+          userId: friendship.requesterId,
+          organizationId: null,
+          type: "FRIEND_REQUEST_ACCEPTED",
+          data: {
+            friendshipId: friendship.id,
+            acceptorId: user.id,
+            acceptorName: `${acceptor?.firstName || ""} ${acceptor?.lastName || ""}`.trim(),
+            acceptorAvatar: acceptor?.avatarUrl || null,
+            message: `${acceptor?.firstName || ""} ${acceptor?.lastName || ""}`.trim() + " a accept\xE9 votre demande d'ami"
+          },
+          actionUrl: `/profile/${user.id}`,
+          priority: "normal",
+          updatedAt: /* @__PURE__ */ new Date()
+        }
+      });
+    } catch (notifErr) {
+      console.error("[FRIENDS] Notification error (non-blocking):", notifErr);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[FRIENDS] Error accepting:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router86.post("/:id/block", async (req2, res) => {
+  const user = req2.user;
+  if (!user?.id) {
+    res.status(401).json({ error: "Non authentifi\xE9" });
+    return;
+  }
+  try {
+    const friendship = await db.friendship.findUnique({ where: { id: req2.params.id } });
+    if (!friendship || friendship.requesterId !== user.id && friendship.addresseeId !== user.id) {
+      res.status(404).json({ error: "Relation non trouv\xE9e" });
+      return;
+    }
+    if (friendship.status === "blocked") {
+      res.json({ success: true, alreadyBlocked: true });
+      return;
+    }
+    await db.friendship.update({
+      where: { id: req2.params.id },
+      data: { status: "blocked" }
+    });
+    try {
+      const originalNotif = await db.notification.findFirst({
+        where: {
+          type: "FRIEND_REQUEST_RECEIVED",
+          userId: user.id,
+          data: { path: ["friendshipId"], equals: friendship.id }
+        }
+      });
+      if (originalNotif) {
+        await db.notification.update({
+          where: { id: originalNotif.id },
+          data: {
+            status: "READ",
+            readAt: /* @__PURE__ */ new Date(),
+            updatedAt: /* @__PURE__ */ new Date(),
+            data: { ...originalNotif.data, handled: "blocked" }
+          }
+        });
+      }
+    } catch (updateErr) {
+      console.error("[FRIENDS] Update notif on block error (non-blocking):", updateErr);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[FRIENDS] Error blocking:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router86.delete("/:id", async (req2, res) => {
+  const user = req2.user;
+  if (!user?.id) {
+    res.status(401).json({ error: "Non authentifi\xE9" });
+    return;
+  }
+  try {
+    const friendship = await db.friendship.findUnique({ where: { id: req2.params.id } });
+    if (!friendship || friendship.requesterId !== user.id && friendship.addresseeId !== user.id) {
+      res.status(404).json({ error: "Amiti\xE9 non trouv\xE9e" });
+      return;
+    }
+    try {
+      const originalNotif = await db.notification.findFirst({
+        where: {
+          type: "FRIEND_REQUEST_RECEIVED",
+          userId: user.id,
+          data: { path: ["friendshipId"], equals: friendship.id }
+        }
+      });
+      if (originalNotif) {
+        await db.notification.update({
+          where: { id: originalNotif.id },
+          data: {
+            status: "READ",
+            readAt: /* @__PURE__ */ new Date(),
+            updatedAt: /* @__PURE__ */ new Date(),
+            data: { ...originalNotif.data, handled: "rejected" }
+          }
+        });
+      }
+    } catch (updateErr) {
+      console.error("[FRIENDS] Update notif on reject error (non-blocking):", updateErr);
+    }
+    await db.friendship.delete({ where: { id: req2.params.id } });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[FRIENDS] Error removing:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router86.get("/search", async (req2, res) => {
+  const user = req2.user;
+  const q = (req2.query.q || "").trim();
+  if (!user?.id) {
+    res.status(401).json({ error: "Non authentifi\xE9" });
+    return;
+  }
+  if (q.length < 2) {
+    res.json([]);
+    return;
+  }
+  try {
+    const users = await db.user.findMany({
+      where: {
+        id: { not: user.id },
+        OR: [
+          { firstName: { contains: q, mode: "insensitive" } },
+          { lastName: { contains: q, mode: "insensitive" } },
+          { email: { contains: q, mode: "insensitive" } }
+        ]
+      },
+      select: { id: true, firstName: true, lastName: true, avatarUrl: true, email: true, organizationId: true },
+      take: 20
+    });
+    const friendships = await db.friendship.findMany({
+      where: {
+        OR: [
+          { requesterId: user.id, addresseeId: { in: users.map((u) => u.id) } },
+          { addresseeId: user.id, requesterId: { in: users.map((u) => u.id) } }
+        ]
+      }
+    });
+    const friendshipMap = /* @__PURE__ */ new Map();
+    for (const f of friendships) {
+      const otherId = f.requesterId === user.id ? f.addresseeId : f.requesterId;
+      friendshipMap.set(otherId, { id: f.id, status: f.status });
+    }
+    res.json(users.map((u) => ({
+      ...u,
+      isOrgMember: u.organizationId === user.organizationId,
+      friendshipStatus: friendshipMap.get(u.id)?.status || null,
+      friendshipId: friendshipMap.get(u.id)?.id || null
+    })));
+  } catch (err) {
+    console.error("[FRIENDS] Error searching:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+var friends_default = router86;
+
+// src/routes/messenger.ts
+var import_express88 = require("express");
+init_database();
+var router87 = (0, import_express88.Router)();
+router87.use(authenticateToken);
+router87.get("/conversations", async (req2, res) => {
+  const user = req2.user;
+  if (!user?.id) {
+    res.status(401).json({ error: "Non authentifi\xE9" });
+    return;
+  }
+  try {
+    const participations = await db.conversationParticipant.findMany({
+      where: { userId: user.id, isActive: true },
+      include: {
+        conversation: {
+          include: {
+            participants: {
+              include: {
+                user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } }
+              }
+            },
+            messages: {
+              orderBy: { createdAt: "desc" },
+              take: 1,
+              include: {
+                sender: { select: { id: true, firstName: true, lastName: true } }
+              }
+            }
+          }
+        }
+      },
+      orderBy: { conversation: { lastMessageAt: "desc" } }
+    });
+    const conversations = participations.map((p) => {
+      const conv = p.conversation;
+      const otherParticipants = conv.participants.filter((pp) => pp.userId !== user.id);
+      const lastMessage = conv.messages[0] || null;
+      const unreadCount = lastMessage && lastMessage.createdAt > p.lastReadAt ? 1 : 0;
+      return {
+        id: conv.id,
+        name: conv.name || otherParticipants.map((pp) => `${pp.user.firstName || ""} ${pp.user.lastName || ""}`.trim()).join(", ") || "Conversation",
+        avatarUrl: conv.isGroup ? conv.avatarUrl : otherParticipants[0]?.user.avatarUrl || null,
+        isGroup: conv.isGroup,
+        participants: conv.participants.map((pp) => pp.user),
+        lastMessage: lastMessage ? {
+          id: lastMessage.id,
+          content: lastMessage.isDeleted ? "Message supprim\xE9" : lastMessage.content,
+          senderName: `${lastMessage.sender.firstName || ""} ${lastMessage.sender.lastName || ""}`.trim(),
+          senderId: lastMessage.senderId,
+          createdAt: lastMessage.createdAt,
+          mediaType: lastMessage.mediaType
+        } : null,
+        unreadCount,
+        lastMessageAt: conv.lastMessageAt,
+        myLastReadAt: p.lastReadAt
+      };
+    });
+    res.json(conversations);
+  } catch (err) {
+    console.error("[MESSENGER] Error listing conversations:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router87.post("/conversations", async (req2, res) => {
+  const user = req2.user;
+  const { participantIds, name, isGroup } = req2.body;
+  if (!user?.id) {
+    res.status(401).json({ error: "Non authentifi\xE9" });
+    return;
+  }
+  if (!participantIds || !Array.isArray(participantIds) || participantIds.length === 0) {
+    res.status(400).json({ error: "participantIds requis" });
+    return;
+  }
+  try {
+    const allIds = [.../* @__PURE__ */ new Set([user.id, ...participantIds])];
+    if (!isGroup && allIds.length === 2) {
+      const existing = await db.conversation.findFirst({
+        where: {
+          isGroup: false,
+          AND: allIds.map((id) => ({
+            participants: { some: { userId: id, isActive: true } }
+          }))
+        },
+        include: {
+          participants: {
+            include: { user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } } }
+          }
+        }
+      });
+      if (existing) {
+        res.json(existing);
+        return;
+      }
+    }
+    const conv = await db.conversation.create({
+      data: {
+        name: isGroup ? name || "Groupe" : null,
+        isGroup: !!isGroup,
+        participants: {
+          create: allIds.map((id) => ({
+            userId: id,
+            role: id === user.id ? "admin" : "member"
+          }))
+        }
+      },
+      include: {
+        participants: {
+          include: { user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } } }
+        }
+      }
+    });
+    res.json(conv);
+  } catch (err) {
+    console.error("[MESSENGER] Error creating conversation:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router87.get("/conversations/:id/messages", async (req2, res) => {
+  const user = req2.user;
+  if (!user?.id) {
+    res.status(401).json({ error: "Non authentifi\xE9" });
+    return;
+  }
+  const conversationId = req2.params.id;
+  const cursor = req2.query.cursor;
+  const limit = Math.min(parseInt(req2.query.limit) || 50, 100);
+  try {
+    const participant = await db.conversationParticipant.findUnique({
+      where: { conversationId_userId: { conversationId, userId: user.id } }
+    });
+    if (!participant || !participant.isActive) {
+      res.status(403).json({ error: "Acc\xE8s refus\xE9" });
+      return;
+    }
+    const messages = await db.message.findMany({
+      where: { conversationId },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      ...cursor ? { cursor: { id: cursor }, skip: 1 } : {},
+      include: {
+        sender: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+        replyTo: {
+          select: { id: true, content: true, sender: { select: { firstName: true, lastName: true } } }
+        }
+      }
+    });
+    await db.conversationParticipant.update({
+      where: { conversationId_userId: { conversationId, userId: user.id } },
+      data: { lastReadAt: /* @__PURE__ */ new Date() }
+    });
+    res.json({
+      messages: messages.reverse(),
+      // Return in chronological order
+      hasMore: messages.length === limit,
+      nextCursor: messages.length > 0 ? messages[0].id : null
+    });
+  } catch (err) {
+    console.error("[MESSENGER] Error fetching messages:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router87.post("/conversations/:id/messages", async (req2, res) => {
+  const user = req2.user;
+  if (!user?.id) {
+    res.status(401).json({ error: "Non authentifi\xE9" });
+    return;
+  }
+  const conversationId = req2.params.id;
+  const { content, mediaUrls, mediaType, replyToId } = req2.body;
+  if (!content && (!mediaUrls || mediaUrls.length === 0)) {
+    res.status(400).json({ error: "Contenu ou m\xE9dia requis" });
+    return;
+  }
+  try {
+    const participant = await db.conversationParticipant.findUnique({
+      where: { conversationId_userId: { conversationId, userId: user.id } }
+    });
+    if (!participant || !participant.isActive) {
+      res.status(403).json({ error: "Acc\xE8s refus\xE9" });
+      return;
+    }
+    const message = await db.message.create({
+      data: {
+        conversationId,
+        senderId: user.id,
+        content: content || null,
+        mediaUrls: mediaUrls || void 0,
+        mediaType: mediaType || null,
+        replyToId: replyToId || null
+      },
+      include: {
+        sender: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+        replyTo: {
+          select: { id: true, content: true, sender: { select: { firstName: true, lastName: true } } }
+        }
+      }
+    });
+    await db.conversation.update({
+      where: { id: conversationId },
+      data: { lastMessageAt: /* @__PURE__ */ new Date() }
+    });
+    await db.conversationParticipant.update({
+      where: { conversationId_userId: { conversationId, userId: user.id } },
+      data: { lastReadAt: /* @__PURE__ */ new Date() }
+    });
+    res.json(message);
+  } catch (err) {
+    console.error("[MESSENGER] Error sending message:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router87.post("/conversations/:id/read", async (req2, res) => {
+  const user = req2.user;
+  if (!user?.id) {
+    res.status(401).json({ error: "Non authentifi\xE9" });
+    return;
+  }
+  try {
+    await db.conversationParticipant.update({
+      where: { conversationId_userId: { conversationId: req2.params.id, userId: user.id } },
+      data: { lastReadAt: /* @__PURE__ */ new Date() }
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[MESSENGER] Error marking read:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router87.delete("/messages/:id", async (req2, res) => {
+  const user = req2.user;
+  if (!user?.id) {
+    res.status(401).json({ error: "Non authentifi\xE9" });
+    return;
+  }
+  try {
+    const message = await db.message.findUnique({ where: { id: req2.params.id } });
+    if (!message || message.senderId !== user.id) {
+      res.status(403).json({ error: "Acc\xE8s refus\xE9" });
+      return;
+    }
+    await db.message.update({
+      where: { id: req2.params.id },
+      data: { isDeleted: true, content: null, mediaUrls: void 0 }
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[MESSENGER] Error deleting message:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router87.get("/unread", async (req2, res) => {
+  const user = req2.user;
+  if (!user?.id) {
+    res.status(401).json({ error: "Non authentifi\xE9" });
+    return;
+  }
+  try {
+    const participations = await db.conversationParticipant.findMany({
+      where: { userId: user.id, isActive: true },
+      include: {
+        conversation: {
+          include: {
+            messages: { orderBy: { createdAt: "desc" }, take: 1 }
+          }
+        }
+      }
+    });
+    let unread = 0;
+    for (const p of participations) {
+      const lastMsg = p.conversation.messages[0];
+      if (lastMsg && lastMsg.createdAt > p.lastReadAt && lastMsg.senderId !== user.id) {
+        unread++;
+      }
+    }
+    res.json({ unread });
+  } catch (err) {
+    console.error("[MESSENGER] Error getting unread:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+var messenger_default = router87;
+
+// src/routes/calls.ts
+var import_express90 = require("express");
+init_database();
+
+// src/routes/push.ts
+var import_express89 = require("express");
+var import_web_push = __toESM(require("web-push"), 1);
+init_database();
+var router88 = (0, import_express89.Router)();
+var VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "";
+var VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
+var VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:info@2thier.be";
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  import_web_push.default.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+  console.log("[PUSH] \u2705 Web Push configur\xE9 avec VAPID");
+} else {
+  console.warn("[PUSH] \u26A0\uFE0F VAPID keys manquantes \u2014 notifications push d\xE9sactiv\xE9es");
+}
+router88.get("/vapid-key", (_req, res) => {
+  res.json({ publicKey: VAPID_PUBLIC_KEY });
+});
+router88.post("/subscribe", authenticateToken, async (req2, res) => {
+  const user = req2.user;
+  if (!user?.id) {
+    res.status(401).json({ error: "Non authentifi\xE9" });
+    return;
+  }
+  const { endpoint, keys } = req2.body;
+  if (!endpoint || !keys?.p256dh || !keys?.auth) {
+    res.status(400).json({ error: "Subscription invalide" });
+    return;
+  }
+  try {
+    await db.pushSubscription.upsert({
+      where: { endpoint },
+      update: {
+        userId: user.id,
+        p256dh: keys.p256dh,
+        auth: keys.auth,
+        isActive: true
+      },
+      create: {
+        userId: user.id,
+        endpoint,
+        p256dh: keys.p256dh,
+        auth: keys.auth,
+        isActive: true
+      }
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[PUSH] Error saving subscription:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router88.delete("/unsubscribe", authenticateToken, async (req2, res) => {
+  const user = req2.user;
+  if (!user?.id) {
+    res.status(401).json({ error: "Non authentifi\xE9" });
+    return;
+  }
+  const { endpoint } = req2.body;
+  if (!endpoint) {
+    res.status(400).json({ error: "Endpoint requis" });
+    return;
+  }
+  try {
+    await db.pushSubscription.deleteMany({
+      where: { endpoint, userId: user.id }
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[PUSH] Error removing subscription:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+async function sendPushToUser(userId, payload) {
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return 0;
+  const subscriptions = await db.pushSubscription.findMany({
+    where: { userId, isActive: true }
+  });
+  let sent = 0;
+  for (const sub of subscriptions) {
+    try {
+      await import_web_push.default.sendNotification(
+        {
+          endpoint: sub.endpoint,
+          keys: { p256dh: sub.p256dh, auth: sub.auth }
+        },
+        JSON.stringify(payload)
+      );
+      sent++;
+    } catch (err) {
+      if (err.statusCode === 404 || err.statusCode === 410) {
+        await db.pushSubscription.update({
+          where: { id: sub.id },
+          data: { isActive: false }
+        }).catch(() => {
+        });
+      }
+      console.warn(`[PUSH] Failed to send to ${sub.endpoint.slice(0, 50)}...`, err.statusCode || err.message);
+    }
+  }
+  return sent;
+}
+var push_default = router88;
+
+// src/routes/calls.ts
+var router89 = (0, import_express90.Router)();
+router89.use(authenticateToken);
+router89.post("/start", async (req2, res) => {
+  const user = req2.user;
+  if (!user?.id) {
+    res.status(401).json({ error: "Non authentifi\xE9" });
+    return;
+  }
+  const { conversationId, callType = "video", title } = req2.body;
+  if (!conversationId) {
+    res.status(400).json({ error: "conversationId requis" });
+    return;
+  }
+  try {
+    const participants = await db.conversationParticipant.findMany({
+      where: { conversationId, isActive: true },
+      select: { userId: true }
+    });
+    if (participants.length < 2) {
+      res.status(400).json({ error: "La conversation doit avoir au moins 2 participants" });
+      return;
+    }
+    const activeCall = await db.videoCall.findFirst({
+      where: { conversationId, status: { in: ["ringing", "active"] } }
+    });
+    if (activeCall) {
+      res.json({ call: activeCall, existing: true });
+      return;
+    }
+    const call = await db.videoCall.create({
+      data: {
+        conversationId,
+        initiatorId: user.id,
+        callType,
+        title,
+        status: "ringing",
+        participants: {
+          create: participants.map((p) => ({
+            userId: p.userId,
+            status: p.userId === user.id ? "joined" : "invited",
+            joinedAt: p.userId === user.id ? /* @__PURE__ */ new Date() : null
+          }))
+        }
+      },
+      include: {
+        participants: {
+          include: { user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } } }
+        },
+        initiator: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } }
+      }
+    });
+    const callerName = `${call.initiator.firstName} ${call.initiator.lastName}`.trim();
+    const invitedParticipants = call.participants.filter((p) => p.userId !== user.id);
+    for (const p of invitedParticipants) {
+      sendPushToUser(p.userId, {
+        title: `\u{1F4DE} ${callType === "video" ? "Appel vid\xE9o" : "Appel audio"} entrant`,
+        body: `${callerName} vous appelle...`,
+        icon: call.initiator.avatarUrl || "/pwa-192x192.png",
+        tag: `call-${call.id}`,
+        callId: call.id,
+        type: "incoming-call",
+        url: "/",
+        requireInteraction: true,
+        vibrate: [200, 100, 200, 100, 200, 100, 200],
+        actions: [
+          { action: "answer", title: "\u2705 R\xE9pondre" },
+          { action: "reject", title: "\u274C Refuser" }
+        ]
+      }).catch((err) => console.warn("[CALLS] Push notification error:", err));
+    }
+    res.json({ call, existing: false });
+  } catch (err) {
+    console.error("[CALLS] Error starting call:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router89.post("/:id/join", async (req2, res) => {
+  const user = req2.user;
+  if (!user?.id) {
+    res.status(401).json({ error: "Non authentifi\xE9" });
+    return;
+  }
+  try {
+    const call = await db.videoCall.findUnique({ where: { id: req2.params.id } });
+    if (!call || call.status === "ended") {
+      res.status(404).json({ error: "Appel termin\xE9 ou non trouv\xE9" });
+      return;
+    }
+    await db.callParticipant.updateMany({
+      where: { callId: req2.params.id, userId: user.id },
+      data: { status: "joined", joinedAt: /* @__PURE__ */ new Date() }
+    });
+    if (call.status === "ringing" && call.initiatorId !== user.id) {
+      await db.videoCall.update({
+        where: { id: req2.params.id },
+        data: { status: "active", startedAt: /* @__PURE__ */ new Date() }
+      });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[CALLS] Error joining call:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router89.post("/:id/leave", async (req2, res) => {
+  const user = req2.user;
+  if (!user?.id) {
+    res.status(401).json({ error: "Non authentifi\xE9" });
+    return;
+  }
+  try {
+    await db.callParticipant.updateMany({
+      where: { callId: req2.params.id, userId: user.id },
+      data: { status: "left", leftAt: /* @__PURE__ */ new Date() }
+    });
+    const stillJoined = await db.callParticipant.count({
+      where: { callId: req2.params.id, status: "joined" }
+    });
+    if (stillJoined === 0) {
+      const call = await db.videoCall.update({
+        where: { id: req2.params.id },
+        data: {
+          status: "ended",
+          endedAt: /* @__PURE__ */ new Date(),
+          duration: Math.floor((Date.now() - (await db.videoCall.findUnique({ where: { id: req2.params.id } })).startedAt.getTime()) / 1e3)
+        }
+      });
+      res.json({ success: true, callEnded: true, call });
+    } else {
+      res.json({ success: true, callEnded: false });
+    }
+  } catch (err) {
+    console.error("[CALLS] Error leaving call:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router89.post("/:id/reject", async (req2, res) => {
+  const user = req2.user;
+  if (!user?.id) {
+    res.status(401).json({ error: "Non authentifi\xE9" });
+    return;
+  }
+  try {
+    await db.callParticipant.updateMany({
+      where: { callId: req2.params.id, userId: user.id },
+      data: { status: "rejected" }
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[CALLS] Error rejecting call:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router89.get("/:id", async (req2, res) => {
+  const user = req2.user;
+  if (!user?.id) {
+    res.status(401).json({ error: "Non authentifi\xE9" });
+    return;
+  }
+  try {
+    const call = await db.videoCall.findUnique({
+      where: { id: req2.params.id },
+      include: {
+        participants: {
+          include: { user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } } }
+        },
+        initiator: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } }
+      }
+    });
+    if (!call) {
+      res.status(404).json({ error: "Appel non trouv\xE9" });
+      return;
+    }
+    res.json(call);
+  } catch (err) {
+    console.error("[CALLS] Error fetching call:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router89.get("/check/incoming", async (req2, res) => {
+  const user = req2.user;
+  if (!user?.id) {
+    res.status(401).json({ error: "Non authentifi\xE9" });
+    return;
+  }
+  try {
+    const incoming = await db.callParticipant.findFirst({
+      where: {
+        userId: user.id,
+        status: "invited",
+        call: { status: { in: ["ringing", "active"] } }
+      },
+      include: {
+        call: {
+          include: {
+            initiator: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+            participants: {
+              include: { user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } } }
+            }
+          }
+        }
+      }
+    });
+    res.json({ incoming: incoming?.call || null });
+  } catch (err) {
+    console.error("[CALLS] Error checking incoming:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+var signalingBuffer = /* @__PURE__ */ new Map();
+router89.post("/:id/signal", async (req2, res) => {
+  const user = req2.user;
+  if (!user?.id) {
+    res.status(401).json({ error: "Non authentifi\xE9" });
+    return;
+  }
+  const { to, type, data } = req2.body;
+  const callId = req2.params.id;
+  const key2 = callId;
+  if (!signalingBuffer.has(key2)) signalingBuffer.set(key2, []);
+  signalingBuffer.get(key2).push({ from: user.id, to, type, data, ts: Date.now() });
+  const now = Date.now();
+  const signals = signalingBuffer.get(key2);
+  const cleaned = signals.filter((s) => now - s.ts < 3e4);
+  signalingBuffer.set(key2, cleaned);
+  res.json({ success: true });
+});
+router89.get("/:id/signal", async (req2, res) => {
+  const user = req2.user;
+  if (!user?.id) {
+    res.status(401).json({ error: "Non authentifi\xE9" });
+    return;
+  }
+  const callId = req2.params.id;
+  const signals = signalingBuffer.get(callId) || [];
+  const mySignals = signals.filter((s) => s.to === user.id);
+  if (mySignals.length > 0) {
+    const remaining = signals.filter((s) => s.to !== user.id);
+    signalingBuffer.set(callId, remaining);
+  }
+  res.json({ signals: mySignals });
+});
+router89.post("/:id/transcribe", async (req2, res) => {
+  const user = req2.user;
+  if (!user?.id) {
+    res.status(401).json({ error: "Non authentifi\xE9" });
+    return;
+  }
+  const { transcription } = req2.body;
+  if (!transcription) {
+    res.status(400).json({ error: "Transcription requise" });
+    return;
+  }
+  try {
+    const call = await db.videoCall.findUnique({
+      where: { id: req2.params.id },
+      include: {
+        participants: {
+          include: { user: { select: { firstName: true, lastName: true } } }
+        }
+      }
+    });
+    if (!call) {
+      res.status(404).json({ error: "Appel non trouv\xE9" });
+      return;
+    }
+    const participantNames = call.participants.map(
+      (p) => `${p.user.firstName || ""} ${p.user.lastName || ""}`.trim()
+    ).join(", ");
+    const gemini = getGeminiService();
+    const prompt = `Tu es un assistant professionnel. Voici la transcription d'une r\xE9union vid\xE9o entre: ${participantNames}.
+${call.title ? `Sujet de la r\xE9union: ${call.title}` : ""}
+
+TRANSCRIPTION:
+${transcription}
+
+G\xE9n\xE8re un compte-rendu de r\xE9union structur\xE9 en fran\xE7ais avec:
+1. **R\xE9sum\xE9** (3-5 phrases)
+2. **Points cl\xE9s discut\xE9s** (liste \xE0 puces)
+3. **D\xE9cisions prises** (si applicable)
+4. **Actions \xE0 suivre** (avec responsable si identifiable)
+5. **Prochaines \xE9tapes**
+
+Sois concis et professionnel.`;
+    const chatResult = await gemini.chat({ prompt });
+    const summary = chatResult.success && chatResult.content ? chatResult.content : "R\xE9sum\xE9 non disponible";
+    await db.videoCall.update({
+      where: { id: req2.params.id },
+      data: { transcription, meetingSummary: summary }
+    });
+    res.json({ success: true, summary });
+  } catch (err) {
+    console.error("[CALLS] Error transcribing:", err);
+    res.status(500).json({ error: "Erreur lors de la transcription" });
+  }
+});
+router89.get("/history/list", async (req2, res) => {
+  const user = req2.user;
+  if (!user?.id) {
+    res.status(401).json({ error: "Non authentifi\xE9" });
+    return;
+  }
+  try {
+    const calls = await db.videoCall.findMany({
+      where: {
+        participants: { some: { userId: user.id } },
+        status: "ended"
+      },
+      include: {
+        participants: {
+          include: { user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } } }
+        },
+        initiator: { select: { id: true, firstName: true, lastName: true } }
+      },
+      orderBy: { createdAt: "desc" },
+      take: 20
+    });
+    res.json(calls);
+  } catch (err) {
+    console.error("[CALLS] Error fetching history:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+var calls_default = router89;
+
+// src/routes/zhiive.ts
+var import_express91 = require("express");
+init_database();
+var import_zod15 = require("zod");
+var router90 = (0, import_express91.Router)();
+router90.post("/follow/:userId", authenticateToken, async (req2, res) => {
+  try {
+    const followerId = req2.user.id;
+    const followingId = req2.params.userId;
+    if (followerId === followingId) return res.status(400).json({ error: "Impossible de se suivre soi-m\xEAme" });
+    const existing = await db.follow.findUnique({
+      where: { followerId_followingId: { followerId, followingId } }
+    });
+    if (existing) return res.status(409).json({ error: "D\xE9j\xE0 suivi" });
+    await db.follow.create({ data: { followerId, followingId } });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+router90.delete("/follow/:userId", authenticateToken, async (req2, res) => {
+  try {
+    const followerId = req2.user.id;
+    const followingId = req2.params.userId;
+    await db.follow.deleteMany({ where: { followerId, followingId } });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+router90.get("/followers/:userId", authenticateToken, async (req2, res) => {
+  try {
+    const followers = await db.follow.findMany({
+      where: { followingId: req2.params.userId },
+      include: { follower: { select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true } } },
+      orderBy: { createdAt: "desc" }
+    });
+    res.json({ followers: followers.map((f) => f.follower), count: followers.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+router90.get("/following/:userId", authenticateToken, async (req2, res) => {
+  try {
+    const following = await db.follow.findMany({
+      where: { followerId: req2.params.userId },
+      include: { following: { select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true } } },
+      orderBy: { createdAt: "desc" }
+    });
+    res.json({ following: following.map((f) => f.following), count: following.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+router90.get("/stories/feed", authenticateToken, async (req2, res) => {
+  try {
+    const userId = req2.user.id;
+    const orgId = req2.user.organizationId;
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1e3);
+    const stories = await db.story.findMany({
+      where: {
+        organizationId: orgId,
+        OR: [
+          { createdAt: { gt: twentyFourHoursAgo }, expiresAt: { gt: /* @__PURE__ */ new Date() } },
+          { isHighlight: true }
+        ]
+      },
+      include: {
+        author: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+        views: { where: { viewerId: userId }, select: { id: true } }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+    res.json({
+      stories: stories.map((s) => ({
+        id: s.id,
+        userId: s.authorId,
+        userName: `${s.author.firstName} ${s.author.lastName}`.trim(),
+        avatarUrl: s.author.avatarUrl,
+        mediaUrl: s.mediaUrl,
+        mediaType: s.mediaType,
+        viewed: s.views.length > 0,
+        createdAt: s.createdAt
+      }))
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+router90.post("/stories", authenticateToken, async (req2, res) => {
+  try {
+    const userId = req2.user.id;
+    const orgId = req2.user.organizationId;
+    const { mediaUrl, mediaType, text, visibility } = req2.body;
+    const story = await db.story.create({
+      data: {
+        authorId: userId,
+        organizationId: orgId,
+        mediaUrl: mediaUrl || "",
+        mediaType: mediaType || "image",
+        caption: text,
+        visibility: ["ALL", "IN", "OUT"].includes(visibility) ? visibility : "ALL",
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1e3)
+      }
+    });
+    res.json({ story });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+router90.post("/stories/:storyId/view", authenticateToken, async (req2, res) => {
+  try {
+    const userId = req2.user.id;
+    const storyId = req2.params.storyId;
+    const existing = await db.storyView.findUnique({
+      where: { storyId_viewerId: { storyId, viewerId: userId } }
+    });
+    if (!existing) {
+      await db.storyView.create({ data: { storyId, viewerId: userId } });
+    }
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+router90.delete("/stories/:storyId", authenticateToken, async (req2, res) => {
+  try {
+    const userId = req2.user.id;
+    const storyId = req2.params.storyId;
+    const story = await db.story.findUnique({ where: { id: storyId } });
+    if (!story) return res.status(404).json({ error: "Story non trouv\xE9e" });
+    if (story.authorId !== userId) return res.status(403).json({ error: "Non autoris\xE9" });
+    await db.storyView.deleteMany({ where: { storyId } });
+    await db.story.delete({ where: { id: storyId } });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+router90.get("/explore/posts", authenticateToken, async (req2, res) => {
+  try {
+    const user = req2.user;
+    const orgId = user.organizationId;
+    const limit = Math.min(parseInt(req2.query.limit) || 30, 100);
+    const category = req2.query.category;
+    const search = req2.query.search;
+    const where = {
+      organizationId: orgId,
+      isPublished: true,
+      visibility: { in: ["ALL", "IN"] }
+    };
+    if (category) {
+      where.category = category;
+    }
+    if (search && search.trim().length >= 2) {
+      const term = search.trim();
+      where.OR = [
+        { content: { contains: term, mode: "insensitive" } },
+        { author: { firstName: { contains: term, mode: "insensitive" } } },
+        { author: { lastName: { contains: term, mode: "insensitive" } } },
+        { tags: { has: term.toLowerCase().replace("#", "") } }
+      ];
+    }
+    const posts = await db.wallPost.findMany({
+      where,
+      orderBy: [{ likesCount: "desc" }, { createdAt: "desc" }],
+      take: limit,
+      select: {
+        id: true,
+        mediaUrls: true,
+        mediaType: true,
+        likesCount: true,
+        commentsCount: true,
+        content: true,
+        category: true,
+        author: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+        reactions: { where: { userId: user.id }, select: { type: true }, take: 1 }
+      }
+    });
+    res.json({
+      posts: posts.map((p) => {
+        const urls = Array.isArray(p.mediaUrls) ? p.mediaUrls : [];
+        return {
+          id: p.id,
+          mediaUrl: urls[0] || "",
+          mediaType: p.mediaType || "image",
+          likesCount: p.likesCount,
+          commentsCount: p.commentsCount,
+          caption: p.content || "",
+          category: p.category || null,
+          authorId: p.author.id,
+          authorName: `${p.author.firstName} ${p.author.lastName}`.trim(),
+          authorAvatar: p.author.avatarUrl,
+          isLiked: p.reactions.length > 0
+        };
+      })
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+router90.get("/explore/gallery", authenticateToken, async (req2, res) => {
+  try {
+    const user = req2.user;
+    const orgId = user.organizationId;
+    const userId = user.id;
+    const limit = Math.min(parseInt(req2.query.limit) || 40, 100);
+    const mediaFilter = req2.query.type || "all";
+    const scope = req2.query.scope || "all";
+    const sort = req2.query.sort || "popular";
+    const mode = req2.query.mode || "org";
+    const category = req2.query.category;
+    const search = req2.query.search;
+    const postWhere = {
+      isPublished: true,
+      NOT: { mediaUrls: { equals: null } }
+    };
+    if (mediaFilter === "photo") {
+      postWhere.mediaType = "image";
+    } else if (mediaFilter === "video") {
+      postWhere.mediaType = "video";
+    } else {
+      postWhere.mediaType = { in: ["image", "video"] };
+    }
+    if (scope === "private") {
+      postWhere.authorId = userId;
+      postWhere.visibility = "OUT";
+    } else if (scope === "friends") {
+      const friendships = await db.friendship.findMany({
+        where: { status: "accepted", OR: [{ requesterId: userId }, { addresseeId: userId }] },
+        select: { requesterId: true, addresseeId: true }
+      });
+      const friendIds = friendships.map((f) => f.requesterId === userId ? f.addresseeId : f.requesterId);
+      friendIds.push(userId);
+      postWhere.authorId = { in: friendIds };
+      postWhere.visibility = { in: ["ALL", "IN"] };
+    } else if (scope === "org") {
+      postWhere.organizationId = orgId;
+      postWhere.visibility = { in: ["ALL", "IN"] };
+    } else if (mode === "personal") {
+      postWhere.OR = [
+        { visibility: "ALL" },
+        { authorId: userId }
+      ];
+    } else {
+      postWhere.OR = [
+        { visibility: "ALL" },
+        ...orgId ? [{ organizationId: orgId, visibility: { in: ["ALL", "IN"] } }] : []
+      ];
+    }
+    if (category) {
+      postWhere.category = category;
+    }
+    if (search && search.trim().length >= 2) {
+      const term = search.trim();
+      const searchConditions = [
+        { content: { contains: term, mode: "insensitive" } },
+        { author: { firstName: { contains: term, mode: "insensitive" } } },
+        { author: { lastName: { contains: term, mode: "insensitive" } } },
+        { tags: { has: term.toLowerCase().replace("#", "") } }
+      ];
+      if (postWhere.OR) {
+        const scopeOR = postWhere.OR;
+        delete postWhere.OR;
+        postWhere.AND = [
+          { OR: scopeOR },
+          { OR: searchConditions }
+        ];
+      } else {
+        postWhere.OR = searchConditions;
+      }
+    }
+    const orderBy = sort === "recent" ? [{ createdAt: "desc" }] : [{ likesCount: "desc" }, { createdAt: "desc" }];
+    const posts = await db.wallPost.findMany({
+      where: postWhere,
+      orderBy,
+      take: limit * 2,
+      // Fetch extra to compensate for empty mediaUrls filtering
+      select: {
+        id: true,
+        mediaUrls: true,
+        mediaType: true,
+        likesCount: true,
+        commentsCount: true,
+        content: true,
+        category: true,
+        createdAt: true,
+        publishAsOrg: true,
+        author: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+        organization: { select: { id: true, name: true, logoUrl: true } },
+        reactions: { where: { userId }, select: { type: true }, take: 1 }
+      }
+    });
+    const galleryItems = [];
+    for (const p of posts) {
+      const urls = Array.isArray(p.mediaUrls) ? p.mediaUrls : [];
+      if (urls.length === 0 || !urls[0]) continue;
+      const isOrg = p.publishAsOrg && p.organization;
+      galleryItems.push({
+        id: p.id,
+        source: "post",
+        mediaUrl: urls[0],
+        mediaType: p.mediaType || "image",
+        likesCount: p.likesCount,
+        commentsCount: p.commentsCount,
+        caption: p.content || "",
+        category: p.category || null,
+        authorId: p.author.id,
+        authorName: isOrg ? p.organization.name : `${p.author.firstName} ${p.author.lastName}`.trim(),
+        authorAvatar: isOrg ? p.organization.logoUrl || null : p.author.avatarUrl,
+        publishAsOrg: p.publishAsOrg,
+        isLiked: p.reactions.length > 0,
+        createdAt: p.createdAt
+      });
+      if (galleryItems.length >= limit) break;
+    }
+    let storyItems = [];
+    if (mediaFilter !== "video") {
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1e3);
+      const storyWhere = {
+        OR: [
+          { createdAt: { gt: twentyFourHoursAgo }, expiresAt: { gt: /* @__PURE__ */ new Date() } },
+          { isHighlight: true }
+        ]
+      };
+      if (scope === "friends") {
+        const friendships = await db.friendship.findMany({
+          where: { status: "accepted", OR: [{ requesterId: userId }, { addresseeId: userId }] },
+          select: { requesterId: true, addresseeId: true }
+        });
+        const friendIds = friendships.map((f) => f.requesterId === userId ? f.addresseeId : f.requesterId);
+        friendIds.push(userId);
+        storyWhere.authorId = { in: friendIds };
+      } else if (scope === "org") {
+        storyWhere.organizationId = orgId;
+      } else {
+        storyWhere.OR = [
+          ...storyWhere.OR || [],
+          { organizationId: orgId }
+        ];
+        storyWhere.organizationId = orgId;
+      }
+      if (mediaFilter === "photo") {
+        storyWhere.mediaType = "image";
+      }
+      const stories = await db.story.findMany({
+        where: storyWhere,
+        orderBy: sort === "recent" ? { createdAt: "desc" } : { createdAt: "desc" },
+        take: 20,
+        include: {
+          author: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+          organization: { select: { id: true, name: true, logoUrl: true } },
+          _count: { select: { views: true } }
+        }
+      });
+      storyItems = stories.filter((s) => s.mediaUrl && s.mediaUrl.length > 0).map((s) => {
+        const isOrg = s.publishAsOrg && s.organization;
+        return {
+          id: `story-${s.id}`,
+          source: "story",
+          mediaUrl: s.mediaUrl,
+          mediaType: s.mediaType || "image",
+          likesCount: s._count.views,
+          commentsCount: 0,
+          caption: s.caption || "",
+          category: null,
+          authorId: s.author.id,
+          authorName: isOrg ? s.organization.name : `${s.author.firstName} ${s.author.lastName}`.trim(),
+          authorAvatar: isOrg ? s.organization.logoUrl || null : s.author.avatarUrl,
+          publishAsOrg: s.publishAsOrg,
+          isLiked: false,
+          createdAt: s.createdAt,
+          isStory: true,
+          isHighlight: s.isHighlight
+        };
+      });
+    }
+    const allItems = [...galleryItems, ...storyItems];
+    if (sort === "popular") {
+      allItems.sort((a, b) => b.likesCount - a.likesCount || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    } else {
+      allItems.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+    res.json({
+      items: allItems.slice(0, limit),
+      total: allItems.length
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+router90.get("/reels", authenticateToken, async (req2, res) => {
+  try {
+    const user = req2.user;
+    const orgId = user.organizationId;
+    const limit = Math.min(parseInt(req2.query.limit) || 20, 50);
+    const mode = req2.query.mode || "org";
+    const whereClause = {
+      isPublished: true,
+      mediaType: "video",
+      NOT: { mediaUrls: { equals: null } }
+    };
+    if (mode === "personal" || !orgId) {
+      whereClause.OR = [
+        { visibility: "ALL" },
+        { authorId: user.id }
+      ];
+    } else {
+      whereClause.organizationId = orgId;
+      whereClause.visibility = { in: ["ALL", "IN"] };
+    }
+    const posts = await db.wallPost.findMany({
+      where: whereClause,
+      orderBy: [{ likesCount: "desc" }, { createdAt: "desc" }],
+      take: limit * 2,
+      // Fetch extra to compensate for empty mediaUrls filtering
+      select: {
+        id: true,
+        mediaUrls: true,
+        mediaType: true,
+        likesCount: true,
+        commentsCount: true,
+        content: true,
+        publishAsOrg: true,
+        author: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+        organization: { select: { id: true, name: true, logoUrl: true } },
+        reactions: { where: { userId: user.id }, select: { type: true }, take: 1 }
+      }
+    });
+    const videoPosts = posts.filter((p) => {
+      const urls = Array.isArray(p.mediaUrls) ? p.mediaUrls : [];
+      return urls.length > 0 && urls[0];
+    }).slice(0, limit);
+    res.json({
+      reels: videoPosts.map((p) => {
+        const urls = p.mediaUrls;
+        const isOrg = p.publishAsOrg && p.organization;
+        return {
+          id: p.id,
+          mediaUrl: urls[0],
+          mediaType: "video",
+          likesCount: p.likesCount,
+          commentsCount: p.commentsCount,
+          caption: p.content || "",
+          authorId: p.author.id,
+          authorName: isOrg ? p.organization.name : `${p.author.firstName} ${p.author.lastName}`.trim(),
+          authorAvatar: isOrg ? p.organization.logoUrl || null : p.author.avatarUrl,
+          publishAsOrg: p.publishAsOrg,
+          organizationName: p.organization?.name || null,
+          isLiked: p.reactions.length > 0
+        };
+      })
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+router90.get("/explore/hashtags", authenticateToken, async (req2, res) => {
+  try {
+    const limit = Math.min(parseInt(req2.query.limit) || 20, 50);
+    const search = req2.query.search;
+    const where = {};
+    if (search && search.trim().length >= 1) {
+      where.name = { contains: search.trim().toLowerCase().replace("#", ""), mode: "insensitive" };
+    }
+    const hashtags = await db.hashtag.findMany({
+      where,
+      orderBy: { postCount: "desc" },
+      take: limit
+    });
+    res.json({ hashtags });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+router90.get("/explore/suggested-users", authenticateToken, async (req2, res) => {
+  try {
+    const userId = req2.user.id;
+    const orgId = req2.user.organizationId;
+    const limit = Math.min(parseInt(req2.query.limit) || 10, 30);
+    const scopeFilter = req2.query.scope || "all";
+    const [alreadyFollowing, userFriendships] = await Promise.all([
+      db.follow.findMany({ where: { followerId: userId }, select: { followingId: true } }),
+      db.friendship.findMany({
+        where: { OR: [{ requesterId: userId }, { addresseeId: userId }] },
+        select: { id: true, requesterId: true, addresseeId: true, status: true }
+      })
+    ]);
+    const followingIds = new Set(alreadyFollowing.map((f) => f.followingId));
+    const blockedIds = new Set(
+      userFriendships.filter((f) => f.status === "blocked").map((f) => f.requesterId === userId ? f.addresseeId : f.requesterId)
+    );
+    const myFriendIds = new Set(
+      userFriendships.filter((f) => f.status === "accepted").map((f) => f.requesterId === userId ? f.addresseeId : f.requesterId)
+    );
+    const friendshipInfoMap = /* @__PURE__ */ new Map();
+    userFriendships.forEach((f) => {
+      const otherId = f.requesterId === userId ? f.addresseeId : f.requesterId;
+      const direction = f.requesterId === userId ? "sent" : "received";
+      friendshipInfoMap.set(otherId, { status: f.status, direction, friendshipId: f.id });
+    });
+    const userWhere = { status: "active", id: { not: userId, notIn: Array.from(blockedIds) } };
+    if (scopeFilter === "friends") {
+      userWhere.id = { in: Array.from(myFriendIds) };
+    } else if (scopeFilter === "org" && orgId) {
+      userWhere.organizationId = orgId;
+    }
+    const users = await db.user.findMany({
+      where: userWhere,
+      select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true, organizationId: true },
+      take: limit,
+      orderBy: { firstName: "asc" }
+    });
+    const usersWithMutual = await Promise.all(users.map(async (u) => {
+      let mutualCount = 0;
+      if (myFriendIds.size > 0) {
+        mutualCount = await db.friendship.count({
+          where: {
+            status: "accepted",
+            OR: [
+              { requesterId: u.id, addresseeId: { in: Array.from(myFriendIds) } },
+              { addresseeId: u.id, requesterId: { in: Array.from(myFriendIds) } }
+            ]
+          }
+        });
+      }
+      const friendInfo = friendshipInfoMap.get(u.id) || null;
+      return {
+        id: u.id,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        avatarUrl: u.avatarUrl,
+        role: u.role,
+        mutualFriends: mutualCount,
+        isFollowing: followingIds.has(u.id),
+        friendStatus: friendInfo?.status || null,
+        friendDirection: friendInfo?.direction || null,
+        friendshipId: friendInfo?.friendshipId || null,
+        sameOrg: !!orgId && u.organizationId === orgId
+      };
+    }));
+    res.json({ users: usersWithMutual });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+var createSparkSchema = import_zod15.z.object({
+  content: import_zod15.z.string().min(1).max(3e3)
+});
+router90.get("/sparks", authenticateToken, async (req2, res) => {
+  try {
+    const userId = req2.user.id;
+    const orgId = req2.user.organizationId;
+    const limit = Math.min(parseInt(req2.query.limit) || 20, 50);
+    const mode = req2.query.mode || "org";
+    const whereClause = {};
+    if (mode === "personal" || !orgId) {
+      whereClause.OR = [
+        { organizationId: null },
+        { authorId: userId }
+      ];
+    } else {
+      whereClause.organizationId = orgId;
+    }
+    const sparks = await db.spark.findMany({
+      where: whereClause,
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      include: {
+        author: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+        organization: { select: { id: true, name: true, logoUrl: true } },
+        votes: { where: { voterId: userId }, select: { id: true } }
+      }
+    });
+    res.json({
+      sparks: sparks.map((s) => {
+        const isOrg = s.isRevealed && s.publishAsOrg && s.organization;
+        return {
+          id: s.id,
+          content: s.content,
+          sparkCount: s.sparkCount,
+          revealThreshold: s.revealThreshold,
+          isRevealed: s.isRevealed,
+          authorName: s.isRevealed ? isOrg ? s.organization.name : `${s.author.firstName} ${s.author.lastName}`.trim() : void 0,
+          authorAvatar: s.isRevealed ? isOrg ? s.organization.logoUrl || null : s.author.avatarUrl : void 0,
+          publishAsOrg: s.publishAsOrg,
+          createdAt: s.createdAt,
+          hasVoted: s.votes.length > 0
+        };
+      })
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+router90.post("/sparks", authenticateToken, async (req2, res) => {
+  try {
+    const userId = req2.user.id;
+    const orgId = req2.user.organizationId;
+    const { content } = createSparkSchema.parse(req2.body);
+    const spark = await db.spark.create({
+      data: { content, authorId: userId, organizationId: orgId, visibility: ["ALL", "IN", "OUT"].includes(req2.body.visibility) ? req2.body.visibility : "ALL", publishAsOrg: req2.body.publishAsOrg && !!orgId ? true : false }
+    });
+    res.json({ spark });
+  } catch (e) {
+    if (e instanceof import_zod15.z.ZodError) return res.status(400).json({ error: e.errors });
+    res.status(500).json({ error: e.message });
+  }
+});
+router90.post("/sparks/:sparkId/vote", authenticateToken, async (req2, res) => {
+  try {
+    const userId = req2.user.id;
+    const sparkId = req2.params.sparkId;
+    const existing = await db.sparkVote.findUnique({
+      where: { sparkId_voterId: { sparkId, voterId: userId } }
+    });
+    if (existing) {
+      return res.status(409).json({ error: "D\xE9j\xE0 vot\xE9" });
+    }
+    await db.sparkVote.create({ data: { sparkId, voterId: userId } });
+    const totalVotes = await db.sparkVote.count({ where: { sparkId } });
+    const spark = await db.spark.update({
+      where: { id: sparkId },
+      data: {
+        sparkCount: totalVotes,
+        isRevealed: totalVotes >= 100
+        // Auto-reveal at threshold
+      }
+    });
+    res.json({ sparkCount: spark.sparkCount, isRevealed: spark.isRevealed });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+router90.get("/battles", authenticateToken, async (req2, res) => {
+  try {
+    const orgId = req2.user.organizationId;
+    const limit = Math.min(parseInt(req2.query.limit) || 10, 30);
+    const mode = req2.query.mode || "org";
+    const whereClause = {};
+    if (mode === "personal" || !orgId) {
+      whereClause.OR = [
+        { organizationId: null },
+        { challengerId: req2.user.id }
+      ];
+    } else {
+      whereClause.organizationId = orgId;
+    }
+    const battles = await db.battle.findMany({
+      where: whereClause,
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      include: {
+        challenger: { select: { firstName: true, lastName: true, avatarUrl: true } },
+        opponent: { select: { firstName: true, lastName: true, avatarUrl: true } },
+        _count: { select: { entries: true } }
+      }
+    });
+    res.json({
+      battles: battles.map((b) => ({
+        id: b.id,
+        title: b.title,
+        description: b.description || "",
+        status: b.status,
+        challengerName: `${b.challenger.firstName} ${b.challenger.lastName}`.trim(),
+        challengerAvatar: b.challenger.avatarUrl,
+        opponentName: b.opponent ? `${b.opponent.firstName} ${b.opponent.lastName}`.trim() : void 0,
+        opponentAvatar: b.opponent?.avatarUrl,
+        endsAt: b.endsAt,
+        entriesCount: b._count.entries
+      }))
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+router90.post("/battles", authenticateToken, async (req2, res) => {
+  try {
+    const userId = req2.user.id;
+    const orgId = req2.user.organizationId;
+    const { title, description, opponentId, endsAt } = req2.body;
+    if (!title || title.length < 3) return res.status(400).json({ error: "Titre requis (min 3 caract\xE8res)" });
+    const battle = await db.battle.create({
+      data: {
+        title,
+        description,
+        challengerId: userId,
+        opponentId: opponentId || null,
+        organizationId: orgId,
+        endsAt: endsAt ? new Date(endsAt) : new Date(Date.now() + 48 * 60 * 60 * 1e3)
+      }
+    });
+    res.json({ battle });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+router90.post("/battles/:id/join", authenticateToken, async (req2, res) => {
+  try {
+    const userId = req2.user.id;
+    const battleId = req2.params.id;
+    const battle = await db.battle.findUnique({ where: { id: battleId } });
+    if (!battle) return res.status(404).json({ error: "Battle non trouv\xE9" });
+    if (battle.challengerId === userId) return res.status(400).json({ error: "Vous \xEAtes le cr\xE9ateur de ce battle" });
+    const existing = await db.battleEntry.findUnique({
+      where: { battleId_userId: { battleId, userId } }
+    });
+    if (existing) return res.status(409).json({ error: "Vous participez d\xE9j\xE0" });
+    const entry = await db.battleEntry.create({
+      data: { battleId, userId }
+    });
+    res.json({ success: true, entry });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+router90.get("/quests/available", authenticateToken, async (req2, res) => {
+  try {
+    const userId = req2.user.id;
+    const orgId = req2.user.organizationId;
+    const quests = await db.quest.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { organizationId: orgId },
+          { organizationId: null }
+          // Global quests
+        ]
+      },
+      orderBy: [{ questType: "asc" }, { rewardPoints: "desc" }],
+      include: {
+        progress: { where: { userId } }
+      }
+    });
+    res.json({
+      quests: quests.map((q) => ({
+        id: q.id,
+        title: q.title,
+        description: q.description || "",
+        type: q.questType,
+        rewardPoints: q.rewardPoints,
+        progress: q.progress[0]?.currentCount || 0,
+        maxProgress: q.targetCount,
+        expiresAt: q.endsAt
+      }))
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+router90.get("/events", authenticateToken, async (req2, res) => {
+  try {
+    const orgId = req2.user.organizationId;
+    const limit = Math.min(parseInt(req2.query.limit) || 10, 30);
+    const mode = req2.query.mode || "org";
+    const whereClause = {
+      startsAt: { gte: /* @__PURE__ */ new Date() }
+    };
+    if (mode === "personal" || !orgId) {
+      whereClause.OR = [
+        { organizationId: null },
+        ...orgId ? [{ organizationId: orgId }] : []
+      ];
+    } else {
+      whereClause.organizationId = orgId;
+    }
+    const events = await db.socialEvent.findMany({
+      where: whereClause,
+      orderBy: { startsAt: "asc" },
+      take: limit,
+      include: {
+        creator: { select: { firstName: true, lastName: true, avatarUrl: true } },
+        organization: { select: { id: true, name: true, logoUrl: true } },
+        _count: { select: { attendees: true } }
+      }
+    });
+    res.json({
+      events: events.map((e) => {
+        const isOrg = e.publishAsOrg && e.organization;
+        return {
+          id: e.id,
+          title: e.title,
+          description: e.description || "",
+          type: e.eventType,
+          location: e.location,
+          startDate: e.startsAt,
+          endDate: e.endsAt,
+          attendeesCount: e._count.attendees,
+          maxAttendees: e.maxAttendees,
+          organizerName: isOrg ? e.organization.name : `${e.creator.firstName} ${e.creator.lastName}`.trim(),
+          organizerAvatar: isOrg ? e.organization.logoUrl || null : e.creator.avatarUrl,
+          publishAsOrg: e.publishAsOrg,
+          coverImage: e.coverUrl
+        };
+      })
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+router90.post("/events", authenticateToken, async (req2, res) => {
+  try {
+    const userId = req2.user.id;
+    const orgId = req2.user.organizationId;
+    const { title, description, type, location, startDate, endDate, maxAttendees, coverImage } = req2.body;
+    if (!title) return res.status(400).json({ error: "Titre requis" });
+    if (!startDate) return res.status(400).json({ error: "Date de d\xE9but requise" });
+    const event = await db.socialEvent.create({
+      data: {
+        title,
+        description,
+        eventType: type || "meetup",
+        location,
+        startsAt: new Date(startDate),
+        endsAt: endDate ? new Date(endDate) : null,
+        maxAttendees,
+        coverUrl: coverImage,
+        creatorId: userId,
+        organizationId: orgId,
+        visibility: ["ALL", "IN", "OUT"].includes(req2.body.visibility) ? req2.body.visibility : "ALL",
+        publishAsOrg: req2.body.publishAsOrg && !!orgId ? true : false
+      }
+    });
+    res.json({ event });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+router90.post("/events/:eventId/rsvp", authenticateToken, async (req2, res) => {
+  try {
+    const userId = req2.user.id;
+    const eventId = req2.params.eventId;
+    const status = req2.body.status || "GOING";
+    const existing = await db.eventAttendee.findUnique({
+      where: { eventId_userId: { eventId, userId } }
+    });
+    if (existing) {
+      await db.eventAttendee.update({ where: { id: existing.id }, data: { status } });
+    } else {
+      await db.eventAttendee.create({ data: { eventId, userId, status } });
+    }
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+router90.delete("/events/:eventId/rsvp", authenticateToken, async (req2, res) => {
+  try {
+    const userId = req2.user.id;
+    const eventId = req2.params.eventId;
+    await db.eventAttendee.deleteMany({ where: { eventId, userId } });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+router90.get("/capsules", authenticateToken, async (req2, res) => {
+  try {
+    const userId = req2.user.id;
+    const limit = Math.min(parseInt(req2.query.limit) || 10, 30);
+    const capsules = await db.timeCapsule.findMany({
+      where: {
+        OR: [
+          { authorId: userId },
+          { recipientId: userId }
+        ]
+      },
+      orderBy: { unlocksAt: "asc" },
+      take: limit,
+      include: {
+        author: { select: { firstName: true, lastName: true, avatarUrl: true } },
+        recipient: { select: { firstName: true, lastName: true } }
+      }
+    });
+    res.json({
+      capsules: capsules.map((c) => ({
+        id: c.id,
+        content: c.content,
+        creatorName: `${c.author.firstName} ${c.author.lastName}`.trim(),
+        creatorAvatar: c.author.avatarUrl,
+        unlocksAt: c.unlocksAt,
+        isUnlocked: c.isOpened || new Date(c.unlocksAt) <= /* @__PURE__ */ new Date(),
+        recipientName: c.recipient ? `${c.recipient.firstName} ${c.recipient.lastName}`.trim() : void 0
+      }))
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+router90.post("/capsules", authenticateToken, async (req2, res) => {
+  try {
+    const userId = req2.user.id;
+    const { content, mediaUrl, mediaType, unlocksAt, recipientId } = req2.body;
+    if (!unlocksAt) return res.status(400).json({ error: "Date de d\xE9verrouillage requise" });
+    const capsule = await db.timeCapsule.create({
+      data: {
+        content,
+        mediaUrl,
+        mediaType,
+        unlocksAt: new Date(unlocksAt),
+        authorId: userId,
+        recipientId: recipientId || null
+      }
+    });
+    res.json({ capsule });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+router90.get("/orbit", authenticateToken, async (req2, res) => {
+  try {
+    const userId = req2.user.id;
+    const friendships = await db.friendship.findMany({
+      where: {
+        status: "accepted",
+        OR: [{ requesterId: userId }, { addresseeId: userId }]
+      },
+      include: {
+        requester: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+        addressee: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } }
+      }
+    });
+    const friends = await Promise.all(friendships.map(async (f) => {
+      const friend = f.requesterId === userId ? f.addressee : f.requester;
+      const [reactionsGiven, reactionsReceived, commentsGiven, commentsReceived] = await Promise.all([
+        db.wallReaction.count({
+          where: { userId, post: { authorId: friend.id } }
+        }).catch(() => 0),
+        db.wallReaction.count({
+          where: { userId: friend.id, post: { authorId: userId } }
+        }).catch(() => 0),
+        db.wallComment.count({
+          where: { authorId: userId, post: { authorId: friend.id } }
+        }).catch(() => 0),
+        db.wallComment.count({
+          where: { authorId: friend.id, post: { authorId: userId } }
+        }).catch(() => 0)
+      ]);
+      const totalInteractions = reactionsGiven + reactionsReceived + (commentsGiven + commentsReceived) * 2;
+      const interactionScore = Math.min(100, Math.round(totalInteractions / 50 * 100));
+      return {
+        id: friend.id,
+        name: `${friend.firstName} ${friend.lastName}`.trim(),
+        avatarUrl: friend.avatarUrl,
+        interactionScore,
+        lastInteraction: f.updatedAt || f.createdAt,
+        online: false
+      };
+    }));
+    friends.sort((a, b) => b.interactionScore - a.interactionScore);
+    res.json({ friends });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+router90.get("/gamification/me", authenticateToken, async (req2, res) => {
+  try {
+    const userId = req2.user.id;
+    const [streak, badges, allBadges] = await Promise.all([
+      db.userStreak.findUnique({ where: { userId } }),
+      db.userBadge.findMany({
+        where: { userId },
+        include: { badge: true },
+        orderBy: { earnedAt: "desc" }
+      }),
+      db.badgeDefinition.findMany({ orderBy: { category: "asc" } })
+    ]);
+    res.json({
+      streak: streak || { currentStreak: 0, longestStreak: 0, totalPoints: 0, level: 1 },
+      earnedBadges: badges.map((ub) => ({
+        id: ub.badge.id,
+        name: ub.badge.name,
+        description: ub.badge.description,
+        icon: ub.badge.icon,
+        category: ub.badge.category,
+        earnedAt: ub.earnedAt
+      })),
+      allBadges: allBadges.map((b) => ({
+        id: b.id,
+        name: b.name,
+        description: b.description,
+        icon: b.icon,
+        category: b.category,
+        earned: badges.some((ub) => ub.badgeId === b.id)
+      }))
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+var zhiive_default = router90;
+
 // src/routes/index.ts
-var apiRouter = (0, import_express86.Router)();
+var apiRouter = (0, import_express92.Router)();
 apiRouter.use("/auth", authRoutes_default);
 console.log("[ROUTER] Routes d'authentification mont\xE9es sur /auth");
 apiRouter.use("/auto-google-auth", autoGoogleAuthRoutes_default);
@@ -76344,6 +79672,12 @@ apiRouter.use("/documents", documents_default);
 apiRouter.use("/product-documents", product_documents_default);
 console.log("[ROUTER] Routes fiches techniques produits mont\xE9es sur /product-documents");
 apiRouter.use("/sync", sync_temp_default);
+apiRouter.use("/wall", wall_default);
+apiRouter.use("/friends", friends_default);
+apiRouter.use("/messenger", messenger_default);
+apiRouter.use("/calls", calls_default);
+apiRouter.use("/push", push_default);
+apiRouter.use("/zhiive", zhiive_default);
 apiRouter.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
 });
@@ -76353,10 +79687,10 @@ var routes_default = apiRouter;
 init_prisma();
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/TBL/routes/ia-config-routes.ts
-var import_express87 = __toESM(require("express"), 1);
+var import_express93 = __toESM(require("express"), 1);
 init_database();
-var router85 = import_express87.default.Router();
-router85.get("/nodes/:nodeId/ia-config", async (req2, res) => {
+var router91 = import_express93.default.Router();
+router91.get("/nodes/:nodeId/ia-config", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     console.log(`\u{1F4CA} [IA-CONFIG] R\xE9cup\xE9ration config pour node ${nodeId}`);
@@ -76386,7 +79720,7 @@ router85.get("/nodes/:nodeId/ia-config", async (req2, res) => {
     res.status(500).json({ error: "Failed to fetch IA config" });
   }
 });
-router85.put("/nodes/:nodeId/ia-config", async (req2, res) => {
+router91.put("/nodes/:nodeId/ia-config", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const config = req2.body;
@@ -76415,7 +79749,7 @@ router85.put("/nodes/:nodeId/ia-config", async (req2, res) => {
     res.status(500).json({ error: "Failed to update IA config" });
   }
 });
-router85.delete("/nodes/:nodeId/ia-config", async (req2, res) => {
+router91.delete("/nodes/:nodeId/ia-config", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     console.log(`\u{1F5D1}\uFE0F [IA-CONFIG] Suppression config pour node ${nodeId}`);
@@ -76433,13 +79767,13 @@ router85.delete("/nodes/:nodeId/ia-config", async (req2, res) => {
     res.status(500).json({ error: "Failed to delete IA config" });
   }
 });
-var ia_config_routes_default = router85;
+var ia_config_routes_default = router91;
 
 // src/controllers/calculatedValueController.ts
-var import_express88 = require("express");
+var import_express94 = require("express");
 var import_crypto30 = require("crypto");
 init_database();
-var router86 = (0, import_express88.Router)();
+var router92 = (0, import_express94.Router)();
 var prisma44 = db;
 var parseStoredStringValue = (raw) => {
   if (raw === null || raw === void 0) {
@@ -76508,7 +79842,7 @@ var toIsoString = (date) => {
     return void 0;
   }
 };
-router86.get("/:nodeId/calculated-value", async (req2, res) => {
+router92.get("/:nodeId/calculated-value", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const pickQueryString = (key2) => {
@@ -77017,7 +80351,7 @@ router86.get("/:nodeId/calculated-value", async (req2, res) => {
     return res.status(500).json({ error: String(error) });
   }
 });
-router86.post("/batch-calculated-values", async (req2, res) => {
+router92.post("/batch-calculated-values", async (req2, res) => {
   try {
     const { nodeIds, submissionId } = req2.body;
     if (!Array.isArray(nodeIds) || nodeIds.length === 0) {
@@ -77068,7 +80402,7 @@ router86.post("/batch-calculated-values", async (req2, res) => {
     return res.status(500).json({ error: String(error) });
   }
 });
-router86.post("/:nodeId/store-calculated-value", async (req2, res) => {
+router92.post("/:nodeId/store-calculated-value", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { calculatedValue, calculatedBy, submissionId } = req2.body;
@@ -77105,7 +80439,7 @@ router86.post("/:nodeId/store-calculated-value", async (req2, res) => {
     return res.status(500).json({ error: String(error) });
   }
 });
-router86.post("/store-batch-calculated-values", async (req2, res) => {
+router92.post("/store-batch-calculated-values", async (req2, res) => {
   try {
     const { values, submissionId } = req2.body;
     if (!Array.isArray(values) || values.length === 0) {
@@ -77146,12 +80480,12 @@ router86.post("/store-batch-calculated-values", async (req2, res) => {
     return res.status(500).json({ error: String(error) });
   }
 });
-var calculatedValueController_default = router86;
+var calculatedValueController_default = router92;
 
 // src/routes/tbl-batch-routes.ts
-var import_express89 = require("express");
+var import_express95 = require("express");
 init_database();
-var router87 = (0, import_express89.Router)();
+var router93 = (0, import_express95.Router)();
 function getAuthCtx6(req2) {
   const user = req2.user;
   return {
@@ -77159,7 +80493,7 @@ function getAuthCtx6(req2) {
     isSuperAdmin: user?.isSuperAdmin || false
   };
 }
-router87.get("/trees/:treeId/formulas", async (req2, res) => {
+router93.get("/trees/:treeId/formulas", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx6(req2);
@@ -77196,7 +80530,7 @@ router87.get("/trees/:treeId/formulas", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des formules" });
   }
 });
-router87.get("/trees/:treeId/calculated-values", async (req2, res) => {
+router93.get("/trees/:treeId/calculated-values", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { leadId, submissionId: qsSubmissionId } = req2.query;
@@ -77266,7 +80600,7 @@ router87.get("/trees/:treeId/calculated-values", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des valeurs calcul\xE9es" });
   }
 });
-router87.get("/trees/:treeId/select-configs", async (req2, res) => {
+router93.get("/trees/:treeId/select-configs", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx6(req2);
@@ -77328,7 +80662,7 @@ router87.get("/trees/:treeId/select-configs", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des configs select" });
   }
 });
-router87.get("/trees/:treeId/all", async (req2, res) => {
+router93.get("/trees/:treeId/all", async (req2, res) => {
   const { treeId } = req2.params;
   console.log(`[TBL Batch API] /all called for treeId: ${treeId}`);
   try {
@@ -77458,7 +80792,7 @@ router87.get("/trees/:treeId/all", async (req2, res) => {
     });
   }
 });
-router87.get("/trees/:treeId/node-data", async (req2, res) => {
+router93.get("/trees/:treeId/node-data", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx6(req2);
@@ -77526,7 +80860,7 @@ router87.get("/trees/:treeId/node-data", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des donn\xE9es de noeuds" });
   }
 });
-router87.get("/trees/:treeId/conditions", async (req2, res) => {
+router93.get("/trees/:treeId/conditions", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx6(req2);
@@ -77581,13 +80915,13 @@ router87.get("/trees/:treeId/conditions", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des conditions" });
   }
 });
-var tbl_batch_routes_default = router87;
+var tbl_batch_routes_default = router93;
 
 // src/routes/batch-routes.ts
-var import_express90 = require("express");
+var import_express96 = require("express");
 init_database();
 var import_googleapis10 = require("googleapis");
-var router88 = (0, import_express90.Router)();
+var router94 = (0, import_express96.Router)();
 function getAuthCtx7(req2) {
   const user = req2.user;
   return {
@@ -77596,7 +80930,7 @@ function getAuthCtx7(req2) {
     isSuperAdmin: user?.isSuperAdmin || false
   };
 }
-router88.post("/gmail/modify", async (req2, res) => {
+router94.post("/gmail/modify", async (req2, res) => {
   try {
     const { userId, organizationId } = getAuthCtx7(req2);
     const { messageIds, addLabelIds = [], removeLabelIds = [] } = req2.body;
@@ -77634,7 +80968,7 @@ router88.post("/gmail/modify", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch Gmail" });
   }
 });
-router88.post("/gmail/trash", async (req2, res) => {
+router94.post("/gmail/trash", async (req2, res) => {
   try {
     const { userId } = getAuthCtx7(req2);
     const { messageIds } = req2.body;
@@ -77672,7 +81006,7 @@ router88.post("/gmail/trash", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch Gmail" });
   }
 });
-router88.delete("/gmail/delete", async (req2, res) => {
+router94.delete("/gmail/delete", async (req2, res) => {
   try {
     const { userId } = getAuthCtx7(req2);
     const { messageIds } = req2.body;
@@ -77708,7 +81042,7 @@ router88.delete("/gmail/delete", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch Gmail" });
   }
 });
-router88.patch("/leads/status", async (req2, res) => {
+router94.patch("/leads/status", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx7(req2);
     const { leadIds, statusId } = req2.body;
@@ -77745,7 +81079,7 @@ router88.patch("/leads/status", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch leads" });
   }
 });
-router88.patch("/leads/assign", async (req2, res) => {
+router94.patch("/leads/assign", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx7(req2);
     const { leadIds, assignedToId } = req2.body;
@@ -77773,7 +81107,7 @@ router88.patch("/leads/assign", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch leads" });
   }
 });
-router88.delete("/leads", async (req2, res) => {
+router94.delete("/leads", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx7(req2);
     const { leadIds } = req2.body;
@@ -77797,7 +81131,7 @@ router88.delete("/leads", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch leads" });
   }
 });
-router88.post("/fields/configs", async (req2, res) => {
+router94.post("/fields/configs", async (req2, res) => {
   try {
     const { fieldIds } = req2.body;
     if (!fieldIds || !Array.isArray(fieldIds) || fieldIds.length === 0) {
@@ -77826,7 +81160,7 @@ router88.post("/fields/configs", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch fields" });
   }
 });
-router88.patch("/modules/toggle", async (req2, res) => {
+router94.patch("/modules/toggle", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx7(req2);
     const { moduleIds, enabled } = req2.body;
@@ -77857,7 +81191,7 @@ router88.patch("/modules/toggle", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch modules" });
   }
 });
-router88.get("/analytics/leads-by-status", async (req2, res) => {
+router94.get("/analytics/leads-by-status", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx7(req2);
     const counts = await db.lead.groupBy({
@@ -77888,7 +81222,7 @@ router88.get("/analytics/leads-by-status", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur analytics" });
   }
 });
-router88.get("/analytics/leads-by-source", async (req2, res) => {
+router94.get("/analytics/leads-by-source", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx7(req2);
     const counts = await db.lead.groupBy({
@@ -77911,7 +81245,7 @@ router88.get("/analytics/leads-by-source", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur analytics" });
   }
 });
-router88.get("/analytics/leads-by-assignee", async (req2, res) => {
+router94.get("/analytics/leads-by-assignee", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx7(req2);
     const counts = await db.lead.groupBy({
@@ -77941,13 +81275,13 @@ router88.get("/analytics/leads-by-assignee", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur analytics" });
   }
 });
-var batch_routes_default = router88;
+var batch_routes_default = router94;
 
 // src/api/websites.ts
-var import_express91 = require("express");
+var import_express97 = require("express");
 init_database();
-var router89 = (0, import_express91.Router)();
-router89.get("/websites", authenticateToken, async (req2, res) => {
+var router95 = (0, import_express97.Router)();
+router95.get("/websites", authenticateToken, async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const showAll = req2.query.all === "true";
@@ -77975,7 +81309,7 @@ router89.get("/websites", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router89.get("/websites/id/:id", authenticateToken, async (req2, res) => {
+router95.get("/websites/id/:id", authenticateToken, async (req2, res) => {
   try {
     const { id } = req2.params;
     const websiteId = parseInt(id, 10);
@@ -77998,7 +81332,7 @@ router89.get("/websites/id/:id", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router89.put("/websites/:id", authenticateToken, async (req2, res) => {
+router95.put("/websites/:id", authenticateToken, async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.id);
     const organizationId = req2.headers["x-organization-id"];
@@ -78063,7 +81397,7 @@ router89.put("/websites/:id", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router89.delete("/websites/:id", authenticateToken, async (req2, res) => {
+router95.delete("/websites/:id", authenticateToken, async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.id);
     const organizationId = req2.headers["x-organization-id"];
@@ -78087,7 +81421,7 @@ router89.delete("/websites/:id", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router89.post("/websites", authenticateToken, async (req2, res) => {
+router95.post("/websites", authenticateToken, async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const data = req2.body;
@@ -78118,7 +81452,7 @@ router89.post("/websites", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router89.get("/websites/:idOrSlug", async (req2, res) => {
+router95.get("/websites/:idOrSlug", async (req2, res) => {
   try {
     const { idOrSlug } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -78178,7 +81512,7 @@ router89.get("/websites/:idOrSlug", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router89.get("/websites/:slug/services", async (req2, res) => {
+router95.get("/websites/:slug/services", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const website = await db.websites.findFirst({
@@ -78201,7 +81535,7 @@ router89.get("/websites/:slug/services", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router89.get("/websites/:slug/projects", async (req2, res) => {
+router95.get("/websites/:slug/projects", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { featured } = req2.query;
@@ -78229,7 +81563,7 @@ router89.get("/websites/:slug/projects", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router89.get("/websites/:slug/testimonials", async (req2, res) => {
+router95.get("/websites/:slug/testimonials", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { featured } = req2.query;
@@ -78257,7 +81591,7 @@ router89.get("/websites/:slug/testimonials", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router89.get("/websites/:slug/blog", async (req2, res) => {
+router95.get("/websites/:slug/blog", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { limit = "10", featured } = req2.query;
@@ -78296,7 +81630,7 @@ router89.get("/websites/:slug/blog", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router89.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
+router95.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
   try {
     const { slug, postSlug } = req2.params;
     const website = await db.websites.findFirst({
@@ -78333,14 +81667,14 @@ router89.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var websites_default = router89;
+var websites_default = router95;
 
 // src/api/website-services.ts
-var import_express92 = require("express");
+var import_express98 = require("express");
 init_database();
-var router90 = (0, import_express92.Router)();
+var router96 = (0, import_express98.Router)();
 var prisma45 = db;
-router90.get("/website-services/:websiteId", async (req2, res) => {
+router96.get("/website-services/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const services = await prisma45.webSiteService.findMany({
@@ -78357,7 +81691,7 @@ router90.get("/website-services/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router90.post("/website-services", async (req2, res) => {
+router96.post("/website-services", async (req2, res) => {
   try {
     const { websiteId, key: key2, icon, title, description, features, ctaText, ctaUrl, isActive } = req2.body;
     if (!websiteId || !key2 || !title) {
@@ -78387,7 +81721,7 @@ router90.post("/website-services", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router90.put("/website-services/:id", async (req2, res) => {
+router96.put("/website-services/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { key: key2, icon, title, description, features, ctaText, ctaUrl, isActive } = req2.body;
@@ -78410,7 +81744,7 @@ router90.put("/website-services/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router90.delete("/website-services/:id", async (req2, res) => {
+router96.delete("/website-services/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     await prisma45.webSiteService.delete({
@@ -78422,7 +81756,7 @@ router90.delete("/website-services/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router90.post("/website-services/reorder", async (req2, res) => {
+router96.post("/website-services/reorder", async (req2, res) => {
   try {
     const { services } = req2.body;
     if (!Array.isArray(services)) {
@@ -78442,14 +81776,14 @@ router90.post("/website-services/reorder", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var website_services_default = router90;
+var website_services_default = router96;
 
 // src/api/website-projects.ts
-var import_express93 = require("express");
+var import_express99 = require("express");
 init_database();
-var router91 = (0, import_express93.Router)();
+var router97 = (0, import_express99.Router)();
 var prisma46 = db;
-router91.get("/website-projects/:websiteId", async (req2, res) => {
+router97.get("/website-projects/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const projects = await prisma46.webSiteProject.findMany({
@@ -78466,7 +81800,7 @@ router91.get("/website-projects/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router91.post("/website-projects", async (req2, res) => {
+router97.post("/website-projects", async (req2, res) => {
   try {
     const { websiteId, title, location, details, tags, isActive, isFeatured, completedAt } = req2.body;
     if (!websiteId || !title) {
@@ -78495,7 +81829,7 @@ router91.post("/website-projects", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router91.put("/website-projects/:id", async (req2, res) => {
+router97.put("/website-projects/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { title, location, details, tags, isActive, isFeatured, completedAt } = req2.body;
@@ -78517,7 +81851,7 @@ router91.put("/website-projects/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router91.delete("/website-projects/:id", async (req2, res) => {
+router97.delete("/website-projects/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     await prisma46.webSiteProject.delete({
@@ -78529,7 +81863,7 @@ router91.delete("/website-projects/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router91.post("/website-projects/reorder", async (req2, res) => {
+router97.post("/website-projects/reorder", async (req2, res) => {
   try {
     const { projects } = req2.body;
     if (!Array.isArray(projects)) {
@@ -78549,14 +81883,14 @@ router91.post("/website-projects/reorder", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var website_projects_default = router91;
+var website_projects_default = router97;
 
 // src/api/website-testimonials.ts
-var import_express94 = require("express");
+var import_express100 = require("express");
 init_database();
-var router92 = (0, import_express94.Router)();
+var router98 = (0, import_express100.Router)();
 var prisma47 = db;
-router92.get("/website-testimonials/:websiteId", async (req2, res) => {
+router98.get("/website-testimonials/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const testimonials = await prisma47.webSiteTestimonial.findMany({
@@ -78573,7 +81907,7 @@ router92.get("/website-testimonials/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router92.post("/website-testimonials", async (req2, res) => {
+router98.post("/website-testimonials", async (req2, res) => {
   try {
     const { websiteId, customerName, location, service, rating, text, isActive, isFeatured, publishedAt } = req2.body;
     if (!websiteId || !customerName || !text) {
@@ -78603,7 +81937,7 @@ router92.post("/website-testimonials", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router92.put("/website-testimonials/:id", async (req2, res) => {
+router98.put("/website-testimonials/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { customerName, location, service, rating, text, isActive, isFeatured, publishedAt } = req2.body;
@@ -78626,7 +81960,7 @@ router92.put("/website-testimonials/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router92.delete("/website-testimonials/:id", async (req2, res) => {
+router98.delete("/website-testimonials/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     await prisma47.webSiteTestimonial.delete({
@@ -78638,7 +81972,7 @@ router92.delete("/website-testimonials/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router92.post("/website-testimonials/reorder", async (req2, res) => {
+router98.post("/website-testimonials/reorder", async (req2, res) => {
   try {
     const { testimonials } = req2.body;
     if (!Array.isArray(testimonials)) {
@@ -78658,13 +81992,13 @@ router92.post("/website-testimonials/reorder", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var website_testimonials_default = router92;
+var website_testimonials_default = router98;
 
 // src/api/website-sections.ts
-var import_express95 = __toESM(require("express"), 1);
+var import_express101 = __toESM(require("express"), 1);
 init_database();
-var router93 = import_express95.default.Router();
-router93.get("/website-sections/:websiteId", async (req2, res) => {
+var router99 = import_express101.default.Router();
+router99.get("/website-sections/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const sections = await db.website_sections.findMany({
@@ -78681,7 +82015,7 @@ router93.get("/website-sections/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router93.post("/website-sections", async (req2, res) => {
+router99.post("/website-sections", async (req2, res) => {
   try {
     const { websiteId, key: key2, type, name, content, backgroundColor, textColor, customCss } = req2.body;
     const maxOrder = await db.website_sections.aggregate({
@@ -78709,7 +82043,7 @@ router93.post("/website-sections", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router93.put("/website-sections/:id", async (req2, res) => {
+router99.put("/website-sections/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { name, content, backgroundColor, textColor, customCss, isActive } = req2.body;
@@ -78760,7 +82094,7 @@ router93.put("/website-sections/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router93.patch("/website-sections/:id", async (req2, res) => {
+router99.patch("/website-sections/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { name, content, backgroundColor, textColor, customCss, isActive } = req2.body;
@@ -78808,7 +82142,7 @@ router93.patch("/website-sections/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router93.delete("/website-sections/:id", async (req2, res) => {
+router99.delete("/website-sections/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const section = await db.website_sections.findUnique({
@@ -78826,7 +82160,7 @@ router93.delete("/website-sections/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router93.post("/website-sections/reorder", async (req2, res) => {
+router99.post("/website-sections/reorder", async (req2, res) => {
   try {
     const { sections } = req2.body;
     await db.$transaction(
@@ -78843,7 +82177,7 @@ router93.post("/website-sections/reorder", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router93.post("/website-sections/duplicate/:id", async (req2, res) => {
+router99.post("/website-sections/duplicate/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const original = await db.website_sections.findUnique({
@@ -78874,13 +82208,13 @@ router93.post("/website-sections/duplicate/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-var website_sections_default = router93;
+var website_sections_default = router99;
 
 // src/api/website-themes.ts
-var import_express96 = require("express");
+var import_express102 = require("express");
 init_prisma();
-var router94 = (0, import_express96.Router)();
-router94.get("/:websiteId", async (req2, res) => {
+var router100 = (0, import_express102.Router)();
+router100.get("/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     console.log("\u{1F4E1} [API] GET theme websiteId:", websiteId);
@@ -78896,7 +82230,7 @@ router94.get("/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router94.post("/", async (req2, res) => {
+router100.post("/", async (req2, res) => {
   try {
     const themeData = req2.body;
     console.log("\u{1F4E1} [API] POST theme:", themeData);
@@ -78909,7 +82243,7 @@ router94.post("/", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router94.put("/:id", async (req2, res) => {
+router100.put("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const themeData = req2.body;
@@ -78924,7 +82258,7 @@ router94.put("/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router94.delete("/:id", async (req2, res) => {
+router100.delete("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     console.log("\u{1F4E1} [API] DELETE theme:", id);
@@ -78937,12 +82271,12 @@ router94.delete("/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-var website_themes_default = router94;
+var website_themes_default = router100;
 
 // src/api/contact-form.ts
-var import_express97 = require("express");
+var import_express103 = require("express");
 init_database();
-var router95 = (0, import_express97.Router)();
+var router101 = (0, import_express103.Router)();
 var prisma48 = db;
 var isValidEmail = (email) => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -78960,7 +82294,7 @@ var isSpam = (data) => {
   }
   return false;
 };
-router95.post("/contact-form", async (req2, res) => {
+router101.post("/contact-form", async (req2, res) => {
   try {
     const data = req2.body;
     if (!data.name || data.name.trim().length < 2) {
@@ -79036,7 +82370,7 @@ router95.post("/contact-form", async (req2, res) => {
     });
   }
 });
-router95.get("/contact-submissions/:websiteId", async (req2, res) => {
+router101.get("/contact-submissions/:websiteId", async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.websiteId);
     const submissions = await prisma48.contactSubmission.findMany({
@@ -79051,7 +82385,7 @@ router95.get("/contact-submissions/:websiteId", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router95.patch("/contact-submission/:id/read", async (req2, res) => {
+router101.patch("/contact-submission/:id/read", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     const submission = await prisma48.contactSubmission.update({
@@ -79064,7 +82398,7 @@ router95.patch("/contact-submission/:id/read", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router95.patch("/contact-submission/:id/status", async (req2, res) => {
+router101.patch("/contact-submission/:id/status", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     const { status, notes } = req2.body;
@@ -79086,7 +82420,7 @@ router95.patch("/contact-submission/:id/status", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router95.delete("/contact-submission/:id", async (req2, res) => {
+router101.delete("/contact-submission/:id", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     await prisma48.contactSubmission.delete({
@@ -79098,20 +82432,22 @@ router95.delete("/contact-submission/:id", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-var contact_form_default = router95;
+var contact_form_default = router101;
 
 // src/api/image-upload.ts
-var import_express98 = require("express");
-var import_multer2 = __toESM(require("multer"), 1);
-var import_path10 = __toESM(require("path"), 1);
-var import_promises = __toESM(require("fs/promises"), 1);
+var import_express104 = require("express");
+var import_multer = __toESM(require("multer"), 1);
+var import_path9 = __toESM(require("path"), 1);
+var import_promises2 = __toESM(require("fs/promises"), 1);
 init_database();
-var router96 = (0, import_express98.Router)();
+init_storage();
+var router102 = (0, import_express104.Router)();
 var prisma49 = db;
-var storage2 = import_multer2.default.diskStorage({
+var isProduction4 = process.env.NODE_ENV === "production";
+var multerStorage = isProduction4 ? import_multer.default.memoryStorage() : import_multer.default.diskStorage({
   destination: async (req2, file, cb) => {
-    const uploadDir = import_path10.default.join(process.cwd(), "public", "uploads", "websites");
-    await import_promises.default.mkdir(uploadDir, { recursive: true });
+    const uploadDir = import_path9.default.join(process.cwd(), "public", "uploads", "websites");
+    await import_promises2.default.mkdir(uploadDir, { recursive: true });
     cb(null, uploadDir);
   },
   filename: (req2, file, cb) => {
@@ -79127,15 +82463,24 @@ var fileFilter = (req2, file, cb) => {
     cb(new Error("Type de fichier non autoris\xE9. Utilisez JPG, PNG, GIF, WEBP ou SVG."));
   }
 };
-var upload2 = (0, import_multer2.default)({
-  storage: storage2,
+var upload = (0, import_multer.default)({
+  storage: multerStorage,
   fileFilter,
   limits: {
     fileSize: 5 * 1024 * 1024
     // 5MB max
   }
 });
-router96.post("/upload", upload2.single("file"), async (req2, res) => {
+async function getUploadedFileUrl(file) {
+  const uniqueName = `${Date.now()}_${file.originalname.replace(/\\s+/g, "_")}`;
+  if (isProduction4) {
+    const key2 = `websites/${uniqueName}`;
+    const url = await uploadFile(file.buffer, key2, file.mimetype);
+    return { fileUrl: url };
+  }
+  return { fileUrl: `/uploads/websites/${file.filename}` };
+}
+router102.post("/upload", upload.single("file"), async (req2, res) => {
   try {
     if (!req2.file) {
       return res.status(400).json({
@@ -79146,23 +82491,19 @@ router96.post("/upload", upload2.single("file"), async (req2, res) => {
     console.log("\u{1F4F8} [IMAGE-UPLOAD] Fichier re\xE7u:", {
       originalName: req2.file.originalname,
       size: req2.file.size,
-      mimetype: req2.file.mimetype,
-      filename: req2.file.filename
+      mimetype: req2.file.mimetype
     });
-    const fileUrl = `/uploads/websites/${req2.file.filename}`;
-    const fullUrl = `http://localhost:4000${fileUrl}`;
+    const { fileUrl } = await getUploadedFileUrl(req2.file);
     console.log("\u{1F4F8} \u2705 Upload r\xE9ussi:", {
       fileName: req2.file.originalname,
-      url: fullUrl,
+      url: fileUrl,
       size: `${(req2.file.size / 1024).toFixed(2)} KB`
     });
     res.json({
       success: true,
       message: "Image upload\xE9e avec succ\xE8s",
-      url: fullUrl,
-      // URL complète utilisable dans le frontend
+      url: fileUrl,
       fileUrl,
-      // Chemin relatif
       file: {
         fileName: req2.file.originalname,
         size: req2.file.size,
@@ -79178,7 +82519,7 @@ router96.post("/upload", upload2.single("file"), async (req2, res) => {
     });
   }
 });
-router96.post("/upload-image", upload2.single("image"), async (req2, res) => {
+router102.post("/upload-image", upload.single("image"), async (req2, res) => {
   try {
     if (!req2.file) {
       return res.status(400).json({
@@ -79193,7 +82534,7 @@ router96.post("/upload-image", upload2.single("image"), async (req2, res) => {
         message: "Website ID manquant"
       });
     }
-    const fileUrl = `/uploads/websites/${req2.file.filename}`;
+    const { fileUrl } = await getUploadedFileUrl(req2.file);
     const mediaFile = await prisma49.webSiteMediaFile.create({
       data: {
         websiteId: parseInt(websiteId),
@@ -79201,7 +82542,7 @@ router96.post("/upload-image", upload2.single("image"), async (req2, res) => {
         fileType: req2.file.mimetype,
         // ✅ CORRECTION: fileType au lieu de mimeType
         fileUrl,
-        filePath: req2.file.path,
+        filePath: fileUrl,
         fileSize: req2.file.size,
         category,
         // 'logo', 'project', 'service', 'general'
@@ -79235,7 +82576,7 @@ router96.post("/upload-image", upload2.single("image"), async (req2, res) => {
     });
   }
 });
-router96.get("/images/:websiteId", async (req2, res) => {
+router102.get("/images/:websiteId", async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.websiteId);
     const { category } = req2.query;
@@ -79259,7 +82600,7 @@ router96.get("/images/:websiteId", async (req2, res) => {
     });
   }
 });
-router96.delete("/image/:id", async (req2, res) => {
+router102.delete("/image/:id", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     const mediaFile = await prisma49.webSiteMediaFile.findUnique({
@@ -79272,7 +82613,7 @@ router96.delete("/image/:id", async (req2, res) => {
       });
     }
     try {
-      await import_promises.default.unlink(mediaFile.filePath);
+      await import_promises2.default.unlink(mediaFile.filePath);
     } catch (err) {
       console.warn("Fichier d\xE9j\xE0 supprim\xE9 ou inexistant");
     }
@@ -79291,10 +82632,10 @@ router96.delete("/image/:id", async (req2, res) => {
     });
   }
 });
-var image_upload_default = router96;
+var image_upload_default = router102;
 
 // src/api/ai-content.ts
-var import_express99 = require("express");
+var import_express105 = require("express");
 
 // src/services/aiContentService.ts
 var AIContentService = class {
@@ -79507,8 +82848,8 @@ R\xE8gles :
 var aiContentService = new AIContentService();
 
 // src/api/ai-content.ts
-var router97 = (0, import_express99.Router)();
-router97.post("/generate-service", async (req2, res) => {
+var router103 = (0, import_express105.Router)();
+router103.post("/generate-service", async (req2, res) => {
   try {
     const { siteName, industry, serviceType, keywords } = req2.body;
     if (!siteName || !industry || !serviceType) {
@@ -79534,7 +82875,7 @@ router97.post("/generate-service", async (req2, res) => {
     });
   }
 });
-router97.post("/generate-project", async (req2, res) => {
+router103.post("/generate-project", async (req2, res) => {
   try {
     const { siteName, industry, projectType, location } = req2.body;
     if (!siteName || !industry || !projectType) {
@@ -79560,7 +82901,7 @@ router97.post("/generate-project", async (req2, res) => {
     });
   }
 });
-router97.post("/generate-testimonial", async (req2, res) => {
+router103.post("/generate-testimonial", async (req2, res) => {
   try {
     const { siteName, industry, serviceType, customerType } = req2.body;
     if (!siteName || !industry || !serviceType) {
@@ -79586,7 +82927,7 @@ router97.post("/generate-testimonial", async (req2, res) => {
     });
   }
 });
-router97.post("/generate-page", async (req2, res) => {
+router103.post("/generate-page", async (req2, res) => {
   try {
     const { siteName, siteType, industry, mainServices, targetAudience } = req2.body;
     if (!siteName || !siteType || !industry || !mainServices) {
@@ -79613,7 +82954,7 @@ router97.post("/generate-page", async (req2, res) => {
     });
   }
 });
-router97.post("/optimize-seo", async (req2, res) => {
+router103.post("/optimize-seo", async (req2, res) => {
   try {
     const { currentTitle, currentDescription, pageContent, targetKeywords, siteName, industry } = req2.body;
     if (!pageContent || !siteName || !industry) {
@@ -79641,7 +82982,7 @@ router97.post("/optimize-seo", async (req2, res) => {
     });
   }
 });
-router97.post("/generate-multiple-services", async (req2, res) => {
+router103.post("/generate-multiple-services", async (req2, res) => {
   try {
     const { siteName, industry, serviceTypes } = req2.body;
     if (!siteName || !industry || !serviceTypes || !Array.isArray(serviceTypes)) {
@@ -79667,15 +83008,15 @@ router97.post("/generate-multiple-services", async (req2, res) => {
     });
   }
 });
-var ai_content_default = router97;
+var ai_content_default = router103;
 
 // src/api/ai.ts
-var import_express100 = __toESM(require("express"), 1);
+var import_express106 = __toESM(require("express"), 1);
 var import_generative_ai2 = require("@google/generative-ai");
-var router98 = import_express100.default.Router();
+var router104 = import_express106.default.Router();
 var genAI = new import_generative_ai2.GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 var MODEL_NAME = "gemini-pro";
-router98.post("/generate", async (req2, res) => {
+router104.post("/generate", async (req2, res) => {
   try {
     const { prompt, context, sectionType, currentValue } = req2.body;
     if (!prompt) {
@@ -79838,7 +83179,7 @@ function formatSuggestions(data, context) {
       return [{ value: data }];
   }
 }
-router98.post("/analyze-section", async (req2, res) => {
+router104.post("/analyze-section", async (req2, res) => {
   try {
     const { sectionType, content, prompt } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -79973,7 +83314,7 @@ function generateFallbackAnalysis(sectionType, content) {
     }
   };
 }
-router98.post("/optimize-seo", async (req2, res) => {
+router104.post("/optimize-seo", async (req2, res) => {
   try {
     const { content, sectionType } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -80013,7 +83354,7 @@ Format de r\xE9ponse : JSON avec { metaTitle, metaDescription, keywords: [], slu
     });
   }
 });
-router98.post("/improve-content", async (req2, res) => {
+router104.post("/improve-content", async (req2, res) => {
   try {
     const { content, instructions } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -80050,7 +83391,7 @@ Retourne le contenu am\xE9lior\xE9 au format JSON identique \xE0 l'original.`;
     });
   }
 });
-router98.post("/optimize-layout", async (req2, res) => {
+router104.post("/optimize-layout", async (req2, res) => {
   try {
     const { itemCount, sectionType, currentLayout } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -80105,7 +83446,7 @@ Format de r\xE9ponse : JSON array avec :
     });
   }
 });
-router98.post("/generate-palette", async (req2, res) => {
+router104.post("/generate-palette", async (req2, res) => {
   try {
     const { baseColor, mood, industry } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -80245,7 +83586,7 @@ function generateFallbackPalettes(baseColor) {
   ];
 }
 var geminiMeasureService = getGeminiService();
-router98.post("/measure-image", async (req2, res) => {
+router104.post("/measure-image", async (req2, res) => {
   const startTime = Date.now();
   try {
     const {
@@ -80325,7 +83666,7 @@ router98.post("/measure-image", async (req2, res) => {
     });
   }
 });
-router98.post("/measure-image/apply", async (req2, res) => {
+router104.post("/measure-image/apply", async (req2, res) => {
   try {
     const {
       measurements,
@@ -80384,7 +83725,7 @@ router98.post("/measure-image/apply", async (req2, res) => {
     });
   }
 });
-router98.get("/measure-image/status", async (_req, res) => {
+router104.get("/measure-image/status", async (_req, res) => {
   try {
     const status = geminiMeasureService.getStatus();
     res.json({
@@ -80404,13 +83745,13 @@ router98.get("/measure-image/status", async (_req, res) => {
     });
   }
 });
-var ai_default2 = router98;
+var ai_default2 = router104;
 
 // src/routes/ai-field-generator.ts
-var import_express101 = __toESM(require("express"), 1);
-var router99 = import_express101.default.Router();
+var import_express107 = __toESM(require("express"), 1);
+var router105 = import_express107.default.Router();
 var geminiService3 = getGeminiService();
-router99.use(authMiddleware);
+router105.use(authMiddleware);
 var SmartPromptBuilder = class {
   /**
    * Construit un prompt optimisé selon le type de champ
@@ -80793,7 +84134,7 @@ var QualityAnalyzer = class {
     }
   }
 };
-router99.post("/generate-field", async (req2, res) => {
+router105.post("/generate-field", async (req2, res) => {
   const startTime = Date.now();
   try {
     const { fieldId, fieldType, fieldLabel, currentValue, aiContext } = req2.body;
@@ -80880,7 +84221,7 @@ router99.post("/generate-field", async (req2, res) => {
     });
   }
 });
-router99.get("/status", async (_req, res) => {
+router105.get("/status", async (_req, res) => {
   try {
     const isAvailable = !!process.env.GOOGLE_API_KEY || !!process.env.GEMINI_API_KEY;
     res.json({
@@ -80897,10 +84238,10 @@ router99.get("/status", async (_req, res) => {
     });
   }
 });
-var ai_field_generator_default = router99;
+var ai_field_generator_default = router105;
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts
-var import_express102 = require("express");
+var import_express108 = require("express");
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-blueprint-builder.ts
 var parseJsonArray = (value) => {
@@ -81386,7 +84727,7 @@ async function executeRepeatDuplication(prisma51, repeaterNodeId, options = {}) 
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-executor.ts
-var import_client7 = require("@prisma/client");
+var import_client8 = require("@prisma/client");
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-variable-with-capacities.ts
 function parseSourceRef2(sourceRef) {
@@ -83621,7 +86962,7 @@ function normalizeNodeBase2(value) {
   return value.replace(/-\d+(?:-\d+)*$/, "");
 }
 function isUniqueConstraintError(error) {
-  return error instanceof import_client7.Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+  return error instanceof import_client8.Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 }
 async function reassignCopiedNodesToDuplicatedParents(prisma51, copiedNodeIds, originalNodeIdByCopyId) {
   if (!copiedNodeIds.size) {
@@ -83982,10 +87323,10 @@ async function syncMissingDisplayNodeChildren(prisma51, duplicatedNodeIds, origi
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts
 function createRepeatRouter(prisma51) {
-  const router105 = (0, import_express102.Router)();
+  const router111 = (0, import_express108.Router)();
   const inFlightExecuteByRepeater = /* @__PURE__ */ new Set();
-  router105.use(authenticateToken);
-  router105.post("/:repeaterNodeId/instances", async (req2, res) => {
+  router111.use(authenticateToken);
+  router111.post("/:repeaterNodeId/instances", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
     try {
@@ -84017,7 +87358,7 @@ function createRepeatRouter(prisma51) {
       });
     }
   });
-  router105.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
+  router111.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
     if (inFlightExecuteByRepeater.has(repeaterNodeId)) {
@@ -84070,7 +87411,7 @@ function createRepeatRouter(prisma51) {
       inFlightExecuteByRepeater.delete(repeaterNodeId);
     }
   });
-  router105.post("/:repeaterId/preload-copies", async (req2, res) => {
+  router111.post("/:repeaterId/preload-copies", async (req2, res) => {
     try {
       const { repeaterId } = req2.params;
       const { targetCount } = req2.body || {};
@@ -84206,7 +87547,7 @@ function createRepeatRouter(prisma51) {
       res.status(500).json({ error: "Erreur lors du pr\xE9-chargement des copies" });
     }
   });
-  return router105;
+  return router111;
 }
 async function deleteNodeWithCascade(prisma51, treeId, nodeId) {
   const allNodes = await prisma51.treeBranchLeafNode.findMany({
@@ -84246,9 +87587,9 @@ async function deleteNodeWithCascade(prisma51, treeId, nodeId) {
 }
 
 // src/api/cloud-run-domains.ts
-var import_express103 = require("express");
-var router100 = (0, import_express103.Router)();
-router100.get("/cloud-run-domains", authenticateToken, async (req2, res) => {
+var import_express109 = require("express");
+var router106 = (0, import_express109.Router)();
+router106.get("/cloud-run-domains", authenticateToken, async (req2, res) => {
   try {
     const user = req2.user;
     if (!user.isSuperAdmin) {
@@ -84290,7 +87631,7 @@ router100.get("/cloud-run-domains", authenticateToken, async (req2, res) => {
     });
   }
 });
-router100.post("/cloud-run-domains/verify", authenticateToken, async (req2, res) => {
+router106.post("/cloud-run-domains/verify", authenticateToken, async (req2, res) => {
   try {
     const user = req2.user;
     const { domain } = req2.body;
@@ -84343,10 +87684,10 @@ async function checkDomainReachability(domain) {
     return false;
   }
 }
-var cloud_run_domains_default = router100;
+var cloud_run_domains_default = router106;
 
 // src/api/measurement-reference.ts
-var import_express104 = require("express");
+var import_express110 = require("express");
 var sharpModule = __toESM(require("sharp"), 1);
 
 // src/lib/apriltag-detector-server.ts
@@ -85227,8 +88568,8 @@ function computeObjectDimensions(calibration, objectCorners) {
 
 // src/api/measurement-reference.ts
 var sharp = sharpModule.default || sharpModule;
-var router101 = (0, import_express104.Router)();
-router101.post("/ultra-fusion-detect", authenticateToken, async (req2, res) => {
+var router107 = (0, import_express110.Router)();
+router107.post("/ultra-fusion-detect", authenticateToken, async (req2, res) => {
   const startTime = Date.now();
   try {
     const { photos } = req2.body;
@@ -85355,7 +88696,7 @@ ${"=".repeat(80)}`);
     });
   }
 });
-router101.post("/compute-dimensions-simple", authenticateToken, async (req2, res) => {
+router107.post("/compute-dimensions-simple", authenticateToken, async (req2, res) => {
   try {
     if (!req2.user?.id) {
       return res.status(401).json({ error: "Non authentifi\xE9" });
@@ -85445,13 +88786,13 @@ router101.post("/compute-dimensions-simple", authenticateToken, async (req2, res
     });
   }
 });
-var measurement_reference_default = router101;
+var measurement_reference_default = router107;
 
 // src/routes/userFavoritesRoutes.ts
-var import_express105 = require("express");
+var import_express111 = require("express");
 init_database();
-var router102 = (0, import_express105.Router)();
-router102.get("/", authMiddleware, async (req2, res) => {
+var router108 = (0, import_express111.Router)();
+router108.get("/", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const organizationId = req2.user?.organizationId;
@@ -85483,7 +88824,7 @@ router102.get("/", authMiddleware, async (req2, res) => {
     });
   }
 });
-router102.post("/", authMiddleware, async (req2, res) => {
+router108.post("/", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const organizationId = req2.user?.organizationId;
@@ -85525,7 +88866,7 @@ router102.post("/", authMiddleware, async (req2, res) => {
     });
   }
 });
-router102.delete("/:moduleKey", authMiddleware, async (req2, res) => {
+router108.delete("/:moduleKey", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const organizationId = req2.user?.organizationId;
@@ -85558,18 +88899,18 @@ router102.delete("/:moduleKey", authMiddleware, async (req2, res) => {
     });
   }
 });
-var userFavoritesRoutes_default = router102;
+var userFavoritesRoutes_default = router108;
 
 // src/routes/website-forms.ts
-var import_express106 = require("express");
+var import_express112 = require("express");
 init_database();
-var router103 = (0, import_express106.Router)();
+var router109 = (0, import_express112.Router)();
 var getOrgId4 = (req2) => {
   const orgId = req2.organizationId || req2.headers["x-organization-id"];
   if (!orgId) throw new Error("Organization ID manquant");
   return orgId;
 };
-router103.get("/", async (req2, res) => {
+router109.get("/", async (req2, res) => {
   try {
     const organizationId = getOrgId4(req2);
     const { websiteId } = req2.query;
@@ -85615,7 +88956,7 @@ router103.get("/", async (req2, res) => {
     });
   }
 });
-router103.get("/by-website/:websiteId", async (req2, res) => {
+router109.get("/by-website/:websiteId", async (req2, res) => {
   try {
     const organizationId = getOrgId4(req2);
     const { websiteId } = req2.params;
@@ -85659,7 +89000,7 @@ router103.get("/by-website/:websiteId", async (req2, res) => {
     });
   }
 });
-router103.get("/my-commercial-links", authMiddleware, async (req2, res) => {
+router109.get("/my-commercial-links", authMiddleware, async (req2, res) => {
   try {
     const organizationId = getOrgId4(req2);
     const userId = req2.user.userId;
@@ -85733,7 +89074,7 @@ router103.get("/my-commercial-links", authMiddleware, async (req2, res) => {
     });
   }
 });
-router103.get("/:id", async (req2, res) => {
+router109.get("/:id", async (req2, res) => {
   try {
     const organizationId = getOrgId4(req2);
     const { id } = req2.params;
@@ -85777,7 +89118,7 @@ router103.get("/:id", async (req2, res) => {
     });
   }
 });
-router103.post("/", async (req2, res) => {
+router109.post("/", async (req2, res) => {
   try {
     const organizationId = getOrgId4(req2);
     const { name, slug, description, treeId, settings, successTitle, successMessage, requiresCommercialTracking } = req2.body;
@@ -85817,7 +89158,7 @@ router103.post("/", async (req2, res) => {
     });
   }
 });
-router103.put("/:id", async (req2, res) => {
+router109.put("/:id", async (req2, res) => {
   try {
     const organizationId = getOrgId4(req2);
     const { id } = req2.params;
@@ -85871,7 +89212,7 @@ router103.put("/:id", async (req2, res) => {
     });
   }
 });
-router103.delete("/:id", async (req2, res) => {
+router109.delete("/:id", async (req2, res) => {
   try {
     const organizationId = getOrgId4(req2);
     const { id } = req2.params;
@@ -85895,7 +89236,7 @@ router103.delete("/:id", async (req2, res) => {
     });
   }
 });
-router103.post("/:id/steps", async (req2, res) => {
+router109.post("/:id/steps", async (req2, res) => {
   try {
     const organizationId = getOrgId4(req2);
     const { id } = req2.params;
@@ -85933,7 +89274,7 @@ router103.post("/:id/steps", async (req2, res) => {
     });
   }
 });
-router103.put("/steps/:stepId", async (req2, res) => {
+router109.put("/steps/:stepId", async (req2, res) => {
   try {
     const { stepId } = req2.params;
     const { title, subtitle, helpText, stepType, order, isRequired, condition, settings } = req2.body;
@@ -85962,7 +89303,7 @@ router103.put("/steps/:stepId", async (req2, res) => {
     });
   }
 });
-router103.delete("/steps/:stepId", async (req2, res) => {
+router109.delete("/steps/:stepId", async (req2, res) => {
   try {
     const { stepId } = req2.params;
     console.log("\u{1F4CB} [WebsiteForms] DELETE step:", stepId);
@@ -85979,7 +89320,7 @@ router103.delete("/steps/:stepId", async (req2, res) => {
     });
   }
 });
-router103.put("/:id/steps/reorder", async (req2, res) => {
+router109.put("/:id/steps/reorder", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { stepIds } = req2.body;
@@ -86001,7 +89342,7 @@ router103.put("/:id/steps/reorder", async (req2, res) => {
     });
   }
 });
-router103.post("/steps/:stepId/fields", async (req2, res) => {
+router109.post("/steps/:stepId/fields", async (req2, res) => {
   try {
     const { stepId } = req2.params;
     const {
@@ -86059,7 +89400,7 @@ router103.post("/steps/:stepId/fields", async (req2, res) => {
     });
   }
 });
-router103.put("/fields/:fieldId", async (req2, res) => {
+router109.put("/fields/:fieldId", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     const {
@@ -86110,7 +89451,7 @@ router103.put("/fields/:fieldId", async (req2, res) => {
     });
   }
 });
-router103.delete("/fields/:fieldId", async (req2, res) => {
+router109.delete("/fields/:fieldId", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     console.log("\u{1F4CB} [WebsiteForms] DELETE field:", fieldId);
@@ -86127,7 +89468,7 @@ router103.delete("/fields/:fieldId", async (req2, res) => {
     });
   }
 });
-router103.put("/steps/:stepId/fields/reorder", async (req2, res) => {
+router109.put("/steps/:stepId/fields/reorder", async (req2, res) => {
   try {
     const { stepId } = req2.params;
     const { fieldIds } = req2.body;
@@ -86149,7 +89490,7 @@ router103.put("/steps/:stepId/fields/reorder", async (req2, res) => {
     });
   }
 });
-router103.post("/:id/link-website", async (req2, res) => {
+router109.post("/:id/link-website", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { websiteId, isDefault, urlPath } = req2.body;
@@ -86182,7 +89523,7 @@ router103.post("/:id/link-website", async (req2, res) => {
     });
   }
 });
-router103.delete("/:id/unlink-website/:websiteId", async (req2, res) => {
+router109.delete("/:id/unlink-website/:websiteId", async (req2, res) => {
   try {
     const { id, websiteId } = req2.params;
     console.log("\u{1F4CB} [WebsiteForms] UNLINK form", id, "from website", websiteId);
@@ -86202,7 +89543,7 @@ router103.delete("/:id/unlink-website/:websiteId", async (req2, res) => {
     });
   }
 });
-router103.get("/:id/stats", async (req2, res) => {
+router109.get("/:id/stats", async (req2, res) => {
   try {
     const _organizationId = getOrgId4(req2);
     const { id } = req2.params;
@@ -86240,7 +89581,7 @@ router103.get("/:id/stats", async (req2, res) => {
     });
   }
 });
-router103.get("/:id/submissions", async (req2, res) => {
+router109.get("/:id/submissions", async (req2, res) => {
   try {
     const { id } = req2.params;
     const submissions = await db.website_form_submissions.findMany({
@@ -86278,7 +89619,7 @@ router103.get("/:id/submissions", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des soumissions" });
   }
 });
-router103.get("/:id/questions", async (req2, res) => {
+router109.get("/:id/questions", async (req2, res) => {
   try {
     const organizationId = getOrgId4(req2);
     const { id } = req2.params;
@@ -86303,7 +89644,7 @@ router103.get("/:id/questions", async (req2, res) => {
     });
   }
 });
-router103.post("/:id/questions", async (req2, res) => {
+router109.post("/:id/questions", async (req2, res) => {
   try {
     const organizationId = getOrgId4(req2);
     const { id } = req2.params;
@@ -86361,7 +89702,7 @@ router103.post("/:id/questions", async (req2, res) => {
     });
   }
 });
-router103.put("/questions/:questionId", async (req2, res) => {
+router109.put("/questions/:questionId", async (req2, res) => {
   try {
     const organizationId = getOrgId4(req2);
     const { questionId } = req2.params;
@@ -86412,7 +89753,7 @@ router103.put("/questions/:questionId", async (req2, res) => {
     });
   }
 });
-router103.delete("/questions/:questionId", async (req2, res) => {
+router109.delete("/questions/:questionId", async (req2, res) => {
   try {
     const organizationId = getOrgId4(req2);
     const { questionId } = req2.params;
@@ -86470,17 +89811,16 @@ var generateUserSlug2 = async (firstName, lastName, organizationId) => {
   }
   return slug;
 };
-var website_forms_default = router103;
+var website_forms_default = router109;
 
 // src/routes/public-forms.ts
-var import_express107 = require("express");
+var import_express113 = require("express");
 init_database();
 var import_uuid7 = require("uuid");
-var fs13 = __toESM(require("fs"), 1);
-var path12 = __toESM(require("path"), 1);
 var import_axios4 = __toESM(require("axios"), 1);
 init_crypto();
 var import_qrcode = __toESM(require("qrcode"), 1);
+init_storage();
 async function sendSmsInternal(organizationId, to, text) {
   try {
     const config = await db.telnyxConfig.findUnique({ where: { organizationId } }).catch(() => null);
@@ -86523,8 +89863,8 @@ async function sendSmsInternal(organizationId, to, text) {
     return false;
   }
 }
-var router104 = (0, import_express107.Router)();
-router104.get("/:slug", async (req2, res) => {
+var router110 = (0, import_express113.Router)();
+router110.get("/:slug", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { websiteSlug: _websiteSlug } = req2.query;
@@ -86634,7 +89974,7 @@ router104.get("/:slug", async (req2, res) => {
     });
   }
 });
-router104.get("/:slug/questions", async (req2, res) => {
+router110.get("/:slug/questions", async (req2, res) => {
   try {
     const { slug } = req2.params;
     console.log("\u{1F3AF} [PublicForms] GET form questions (Effy mode) by slug:", slug);
@@ -86697,7 +90037,7 @@ router104.get("/:slug/questions", async (req2, res) => {
     });
   }
 });
-router104.get("/by-website/:websiteSlug", async (req2, res) => {
+router110.get("/by-website/:websiteSlug", async (req2, res) => {
   try {
     const { websiteSlug } = req2.params;
     console.log("\u{1F4CB} [PublicForms] GET form for website:", websiteSlug);
@@ -86772,7 +90112,7 @@ router104.get("/by-website/:websiteSlug", async (req2, res) => {
     });
   }
 });
-router104.post("/:slug/submit", async (req2, res) => {
+router110.post("/:slug/submit", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const {
@@ -87134,14 +90474,9 @@ router104.post("/:slug/submit", async (req2, res) => {
         leadNumber: leadId ? `LEAD-${(await db.lead.count({ where: { organizationId: form.organizationId } })).toString().padStart(5, "0")}` : void 0
       };
       const pdfBuffer = await generateFormResponsePdf(pdfData);
-      const uploadsDir2 = path12.join(process.cwd(), "public", "uploads", "form-responses");
-      if (!fs13.existsSync(uploadsDir2)) {
-        fs13.mkdirSync(uploadsDir2, { recursive: true });
-      }
       const pdfFileName = `formulaire-${slug}-${leadId ? leadId.substring(0, 8) : "candidat"}-${Date.now()}.pdf`;
-      const pdfPath = path12.join(uploadsDir2, pdfFileName);
-      fs13.writeFileSync(pdfPath, pdfBuffer);
-      pdfUrl = `/uploads/form-responses/${pdfFileName}`;
+      const key2 = `form-responses/${pdfFileName}`;
+      pdfUrl = await uploadFile(pdfBuffer, key2, "application/pdf");
       if (leadId) {
         await db.lead.update({
           where: { id: leadId },
@@ -87224,7 +90559,7 @@ router104.post("/:slug/submit", async (req2, res) => {
     });
   }
 });
-router104.post("/:slug/partial", async (req2, res) => {
+router110.post("/:slug/partial", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { formData, currentStep, metadata } = req2.body;
@@ -87253,7 +90588,7 @@ router104.post("/:slug/partial", async (req2, res) => {
     res.status(500).json({ error: "Erreur" });
   }
 });
-router104.get("/:slug/qrcode", async (req2, res) => {
+router110.get("/:slug/qrcode", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const format = req2.query.format || "png";
@@ -87264,7 +90599,7 @@ router104.get("/:slug/qrcode", async (req2, res) => {
     if (!form) {
       return res.status(404).json({ error: "Formulaire introuvable" });
     }
-    const url = `https://app.2thier.be/form/${slug}`;
+    const url = `https://www.zhiive.com/form/${slug}`;
     if (format === "svg") {
       const svg = await import_qrcode.default.toString(url, { type: "svg", width: size, margin: 2 });
       res.setHeader("Content-Type", "image/svg+xml");
@@ -87280,14 +90615,14 @@ router104.get("/:slug/qrcode", async (req2, res) => {
     res.status(500).json({ error: "Erreur g\xE9n\xE9ration QR code" });
   }
 });
-var public_forms_default = router104;
+var public_forms_default = router110;
 
 // src/middleware/websiteDetection.ts
 init_prisma();
 
 // src/middleware/websiteRenderer.ts
-var fs14 = __toESM(require("fs"), 1);
-var path13 = __toESM(require("path"), 1);
+var fs12 = __toESM(require("fs"), 1);
+var path11 = __toESM(require("path"), 1);
 function renderSection(section) {
   const content = section.content || {};
   const sectionType = section.type;
@@ -87461,10 +90796,10 @@ async function renderWebsite(req2, res) {
         </html>
       `);
     }
-    const distDir = path13.resolve(process.cwd(), "dist");
-    const indexHtmlPath = path13.join(distDir, "index.html");
-    if (fs14.existsSync(indexHtmlPath)) {
-      let indexHtml = fs14.readFileSync(indexHtmlPath, "utf-8");
+    const distDir = path11.resolve(process.cwd(), "dist");
+    const indexHtmlPath = path11.join(distDir, "index.html");
+    if (fs12.existsSync(indexHtmlPath)) {
+      let indexHtml = fs12.readFileSync(indexHtmlPath, "utf-8");
       const seoMeta = `
         <title>${website.name || "2Thier Energy"}</title>
         <meta name="description" content="${website.config?.metaDescription || website.config?.seo?.description || "Votre partenaire en transition \xE9nerg\xE9tique"}">
@@ -87495,7 +90830,7 @@ async function renderWebsite(req2, res) {
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <title>${website.name || "2Thier Energy"}</title>
           <meta name="description" content="${website.config?.metaDescription || "Votre partenaire en transition \xE9nerg\xE9tique"}">
-          <link rel="icon" type="image/png" href="/2thier-logo.png">
+          <link rel="icon" type="image/png" href="/zhiive-logo.png">
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
@@ -87516,8 +90851,10 @@ async function renderWebsite(req2, res) {
 // src/middleware/websiteDetection.ts
 var websiteCache = /* @__PURE__ */ new Map();
 var CACHE_TTL = 6e4;
-var isProduction3 = process.env.NODE_ENV === "production";
+var isProduction5 = process.env.NODE_ENV === "production";
 var CRM_DOMAINS = [
+  "www.zhiive.com",
+  "zhiive.com",
   "app.2thier.be",
   "api.2thier.be",
   "crm.2thier.be",
@@ -87537,12 +90874,12 @@ async function detectWebsite(req2, res, next) {
     const hostHeader = req2.headers.host;
     let hostname = forwardedHost || hostHeader || req2.hostname || "";
     hostname = hostname.split(":")[0];
-    if (!isProduction3) {
+    if (!isProduction5) {
       console.log(`\u{1F50D} [WEBSITE-DETECTION] Headers - X-Forwarded-Host: ${forwardedHost}, Host: ${hostHeader}, hostname: ${req2.hostname}`);
       console.log(`\u{1F50D} [WEBSITE-DETECTION] Domaine d\xE9tect\xE9: ${hostname}`);
     }
     if (CRM_DOMAINS.some((crm) => hostname.includes(crm))) {
-      if (!isProduction3) {
+      if (!isProduction5) {
         console.log(`\u{1F4F1} [WEBSITE-DETECTION] Domaine CRM d\xE9tect\xE9: ${hostname}`);
       }
       req2.isWebsiteRoute = false;
@@ -87560,7 +90897,7 @@ async function detectWebsite(req2, res, next) {
       }
       return next();
     }
-    if (!isProduction3) {
+    if (!isProduction5) {
       console.log(`\u{1F310} [WEBSITE-DETECTION] Recherche site pour: ${cleanDomain}`);
     }
     const website = await db.websites.findFirst({
@@ -87581,7 +90918,7 @@ async function detectWebsite(req2, res, next) {
       }
     });
     if (website) {
-      if (!isProduction3) {
+      if (!isProduction5) {
         console.log(`\u2705 [WEBSITE-DETECTION] Site trouv\xE9: ${website.siteName} (${website.slug})`);
       }
       const websiteData = {
@@ -87597,7 +90934,7 @@ async function detectWebsite(req2, res, next) {
       req2.websiteData = websiteData;
       req2.isWebsiteRoute = true;
     } else {
-      if (!isProduction3) {
+      if (!isProduction5) {
         console.log(`\u26A0\uFE0F [WEBSITE-DETECTION] Aucun site trouv\xE9 pour: ${cleanDomain}`);
       }
       websiteCache.set(cacheKey, { data: null, timestamp: Date.now() });
@@ -87938,7 +91275,7 @@ logSecurityEvent("SERVER_STARTUP", {
   environment: process.env.NODE_ENV || "development",
   securityLevel: "ENTERPRISE"
 }, "info");
-var app = (0, import_express108.default)();
+var app = (0, import_express114.default)();
 app.set("trust proxy", 1);
 var port = Number(process.env.PORT || 8080);
 console.log("\u{1F3AF} [BOOTSTRAP] Server will listen on port:", port);
@@ -88014,7 +91351,9 @@ app.use(advancedRateLimit);
 app.use(anomalyDetection);
 var FRONTEND_URL = process.env.FRONTEND_URL;
 var prodOrigins = [
-  FRONTEND_URL || "https://app.2thier.be",
+  FRONTEND_URL || "https://www.zhiive.com",
+  "https://www.zhiive.com",
+  "https://app.2thier.be",
   "https://www.2thier.be",
   "https://crm.2thier.be",
   "http://localhost:4000",
@@ -88066,7 +91405,7 @@ app.use((0, import_cors.default)({
   exposedHeaders: ["X-Total-Count", "X-Rate-Limit-Remaining", "x-organization-id"]
 }));
 app.use(inputSanitization);
-app.use(import_express108.default.json({
+app.use(import_express114.default.json({
   limit: "50mb",
   verify: (req2, res, buf) => {
     try {
@@ -88080,17 +91419,17 @@ app.use(import_express108.default.json({
     }
   }
 }));
-app.use(import_express108.default.urlencoded({ extended: true, limit: "50mb" }));
+app.use(import_express114.default.urlencoded({ extended: true, limit: "50mb" }));
 app.use((0, import_cookie_parser.default)());
 app.use((0, import_express_fileupload.default)({
-  limits: { fileSize: 25 * 1024 * 1024 },
-  // 25 MB max
-  useTempFiles: false,
-  // Garder en mémoire (Buffer) pour compatibilité avec le contrôleur Gmail
+  limits: { fileSize: 100 * 1024 * 1024 },
+  // 100 MB max (vidéos)
+  useTempFiles: true,
+  tempFileDir: "/tmp/",
   abortOnLimit: true,
-  responseOnLimit: "Fichier trop volumineux (max 25 Mo)"
+  responseOnLimit: "Fichier trop volumineux (max 100 Mo)"
 }));
-console.log("\u2705 [FileUpload] Middleware configur\xE9 (25MB max)");
+console.log("\u2705 [FileUpload] Middleware configur\xE9 (100MB max)");
 app.use((0, import_express_session.default)({
   secret: process.env.SESSION_SECRET || "crm-dev-secret-2024",
   resave: false,
@@ -88108,20 +91447,28 @@ app.use((0, import_express_session.default)({
   // TODO: Ajouter un store persistant en production
 }));
 console.log("\u2705 [ENTERPRISE-SECURITY] Configuration s\xE9curit\xE9 niveau Enterprise activ\xE9e");
-var uploadsDir = import_path11.default.resolve(process.cwd(), "public", "uploads");
-app.use("/uploads", (req2, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-  next();
-}, import_express108.default.static(uploadsDir, {
-  maxAge: "1h",
-  // Cache 1 heure
-  etag: true,
-  lastModified: true
-}));
-console.log("\u{1F4F8} [UPLOADS] Dossier uploads configur\xE9 avec CORS:", uploadsDir);
+var uploadsDir = import_path10.default.resolve(process.cwd(), "public", "uploads");
+var GCS_BUCKET_NAME = process.env.GCS_BUCKET || "crm-2thier-uploads";
+if (process.env.NODE_ENV === "production") {
+  app.use("/uploads", (req2, res) => {
+    const gcsUrl = `https://storage.googleapis.com/${GCS_BUCKET_NAME}${req2.path}`;
+    res.redirect(301, gcsUrl);
+  });
+  console.log("\u{1F4F8} [UPLOADS] Mode production: redirection vers GCS bucket", GCS_BUCKET_NAME);
+} else {
+  app.use("/uploads", (req2, res, next) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    next();
+  }, import_express114.default.static(uploadsDir, {
+    maxAge: "1h",
+    etag: true,
+    lastModified: true
+  }));
+  console.log("\u{1F4F8} [UPLOADS] Mode dev: fichiers locaux depuis", uploadsDir);
+}
 console.log("\u{1F527} [API-SERVER-CLEAN] Configuration Passport...");
 app.use(import_passport.default.initialize());
 app.use(import_passport.default.session());
@@ -88174,20 +91521,20 @@ app.get("/api/health/db", async (_req, res) => {
 app.use(detectWebsite);
 app.use(websiteInterceptor);
 if (process.env.NODE_ENV === "production") {
-  const distDir = import_path11.default.resolve(process.cwd(), "dist");
-  const indexHtml = import_path11.default.join(distDir, "index.html");
-  if (import_fs11.default.existsSync(indexHtml)) {
+  const distDir = import_path10.default.resolve(process.cwd(), "dist");
+  const indexHtml = import_path10.default.join(distDir, "index.html");
+  if (import_fs9.default.existsSync(indexHtml)) {
     console.log("\u{1F5C2}\uFE0F [STATIC] Distribution front d\xE9tect\xE9e, activation du serveur statique");
-    const assetsDir = import_path11.default.join(distDir, "assets");
-    app.use("/assets", import_express108.default.static(assetsDir, {
+    const assetsDir = import_path10.default.join(distDir, "assets");
+    app.use("/assets", import_express114.default.static(assetsDir, {
       setHeaders: (res) => {
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       }
     }));
     app.get(/^\/[^/]+\.(png|jpg|jpeg|gif|svg|ico|webp|js|css|woff|woff2|ttf|eot|json|webmanifest|html|txt|xml)$/i, (req2, res, next) => {
-      const filePath = import_path11.default.join(distDir, req2.path);
-      if (import_fs11.default.existsSync(filePath)) {
-        const ext = import_path11.default.extname(req2.path).toLowerCase();
+      const filePath = import_path10.default.join(distDir, req2.path);
+      if (import_fs9.default.existsSync(filePath)) {
+        const ext = import_path10.default.extname(req2.path).toLowerCase();
         const mimeTypes = {
           ".png": "image/png",
           ".jpg": "image/jpeg",
@@ -88218,19 +91565,19 @@ if (process.env.NODE_ENV === "production") {
       next();
     });
     app.get(/^\/pwa-.*/, (req2, res) => {
-      const filePath = import_path11.default.join(distDir, req2.path);
-      if (import_fs11.default.existsSync(filePath)) {
+      const filePath = import_path10.default.join(distDir, req2.path);
+      if (import_fs9.default.existsSync(filePath)) {
         res.sendFile(filePath);
       } else {
         res.status(404).end();
       }
     });
-    app.get("/favicon.ico", (req2, res) => res.sendFile(import_path11.default.join(distDir, "favicon.ico")));
+    app.get("/favicon.ico", (req2, res) => res.sendFile(import_path10.default.join(distDir, "favicon.ico")));
     const dynamicManifestHandler = (req2, res) => {
       let manifest = {
-        name: "2Thier CRM",
-        short_name: "2Thier",
-        description: "CRM 2Thier - Gestion de Formulaires",
+        name: "Zhiive",
+        short_name: "Zhiive",
+        description: "Zhiive - CRM & R\xE9seau Social Professionnel",
         start_url: "/",
         scope: "/",
         display: "standalone",
@@ -88269,8 +91616,8 @@ if (process.env.NODE_ENV === "production") {
     app.get("/manifest.json", dynamicManifestHandler);
     app.get("/manifest.webmanifest", dynamicManifestHandler);
     app.get("/registerSW.js", (req2, res) => {
-      const swPath = import_path11.default.join(distDir, "registerSW.js");
-      if (import_fs11.default.existsSync(swPath)) {
+      const swPath = import_path10.default.join(distDir, "registerSW.js");
+      if (import_fs9.default.existsSync(swPath)) {
         res.setHeader("Content-Type", "application/javascript");
         res.sendFile(swPath);
       } else {
@@ -88278,8 +91625,8 @@ if (process.env.NODE_ENV === "production") {
       }
     });
     app.get("/sw.js", (req2, res) => {
-      const swPath = import_path11.default.join(distDir, "sw.js");
-      if (import_fs11.default.existsSync(swPath)) {
+      const swPath = import_path10.default.join(distDir, "sw.js");
+      if (import_fs9.default.existsSync(swPath)) {
         res.setHeader("Content-Type", "application/javascript");
         res.sendFile(swPath);
       } else {
@@ -88287,8 +91634,8 @@ if (process.env.NODE_ENV === "production") {
       }
     });
     app.get(/^\/workbox-.*\.js$/, (req2, res) => {
-      const filePath = import_path11.default.join(distDir, req2.path);
-      if (import_fs11.default.existsSync(filePath)) {
+      const filePath = import_path10.default.join(distDir, req2.path);
+      if (import_fs9.default.existsSync(filePath)) {
         res.setHeader("Content-Type", "application/javascript");
         res.sendFile(filePath);
       } else {
@@ -88296,8 +91643,8 @@ if (process.env.NODE_ENV === "production") {
       }
     });
     app.get("/env-config.js", (req2, res) => {
-      const envPath = import_path11.default.join(distDir, "env-config.js");
-      if (import_fs11.default.existsSync(envPath)) {
+      const envPath = import_path10.default.join(distDir, "env-config.js");
+      if (import_fs9.default.existsSync(envPath)) {
         res.setHeader("Content-Type", "application/javascript");
         res.sendFile(envPath);
       } else {
@@ -88338,13 +91685,13 @@ app.get("/api/root-info", (_req, res) => {
   });
 });
 app.get("/api/debug/static-status", (_req, res) => {
-  const distDir = import_path11.default.resolve(process.cwd(), "dist");
-  const indexHtml = import_path11.default.join(distDir, "index.html");
+  const distDir = import_path10.default.resolve(process.cwd(), "dist");
+  const indexHtml = import_path10.default.join(distDir, "index.html");
   res.json({
     env: process.env.NODE_ENV,
-    distExists: import_fs11.default.existsSync(distDir),
-    indexExists: import_fs11.default.existsSync(indexHtml),
-    served: process.env.NODE_ENV === "production" && import_fs11.default.existsSync(indexHtml)
+    distExists: import_fs9.default.existsSync(distDir),
+    indexExists: import_fs9.default.existsSync(indexHtml),
+    served: process.env.NODE_ENV === "production" && import_fs9.default.existsSync(indexHtml)
   });
 });
 var errorHandler = (err, req2, res, next) => {

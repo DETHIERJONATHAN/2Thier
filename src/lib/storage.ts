@@ -13,6 +13,8 @@ import fs from 'fs/promises';
 const isProduction = process.env.NODE_ENV === 'production';
 const GCS_BUCKET = process.env.GCS_BUCKET || 'crm-2thier-uploads';
 
+console.log(`📦 [Storage] Mode: ${isProduction ? 'PRODUCTION (GCS)' : 'DEV (local)'} | Bucket: ${GCS_BUCKET}`);
+
 let storage: Storage | null = null;
 
 function getStorage(): Storage {
@@ -92,16 +94,23 @@ export async function deleteFile(keyOrUrl: string): Promise<void> {
 // ── Internal ──────────────────────────────────────────────────
 
 async function uploadToGCS(buffer: Buffer, key: string, mimeType: string): Promise<string> {
-  const bucket = getStorage().bucket(GCS_BUCKET);
-  const blob = bucket.file(key);
-  await blob.save(buffer, {
-    contentType: mimeType,
-    resumable: false,
-    metadata: {
-      cacheControl: 'public, max-age=3600',
-    },
-  });
-  return `https://storage.googleapis.com/${GCS_BUCKET}/${key}`;
+  try {
+    const bucket = getStorage().bucket(GCS_BUCKET);
+    const blob = bucket.file(key);
+    await blob.save(buffer, {
+      contentType: mimeType,
+      resumable: false,
+      metadata: {
+        cacheControl: 'public, max-age=3600',
+      },
+    });
+    const url = `https://storage.googleapis.com/${GCS_BUCKET}/${key}`;
+    console.log(`📦 [Storage] ✅ GCS upload OK: ${key} (${(buffer.length / 1024).toFixed(1)} KB)`);
+    return url;
+  } catch (error) {
+    console.error(`📦 [Storage] ❌ GCS upload FAILED for ${key}:`, error);
+    throw error;
+  }
 }
 
 async function uploadToLocal(buffer: Buffer, key: string): Promise<string> {
