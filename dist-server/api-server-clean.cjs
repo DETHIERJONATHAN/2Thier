@@ -91353,6 +91353,7 @@ var FRONTEND_URL = process.env.FRONTEND_URL;
 var prodOrigins = [
   FRONTEND_URL || "https://www.zhiive.com",
   "https://www.zhiive.com",
+  "https://zhiive.com",
   "https://app.2thier.be",
   "https://www.2thier.be",
   "https://crm.2thier.be",
