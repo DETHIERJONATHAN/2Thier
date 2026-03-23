@@ -83,6 +83,35 @@ const api = useMemo(() => apiHook, []); // L'instance 'api' est maintenant stabl
 - **Génération d'email :** L'adresse email professionnelle d'un utilisateur suit un format strict : `prénom.nom@organisation.be`. Pour le Super Admin, l'organisation est `2thier.be`. La logique de normalisation (suppression des accents, etc.) est cruciale.
   - **Fichier de référence :** `src/pages/MailPage.tsx` contient une implémentation de référence.
 
+### 🐝 Identité Active Centralisée (CRITIQUE)
+**NE JAMAIS** recalculer `feedMode === 'org' && !!currentOrganization` localement dans un composant. **TOUJOURS** utiliser le hook centralisé `useActiveIdentity()`.
+
+Ce système résout un problème majeur : chaque composant Zhiive (Wall, Reels, Stories, Universe, Explore) 
+calculait son propre `isOrgMode` localement, causant des incohérences (posts attribués au personnel au lieu de l'organisation).
+
+```typescript
+// ✅ BONNE PRATIQUE — Source unique d'identité
+import { useActiveIdentity } from '@/contexts/ActiveIdentityContext';
+
+const { isOrgMode, publishAsOrg, displayName, avatarUrl, avatarFallback, avatarBgColor } = useActiveIdentity();
+
+// Dans un appel API :
+await api.post('/api/wall/posts', { 
+  content, 
+  publishAsOrg,  // ← déjà calculé correctement par le système centralisé
+});
+
+// Pour afficher l'avatar :
+<Avatar src={avatarUrl} style={{ background: avatarBgColor }}>{avatarFallback}</Avatar>
+
+// ❌ INTERDIT — Ne JAMAIS calculer localement
+const isOrgMode = feedMode === 'org' && !!currentOrganization; // NE PAS FAIRE ÇA !
+```
+
+- **Fichier clé :** `src/contexts/ActiveIdentityContext.tsx` — Système centralisé d'identité
+- **Provider :** Monté dans `src/pages/page2thier/MainLayoutNew.tsx` (à l'intérieur de `ZhiiveNavProvider`)
+- **Composants migrés :** DashboardPageUnified, StoriesBar, ReelsPanel, UniversePanel, ExplorePanel, MainLayoutNew
+
 ## 3. Workflows de Développement
 
 ### Lancement de l'application

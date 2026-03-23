@@ -2,8 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Avatar, Tooltip, Modal, Input, message } from 'antd';
 import { PlusOutlined, UserOutlined, CameraOutlined, LoadingOutlined } from '@ant-design/icons';
 import { SF } from './ZhiiveTheme';
-import { useZhiiveNav } from '../../contexts/ZhiiveNavContext';
-import { useAuth } from '../../auth/useAuth';
+import { useActiveIdentity } from '../../contexts/ActiveIdentityContext';
 
 interface Story {
   id: string;
@@ -22,12 +21,11 @@ interface StoriesBarProps {
 }
 
 const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
-  const { feedMode } = useZhiiveNav();
-  const { currentOrganization } = useAuth();
-  const isOrgMode = feedMode === 'org' && !!currentOrganization;
-  const orgLogo = (currentOrganization as any)?.logoUrl || null;
-  const storyAvatarSrc = isOrgMode ? (orgLogo || undefined) : (currentUser?.avatarUrl || undefined);
+  // 🐝 Identité centralisée — source unique pour savoir si on poste en tant qu'org ou personnel
+  const identity = useActiveIdentity();
+  const { isOrgMode, avatarUrl: storyAvatarSrc, organization: currentOrganization } = identity;
   const storyLabel = isOrgMode ? (currentOrganization?.name?.substring(0, 8) || 'Org') : 'Ma Story';
+  const orgLogo = currentOrganization?.logoUrl || null;
   const [stories, setStories] = useState<Story[]>([]);
   const [loading, setLoading] = useState(true);
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -128,7 +126,8 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
         mediaUrl: mediaUrl || undefined,
         mediaType,
         visibility: storyVisibility,
-        publishAsOrg: isOrgMode ? true : undefined,
+        // 🐝 publishAsOrg piloté par le système d'identité centralisé
+        publishAsOrg: identity.publishAsOrg,
       });
       message.success('Story publiée ! 🎉');
       setStoryText(''); setStoryMediaUrl('');

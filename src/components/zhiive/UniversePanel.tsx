@@ -7,7 +7,7 @@ import {
 } from '@ant-design/icons';
 import { SF } from './ZhiiveTheme';
 import { useZhiiveNav } from '../../contexts/ZhiiveNavContext';
-import { useAuth } from '../../auth/useAuth';
+import { useActiveIdentity } from '../../contexts/ActiveIdentityContext';
 
 interface SocialEventData {
   id: string;
@@ -50,9 +50,10 @@ interface UniversePanelProps {
 
 const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
   const { feedMode } = useZhiiveNav();
-  const { currentOrganization } = useAuth();
-  const isOrgMode = feedMode === 'org' && !!currentOrganization;
-  const orgLogo = (currentOrganization as any)?.logoUrl || null;
+  // 🐝 Identité centralisée — source unique pour l'identité de publication
+  const identity = useActiveIdentity();
+  const { isOrgMode, organization: currentOrganization } = identity;
+  const orgLogo = currentOrganization?.logoUrl || null;
   const [activeSection, setActiveSection] = useState<'pulse' | 'events' | 'capsules' | 'orbit'>('pulse');
   const [events, setEvents] = useState<SocialEventData[]>([]);
   const [capsules, setCapsules] = useState<TimeCapsuleData[]>([]);
@@ -110,7 +111,8 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
         location: eventLocation.trim(),
         startDate: eventStartDate.toISOString(),
         visibility: eventVisibility,
-        publishAsOrg: isOrgMode ? true : undefined,
+        // 🐝 publishAsOrg piloté par le système d'identité centralisé
+        publishAsOrg: identity.publishAsOrg,
       });
       message.success('Événement créé ! 📅');
       setEventTitle(''); setEventDesc(''); setEventLocation('');

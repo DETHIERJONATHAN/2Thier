@@ -9,7 +9,7 @@ import {
   BookOutlined, BookFilled, RetweetOutlined, CopyOutlined,
 } from '@ant-design/icons';
 import { useZhiiveNav } from '../../contexts/ZhiiveNavContext';
-import { useAuth } from '../../auth/useAuth';
+import { useActiveIdentity } from '../../contexts/ActiveIdentityContext';
 
 const SF = {
   primary: '#6C5CE7',
@@ -43,10 +43,11 @@ interface ReelsPanelProps {
 
 const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
   const { feedMode } = useZhiiveNav();
-  const { currentOrganization } = useAuth();
-  const isOrgMode = feedMode === 'org' && !!currentOrganization;
-  const orgLogo = (currentOrganization as any)?.logoUrl || null;
-  const commentAvatarSrc = isOrgMode ? (orgLogo || undefined) : (currentUser?.avatarUrl || undefined);
+  // 🐝 Identité centralisée — source unique pour l'identité de publication
+  const identity = useActiveIdentity();
+  const { isOrgMode, organization: currentOrganization } = identity;
+  const orgLogo = currentOrganization?.logoUrl || null;
+  const commentAvatarSrc = identity.avatarUrl;
   const [reels, setReels] = useState<Reel[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -286,7 +287,8 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
         mediaUrls,
         mediaType: 'video',
         visibility: reelVisibility,
-        publishAsOrg: isOrgMode ? true : undefined,
+        // 🐝 publishAsOrg piloté par le système d'identité centralisé
+        publishAsOrg: identity.publishAsOrg,
       });
 
       showToast('Reel publié ! 🎬');
@@ -334,7 +336,8 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
     try {
       const body: Record<string, any> = { content: text.trim() };
       if (parentCommentId) body.parentCommentId = parentCommentId;
-      if (isOrgMode) body.publishAsOrg = true;
+      // 🐝 publishAsOrg piloté par le système d'identité centralisé
+      if (identity.publishAsOrg) body.publishAsOrg = true;
       const newComment = await api.post(`/api/wall/posts/${commentReelId}/comments`, body);
       if (parentCommentId) {
         setComments(prev => prev.map(c => c.id === parentCommentId ? { ...c, replies: [...(c.replies || []), newComment] } : c));

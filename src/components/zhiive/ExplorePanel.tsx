@@ -9,6 +9,7 @@ import {
 } from '@ant-design/icons';
 import { SF } from './ZhiiveTheme';
 import { useZhiiveNav } from '../../contexts/ZhiiveNavContext';
+import { useActiveIdentity } from '../../contexts/ActiveIdentityContext';
 import { useAuth } from '../../auth/useAuth';
 import { useNavigate } from 'react-router-dom';
 
@@ -58,9 +59,10 @@ interface ExplorePanelProps {
 const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
   // ── State ──
   const { feedMode } = useZhiiveNav();
-  const { currentOrganization, user } = useAuth();
+  const { currentOrganization } = useAuth();
   const navigate = useNavigate();
-  const isOrgMode = feedMode === 'org' && !!currentOrganization;
+  // 🐝 Identité centralisée — source unique pour l'identité de publication
+  const identity = useActiveIdentity();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'gallery' | 'people' | 'hashtags'>('gallery');
   const [items, setItems] = useState<GalleryItem[]>([]);
@@ -129,7 +131,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
   const handleAddComment = async () => {
     if (!commentText.trim() || !selectedPost || selectedPost.source === 'story') return;
     try {
-      const res = await api.post(`/api/wall/posts/${selectedPost.id}/comments`, { content: commentText.trim(), publishAsOrg: isOrgMode ? true : undefined });
+      const res = await api.post(`/api/wall/posts/${selectedPost.id}/comments`, { content: commentText.trim(), publishAsOrg: identity.publishAsOrg });
       if (res) {
         setPostComments(prev => [...prev, res]);
         setCommentText('');

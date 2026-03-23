@@ -8,6 +8,7 @@ import {
 import { SF } from './ZhiiveTheme';
 import { useZhiiveNav } from '../../contexts/ZhiiveNavContext';
 import { useAuth } from '../../auth/useAuth';
+import { useActiveIdentity } from '../../contexts/ActiveIdentityContext';
 
 interface SparkPost {
   id: string;
@@ -53,7 +54,8 @@ interface FlowPanelProps {
 const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
   const { feedMode } = useZhiiveNav();
   const { currentOrganization } = useAuth();
-  const isOrgMode = feedMode === 'org' && !!currentOrganization;
+  // 🐝 Identité centralisée — source unique pour l'identité de publication
+  const identity = useActiveIdentity();
   const [activeSection, setActiveSection] = useState<'spark' | 'battles' | 'quests'>('spark');
   const [sparks, setSparks] = useState<SparkPost[]>([]);
   const [battles, setBattles] = useState<BattleData[]>([]);
@@ -95,7 +97,7 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
     if (!sparkContent.trim()) return;
     setSparkSubmitting(true);
     try {
-      await api.post('/api/zhiive/sparks', { content: sparkContent.trim(), visibility: sparkVisibility, publishAsOrg: isOrgMode ? true : undefined });
+      await api.post('/api/zhiive/sparks', { content: sparkContent.trim(), visibility: sparkVisibility, publishAsOrg: identity.publishAsOrg });
       message.success('Spark publié anonymement ! ⚡');
       setSparkContent('');
       setSparkModalOpen(false);

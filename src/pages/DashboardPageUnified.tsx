@@ -5,6 +5,7 @@ import { useLeadStatuses } from "../hooks/useLeadStatuses";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { WallNavigationProvider } from "../contexts/WallNavigationContext";
 import { useZhiiveNav } from "../contexts/ZhiiveNavContext";
+import { useActiveIdentity } from "../contexts/ActiveIdentityContext";
 
 /* ═══════════════════════════════════════════════════════════════
    LAZY-LOADED MODULE COMPONENTS (embedded in dashboard)
@@ -471,7 +472,11 @@ export const WallPostCard: React.FC<{
   onUpdate: () => void;
   feedMode?: string;
   currentOrganization?: any;
-}> = ({ post, isMobile, currentUserId: _uid, currentUser, api, onUpdate: _onUpdate, feedMode, currentOrganization }) => {
+}> = ({ post, isMobile, currentUserId: _uid, currentUser, api, onUpdate: _onUpdate, feedMode: _feedModeProp, currentOrganization: _orgProp }) => {
+  // 🐝 Identité centralisée — on utilise le hook au lieu des props feedMode/currentOrganization
+  const cardIdentity = useActiveIdentity();
+  const feedMode = undefined; // ← BLOQUÉ : forcer l'utilisation de cardIdentity.publishAsOrg
+  const currentOrganization = cardIdentity.organization;
   const [myReaction, setMyReaction] = useState(post.myReaction);
   const [likesCount, setLikesCount] = useState(post.totalReactions);
   const [commentsCount, setCommentsCount] = useState(post.totalComments);
@@ -544,7 +549,8 @@ export const WallPostCard: React.FC<{
     try {
       const body: Record<string, any> = { content: text.trim() };
       if (parentCommentId) body.parentCommentId = parentCommentId;
-      if (feedMode === 'org' && !!currentOrganization) body.publishAsOrg = true;
+      // 🐝 publishAsOrg piloté par le système d'identité centralisé
+      if (cardIdentity.publishAsOrg) body.publishAsOrg = true;
       const newComment = await api.post(`/api/wall/posts/${post.id}/comments`, body);
       if (parentCommentId) {
         // Add reply under its parent
@@ -606,7 +612,8 @@ export const WallPostCard: React.FC<{
       setShareComment("");
       setShareVisibility(currentOrganization ? 'IN' : 'ALL');
       setShareIncludeOriginal(true);
-      setShareAsOrg(feedMode === 'org' && !!currentOrganization);
+      // 🐝 Identité centralisée pour le partage
+      setShareAsOrg(!!cardIdentity.publishAsOrg);
       setShowShareModal(true);
       return;
     }
@@ -1171,11 +1178,12 @@ export const WallPostCard: React.FC<{
                   {/* Reply input (shown when replying to this comment) */}
                   {replyingTo === comment.id && (
                     <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 6, marginLeft: 12 }}>
-                      {(() => { const inputIsOrg = feedMode === 'org' && currentOrganization; const inputAvatar = inputIsOrg ? ((currentOrganization as any)?.logoUrl || null) : null; return (
-                      <Avatar size={24} src={inputAvatar || undefined}
-                        icon={!inputAvatar ? <UserOutlined /> : undefined}
-                        style={{ backgroundColor: !inputAvatar && inputIsOrg ? '#6C5CE7' : undefined }} />
-                      ); })()}
+                      {/* 🐝 Avatar réponse piloté par le système d'identité centralisé */}
+                      <Avatar size={24} src={cardIdentity.avatarUrl}
+                        icon={!cardIdentity.avatarUrl && !cardIdentity.isOrgMode ? <UserOutlined /> : undefined}
+                        style={{ backgroundColor: !cardIdentity.avatarUrl ? cardIdentity.avatarBgColor : undefined }}>
+                        {!cardIdentity.avatarUrl && cardIdentity.avatarFallback}
+                      </Avatar>
                       <div style={{
                         flex: 1, display: "flex", alignItems: "center",
                         background: FB.btnGray, borderRadius: 20, padding: "2px 4px 2px 10px",
@@ -1209,12 +1217,13 @@ export const WallPostCard: React.FC<{
           ); })}
 
           {/* New comment input */}
+          {/* 🐝 Avatar commentaire principal piloté par le système d'identité centralisé */}
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 4 }}>
-            {(() => { const inputIsOrg = feedMode === 'org' && currentOrganization; const inputAvatar = inputIsOrg ? ((currentOrganization as any)?.logoUrl || null) : null; return (
-            <Avatar size={28} src={inputAvatar || undefined}
-              icon={!inputAvatar ? <UserOutlined /> : undefined}
-              style={{ backgroundColor: !inputAvatar && inputIsOrg ? '#6C5CE7' : undefined }} />
-            ); })()}
+            <Avatar size={28} src={cardIdentity.avatarUrl}
+              icon={!cardIdentity.avatarUrl && !cardIdentity.isOrgMode ? <UserOutlined /> : undefined}
+              style={{ backgroundColor: !cardIdentity.avatarUrl ? cardIdentity.avatarBgColor : undefined }}>
+              {!cardIdentity.avatarUrl && cardIdentity.avatarFallback}
+            </Avatar>
             <div style={{
               flex: 1, display: "flex", alignItems: "center",
               background: FB.btnGray, borderRadius: 20, padding: "2px 4px 2px 12px",
@@ -1260,18 +1269,17 @@ export const WallPostCard: React.FC<{
         {/* Current user profile + visibility */}
         <div style={{ padding: '12px 16px', borderTop: `1px solid ${FB.divider}` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* 🐝 Avatar de partage piloté par le système d'identité centralisé */}
             <Avatar size={40}
-              src={shareAsOrg && currentOrganization?.logoUrl ? currentOrganization.logoUrl : currentUser?.avatarUrl}
-              style={!(shareAsOrg ? currentOrganization?.logoUrl : currentUser?.avatarUrl)
-                ? { background: shareAsOrg ? '#6C5CE7' : FB.blue, fontSize: 16 } : undefined}
+              src={cardIdentity.avatarUrl}
+              style={!cardIdentity.avatarUrl
+                ? { background: cardIdentity.avatarBgColor, fontSize: 16 } : undefined}
             >
-              {!(shareAsOrg ? currentOrganization?.logoUrl : currentUser?.avatarUrl) &&
-                ((shareAsOrg ? currentOrganization?.name?.[0] : currentUser?.firstName?.[0]) || '?').toUpperCase()}
+              {!cardIdentity.avatarUrl && cardIdentity.avatarFallback}
             </Avatar>
             <div>
               <div style={{ fontWeight: 600, fontSize: 15, color: FB.text }}>
-                {shareAsOrg && currentOrganization?.name ? currentOrganization.name
-                  : [currentUser?.firstName, currentUser?.lastName].filter(Boolean).join(' ') || 'Moi'}
+                {cardIdentity.displayName}
               </div>
               <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
                 {/* Visibility selector */}
@@ -1480,6 +1488,7 @@ export default function DashboardPageUnified() {
   const [wallLoading, setWallLoading] = useState(false);
   const [wallCursor, setWallCursor] = useState<string | null>(null);
   const [newPostContent, setNewPostContent] = useState("");
+  // 🐝 La visibilité par défaut sera mise à jour via useEffect quand l'identité change
   const [newPostVisibility, setNewPostVisibility] = useState<WallVisibility>("ALL");
   const [postSubmitting, setPostSubmitting] = useState(false);
   const [feedFilter, setFeedFilter] = useState<string>(""); // category filter
@@ -1496,6 +1505,15 @@ export default function DashboardPageUnified() {
 
   // Zhiive navigation (shared with header tabs via context)
   const { centerApp, setCenterApp, leftSidebarApp, rightSidebarApp, registerMobileScroll, setMobilePanel: setContextMobilePanel, tabOrder, feedMode } = useZhiiveNav();
+
+  // 🐝 Identité centralisée — source unique de "qui poste" (org ou personnel)
+  // NE JAMAIS recalculer `feedMode === 'org' && !!currentOrganization` localement !
+  const identity = useActiveIdentity();
+
+  // 🐝 Default visibility sync: si on est en mode org → "IN" (Organisation), sinon "ALL" (Public)
+  useEffect(() => {
+    setNewPostVisibility(identity.isOrgMode ? 'IN' : 'ALL');
+  }, [identity.isOrgMode]);
 
   // Embedded module navigation
   const navigate = useNavigate();
@@ -1804,7 +1822,8 @@ export default function DashboardPageUnified() {
         mediaUrls: mediaUrls.length > 0 ? mediaUrls : undefined,
         mediaType,
         category: postCategory || undefined,
-        publishAsOrg: feedMode === 'org' && !!currentOrganization ? true : undefined,
+        // 🐝 publishAsOrg piloté par le système d'identité centralisé (ActiveIdentityContext)
+        publishAsOrg: identity.publishAsOrg,
       });
       const enriched: WallPostData = {
         ...(newPost as WallPostData),
@@ -1827,7 +1846,7 @@ export default function DashboardPageUnified() {
       NotificationManager.error("Erreur lors de la publication");
     }
     setPostSubmitting(false);
-  }, [api, newPostContent, newPostVisibility, postSubmitting, postMediaPreviews, postMood, postCategory]);
+  }, [api, newPostContent, newPostVisibility, postSubmitting, postMediaPreviews, postMood, postCategory, identity.publishAsOrg]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -2472,18 +2491,16 @@ export default function DashboardPageUnified() {
           </div>
         )}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          {(() => {
-            const isOrgMode = feedMode === 'org' && currentOrganization;
-            const orgLogo = (currentOrganization as any)?.logoUrl;
-            const avatarSrc = isOrgMode ? (orgLogo || undefined) : (user?.avatarUrl || undefined);
-            const avatarFallback = isOrgMode ? (!orgLogo ? (currentOrganization?.name?.[0]?.toUpperCase() || 'O') : undefined) : (!user?.avatarUrl ? <UserOutlined /> : undefined);
-            const avatarBg = isOrgMode ? (orgLogo ? undefined : '#6C5CE7') : (!user?.avatarUrl ? FB.blue : undefined);
-            return <Avatar size={30} src={avatarSrc} icon={!isOrgMode && !user?.avatarUrl ? <UserOutlined /> : undefined} style={{ background: avatarBg, flexShrink: 0 }}>{isOrgMode && !orgLogo && avatarFallback}</Avatar>;
-          })()}
+          {/* 🐝 Avatar piloté par le système d'identité centralisé */}
+          <Avatar size={30} src={identity.avatarUrl}
+            icon={!identity.isOrgMode && !identity.avatarUrl ? <UserOutlined /> : undefined}
+            style={{ background: !identity.avatarUrl ? identity.avatarBgColor : undefined, flexShrink: 0 }}>
+            {!identity.avatarUrl && identity.avatarFallback}
+          </Avatar>
           <textarea
             value={newPostContent}
             onChange={e => setNewPostContent(e.target.value)}
-            placeholder={feedMode === 'org' && currentOrganization ? "Quoi de neuf, " + currentOrganization.name + " ?" : "Quoi de neuf, " + (user?.firstName || "collègue") + " ?"}
+            placeholder={"Quoi de neuf, " + identity.displayName + " ?"}
             rows={1}
             style={{
               flex: 1, background: FB.btnGray, borderRadius: 20, padding: "6px 12px",

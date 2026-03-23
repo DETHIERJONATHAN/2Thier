@@ -17,6 +17,7 @@ import {
 import Icon from '@ant-design/icons';
 import { useAuth } from '../../auth/useAuth';
 import { useZhiiveNav, ZhiiveNavProvider } from '../../contexts/ZhiiveNavContext';
+import { ActiveIdentityProvider, useActiveIdentity } from '../../contexts/ActiveIdentityContext';
 
 const { Header, Content } = Layout;
 
@@ -249,6 +250,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const { logout, user, currentOrganization } = useAuth();
   const { feedMode, setFeedMode } = useZhiiveNav();
 
+  // 🐝 Identité centralisée — source unique de vérité pour l'avatar/nom du header
+  const identity = useActiveIdentity();
+
   const userInitial = useMemo(() => {
     const source = user?.firstName || (user as any)?.firstname || user?.email || currentOrganization?.name || 'C';
     return (source?.charAt?.(0) || 'C').toUpperCase();
@@ -257,9 +261,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const orgLogo = (currentOrganization as any)?.logoUrl || null;
   const orgInitial = useMemo(() => (currentOrganization?.name?.charAt(0) || 'O').toUpperCase(), [currentOrganization?.name]);
 
-  // Determine which avatar to show based on feed mode
-  const showOrgAvatar = feedMode === 'org' && currentOrganization;
-  const headerAvatarSrc = showOrgAvatar ? (orgLogo || undefined) : (user?.avatarUrl || undefined);
+  // 🐝 Avatar du header piloté par le système d'identité centralisé
+  const showOrgAvatar = identity.isOrgMode;
+  const headerAvatarSrc = identity.avatarUrl;
   const headerAvatarFallback = showOrgAvatar ? (!orgLogo && orgInitial) : (!user?.avatarUrl && userInitial);
   const headerAvatarBg = showOrgAvatar
     ? (orgLogo ? 'transparent' : '#6C5CE7')
@@ -485,10 +489,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   );
 };
 
-// Wrap with ZhiiveNavProvider so Header tabs & Dashboard share state
+// Wrap with ZhiiveNavProvider + ActiveIdentityProvider so Header tabs & Dashboard share state
+// 🐝 ActiveIdentityProvider = système centralisé d'identité (voir src/contexts/ActiveIdentityContext.tsx)
 const MainLayoutWithNav: React.FC<MainLayoutProps> = (props) => (
   <ZhiiveNavProvider>
-    <MainLayout {...props} />
+    <ActiveIdentityProvider>
+      <MainLayout {...props} />
+    </ActiveIdentityProvider>
   </ZhiiveNavProvider>
 );
 
