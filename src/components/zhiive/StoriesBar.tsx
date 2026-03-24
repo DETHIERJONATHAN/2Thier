@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Avatar, Tooltip, Modal, Input, message } from 'antd';
 import { PlusOutlined, UserOutlined, CameraOutlined, LoadingOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { SF } from './ZhiiveTheme';
 import { useActiveIdentity } from '../../contexts/ActiveIdentityContext';
 
@@ -9,6 +10,7 @@ interface Story {
   userId: string;
   userName: string;
   avatarUrl?: string;
+  publishAsOrg?: boolean;
   mediaUrl: string;
   mediaType: 'IMAGE' | 'VIDEO';
   viewed: boolean;
@@ -21,10 +23,11 @@ interface StoriesBarProps {
 }
 
 const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
+  const { t } = useTranslation();
   // 🐝 Identité centralisée — source unique pour savoir si on poste en tant qu'org ou personnel
   const identity = useActiveIdentity();
   const { isOrgMode, avatarUrl: storyAvatarSrc, organization: currentOrganization } = identity;
-  const storyLabel = isOrgMode ? (currentOrganization?.name?.substring(0, 8) || 'Org') : 'Ma Story';
+  const storyLabel = isOrgMode ? (currentOrganization?.name?.substring(0, 8) || 'Org') : 'My Story';
   const orgLogo = currentOrganization?.logoUrl || null;
   const [stories, setStories] = useState<Story[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,6 +36,12 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
   const [storyMediaUrl, setStoryMediaUrl] = useState('');
   const [storySubmitting, setStorySubmitting] = useState(false);
   const [storyVisibility, setStoryVisibility] = useState<string>(currentOrganization ? 'IN' : 'ALL');
+
+  // 🐝 Sync visibilité quand le mode change (Bee ↔ Colony)
+  useEffect(() => {
+    setStoryVisibility(currentOrganization ? 'IN' : 'ALL');
+  }, [currentOrganization]);
+
   const [viewingStory, setViewingStory] = useState<Story | null>(null);
   const [viewingStoryList, setViewingStoryList] = useState<Story[]>([]);
   const [viewingStoryIndex, setViewingStoryIndex] = useState(0);
@@ -77,11 +86,11 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
-      message.error('Seules les images et vidéos sont acceptées');
+      message.error(t('stories.onlyImagesVideos'));
       return;
     }
     if (file.size > 50 * 1024 * 1024) {
-      message.error('Fichier trop volumineux (max 50 Mo)');
+      message.error(t('stories.fileTooLarge50'));
       return;
     }
     setStoryFile(file);
@@ -113,7 +122,7 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
         setUploading(false);
         const urls = uploadResult?.urls || [];
         if (urls.length === 0) {
-          message.error('Échec de l\'upload');
+          message.error('Upload failed');
           setStorySubmitting(false);
           return;
         }
@@ -129,13 +138,13 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
         // 🐝 publishAsOrg piloté par le système d'identité centralisé
         publishAsOrg: identity.publishAsOrg,
       });
-      message.success('Story publiée ! 🎉');
+      message.success(t('stories.storyPublished'));
       setStoryText(''); setStoryMediaUrl('');
       removeStoryFile();
       setCreateModalOpen(false);
       fetchStories();
     } catch {
-      message.error('Erreur lors de la création de la story');
+      message.error(t('stories.storyCreationFailed'));
     } finally {
       setStorySubmitting(false);
       setUploading(false);
@@ -185,9 +194,9 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
       setStories(prev => prev.filter(s => s.id !== storyId));
       setViewingStory(null);
       setViewingStoryList([]);
-      message.success('Story supprimée');
+      message.success(t('stories.storyDeleted'));
     } catch {
-      message.error('Erreur lors de la suppression');
+      message.error(t('stories.deleteFailed'));
     }
   };
 
@@ -208,7 +217,7 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
 
       {/* My Story — Add button */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flexShrink: 0 }}>
-        <Tooltip title="Ajouter une story">
+        <Tooltip title={t('stories.addStory')}>
           <div
             onClick={() => setCreateModalOpen(true)}
             style={{
@@ -263,7 +272,7 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
 
       {!loading && storyUsers.length === 0 && (
         <div style={{ padding: '8px 12px', fontSize: 12, color: SF.textMuted }}>
-          Aucune story active — soyez le premier ! 🚀
+          {t('stories.noActiveStories')}
         </div>
       )}
 
@@ -273,15 +282,15 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
         onCancel={() => { if (!storySubmitting) { setCreateModalOpen(false); removeStoryFile(); } }}
         onOk={handleCreateStory}
         confirmLoading={storySubmitting}
-        title="📸 Nouvelle Story"
-        okText={uploading ? 'Upload...' : 'Publier'}
-        cancelText="Annuler"
+        title={t('stories.newStory')}
+        okText={uploading ? t('common.upload') : t('common.publish')}
+        cancelText={t('common.cancel')}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
           <Input.TextArea
             value={storyText}
             onChange={e => setStoryText(e.target.value)}
-            placeholder="Votre message (optionnel)..."
+            placeholder={t('stories.yourMessage')}
             rows={3}
             maxLength={500}
           />
@@ -300,7 +309,7 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
               {storyFile?.type.startsWith('video/') ? (
                 <video src={storyPreview} style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 12 }} controls muted />
               ) : (
-                <img src={storyPreview} alt="Aperçu" style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 12 }} />
+                <img src={storyPreview} alt="Preview" style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 12 }} />
               )}
               <div
                 onClick={removeStoryFile}
@@ -322,16 +331,16 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
               }}
             >
               <CameraOutlined style={{ fontSize: 28, color: '#999', marginBottom: 4 }} />
-              <div style={{ fontSize: 13, color: '#666' }}>Cliquez pour ajouter une photo ou vidéo</div>
+              <div style={{ fontSize: 13, color: '#666' }}>{t('stories.tapToAdd')}</div>
               <div style={{ fontSize: 11, color: '#999' }}>max 50 Mo</div>
             </div>
           )}
 
-          <div style={{ fontSize: 11, color: '#999', textAlign: 'center' }}>ou collez une URL :</div>
+          <div style={{ fontSize: 11, color: '#999', textAlign: 'center' }}>{t('stories.pasteUrl')}</div>
           <Input
             value={storyMediaUrl}
             onChange={e => { setStoryMediaUrl(e.target.value); if (storyFile) removeStoryFile(); }}
-            placeholder="URL de l'image ou vidéo (optionnel)"
+            placeholder={t('stories.imageVideoUrl')}
             prefix="🖼️"
             disabled={!!storyFile}
           />
@@ -340,9 +349,9 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {(currentOrganization ? ['IN', 'ALL', 'OUT'] : ['ALL', 'OUT']).map(v => {
               const labels: Record<string, { icon: string; label: string; color: string }> = {
-                IN: { icon: '👥', label: 'Organisation', color: '#1890ff' },
+                IN: { icon: '⬡', label: 'Colony', color: '#1890ff' },
                 ALL: { icon: '🌐', label: 'Public', color: '#52c41a' },
-                OUT: { icon: '🔒', label: 'Privé', color: '#8c8c8c' },
+                OUT: { icon: '🔒', label: 'Private', color: '#8c8c8c' },
               };
               const opt = labels[v];
               const active = storyVisibility === v;
@@ -424,7 +433,7 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
                     background: viewingStoryIndex > 0 ? SF.primary : SF.border,
                     color: viewingStoryIndex > 0 ? 'white' : SF.textMuted, fontSize: 12, fontWeight: 600,
                   }}
-                >← Précédent</div>
+                >{t('stories.previousStory')}</div>
                 <span style={{ fontSize: 11, color: SF.textMuted, alignSelf: 'center' }}>
                   {viewingStoryIndex + 1} / {viewingStoryList.length}
                 </span>
@@ -434,7 +443,7 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
                     padding: '6px 16px', borderRadius: 20, cursor: 'pointer',
                     background: SF.primary, color: 'white', fontSize: 12, fontWeight: 600,
                   }}
-                >{viewingStoryIndex < viewingStoryList.length - 1 ? 'Suivant →' : 'Fermer ✓'}</div>
+                >{viewingStoryIndex < viewingStoryList.length - 1 ? t('stories.nextStory') : t('stories.closeStory')}</div>
               </div>
             )}
           </div>

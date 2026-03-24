@@ -377,7 +377,7 @@ export const CallModule: React.FC<CallModuleProps> = ({
                       };
                       googleCalendar.createMeeting(slot, {
                         title: `RDV Commercial - ${lead?.data?.name}`,
-                        description: `Rendez-vous commercial programmé via CRM.\n\nClient: ${lead?.data?.name}\nSociété: ${lead?.data?.company || 'N/A'}\nTéléphone: ${lead?.data?.phone || 'N/A'}`,
+                        description: `Rendez-vous commercial programmé via Zhiive.\n\nClient: ${lead?.data?.name}\nSociété: ${lead?.data?.company || 'N/A'}\nTéléphone: ${lead?.data?.phone || 'N/A'}`,
                         duration: 30 // Durée en minutes
                       });
                     }

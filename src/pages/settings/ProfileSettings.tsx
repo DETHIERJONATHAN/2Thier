@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../auth/useAuth';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { Spin, message } from 'antd';
+import { useTranslation } from 'react-i18next';
 import {
   UserOutlined,
   CameraOutlined,
@@ -36,8 +37,8 @@ const FBCard: React.FC<{ children: React.ReactNode; style?: React.CSSProperties 
 
 const roleLabel = (role?: string) => {
   const map: Record<string, { label: string; color: string }> = {
-    super_admin: { label: 'Super Administrateur', color: '#f5a623' },
-    admin: { label: 'Administrateur', color: FB.blue },
+    super_admin: { label: 'Super Keeper', color: '#f5a623' },
+    admin: { label: 'Keeper', color: FB.blue },
     manager: { label: 'Manager', color: '#13c2c2' },
     commercial: { label: 'Commercial', color: FB.green },
     user: { label: 'Utilisateur', color: FB.textSecondary },
@@ -93,6 +94,8 @@ const ProfileSettings: React.FC = () => {
   const [address, setAddress] = useState('');
   const [vatNumber, setVatNumber] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [language, setLanguageState] = useState('fr');
+  const { i18n } = useTranslation();
 
   useEffect(() => {
     if (user) {
@@ -103,6 +106,10 @@ const ProfileSettings: React.FC = () => {
         setVatNumber(response.vatNumber || '');
         setPhoneNumber(response.phoneNumber || '');
         setAvatarUrl(response.avatarUrl || '');
+        const lang = response.language || 'fr';
+        setLanguageState(lang);
+        // Sync i18n with user's saved preference
+        if (i18n.language !== lang) i18n.changeLanguage(lang);
         setLoading(false);
       }).catch(() => {
         message.error('Impossible de charger le profil.');
@@ -135,7 +142,7 @@ const ProfileSettings: React.FC = () => {
     }
     setSaving(true);
     try {
-      const result: any = await api.put('/api/profile', { firstName, lastName, address, vatNumber, phoneNumber });
+      const result: any = await api.put('/api/profile', { firstName, lastName, address, vatNumber, phoneNumber, language });
       setFirstName(result.firstName || firstName);
       setLastName(result.lastName || lastName);
       setAddress(result.address || address);
@@ -251,6 +258,35 @@ const ProfileSettings: React.FC = () => {
           <FBInput icon={<PhoneOutlined />} label="Téléphone" value={phoneNumber} onChange={setPhoneNumber} placeholder="+32 470 00 00 00" />
         </div>
 
+        {/* Language selector */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 6 }}>Langue / Language</label>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            border: '1px solid ' + FB.border, borderRadius: 6, padding: '10px 12px',
+            background: FB.white,
+          }}>
+            <span style={{ fontSize: 16 }}>🌐</span>
+            <select
+              value={language}
+              onChange={e => {
+                const lang = e.target.value;
+                setLanguageState(lang);
+                i18n.changeLanguage(lang);
+                localStorage.setItem('zhiive_language', lang);
+              }}
+              style={{
+                flex: 1, border: 'none', outline: 'none', fontSize: 15, color: FB.text,
+                background: 'transparent', fontFamily: 'inherit', cursor: 'pointer',
+              }}
+            >
+              <option value="fr">Français</option>
+              <option value="en">English</option>
+              <option value="nl">Nederlands</option>
+            </select>
+          </div>
+        </div>
+
         {/* Email (read-only) */}
         <div style={{
           padding: 16, background: FB.btnGray, borderRadius: FB.radius, marginBottom: 16,
@@ -263,7 +299,7 @@ const ProfileSettings: React.FC = () => {
             </div>
           </div>
           <div style={{ fontSize: 12, color: FB.textSecondary, marginTop: 4, marginLeft: 26 }}>
-            L'email ne peut pas être modifié ici. Contactez un administrateur.
+            L'email ne peut pas être modifié ici. Contactez un Keeper.
           </div>
         </div>
 

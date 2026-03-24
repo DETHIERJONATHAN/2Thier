@@ -241,12 +241,12 @@ const ProfilePage = () => {
         email: values.email,
         description: values.description || '',
       });
-      message.success(`Organisation "${values.name}" créée avec succès !`);
+      message.success(`Colony "${values.name}" créée avec succès !`);
       setIsCreateOrgModalVisible(false);
       orgForm.resetFields();
       window.location.reload();
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.data?.message || "Erreur lors de la création de l'organisation";
+      const msg = err?.response?.data?.message || err?.data?.message || "Erreur lors de la création de la Colony";
       message.error(msg);
     } finally {
       setIsCreatingOrg(false);
@@ -444,7 +444,7 @@ const ProfilePage = () => {
 
   const handleOrgChange = async (orgId: string) => {
     setChangingOrg(true);
-    try { await selectOrganization(orgId); message.success('Organisation changée'); }
+    try { await selectOrganization(orgId); message.success('Colony changée'); }
     catch { message.error("Erreur"); }
     finally { setChangingOrg(false); }
   };
@@ -784,8 +784,8 @@ const ProfilePage = () => {
                 )}
               </FBCard>
 
-              {/* Rôle & Organisation */}
-              <FBCard title="Rôle & Organisation">
+              {/* Rôle & Colony */}
+              <FBCard title="Rôle & Colony">
                 <InfoLine icon={<SafetyCertificateOutlined />}>
                   <span style={{ color: rl.color, fontWeight: 600 }}>{rl.icon} {rl.label}</span>
                 </InfoLine>
@@ -799,9 +799,9 @@ const ProfilePage = () => {
                 )}
               </FBCard>
 
-              {/* Organisations (super admin) */}
+              {/* Colonies (super admin) */}
               {isSuperAdmin && organizations && organizations.length > 1 && (
-                <FBCard title="Mes Organisations">
+                <FBCard title="Mes Colonies">
                   {organizations.map(org => {
                     const isActive = currentOrganization?.id === org.id;
                     const orgLogo = (org as any).logoUrl;
@@ -902,7 +902,7 @@ const ProfilePage = () => {
                     <div style={{ fontSize: 15, fontWeight: 600, color: FB.text, marginTop: 8 }}>
                       {currentOrganization?.name || '-'}
                     </div>
-                    <div style={{ fontSize: 13, color: FB.textSecondary }}>Organisation</div>
+                    <div style={{ fontSize: 13, color: FB.textSecondary }}>Colony</div>
                   </div>
                   <div style={{ background: FB.bg, borderRadius: 8, padding: isMobile ? 16 : 20, textAlign: 'center' }}>
                     <SafetyCertificateOutlined style={{ fontSize: 28, color: rl.color }} />
@@ -1380,9 +1380,9 @@ const ProfilePage = () => {
       </div>
     </div>
 
-    {/* Modal création d'organisation (Business) */}
+    {/* Modal création de Colony (Business) */}
     <Modal
-      title="Créer votre organisation"
+      title="Fonder votre Colony"
       open={isCreateOrgModalVisible}
       onCancel={() => setIsCreateOrgModalVisible(false)}
       footer={null}
@@ -1390,10 +1390,10 @@ const ProfilePage = () => {
     >
       <Form form={orgForm} layout="vertical" onFinish={handleCreateOrganization}>
         <Form.Item
-          label="Nom de l'organisation"
+          label="Nom de la Colony"
           name="name"
           rules={[
-            { required: true, message: "Le nom de l'organisation est requis" },
+            { required: true, message: "Le nom de la Colony est requis" },
             { min: 2, message: 'Le nom doit faire au moins 2 caractères' }
           ]}
         >
@@ -1441,7 +1441,7 @@ const ProfilePage = () => {
           <Input placeholder="Ex: contact@monentreprise.be" />
         </Form.Item>
         <Form.Item label="Description (optionnel)" name="description">
-          <Input.TextArea rows={2} placeholder="Décrivez brièvement votre organisation..." />
+          <Input.TextArea rows={2} placeholder="Décrivez brièvement votre Colony..." />
         </Form.Item>
         <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
           <button type="button" onClick={() => setIsCreateOrgModalVisible(false)}
@@ -1450,7 +1450,7 @@ const ProfilePage = () => {
           </button>
           <button type="submit" disabled={isCreatingOrg}
             style={{ padding: '6px 16px', borderRadius: 6, border: 'none', background: '#0f766e', color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600, opacity: isCreatingOrg ? 0.7 : 1 }}>
-            {isCreatingOrg ? 'Création...' : "Créer l'organisation"}
+            {isCreatingOrg ? 'Création...' : "Fonder la Colony"}
           </button>
         </Form.Item>
       </Form>

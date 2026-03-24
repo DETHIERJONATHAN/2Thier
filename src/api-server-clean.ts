@@ -447,7 +447,7 @@ if (process.env.NODE_ENV === 'production') {
       let manifest: Record<string, unknown> = {
         name: 'Zhiive',
         short_name: 'Zhiive',
-        description: 'Zhiive - CRM & Réseau Social Professionnel',
+        description: 'Zhiive — The Hive',
         start_url: '/',
         scope: '/',
         display: 'standalone',
@@ -456,7 +456,8 @@ if (process.env.NODE_ENV === 'production') {
         background_color: '#ffffff',
         icons: [
           { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' }
+          { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          { src: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }
         ]
       };
 
@@ -476,7 +477,8 @@ if (process.env.NODE_ENV === 'production') {
           background_color: '#ffffff',
           icons: [
             { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-            { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' }
+            { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+            { src: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }
           ]
         };
         console.log(`📱 [MANIFEST] Dynamique pour ${site.domain} → ${site.name}`);

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef, Suspense } from "react";
+import { useTranslation } from 'react-i18next';
 import { useAuthenticatedApi } from "../hooks/useAuthenticatedApi";
 import { useAuth } from "../auth/useAuth";
 import { useLeadStatuses } from "../hooks/useLeadStatuses";
@@ -360,7 +361,7 @@ const timeAgo = (timestamp: string): string => {
 
 const visibilityLabel: Record<string, { icon: React.ReactNode; label: string; color: string }> = {
   OUT: { icon: <LockOutlined />, label: "Privé", color: "#8c8c8c" },
-  IN: { icon: <TeamOutlined />, label: "Organisation", color: "#1890ff" },
+  IN: { icon: <TeamOutlined />, label: "Colony", color: "#1890ff" },
   ALL: { icon: <GlobalOutlined />, label: "Public", color: "#52c41a" },
   CLIENT: { icon: <UserOutlined />, label: "Client", color: "#722ed1" },
 };
@@ -475,6 +476,7 @@ export const WallPostCard: React.FC<{
 }> = ({ post, isMobile, currentUserId: _uid, currentUser, api, onUpdate: _onUpdate, feedMode: _feedModeProp, currentOrganization: _orgProp }) => {
   // 🐝 Identité centralisée — on utilise le hook au lieu des props feedMode/currentOrganization
   const cardIdentity = useActiveIdentity();
+  const { t } = useTranslation();
   const feedMode = undefined; // ← BLOQUÉ : forcer l'utilisation de cardIdentity.publishAsOrg
   const currentOrganization = cardIdentity.organization;
   const [myReaction, setMyReaction] = useState(post.myReaction);
@@ -513,10 +515,10 @@ export const WallPostCard: React.FC<{
   const vis = visibilityLabel[post.visibility] || visibilityLabel.IN;
 
   const reactionTypes = [
-    { type: "LIKE", emoji: "👍", label: "J'aime", color: FB.blue },
-    { type: "LOVE", emoji: "❤️", label: "J'adore", color: "#e74c3c" },
+    { type: "LIKE", emoji: "👍", label: "Pollen", color: FB.blue },
+    { type: "LOVE", emoji: "❤️", label: "Nectar", color: "#e74c3c" },
     { type: "BRAVO", emoji: "👏", label: "Bravo", color: "#f39c12" },
-    { type: "UTILE", emoji: "💡", label: "Utile", color: "#27ae60" },
+    { type: "UTILE", emoji: "💡", label: "Gold", color: "#27ae60" },
     { type: "WOW", emoji: "😮", label: "Wow", color: "#9b59b6" },
   ];
 
@@ -668,7 +670,7 @@ export const WallPostCard: React.FC<{
         visibility: shareVisibility,
         publishAsOrg: shareAsOrg && !!currentOrganization,
       });
-      NotificationManager.success("Partagé sur votre mur !");
+      NotificationManager.success(t('dashboard.sharedOnHive'));
       setShowShareModal(false);
       setShareComment("");
       _onUpdate();
@@ -696,7 +698,7 @@ export const WallPostCard: React.FC<{
           <div>
             <span style={{ fontWeight: 600, fontSize: 14, color: FB.text }}>{authorName}</span>
             {post.parentPost && (
-              <span style={{ color: FB.textSecondary, fontSize: 13, fontWeight: 400 }}> a partagé une publication</span>
+              <span style={{ color: FB.textSecondary, fontSize: 13, fontWeight: 400 }}> a partagé un Buzz</span>
             )}
             {post.crmEventType && (
               <span style={{ color: FB.textSecondary, fontSize: 14 }}>
@@ -759,8 +761,8 @@ export const WallPostCard: React.FC<{
           : (pp.author.firstName?.[0] || '?').toUpperCase();
         return (
           <div style={{
-            margin: "0 16px 8px", border: `1px solid ${FB.divider}`, borderRadius: 8,
-            overflow: "hidden", background: FB.bgGray,
+            margin: "0 16px 8px", border: `1px solid ${FB.border}`, borderRadius: 8,
+            overflow: "hidden", background: FB.bg,
           }}>
             {/* Original post header */}
             <div style={{ display: "flex", alignItems: "center", padding: "10px 12px", gap: 8 }}>
@@ -905,7 +907,7 @@ export const WallPostCard: React.FC<{
         <div style={{ display: "flex", gap: 12 }}>
           {commentsCount > 0 && (
             <span style={{ cursor: "pointer" }} onClick={handleToggleComments}>
-              {commentsCount} commentaire{commentsCount > 1 ? "s" : ""}
+              {commentsCount} buzz{commentsCount > 1 ? "s" : ""}
             </span>
           )}
           {post.totalShares > 0 && <span>{post.totalShares} partage{post.totalShares > 1 ? "s" : ""}</span>}
@@ -967,7 +969,7 @@ export const WallPostCard: React.FC<{
             {isLiked
               ? <span style={{ fontSize: 16 }}>{reactionTypes.find(r => r.type === myReaction?.type)?.emoji || "👍"}</span>
               : <LikeOutlined />}
-            {!isMobile && <span>{isLiked ? (reactionTypes.find(r => r.type === myReaction?.type)?.label || "J'aime") : "J'aime"}</span>}
+            {!isMobile && <span>{isLiked ? (reactionTypes.find(r => r.type === myReaction?.type)?.label || "Pollen") : "Pollen"}</span>}
           </div>
         </div>
 
@@ -983,7 +985,7 @@ export const WallPostCard: React.FC<{
           onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
         >
           <MessageOutlined />
-          {!isMobile && <span>Commenter</span>}
+          {!isMobile && <span>Buzz</span>}
         </div>
 
         {/* Share button with menu */}
@@ -999,7 +1001,7 @@ export const WallPostCard: React.FC<{
             onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
           >
             <ShareAltOutlined />
-            {!isMobile && <span>Partager</span>}
+            {!isMobile && <span>Share</span>}
           </div>
           {showShareMenu && (
             <div style={{
@@ -1008,7 +1010,7 @@ export const WallPostCard: React.FC<{
               padding: 4, minWidth: 180, zIndex: 100,
             }}>
               {[
-                { type: "WALL", icon: "📝", label: "Partager sur mon mur" },
+                { type: "WALL", icon: "📝", label: "Share on my Hive" },
                 { type: "LINK", icon: "🔗", label: "Copier le lien" },
                 { type: "FACEBOOK", icon: "📘", label: "Facebook" },
                 { type: "LINKEDIN", icon: "💼", label: "LinkedIn" },
@@ -1072,7 +1074,7 @@ export const WallPostCard: React.FC<{
                           ? (commentReactions[comment.id] === '❤️' ? '#e74c3c' : commentReactions[comment.id] === '😮' ? '#9b59b6' : FB.blue)
                           : FB.textSecondary,
                       }}>
-                      {likedComments.has(comment.id) ? (commentReactions[comment.id] || '👍') : "J'aime"}
+                      {likedComments.has(comment.id) ? (commentReactions[comment.id] || '👍') : "Pollen"}
                     </span>
                     {/* Mini reaction picker on hover */}
                     {hoverReactionCommentId === comment.id && (
@@ -1138,7 +1140,7 @@ export const WallPostCard: React.FC<{
                                       ? (commentReactions[reply.id] === '❤️' ? '#e74c3c' : commentReactions[reply.id] === '😮' ? '#9b59b6' : FB.blue)
                                       : FB.textSecondary,
                                   }}>
-                                  {likedComments.has(reply.id) ? (commentReactions[reply.id] || '👍') : "J'aime"}
+                                  {likedComments.has(reply.id) ? (commentReactions[reply.id] || '👍') : "Pollen"}
                                 </span>
                                 {hoverReactionCommentId === reply.id && (
                                   <div
@@ -1232,7 +1234,7 @@ export const WallPostCard: React.FC<{
                 value={commentText}
                 onChange={e => setCommentText(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleComment(); } }}
-                placeholder="Écrire un commentaire…"
+                placeholder={t('dashboard.dropABuzz')}
                 style={{
                   flex: 1, border: "none", background: "transparent", outline: "none",
                   fontSize: 14, color: FB.text, padding: "6px 0",
@@ -1262,12 +1264,12 @@ export const WallPostCard: React.FC<{
         styles={{ body: { padding: 0 } }}
         title={
           <div style={{ textAlign: 'center', fontSize: 20, fontWeight: 700, padding: '4px 0' }}>
-            Écrire une publication
+            Share a Buzz
           </div>
         }
       >
         {/* Current user profile + visibility */}
-        <div style={{ padding: '12px 16px', borderTop: `1px solid ${FB.divider}` }}>
+        <div style={{ padding: '12px 16px', borderTop: `1px solid ${FB.border}` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {/* 🐝 Avatar de partage piloté par le système d'identité centralisé */}
             <Avatar size={40}
@@ -1288,19 +1290,19 @@ export const WallPostCard: React.FC<{
                   onChange={e => setShareVisibility(e.target.value)}
                   style={{
                     fontSize: 12, fontWeight: 600, padding: '2px 8px', borderRadius: 6,
-                    border: `1px solid ${FB.divider}`, background: FB.btnGray, color: FB.text,
+                    border: `1px solid ${FB.border}`, background: FB.btnGray, color: FB.text,
                     cursor: 'pointer', outline: 'none',
                   }}
                 >
                   <option value="ALL">🌐 Public</option>
-                  {currentOrganization && <option value="IN">👥 Organisation</option>}
+                  {currentOrganization && <option value="IN">👥 Colony</option>}
                   <option value="OUT">🔒 Privé</option>
                 </select>
                 {/* Publish as org toggle */}
                 {currentOrganization && (
                   <label style={{
                     fontSize: 12, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4,
-                    padding: '2px 8px', borderRadius: 6, border: `1px solid ${FB.divider}`,
+                    padding: '2px 8px', borderRadius: 6, border: `1px solid ${FB.border}`,
                     background: shareAsOrg ? '#6C5CE715' : FB.btnGray, color: shareAsOrg ? '#6C5CE7' : FB.text,
                     cursor: 'pointer',
                   }}>
@@ -1319,7 +1321,7 @@ export const WallPostCard: React.FC<{
           <textarea
             value={shareComment}
             onChange={e => setShareComment(e.target.value)}
-            placeholder={`Quoi de neuf, ${shareAsOrg && currentOrganization?.name ? currentOrganization.name : currentUser?.firstName || ''} ?`}
+            placeholder={t('dashboard.whatsBuzzing', { name: shareAsOrg && currentOrganization?.name ? currentOrganization.name : currentUser?.firstName || '' })}
             maxLength={5000}
             style={{
               width: '100%', minHeight: 80, border: 'none', outline: 'none', resize: 'none',
@@ -1333,21 +1335,21 @@ export const WallPostCard: React.FC<{
         <div style={{ padding: '0 16px 12px' }}>
           <label style={{
             display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px',
-            borderRadius: 8, border: `1px solid ${FB.divider}`, cursor: 'pointer',
+            borderRadius: 8, border: `1px solid ${FB.border}`, cursor: 'pointer',
             background: shareIncludeOriginal ? FB.blue + '08' : 'transparent',
           }}>
             <input type="checkbox" checked={shareIncludeOriginal}
               onChange={e => setShareIncludeOriginal(e.target.checked)}
               style={{ width: 18, height: 18, accentColor: FB.blue }} />
-            <span style={{ fontSize: 14, fontWeight: 500, color: FB.text }}>Inclure la publication d'origine</span>
+            <span style={{ fontSize: 14, fontWeight: 500, color: FB.text }}>Include original Buzz</span>
           </label>
         </div>
 
         {/* Original post preview */}
         {shareIncludeOriginal && (
           <div style={{
-            margin: '0 16px 12px', border: `1px solid ${FB.divider}`, borderRadius: 8,
-            overflow: 'hidden', background: FB.bgGray,
+            margin: '0 16px 12px', border: `1px solid ${FB.border}`, borderRadius: 8,
+            overflow: 'hidden', background: FB.bg,
           }}>
             {/* Original post media (full width at top like Facebook) */}
             {post.mediaUrls && (post.mediaUrls as string[]).length > 0 && (
@@ -1395,7 +1397,7 @@ export const WallPostCard: React.FC<{
               transition: 'background 0.2s',
             }}
           >
-            {sharingPost ? 'Publication...' : 'Publier'}
+            {sharingPost ? 'Buzzing...' : 'Buzz it'}
           </button>
         </div>
       </Modal>
@@ -1438,14 +1440,14 @@ const CreateOrganizationPrompt = () => (
       <Avatar size={64} icon={<BankOutlined />} style={{ marginBottom: 16 }} />
       <h3 style={{ fontSize: 20, fontWeight: 700, color: FB.text, margin: "0 0 8px" }}>Bienvenue</h3>
       <p style={{ color: FB.textSecondary, marginBottom: 20 }}>
-        Pour commencer, vous devez créer ou rejoindre une organisation.
+        Pour commencer, vous devez créer ou rejoindre une Colony.
       </p>
       <Link to="/organization/create">
         <button style={{
           width: "100%", padding: "10px 0", background: FB.blue, color: FB.white,
           border: "none", borderRadius: 6, fontWeight: 600, fontSize: 15, cursor: "pointer", marginBottom: 10,
         }}>
-          <PlusOutlined /> Créer une organisation
+          <PlusOutlined /> Fonder une Colony
         </button>
       </Link>
       <Link to="/settings/profile">
@@ -1464,6 +1466,7 @@ const CreateOrganizationPrompt = () => (
    MAIN COMPONENT — FACEBOOK NEWS FEED / WALL
    ═══════════════════════════════════════════════════════════════ */
 export default function DashboardPageUnified() {
+  const { t } = useTranslation();
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, [apiHook.api]);
   const { currentOrganization, isSuperAdmin, user, hasFeature, modules } = useAuth();
@@ -1840,10 +1843,10 @@ export default function DashboardPageUnified() {
       setPostCategory(null);
       postMediaPreviews.forEach(m => URL.revokeObjectURL(m.preview));
       setPostMediaPreviews([]);
-      NotificationManager.success("Post publié !");
+      NotificationManager.success("Buzz published! 🐝");
     } catch (error) {
       console.error("[WALL] Erreur création post:", error);
-      NotificationManager.error("Erreur lors de la publication");
+      NotificationManager.error("Failed to publish Buzz");
     }
     setPostSubmitting(false);
   }, [api, newPostContent, newPostVisibility, postSubmitting, postMediaPreviews, postMood, postCategory, identity.publishAsOrg]);
@@ -2480,7 +2483,7 @@ export default function DashboardPageUnified() {
   const renderFeed = () => (
     <div style={{ flex: 1, minWidth: 0, margin: "0 auto", paddingTop: isMobile ? 0 : 8 }}>
 
-      {/* "Quoi de neuf" — Twitter-style single line */}
+      {/* "What's buzzing" — Twitter-style single line */}
       <FBCard>
         <input type="file" ref={fileInputRef} multiple style={{ display: 'none' }} onChange={handleFileChange} />
         {postMood && (
@@ -2500,7 +2503,7 @@ export default function DashboardPageUnified() {
           <textarea
             value={newPostContent}
             onChange={e => setNewPostContent(e.target.value)}
-            placeholder={"Quoi de neuf, " + identity.displayName + " ?"}
+            placeholder={t('dashboard.whatsBuzzing', { name: identity.displayName })}
             rows={1}
             style={{
               flex: 1, background: FB.btnGray, borderRadius: 20, padding: "6px 12px",
@@ -2634,7 +2637,7 @@ export default function DashboardPageUnified() {
                 cursor: postSubmitting ? "not-allowed" : "pointer",
                 opacity: postSubmitting ? 0.6 : 1,
               }}>
-              {postSubmitting ? "..." : "Publier"}
+              {postSubmitting ? "..." : "Buzz it"}
             </button>
           </div>
         )}
@@ -2786,7 +2789,7 @@ export default function DashboardPageUnified() {
         /* Fallback: legacy activity feed when no wall posts exist yet */
         <>
           <div style={{ fontSize: 12, color: FB.textSecondary, textAlign: "center", marginBottom: 8 }}>
-            Activité récente (données CRM)
+            Activité récente
           </div>
           {recentActivities.slice(0, 10).map(activity => {
             // Convert legacy activity to minimal card display
@@ -2813,10 +2816,10 @@ export default function DashboardPageUnified() {
         <FBCard style={{ textAlign: "center", padding: "40px 16px" }}>
           <BulbOutlined style={{ fontSize: 48, color: FB.border, marginBottom: 16 }} />
           <div style={{ fontSize: 17, fontWeight: 600, color: FB.text, marginBottom: 8 }}>
-            Bienvenue sur le mur !
+            Bienvenue sur le Hive !
           </div>
           <div style={{ color: FB.textSecondary, fontSize: 14 }}>
-            Publiez votre premier post ou commencez à utiliser le CRM pour voir l'activité ici.
+            Publiez votre premier Buzz ou commencez à utiliser le Hive pour voir l'activité ici.
           </div>
         </FBCard>
       )}

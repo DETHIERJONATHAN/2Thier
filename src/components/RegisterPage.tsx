@@ -41,7 +41,7 @@ export default function RegisterPage() {
 
       if (response.success !== false) {
         const messages: Record<string, string> = {
-          createOrg: 'Organisation créée ! Connectez-vous maintenant.',
+          createOrg: 'Colony fondée ! Connectez-vous maintenant.',
           freelance: 'Inscription réussie ! Vous pouvez vous connecter.',
         };
         message.success(messages[registrationType]);
@@ -61,14 +61,14 @@ export default function RegisterPage() {
     {
       value: 'freelance' as const,
       icon: <UserOutlined style={{ fontSize: 28, color: '#2563eb' }} />,
-      title: 'Rejoindre le réseau',
-      desc: 'Accédez au réseau social Zhiive gratuitement',
+      title: 'Join the Hive',
+      desc: 'Rejoignez la Ruche gratuitement',
     },
     {
       value: 'createOrg' as const,
       icon: <BankOutlined style={{ fontSize: 28, color: '#059669' }} />,
-      title: 'Créer mon organisation',
-      desc: 'CRM, devis, factures — devenez admin',
+      title: 'Found a Colony',
+      desc: 'Devis, factures, projets — devenez Keeper',
     },
   ];
 
@@ -116,10 +116,10 @@ export default function RegisterPage() {
           {/* Features */}
           <div style={{ position: 'relative', zIndex: 10, textAlign: 'left' }}>
             <Title level={3} style={{ color: '#fff', lineHeight: 1.4, marginBottom: 28, textAlign: 'left' }}>
-              Rejoignez des milliers d'entreprises qui font confiance à Zhiive.
+              Des milliers de Colonies font déjà vivre leur Hive.
             </Title>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {['Gestion client intelligente', 'Devis & facturation en 1 clic', 'Collaboration en temps réel'].map((feature, i) => (
+              {['Transformez votre Nectar en Gold', 'Devis & facturation en 1 clic', 'Votre Crew, connectée en temps réel'].map((feature, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <CheckCircleOutlined style={{ fontSize: 20, color: '#34d399' }} />
                   <span style={{ color: '#bfdbfe', fontSize: 15 }}>{feature}</span>
@@ -147,8 +147,8 @@ export default function RegisterPage() {
 
             <div style={{ background: '#fff', borderRadius: 20, padding: '32px 28px', boxShadow: '0 4px 24px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9' }}>
               <div style={{ textAlign: 'center', marginBottom: 24 }}>
-                <Title level={2} style={{ margin: '0 0 8px 0', fontSize: 26, color: '#111827' }}>Créer un compte</Title>
-                <Text style={{ color: '#9ca3af', fontSize: 14 }}>Commencez gratuitement en 2 minutes</Text>
+                <Title level={2} style={{ margin: '0 0 8px 0', fontSize: 26, color: '#111827' }}>Rejoignez le Hive</Title>
+                <Text style={{ color: '#9ca3af', fontSize: 14 }}>Entrez dans la Ruche en 2 minutes</Text>
               </div>
 
               {/* Sélection du type — cartes visuelles */}
@@ -258,7 +258,7 @@ export default function RegisterPage() {
                 {registrationType === 'createOrg' && (
                   <div style={{ marginBottom: 16, padding: 16, background: '#f0fdf4', borderRadius: 12, border: '1px solid #bbf7d0' }}>
                     <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: '#166534' }}>
-                      <BankOutlined /> Votre organisation
+                      <BankOutlined /> Votre Colony
                     </p>
                     <Form.Item
                       name="organizationName"
@@ -290,8 +290,8 @@ export default function RegisterPage() {
                     }}
                   >
                     {registrationType === 'createOrg'
-                      ? 'Créer mon organisation'
-                      : 'Rejoindre le réseau'}
+                      ? 'Fonder ma Colony'
+                      : 'Join the Hive'}
                   </Button>
                 </Form.Item>
               </Form>

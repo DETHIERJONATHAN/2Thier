@@ -1,12 +1,14 @@
-# Guide pour l'agent IA - Développement du CRM
+# Guide pour l'agent IA - Développement de Zhiive (The Hive)
 
-Ce guide contient les conventions et l'architecture essentielles pour développer efficacement sur cette application CRM.
+Ce guide contient les conventions et l'architecture essentielles pour développer efficacement sur Zhiive.
+
+**IDENTITÉ** : Zhiive n'est PAS un CRM, PAS un ERP, PAS un réseau social. C'est un **Hive** (une Ruche). NE JAMAIS utiliser "CRM", "ERP", "réseau social" dans l'UI visible par l'utilisateur. Voir le lexique complet dans `/memories/repo/zhiive-hive-lexicon.md`.
 
 ## 1. Architecture Générale
 
 L'application est un monorepo qui contient :
 - Un **frontend React** (Vite, TypeScript, Ant Design, Tailwind CSS) dans `src/`.
-- Un **serveur API Node.js** (probablement Express) défini dans `src/api-server.ts`.
+- Un **serveur API Node.js** (Express) défini dans `src/api-server-clean.ts`.
 - Une **base de données PostgreSQL sur Google Cloud SQL**, accédée via une couche d'abstraction dans `src/lib/database.ts`.
 
 Le flux de données typique est : Composant React -> Hook `useAuthenticatedApi` -> Serveur API -> Database Layer (`db`) -> Base de données.

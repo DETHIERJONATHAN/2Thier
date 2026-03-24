@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, type CSSProperties } from 'react';
 import { Avatar, Input, Tag, message, Modal } from 'antd';
 import {
   SearchOutlined, UserOutlined, FireOutlined, CompassOutlined,
@@ -12,6 +12,61 @@ import { useZhiiveNav } from '../../contexts/ZhiiveNavContext';
 import { useActiveIdentity } from '../../contexts/ActiveIdentityContext';
 import { useAuth } from '../../auth/useAuth';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+
+/** Horizontal scroll row — swipe on mobile, click-drag on desktop */
+const ScrollRow: React.FC<{ style?: CSSProperties; children: React.ReactNode }> = ({ style, children }) => {
+  const rowRef = useRef<HTMLDivElement>(null);
+  const dragState = useRef({ isDown: false, startX: 0, scrollLeft: 0, moved: false });
+
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    const el = rowRef.current;
+    if (!el) return;
+    dragState.current = { isDown: true, startX: e.pageX - el.offsetLeft, scrollLeft: el.scrollLeft, moved: false };
+    el.style.cursor = 'grabbing';
+    el.style.userSelect = 'none';
+  }, []);
+
+  const onMouseMove = useCallback((e: React.MouseEvent) => {
+    const ds = dragState.current;
+    if (!ds.isDown) return;
+    e.preventDefault();
+    const el = rowRef.current!;
+    const x = e.pageX - el.offsetLeft;
+    const walk = (x - ds.startX) * 1.5;
+    if (Math.abs(walk) > 3) ds.moved = true;
+    el.scrollLeft = ds.scrollLeft - walk;
+  }, []);
+
+  const onMouseUp = useCallback(() => {
+    dragState.current.isDown = false;
+    const el = rowRef.current;
+    if (el) { el.style.cursor = 'grab'; el.style.userSelect = ''; }
+  }, []);
+
+  return (
+    <div
+      ref={el => { (rowRef as React.MutableRefObject<HTMLDivElement | null>).current = el; if (el) el.setAttribute('data-hscroll', '1'); }}
+      onMouseDown={onMouseDown}
+      onMouseMove={onMouseMove}
+      onMouseUp={onMouseUp}
+      onMouseLeave={onMouseUp}
+      style={{
+        display: 'flex',
+        overflowX: 'auto',
+        overflowY: 'hidden',
+        WebkitOverflowScrolling: 'touch',
+        msOverflowStyle: 'none',
+        scrollbarWidth: 'none',
+        cursor: 'grab',
+        ...style,
+      }}
+    >
+      <style>{`[data-hscroll]::-webkit-scrollbar{display:none!important;height:0!important;width:0!important}`}</style>
+      {children}
+    </div>
+  );
+};
 
 interface GalleryItem {
   id: string;
@@ -63,6 +118,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
   const navigate = useNavigate();
   // 🐝 Identité centralisée — source unique pour l'identité de publication
   const identity = useActiveIdentity();
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'gallery' | 'people' | 'hashtags'>('gallery');
   const [items, setItems] = useState<GalleryItem[]>([]);
@@ -139,20 +195,20 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
         setSelectedPost(prev => prev ? { ...prev, commentsCount: prev.commentsCount + 1 } : null);
       }
     } catch {
-      message.error('Erreur lors du commentaire');
+      message.error(t('explore.buzzError'));
     }
   };
 
-  // Category label → DB category value mapping
+  // Category key → DB category value mapping (stable keys, not dependent on i18n)
   const categoryMap: Record<string, string> = {
-    'Populaire': 'promotion',
-    'Créatif': 'conseil',
-    'Chantiers': 'chantier_realise',
-    'Business': 'projet',
-    'Formation': 'actualite',
-    'Local': 'actualite',
-    'Emploi': 'emploi',
-    'Market': 'market',
+    'popular': 'promotion',
+    'creative': 'conseil',
+    'combs': 'chantier_realise',
+    'business': 'projet',
+    'learning': 'actualite',
+    'local': 'actualite',
+    'jobs': 'emploi',
+    'market': 'market',
   };
 
   // ── Fetch Gallery Data ──
@@ -240,10 +296,10 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
       } else {
         await api.post(`/api/zhiive/follow/${userId}`);
         setFollowingSet(prev => new Set(prev).add(userId));
-        message.success('Suivi avec succès ! 🎉');
+        message.success(t('explore.followSuccess'));
       }
     } catch {
-      message.error('Erreur lors du suivi');
+      message.error(t('explore.followError'));
     }
   };
 
@@ -256,7 +312,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
         if (fId) {
           await api.delete(`/api/friends/${fId}`);
           setSuggestedUsers(prev => prev.map(u => u.id === userId ? { ...u, friendStatus: null, friendDirection: null, friendshipId: null } : u));
-          message.success('Ami retiré');
+          message.success(t('explore.friendRemoved'));
         }
       } else if (currentStatus === 'pending' && direction === 'received') {
         // Accept received request
@@ -265,7 +321,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
         if (fId) {
           await api.post(`/api/friends/${fId}/accept`);
           setSuggestedUsers(prev => prev.map(u => u.id === userId ? { ...u, friendStatus: 'accepted', friendDirection: null } : u));
-          message.success('Demande acceptée ! Vous êtes maintenant amis 🎉');
+          message.success(t('explore.requestAccepted'));
         }
       } else if (currentStatus === 'pending' && direction === 'sent') {
         // Cancel sent request
@@ -274,13 +330,13 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
         if (fId) {
           await api.delete(`/api/friends/${fId}`);
           setSuggestedUsers(prev => prev.map(u => u.id === userId ? { ...u, friendStatus: null, friendDirection: null, friendshipId: null } : u));
-          message.success('Demande annulée');
+          message.success(t('explore.requestCancelled'));
         }
       } else {
         // Send friend request
         const res = await api.post('/api/friends/request', { userId });
         setSuggestedUsers(prev => prev.map(u => u.id === userId ? { ...u, friendStatus: 'pending', friendDirection: 'sent', friendshipId: res?.friendship?.id || null } : u));
-        message.success('Demande d\'ami envoyée ! 🤝');
+        message.success(t('explore.friendAdded'));
       }
     } catch {
       message.error('Erreur');
@@ -293,9 +349,9 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
       const convId = res?.conversation?.id || res?.id;
       if (convId) {
         window.dispatchEvent(new CustomEvent('open-messenger', { detail: { conversationId: convId } }));
-        message.success('Chat ouvert 💬');
+        message.success(t('explore.whisperOpened'));
       } else {
-        message.error('Impossible d\'ouvrir le chat');
+        message.error(t('explore.whisperError'));
       }
     } catch {
       message.error('Erreur lors de l\'ouverture du chat');
@@ -310,20 +366,20 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
     : suggestedUsers;
 
   const tabs = [
-    { key: 'gallery' as const, label: 'Galerie', icon: <AppstoreOutlined /> },
-    { key: 'people' as const, label: 'Personnes', icon: <TeamOutlined /> },
-    { key: 'hashtags' as const, label: 'Hashtags', icon: <RiseOutlined /> },
+    { key: 'gallery' as const, label: t('explore.gallery'), icon: <AppstoreOutlined /> },
+    { key: 'people' as const, label: t('explore.people'), icon: <TeamOutlined /> },
+    { key: 'hashtags' as const, label: t('explore.hashtags'), icon: <RiseOutlined /> },
   ];
 
   const categories = [
-    { emoji: '🔥', label: 'Populaire' },
-    { emoji: '🎨', label: 'Créatif' },
-    { emoji: '🏗️', label: 'Chantiers' },
-    { emoji: '💼', label: 'Business' },
-    { emoji: '🎓', label: 'Formation' },
-    { emoji: '🌍', label: 'Local' },
-    { emoji: '🧑‍💼', label: 'Emploi' },
-    { emoji: '🛒', label: 'Market' },
+    { emoji: '🔥', label: t('explore.popular'), key: 'popular' },
+    { emoji: '🎨', label: t('explore.creative'), key: 'creative' },
+    { emoji: '🏗️', label: t('explore.combs'), key: 'combs' },
+    { emoji: '💼', label: t('explore.business'), key: 'business' },
+    { emoji: '🎓', label: t('explore.learning'), key: 'learning' },
+    { emoji: '🌍', label: t('explore.local'), key: 'local' },
+    { emoji: '🧑‍💼', label: t('explore.jobs'), key: 'jobs' },
+    { emoji: '🛒', label: 'Market', key: 'market' },
   ];
 
   return (
@@ -334,13 +390,13 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: 12, paddingTop: 4 }}>
         <span style={{ fontSize: 20, fontWeight: 800, background: SF.gradientSecondary, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-          � Explorer
+          🐝 Scout
         </span>
       </div>
       {/* Search */}
       <Input
         prefix={<SearchOutlined style={{ color: SF.textMuted }} />}
-        placeholder="Rechercher personnes, hashtags, médias..."
+        placeholder={t('explore.searchPlaceholder')}
         value={searchQuery}
         onChange={e => handleSearchChange(e.target.value)}
         allowClear
@@ -349,14 +405,14 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
       />
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 0, marginBottom: 10, background: SF.cardBg, borderRadius: SF.radiusSm, overflow: 'hidden', boxShadow: SF.shadow }}>
+      <ScrollRow style={{ gap: 0, marginBottom: 10, background: SF.cardBg, borderRadius: SF.radiusSm, boxShadow: SF.shadow }}>
         {tabs.map(tab => (
           <div
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
             style={{
-              flex: 1, padding: '8px 0', textAlign: 'center', cursor: 'pointer',
-              fontSize: 12, fontWeight: 600, transition: 'all 0.2s',
+              flexShrink: 0, padding: '8px 14px', textAlign: 'center', cursor: 'pointer',
+              fontSize: 12, fontWeight: 600, transition: 'all 0.2s', whiteSpace: 'nowrap',
               color: activeTab === tab.key ? SF.primary : SF.textSecondary,
               background: activeTab === tab.key ? SF.primary + '12' : 'transparent',
               borderBottom: activeTab === tab.key ? `2px solid ${SF.primary}` : '2px solid transparent',
@@ -365,7 +421,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
             {tab.icon} {tab.label}
           </div>
         ))}
-      </div>
+      </ScrollRow>
 
       {/* ═══════════════════════════════════════════════════════════ */}
       {/* GALLERY TAB — Instagram-style media grid */}
@@ -373,19 +429,19 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
       {activeTab === 'gallery' && (
         <>
           {/* ── Scope filter: Amis / Organisation / Privé / Tout le monde ── */}
-          <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+          <ScrollRow style={{ gap: 4, marginBottom: 8 }}>
             {([
-              { key: 'all' as const, label: '🌍 Tous', },
-              { key: 'friends' as const, label: '👥 Amis' },
-              ...(currentOrganization ? [{ key: 'org' as const, label: '🏢 Organisation' }] : []),
+              { key: 'all' as const, label: t('explore.allFilter'), },
+              { key: 'friends' as const, label: t('explore.friendsFilter') },
+              ...(currentOrganization ? [{ key: 'org' as const, label: '⬡ Colony' }] : []),
               { key: 'private' as const, label: '🔒 Privé' },
             ]).map(s => (
               <div
                 key={s.key}
                 onClick={() => setScope(s.key)}
                 style={{
-                  flex: 1, padding: '6px 0', textAlign: 'center', cursor: 'pointer',
-                  borderRadius: 20, fontSize: 11, fontWeight: 600,
+                  flexShrink: 0, padding: '6px 12px', textAlign: 'center', cursor: 'pointer',
+                  borderRadius: 20, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
                   background: scope === s.key ? SF.gradientPrimary : SF.cardBg,
                   color: scope === s.key ? '#fff' : SF.textSecondary,
                   boxShadow: scope === s.key ? SF.shadowMd : SF.shadow,
@@ -395,28 +451,28 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                 {s.label}
               </div>
             ))}
-          </div>
+          </ScrollRow>
 
           {/* ── Type + Sort filters ── */}
-          <div style={{ display: 'flex', gap: 4, marginBottom: 8, alignItems: 'center' }}>
+          <ScrollRow style={{ gap: 4, marginBottom: 8, alignItems: 'center' }}>
             {/* Type filters */}
-            <div style={{ display: 'flex', gap: 3, flex: 1 }}>
+            <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
               {([
-                { key: 'all' as const, label: 'Tout', icon: <AppstoreOutlined style={{ fontSize: 11 }} /> },
-                { key: 'photo' as const, label: 'Photos', icon: <PictureOutlined style={{ fontSize: 11 }} /> },
-                { key: 'video' as const, label: 'Vidéos', icon: <VideoCameraOutlined style={{ fontSize: 11 }} /> },
-              ]).map(t => (
+                { key: 'all' as const, label: t('common.all'), icon: <AppstoreOutlined style={{ fontSize: 11 }} /> },
+                { key: 'photo' as const, label: t('explore.photos'), icon: <PictureOutlined style={{ fontSize: 11 }} /> },
+                { key: 'video' as const, label: t('explore.videos'), icon: <VideoCameraOutlined style={{ fontSize: 11 }} /> },
+              ]).map(f => (
                 <Tag
-                  key={t.key}
-                  onClick={() => setMediaFilter(t.key)}
+                  key={f.key}
+                  onClick={() => setMediaFilter(f.key)}
                   style={{
                     borderRadius: 16, padding: '3px 10px', cursor: 'pointer', border: 'none',
-                    background: mediaFilter === t.key ? SF.secondary + '25' : SF.cardBg,
-                    color: mediaFilter === t.key ? SF.secondary : SF.textSecondary,
+                    background: mediaFilter === f.key ? SF.secondary + '25' : SF.cardBg,
+                    color: mediaFilter === f.key ? SF.secondary : SF.textSecondary,
                     fontSize: 11, fontWeight: 600, margin: 0,
                   }}
                 >
-                  {t.icon} {t.label}
+                  {f.icon} {f.label}
                 </Tag>
               ))}
             </div>
@@ -428,31 +484,31 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                 padding: '4px 10px', borderRadius: 16, cursor: 'pointer',
                 background: SF.cardBg, fontSize: 11, fontWeight: 600,
                 color: SF.textSecondary, boxShadow: SF.shadow,
-                display: 'flex', alignItems: 'center', gap: 4,
+                display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, whiteSpace: 'nowrap',
               }}
             >
               {sortMode === 'popular'
-                ? <><RiseOutlined style={{ color: SF.fire, fontSize: 12 }} /> Tendances</>
-                : <><ClockCircleOutlined style={{ color: SF.primary, fontSize: 12 }} /> Récent</>
+                ? <><RiseOutlined style={{ color: SF.fire, fontSize: 12 }} /> {t('explore.trending')}</>
+                : <><ClockCircleOutlined style={{ color: SF.primary, fontSize: 12 }} /> {t('explore.recent')}</>
               }
             </div>
-          </div>
+          </ScrollRow>
 
           {/* ── Category pills ── */}
-          <div style={{ display: 'flex', gap: 5, overflowX: 'auto', marginBottom: 10, scrollbarWidth: 'none', paddingBottom: 2 }}>
+          <ScrollRow style={{ gap: 5, marginBottom: 10, paddingBottom: 2 }}>
             {categories.map(cat => (
-              <Tag key={cat.label}
-                onClick={() => setActiveCategory(activeCategory === cat.label ? null : cat.label)}
+              <Tag key={cat.key}
+                onClick={() => setActiveCategory(activeCategory === cat.key ? null : cat.key)}
                 style={{
                   borderRadius: 20, padding: '3px 10px', cursor: 'pointer', border: 'none',
-                  background: activeCategory === cat.label ? SF.primary + '20' : SF.cardBg,
-                  color: activeCategory === cat.label ? SF.primary : SF.text,
+                  background: activeCategory === cat.key ? SF.primary + '20' : SF.cardBg,
+                  color: activeCategory === cat.key ? SF.primary : SF.text,
                   fontSize: 11, flexShrink: 0, boxShadow: SF.shadow, margin: 0,
                 }}>
                 {cat.emoji} {cat.label}
               </Tag>
             ))}
-          </div>
+          </ScrollRow>
 
           {/* ── Gallery Grid ── */}
           {loading ? (
@@ -551,10 +607,10 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
           ) : (
             <EmptyState
               icon={<CompassOutlined style={{ fontSize: 40, color: SF.secondary }} />}
-              title="Aucun média trouvé"
+              title={t('explore.noMediaFound')}
               subtitle={scope === 'friends'
-                ? "Vos amis n'ont pas encore publié de médias. Changez le scope !"
-                : "Publiez des photos et vidéos sur le Mur pour les voir ici."
+                ? t('explore.noFriendsMedia')
+                : "Publiez des photos et vidéos sur le Hive pour les voir ici."
               }
             />
           )}
@@ -565,18 +621,18 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
       {activeTab === 'people' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {/* ── Scope filter: Tous / Amis / Organisation ── */}
-          <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+          <ScrollRow style={{ gap: 4, marginBottom: 4 }}>
             {([
-              { key: 'all' as const, label: '🌍 Tous' },
-              { key: 'friends' as const, label: '💚 Amis' },
-              ...(currentOrganization ? [{ key: 'org' as const, label: '🏢 Organisation' }] : []),
+              { key: 'all' as const, label: t('explore.allFilter') },
+              { key: 'friends' as const, label: t('explore.friendsFilter') },
+              ...(currentOrganization ? [{ key: 'org' as const, label: '⬡ Colony' }] : []),
             ]).map(s => (
               <div
                 key={s.key}
                 onClick={() => setPeopleScope(s.key)}
                 style={{
-                  flex: 1, padding: '6px 0', textAlign: 'center', cursor: 'pointer',
-                  borderRadius: 20, fontSize: 11, fontWeight: 600,
+                  flexShrink: 0, padding: '6px 12px', textAlign: 'center', cursor: 'pointer',
+                  borderRadius: 20, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
                   background: peopleScope === s.key ? SF.gradientPrimary : SF.cardBg,
                   color: peopleScope === s.key ? '#fff' : SF.textSecondary,
                   boxShadow: peopleScope === s.key ? SF.shadowMd : SF.shadow,
@@ -586,7 +642,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                 {s.label}
               </div>
             ))}
-          </div>
+          </ScrollRow>
 
           {/* ── Users list ── */}
           {filteredUsers.length > 0 ? filteredUsers.map(su => {
@@ -611,12 +667,12 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                 >
                   <div style={{ fontSize: 14, fontWeight: 600, color: SF.text }}>
                     {su.firstName} {su.lastName}
-                    {isFriend && <span style={{ marginLeft: 4, fontSize: 11, color: '#52c41a' }}>✓ Ami</span>}
+                    {isFriend && <span style={{ marginLeft: 4, fontSize: 11, color: '#52c41a' }}>{t('explore.isFriend')}</span>}
                     {su.sameOrg && <span style={{ marginLeft: 4, fontSize: 9, background: SF.primary + '20', color: SF.primary, padding: '1px 5px', borderRadius: 6 }}>Org</span>}
                   </div>
                   <div style={{ fontSize: 11, color: SF.textSecondary }}>{su.role}</div>
                   {su.mutualFriends > 0 && (
-                    <div style={{ fontSize: 10, color: SF.textMuted }}>{su.mutualFriends} ami(s) en commun</div>
+                    <div style={{ fontSize: 10, color: SF.textMuted }}>{su.mutualFriends} {t('explore.mutualFriends')}</div>
                   )}
                 </div>
 
@@ -625,7 +681,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                   {/* Messenger button */}
                   <div
                     onClick={() => handleOpenMessenger(su.id)}
-                    title="Envoyer un message"
+                    title={t('explore.sendWhisper')}
                     style={{
                       width: 32, height: 32, borderRadius: '50%', display: 'flex',
                       alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
@@ -639,7 +695,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                   {/* Add friend / Friend status button */}
                   <div
                     onClick={() => handleFriendAction(su.id, su.friendStatus, su.friendDirection, su.friendshipId)}
-                    title={isFriend ? 'Ami ✓' : (isPending && su.friendDirection === 'received') ? 'Accepter la demande' : isPending ? 'En attente (annuler)' : 'Ajouter en ami'}
+                    title={isFriend ? t('explore.friendBadge') : (isPending && su.friendDirection === 'received') ? t('explore.acceptRequest') : isPending ? t('explore.pendingCancel') : t('explore.addFriend')}
                     style={{
                       width: 32, height: 32, borderRadius: '50%', display: 'flex',
                       alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
@@ -665,7 +721,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                       transition: 'all 0.15s',
                     }}
                   >
-                    {isFollowed ? 'Suivi ✓' : 'Suivre'}
+                    {isFollowed ? t('common.following') : t('common.follow')}
                   </div>
                 </div>
               </div>
@@ -673,8 +729,8 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
           }) : (
             <EmptyState
               icon={<TeamOutlined style={{ fontSize: 40, color: SF.primary }} />}
-              title={peopleScope === 'friends' ? 'Aucun ami pour le moment' : 'Aucune personne trouvée'}
-              subtitle={peopleScope === 'friends' ? 'Ajoutez des amis depuis l\'onglet "Tous" !' : 'Plus vous interagissez, plus nos suggestions s\'affinent.'}
+              title={peopleScope === 'friends' ? t('explore.noFriendsYet') : t('explore.noBeesFound')}
+              subtitle={peopleScope === 'friends' ? t('explore.addFriendsHint') : t('explore.betterSuggestions')}
             />
           )}
         </div>
@@ -684,7 +740,11 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
       {activeTab === 'hashtags' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {hashtags.length > 0 ? hashtags.map((ht, i) => (
-            <div key={ht.id} style={{
+            <div key={ht.id} onClick={() => {
+              setSearchQuery(`#${ht.name}`);
+              setActiveTab('gallery');
+              fetchGallery(`#${ht.name}`, null);
+            }} style={{
               display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
               background: SF.cardBg, borderRadius: SF.radiusSm, boxShadow: SF.shadow,
               cursor: 'pointer',
@@ -698,15 +758,15 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, color: SF.text }}>#{ht.name}</div>
-                <div style={{ fontSize: 11, color: SF.textSecondary }}>{ht.postCount} publications</div>
+                <div style={{ fontSize: 11, color: SF.textSecondary }}>{ht.postCount} buzzes</div>
               </div>
-              {i < 3 && <Tag color="volcano" style={{ borderRadius: 10, fontSize: 10 }}>Trending</Tag>}
+              {i < 3 && <Tag color="volcano" style={{ borderRadius: 10, fontSize: 10 }}>{t('explore.trending')}</Tag>}
             </div>
           )) : (
             <EmptyState
               icon={<RiseOutlined style={{ fontSize: 40, color: SF.accent }} />}
-              title="Pas encore de hashtags"
-              subtitle="Ajoutez #hashtags à vos posts pour lancer des tendances !"
+              title={t('explore.noHashtags')}
+              subtitle={t('explore.addHashtagsHint')}
             />
           )}
         </div>
@@ -790,7 +850,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                         </div>
                       ); })
                     ) : (
-                      <div style={{ textAlign: 'center', padding: 12, color: SF.textMuted, fontSize: 12 }}>Aucun commentaire</div>
+                      <div style={{ textAlign: 'center', padding: 12, color: SF.textMuted, fontSize: 12 }}>{t('explore.noBuzzesYet')}</div>
                     )}
                   </div>
 
@@ -800,7 +860,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                       value={commentText}
                       onChange={e => setCommentText(e.target.value)}
                       onPressEnter={handleAddComment}
-                      placeholder="Ajouter un commentaire..."
+                      placeholder={t('explore.dropABuzz')}
                       style={{ borderRadius: 20, flex: 1, background: SF.cardBg, border: 'none' }}
                       size="small"
                     />

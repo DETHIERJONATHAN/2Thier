@@ -73,10 +73,10 @@ const UniverseIcon = (props: any) => <Icon component={UniverseSvg} {...props} />
 
 // ── Zhiive Header Tabs Component ──
 const SF_TAB_CONFIG: { id: string; label: string; icon: React.ComponentType<{ style?: React.CSSProperties }>; color: string }[] = [
-  { id: 'explore', label: 'Explore', icon: CompassOutlined, color: '#00CEC9' },
-  { id: 'flow', label: 'Flow', icon: FlowWaveIcon, color: '#6C5CE7' },
+  { id: 'mur', label: 'Hive', icon: WallIcon, color: '#F5A623' },
+  { id: 'explore', label: 'Scout', icon: CompassOutlined, color: '#00CEC9' },
   { id: 'reels', label: 'Reels', icon: ClapperboardIcon, color: '#e84393' },
-  { id: 'mur', label: 'Mur', icon: WallIcon, color: '#1877F2' },
+  { id: 'flow', label: 'Flow', icon: FlowWaveIcon, color: '#6C5CE7' },
   { id: 'universe', label: 'Universe', icon: UniverseIcon, color: '#FD79A8' },
   { id: 'stats', label: 'Stats', icon: BarChartOutlined, color: '#FDCB6E' },
 ];
@@ -312,8 +312,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           label: (
             <div style={{ display: 'flex', gap: 4, padding: '2px 0' }} onClick={e => e.stopPropagation()}>
               {([
-                { key: 'personal' as const, label: '👤 Personnel', color: '#00CEC9' },
-                { key: 'org' as const, label: '🏢 Organisation', color: '#6C5CE7' },
+                { key: 'personal' as const, label: '👤 Mon Hive', color: '#00CEC9' },
+                { key: 'org' as const, label: '🏢 Colony', color: '#6C5CE7' },
               ]).map(m => (
                 <div
                   key={m.key}

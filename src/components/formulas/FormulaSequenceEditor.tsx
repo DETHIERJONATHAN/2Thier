@@ -241,7 +241,7 @@ const FormulaSequenceEditor: React.FC<FormulaSequenceEditorProps> = ({ formula }
                     try {
                         // Option 1: Utiliser l'API Notification du navigateur si disponible et autorisée
                         if (typeof Notification !== 'undefined' && Notification.permission === "granted") {
-                            new Notification('CRM', {
+                            new Notification('Zhiive', {
                                 body: 'Élément ajouté à la formule',
                                 icon: '/public/vite.svg'
                             });

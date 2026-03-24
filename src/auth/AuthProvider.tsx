@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { message as antdMessage } from 'antd';
+import i18n from '../i18n';
 import { AuthUser } from './user';
 import { AuthOrganization } from './organization';
 import { Permission } from './permissions';
@@ -237,6 +238,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (res && res.currentUser) {
         const { currentUser, originalUser: impersonator } = res;
         setUser(currentUser);
+
+        // Sync i18n language with user preference
+        if (currentUser.language && i18n.language !== currentUser.language) {
+          i18n.changeLanguage(currentUser.language);
+        }
 
         // Si l'utilisateur est un super-admin (et non en usurpation), on charge TOUTES les organisations.
         // Sinon, on charge uniquement celles auxquelles il appartient.

@@ -212,7 +212,7 @@ const GoogleWorkspaceSection: React.FC<{ organizationId: string }> = ({ organiza
         <FBCard style={{ textAlign: 'center', padding: 32 }}>
           <GoogleOutlined style={{ fontSize: 40, color: FB.border, marginBottom: 12 }} />
           <div style={{ fontSize: 15, fontWeight: 600, color: FB.text }}>Google Workspace non configuré</div>
-          <div style={{ fontSize: 13, color: FB.textSecondary }}>Contactez votre administrateur système.</div>
+          <div style={{ fontSize: 13, color: FB.textSecondary }}>Contactez votre Keeper.</div>
         </FBCard>
       )}
     </>
@@ -261,14 +261,14 @@ const OrganizationSettings: React.FC = () => {
     e.preventDefault();
     setIsLoading(true);
     if (!currentOrganization) {
-      message.error("Impossible de trouver les informations de l'organisation.");
+      message.error("Impossible de trouver les informations de la Colony.");
       setIsLoading(false);
       return;
     }
     try {
       const response = await api.patch(`/api/organizations/${currentOrganization.id}`, { name });
       if (response.success) {
-        message.success("Le nom de l'organisation a été mis à jour.");
+        message.success("Le nom de la Colony a été mis à jour.");
         if (refetchUser) await refetchUser();
       } else {
         throw new Error(response.message || "Une erreur est survenue.");
@@ -281,8 +281,8 @@ const OrganizationSettings: React.FC = () => {
   if (!currentOrganization) return (
     <FBCard style={{ textAlign: 'center', padding: 40 }}>
       <BankOutlined style={{ fontSize: 40, color: FB.border, marginBottom: 12 }} />
-      <div style={{ fontSize: 16, fontWeight: 600, color: FB.text }}>Paramètres de l'organisation</div>
-      <div style={{ fontSize: 14, color: FB.textSecondary }}>Chargement ou aucune organisation associée.</div>
+      <div style={{ fontSize: 16, fontWeight: 600, color: FB.text }}>Paramètres de la Colony</div>
+      <div style={{ fontSize: 14, color: FB.textSecondary }}>Chargement ou aucune Colony associée.</div>
     </FBCard>
   );
 
@@ -327,7 +327,7 @@ const OrganizationSettings: React.FC = () => {
             onChange={handleLogoUpload}
           />
           <div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: FB.text }}>Paramètres de l'organisation</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: FB.text }}>Paramètres de la Colony</div>
             <div style={{ fontSize: 14, color: FB.textSecondary }}>Configurez les informations de {currentOrganization.name}</div>
           </div>
         </div>
@@ -335,11 +335,11 @@ const OrganizationSettings: React.FC = () => {
 
       {/* Organization Name */}
       <FBCard>
-        <div style={{ fontSize: 16, fontWeight: 700, color: FB.text, marginBottom: 14 }}>Nom de l'organisation</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: FB.text, marginBottom: 14 }}>Nom de la Colony</div>
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: 14 }}>
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 6 }}>
-              Nom de l'organisation
+              Nom de la Colony
             </label>
             <input
               type="text" value={name} onChange={e => setName(e.target.value)} required disabled={!isAdmin}

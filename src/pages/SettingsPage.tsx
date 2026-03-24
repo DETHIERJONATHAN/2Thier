@@ -77,7 +77,7 @@ interface MenuCategory {
 /* ── Quick access cards data ─────────────────────────────────── */
 const quickCards = [
   { to: '/settings/profile', emoji: '👤', bg: '#e7f3ff', title: 'Mon Profil', desc: 'Modifiez votre nom, photo et coordonnées.', permission: null as string | null, superAdminOnly: false },
-  { to: '/settings/organization', emoji: '🏢', bg: '#fff3e0', title: 'Organisation', desc: 'Gérez les paramètres de votre organisation.', permission: 'organization:read', superAdminOnly: false },
+  { to: '/settings/organization', emoji: '🏢', bg: '#fff3e0', title: 'Colony', desc: 'Gérez les paramètres de votre Colony.', permission: 'organization:read', superAdminOnly: false },
   { to: '/settings/users', emoji: '👥', bg: '#e8f5e9', title: 'Utilisateurs', desc: 'Invitez et gérez les membres.', permission: 'user:read', superAdminOnly: false },
   { to: '/settings/roles', emoji: '🛡️', bg: '#fce4ec', title: 'Rôles & Permissions', desc: "Configurez les droits d'accès.", permission: 'role:read', superAdminOnly: false },
   { to: '/settings/emails', emoji: '📧', bg: '#f3e5f5', title: 'Emails', desc: 'Paramètres email et SMTP.', permission: 'user:read', superAdminOnly: false },
@@ -293,10 +293,10 @@ const SettingsPage = () => {
     }
 
     cats.push({ title: '', description: '', items: filterItems(accountItems) });
-    cats.push({ title: 'Outils et ressources', description: 'Gérez votre organisation et vos équipes.', items: filterItems(toolItems) });
+    cats.push({ title: 'Outils et ressources', description: 'Gérez votre Colony et vos Crews.', items: filterItems(toolItems) });
     cats.push({ title: 'Préférences', description: 'Personnalisez votre expérience.', items: filterItems(prefItems) });
     if (adminItems.length > 0) {
-      cats.push({ title: 'Administration', description: 'Configuration avancée du CRM.', items: filterItems(adminItems) });
+      cats.push({ title: 'Administration', description: 'Configuration avancée.', items: filterItems(adminItems) });
     }
 
     return cats.filter(c => c.items.length > 0);

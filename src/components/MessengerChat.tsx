@@ -13,6 +13,7 @@ import {
   VideoCameraOutlined,
   ArrowLeftOutlined,
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import VideoCallModal from './VideoCallModal';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { useAuth } from '../auth/useAuth';
@@ -88,6 +89,7 @@ const LIST_HEIGHT = 500;
 // ═══════════════════════════════════════════════════════════════
 
 const MessengerChat: React.FC = () => {
+  const { t } = useTranslation();
   const { api } = useAuthenticatedApi();
   const { user, currentOrganization } = useAuth();
 
@@ -263,13 +265,13 @@ const MessengerChat: React.FC = () => {
         const data = await api.get('/api/calls/check/incoming') as any;
         if (data?.incoming) {
           const call = data.incoming;
-          const callerName = call.initiator ? `${call.initiator.firstName} ${call.initiator.lastName}` : 'Appel entrant';
+          const callerName = call.initiator ? `${call.initiator.firstName} ${call.initiator.lastName}` : 'Incoming call';
 
           // Browser notification (works even when tab is in background)
           if ('Notification' in window && Notification.permission === 'granted') {
             try {
-              new Notification(`📞 Appel ${call.callType === 'video' ? 'vidéo' : 'audio'} entrant`, {
-                body: `${callerName} vous appelle...`,
+              new Notification(`📞 ${call.callType === 'video' ? 'Video' : 'Audio'} call incoming`, {
+                body: `${callerName} is calling...`,
                 icon: call.initiator?.avatarUrl || '/favicon.ico',
                 tag: `call-${call.id}`,
                 requireInteraction: true,
@@ -360,7 +362,7 @@ const MessengerChat: React.FC = () => {
   const timeAgo = (date: string) => {
     const diff = Date.now() - new Date(date).getTime();
     const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'à l\'instant';
+    if (mins < 1) return t('common.justNow');
     if (mins < 60) return `${mins} min`;
     const hrs = Math.floor(mins / 60);
     if (hrs < 24) return `${hrs}h`;
@@ -427,14 +429,14 @@ const MessengerChat: React.FC = () => {
             </div>
             <div style={{ display: 'flex', gap: 4 }}>
               <div onClick={() => startCall(activeConversationId, 'audio', convName)}
-                title="Appel audio"
+                title={t('messenger.audioCall')}
                 style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
                 onMouseEnter={e => e.currentTarget.style.background = FB.hover}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                 <PhoneOutlined style={{ fontSize: 14, color: FB.blue }} />
               </div>
               <div onClick={() => startCall(activeConversationId, 'video', convName)}
-                title="Appel vidéo"
+                title={t('messenger.videoCall')}
                 style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
                 onMouseEnter={e => e.currentTarget.style.background = FB.hover}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
@@ -456,7 +458,7 @@ const MessengerChat: React.FC = () => {
                 <Avatar size={56} src={convAvatar} icon={isGroup ? <TeamOutlined /> : <UserOutlined />}
                   style={{ backgroundColor: convAvatar ? undefined : FB.blue, marginBottom: 8 }} />
                 <div style={{ fontWeight: 600, color: FB.text }}>{convName}</div>
-                <div style={{ marginTop: 4 }}>Commencez la conversation !</div>
+                <div style={{ marginTop: 4 }}>{t('messenger.startWhispering')}</div>
               </div>
             )}
             {inlineMessages.map((msg, i) => {
@@ -491,7 +493,7 @@ const MessengerChat: React.FC = () => {
                       fontSize: 14, lineHeight: '1.35', wordBreak: 'break-word',
                     }}>
                       {msg.isDeleted ? (
-                        <span style={{ fontStyle: 'italic', opacity: 0.6 }}>Message supprimé</span>
+                        <span style={{ fontStyle: 'italic', opacity: 0.6 }}>{t('messenger.messageDeleted')}</span>
                       ) : (
                         msg.content
                       )}
@@ -553,7 +555,7 @@ const MessengerChat: React.FC = () => {
       }}>
         {/* Header */}
         <div style={{ padding: '12px 16px', borderBottom: `1px solid ${FB.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 20, fontWeight: 800, color: FB.text }}>Discussions</span>
+          <span style={{ fontSize: 20, fontWeight: 800, color: FB.text }}>{t('messenger.whispers')}</span>
           <div style={{ display: 'flex', gap: 8 }}>
             <div onClick={() => setShowNewChat(!showNewChat)}
               style={{ width: 32, height: 32, borderRadius: '50%', background: FB.hover, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
@@ -570,7 +572,7 @@ const MessengerChat: React.FC = () => {
         <div style={{ padding: '8px 12px' }}>
           <Input
             prefix={<SearchOutlined style={{ color: FB.textSecondary }} />}
-            placeholder="Rechercher dans Messenger"
+            placeholder={t('messenger.searchMessenger')}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             style={{ borderRadius: 20, background: FB.bg, border: 'none' }}
@@ -582,7 +584,7 @@ const MessengerChat: React.FC = () => {
         {showNewChat ? (
           <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
             <div style={{ padding: '8px 16px', fontSize: 13, fontWeight: 600, color: FB.textSecondary }}>
-              Nouvelle conversation
+              {t('messenger.newWhisper')}
             </div>
             {filteredFriends.map(friend => (
               <div key={friend.id}
@@ -601,14 +603,14 @@ const MessengerChat: React.FC = () => {
                     {friend.firstName} {friend.lastName}
                   </div>
                   <div style={{ fontSize: 11, color: FB.textSecondary }}>
-                    {friend.isOrgMember ? '🏢 Organisation' : '👤 Externe'}
+                    {friend.isOrgMember ? '⬡ Colony' : '🐝 Free Bee'}
                   </div>
                 </div>
               </div>
             ))}
             {filteredFriends.length === 0 && (
               <div style={{ padding: 20, textAlign: 'center', color: FB.textSecondary, fontSize: 13 }}>
-                Aucun ami trouvé
+                {t('messenger.noFriendsFound')}
               </div>
             )}
           </div>
@@ -644,9 +646,9 @@ const MessengerChat: React.FC = () => {
                   }}>
                     {conv.lastMessage ? (
                       conv.lastMessage.senderId === user?.id
-                        ? `Vous : ${conv.lastMessage.content || '📎 Média'}`
-                        : conv.lastMessage.content || '📎 Média'
-                    ) : 'Démarrer la conversation'}
+                        ? `${t('messenger.youPrefix')}${conv.lastMessage.content || t('messenger.media')}`
+                        : conv.lastMessage.content || t('messenger.media')
+                    ) : t('messenger.startAWhisper')}
                   </div>
                 </div>
                 {conv.unreadCount > 0 && (
@@ -659,9 +661,9 @@ const MessengerChat: React.FC = () => {
             {filteredConversations.length === 0 && !_loading && (
               <div style={{ padding: 30, textAlign: 'center', color: FB.textSecondary, fontSize: 14 }}>
                 <MessageOutlined style={{ fontSize: 40, marginBottom: 12, display: 'block', opacity: 0.3 }} />
-                Aucune conversation
+                {t('messenger.noWhispersYet')}
                 <div style={{ fontSize: 12, marginTop: 8 }}>
-                  Cliquez sur <EditOutlined /> pour démarrer
+                  {t('messenger.tapToStart')}
                 </div>
               </div>
             )}
@@ -766,6 +768,7 @@ interface ChatWindowProps {
 }
 
 const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, index, onClose, api, userId, onRefresh, onStartCall }) => {
+  const { t } = useTranslation();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -868,14 +871,14 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
         </div>
         <div style={{ display: 'flex', gap: 4 }}>
           <div onClick={() => onStartCall(conversationId, 'audio', convName)}
-            title="Appel audio"
+            title={t('messenger.audioCall')}
             style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
             onMouseEnter={e => e.currentTarget.style.background = FB.hover}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
             <PhoneOutlined style={{ fontSize: 14, color: FB.blue }} />
           </div>
           <div onClick={() => onStartCall(conversationId, 'video', convName)}
-            title="Appel vidéo"
+            title={t('messenger.videoCall')}
             style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
             onMouseEnter={e => e.currentTarget.style.background = FB.hover}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
@@ -903,7 +906,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
             <Avatar size={56} src={convAvatar} icon={isGroup ? <TeamOutlined /> : <UserOutlined />}
               style={{ backgroundColor: convAvatar ? undefined : FB.blue, marginBottom: 8 }} />
             <div style={{ fontWeight: 600, color: FB.text }}>{convName}</div>
-            <div style={{ marginTop: 4 }}>Commencez la conversation !</div>
+            <div style={{ marginTop: 4 }}>{t('messenger.startWhispering')}</div>
           </div>
         )}
         {messages.map((msg, i) => {
@@ -938,7 +941,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
                   fontSize: 14, lineHeight: '1.35', wordBreak: 'break-word',
                 }}>
                   {msg.isDeleted ? (
-                    <span style={{ fontStyle: 'italic', opacity: 0.6 }}>Message supprimé</span>
+                    <span style={{ fontStyle: 'italic', opacity: 0.6 }}>{t('messenger.messageDeleted')}</span>
                   ) : (
                     msg.content
                   )}
@@ -999,6 +1002,7 @@ interface FriendsWidgetProps {
 }
 
 export const FriendsWidget: React.FC<FriendsWidgetProps> = ({ onStartChat }) => {
+  const { t } = useTranslation();
   const { api } = useAuthenticatedApi();
   const [friends, setFriends] = useState<Friend[]>([]);
   const [_pendingCount, setPendingCount] = useState(0);
@@ -1022,7 +1026,7 @@ export const FriendsWidget: React.FC<FriendsWidgetProps> = ({ onStartChat }) => 
       {/* Org members */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <span style={{ fontSize: 13, fontWeight: 600, color: FB.textSecondary }}>
-          Contacts de l'organisation
+          {t('messenger.colonyContacts')}
         </span>
         <span style={{ fontSize: 12, color: FB.textSecondary }}>{orgFriends.length}</span>
       </div>
@@ -1055,7 +1059,7 @@ export const FriendsWidget: React.FC<FriendsWidgetProps> = ({ onStartChat }) => 
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, marginBottom: 8 }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: FB.textSecondary }}>
-              Amis externes
+              {t('messenger.externalFriends')}
             </span>
             <span style={{ fontSize: 12, color: FB.textSecondary }}>{externalFriends.length}</span>
           </div>
@@ -1081,7 +1085,7 @@ export const FriendsWidget: React.FC<FriendsWidgetProps> = ({ onStartChat }) => 
 
       {friends.length === 0 && (
         <div style={{ textAlign: 'center', padding: 12, color: FB.textSecondary, fontSize: 13 }}>
-          Aucun contact pour l'instant
+          {t('messenger.noContactsYet')}
         </div>
       )}
     </div>

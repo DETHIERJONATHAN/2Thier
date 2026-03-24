@@ -149,7 +149,7 @@ export default function MyCommercialLinks() {
               'Copiez votre lien personnalisé ci-dessous',
               'Partagez-le avec vos prospects (email, WhatsApp, réseaux sociaux...)',
               'Chaque personne qui remplit le formulaire via votre lien devient automatiquement VOTRE lead',
-              'Suivez vos performances en temps réel dans le CRM',
+              'Suivez vos performances en temps réel dans le Hive',
             ].map((step, i) => (
               <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6, fontSize: 13, color: FB.blue, opacity: 0.85 }}>
                 <span style={{
@@ -261,7 +261,7 @@ export default function MyCommercialLinks() {
             ['Ajoutez votre lien dans la', 'signature de vos emails', ''],
             ['Partagez-le sur vos', 'réseaux sociaux professionnels', '(LinkedIn, Facebook...)'],
             ['Intégrez-le dans vos', 'campagnes WhatsApp Business', ''],
-            ['Suivez vos', 'statistiques de conversion', 'dans le module Leads du CRM'],
+            ['Suivez vos', 'statistiques de conversion', 'dans le module Nectar du Hive'],
           ].map((tip, i) => (
             <div key={i} style={{ fontSize: 13, color: FB.text, display: 'flex', alignItems: 'flex-start', gap: 6 }}>
               <CheckCircleOutlined style={{ color: FB.green, marginTop: 2, flexShrink: 0 }} />

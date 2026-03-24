@@ -244,7 +244,7 @@ export const GoogleAutoConnectionStatus: React.FC<GoogleAutoConnectionStatusProp
         <div style={{ fontSize: '12px', color: '#8c8c8c' }}>
           <p>Dernière vérification: {lastRefresh.toLocaleTimeString()}</p>
           <p>
-            💡 <strong>Astuce:</strong> La connexion se fait automatiquement lors de votre connexion au CRM.
+            💡 <strong>Astuce:</strong> La connexion se fait automatiquement lors de votre connexion au Hive.
             {connectionStatus.isConnected 
               ? ' Vous n\'avez plus besoin de vous connecter manuellement à Google !' 
               : ' Une fois configurée, vous n\'aurez plus à vous soucier de la connexion Google.'}

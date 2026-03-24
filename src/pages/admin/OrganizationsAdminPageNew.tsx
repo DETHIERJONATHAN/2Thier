@@ -1072,7 +1072,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
       ),
     },
     {
-      title: 'Modules CRM',
+      title: 'Modules',
       key: 'modules',
       width: 120,
       render: (_, record: Organization) => {
@@ -1237,7 +1237,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
             <EditOutlined /> Modifier l'organisation
           </button>
           <button style={btnStyle} onClick={() => openModulesManager(organization)}>
-            <AppstoreAddOutlined /> Modules CRM
+            <AppstoreAddOutlined /> Modules
           </button>
           <button style={btnStyle} onClick={() => openGoogleWorkspaceConfig(organization)}>
             <GoogleOutlined /> Google Workspace
@@ -1318,7 +1318,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
           {[
             { icon: <UserOutlined style={{ color: FB.blue }} />, label: 'Utilisateurs', val: organization.stats?.totalUsers || 0 },
             { icon: <TeamOutlined style={{ color: FB.purple }} />, label: 'Rôles', val: organization.stats?.totalRoles || 0 },
-            { icon: <AppstoreOutlined style={{ color: FB.green }} />, label: 'Modules CRM', val: moduleCount },
+            { icon: <AppstoreOutlined style={{ color: FB.green }} />, label: 'Modules', val: moduleCount },
             { icon: <GoogleOutlined style={{ color: '#4285F4' }} />, label: 'Google', val: googleEnabled ? 'Activé' : 'Inactif' },
           ].map((s, i) => (
             <div key={i} style={{
@@ -1710,7 +1710,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
 
             {organizationModules.length > 0 && (
               <div style={{ background: FB.bg, borderRadius: FB.radius, padding: 16 }}>
-                <div style={{ fontWeight: 700, fontSize: 15, color: FB.text, marginBottom: 12 }}>Modules CRM Actifs</div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: FB.text, marginBottom: 12 }}>Modules Actifs</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {organizationModules.map(module => (
                     <Tag key={module.id} icon={getCrmModuleIcon(module.key)} color="blue">

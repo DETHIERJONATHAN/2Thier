@@ -36,7 +36,7 @@ const HeaderAICoach: React.FC = () => {
 
       {open && (
         <div className="absolute right-0 mt-2 w-96 bg-white border border-gray-200 rounded shadow-lg p-4 z-50">
-          <div className="font-semibold mb-2">Assistant CRM</div>
+          <div className="font-semibold mb-2">Hive Mind</div>
           <div className="text-sm text-gray-600">
             Comment puis-je vous aider avec cette page ?
           </div>

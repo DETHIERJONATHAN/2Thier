@@ -194,7 +194,7 @@ const UsersSettings: React.FC = () => {
           <div>
             <div style={{ fontSize: 20, fontWeight: 700, color: FB.text }}>Utilisateurs</div>
             <div style={{ fontSize: 14, color: FB.textSecondary }}>
-              Gérez les membres de {currentOrganization?.name || 'votre organisation'}
+              Gérez les membres de {currentOrganization?.name || 'votre Colony'}
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

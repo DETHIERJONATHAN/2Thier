@@ -266,7 +266,7 @@ const GoogleSettings: React.FC = () => {
             Google Workspace non configuré
           </div>
           <div style={{ fontSize: 14, color: FB.textSecondary }}>
-            Contactez votre administrateur système pour configurer l'intégration.
+            Contactez votre Keeper pour configurer l'intégration.
           </div>
         </FBCard>
       )}

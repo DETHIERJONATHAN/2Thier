@@ -90,6 +90,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<any> =
       address: user.address || "",      // Ajouter l'adresse
       vatNumber: user.vatNumber || "",  // Ajouter le numéro TVA
       phoneNumber: user.phoneNumber || "", // Ajouter le numéro de téléphone
+      language: user.language || "fr",
       role: user.role || "user",
   avatarUrl: buildAvatarUrl(req, user.avatarUrl),
   coverUrl: buildAvatarUrl(req, (user as any).coverUrl),
@@ -313,7 +314,8 @@ router.put('/', (async (req: any, res: Response) => {
       address,
       vatNumber,
       phoneNumber,
-      avatarUrl
+      avatarUrl,
+      language
     } = req.body;
 
     let normalizedAvatarUrl: string | null | undefined = undefined;
@@ -339,6 +341,7 @@ router.put('/', (async (req: any, res: Response) => {
         address: sanitizeText(address),
         vatNumber: sanitizeText(vatNumber),
         phoneNumber: sanitizeText(phoneNumber),
+        language: typeof language === 'string' && ['fr', 'en', 'nl'].includes(language) ? language : undefined,
         avatarUrl: normalizedAvatarUrl,
       },
       select: {

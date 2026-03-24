@@ -382,7 +382,7 @@ export const GoogleConnectionCard: React.FC<GoogleConnectionCardProps> = ({ orga
               message="Connexion active"
               description={
                 connectionStatus.accessType === 'personal' 
-                  ? "Votre compte Google personnel est connecté. Vous pouvez utiliser toutes les fonctionnalités Google dans le CRM."
+                  ? "Votre compte Google personnel est connecté. Vous pouvez utiliser toutes les fonctionnalités Google dans le Hive."
                   : "Vous utilisez la connexion Google de votre organisation. Toutes les fonctionnalités Google sont disponibles."
               }
               type="success"
@@ -394,7 +394,7 @@ export const GoogleConnectionCard: React.FC<GoogleConnectionCardProps> = ({ orga
         <div>
           <Alert
             message="Connexion requise"
-            description="Connectez votre compte Google Workspace pour utiliser Gmail, Calendar, Drive et Meet directement dans le CRM."
+            description="Connectez votre compte Google Workspace pour utiliser Gmail, Calendar, Drive et Meet directement dans le Hive."
             type="info"
             showIcon
             style={{ marginBottom: 16 }}

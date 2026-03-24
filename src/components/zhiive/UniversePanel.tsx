@@ -5,6 +5,7 @@ import {
   EnvironmentOutlined, ClockCircleOutlined, HeartOutlined,
   LockOutlined, GiftOutlined,
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { SF } from './ZhiiveTheme';
 import { useZhiiveNav } from '../../contexts/ZhiiveNavContext';
 import { useActiveIdentity } from '../../contexts/ActiveIdentityContext';
@@ -52,13 +53,14 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
   const { feedMode } = useZhiiveNav();
   // 🐝 Identité centralisée — source unique pour l'identité de publication
   const identity = useActiveIdentity();
+  const { t } = useTranslation();
   const { isOrgMode, organization: currentOrganization } = identity;
   const orgLogo = currentOrganization?.logoUrl || null;
   const [activeSection, setActiveSection] = useState<'pulse' | 'events' | 'capsules' | 'orbit'>('pulse');
   const [events, setEvents] = useState<SocialEventData[]>([]);
   const [capsules, setCapsules] = useState<TimeCapsuleData[]>([]);
   const [orbitFriends, setOrbitFriends] = useState<OrbitFriend[]>([]);
-  const [_loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const pulseCanvasRef = useRef<HTMLCanvasElement>(null);
 
   // Event modal
@@ -71,6 +73,11 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
   const [eventSubmitting, setEventSubmitting] = useState(false);
   const [eventVisibility, setEventVisibility] = useState<string>(currentOrganization ? 'IN' : 'ALL');
 
+  // 🐝 Sync visibilité quand le mode change (Bee ↔ Colony)
+  useEffect(() => {
+    setEventVisibility(currentOrganization ? 'IN' : 'ALL');
+  }, [currentOrganization]);
+
   // Capsule modal
   const [capsuleModalOpen, setCapsuleModalOpen] = useState(false);
   const [capsuleContent, setCapsuleContent] = useState('');
@@ -80,16 +87,35 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
   // RSVP tracking
   const [rsvpSet, setRsvpSet] = useState<Set<string>>(new Set());
 
+  // Pulse metrics — computed from real data
+  const [pulseMetrics, setPulseMetrics] = useState({ positive: 0, active: 0, creative: 0, social: 0 });
+
   const fetchData = useCallback(async () => {
     try {
-      const [eventsRes, capsulesRes, orbitRes] = await Promise.all([
+      setLoading(true);
+      const [eventsRes, capsulesRes, orbitRes, pulseRes] = await Promise.all([
         api.get(`/api/zhiive/events?limit=10&mode=${feedMode}`).catch(() => ({ events: [] })),
         api.get(`/api/zhiive/capsules?limit=10&mode=${feedMode}`).catch(() => ({ capsules: [] })),
         api.get(`/api/zhiive/orbit?mode=${feedMode}`).catch(() => ({ friends: [] })),
+        api.get(`/api/zhiive/pulse?mode=${feedMode}`).catch(() => null),
       ]);
-      if (eventsRes?.events) setEvents(eventsRes.events);
+      if (eventsRes?.events) {
+        setEvents(eventsRes.events);
+        // Hydrater le RSVP set depuis les données backend
+        const attending = new Set<string>();
+        eventsRes.events.forEach((e: any) => { if (e.isAttending) attending.add(e.id); });
+        setRsvpSet(attending);
+      }
       if (capsulesRes?.capsules) setCapsules(capsulesRes.capsules);
       if (orbitRes?.friends) setOrbitFriends(orbitRes.friends);
+      if (pulseRes) {
+        setPulseMetrics({
+          positive: pulseRes.positive ?? 50,
+          active: pulseRes.active ?? 30,
+          creative: pulseRes.creative ?? 20,
+          social: pulseRes.social ?? 40,
+        });
+      }
     } catch {
       // Non-blocking
     } finally {
@@ -114,12 +140,12 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
         // 🐝 publishAsOrg piloté par le système d'identité centralisé
         publishAsOrg: identity.publishAsOrg,
       });
-      message.success('Événement créé ! 📅');
+      message.success(t('universe.eventCreated'));
       setEventTitle(''); setEventDesc(''); setEventLocation('');
       setEventStartDate(null); setEventModalOpen(false);
       fetchData();
     } catch {
-      message.error('Erreur lors de la création');
+      message.error(t('universe.creationFailed'));
     } finally {
       setEventSubmitting(false);
     }
@@ -130,14 +156,14 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
       if (rsvpSet.has(eventId)) {
         await api.delete(`/api/zhiive/events/${eventId}/rsvp`);
         setRsvpSet(prev => { const next = new Set(prev); next.delete(eventId); return next; });
-        message.success('Inscription annulée');
+        message.success(t('universe.rsvpCancelled'));
       } else {
         await api.post(`/api/zhiive/events/${eventId}/rsvp`, { status: 'going' });
         setRsvpSet(prev => new Set(prev).add(eventId));
-        message.success('Participation confirmée ! 🎉');
+        message.success(t('universe.attendanceConfirmed'));
       }
     } catch {
-      message.error('Erreur lors de l\'inscription');
+      message.error(t('universe.rsvpFailed'));
     }
   };
 
@@ -149,13 +175,14 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
       await api.post('/api/zhiive/capsules', {
         content: capsuleContent.trim(),
         unlocksAt: capsuleUnlocksAt.toISOString(),
+        publishAsOrg: identity.publishAsOrg,
       });
-      message.success('Capsule temporelle créée ! ⏳');
+      message.success(t('universe.capsuleSealed'));
       setCapsuleContent(''); setCapsuleUnlocksAt(null);
       setCapsuleModalOpen(false);
       fetchData();
     } catch {
-      message.error('Erreur lors de la création');
+      message.error(t('universe.creationFailed'));
     } finally {
       setCapsuleSubmitting(false);
     }
@@ -163,16 +190,16 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
 
   const handleOpenCapsule = (capsule: TimeCapsuleData) => {
     Modal.info({
-      title: '🎁 Capsule Temporelle Ouverte !',
+      title: t('universe.capsuleOpened'),
       content: (
         <div style={{ marginTop: 12 }}>
-          <p style={{ color: SF.textSecondary, marginBottom: 8 }}>De : {capsule.creatorName}</p>
+          <p style={{ color: SF.textSecondary, marginBottom: 8 }}>{t('universe.from', { name: capsule.creatorName })}</p>
           <div style={{ padding: 16, background: SF.bg, borderRadius: 12, fontSize: 14, lineHeight: 1.6 }}>
-            {capsule.content || '(Contenu vide)'}
+            {capsule.content || t('universe.emptyContent')}
           </div>
         </div>
       ),
-      okText: 'Fermer',
+      okText: t('common.close'),
       width: 400,
     });
   };
@@ -269,9 +296,9 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
 
   const sections = [
     { key: 'pulse' as const, label: 'Pulse', icon: '💫', color: SF.primary },
-    { key: 'events' as const, label: 'Events', icon: '📅', color: SF.secondary },
-    { key: 'capsules' as const, label: 'Capsules', icon: '⏳', color: SF.gold },
-    { key: 'orbit' as const, label: 'Orbit', icon: '🪐', color: SF.accent },
+    { key: 'events' as const, label: t('universe.events'), icon: '📅', color: SF.secondary },
+    { key: 'capsules' as const, label: t('universe.capsules'), icon: '⏳', color: SF.gold },
+    { key: 'orbit' as const, label: t('universe.orbit'), icon: '🪐', color: SF.accent },
   ];
 
   return (
@@ -300,6 +327,14 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
         ))}
       </div>
 
+      {/* === LOADING STATE === */}
+      {loading && activeSection !== 'pulse' && (
+        <div style={{ textAlign: 'center', padding: 40 }}>
+          <div style={{ fontSize: 28, marginBottom: 8, animation: 'pulse 1.5s infinite' }}>🌌</div>
+          <div style={{ fontSize: 12, color: SF.textMuted }}>{t('common.loading')}</div>
+        </div>
+      )}
+
       {/* === PULSE — Community Energy Sphere === */}
       {activeSection === 'pulse' && (
         <div>
@@ -319,14 +354,14 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
             boxShadow: SF.shadow, marginBottom: 8,
           }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: SF.text, marginBottom: 8 }}>
-              💫 Énergie de la communauté
+              {t('universe.communityEnergy')}
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {[
-                { emoji: '😊', label: 'Positif', pct: 68, color: SF.success },
-                { emoji: '🔥', label: 'Actif', pct: 42, color: SF.fire },
-                { emoji: '💡', label: 'Créatif', pct: 35, color: SF.gold },
-                { emoji: '🤝', label: 'Social', pct: 55, color: SF.primary },
+                { emoji: '😊', label: t('universe.positive'), pct: pulseMetrics.positive, color: SF.success },
+                { emoji: '🔥', label: t('universe.active'), pct: pulseMetrics.active, color: SF.fire },
+                { emoji: '💡', label: t('universe.creative'), pct: pulseMetrics.creative, color: SF.gold },
+                { emoji: '🤝', label: t('universe.social'), pct: pulseMetrics.social, color: SF.primary },
               ].map(m => (
                 <div key={m.label} style={{
                   flex: '1 0 45%', display: 'flex', alignItems: 'center', gap: 6,
@@ -355,9 +390,9 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
             textAlign: 'center', color: 'white',
           }}>
             <CalendarOutlined style={{ fontSize: 28 }} />
-            <div style={{ fontSize: 14, fontWeight: 700, marginTop: 6 }}>Créer un événement</div>
+            <div style={{ fontSize: 14, fontWeight: 700, marginTop: 6 }}>{t('universe.createEvent')}</div>
             <div style={{ fontSize: 11, opacity: 0.9, marginTop: 2, marginBottom: 8 }}>
-              Meetups, ateliers, job fairs...
+              {t('universe.meetupsWorkshops')}
             </div>
             <div
               onClick={() => setEventModalOpen(true)}
@@ -365,7 +400,7 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
               padding: '6px 18px', borderRadius: 20, display: 'inline-block',
               background: 'rgba(255,255,255,0.25)', fontWeight: 700, fontSize: 12, cursor: 'pointer',
             }}>
-              📅 Créer
+              📅 Create
             </div>
           </div>
 
@@ -375,30 +410,30 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
             onCancel={() => setEventModalOpen(false)}
             onOk={handleCreateEvent}
             confirmLoading={eventSubmitting}
-            title="📅 Créer un événement"
-            okText="Créer"
-            cancelText="Annuler"
+            title={t('universe.createEvent')}
+            okText={t('common.create')}
+            cancelText={t('common.cancel')}
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
-              <Input value={eventTitle} onChange={e => setEventTitle(e.target.value)} placeholder="Titre de l'événement" />
-              <Input.TextArea value={eventDesc} onChange={e => setEventDesc(e.target.value)} placeholder="Description..." rows={3} />
+              <Input value={eventTitle} onChange={e => setEventTitle(e.target.value)} placeholder={t('universe.eventTitle')} />
+              <Input.TextArea value={eventDesc} onChange={e => setEventDesc(e.target.value)} placeholder={t('universe.description')} rows={3} />
               <Select value={eventType} onChange={setEventType} style={{ width: '100%' }} options={[
-                { value: 'meetup', label: '🤝 Meetup' },
-                { value: 'workshop', label: '🎓 Atelier' },
-                { value: 'jobfair', label: '💼 Job Fair' },
-                { value: 'openday', label: '🏠 Portes ouvertes' },
-                { value: 'other', label: '📅 Autre' },
+                { value: 'meetup', label: t('universe.meetup') },
+                { value: 'workshop', label: t('universe.workshop') },
+                { value: 'jobfair', label: t('universe.jobFair') },
+                { value: 'openday', label: t('universe.openDay') },
+                { value: 'other', label: t('universe.other') },
               ]} />
-              <Input value={eventLocation} onChange={e => setEventLocation(e.target.value)} prefix={<EnvironmentOutlined />} placeholder="Lieu" />
-              <DatePicker value={eventStartDate} onChange={setEventStartDate} showTime placeholder="Date et heure" style={{ width: '100%' }} />
+              <Input value={eventLocation} onChange={e => setEventLocation(e.target.value)} prefix={<EnvironmentOutlined />} placeholder={t('universe.location')} />
+              <DatePicker value={eventStartDate} onChange={setEventStartDate} showTime placeholder={t('universe.dateTime')} style={{ width: '100%' }} />
 
               {/* Visibility selector */}
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {(currentOrganization ? ['IN', 'ALL', 'OUT'] : ['ALL', 'OUT']).map(v => {
                   const labels: Record<string, { icon: string; label: string; color: string }> = {
-                    IN: { icon: '👥', label: 'Organisation', color: '#1890ff' },
+                    IN: { icon: '⬡', label: 'Colony', color: '#1890ff' },
                     ALL: { icon: '🌐', label: 'Public', color: '#52c41a' },
-                    OUT: { icon: '🔒', label: 'Privé', color: '#8c8c8c' },
+                    OUT: { icon: '🔒', label: 'Private', color: '#8c8c8c' },
                   };
                   const opt = labels[v];
                   const active = eventVisibility === v;
@@ -433,7 +468,7 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: SF.text }}>{event.title}</div>
                     <div style={{ fontSize: 11, color: SF.textSecondary }}>
-                      par {event.organizerName}
+                      {t('universe.by', { name: event.organizerName })}
                     </div>
                   </div>
                 </div>
@@ -441,7 +476,7 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: SF.textSecondary, marginBottom: 8 }}>
                   <div><ClockCircleOutlined /> {new Date(event.startDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>
                   {event.location && <div><EnvironmentOutlined /> {event.location}</div>}
-                  <div><TeamOutlined /> {event.attendeesCount} participant(s){event.maxAttendees ? ` / ${event.maxAttendees}` : ''}</div>
+                  <div><TeamOutlined /> {t('universe.attendees', { count: event.attendeesCount })}{event.maxAttendees ? ` / ${event.maxAttendees}` : ''}</div>
                 </div>
 
                 <div
@@ -453,12 +488,12 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
                   fontWeight: 700,
                   fontSize: 12, cursor: 'pointer',
                 }}>
-                  {rsvpSet.has(event.id) ? '✓ Inscrit(e) (annuler)' : 'Participer'}
+                  {rsvpSet.has(event.id) ? t('universe.going') : t('universe.attend')}
                 </div>
               </div>
             </div>
           )) : (
-            <EmptyUniverse icon="📅" title="Aucun événement" subtitle="Organisez le premier événement de votre communauté !" />
+            <EmptyUniverse icon="📅" title={t('universe.noEvents')} subtitle={t('universe.hostFirstEvent')} />
           )}
         </div>
       )}
@@ -472,9 +507,9 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
             textAlign: 'center',
           }}>
             <LockOutlined style={{ fontSize: 28, color: SF.text }} />
-            <div style={{ fontSize: 14, fontWeight: 700, color: SF.text, marginTop: 6 }}>Capsule Temporelle</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: SF.text, marginTop: 6 }}>{t('universe.timeCapsule')}</div>
             <div style={{ fontSize: 11, color: SF.text, opacity: 0.7, marginTop: 2, marginBottom: 8 }}>
-              Envoyez un message vers le futur !
+              {t('universe.sendToFuture')}
             </div>
             <div
               onClick={() => setCapsuleModalOpen(true)}
@@ -483,7 +518,7 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
               background: 'rgba(255,255,255,0.5)', fontWeight: 700, fontSize: 12,
               cursor: 'pointer', color: SF.text,
             }}>
-              ⏳ Créer une capsule
+              {t('universe.createCapsule')}
             </div>
           </div>
 
@@ -493,15 +528,15 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
             onCancel={() => setCapsuleModalOpen(false)}
             onOk={handleCreateCapsule}
             confirmLoading={capsuleSubmitting}
-            title="⏳ Nouvelle Capsule Temporelle"
-            okText="Sceller"
-            cancelText="Annuler"
+            title={t('universe.newTimeCapsule')}
+            okText={t('universe.seal')}
+            cancelText={t('common.cancel')}
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
               <Input.TextArea
                 value={capsuleContent}
                 onChange={e => setCapsuleContent(e.target.value)}
-                placeholder="Votre message pour le futur..."
+                placeholder={t('universe.futureMessage')}
                 rows={4}
                 maxLength={5000}
                 showCount
@@ -509,7 +544,7 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
               <DatePicker
                 value={capsuleUnlocksAt}
                 onChange={setCapsuleUnlocksAt}
-                placeholder="Date de déverrouillage"
+                placeholder={t('universe.unlockDate')}
                 style={{ width: '100%' }}
               />
             </div>
@@ -536,15 +571,15 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
                     {cap.isUnlocked ? '🎁' : '🔒'}
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: SF.text }}>{cap.content ? (cap.content.length > 40 ? cap.content.substring(0, 40) + '...' : cap.content) : 'Capsule mystère'}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: SF.text }}>{cap.content ? (cap.content.length > 40 ? cap.content.substring(0, 40) + '...' : cap.content) : t('universe.mysteryCapsule')}</div>
                     <div style={{ fontSize: 11, color: SF.textSecondary }}>
-                      De {cap.creatorName}
+                      {t('universe.from', { name: cap.creatorName })}
                       {cap.recipientName && ` → ${cap.recipientName}`}
                     </div>
                     <div style={{ fontSize: 10, color: cap.isUnlocked ? SF.gold : SF.textMuted, marginTop: 2 }}>
                       {cap.isUnlocked
-                        ? '✨ Déverrouillée ! Ouvrez-la !'
-                        : `🔒 Se déverrouille dans ${daysLeft} jour(s)`}
+                        ? t('universe.unlocked')
+                        : t('universe.unlocksIn', { days: daysLeft })}
                     </div>
                   </div>
                 </div>
@@ -557,13 +592,13 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
                     background: SF.gradientGold, color: SF.text, fontWeight: 700,
                     fontSize: 12, cursor: 'pointer',
                   }}>
-                    <GiftOutlined /> Ouvrir la capsule
+                    <GiftOutlined /> {t('universe.openCapsule')}
                   </div>
                 )}
               </div>
             );
           }) : (
-            <EmptyUniverse icon="⏳" title="Aucune capsule" subtitle="Créez une capsule temporelle pour une surprise future !" />
+            <EmptyUniverse icon="⏳" title={t('universe.noCapsules')} subtitle={t('universe.createCapsuleHint')} />
           )}
         </div>
       )}
@@ -587,7 +622,7 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
             >
               {isOrgMode && !orgLogo && (currentOrganization?.name?.[0]?.toUpperCase() || 'O')}
             </Avatar>
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'white', marginTop: 4 }}>{isOrgMode ? currentOrganization?.name : 'Vous'}</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'white', marginTop: 4 }}>{isOrgMode ? currentOrganization?.name : t('universe.you')}</div>
 
             {/* Orbital friends */}
             {orbitFriends.slice(0, 8).map((f, i) => {
@@ -617,7 +652,7 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
 
           {/* Friends list */}
           <div style={{ fontSize: 13, fontWeight: 700, color: SF.text, marginBottom: 8 }}>
-            🪐 Votre constellation ({orbitFriends.length})
+            {t('universe.yourConstellation', { count: orbitFriends.length })}
           </div>
           {orbitFriends.length > 0 ? orbitFriends.map(f => (
             <div key={f.id} style={{
@@ -640,13 +675,13 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: SF.text }}>{f.name}</div>
                 <div style={{ fontSize: 10, color: SF.textMuted }}>
-                  Proximité: {f.interactionScore}%
+                  {t('universe.proximity', { score: f.interactionScore })}
                 </div>
               </div>
               <HeartOutlined style={{ color: SF.accent, fontSize: 14 }} />
             </div>
           )) : (
-            <EmptyUniverse icon="🪐" title="Votre orbite est vide" subtitle="Ajoutez des amis pour voir votre constellation !" />
+            <EmptyUniverse icon="🪐" title={t('universe.orbitEmpty')} subtitle={t('universe.addFriendsHint')} />
           )}
         </div>
       )}

@@ -279,7 +279,7 @@ const RolesSettings: React.FC = () => {
           <div>
             <div style={{ fontSize: 20, fontWeight: 700, color: FB.text }}>Rôles & Permissions</div>
             <div style={{ fontSize: 14, color: FB.textSecondary }}>
-              Gérez les rôles et leurs permissions pour {currentOrganization?.name || 'votre organisation'}
+              Gérez les rôles et leurs permissions pour {currentOrganization?.name || 'votre Colony'}
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

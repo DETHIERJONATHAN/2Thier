@@ -361,7 +361,7 @@ const Sidebar = ({ modules, hasFeature }: { modules: Array<{ key?: string; id?: 
                 }
               >
                 {renderIcon('FaTachometerAlt')}
-                <span>Tableau de bord</span>
+                <span>Panorama</span>
               </NavLink>
               
               <NavLink
@@ -627,16 +627,16 @@ const Sidebar = ({ modules, hasFeature }: { modules: Array<{ key?: string; id?: 
             {/* Affichage de l'organisation et du rôle, en utilisant les données de useAuth */}
             {currentOrganization && currentOrganization.id !== 'all' ? (
               <p className="text-xs mt-1">
-                <span className="font-semibold">Organisation :</span> {currentOrganization.name}
+                <span className="font-semibold">Colony :</span> {currentOrganization.name}
               </p>
             ) : isSuperAdmin && !isImpersonating ? (
               <p className="text-xs mt-1">
-                <span className="font-semibold">Organisation :</span> Vue Globale
+                <span className="font-semibold">Colony :</span> Vue Globale
               </p>
             ) : null}
 
             <p className="text-xs mt-1">
-              <span className="font-semibold">Rôle :</span> {userRole || 'N/A'}
+              <span className="font-semibold">Rôle :</span> {userRole === 'admin' ? 'Keeper' : userRole || 'N/A'}
             </p>
 
             {isImpersonating && originalUser && (

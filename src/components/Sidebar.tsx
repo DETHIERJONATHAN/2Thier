@@ -156,7 +156,7 @@ const Sidebar = ({ modules }: { modules: Array<ModuleNav> }) => {
   
   // Liens curatés et stables pour Devis1Minute-ADMIN (ne dépendent pas des modules dynamiques)
   const d1mAdminLinks = useMemo(() => ([
-    { key: 'd1m-admin-dashboard', label: 'Dashboard', icon: 'FaTachometerAlt', route: '/devis1minute/admin/dashboard' },
+    { key: 'd1m-admin-dashboard', label: 'Panorama', icon: 'FaTachometerAlt', route: '/devis1minute/admin/dashboard' },
     { key: 'd1m-admin-intake', label: 'Intake', icon: 'FaInbox', route: '/devis1minute/admin/intake' },
     { key: 'd1m-admin-dispatch', label: 'Dispatch', icon: 'FaProjectDiagram', route: '/devis1minute/admin/dispatch' },
     { key: 'd1m-admin-integrations', label: 'Intégrations', icon: 'FaPlug', route: '/devis1minute/admin/integrations' },

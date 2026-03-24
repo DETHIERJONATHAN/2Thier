@@ -85,22 +85,27 @@ router.get('/stories/feed', authenticateToken, async (req: Request, res: Respons
       },
       include: {
         author: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+        organization: { select: { id: true, name: true, logoUrl: true } },
         views: { where: { viewerId: userId }, select: { id: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
 
     res.json({
-      stories: stories.map(s => ({
-        id: s.id,
-        userId: s.authorId,
-        userName: `${s.author.firstName} ${s.author.lastName}`.trim(),
-        avatarUrl: s.author.avatarUrl,
-        mediaUrl: s.mediaUrl,
-        mediaType: s.mediaType,
-        viewed: s.views.length > 0,
-        createdAt: s.createdAt,
-      })),
+      stories: stories.map(s => {
+        const isOrg = s.publishAsOrg && s.organization;
+        return {
+          id: s.id,
+          userId: s.authorId,
+          userName: isOrg ? s.organization!.name : `${s.author.firstName} ${s.author.lastName}`.trim(),
+          avatarUrl: isOrg ? (s.organization!.logoUrl || null) : s.author.avatarUrl,
+          publishAsOrg: s.publishAsOrg,
+          mediaUrl: s.mediaUrl,
+          mediaType: s.mediaType,
+          viewed: s.views.length > 0,
+          createdAt: s.createdAt,
+        };
+      }),
     });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -111,7 +116,7 @@ router.post('/stories', authenticateToken, async (req: Request, res: Response) =
   try {
     const userId = (req as any).user.id;
     const orgId = (req as any).user.organizationId;
-    const { mediaUrl, mediaType, text, visibility } = req.body;
+    const { mediaUrl, mediaType, text, visibility, publishAsOrg } = req.body;
 
     const story = await db.story.create({
       data: {
@@ -121,6 +126,7 @@ router.post('/stories', authenticateToken, async (req: Request, res: Response) =
         mediaType: mediaType || 'image',
         caption: text,
         visibility: ['ALL', 'IN', 'OUT'].includes(visibility) ? visibility : 'ALL',
+        publishAsOrg: publishAsOrg && !!orgId ? true : false,
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       },
     });
@@ -651,6 +657,9 @@ router.get('/sparks', authenticateToken, async (req: Request, res: Response) => 
       whereClause.organizationId = orgId;
     }
 
+    // Exclure les sparks que l'utilisateur a dismissés
+    whereClause.dismissals = { none: { userId } };
+
     const sparks = await db.spark.findMany({
       where: whereClause,
       orderBy: { createdAt: 'desc' },
@@ -727,6 +736,24 @@ router.post('/sparks/:sparkId/vote', authenticateToken, async (req: Request, res
     });
 
     res.json({ sparkCount: spark.sparkCount, isRevealed: spark.isRevealed });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /sparks/:sparkId/dismiss — Masquer un spark du feed (persisté en DB)
+router.post('/sparks/:sparkId/dismiss', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+    const sparkId = req.params.sparkId;
+
+    await db.sparkDismiss.upsert({
+      where: { sparkId_userId: { sparkId, userId } },
+      create: { sparkId, userId },
+      update: {},
+    });
+
+    res.json({ dismissed: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -864,10 +891,41 @@ router.get('/quests/available', authenticateToken, async (req: Request, res: Res
   }
 });
 
+// ── PULSE (Community Energy Metrics) ────────────────────────────────────────
+
+router.get('/pulse', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const orgId = (req as any).user.organizationId;
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const whereOrg = orgId ? { organizationId: orgId } : {};
+
+    // Count recent activity in parallel
+    const [postsCount, reactionsCount, commentsCount, storiesCount] = await Promise.all([
+      db.wallPost.count({ where: { ...whereOrg, createdAt: { gte: sevenDaysAgo } } }),
+      db.reaction.count({ where: { createdAt: { gte: sevenDaysAgo }, post: whereOrg } }),
+      db.comment.count({ where: { createdAt: { gte: sevenDaysAgo }, post: whereOrg } }),
+      db.story.count({ where: { ...whereOrg, createdAt: { gte: sevenDaysAgo } } }),
+    ]);
+
+    // Compute metrics as percentages (capped at 100)
+    const totalActivity = postsCount + reactionsCount + commentsCount + storiesCount;
+    const positive = Math.min(100, totalActivity > 0 ? Math.round((reactionsCount / Math.max(postsCount, 1)) * 25) : 0);
+    const active = Math.min(100, Math.round(Math.min(postsCount, 40) * 2.5));
+    const creative = Math.min(100, Math.round(Math.min(storiesCount, 20) * 5));
+    const social = Math.min(100, totalActivity > 0 ? Math.round((commentsCount / Math.max(postsCount, 1)) * 25) : 0);
+
+    res.json({ positive, active, creative, social });
+  } catch (e: any) {
+    res.json({ positive: 50, active: 30, creative: 20, social: 40 });
+  }
+});
+
 // ── EVENTS ────────────────────────────────────────────────────
 
 router.get('/events', authenticateToken, async (req: Request, res: Response) => {
   try {
+    const userId = (req as any).user.id;
     const orgId = (req as any).user.organizationId;
     const limit = Math.min(parseInt(req.query.limit as string) || 10, 30);
     const mode = (req.query.mode as string) || 'org';
@@ -892,6 +950,7 @@ router.get('/events', authenticateToken, async (req: Request, res: Response) => 
       include: {
         creator: { select: { firstName: true, lastName: true, avatarUrl: true } },
         organization: { select: { id: true, name: true, logoUrl: true } },
+        attendees: { where: { userId }, select: { id: true }, take: 1 },
         _count: { select: { attendees: true } },
       },
     });
@@ -913,6 +972,7 @@ router.get('/events', authenticateToken, async (req: Request, res: Response) => 
           organizerAvatar: isOrg ? (e.organization!.logoUrl || null) : e.creator.avatarUrl,
           publishAsOrg: e.publishAsOrg,
           coverImage: e.coverUrl,
+          isAttending: e.attendees.length > 0,
         };
       }),
     });
@@ -1020,7 +1080,8 @@ router.get('/capsules', authenticateToken, async (req: Request, res: Response) =
 router.post('/capsules', authenticateToken, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.id;
-    const { content, mediaUrl, mediaType, unlocksAt, recipientId } = req.body;
+    const orgId = (req as any).user.organizationId;
+    const { content, mediaUrl, mediaType, unlocksAt, recipientId, publishAsOrg } = req.body;
 
     if (!unlocksAt) return res.status(400).json({ error: 'Date de déverrouillage requise' });
 
@@ -1029,6 +1090,7 @@ router.post('/capsules', authenticateToken, async (req: Request, res: Response) 
         content, mediaUrl, mediaType,
         unlocksAt: new Date(unlocksAt),
         authorId: userId,
+        organizationId: publishAsOrg && orgId ? orgId : null,
         recipientId: recipientId || null,
       },
     });
@@ -1133,6 +1195,139 @@ router.get('/gamification/me', authenticateToken, async (req: Request, res: Resp
         category: b.category,
         earned: badges.some(ub => ub.badgeId === b.id),
       })),
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── SAVED REELS (sauvegarder/retirer un post) ──────────────────
+
+// GET /saved-reels — Liste des posts sauvegardés par l'utilisateur
+router.get('/saved-reels', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+
+    const saved = await db.savedReel.findMany({
+      where: { userId },
+      select: { postId: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json({ savedPostIds: saved.map(s => s.postId) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /saved-reels/:postId — Sauvegarder un post
+router.post('/saved-reels/:postId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+    const postId = req.params.postId;
+
+    await db.savedReel.upsert({
+      where: { postId_userId: { postId, userId } },
+      create: { postId, userId },
+      update: {},
+    });
+
+    res.json({ saved: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /saved-reels/:postId — Retirer un post des sauvegardés
+router.delete('/saved-reels/:postId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+    const postId = req.params.postId;
+
+    await db.savedReel.deleteMany({
+      where: { postId, userId },
+    });
+
+    res.json({ saved: false });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── COMMENT LIKES (like sur un commentaire) ──────────────────
+
+// POST /comments/liked — Récupérer les IDs de commentaires likés par l'utilisateur (doit être AVANT :commentId)
+router.post('/comments/liked', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+    const { commentIds } = req.body;
+    if (!Array.isArray(commentIds)) return res.json({ likedIds: [] });
+
+    const likes = await db.commentLike.findMany({
+      where: { userId, commentId: { in: commentIds } },
+      select: { commentId: true },
+    });
+
+    res.json({ likedIds: likes.map(l => l.commentId) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /comments/:commentId/like — Toggle like sur un commentaire
+router.post('/comments/:commentId/like', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+    const commentId = req.params.commentId;
+
+    const existing = await db.commentLike.findUnique({
+      where: { commentId_userId: { commentId, userId } },
+    });
+
+    if (existing) {
+      await db.commentLike.delete({ where: { id: existing.id } });
+      const count = await db.commentLike.count({ where: { commentId } });
+      return res.json({ liked: false, likesCount: count });
+    }
+
+    await db.commentLike.create({ data: { commentId, userId } });
+    const count = await db.commentLike.count({ where: { commentId } });
+    res.json({ liked: true, likesCount: count });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── QUEST PROGRESS (avancement des quêtes) ──────────────────
+
+// POST /quests/:questId/progress — Incrémenter la progression d'une quête
+router.post('/quests/:questId/progress', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+    const questId = req.params.questId;
+
+    const quest = await db.quest.findUnique({ where: { id: questId } });
+    if (!quest) return res.status(404).json({ error: 'Quête introuvable' });
+
+    const progress = await db.questProgress.upsert({
+      where: { questId_userId: { questId, userId } },
+      create: { questId, userId, currentCount: 1 },
+      update: { currentCount: { increment: 1 } },
+    });
+
+    const isCompleted = progress.currentCount >= quest.targetCount;
+    if (isCompleted && !progress.isCompleted) {
+      await db.questProgress.update({
+        where: { id: progress.id },
+        data: { isCompleted: true, completedAt: new Date() },
+      });
+    }
+
+    res.json({
+      currentCount: progress.currentCount,
+      targetCount: quest.targetCount,
+      isCompleted,
+      rewardPoints: isCompleted ? quest.rewardPoints : 0,
     });
   } catch (e: any) {
     res.status(500).json({ error: e.message });

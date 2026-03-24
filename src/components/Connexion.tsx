@@ -29,8 +29,8 @@ export default function Connexion() {
   };
 
   const features = [
-    { icon: <TeamOutlined style={{ fontSize: 22, color: '#93c5fd' }} />, title: 'Connectez vos équipes', desc: 'Collaborez en temps réel avec vos clients et partenaires.' },
-    { icon: <RocketOutlined style={{ fontSize: 22, color: '#93c5fd' }} />, title: 'Boostez votre activité', desc: 'Devis, suivi client, facturation — tout en un.' },
+    { icon: <TeamOutlined style={{ fontSize: 22, color: '#93c5fd' }} />, title: 'Votre Crew, connectée', desc: 'Collaborez en temps réel au sein de votre Colony.' },
+    { icon: <RocketOutlined style={{ fontSize: 22, color: '#93c5fd' }} />, title: 'Du Nectar au Gold', desc: 'Devis, suivi, facturation — tout dans le Hive.' },
     { icon: <SafetyOutlined style={{ fontSize: 22, color: '#93c5fd' }} />, title: 'Sécurisé & fiable', desc: 'Données protégées, hébergées en Europe.' },
   ];
 
@@ -108,8 +108,8 @@ export default function Connexion() {
 
             <div style={{ background: '#fff', borderRadius: 20, padding: '40px 36px', boxShadow: '0 4px 24px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9' }}>
               <div style={{ textAlign: 'center', marginBottom: 32 }}>
-                <Title level={2} style={{ margin: '0 0 8px 0', fontSize: 26, color: '#111827' }}>Bon retour 👋</Title>
-                <Text style={{ color: '#9ca3af', fontSize: 14 }}>Connectez-vous à votre espace</Text>
+                <Title level={2} style={{ margin: '0 0 8px 0', fontSize: 26, color: '#111827' }}>Welcome back 👋</Title>
+                <Text style={{ color: '#9ca3af', fontSize: 14 }}>Retrouvez votre Hive</Text>
               </div>
 
               {error && (
@@ -189,7 +189,7 @@ export default function Connexion() {
                   fontSize: 15,
                 }}
               >
-                Créer un compte gratuitement
+                Rejoindre le Hive
               </Button>
             </div>
 

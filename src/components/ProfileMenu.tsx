@@ -80,7 +80,7 @@ const ProfileMenu = () => {
               >
                 <div className="flex items-center">
                   <Building2 className="mr-2 h-4 w-4" />
-                  <span>Changer d'organisation</span>
+                  <span>Changer de Colony</span>
                 </div>
                 <svg 
                   className={`h-4 w-4 transition-transform ${showOrgSelector ? 'rotate-180' : ''}`}

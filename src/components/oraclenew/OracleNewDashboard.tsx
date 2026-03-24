@@ -79,7 +79,7 @@ const OracleNewDashboard: React.FC = () => {
         id: 'current-organization',
         label: 'Organisation courante',
         value: currentOrganization?.name ?? 'Aucune',
-        helper: currentOrganization ? 'Contexte CRM synchronisé' : 'Sélectionnez une organisation',
+        helper: currentOrganization ? 'Contexte synchronisé' : 'Sélectionnez une organisation',
         icon: <DeploymentUnitOutlined className="text-2xl" />,
         gradient: 'from-amber-400/80 via-orange-500 to-rose-600',
       },
@@ -104,7 +104,7 @@ const OracleNewDashboard: React.FC = () => {
           Pilotage intelligent des modules Oracle
         </h2>
         <p className="max-w-3xl text-sm text-white/60">
-          Visualisez en temps réel l'activation de vos modules CRM, repérez les fonctionnalités à activer
+          Visualisez en temps réel l'activation de vos modules, repérez les fonctionnalités à activer
           et maintenez l'alignement avec votre organisation.
         </p>
       </section>

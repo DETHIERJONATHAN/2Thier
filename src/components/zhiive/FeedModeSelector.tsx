@@ -14,8 +14,8 @@ const FeedModeSelector: React.FC = () => {
   if (!currentOrganization) return null;
 
   const modes: { key: FeedMode; label: string; icon: string }[] = [
-    { key: 'personal', label: 'Personnel', icon: '👤' },
-    { key: 'org', label: 'Organisation', icon: '🏢' },
+    { key: 'personal', label: 'My Hive', icon: '🐝' },
+    { key: 'org', label: 'Colony', icon: '⬡' },
   ];
 
   return (

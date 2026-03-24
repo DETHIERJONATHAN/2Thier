@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Avatar, Button, Tooltip, Modal, Spin } from 'antd';
 import {
   PhoneOutlined,
@@ -78,6 +79,8 @@ const ICE_SERVERS: RTCConfiguration = {
 const VideoCallModal: React.FC<VideoCallModalProps> = ({
   callId, callType, isIncoming, conversationName, api, userId, onClose,
 }) => {
+  const { t } = useTranslation();
+
   // State
   const [callData, setCallData] = useState<CallData | null>(null);
   const [status, setStatus] = useState<'ringing' | 'active' | 'ended'>('ringing');
@@ -385,7 +388,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
     if (isRecording && audioChunksRef.current.length > 0) {
       setIsTranscribing(true);
       try {
-        const transcriptionText = `Réunion ${callType === 'video' ? 'vidéo' : 'audio'} avec ${conversationName} - Durée: ${formatDuration(callDuration)}. [Enregistrement audio capturé — transcription par Gemini AI]`;
+        const transcriptionText = `Meeting ${callType === 'video' ? 'video' : 'audio'} with ${conversationName} - Duration: ${formatDuration(callDuration)}. [Audio recording captured — Hive Mind transcription]`;
         const result = await api.post(`/api/calls/${callId}/transcribe`, {
           transcription: transcriptionText,
         }) as any;
@@ -565,7 +568,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
               {callData?.initiator ? `${callData.initiator.firstName} ${callData.initiator.lastName}` : conversationName}
             </div>
             <div style={{ color: COLORS.textDim, fontSize: 14, marginTop: 4 }}>
-              {callType === 'video' ? '📹 Appel vidéo entrant...' : '📞 Appel audio entrant...'}
+              {callType === 'video' ? t('videocall.incomingVideoCall') : t('videocall.incomingAudioCall')}
             </div>
           </div>
 
@@ -611,24 +614,24 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
     return (
       <Modal
         open
-        title={<span><FileTextOutlined /> Appel terminé — {conversationName}</span>}
+        title={<span><FileTextOutlined /> {t('videocall.callEndedWith', { name: conversationName })}</span>}
         onCancel={onClose}
         footer={[
-          <Button key="close" type="primary" onClick={onClose}>Fermer</Button>,
+          <Button key="close" type="primary" onClick={onClose}>Close</Button>,
         ]}
         width={600}
       >
         <div style={{ padding: '12px 0' }}>
           <div style={{ color: '#65676b', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
             <PhoneOutlined style={{ transform: 'rotate(135deg)', color: COLORS.red }} />
-            <span>Durée: {formatDuration(callDuration)}</span>
+            <span>{t('videocall.duration', { duration: formatDuration(callDuration) })}</span>
           </div>
 
           {isTranscribing && (
             <div style={{ textAlign: 'center', padding: 20 }}>
               <Spin indicator={<LoadingOutlined style={{ fontSize: 32, color: COLORS.blue }} />} />
               <div style={{ marginTop: 12, color: '#65676b' }}>
-                Gemini AI analyse la réunion et génère le compte-rendu...
+                {t('videocall.analyzingMeeting')}
               </div>
             </div>
           )}
@@ -639,7 +642,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
               border: '1px solid #cce0ff',
             }}>
               <div style={{ fontWeight: 600, marginBottom: 8, color: COLORS.blue, display: 'flex', alignItems: 'center', gap: 6 }}>
-                🤖 Compte-rendu Gemini AI
+                {t('videocall.hiveMindSummary')}
               </div>
               <div style={{ whiteSpace: 'pre-wrap', fontSize: 14, lineHeight: 1.6, color: '#333' }}>
                 {meetingSummary}
@@ -649,9 +652,9 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
 
           {!isTranscribing && !meetingSummary && !isRecording && (
             <div style={{ color: '#65676b', textAlign: 'center', padding: 20 }}>
-              L'enregistrement Gemini n'était pas activé pendant cet appel.
+              {t('videocall.recordingNotEnabled')}
               <br />
-              <span style={{ fontSize: 12 }}>Activez le bouton 🔴 REC pendant un appel pour obtenir un compte-rendu automatique.</span>
+              <span style={{ fontSize: 12 }}>{t('videocall.enableRecHint')}</span>
             </div>
           )}
         </div>
@@ -691,11 +694,11 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
             background: COLORS.green, color: '#fff', padding: '2px 10px',
             borderRadius: 12, fontSize: 12, fontWeight: 600,
           }}>
-            {callType === 'video' ? '📹 Vidéo' : '📞 Audio'}
+            {callType === 'video' ? t('videocall.video') : t('videocall.audio')}
           </span>
           {remoteParticipants.length > 0 && (
             <span style={{ color: COLORS.textDim, fontSize: 13 }}>
-              {remoteParticipants.length + 1} participant{remoteParticipants.length > 0 ? 's' : ''}
+              {t('videocall.participants', { count: remoteParticipants.length + 1 })}
             </span>
           )}
         </div>
@@ -727,7 +730,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
             color: '#fff', padding: '3px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500,
             display: 'flex', alignItems: 'center', gap: 6,
           }}>
-            Vous {isMuted && '🔇'}
+            {t('videocall.you')} {isMuted && '🔇'}
             {/* Mic level indicator */}
             {!isMuted && (
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 1, height: 14 }}>
@@ -780,7 +783,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
           }}>
             <Spin indicator={<LoadingOutlined spin style={{ fontSize: 32, color: COLORS.blue }} />} />
             <span style={{ color: COLORS.textDim, fontSize: 14 }}>
-              En attente des participants...
+              {t('videocall.waitingParticipants')}
             </span>
           </div>
         )}
@@ -811,12 +814,12 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
             ))}
           </div>
           <span style={{ fontSize: 9, color: COLORS.textDim }}>
-            {isMuted ? 'MUTÉ' : micLevel > 5 ? 'MIC OK' : 'PAS DE SON'}
+            {isMuted ? t('videocall.muted') : micLevel > 5 ? t('videocall.micOk') : t('videocall.noSound')}
           </span>
         </div>
 
         {/* Speaker test button */}
-        <Tooltip title="Tester les haut-parleurs (joue un son court)">
+        <Tooltip title={t('videocall.testSpeakers')}>
           <div onClick={() => {
             try {
               const ctx = new AudioContext();
@@ -843,7 +846,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
           </div>
         </Tooltip>
 
-        <Tooltip title={isMuted ? 'Activer le micro' : 'Couper le micro'}>
+        <Tooltip title={isMuted ? t('videocall.unmute') : t('videocall.mute')}>
           <div onClick={toggleMute} style={{
             width: 52, height: 52, borderRadius: '50%',
             background: isMuted ? COLORS.red : 'rgba(255,255,255,0.15)',
@@ -857,7 +860,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
         </Tooltip>
 
         {callType === 'video' && (
-          <Tooltip title={isVideoOff ? 'Allumer la caméra' : 'Éteindre la caméra'}>
+          <Tooltip title={isVideoOff ? t('videocall.cameraOn') : t('videocall.cameraOff')}>
             <div onClick={toggleVideo} style={{
               width: 52, height: 52, borderRadius: '50%',
               background: isVideoOff ? COLORS.red : 'rgba(255,255,255,0.15)',
@@ -871,7 +874,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
           </Tooltip>
         )}
 
-        <Tooltip title={isScreenSharing ? 'Arrêter le partage' : 'Partager l\'écran'}>
+        <Tooltip title={isScreenSharing ? t('videocall.stopSharing') : t('videocall.shareScreen')}>
           <div onClick={toggleScreenShare} style={{
             width: 52, height: 52, borderRadius: '50%',
             background: isScreenSharing ? COLORS.blue : 'rgba(255,255,255,0.15)',
@@ -885,7 +888,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
         </Tooltip>
 
         {/* Recording toggle */}
-        <Tooltip title={isRecording ? 'Arrêter l\'enregistrement Gemini' : 'Activer l\'enregistrement Gemini (compte-rendu IA)'}>
+        <Tooltip title={isRecording ? t('videocall.stopRecording') : t('videocall.startRecording')}>
           <div onClick={toggleRecording} style={{
             width: 52, height: 52, borderRadius: '50%',
             background: isRecording ? '#e53935' : 'rgba(255,255,255,0.15)',
@@ -913,7 +916,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
         </Tooltip>
 
         {/* End call */}
-        <Tooltip title="Raccrocher">
+        <Tooltip title={t('videocall.hangUp')}>
           <div onClick={leaveCall} style={{
             width: 62, height: 52, borderRadius: 26,
             background: COLORS.red, display: 'flex', alignItems: 'center', justifyContent: 'center',

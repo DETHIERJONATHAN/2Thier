@@ -175,7 +175,7 @@ export const useGoogleCalendar = (
           `Téléphone: ${lead.data.phone}\n` +
           `Email: ${lead.data.email}\n` +
           `Source: ${lead.source}\n\n` +
-          `RDV programmé via CRM pendant appel téléphonique.`,
+          `RDV programmé via Zhiive pendant appel téléphonique.`,
         start: slot.start,
         end: meetingDetails.duration 
           ? dayjs(slot.start).add(meetingDetails.duration, 'minute').toDate()

@@ -8,6 +8,7 @@ import {
   CloseOutlined, SendOutlined, LoadingOutlined, DeleteOutlined,
   BookOutlined, BookFilled, RetweetOutlined, CopyOutlined,
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { useZhiiveNav } from '../../contexts/ZhiiveNavContext';
 import { useActiveIdentity } from '../../contexts/ActiveIdentityContext';
 
@@ -42,6 +43,7 @@ interface ReelsPanelProps {
 }
 
 const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
+  const { t } = useTranslation();
   const { feedMode } = useZhiiveNav();
   // 🐝 Identité centralisée — source unique pour l'identité de publication
   const identity = useActiveIdentity();
@@ -66,6 +68,11 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [reelVisibility, setReelVisibility] = useState<string>(currentOrganization ? 'IN' : 'ALL');
 
+  // 🐝 Sync visibilité quand le mode change (Bee ↔ Colony)
+  useEffect(() => {
+    setReelVisibility(currentOrganization ? 'IN' : 'ALL');
+  }, [currentOrganization]);
+
   // === Commentaires ===
   const [commentModalOpen, setCommentModalOpen] = useState(false);
   const [commentReelId, setCommentReelId] = useState<string | null>(null);
@@ -76,9 +83,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
   // === Partage et enregistrement ===
   const [shareSheetOpen, setShareSheetOpen] = useState(false);
   const [shareReel, setShareReel] = useState<Reel | null>(null);
-  const [savedSet, setSavedSet] = useState<Set<string>>(() => {
-    try { const s = localStorage.getItem('sf_saved_reels'); return s ? new Set(JSON.parse(s)) : new Set(); } catch { return new Set(); }
-  });
+  const [savedSet, setSavedSet] = useState<Set<string>>(new Set());
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
   const [likedComments, setLikedComments] = useState<Set<string>>(new Set());
@@ -106,7 +111,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
       const videos = (data?.reels || []).map((p: any) => ({
         id: p.id,
         authorId: p.authorId || '',
-        authorName: p.authorName || 'Utilisateur',
+        authorName: p.authorName || 'Bee',
         authorAvatar: p.authorAvatar,
         caption: p.caption || '',
         mediaUrl: p.mediaUrl,
@@ -119,16 +124,11 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
         musicName: undefined,
       }));
       setReels(videos);
-      // Nettoyer les IDs sauvegardés qui ne correspondent plus à aucun reel
-      setSavedSet(prev => {
-        const loadedIds = new Set(videos.map((p: any) => p.id));
-        const cleaned = new Set([...prev].filter(id => loadedIds.has(id)));
-        if (cleaned.size !== prev.size) {
-          localStorage.setItem('sf_saved_reels', JSON.stringify([...cleaned]));
-          return cleaned;
-        }
-        return prev;
-      });
+      // Charger les reels sauvegardés depuis la DB
+      try {
+        const savedData = await api.get('/api/zhiive/saved-reels');
+        if (savedData?.savedPostIds) setSavedSet(new Set(savedData.savedPostIds));
+      } catch {}
     } catch {
       setReels([]);
     } finally {
@@ -153,13 +153,20 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
 
   const toggleLike = (index: number) => {
     const reel = reels[index];
+    const wasLiked = reel.isLiked;
+    // Mise à jour optimiste
     setReels(prev => prev.map((r, i) => i === index ? {
       ...r, isLiked: !r.isLiked,
       likesCount: r.likesCount + (r.isLiked ? -1 : 1),
     } : r));
-    // Persist like to API (fire and forget)
     if (reel?.id) {
-      api.post(`/api/wall/posts/${reel.id}/reactions`, { type: 'LIKE' }).catch(() => {});
+      api.post(`/api/wall/posts/${reel.id}/reactions`, { type: 'LIKE' }).catch(() => {
+        // Rollback si l'API échoue
+        setReels(prev => prev.map((r, i) => i === index ? {
+          ...r, isLiked: wasLiked,
+          likesCount: r.likesCount + (wasLiked ? 1 : -1),
+        } : r));
+      });
     }
   };
 
@@ -169,14 +176,14 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
       if (followedSet.has(authorId)) {
         await api.delete(`/api/zhiive/follow/${authorId}`);
         setFollowedSet(prev => { const next = new Set(prev); next.delete(authorId); return next; });
-        showToast(`Désabonné de @${authorName.replace(/\s+/g, '').toLowerCase()}`);
+        showToast(t('reels.unfollowedUser', { name: authorName.replace(/\s+/g, '').toLowerCase() }));
       } else {
         await api.post(`/api/zhiive/follow/${authorId}`);
         setFollowedSet(prev => new Set(prev).add(authorId));
-        showToast(`Suivi @${authorName.replace(/\s+/g, '').toLowerCase()} ! 🎉`);
+        showToast(t('reels.followedUser', { name: authorName.replace(/\s+/g, '').toLowerCase() }));
       }
     } catch {
-      showToast('Erreur lors du suivi', 'err');
+      showToast(t('reels.followFailed'), 'err');
     }
   };
 
@@ -186,8 +193,8 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
   };
 
   const handleCopyLink = () => {
-    const text = `Reel de @${shareReel?.authorName}: ${shareReel?.caption || 'Regardez ce reel !'}`;
-    navigator.clipboard?.writeText(text).then(() => showToast('Lien copié !')).catch(() => showToast('Copié !'));
+    const text = t('reels.reelBy', { name: shareReel?.authorName }) + ': ' + (shareReel?.caption || t('reels.checkOutReel'));
+    navigator.clipboard?.writeText(text).then(() => showToast(t('common.linkCopied'))).catch(() => showToast(t('common.copied')));
     setShareSheetOpen(false);
   };
 
@@ -195,35 +202,56 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
     if (!shareReel) { setShareSheetOpen(false); return; }
     try {
       await api.post('/api/wall/posts', {
-        content: `🔄 Republié : ${shareReel.caption || ''}`.trim(),
+        content: `${t('reels.rebuzzed')}: ${shareReel.caption || ''}`.trim(),
         mediaUrls: shareReel.mediaUrl ? [shareReel.mediaUrl] : [],
         mediaType: shareReel.mediaType,
-        visibility: 'ALL',
+        visibility: reelVisibility,
+        publishAsOrg: identity.publishAsOrg,
       });
-      showToast('Reel republié sur votre mur ! 🔄');
-    } catch { showToast('Erreur lors de la republication', 'err'); }
+      showToast(t('reels.reelSharedOnHive'));
+    } catch { showToast(t('reels.repostError'), 'err'); }
     setShareSheetOpen(false);
   };
 
   const handleSendReel = () => {
     if (navigator.share && shareReel) {
-      navigator.share({ title: `Reel de @${shareReel.authorName}`, text: shareReel.caption || 'Regardez ce reel !' }).catch(() => {});
+      navigator.share({ title: t('reels.reelBy', { name: shareReel.authorName }), text: shareReel.caption || t('reels.checkOutReel') }).catch(() => {});
     } else { handleCopyLink(); }
     setShareSheetOpen(false);
   };
 
-  const handleSaveReel = (reelId: string) => {
+  const handleSaveReel = async (reelId: string) => {
+    const wasSaved = savedSet.has(reelId);
+    // Optimistic update
     setSavedSet(prev => {
       const next = new Set(prev);
-      if (next.has(reelId)) { next.delete(reelId); showToast('Retiré des enregistrements'); }
-      else { next.add(reelId); showToast('Reel enregistré ! 📌'); }
-      try { localStorage.setItem('sf_saved_reels', JSON.stringify([...next])); } catch {}
+      if (wasSaved) { next.delete(reelId); showToast(t('reels.removedFromSaved')); }
+      else { next.add(reelId); showToast(t('reels.reelSaved')); }
       return next;
     });
+    try {
+      if (wasSaved) await api.delete(`/api/zhiive/saved-reels/${reelId}`);
+      else await api.post(`/api/zhiive/saved-reels/${reelId}`);
+    } catch {
+      // Rollback
+      setSavedSet(prev => {
+        const next = new Set(prev);
+        if (wasSaved) next.add(reelId); else next.delete(reelId);
+        return next;
+      });
+    }
   };
 
-  const handleCommentLike = (commentId: string) => {
-    setLikedComments(prev => { const next = new Set(prev); if (next.has(commentId)) next.delete(commentId); else next.add(commentId); return next; });
+  const handleCommentLike = async (commentId: string) => {
+    const wasLiked = likedComments.has(commentId);
+    // Optimistic update
+    setLikedComments(prev => { const next = new Set(prev); if (wasLiked) next.delete(commentId); else next.add(commentId); return next; });
+    try {
+      await api.post(`/api/zhiive/comments/${commentId}/like`);
+    } catch {
+      // Rollback
+      setLikedComments(prev => { const next = new Set(prev); if (wasLiked) next.add(commentId); else next.delete(commentId); return next; });
+    }
   };
 
   const timeAgo = (dateStr: string) => {
@@ -251,11 +279,11 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
     if (!file) return;
 
     if (!file.type.startsWith('video/')) {
-      showToast('Seules les vidéos sont acceptées pour les Reels', 'err');
+      showToast(t('reels.onlyVideos'), 'err');
       return;
     }
     if (file.size > 100 * 1024 * 1024) {
-      showToast('Fichier trop volumineux (max 100 Mo)', 'err');
+      showToast(t('reels.fileTooLarge100'), 'err');
       return;
     }
 
@@ -276,7 +304,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
       const mediaUrls = uploadResult?.urls || [];
 
       if (mediaUrls.length === 0) {
-        showToast('Échec de l\'upload du fichier', 'err');
+        showToast(t('reels.uploadFailed'), 'err');
         setSubmitting(false);
         return;
       }
@@ -291,7 +319,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
         publishAsOrg: identity.publishAsOrg,
       });
 
-      showToast('Reel publié ! 🎬');
+      showToast(t('reels.reelPublished'));
       setCreateModalOpen(false);
       if (reelPreview) URL.revokeObjectURL(reelPreview);
       setReelFile(null);
@@ -301,7 +329,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
       loadReels();
     } catch (err) {
       console.error('[REELS] Erreur publication:', err);
-      showToast('Erreur lors de la publication du reel', 'err');
+      showToast(t('reels.publishError'), 'err');
     } finally {
       setSubmitting(false);
     }
@@ -322,7 +350,17 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
     setReplyText('');
     try {
       const data = await api.get(`/api/wall/posts/${reelId}/comments`);
-      setComments(Array.isArray(data) ? data : (data?.comments || []));
+      const loadedComments = Array.isArray(data) ? data : (data?.comments || []);
+      setComments(loadedComments);
+      // Charger les likes de l'utilisateur pour ces commentaires
+      const commentIds = loadedComments.map((c: any) => c.id);
+      const allIds = [...commentIds, ...loadedComments.flatMap((c: any) => (c.replies || []).map((r: any) => r.id))];
+      if (allIds.length > 0) {
+        try {
+          const likesData = await api.post('/api/zhiive/comments/liked', { commentIds: allIds });
+          if (likesData?.likedIds) setLikedComments(new Set(likesData.likedIds));
+        } catch {}
+      }
     } catch {
       setComments([]);
     } finally {
@@ -349,7 +387,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
       }
       setReels(prev => prev.map(r => r.id === commentReelId ? { ...r, commentsCount: r.commentsCount + 1 } : r));
     } catch {
-      showToast('Erreur lors de l\'envoi du commentaire', 'err');
+      showToast(t('reels.commentFailed'), 'err');
     }
   };
 
@@ -359,12 +397,12 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
       await api.delete(`/api/wall/posts/${reelId}`);
     } catch (err: any) {
       if (err?.status !== 404 && err?.response?.status !== 404) {
-        showToast('Erreur lors de la suppression', 'err');
+        showToast(t('reels.deleteFailed'), 'err');
         return;
       }
     }
     setReels(prev => prev.filter(r => r.id !== reelId));
-    showToast('Reel supprimé');
+    showToast(t('reels.reelDeleted'));
   };
 
   const togglePause = () => {
@@ -421,13 +459,13 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
           {savedReels.length === 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '70%', color: SF.textMuted }}>
               <BookOutlined style={{ fontSize: 48, marginBottom: 12 }} />
-              <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>Aucun reel enregistré</div>
-              <div style={{ fontSize: 13 }}>Appuyez sur 📌 Enregistrer sur un reel pour le retrouver ici</div>
+              <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>{t('reels.noReelsSaved')}</div>
+              <div style={{ fontSize: 13 }}>{t('reels.tapSaveHint')}</div>
             </div>
           ) : (
             <div style={{ padding: '4px 4px 80px' }}>
               <div style={{ padding: '0 12px 12px', color: SF.textMuted, fontSize: 13 }}>
-                {savedReels.length} reel{savedReels.length > 1 ? 's' : ''} enregistré{savedReels.length > 1 ? 's' : ''}
+                {t('reels.reelsSavedCount', { count: savedReels.length })}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
                 {savedReels.map(reel => (
@@ -478,9 +516,9 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
           paddingTop: 56,
         }}>
           <VideoCameraOutlined style={{ fontSize: 56, marginBottom: 16, opacity: 0.5 }} />
-          <div style={{ fontSize: 18, fontWeight: 700, color: SF.text, marginBottom: 8 }}>Aucun reel pour le moment</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: SF.text, marginBottom: 8 }}>{t('reels.noReelsYet')}</div>
           <div style={{ fontSize: 13, marginBottom: 20, textAlign: 'center', maxWidth: 260 }}>
-            Soyez le premier à publier un reel ! Partagez vos meilleurs moments en vidéo.
+            {t('reels.beFirstToPost')}
           </div>
           <div
             onClick={openCreateModal}
@@ -490,7 +528,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
             }}
           >
-            <PlusOutlined /> Créer un reel
+            <PlusOutlined /> {t('reels.createReel')}
           </div>
         </div>
       ) : (
@@ -528,7 +566,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               }}>
                 <div style={{ textAlign: 'center', padding: 32 }}>
                   <VideoCameraOutlined style={{ fontSize: 48, marginBottom: 16, color: '#fff' }} />
-                  <div style={{ fontSize: 14, color: SF.text, fontWeight: 600 }}>Vidéo indisponible</div>
+                  <div style={{ fontSize: 14, color: SF.text, fontWeight: 600 }}>{t('reels.videoUnavailable')}</div>
                 </div>
               </div>
             )}
@@ -593,7 +631,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               <div onClick={() => handleShare(reel)} style={{ cursor: 'pointer', textAlign: 'center' }}>
                 <ShareAltOutlined style={{ fontSize: 26, color: SF.text }} />
                 <div style={{ fontSize: 11, color: SF.text, fontWeight: 600, marginTop: 2 }}>
-                  Partager
+                  {t('common.share')}
                 </div>
               </div>
 
@@ -605,7 +643,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                   <BookOutlined style={{ fontSize: 26, color: SF.text }} />
                 )}
                 <div style={{ fontSize: 11, color: SF.text, fontWeight: 600, marginTop: 2 }}>
-                  {savedSet.has(reel.id) ? 'Enregistré' : 'Enregistrer'}
+                  {savedSet.has(reel.id) ? t('reels.saved') : t('reels.saveReel')}
                 </div>
               </div>
 
@@ -654,7 +692,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                   background: followedSet.has(reel.authorId) ? SF.textMuted : SF.primary,
                   color: '#fff', fontWeight: 600, cursor: 'pointer',
                 }}>
-                  {followedSet.has(reel.authorId) ? 'Suivi ✓' : 'Suivre'}
+                  {followedSet.has(reel.authorId) ? t('common.following') : t('common.follow')}
                 </span>
               </div>
 
@@ -772,10 +810,10 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                 <VideoCameraOutlined style={{ fontSize: 36, color: SF.primary }} />
               </div>
               <div style={{ fontSize: 15, color: SF.text, fontWeight: 600, marginBottom: 4 }}>
-                Tapez pour sélectionner une vidéo
+                {t('reels.selectVideo')}
               </div>
               <div style={{ fontSize: 12, color: SF.textMuted }}>
-                Vidéo uniquement (max 100 Mo)
+                {t('reels.videoOnly')}
               </div>
             </div>
           ) : (
@@ -804,7 +842,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
           <Input.TextArea
             value={reelCaption}
             onChange={e => setReelCaption(e.target.value)}
-            placeholder="Ajoutez une description... #hashtags"
+            placeholder={t('reels.addDescription')}
             maxLength={500}
             autoSize={{ minRows: 2, maxRows: 4 }}
             style={{
@@ -821,9 +859,9 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
           <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
             {(currentOrganization ? ['IN', 'ALL', 'OUT'] : ['ALL', 'OUT']).map(v => {
               const labels: Record<string, { icon: string; label: string }> = {
-                IN: { icon: '👥', label: 'Organisation' },
-                ALL: { icon: '🌐', label: 'Public' },
-                OUT: { icon: '🔒', label: 'Privé' },
+                IN: { icon: '👥', label: t('reels.colony') },
+                ALL: { icon: '🌐', label: t('reels.public') },
+                OUT: { icon: '🔒', label: t('reels.private') },
               };
               const opt = labels[v];
               const active = reelVisibility === v;
@@ -861,9 +899,9 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
             }}
           >
             {submitting ? (
-              <><LoadingOutlined spin /> Publication en cours...</>
+              <><LoadingOutlined spin /> {t('reels.buzzing')}</>
             ) : (
-              <><SendOutlined /> Publier le Reel</>
+              <><SendOutlined /> {t('reels.buzzTheReel')}</>
             )}
           </div>
         </div>
@@ -882,7 +920,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
       >
         {/* Header */}
         <div style={{ padding: '14px 16px', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 16, fontWeight: 700 }}>💬 Commentaires</span>
+          <span style={{ fontSize: 16, fontWeight: 700 }}>💬 Buzzes</span>
           <CloseOutlined onClick={() => { setCommentModalOpen(false); setComments([]); setCommentText(''); setReplyingTo(null); }}
             style={{ fontSize: 16, cursor: 'pointer', color: '#999' }} />
         </div>
@@ -894,7 +932,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
           ) : comments.length > 0 ? comments.map((c: any) => {
             const cIsOrg = c.publishAsOrg && c.organization;
             const cAvatar = cIsOrg ? (c.organization?.logoUrl || null) : c.author?.avatarUrl;
-            const cName = cIsOrg ? c.organization.name : [c.author?.firstName, c.author?.lastName].filter(Boolean).join(' ') || 'Utilisateur';
+            const cName = cIsOrg ? c.organization.name : [c.author?.firstName, c.author?.lastName].filter(Boolean).join(' ') || 'Bee';
             return (
             <div key={c.id} style={{ marginBottom: 16 }}>
               {/* Main comment */}
@@ -914,11 +952,11 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                     <span style={{ fontSize: 11, color: '#999' }}>{timeAgo(c.createdAt)}</span>
                     <span onClick={() => handleCommentLike(c.id)}
                       style={{ fontSize: 12, fontWeight: 600, cursor: 'pointer', color: likedComments.has(c.id) ? '#e74c3c' : '#65676b' }}>
-                      {likedComments.has(c.id) ? '❤️ Aimé' : "J'aime"}
+                      {likedComments.has(c.id) ? '❤️ ' + t('common.liked') : t('common.like')}
                     </span>
                     <span onClick={() => { setReplyingTo(replyingTo === c.id ? null : c.id); setReplyText(''); }}
                       style={{ fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#65676b' }}>
-                      Répondre
+                      {t('common.reply')}
                     </span>
                   </div>
 
@@ -945,7 +983,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                               <span style={{ fontSize: 10, color: '#999' }}>{timeAgo(reply.createdAt)}</span>
                               <span onClick={() => handleCommentLike(reply.id)}
                                 style={{ fontSize: 11, fontWeight: 600, cursor: 'pointer', color: likedComments.has(reply.id) ? '#e74c3c' : '#65676b' }}>
-                                {likedComments.has(reply.id) ? '❤️' : "J'aime"}
+                                {likedComments.has(reply.id) ? '❤️' : t('common.like')}
                               </span>
                             </div>
                           </div>
@@ -967,7 +1005,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                           value={replyText}
                           onChange={e => setReplyText(e.target.value)}
                           onKeyDown={e => e.key === 'Enter' && handlePostComment(c.id)}
-                          placeholder={`Répondre à ${c.author?.firstName || 'ce commentaire'}...`}
+                          placeholder={t('reels.replyTo', { name: c.author?.firstName || t('reels.thisComment') })}
                           style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', fontSize: 13 }}
                           autoFocus
                         />
@@ -984,7 +1022,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
           ); }) : (
             <div style={{ textAlign: 'center', color: '#999', padding: 30 }}>
               <MessageOutlined style={{ fontSize: 32, marginBottom: 8, display: 'block' }} />
-              Aucun commentaire. Soyez le premier !
+              {t('reels.noBuzzesYet')}
             </div>
           )}
         </div>
@@ -1001,7 +1039,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               value={commentText}
               onChange={e => setCommentText(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handlePostComment()}
-              placeholder="Écrire un commentaire..."
+              placeholder={t('reels.dropABuzz')}
               style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', fontSize: 14 }}
             />
             <div onClick={() => handlePostComment()}
@@ -1024,16 +1062,16 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
       >
         <div style={{ padding: 24, textAlign: 'center' }}>
           <DeleteOutlined style={{ fontSize: 36, color: '#ff4d4f', marginBottom: 12 }} />
-          <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Supprimer ce reel ?</div>
-          <div style={{ fontSize: 13, color: '#666', marginBottom: 20 }}>Cette action est irréversible.</div>
+          <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>{t('reels.deleteReel')}</div>
+          <div style={{ fontSize: 13, color: '#666', marginBottom: 20 }}>{t('reels.irreversible')}</div>
           <div style={{ display: 'flex', gap: 12 }}>
             <div onClick={() => setDeleteConfirmId(null)}
               style={{ flex: 1, padding: '10px 0', borderRadius: 8, background: '#f0f2f5', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
-              Annuler
+              {t('common.cancel')}
             </div>
             <div onClick={async () => { if (deleteConfirmId) { await handleDeleteReel(deleteConfirmId); setDeleteConfirmId(null); } }}
               style={{ flex: 1, padding: '10px 0', borderRadius: 8, background: '#ff4d4f', color: '#fff', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
-              Supprimer
+              {t('common.delete')}
             </div>
           </div>
         </div>
@@ -1052,7 +1090,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
             <div style={{ padding: '12px 0' }}>
               {/* Drag handle */}
               <div style={{ width: 40, height: 4, borderRadius: 2, background: '#ddd', margin: '0 auto 16px' }} />
-              <div style={{ fontSize: 16, fontWeight: 700, textAlign: 'center', marginBottom: 16 }}>Partager</div>
+              <div style={{ fontSize: 16, fontWeight: 700, textAlign: 'center', marginBottom: 16 }}>{t('reels.shareTitle')}</div>
 
               {/* Share options grid */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, padding: '0 16px', marginBottom: 16 }}>
@@ -1060,33 +1098,33 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                   <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#E8F5E9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <RetweetOutlined style={{ fontSize: 22, color: '#4CAF50' }} />
                   </div>
-                  <span style={{ fontSize: 11, color: '#333', textAlign: 'center' }}>Republier</span>
+                  <span style={{ fontSize: 11, color: '#333', textAlign: 'center' }}>{t('reels.rebuzz')}</span>
                 </div>
                 <div onClick={handleSendReel} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer', padding: 8 }}>
                   <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#E3F2FD', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <SendOutlined style={{ fontSize: 22, color: '#2196F3' }} />
                   </div>
-                  <span style={{ fontSize: 11, color: '#333', textAlign: 'center' }}>Envoyer</span>
+                  <span style={{ fontSize: 11, color: '#333', textAlign: 'center' }}>{t('common.send')}</span>
                 </div>
                 <div onClick={() => { if (shareReel) handleSaveReel(shareReel.id); setShareSheetOpen(false); }}
                   style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer', padding: 8 }}>
                   <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#FFF3E0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <BookOutlined style={{ fontSize: 22, color: '#FF9800' }} />
                   </div>
-                  <span style={{ fontSize: 11, color: '#333', textAlign: 'center' }}>Enregistrer</span>
+                  <span style={{ fontSize: 11, color: '#333', textAlign: 'center' }}>{t('reels.saveReel')}</span>
                 </div>
                 <div onClick={handleCopyLink} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer', padding: 8 }}>
                   <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#F3E5F5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <CopyOutlined style={{ fontSize: 22, color: '#9C27B0' }} />
                   </div>
-                  <span style={{ fontSize: 11, color: '#333', textAlign: 'center' }}>Copier le lien</span>
+                  <span style={{ fontSize: 11, color: '#333', textAlign: 'center' }}>{t('reels.copyLink')}</span>
                 </div>
               </div>
 
               {/* Cancel */}
               <div onClick={() => setShareSheetOpen(false)}
                 style={{ textAlign: 'center', padding: '12px 16px', borderTop: '1px solid #eee', fontSize: 15, fontWeight: 600, color: '#999', cursor: 'pointer' }}>
-                Annuler
+                {t('common.cancel')}
               </div>
             </div>
           </div>

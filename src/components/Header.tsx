@@ -200,7 +200,7 @@ const AssistantAmeliorationIA: React.FC = () => {
       {open && (
         <div className="absolute right-0 mt-2 w-96 bg-white border border-gray-200 rounded shadow-lg p-0 z-50 text-sm flex flex-col max-h-[520px]">
           <div className="flex items-center justify-between px-3 py-2 border-b">
-            <div className="font-semibold">Assistant CRM Interne</div>
+            <div className="font-semibold">Hive Mind</div>
             <div className="flex gap-2 text-[11px]">
               <button onClick={() => setTab('suggestions')} className={"px-2 py-0.5 rounded " + (tab==='suggestions' ? 'bg-indigo-100 text-indigo-700':'bg-gray-100 hover:bg-gray-200')}>Optimisations</button>
               <button onClick={() => setTab('chat')} className={"px-2 py-0.5 rounded " + (tab==='chat' ? 'bg-indigo-100 text-indigo-700':'bg-gray-100 hover:bg-gray-200')}>Chat</button>
@@ -222,7 +222,7 @@ const AssistantAmeliorationIA: React.FC = () => {
                   <button
                     onClick={() => analyzeWorkspaceQuick?.()}
                     className="text-[11px] px-2 py-1 rounded border bg-gray-50 hover:bg-gray-100"
-                  >CRM</button>
+                  >Hive</button>
                 </div>
                 <div className="flex items-center gap-2">
                   {analysisLoading && <span className="text-[10px] text-gray-500 animate-pulse">Analyse en cours…</span>}
@@ -236,7 +236,7 @@ const AssistantAmeliorationIA: React.FC = () => {
                 </div>
               </div>
 
-              {/* Résumé global CRM si dispo */}
+              {/* Résumé global Hive si dispo */}
               {globalAnalysis && (
                 <div className="border border-yellow-200 bg-yellow-50 rounded p-2 text-[12px]">
                   <div className="font-medium mb-1">Résumé global (échantillon)</div>
@@ -329,7 +329,7 @@ const AssistantAmeliorationIA: React.FC = () => {
           {tab === 'chat' && (
             <div className="flex flex-col flex-1 min-h-[320px]">
               <div className="px-3 py-2 border-b bg-gray-50 text-[11px] leading-snug">
-                Discutez de l'évolution du CRM. Le modèle reste interne (pas d'envoi de données sensibles hors contexte minimal). Mode vocal disponible si supporté.
+                Discutez de l'évolution du Hive. Le modèle reste interne (pas d'envoi de données sensibles hors contexte minimal). Mode vocal disponible si supporté.
               </div>
               <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
                 {messages.map(m => (
@@ -362,7 +362,7 @@ const AssistantAmeliorationIA: React.FC = () => {
                     value={input}
                     onChange={e=>setInput(e.target.value)}
                     onKeyDown={e=> { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                    placeholder={recording ? 'Parlez...' : 'Votre question sur le CRM...'}
+                    placeholder={recording ? 'Parlez...' : 'Votre question sur le Hive...'}
                     className="flex-1 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   />
                   <button onClick={sendMessage} disabled={!input.trim() || chatLoading} className="p-2 rounded bg-indigo-600 text-white text-xs hover:bg-indigo-700 disabled:opacity-40"><FiSend /></button>
@@ -429,7 +429,7 @@ const Header: React.FC = () => {
           {/* Navigation principale */}
           <nav className="hidden lg:flex items-center space-x-1">
             <Link to="/dashboard" className="px-3 py-2 rounded-md text-sm font-medium text-white/90 hover:text-white hover:bg-white/10">
-              Tableau de bord
+              Panorama
             </Link>
             
             {/* Menu modules avec dropdown */}

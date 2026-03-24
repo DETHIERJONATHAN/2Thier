@@ -45,13 +45,13 @@ router.get('/conversations', async (req: Request, res: Response): Promise<void> 
 
       return {
         id: conv.id,
-        name: conv.name || otherParticipants.map(pp => `${pp.user.firstName || ''} ${pp.user.lastName || ''}`.trim()).join(', ') || 'Conversation',
+        name: conv.name || otherParticipants.map(pp => `${pp.user.firstName || ''} ${pp.user.lastName || ''}`.trim()).join(', ') || 'Whisper',
         avatarUrl: conv.isGroup ? conv.avatarUrl : otherParticipants[0]?.user.avatarUrl || null,
         isGroup: conv.isGroup,
         participants: conv.participants.map(pp => pp.user),
         lastMessage: lastMessage ? {
           id: lastMessage.id,
-          content: lastMessage.isDeleted ? 'Message supprimé' : lastMessage.content,
+          content: lastMessage.isDeleted ? 'Whisper deleted' : lastMessage.content,
           senderName: `${lastMessage.sender.firstName || ''} ${lastMessage.sender.lastName || ''}`.trim(),
           senderId: lastMessage.senderId,
           createdAt: lastMessage.createdAt,
@@ -108,7 +108,7 @@ router.post('/conversations', async (req: Request, res: Response): Promise<void>
     // Create new conversation
     const conv = await db.conversation.create({
       data: {
-        name: isGroup ? (name || 'Groupe') : null,
+        name: isGroup ? (name || 'Group') : null,
         isGroup: !!isGroup,
         participants: {
           create: allIds.map(id => ({

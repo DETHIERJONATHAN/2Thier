@@ -66,6 +66,7 @@ router.get('/me', async (_req, res) => {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
+        language: user.language || 'fr',
         role: 'super_admin',
         permissions: ['super_admin'],
         organizations: user.UserOrganization.map(uo => ({

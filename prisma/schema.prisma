@@ -2211,6 +2211,7 @@ model User {
   updatedAt                                           DateTime
   passwordHash                                        String
   status                                              String                                   @default("active")
+  language                                            String                                   @default("fr")
   address                                             String?
   avatarUrl                                           String?
   coverUrl                                            String?
@@ -2286,6 +2287,7 @@ model User {
   StoryViews                                          StoryView[]         @relation("StoryViewer")
   Sparks                                              Spark[]             @relation("SparkAuthor")
   SparkVotes                                          SparkVote[]         @relation("SparkVoter")
+  SparkDismissals                                     SparkDismiss[]      @relation("SparkDismissUser")
   BattlesCreated                                      Battle[]            @relation("BattleChallenger")
   BattlesOpponent                                     Battle[]            @relation("BattleOpponent")
   BattlesWon                                          Battle[]            @relation("BattleWinner")
@@ -2294,6 +2296,8 @@ model User {
   CapsulesReceived                                    TimeCapsule[]       @relation("CapsuleRecipient")
   QuestsSponsored                                     Quest[]             @relation("QuestSponsor")
   QuestProgress                                       QuestProgress[]     @relation("QuestProgressUser")
+  SavedReels                                          SavedReel[]         @relation("SavedReelUser")
+  CommentLikes                                        CommentLike[]       @relation("CommentLikeUser")
   UserBadges                                          UserBadge[]         @relation("UserBadges")
   UserStreak                                          UserStreak?         @relation("UserStreakData")
   ContentReports                                      ContentReport[]     @relation("ContentReporter")
@@ -3751,6 +3755,7 @@ model WallPost {
   hashtags        PostHashtag[]
   parentPost      WallPost?    @relation("PostEcho", fields: [parentPostId], references: [id], onDelete: SetNull)
   echoes          WallPost[]   @relation("PostEcho")
+  savedBy         SavedReel[]
 
   @@index([organizationId, visibility, createdAt])
   @@index([organizationId, createdAt])
@@ -3795,6 +3800,7 @@ model WallComment {
   organization    Organization? @relation("WallCommentOrg", fields: [organizationId], references: [id], onDelete: Cascade)
   parentComment   WallComment? @relation("CommentReplies", fields: [parentCommentId], references: [id])
   replies         WallComment[] @relation("CommentReplies")
+  likes           CommentLike[]
 
   @@index([postId, createdAt])
   @@index([authorId])
@@ -4101,6 +4107,7 @@ model Spark {
   author         User         @relation("SparkAuthor", fields: [authorId], references: [id], onDelete: Cascade)
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   votes          SparkVote[]
+  dismissals     SparkDismiss[]
 
   @@index([isRevealed, sparkCount])
   @@index([createdAt])
@@ -4226,6 +4233,52 @@ model QuestProgress {
 
   @@unique([questId, userId])
   @@index([userId, isCompleted])
+}
+
+// ── SPARK DISMISS (masquer un spark du feed) ──
+
+model SparkDismiss {
+  id        String   @id @default(uuid())
+  sparkId   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  spark     Spark @relation(fields: [sparkId], references: [id], onDelete: Cascade)
+  user      User  @relation("SparkDismissUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([sparkId, userId])
+  @@index([userId])
+}
+
+// ── SAVED REELS (sauvegarder un post/reel) ──
+
+model SavedReel {
+  id        String   @id @default(uuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  post      WallPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation("SavedReelUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([userId, createdAt])
+}
+
+// ── COMMENT LIKES (like sur un commentaire) ──
+
+model CommentLike {
+  id        String   @id @default(uuid())
+  commentId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  comment   WallComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user      User        @relation("CommentLikeUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId])
+  @@index([commentId])
+  @@index([userId])
 }
 
 // ── GAMIFICATION (badges, niveaux, streaks) ──

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Avatar, Progress, Tag, Badge, Modal, Input, message, DatePicker } from 'antd';
 import {
   ThunderboltOutlined, EyeInvisibleOutlined, TrophyOutlined,
@@ -52,6 +53,7 @@ interface FlowPanelProps {
 }
 
 const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
+  const { t, i18n } = useTranslation();
   const { feedMode } = useZhiiveNav();
   const { currentOrganization } = useAuth();
   // 🐝 Identité centralisée — source unique pour l'identité de publication
@@ -60,13 +62,19 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
   const [sparks, setSparks] = useState<SparkPost[]>([]);
   const [battles, setBattles] = useState<BattleData[]>([]);
   const [quests, setQuests] = useState<QuestData[]>([]);
-  const [_loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
 
   // Modals
   const [sparkModalOpen, setSparkModalOpen] = useState(false);
   const [sparkContent, setSparkContent] = useState('');
   const [sparkSubmitting, setSparkSubmitting] = useState(false);
-  const [sparkVisibility, setSparkVisibility] = useState<string>(currentOrganization ? 'IN' : 'ALL');
+  const [sparkVisibility, setSparkVisibility] = useState<'IN' | 'ALL' | 'OUT'>(currentOrganization ? 'IN' : 'ALL');
+
+  // 🐝 Sync visibilité quand le mode change (Bee ↔ Colony)
+  useEffect(() => {
+    setSparkVisibility(currentOrganization ? 'IN' : 'ALL');
+  }, [currentOrganization]);
+
   const [battleModalOpen, setBattleModalOpen] = useState(false);
   const [battleTitle, setBattleTitle] = useState('');
   const [battleDesc, setBattleDesc] = useState('');
@@ -75,6 +83,7 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
 
   const fetchFlow = useCallback(async () => {
     try {
+      setLoading(true);
       const [sparksRes, battlesRes, questsRes] = await Promise.all([
         api.get(`/api/zhiive/sparks?limit=20&mode=${feedMode}`).catch(() => ({ sparks: [] })),
         api.get(`/api/zhiive/battles?limit=10&mode=${feedMode}`).catch(() => ({ battles: [] })),
@@ -98,29 +107,33 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
     setSparkSubmitting(true);
     try {
       await api.post('/api/zhiive/sparks', { content: sparkContent.trim(), visibility: sparkVisibility, publishAsOrg: identity.publishAsOrg });
-      message.success('Spark publié anonymement ! ⚡');
+      message.success(t('flow.sparkPosted'));
       setSparkContent('');
       setSparkModalOpen(false);
       fetchFlow();
     } catch {
-      message.error('Erreur lors de la création du Spark');
+      message.error(t('flow.sparkError'));
     } finally {
       setSparkSubmitting(false);
     }
   };
 
   const handleVoteSpark = async (sparkId: string) => {
+    // Mise à jour optimiste pour éviter le double-clic
+    setSparks(prev => prev.map(s => s.id === sparkId ? { ...s, hasVoted: true, sparkCount: s.sparkCount + 1 } : s));
     try {
       const res = await api.post(`/api/zhiive/sparks/${sparkId}/vote`);
       setSparks(prev => prev.map(s => s.id === sparkId ? {
         ...s,
-        sparkCount: res.sparkCount ?? s.sparkCount + 1,
+        sparkCount: res.sparkCount ?? s.sparkCount,
         isRevealed: res.isRevealed ?? s.isRevealed,
         hasVoted: true,
       } : s));
-      message.success('Vote enregistré ! ⚡');
+      message.success(t('flow.voteRecorded'));
     } catch {
-      message.warning('Vous avez déjà voté pour ce Spark');
+      // Rollback si l'API échoue
+      setSparks(prev => prev.map(s => s.id === sparkId ? { ...s, hasVoted: false, sparkCount: s.sparkCount - 1 } : s));
+      message.warning(t('flow.alreadyVoted'));
     }
   };
 
@@ -133,15 +146,16 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
         title: battleTitle.trim(),
         description: battleDesc.trim(),
         endsAt: battleEndsAt?.toISOString(),
+        publishAsOrg: identity.publishAsOrg,
       });
-      message.success('Battle lancé ! ⚔️');
+      message.success(t('flow.battleCreated'));
       setBattleTitle('');
       setBattleDesc('');
       setBattleEndsAt(null);
       setBattleModalOpen(false);
       fetchFlow();
     } catch {
-      message.error('Erreur lors de la création du Battle');
+      message.error(t('flow.battleError'));
     } finally {
       setBattleSubmitting(false);
     }
@@ -150,35 +164,35 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
   const handleJoinBattle = async (battleId: string) => {
     try {
       await api.post(`/api/zhiive/battles/${battleId}/join`);
-      message.success('Défi relevé ! 🥊');
+      message.success(t('flow.challengeAccepted'));
       fetchFlow();
     } catch {
-      message.warning('Impossible de rejoindre ce battle');
+      message.warning(t('flow.unableToJoin'));
     }
   };
 
   const sections = [
     { key: 'spark' as const, label: 'Spark', icon: <ThunderboltOutlined />, color: SF.gold },
-    { key: 'battles' as const, label: 'Battles', icon: <TrophyOutlined />, color: SF.accent },
-    { key: 'quests' as const, label: 'Quests', icon: <StarOutlined />, color: SF.success },
+    { key: 'battles' as const, label: t('flow.battles'), icon: <TrophyOutlined />, color: SF.accent },
+    { key: 'quests' as const, label: t('flow.quests'), icon: <StarOutlined />, color: SF.success },
   ];
 
   const getQuestTypeStyle = (type: QuestData['type']) => {
     const styles: Record<string, { bg: string; label: string; emoji: string }> = {
-      DAILY: { bg: SF.gradientSecondary, label: 'Quotidien', emoji: '☀️' },
-      WEEKLY: { bg: SF.gradientPrimary, label: 'Hebdo', emoji: '📅' },
-      MONTHLY: { bg: SF.gradientHot, label: 'Mensuel', emoji: '🏆' },
-      SPECIAL: { bg: SF.gradientGold, label: 'Spécial', emoji: '⭐' },
+      DAILY: { bg: SF.gradientSecondary, label: t('flow.daily'), emoji: '☀️' },
+      WEEKLY: { bg: SF.gradientPrimary, label: t('flow.weekly'), emoji: '📅' },
+      MONTHLY: { bg: SF.gradientHot, label: t('flow.monthly'), emoji: '🏆' },
+      SPECIAL: { bg: SF.gradientGold, label: t('flow.special'), emoji: '⭐' },
     };
     return styles[type] || styles.DAILY;
   };
 
   const getBattleStatusTag = (status: BattleData['status']) => {
     const map: Record<string, { color: string; label: string }> = {
-      OPEN: { color: 'green', label: '🟢 Ouvert' },
-      ACTIVE: { color: 'blue', label: '⚔️ En cours' },
-      VOTING: { color: 'orange', label: '🗳️ Votes' },
-      ENDED: { color: 'default', label: '🏁 Terminé' },
+      OPEN: { color: 'green', label: t('flow.statusOpen') },
+      ACTIVE: { color: 'blue', label: t('flow.statusActive') },
+      VOTING: { color: 'orange', label: t('flow.statusVoting') },
+      ENDED: { color: 'default', label: t('flow.statusEnded') },
     };
     return map[status] || map.OPEN;
   };
@@ -191,7 +205,7 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
           🌊 Flow
         </span>
         <div style={{ fontSize: 11, color: SF.textSecondary, marginTop: 2 }}>
-          Exister, Créer, Gagner !
+          {t('flow.tagline')}
         </div>
       </div>
 
@@ -217,8 +231,16 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
         ))}
       </div>
 
+      {/* Loading state */}
+      {loading && (
+        <div style={{ textAlign: 'center', padding: 40 }}>
+          <div style={{ fontSize: 28, marginBottom: 8, animation: 'pulse 1.5s infinite' }}>⚡</div>
+          <div style={{ fontSize: 12, color: SF.textMuted }}>{t('common.loading')}</div>
+        </div>
+      )}
+
       {/* === SPARK — Anonymous Posts === */}
-      {activeSection === 'spark' && (
+      {!loading && activeSection === 'spark' && (
         <div>
           {/* Create Spark */}
           <div style={{
@@ -227,10 +249,10 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
           }}>
             <EyeInvisibleOutlined style={{ fontSize: 28, color: SF.gold }} />
             <div style={{ fontSize: 14, fontWeight: 700, color: SF.text, marginTop: 6 }}>
-              Postez anonymement
+              {t('flow.postAnonymously')}
             </div>
             <div style={{ fontSize: 11, color: SF.textSecondary, marginTop: 2, marginBottom: 10 }}>
-              À 100 votes, votre identité est révélée !
+              {t('flow.revealAt100')}
             </div>
             <div
               onClick={() => setSparkModalOpen(true)}
@@ -239,7 +261,7 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
               background: SF.gradientGold, color: SF.text, fontWeight: 700,
               fontSize: 13, cursor: 'pointer',
             }}>
-              ⚡ Créer un Spark
+              {t('flow.createSpark')}
             </div>
           </div>
 
@@ -249,14 +271,14 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
             onCancel={() => setSparkModalOpen(false)}
             onOk={handleCreateSpark}
             confirmLoading={sparkSubmitting}
-            title="⚡ Nouveau Spark anonyme"
-            okText="Publier"
-            cancelText="Annuler"
+            title={t('flow.newSpark')}
+            okText={t('flow.buzzIt')}
+            cancelText={t('common.cancel')}
           >
             <Input.TextArea
               value={sparkContent}
               onChange={e => setSparkContent(e.target.value)}
-              placeholder="Partagez quelque chose anonymement... votre identité sera révélée à 100 votes !"
+              placeholder={t('flow.sparkFullPlaceholder')}
               maxLength={3000}
               rows={4}
               showCount
@@ -264,11 +286,11 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
             />
             {/* Visibility selector */}
             <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
-              {(currentOrganization ? ['IN', 'ALL', 'OUT'] : ['ALL', 'OUT']).map(v => {
+              {(currentOrganization ? ['IN', 'ALL', 'OUT'] as const : ['ALL', 'OUT'] as const).map(v => {
                 const labels: Record<string, { icon: string; label: string; color: string }> = {
-                  IN: { icon: '👥', label: 'Organisation', color: '#1890ff' },
+                  IN: { icon: '⬡', label: 'Colony', color: '#1890ff' },
                   ALL: { icon: '🌐', label: 'Public', color: '#52c41a' },
-                  OUT: { icon: '🔒', label: 'Privé', color: '#8c8c8c' },
+                  OUT: { icon: '🔒', label: 'Private', color: '#8c8c8c' },
                 };
                 const opt = labels[v];
                 const active = sparkVisibility === v;
@@ -301,10 +323,10 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
                 </Avatar>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: SF.text }}>
-                    {spark.isRevealed ? spark.authorName : 'Anonyme'}
+                    {spark.isRevealed ? spark.authorName : t('flow.anonymous')}
                   </div>
                   <div style={{ fontSize: 10, color: SF.textMuted }}>
-                    {spark.isRevealed ? '✨ Identité révélée !' : `⚡ ${spark.sparkCount}/${spark.revealThreshold} votes`}
+                    {spark.isRevealed ? t('flow.identityRevealed') : `⚡ ${spark.sparkCount}/${spark.revealThreshold} votes`}
                   </div>
                 </div>
                 {!spark.isRevealed && (
@@ -337,15 +359,18 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
                     cursor: spark.hasVoted ? 'default' : 'pointer', fontSize: 13, fontWeight: 600,
                     opacity: spark.hasVoted ? 0.7 : 1,
                   }}>
-                    <LikeOutlined /> {spark.hasVoted ? 'Voté ✓' : 'Voter'}
+                    <LikeOutlined /> {spark.hasVoted ? t('flow.voted') : t('flow.vote')}
                   </div>
-                  <div style={{
+                  <div onClick={async () => {
+                    setSparks(prev => prev.filter(s => s.id !== spark.id));
+                    try { await api.post(`/api/zhiive/sparks/${spark.id}/dismiss`); } catch {}
+                  }} style={{
                     flex: 1, padding: '6px 0', textAlign: 'center', borderRadius: 20,
                     background: SF.bg,
                     color: SF.textSecondary,
                     cursor: 'pointer', fontSize: 13, fontWeight: 600,
                   }}>
-                    <DislikeOutlined /> Passer
+                    <DislikeOutlined /> {t('flow.skip')}
                   </div>
                 </div>
               )}
@@ -353,15 +378,15 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
           )) : (
             <EmptyFlow
               icon="⚡"
-              title="Aucun Spark actif"
-              subtitle="Soyez le premier à poster anonymement !"
+              title={t('flow.noSparks')}
+              subtitle={t('flow.beFirstSpark')}
             />
           )}
         </div>
       )}
 
       {/* === BATTLES — Creative Duels === */}
-      {activeSection === 'battles' && (
+      {!loading && activeSection === 'battles' && (
         <div>
           {/* Create Battle CTA */}
           <div style={{
@@ -369,9 +394,9 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
             textAlign: 'center', color: 'white',
           }}>
             <TrophyOutlined style={{ fontSize: 28 }} />
-            <div style={{ fontSize: 14, fontWeight: 700, marginTop: 6 }}>Lancez un Battle !</div>
+            <div style={{ fontSize: 14, fontWeight: 700, marginTop: 6 }}>{t('flow.launchBattle')}</div>
             <div style={{ fontSize: 11, opacity: 0.9, marginTop: 2, marginBottom: 10 }}>
-              Défiez quelqu'un dans un duel créatif
+              {t('flow.challengeSomeone')}
             </div>
             <div
               onClick={() => setBattleModalOpen(true)}
@@ -379,7 +404,7 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
               padding: '8px 20px', borderRadius: 20, display: 'inline-block',
               background: 'rgba(255,255,255,0.25)', fontWeight: 700, fontSize: 13, cursor: 'pointer',
             }}>
-              ⚔️ Lancer un Battle
+              {t('flow.launchBattleBtn')}
             </div>
           </div>
 
@@ -389,28 +414,28 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
             onCancel={() => setBattleModalOpen(false)}
             onOk={handleCreateBattle}
             confirmLoading={battleSubmitting}
-            title="⚔️ Lancer un Battle"
-            okText="Lancer"
-            cancelText="Annuler"
+            title={t('flow.newBattle')}
+            okText={t('common.launch')}
+            cancelText={t('common.cancel')}
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
               <Input
                 value={battleTitle}
                 onChange={e => setBattleTitle(e.target.value)}
-                placeholder="Titre du Battle (ex: Meilleure photo du jour)"
+                placeholder={t('flow.battleTitlePlaceholder')}
                 maxLength={200}
               />
               <Input.TextArea
                 value={battleDesc}
                 onChange={e => setBattleDesc(e.target.value)}
-                placeholder="Description / thème du défi..."
+                placeholder={t('flow.battleDescPlaceholder')}
                 rows={3}
               />
               <DatePicker
                 value={battleEndsAt}
                 onChange={setBattleEndsAt}
                 showTime
-                placeholder="Date de fin (48h par défaut)"
+                placeholder={t('flow.endDatePlaceholder')}
                 style={{ width: '100%' }}
               />
             </div>
@@ -468,7 +493,7 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
                     background: SF.gradientHot, color: 'white', fontWeight: 700,
                     fontSize: 12, cursor: 'pointer',
                   }}>
-                    🥊 Relever le défi !
+                    {t('flow.takeChallenge')}
                   </div>
                 )}
               </div>
@@ -476,15 +501,15 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
           }) : (
             <EmptyFlow
               icon="⚔️"
-              title="Aucun Battle en cours"
-              subtitle="Lancez le premier duel créatif !"
+              title={t('flow.noBattles')}
+              subtitle={t('flow.launchFirst')}
             />
           )}
         </div>
       )}
 
       {/* === QUESTS — Gamified Missions === */}
-      {activeSection === 'quests' && (
+      {!loading && activeSection === 'quests' && (
         <div>
           {/* Quest intro */}
           <div style={{
@@ -492,9 +517,9 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
             textAlign: 'center', color: 'white',
           }}>
             <StarOutlined style={{ fontSize: 28 }} />
-            <div style={{ fontSize: 14, fontWeight: 700, marginTop: 6 }}>Quêtes Zhiive</div>
+            <div style={{ fontSize: 14, fontWeight: 700, marginTop: 6 }}>{t('flow.zhiiveQuests')}</div>
             <div style={{ fontSize: 11, opacity: 0.9, marginTop: 2 }}>
-              Complétez des missions, gagnez des points et des badges !
+              {t('flow.completeMissions')}
             </div>
           </div>
 
@@ -534,7 +559,7 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
 
                 {quest.expiresAt && (
                   <div style={{ fontSize: 10, color: SF.textMuted, marginTop: 4 }}>
-                    <ClockCircleOutlined /> Expire : {new Date(quest.expiresAt).toLocaleDateString('fr-FR')}
+                    <ClockCircleOutlined /> {t('flow.expires', { date: new Date(quest.expiresAt).toLocaleDateString(i18n.language) })}
                   </div>
                 )}
               </div>
@@ -542,8 +567,8 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
           }) : (
             <EmptyFlow
               icon="🎯"
-              title="Aucune quête disponible"
-              subtitle="De nouvelles quêtes arrivent bientôt !"
+              title={t('flow.noQuests')}
+              subtitle={t('flow.checkBackSoon')}
             />
           )}
         </div>
