@@ -100,6 +100,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const remoteVideosRef = useRef<Map<string, HTMLVideoElement>>(new Map());
   const remoteStreamsRef = useRef<Map<string, MediaStream>>(new Map());
+  const remoteAudiosRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const signalPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -108,6 +109,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
   const hasJoinedRef = useRef(false);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const micAnimRef = useRef<number | null>(null);
+  const mountedAtRef = useRef(Date.now());
   const [, forceUpdate] = useState(0);
 
   // Format duration as HH:MM:SS
@@ -177,6 +179,9 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
       localStreamRef.current.getTracks().forEach(track => {
         pc.addTrack(track, localStreamRef.current!);
       });
+      console.log(`[CALL] 🎵 Added ${localStreamRef.current.getTracks().length} local track(s) to PC for ${remoteUserId.slice(0,8)}`);
+    } else {
+      console.warn(`[CALL] ⚠️ Creating PeerConnection for ${remoteUserId.slice(0,8)} WITHOUT local media!`);
     }
 
     // Handle ICE candidates
@@ -192,22 +197,31 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
 
     // Handle remote stream
     pc.ontrack = (event) => {
+      console.log(`[CALL] 🔊 Track from ${remoteUserId.slice(0,8)}:`, event.track.kind, 'enabled:', event.track.enabled);
       const [remoteStream] = event.streams;
       remoteStreamsRef.current.set(remoteUserId, remoteStream);
 
+      // Attach stream to video element if already in DOM
       const videoEl = remoteVideosRef.current.get(remoteUserId);
       if (videoEl) {
         videoEl.srcObject = remoteStream;
+        videoEl.play().catch(() => {});
       }
+      // Force re-render so ref callback runs and attaches stream
       forceUpdate(n => n + 1);
     };
 
     pc.onconnectionstatechange = () => {
+      console.log(`[CALL] 🔗 Connection (${remoteUserId.slice(0,8)}):`, pc.connectionState);
       if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
         peerConnectionsRef.current.delete(remoteUserId);
         remoteStreamsRef.current.delete(remoteUserId);
         forceUpdate(n => n + 1);
       }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      console.log(`[CALL] 🧊 ICE (${remoteUserId.slice(0,8)}):`, pc.iceConnectionState);
     };
 
     peerConnectionsRef.current.set(remoteUserId, pc);
@@ -218,6 +232,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
   // Send offer to a participant
   // ──────────────────────────────────────────────
   const sendOffer = useCallback(async (remoteUserId: string) => {
+    console.log(`[CALL] 📤 Sending offer to ${remoteUserId.slice(0,8)}`);
     const pc = createPeerConnection(remoteUserId);
     try {
       const offer = await pc.createOffer();
@@ -237,27 +252,34 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
   // ──────────────────────────────────────────────
   const handleSignal = useCallback(async (signal: { from: string; type: string; data: any }) => {
     const { from, type, data } = signal;
+    console.log(`[CALL] 📥 Signal from ${from.slice(0,8)}: ${type}`);
 
-    if (type === 'offer') {
-      const pc = createPeerConnection(from);
-      await pc.setRemoteDescription(new RTCSessionDescription(data));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      await api.post(`/api/calls/${callId}/signal`, {
-        to: from, type: 'answer', data: answer,
-      });
-    } else if (type === 'answer') {
-      const pc = peerConnectionsRef.current.get(from);
-      if (pc && pc.signalingState === 'have-local-offer') {
+    try {
+      if (type === 'offer') {
+        const pc = createPeerConnection(from);
         await pc.setRemoteDescription(new RTCSessionDescription(data));
-      }
-    } else if (type === 'ice-candidate') {
-      const pc = peerConnectionsRef.current.get(from);
-      if (pc) {
-        try {
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        await api.post(`/api/calls/${callId}/signal`, {
+          to: from, type: 'answer', data: answer,
+        });
+        console.log(`[CALL] ✅ Answer sent to ${from.slice(0,8)}`);
+      } else if (type === 'answer') {
+        const pc = peerConnectionsRef.current.get(from);
+        if (pc && pc.signalingState === 'have-local-offer') {
+          await pc.setRemoteDescription(new RTCSessionDescription(data));
+          console.log(`[CALL] ✅ Answer applied from ${from.slice(0,8)}`);
+        } else {
+          console.warn(`[CALL] ⚠️ Ignoring answer from ${from.slice(0,8)}, state: ${pc?.signalingState}`);
+        }
+      } else if (type === 'ice-candidate') {
+        const pc = peerConnectionsRef.current.get(from);
+        if (pc) {
           await pc.addIceCandidate(new RTCIceCandidate(data));
-        } catch { /* ignore late candidates */ }
+        }
       }
+    } catch (err) {
+      console.error(`[CALL] ❌ handleSignal error (${type} from ${from.slice(0,8)}):`, err);
     }
   }, [createPeerConnection, api, callId]);
 
@@ -267,14 +289,20 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
   useEffect(() => {
     signalPollRef.current = setInterval(async () => {
       if (status === 'ended') return;
+      // CRITICAL: Don't fetch signals before joining — GET removes them from server buffer!
+      // If we fetch before having local media, offers are consumed and lost.
+      if (!hasJoinedRef.current) return;
       try {
         const { signals } = await api.get(`/api/calls/${callId}/signal`);
         if (signals?.length) {
+          console.log(`[CALL] 📬 ${signals.length} signal(s) received`);
           for (const signal of signals) {
             await handleSignal(signal);
           }
         }
-      } catch { /* silent */ }
+      } catch (err) {
+        console.warn('[CALL] Signal poll error:', err);
+      }
     }, 1000);
 
     return () => { if (signalPollRef.current) clearInterval(signalPollRef.current); };
@@ -293,13 +321,23 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
             setStatus('active');
           }
 
-          // Connect to new participants that have joined
+          // Ringing timeout: auto-cancel outgoing calls after 60s
+          if (!isIncoming && data.status === 'ringing' && Date.now() - mountedAtRef.current > 60000) {
+            console.log('[CALL] ⏰ Ringing timeout 60s, auto-cancelling');
+            try { await api.post(`/api/calls/${callId}/leave`, {}); } catch {}
+            if (pollRef.current) clearInterval(pollRef.current);
+            if (signalPollRef.current) clearInterval(signalPollRef.current);
+            setStatus('ended');
+            return;
+          }
+
+          // Connect to new participants (deterministic: lower userId sends offer to prevent collision)
           if (data.status === 'active' && hasJoinedRef.current) {
             const joinedParticipants = data.participants.filter(
               (p: CallParticipant) => p.userId !== userId && p.status === 'joined'
             );
             for (const p of joinedParticipants) {
-              if (!peerConnectionsRef.current.has(p.userId)) {
+              if (!peerConnectionsRef.current.has(p.userId) && userId < p.userId) {
                 await sendOffer(p.userId);
               }
             }
@@ -332,18 +370,25 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
     if (!stream) { console.error('[CALL] Failed to get media stream'); return; }
 
     await api.post(`/api/calls/${callId}/join`, {});
+    console.log(`[CALL] ✅ Joined call with ${stream.getTracks().length} tracks (audio: ${stream.getAudioTracks().length}, video: ${stream.getVideoTracks().length})`);
     setStatus('active');
 
-    // Send offers to all already-joined participants
-    if (callData) {
-      const joined = callData.participants.filter(
-        p => p.userId !== userId && p.status === 'joined'
-      );
-      for (const p of joined) {
-        await sendOffer(p.userId);
-      }
+    // If PeerConnections were created before we had media (edge case), add tracks now and renegotiate
+    if (peerConnectionsRef.current.size > 0) {
+      peerConnectionsRef.current.forEach((pc, peerId) => {
+        const senders = pc.getSenders();
+        if (senders.length === 0 || senders.every(s => !s.track)) {
+          console.log(`[CALL] 🔄 Adding tracks to existing PC for ${peerId.slice(0,8)} and renegotiating`);
+          stream.getTracks().forEach(track => pc.addTrack(track, stream));
+          // Trigger renegotiation: create new offer with tracks
+          pc.createOffer().then(offer => {
+            pc.setLocalDescription(offer);
+            api.post(`/api/calls/${callId}/signal`, { to: peerId, type: 'offer', data: offer });
+          }).catch(err => console.error('[CALL] Renegotiation error:', err));
+        }
+      });
     }
-  }, [getLocalStream, api, callId, callData, userId, sendOffer]);
+  }, [getLocalStream, api, callId]);
 
   // Auto-join for outgoing calls
   useEffect(() => {
@@ -380,7 +425,8 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
 
     try {
       await api.post(`/api/calls/${callId}/leave`, {});
-    } catch { /* silent */ }
+      console.log('[CALL] 📴 Left call successfully');
+    } catch (err) { console.warn('[CALL] Leave error:', err); }
 
     setStatus('ended');
 
@@ -400,7 +446,10 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
       }
       setIsTranscribing(false);
     }
-  }, [api, callId, callDuration, conversationName, isRecording, callType]);
+
+    // Auto-close modal after a short delay so user sees the "ended" screen
+    setTimeout(() => onClose(), 3000);
+  }, [api, callId, callDuration, conversationName, isRecording, callType, onClose]);
 
   // Reject incoming call
   const rejectCall = useCallback(async () => {
@@ -538,6 +587,22 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
   const remoteParticipants = callData?.participants.filter(
     p => p.userId !== userId && p.status === 'joined'
   ) || [];
+
+  // Re-attach remote streams to video AND audio elements after each render (fixes race condition)
+  useEffect(() => {
+    remoteStreamsRef.current.forEach((stream, peerId) => {
+      const videoEl = remoteVideosRef.current.get(peerId);
+      if (videoEl && videoEl.srcObject !== stream) {
+        videoEl.srcObject = stream;
+        videoEl.play().catch(() => {});
+      }
+      const audioEl = remoteAudiosRef.current.get(peerId);
+      if (audioEl && audioEl.srcObject !== stream) {
+        audioEl.srcObject = stream;
+        audioEl.play().catch(() => {});
+      }
+    });
+  });
 
   // ──────────────────────────────────────────────
   // RENDER: Incoming call (ringing)
@@ -756,10 +821,33 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
             position: 'relative', background: COLORS.surface, borderRadius: 12, overflow: 'hidden',
             display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200,
           }}>
+            {/* Hidden audio element — always plays remote audio regardless of video state */}
+            <audio
+              ref={el => {
+                if (el) {
+                  remoteAudiosRef.current.set(p.userId, el);
+                  const s = remoteStreamsRef.current.get(p.userId);
+                  if (s && el.srcObject !== s) {
+                    el.srcObject = s;
+                    el.play().then(() => {
+                      console.log(`[CALL] 🔉 Audio playing for ${p.userId.slice(0,8)}`);
+                    }).catch(err => console.warn('[CALL] Audio autoplay blocked:', err.message));
+                  }
+                }
+              }}
+              autoPlay
+              style={{ display: 'none' }}
+            />
             {callType === 'video' && !p.isVideoOff ? (
               <video
-                ref={el => { if (el) { remoteVideosRef.current.set(p.userId, el); const s = remoteStreamsRef.current.get(p.userId); if (s) el.srcObject = s; } }}
-                autoPlay playsInline
+                ref={el => {
+                  if (el) {
+                    remoteVideosRef.current.set(p.userId, el);
+                    const s = remoteStreamsRef.current.get(p.userId);
+                    if (s && el.srcObject !== s) { el.srcObject = s; el.play().catch(() => {}); }
+                  }
+                }}
+                autoPlay playsInline muted
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
             ) : (

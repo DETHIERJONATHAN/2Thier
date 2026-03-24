@@ -134,6 +134,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
   const [commentText, setCommentText] = useState('');
   const [postComments, setPostComments] = useState<any[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
+  const [likedCommentsSet, setLikedCommentsSet] = useState<Set<string>>(new Set());
 
   // ── People tab filters ──
   const [peopleScope, setPeopleScope] = useState<'all' | 'friends' | 'org'>('all');
@@ -171,11 +172,22 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
     setSelectedPost(item);
     setPostComments([]);
     setCommentText('');
+    setLikedCommentsSet(new Set());
     if (item.source === 'story') return; // No comments on stories
     setCommentsLoading(true);
     try {
       const res = await api.get(`/api/wall/posts/${item.id}/comments?limit=20`);
-      if (res?.comments) setPostComments(res.comments);
+      if (res?.comments) {
+        setPostComments(res.comments);
+        // Load liked state for these comments
+        const commentIds = res.comments.map((c: any) => c.id);
+        if (commentIds.length > 0) {
+          try {
+            const likedRes = await api.post('/api/zhiive/comments/liked', { commentIds });
+            if (likedRes?.likedIds) setLikedCommentsSet(new Set(likedRes.likedIds));
+          } catch { /* non-blocking */ }
+        }
+      }
     } catch {
       // Non-blocking
     } finally {
@@ -839,14 +851,28 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                         const cIsOrg = c.publishAsOrg && c.organization;
                         const cAvatar = cIsOrg ? (c.organization?.logoUrl || null) : (c.authorAvatar || c.author?.avatarUrl || null);
                         const cName = cIsOrg ? c.organization.name : (c.authorName || [c.author?.firstName, c.author?.lastName].filter(Boolean).join(' ') || 'Utilisateur');
+                        const isCommentLiked = likedCommentsSet.has(c.id);
                         return (
-                        <div key={c.id} style={{ display: 'flex', gap: 8, padding: '6px 0' }}>
+                        <div key={c.id} style={{ display: 'flex', gap: 8, padding: '6px 0', alignItems: 'flex-start' }}>
                           <Avatar size={24} src={cAvatar} icon={!cAvatar ? <UserOutlined /> : undefined}
                             style={{ background: !cAvatar ? (cIsOrg ? '#6C5CE7' : SF.primary) : undefined, flexShrink: 0 }} />
-                          <div>
+                          <div style={{ flex: 1 }}>
                             <span style={{ fontWeight: 600, fontSize: 12, color: SF.text }}>{cName} </span>
                             <span style={{ fontSize: 12, color: SF.text }}>{c.content}</span>
                           </div>
+                          <HeartFilled
+                            onClick={async () => {
+                              try {
+                                const res = await api.post(`/api/zhiive/comments/${c.id}/like`);
+                                setLikedCommentsSet(prev => {
+                                  const next = new Set(prev);
+                                  if (res.liked) next.add(c.id); else next.delete(c.id);
+                                  return next;
+                                });
+                              } catch { /* non-blocking */ }
+                            }}
+                            style={{ fontSize: 12, color: isCommentLiked ? '#ff2d55' : SF.textMuted, cursor: 'pointer', flexShrink: 0, marginTop: 2 }}
+                          />
                         </div>
                       ); })
                     ) : (

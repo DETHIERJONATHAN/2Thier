@@ -226,8 +226,8 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
             cursor: 'pointer', position: 'relative',
           }}>
             <Avatar size={50} src={storyAvatarSrc}
-              icon={!isOrgMode && !currentUser?.avatarUrl ? <UserOutlined /> : undefined}
-              style={{ background: isOrgMode ? (orgLogo ? undefined : '#6C5CE7') : (!currentUser?.avatarUrl ? SF.primary : undefined) }}
+              icon={!storyAvatarSrc ? <UserOutlined /> : undefined}
+              style={{ background: isOrgMode ? (orgLogo ? undefined : '#6C5CE7') : (!storyAvatarSrc ? SF.primary : undefined) }}
             >
               {isOrgMode && !orgLogo && (currentOrganization?.name?.[0]?.toUpperCase() || 'O')}
             </Avatar>

@@ -5,6 +5,15 @@
 
 ---
 
+## 🚨 RÈGLES ABSOLUES
+
+> **ZÉRO STOCKAGE LOCAL** : Aucun `localStorage`/`sessionStorage`. Tout en base de données via API.
+>
+> **ZÉRO VALEUR HARDCODÉE** : Aucune couleur (`#6C5CE7`), texte français, magic number, URL en dur.
+> Utiliser `SF.*`/`FB.*`/`COLORS.*` pour les couleurs, `t('clé')` pour les textes, constantes nommées pour les nombres.
+
+---
+
 ## 📋 SOUS-APPLICATIONS
 
 | Sous-App | Composant | Statut | Description |

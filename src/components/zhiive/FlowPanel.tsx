@@ -4,7 +4,7 @@ import { Avatar, Progress, Tag, Badge, Modal, Input, message, DatePicker } from 
 import {
   ThunderboltOutlined, EyeInvisibleOutlined, TrophyOutlined,
   UserOutlined, LikeOutlined, DislikeOutlined,
-  ClockCircleOutlined, StarOutlined,
+  ClockCircleOutlined, StarOutlined, CheckCircleOutlined,
 } from '@ant-design/icons';
 import { SF } from './ZhiiveTheme';
 import { useZhiiveNav } from '../../contexts/ZhiiveNavContext';
@@ -556,6 +556,34 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
                   trailColor={SF.border}
                   format={() => `${quest.progress}/${quest.maxProgress}`}
                 />
+
+                {pct < 100 && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        await api.post(`/api/zhiive/quests/${quest.id}/progress`);
+                        setQuests(prev => prev.map(q => q.id === quest.id
+                          ? { ...q, progress: Math.min(q.progress + 1, q.maxProgress) }
+                          : q
+                        ));
+                        message.success(t('flow.questProgress'));
+                      } catch { message.error(t('flow.questError')); }
+                    }}
+                    style={{
+                      marginTop: 8, width: '100%', padding: '6px 0', border: 'none',
+                      borderRadius: SF.radiusSm, background: SF.primary, color: '#fff',
+                      fontWeight: 600, fontSize: 12, cursor: 'pointer',
+                    }}
+                  >
+                    <CheckCircleOutlined /> {t('flow.completeStep')}
+                  </button>
+                )}
+
+                {pct >= 100 && (
+                  <div style={{ marginTop: 6, fontSize: 11, color: SF.success, fontWeight: 600 }}>
+                    <CheckCircleOutlined /> {t('flow.questCompleted')}
+                  </div>
+                )}
 
                 {quest.expiresAt && (
                   <div style={{ fontSize: 10, color: SF.textMuted, marginTop: 4 }}>

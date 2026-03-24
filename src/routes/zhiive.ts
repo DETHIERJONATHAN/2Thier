@@ -1118,6 +1118,17 @@ router.get('/orbit', authenticateToken, async (req: Request, res: Response) => {
       },
     });
 
+    // Get all friend user IDs to batch-fetch online status
+    const friendUserIds = friendships.map(f => f.requesterId === userId ? f.addresseeId : f.requesterId);
+
+    // Batch fetch streaks for online status (active within last 5 minutes)
+    const streaks = await db.userStreak.findMany({
+      where: { userId: { in: friendUserIds } },
+      select: { userId: true, lastActiveAt: true },
+    });
+    const streakMap = new Map(streaks.map(s => [s.userId, s.lastActiveAt]));
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+
     // Compute real interaction scores based on reactions and comments
     const friends = await Promise.all(friendships.map(async (f) => {
       const friend = f.requesterId === userId ? f.addressee : f.requester;
@@ -1142,13 +1153,16 @@ router.get('/orbit', authenticateToken, async (req: Request, res: Response) => {
       // Normalize to 0-100 score (cap at 50 interactions = 100)
       const interactionScore = Math.min(100, Math.round((totalInteractions / 50) * 100));
 
+      const lastActiveAt = streakMap.get(friend.id);
+      const isOnline = lastActiveAt ? lastActiveAt > fiveMinAgo : false;
+
       return {
         id: friend.id,
         name: `${friend.firstName} ${friend.lastName}`.trim(),
         avatarUrl: friend.avatarUrl,
         interactionScore,
         lastInteraction: f.updatedAt || f.createdAt,
-        online: false,
+        online: isOnline,
       };
     }));
 

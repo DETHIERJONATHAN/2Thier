@@ -1,7 +1,7 @@
 # 🐝 AUDIT GLOBAL ZHIIVE — Mars 2026
 
 > Analyse ultra-détaillée de toutes les applications et sous-applications de la Ruche Zhiive.
-> Date : 24 mars 2026 | Mis à jour : 24 mars 2026 (Pass 4 — DB Persistence)
+> Date : 24 mars 2026 | Mis à jour : 24 mars 2026 (Pass 6 — WebRTC Collision Fix + Timeout + Logging)
 
 ---
 
@@ -21,18 +21,56 @@
 
 ---
 
+## 🚨 RÈGLE ABSOLUE — ZÉRO VALEUR HARDCODÉE
+
+> **AUCUNE valeur "en dur" dans le code des composants Zhiive.**
+> Toute valeur doit être centralisée, configurable et maintenable.
+>
+> Cette règle est NON NÉGOCIABLE. Un hardcode signifie :
+> - ❌ Modification manuelle dans 25+ fichiers pour un simple changement de couleur
+> - ❌ Incohérences visuelles entre composants
+> - ❌ Impossible de supporter le multi-langue (i18n cassé)
+> - ❌ Impossible de changer d'infra (STUN/TURN, API URL)
+> - ❌ Code illisible rempli de "magic numbers"
+>
+> ### Catégories interdites :
+>
+> | Type | ❌ Interdit | ✅ Obligatoire |
+> |------|-----------|---------------|
+> | **Couleurs** | `'#6C5CE7'`, `'#ff2d55'`, `'rgba(0,0,0,0.5)'` en inline | `SF.primary`, `SF.success`, `COLORS.accent` depuis le thème |
+> | **Textes FR** | `'Erreur'`, `'Chargement...'`, `'max 50 Mo'` | `t('common.error')`, `t('upload.maxSize', { size: 50 })` via i18n |
+> | **Magic numbers** | `2500`, `100 * 1024 * 1024`, `limit=20` | `TOAST_DURATION`, `MAX_VIDEO_SIZE`, `API_PAGE_SIZE` en constantes |
+> | **URLs/Serveurs** | `'stun:stun.l.google.com:19302'` | Variable d'env ou config centralisée |
+> | **Booleans hardcodés** | `online: false`, `verified: true` | Valeur calculée ou lue depuis la DB |
+> | **Labels UI** | `'My Story'`, `'Colony'`, `'Market'` | `t('stories.myStory')` via i18n |
+>
+> ### Fichiers de référence pour les constantes :
+> - **Thème Zhiive** : `src/components/zhiive/ZhiiveTheme.ts` → `SF.*` (couleurs, rayons, ombres)
+> - **Thème Wall** : `src/pages/DashboardPageUnified.tsx` → `FB.*` (Facebook-like constants)
+> - **Thème VideoCall** : `src/components/VideoCallModal.tsx` → `COLORS.*`
+> - **i18n** : `src/locales/` → fichiers de traduction
+>
+> ### Violations connues à corriger :
+> - 25+ couleurs hardcodées (`#6C5CE7`, `#FD79A8`, `#00CEC9`, `#ff2d55`, etc.)
+> - 6 textes français non traduits (`'Erreur'`, `'max 50 Mo'`, `'maintenant'`, etc.)
+> - 8 magic numbers (tailles fichiers, timeouts, limites pagination)
+> - 2 serveurs ICE/STUN hardcodés dans VideoCallModal
+
+---
+
 ## 📊 TABLEAU DE BORD GLOBAL
 
 | # | Application | Sous-apps | Bugs Critiques | Bugs Majeurs | Bugs Mineurs | Score | Statut |
 |---|-------------|-----------|----------------|--------------|-------------|-------|--------|
 | 1 | **Hive (Wall/Fil)** | Feed, Composer, Réactions, Commentaires, Partage | 0 | 0 | 1 | 9/10 | ✅ |
-| 2 | **Stories** | Création, Visualisation, Stories Org | 0 | 0 | 1 | 9/10 | ✅ |
+| 2 | **Stories** | Création, Visualisation, Stories Org | 0 | 0 | 0 | 9/10 | ✅ |
 | 3 | **Reels** | Création, Carousel Vidéo, Commentaires, Partage | 0 | 0 | 2 | 9/10 | ✅ |
-| 4 | **Scout (Explore)** | Galerie, Bees (People), Hashtags | 0 | 0 | 2 | 9/10 | ✅ |
-| 5 | **Universe** | Pulse, Événements, Capsules, Orbite | 0 | 1 | 2 | 8/10 | ✅ |
-| 6 | **Flow** | Spark, Battles, Quêtes | 0 | 1 | 2 | 8/10 | ✅ |
+| 4 | **Scout (Explore)** | Galerie, Bees (People), Hashtags, Comment Likes | 0 | 0 | 1 | 9/10 | ✅ |
+| 5 | **Universe** | Pulse, Événements, Capsules, Orbite | 0 | 0 | 2 | 8.5/10 | ✅ |
+| 6 | **Flow** | Spark, Battles, Quêtes (+ boutons action) | 0 | 0 | 2 | 8.5/10 | ✅ |
+| 7 | **Messenger** | Chat, Video Call, Audio Call, Signaling | 0 | 1 | 1 | 7.75/10 | ⚠️ |
 
-**Total bugs initiaux : 62** → **Corrigés : 27** → **Restants : 6** (0 critique, 1 majeur, 5 mineurs)
+**Total bugs initiaux : 62+6** → **Corrigés : 37** → **Restants : 4** (0 critique, 1 majeur, 3 mineurs)
 
 ---
 
@@ -82,6 +120,36 @@
 | 26 | Reels | **Comment Like → persisté en DB** via `CommentLike` table + toggle API + chargement des likes | `zhiive.ts` + `ReelsPanel.tsx` + `schema.prisma` |
 | 27 | Flow | **Quest Progress → endpoint backend** `POST /quests/:id/progress` avec compteur + complétion auto | `zhiive.ts` + `schema.prisma` |
 
+### Pass 4 — VideoCall, Orbit, Quêtes UI, Scout Comments (6 fixes)
+
+| # | App | Correction | Fichier(s) |
+|---|-----|-----------|------------|
+| 28 | Messenger | **VideoCall race condition corrigée** : triple attachement stream (ontrack + ref callback + useEffect post-render) | `VideoCallModal.tsx` |
+| 29 | Messenger | **Audio caché ajouté** : `<audio autoPlay>` pour chaque participant distant, joue l'audio même en call audio-only | `VideoCallModal.tsx` |
+| 30 | Stories | **Avatar icon** : utilise `storyAvatarSrc` au lieu de `currentUser?.avatarUrl` pour le fallback icon | `StoriesBar.tsx` |
+| 31 | Flow | **Bouton d'action Quêtes** : bouton "Compléter" qui appelle `POST /quests/:id/progress` + état complété visible | `FlowPanel.tsx` |
+| 32 | Universe | **Orbit online status** : calcul réel basé sur `UserStreak.lastActiveAt` (actif < 5 min = en ligne) | `zhiive.ts` |
+| 33 | Scout | **Comment liked state** : chargement des likes via `POST /comments/liked` + bouton like par commentaire | `ExplorePanel.tsx` |
+
+### Pass 5 — Messenger & VideoCall (4 fixes)
+
+| # | App | Correction | Fichier(s) |
+|---|-----|-----------|------------|
+| 34 | Messenger | **Audio fiable** : `remoteAudiosRef` Map + `<audio>` trackée dans useEffect post-render + logging `.play()` | `VideoCallModal.tsx` |
+| 35 | Messenger | **Hangup ferme le modal** : `onClose()` appelé 3s après `leaveCall()` (auto-close) | `VideoCallModal.tsx` |
+| 36 | Messenger | **Trace appel dans Whisper** : message système `📹 Appel vidéo terminé — Durée: Xmin Ys` inséré dans la conversation | `calls.ts` |
+| 37 | Messenger | **Trace appel rejeté** : message système `📞 Appel manqué` dans la conversation + timestamp conversation mis à jour | `calls.ts` |
+
+### Pass 6 — WebRTC Collision Fix + Timeout + Diagnostic (3 fixes)
+
+| # | App | Correction | Fichier(s) |
+|---|-----|-----------|------------|
+| 38 | Messenger | **Offres déterministes** : suppression des offres dans `joinCall()`, seul le status poll envoie les offres, règle `userId < peerUserId` pour éviter les collisions | `VideoCallModal.tsx` |
+| 39 | Messenger | **Timeout de sonnerie 60s** : auto-annulation après 60s sans réponse + message "Appel manqué" | `VideoCallModal.tsx`, `calls.ts` |
+| 40 | Messenger | **Logging WebRTC complet** : ICE/connection state, track events, offer/answer, signal polling, audio playback, join/leave confirmation | `VideoCallModal.tsx` |
+
+**Total corrigé : 40 bugs** (Passes 1-6)
+
 **Nouveaux modèles Prisma** : `SparkDismiss`, `SavedReel`, `CommentLike` (3 tables)
 **Nouveaux endpoints** : 7 routes (`dismiss`, `saved-reels` x3, `comments/like`, `comments/liked`, `quests/progress`)
 **localStorage supprimé** : 0 occurrence restante dans `src/components/zhiive/`
@@ -92,9 +160,9 @@
 
 | # | App | Bug | Sévérité | Note |
 |---|-----|-----|----------|------|
-| 1 | **Universe** | Statut en ligne (Orbit) toujours false | ⚠️ Majeur | Besoin WebSocket/heartbeat côté serveur |
-| 2 | **All** | Error handling silencieux `.catch(() => ({}))` | Mineur | Pattern toléré en v1 |
-| 3 | **Universe** | Canvas Pulse ne se redimensionne pas au resize | Mineur | Cosmétique |
+| 1 | **Messenger** | Signaling par REST polling (1s) au lieu de WebSocket | ⚠️ Majeur | Acceptable en v1, migrer vers WS en v2 |
+| 2 | **Messenger** | Pas de serveur TURN (échecs derrière NAT symétrique) | Mineur | Nécessite compte TURN externe |
+| 3 | **All** | Error handling silencieux `.catch(() => ({}))` | Mineur | Pattern toléré en v1 |
 
 ---
 
@@ -140,6 +208,8 @@ tests/zhiive/
 │   └── AUDIT-STATS.md          ← Tests Stats (KPI, Graphiques)
 ├── 08-settings/
 │   └── AUDIT-SETTINGS.md       ← Tests Paramètres
-└── 09-integration/
-    └── AUDIT-INTEGRATION.md    ← Tests cross-app
+├── 09-integration/
+│   └── AUDIT-INTEGRATION.md    ← Tests cross-app
+└── 10-messenger/
+    └── AUDIT-MESSENGER.md      ← Tests Messenger (Chat, Video/Audio Call, Signaling)
 ```

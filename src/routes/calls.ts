@@ -143,14 +143,50 @@ router.post('/:id/leave', async (req: Request, res: Response): Promise<void> => 
 
     // If no one left, end the call
     if (stillJoined === 0) {
+      const callData = await db.videoCall.findUnique({ where: { id: req.params.id } });
+      const durationSec = callData?.startedAt
+        ? Math.floor((Date.now() - callData.startedAt.getTime()) / 1000)
+        : 0;
+
       const call = await db.videoCall.update({
         where: { id: req.params.id },
         data: {
           status: 'ended',
           endedAt: new Date(),
-          duration: Math.floor((Date.now() - (await db.videoCall.findUnique({ where: { id: req.params.id } }))!.startedAt!.getTime()) / 1000),
+          duration: durationSec,
         },
       });
+
+      // Insert a system message in the conversation so the call appears in Whispers
+      if (call.conversationId) {
+        const callIcon = call.callType === 'video' ? '📹' : '📞';
+        let messageContent: string;
+
+        if (!callData?.startedAt) {
+          // Nobody answered — cancelled/missed call
+          messageContent = `${callIcon} Appel ${call.callType === 'video' ? 'vidéo' : 'audio'} manqué`;
+        } else {
+          const mins = Math.floor(durationSec / 60);
+          const secs = durationSec % 60;
+          const durationStr = mins > 0 ? `${mins}min ${secs}s` : `${secs}s`;
+          messageContent = `${callIcon} Appel ${call.callType === 'video' ? 'vidéo' : 'audio'} terminé — Durée : ${durationStr}`;
+        }
+
+        await db.message.create({
+          data: {
+            conversationId: call.conversationId,
+            senderId: user.id,
+            content: messageContent,
+          },
+        });
+
+        // Update conversation timestamp so it appears at the top
+        await db.conversation.update({
+          where: { id: call.conversationId },
+          data: { updatedAt: new Date() },
+        }).catch(() => {});
+      }
+
       res.json({ success: true, callEnded: true, call });
     } else {
       res.json({ success: true, callEnded: false });
@@ -173,6 +209,24 @@ router.post('/:id/reject', async (req: Request, res: Response): Promise<void> =>
       where: { callId: req.params.id, userId: user.id },
       data: { status: 'rejected' },
     });
+
+    // Insert a "missed call" message in the conversation
+    const call = await db.videoCall.findUnique({ where: { id: req.params.id } });
+    if (call?.conversationId) {
+      const callIcon = call.callType === 'video' ? '📹' : '📞';
+      await db.message.create({
+        data: {
+          conversationId: call.conversationId,
+          senderId: call.initiatorId,
+          content: `${callIcon} Appel ${call.callType === 'video' ? 'vidéo' : 'audio'} manqué`,
+        },
+      });
+      await db.conversation.update({
+        where: { id: call.conversationId },
+        data: { updatedAt: new Date() },
+      }).catch(() => {});
+    }
+
     res.json({ success: true });
   } catch (err) {
     console.error('[CALLS] Error rejecting call:', err);
@@ -252,6 +306,7 @@ router.post('/:id/signal', async (req: Request, res: Response): Promise<void> =>
 
   const { to, type, data } = req.body; // type: 'offer' | 'answer' | 'ice-candidate'
   const callId = req.params.id;
+  console.log(`[SIGNAL] POST ${type} from ${user.id.slice(0,8)} to ${to?.slice(0,8)} (call ${callId.slice(0,8)})`);
 
   const key = callId;
   if (!signalingBuffer.has(key)) signalingBuffer.set(key, []);
@@ -279,6 +334,7 @@ router.get('/:id/signal', async (req: Request, res: Response): Promise<void> => 
 
   // Remove consumed signals
   if (mySignals.length > 0) {
+    console.log(`[SIGNAL] GET ${mySignals.length} signal(s) for ${user.id.slice(0,8)} (call ${callId.slice(0,8)}): ${mySignals.map(s => `${s.type} from ${s.from.slice(0,8)}`).join(', ')}`);
     const remaining = signals.filter(s => s.to !== user.id);
     signalingBuffer.set(callId, remaining);
   }

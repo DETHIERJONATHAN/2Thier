@@ -114,6 +114,31 @@ const isOrgMode = feedMode === 'org' && !!currentOrganization; // NE PAS FAIRE �
 - **Provider :** Monté dans `src/pages/page2thier/MainLayoutNew.tsx` (à l'intérieur de `ZhiiveNavProvider`)
 - **Composants migrés :** DashboardPageUnified, StoriesBar, ReelsPanel, UniversePanel, ExplorePanel, MainLayoutNew
 
+### 🚫 Zéro Valeur Hardcodée (CRITIQUE)
+**NE JAMAIS** écrire de valeurs "en dur" dans les composants. **TOUJOURS** utiliser des constantes centralisées, des traductions i18n, ou des variables d'environnement.
+
+```typescript
+// ✅ BONNE PRATIQUE
+import { SF } from './ZhiiveTheme';
+<div style={{ color: SF.primary, background: SF.cardBg }}>
+  {t('common.loading')}
+</div>
+const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // dans un fichier de constantes
+
+// ❌ INTERDIT — Valeurs hardcodées !
+<div style={{ color: '#6C5CE7', background: '#1a1a2e' }}>
+  Chargement...
+</div>
+if (file.size > 100 * 1024 * 1024) // magic number !
+```
+
+**Types de hardcode interdits :**
+- **Couleurs** : utiliser `SF.*`, `FB.*`, `COLORS.*` depuis le thème
+- **Textes** : utiliser `t('clé')` depuis i18n (jamais de français en dur)
+- **Magic numbers** : exporter en constantes nommées (`MAX_FILE_SIZE`, `API_PAGE_SIZE`)
+- **URLs/Serveurs** : utiliser variables d'environnement ou config centralisée
+- **Booleans de config** : calculer depuis la DB (jamais `online: false` en dur)
+
 ## 3. Workflows de Développement
 
 ### Lancement de l'application
