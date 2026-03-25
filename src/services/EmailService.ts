@@ -168,7 +168,7 @@ class EmailService {
 
     /**
      * Envoie un e-mail générique.
-     * Stratégie : Gmail API > SMTP > Log console (fallback final)
+     * Stratégie : Gmail API > SMTP > Throw (pour que l'appelant sache)
      */
     async sendEmail(payload: SendEmailPayload): Promise<void> {
         const { to, subject, html, inviterId, organizationId } = payload;
@@ -183,9 +183,9 @@ class EmailService {
         const sent = await this.sendViaSMTP(to, subject, html);
         if (sent) return;
 
-        // 3. Console fallback
-        console.warn('[EmailService] ⚠️ Aucun transport — log console');
-        console.log(`[EmailService] À: ${to} | Sujet: ${subject}`);
+        // 3. Aucun transport — throw pour que l'appelant sache
+        console.error(`[EmailService] ❌ Aucun transport disponible pour envoyer à ${to}`);
+        throw new Error('Aucun transport email disponible (ni Gmail API, ni SMTP)');
     }
 }
 

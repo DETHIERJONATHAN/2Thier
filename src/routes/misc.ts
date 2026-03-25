@@ -149,6 +149,7 @@ router.post("/register", async (req: Request, res: Response) => {
     // Envoyer l'email d'activation
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const verifyUrl = `${frontendUrl}/verify-email?token=${emailVerificationToken}`;
+    let emailSent = false;
     
     try {
       await emailService.sendEmail({
@@ -174,15 +175,17 @@ router.post("/register", async (req: Request, res: Response) => {
         `,
       });
       console.log(`[Register] ✅ Email d'activation envoyé à ${normalizedEmail}`);
+      emailSent = true;
     } catch (emailError) {
       console.error(`[Register] ⚠️ Échec envoi email d'activation à ${normalizedEmail}:`, emailError);
-      // L'inscription reste valide même si l'email échoue
     }
 
     // Message de succès adapté
-    let successMessage = 'Inscription réussie ! Un email d\'activation a été envoyé à votre adresse. Vérifiez votre boîte de réception (et vos spams).';
+    let successMessage = emailSent
+      ? 'Inscription réussie ! Un email d\'activation a été envoyé à votre adresse. Vérifiez votre boîte de réception (et vos spams).'
+      : 'Inscription réussie ! L\'envoi de l\'email a échoué. Utilisez "Renvoyer le lien d\'activation" sur la page de connexion.';
     if (registrationType === 'createOrg') {
-      successMessage = `Organisation "${organizationName}" créée avec succès. Un email d'activation a été envoyé à votre adresse.`;
+      successMessage = `Organisation "${organizationName}" créée avec succès. ${emailSent ? "Un email d'activation a été envoyé." : "L'envoi de l'email a échoué — renvoyez-le depuis la page de connexion."}`;
     }
 
     res.status(201).json({ 
@@ -190,6 +193,7 @@ router.post("/register", async (req: Request, res: Response) => {
       id: result.user.id, 
       email: result.user.email,
       registrationType,
+      emailSent,
       organization: result.organization ? { id: result.organization.id, name: result.organization.name } : null,
       message: successMessage
     });
