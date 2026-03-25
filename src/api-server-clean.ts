@@ -452,8 +452,8 @@ if (process.env.NODE_ENV === 'production') {
         scope: '/',
         display: 'standalone',
         orientation: 'portrait',
-        theme_color: '#1890ff',
-        background_color: '#ffffff',
+        theme_color: '#1e3a5f',
+        background_color: '#0f172a',
         icons: [
           { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
           { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
@@ -473,8 +473,8 @@ if (process.env.NODE_ENV === 'production') {
           scope: '/',
           display: 'standalone',
           orientation: 'portrait',
-          theme_color: (config?.primaryColor as string) || '#1890ff',
-          background_color: '#ffffff',
+          theme_color: (config?.primaryColor as string) || '#1e3a5f',
+          background_color: '#0f172a',
           icons: [
             { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
             { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
