@@ -546,17 +546,58 @@ router.delete('/:userId', usersModifyRateLimit, requireRole(['admin', 'super_adm
       }
     }
 
-    // Transaction sécurisée
+    // Transaction sécurisée — nettoyage complet de toutes les FK vers User
+    const uid = sanitizeString(userId);
     await prisma.$transaction(async (tx) => {
-      // Supprimer toutes les relations UserOrganization
-      await tx.userOrganization.deleteMany({
-        where: { userId: sanitizeString(userId) }
-      });
+      // 1. NULL-ifier les FK nullables (conserver les données, détacher l'user)
+      await tx.notification.updateMany({ where: { userId: uid }, data: { userId: null } });
+      await tx.calendarParticipant.updateMany({ where: { userId: uid }, data: { userId: null } });
+      await tx.calendarEvent.updateMany({ where: { ownerId: uid }, data: { ownerId: null } });
+      await tx.chantierHistory.updateMany({ where: { userId: uid }, data: { userId: null } });
+      await tx.chantier.updateMany({ where: { responsableId: uid }, data: { responsableId: null } });
+      await tx.chantier.updateMany({ where: { commercialId: uid }, data: { commercialId: null } });
+      await tx.chantier.updateMany({ where: { validatedById: uid }, data: { validatedById: null } });
+      await tx.chantierEvent.updateMany({ where: { validatedById: uid }, data: { validatedById: null } });
+      await tx.formSubmission.updateMany({ where: { userId: uid }, data: { userId: null } });
+      await tx.generatedDocument.updateMany({ where: { createdBy: uid }, data: { createdBy: null } });
+      await tx.generatedDocument.updateMany({ where: { sentBy: uid }, data: { sentBy: null } });
+      await tx.googleVoiceCall.updateMany({ where: { userId: uid }, data: { userId: null } });
+      await tx.googleVoiceSMS.updateMany({ where: { userId: uid }, data: { userId: null } });
+      await tx.integrationsSettings.updateMany({ where: { userId: uid }, data: { userId: null } });
+      await tx.invitation.updateMany({ where: { targetUserId: uid }, data: { targetUserId: null } });
+      await tx.lead.updateMany({ where: { assignedToId: uid }, data: { assignedToId: null } });
+      await tx.telnyxPhoneNumber.updateMany({ where: { assignedUserId: uid }, data: { assignedUserId: null } });
+      await tx.telnyxSipEndpoint.updateMany({ where: { userId: uid }, data: { userId: null } });
+      await tx.contentReport.updateMany({ where: { reviewedBy: uid }, data: { reviewedBy: null } });
+      await tx.quest.updateMany({ where: { sponsorId: uid }, data: { sponsorId: null } });
+      await tx.website_blog_posts.updateMany({ where: { authorId: uid }, data: { authorId: null } });
+      await tx.website_media_files.updateMany({ where: { uploadedById: uid }, data: { uploadedById: null } });
 
-      // Supprimer l'utilisateur
-      await tx.user.delete({
-        where: { id: sanitizeString(userId) }
-      });
+      // 2. Supprimer les réactions/comments/shares de l'user (avant les posts)
+      await tx.wallReaction.deleteMany({ where: { userId: uid } });
+      await tx.wallComment.deleteMany({ where: { authorId: uid } });
+      await tx.wallShare.deleteMany({ where: { userId: uid } });
+
+      // 3. Supprimer les posts de l'user (cascade: réactions/comments/shares des autres)
+      await tx.wallPost.deleteMany({ where: { authorId: uid } });
+
+      // 4. Supprimer les tables avec FK requises vers User
+      await tx.deletedEmail.deleteMany({ where: { userId: uid } });
+      await tx.email.deleteMany({ where: { userId: uid } });
+      await tx.emailAccount.deleteMany({ where: { userId: uid } });
+      await tx.googleMailWatch.deleteMany({ where: { userId: uid } });
+      await tx.googleToken.deleteMany({ where: { userId: uid } });
+      await tx.googleWorkspaceUser.deleteMany({ where: { userId: uid } });
+      await tx.invitation.deleteMany({ where: { invitedById: uid } });
+      await tx.productDocument.deleteMany({ where: { uploadedById: uid } });
+      await tx.technicianFieldReview.deleteMany({ where: { reviewedById: uid } });
+      await tx.telnyxSettings.deleteMany({ where: { userId: uid } });
+      await tx.telnyxUserConfig.deleteMany({ where: { userId: uid } });
+      await tx.userOrganization.deleteMany({ where: { userId: uid } });
+      await tx.userService.deleteMany({ where: { userId: uid } });
+
+      // 5. Supprimer l'utilisateur (les tables Cascade s'auto-nettoient)
+      await tx.user.delete({ where: { id: uid } });
     });
 
     console.log(`[USERS] User ${sessionUser?.email} deleted user ${userToDelete.email}`);
@@ -565,8 +606,15 @@ router.delete('/:userId', usersModifyRateLimit, requireRole(['admin', 'super_adm
       message: `Utilisateur ${userToDelete.email} supprimé avec succès` 
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('[USERS] Erreur suppression utilisateur:', error);
+    // Message spécifique si FK constraint
+    if (error?.code === 'P2003') {
+      return res.status(400).json({ 
+        success: false, 
+        message: `Impossible de supprimer : des données liées existent (${error?.meta?.field_name || 'contrainte FK'})` 
+      });
+    }
     res.status(500).json({ 
       success: false, 
       message: "Erreur interne du serveur lors de la suppression" 
