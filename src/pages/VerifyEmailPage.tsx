@@ -44,10 +44,12 @@ export default function VerifyEmailPage() {
       });
   }, [searchParams]);
 
+  const gradientBg = 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #2563eb 100%)';
+
   if (state === 'loading') {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f8fafc' }}>
-        <Spin size="large" tip="Activation de votre compte..." />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: gradientBg }}>
+        <Spin size="large" tip={<span style={{ color: '#93c5fd' }}>Activation de votre compte...</span>} />
       </div>
     );
   }
@@ -62,11 +64,15 @@ export default function VerifyEmailPage() {
   const cfg = configs[state];
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f8fafc', padding: 24 }}>
-      <div style={{ background: '#fff', borderRadius: 20, padding: 48, maxWidth: 480, width: '100%', boxShadow: '0 4px 24px rgba(0,0,0,0.05)' }}>
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <img src="/zhiive-logo.png" alt="Zhiive" style={{ width: 48, height: 48, borderRadius: 12, objectFit: 'contain' }} />
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', minHeight: '100vh', background: gradientBg, padding: 24 }}>
+      <div style={{ textAlign: 'center', marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, justifyContent: 'center', marginBottom: 8 }}>
+          <img src="/zhiive-logo.png" alt="Zhiive" style={{ width: 56, height: 56, borderRadius: 14, objectFit: 'contain' }} />
+          <img src="/zhiive-ecrit.png" alt="Zhiive" style={{ height: 44, objectFit: 'contain' }} />
         </div>
+        <p style={{ color: '#93c5fd', fontSize: 15, margin: 0 }}>Votre ruche vivante.</p>
+      </div>
+      <div style={{ background: '#fff', borderRadius: 20, padding: 48, maxWidth: 480, width: '100%', boxShadow: '0 4px 24px rgba(0,0,0,0.15)', border: '1px solid #f1f5f9' }}>
         <Result
           status={cfg.status}
           icon={cfg.icon}

@@ -1,5 +1,6 @@
 import { GoogleGmailService } from '../google-auth/services/GoogleGmailService';
 import nodemailer from 'nodemailer';
+import { randomUUID } from 'crypto';
 
 interface InvitationEmailPayload {
     to: string;
@@ -22,6 +23,47 @@ interface SendEmailPayload {
 }
 
 class EmailService {
+
+    /**
+     * Convertit du HTML en texte brut (fallback anti-spam)
+     */
+    private htmlToPlainText(html: string): string {
+        return html
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<\/p>/gi, '\n\n')
+            .replace(/<\/h[1-6]>/gi, '\n\n')
+            .replace(/<\/li>/gi, '\n')
+            .replace(/<\/tr>/gi, '\n')
+            .replace(/<hr[^>]*>/gi, '\n---\n')
+            .replace(/<a[^>]+href="([^"]+)"[^>]*>([^<]*)<\/a>/gi, '$2 ($1)')
+            .replace(/<[^>]+>/g, '')
+            .replace(/&nbsp;/gi, ' ')
+            .replace(/&amp;/gi, '&')
+            .replace(/&lt;/gi, '<')
+            .replace(/&gt;/gi, '>')
+            .replace(/&quot;/gi, '"')
+            .replace(/&#39;/gi, "'")
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
+    }
+
+    /**
+     * Enveloppe le contenu HTML dans une structure email conforme (DOCTYPE, charset)
+     */
+    private wrapHtmlEmail(content: string): string {
+        return `<!DOCTYPE html>
+<html lang="fr" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>Zhiive</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f8f9fa;">
+${content}
+</body>
+</html>`;
+    }
 
     /**
      * Construit le contenu HTML de l'email d'invitation
@@ -102,7 +144,7 @@ class EmailService {
     /**
      * Fallback: envoie via Nodemailer SMTP (noreply@2thier.be ou config SMTP)
      */
-    private async sendViaSMTP(to: string, subject: string, htmlBody: string): Promise<boolean> {
+    private async sendViaSMTP(to: string, subject: string, htmlBody: string, plainText?: string): Promise<boolean> {
         const smtpHost = process.env.SMTP_HOST;
         const smtpUser = process.env.SMTP_USER;
         const smtpPass = process.env.SMTP_PASS;
@@ -112,6 +154,9 @@ class EmailService {
             return false;
         }
 
+        const fromAddress = process.env.SMTP_FROM || smtpUser;
+        const fromDomain = fromAddress.split('@')[1] || 'zhiive.com';
+
         try {
             const transporter = nodemailer.createTransport({
                 host: smtpHost,
@@ -120,11 +165,22 @@ class EmailService {
                 auth: { user: smtpUser, pass: smtpPass },
             });
 
+            const wrappedHtml = this.wrapHtmlEmail(htmlBody);
+            const text = plainText || this.htmlToPlainText(htmlBody);
+
             await transporter.sendMail({
-                from: `"Zhiive" <${process.env.SMTP_FROM || smtpUser}>`,
+                from: `"Zhiive" <${fromAddress}>`,
+                replyTo: `"Zhiive" <${fromAddress}>`,
                 to,
                 subject,
-                html: htmlBody,
+                html: wrappedHtml,
+                text,
+                headers: {
+                    'X-Mailer': 'Zhiive Mailer',
+                    'List-Unsubscribe': `<mailto:${fromAddress}?subject=unsubscribe>`,
+                    'Message-ID': `<${randomUUID()}@${fromDomain}>`,
+                    'Precedence': 'bulk',
+                },
             });
 
             console.log(`[EmailService] ✅ Email envoyé via SMTP (${smtpHost})`);
@@ -171,7 +227,7 @@ class EmailService {
      * Stratégie : Gmail API > SMTP > Throw (pour que l'appelant sache)
      */
     async sendEmail(payload: SendEmailPayload): Promise<void> {
-        const { to, subject, html, inviterId, organizationId } = payload;
+        const { to, subject, html, text, inviterId, organizationId } = payload;
 
         // 1. Gmail API
         if (inviterId && organizationId) {
@@ -180,7 +236,7 @@ class EmailService {
         }
 
         // 2. SMTP
-        const sent = await this.sendViaSMTP(to, subject, html);
+        const sent = await this.sendViaSMTP(to, subject, html, text);
         if (sent) return;
 
         // 3. Aucun transport — throw pour que l'appelant sache

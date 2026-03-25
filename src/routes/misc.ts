@@ -154,22 +154,23 @@ router.post("/register", async (req: Request, res: Response) => {
     try {
       await emailService.sendEmail({
         to: normalizedEmail,
-        subject: 'Zhiive — Activez votre compte',
+        subject: 'Activez votre compte Zhiive',
+        text: `Bienvenue ${firstName} !\n\nMerci de vous etre inscrit(e) sur Zhiive. Pour activer votre compte, ouvrez ce lien :\n\n${verifyUrl}\n\nCe lien est valide pendant 24 heures.\n\nSi vous n'avez pas cree de compte, ignorez simplement cet email.\n\n-- Zhiive`,
         html: `
           <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8f9fa; padding: 40px 20px;">
             <div style="background: white; border-radius: 12px; padding: 40px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
               <div style="text-align: center; margin-bottom: 30px;">
-                <h1 style="color: #6C5CE7; margin: 0; font-size: 28px;">🐝 Zhiive</h1>
+                <h1 style="color: #2563eb; margin: 0; font-size: 28px;">Zhiive</h1>
               </div>
               <h2 style="color: #1a1a2e; margin-top: 0;">Bienvenue ${firstName} !</h2>
-              <p style="color: #444; line-height: 1.6;">Merci de vous être inscrit(e) sur Zhiive. Pour activer votre compte et commencer à utiliser la plateforme, cliquez sur le bouton ci-dessous :</p>
+              <p style="color: #444; line-height: 1.6;">Merci de vous etre inscrit(e) sur Zhiive. Pour activer votre compte et commencer a utiliser la plateforme, cliquez sur le bouton ci-dessous :</p>
               <p style="text-align: center; margin: 35px 0;">
-                <a href="${verifyUrl}" style="background: linear-gradient(135deg, #6C5CE7, #a855f7); color: white; padding: 14px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block;">Activer mon compte</a>
+                <a href="${verifyUrl}" style="background-color: #2563eb; color: white; padding: 14px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block;">Activer mon compte</a>
               </p>
               <p style="color: #888; font-size: 13px;">Ce lien est valide pendant 24 heures.</p>
-              <p style="color: #888; font-size: 13px;">Si vous n'avez pas créé de compte, ignorez simplement cet email.</p>
+              <p style="color: #888; font-size: 13px;">Si vous n'avez pas cree de compte, ignorez simplement cet email.</p>
               <hr style="border: none; border-top: 1px solid #eee; margin: 25px 0;">
-              <p style="color: #aaa; font-size: 11px; text-align: center;">Zhiive — The Hive</p>
+              <p style="color: #aaa; font-size: 11px; text-align: center;">Cet email a ete envoye par Zhiive (zhiive.com). Vous recevez ce message suite a la creation de votre compte.</p>
             </div>
           </div>
         `,
@@ -303,21 +304,22 @@ router.post("/resend-verification", async (req: Request, res: Response) => {
 
     await emailService.sendEmail({
       to: user.email,
-      subject: 'Zhiive — Nouveau lien d\'activation',
+      subject: 'Nouveau lien d\'activation Zhiive',
+      text: `Bonjour,\n\nVoici votre nouveau lien pour activer votre compte Zhiive :\n\n${verifyUrl}\n\nCe lien est valide pendant 24 heures.\n\n-- Zhiive`,
       html: `
         <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8f9fa; padding: 40px 20px;">
           <div style="background: white; border-radius: 12px; padding: 40px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
             <div style="text-align: center; margin-bottom: 30px;">
-              <h1 style="color: #6C5CE7; margin: 0; font-size: 28px;">🐝 Zhiive</h1>
+              <h1 style="color: #2563eb; margin: 0; font-size: 28px;">Zhiive</h1>
             </div>
             <h2 style="color: #1a1a2e; margin-top: 0;">Nouveau lien d'activation</h2>
             <p style="color: #444; line-height: 1.6;">Voici votre nouveau lien pour activer votre compte Zhiive :</p>
             <p style="text-align: center; margin: 35px 0;">
-              <a href="${verifyUrl}" style="background: linear-gradient(135deg, #6C5CE7, #a855f7); color: white; padding: 14px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block;">Activer mon compte</a>
+              <a href="${verifyUrl}" style="background-color: #2563eb; color: white; padding: 14px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block;">Activer mon compte</a>
             </p>
             <p style="color: #888; font-size: 13px;">Ce lien est valide pendant 24 heures.</p>
             <hr style="border: none; border-top: 1px solid #eee; margin: 25px 0;">
-            <p style="color: #aaa; font-size: 11px; text-align: center;">Zhiive — The Hive</p>
+            <p style="color: #aaa; font-size: 11px; text-align: center;">Cet email a ete envoye par Zhiive (zhiive.com). Vous recevez ce message suite a votre demande de renvoi de lien d'activation.</p>
           </div>
         </div>
       `,
