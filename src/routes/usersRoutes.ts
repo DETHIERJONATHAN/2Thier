@@ -5,6 +5,8 @@ import invitationRoutes from './invitations.js';
 import { db } from '../lib/database';
 import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
+import { randomBytes } from 'crypto';
+import { emailService } from '../services/EmailService';
 
 // Type pour les requêtes authentifiées
 interface AuthenticatedRequest extends Request {
@@ -92,7 +94,9 @@ router.get('/free', requireRole(['admin', 'super_admin']), async (req: Request, 
         firstName: true,
         lastName: true,
         createdAt: true,
-        status: true
+        status: true,
+        emailVerified: true,
+        confirmationEmailSentAt: true,
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -856,6 +860,110 @@ router.post('/me/current-organization', async (req: Request, res: Response) => {
       success: false,
       message: 'Erreur lors du changement d\'organisation'
     });
+  }
+});
+
+// ============================================================================
+// POST /api/users/:userId/resend-verification - Admin: Renvoyer l'email de confirmation
+// ============================================================================
+router.post('/:userId/resend-verification', requireRole(['admin', 'super_admin']), async (req: AuthenticatedRequest, res: Response) => {
+  const { userId } = req.params;
+
+  try {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Utilisateur introuvable' });
+    }
+
+    if (user.emailVerified) {
+      return res.json({ success: true, message: 'Cet utilisateur a déjà vérifié son email.', alreadyVerified: true });
+    }
+
+    // Générer un nouveau token
+    const newToken = randomBytes(32).toString('hex');
+    const newExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        emailVerificationToken: newToken,
+        emailVerificationExpires: newExpires,
+        confirmationEmailSentAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const verifyUrl = `${frontendUrl}/verify-email?token=${newToken}`;
+    const firstName = user.firstName || '';
+
+    await emailService.sendEmail({
+      to: user.email,
+      subject: 'Activez votre compte Zhiive',
+      text: `Bonjour ${firstName},\n\nVoici votre lien pour activer votre compte Zhiive :\n\n${verifyUrl}\n\nCe lien est valide pendant 24 heures.\n\n-- Zhiive`,
+      html: `
+        <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8f9fa; padding: 40px 20px;">
+          <div style="background: white; border-radius: 12px; padding: 40px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+            <div style="text-align: center; margin-bottom: 30px;">
+              <h1 style="color: #2563eb; margin: 0; font-size: 28px;">Zhiive</h1>
+            </div>
+            <h2 style="color: #1a1a2e; margin-top: 0;">Bonjour ${firstName} !</h2>
+            <p style="color: #444; line-height: 1.6;">Un administrateur vous a renvoy&eacute; le lien d'activation. Cliquez ci-dessous pour activer votre compte :</p>
+            <p style="text-align: center; margin: 35px 0;">
+              <a href="${verifyUrl}" style="background-color: #2563eb; color: white; padding: 14px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block;">Activer mon compte</a>
+            </p>
+            <p style="color: #888; font-size: 13px;">Ce lien est valide pendant 24 heures.</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 25px 0;">
+            <p style="color: #aaa; font-size: 11px; text-align: center;">Cet email a ete envoye par Zhiive.</p>
+          </div>
+        </div>
+      `,
+    });
+
+    console.log(`[USERS] ✅ Email de vérification renvoyé à ${user.email} par admin ${req.user?.email}`);
+    res.json({ success: true, message: `Email de confirmation renvoyé à ${user.email}` });
+
+  } catch (error) {
+    console.error('[USERS] Erreur renvoi email vérification:', error);
+    res.status(500).json({ success: false, message: "Erreur lors de l'envoi de l'email de vérification" });
+  }
+});
+
+// ============================================================================
+// PATCH /api/users/:userId/global-status - Admin: Toggle statut global Zhiive
+// ============================================================================
+router.patch('/:userId/global-status', requireRole(['admin', 'super_admin']), async (req: AuthenticatedRequest, res: Response) => {
+  const { userId } = req.params;
+  const { status } = req.body;
+
+  const parsed = z.object({
+    status: z.enum(['active', 'inactive'], {
+      errorMap: () => ({ message: 'Statut doit être "active" ou "inactive"' })
+    })
+  }).safeParse({ status });
+
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, message: parsed.error.errors[0]?.message });
+  }
+
+  try {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Utilisateur introuvable' });
+    }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { status: parsed.data.status, updatedAt: new Date() },
+    });
+
+    console.log(`[USERS] Statut global Zhiive de ${user.email} → ${parsed.data.status} (par ${req.user?.email})`);
+    res.json({ success: true, message: `Statut Zhiive mis à jour: ${parsed.data.status}` });
+
+  } catch (error) {
+    console.error('[USERS] Erreur changement statut global:', error);
+    res.status(500).json({ success: false, message: 'Erreur lors du changement de statut global' });
   }
 });
 

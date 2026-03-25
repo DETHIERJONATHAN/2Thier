@@ -2226,6 +2226,7 @@ model User {
   emailVerified                                       Boolean                                  @default(false)
   emailVerificationToken                              String?
   emailVerificationExpires                            DateTime?
+  confirmationEmailSentAt                             DateTime?
   CalendarEvent                                       CalendarEvent[]
   CalendarParticipant                                 CalendarParticipant[]
 

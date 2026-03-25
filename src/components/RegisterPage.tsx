@@ -11,6 +11,8 @@ const { Title, Text } = Typography;
 
 export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
+  const [registrationComplete, setRegistrationComplete] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState('');
   const [form] = Form.useForm();
   const navigate = useNavigate();
   const apiHook = useAuthenticatedApi();
@@ -40,11 +42,8 @@ export default function RegisterPage() {
       });
 
       if (response.success !== false) {
-        message.success({
-          content: 'Inscription réussie ! Vérifiez votre boîte mail pour activer votre compte.',
-          duration: 8,
-        });
-        navigate('/login');
+        setRegisteredEmail(cleanEmail);
+        setRegistrationComplete(true);
       } else {
         throw new Error(response.error || "Erreur lors de l'inscription");
       }
@@ -144,6 +143,69 @@ export default function RegisterPage() {
               <p style={{ color: '#93c5fd', fontSize: 15, margin: 0 }}>Votre ruche vivante.</p>
             </div>
 
+            {registrationComplete ? (
+              /* === ÉCRAN DE CONFIRMATION POST-INSCRIPTION === */
+              <div style={{ background: '#fff', borderRadius: 20, padding: '48px 28px', boxShadow: '0 4px 24px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9', textAlign: 'center' }}>
+                <div style={{
+                  width: 80, height: 80, borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  margin: '0 auto 24px',
+                }}>
+                  <MailOutlined style={{ fontSize: 36, color: '#059669' }} />
+                </div>
+
+                <Title level={3} style={{ color: '#111827', margin: '0 0 12px' }}>
+                  Vérifiez votre boîte mail !
+                </Title>
+
+                <Text style={{ color: '#6b7280', fontSize: 15, lineHeight: 1.6, display: 'block', marginBottom: 8 }}>
+                  Un email d'activation a été envoyé à :
+                </Text>
+                <Text strong style={{ color: '#2563eb', fontSize: 16, display: 'block', marginBottom: 24 }}>
+                  {registeredEmail}
+                </Text>
+
+                <div style={{
+                  background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12,
+                  padding: '16px 20px', marginBottom: 24, textAlign: 'left',
+                }}>
+                  <Text strong style={{ color: '#92400e', fontSize: 14, display: 'block', marginBottom: 8 }}>
+                    ⚠️ Étape obligatoire avant de vous connecter
+                  </Text>
+                  <Text style={{ color: '#78350f', fontSize: 13, lineHeight: 1.6 }}>
+                    Ouvrez votre boîte mail et cliquez sur le lien d'activation.
+                    Sans cette étape, vous ne pourrez pas vous connecter.
+                  </Text>
+                </div>
+
+                <div style={{
+                  background: '#f8fafc', borderRadius: 12,
+                  padding: '16px 20px', marginBottom: 28, textAlign: 'left',
+                }}>
+                  <Text style={{ color: '#64748b', fontSize: 13, lineHeight: 1.8 }}>
+                    📨 Vous ne trouvez pas l'email ?<br />
+                    • Vérifiez votre dossier <strong>Spam / Courrier indésirable</strong><br />
+                    • L'email vient de <strong>Zhiive</strong><br />
+                    • Il peut prendre 1-2 minutes pour arriver
+                  </Text>
+                </div>
+
+                <Button
+                  type="primary"
+                  size="large"
+                  block
+                  onClick={() => navigate('/login')}
+                  style={{
+                    borderRadius: 12, height: 50, fontSize: 16, fontWeight: 600,
+                    background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                    border: 'none', boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)',
+                  }}
+                >
+                  J'ai activé mon compte — Me connecter
+                </Button>
+              </div>
+            ) : (
             <div style={{ background: '#fff', borderRadius: 20, padding: '32px 28px', boxShadow: '0 4px 24px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9' }}>
               <div style={{ textAlign: 'center', marginBottom: 24 }}>
                 <Title level={2} style={{ margin: '0 0 8px 0', fontSize: 26, color: '#111827' }}>Rejoignez le Hive</Title>
@@ -315,6 +377,7 @@ export default function RegisterPage() {
                 Se connecter
               </Button>
             </div>
+            )}
           </div>
         </div>
       </div>

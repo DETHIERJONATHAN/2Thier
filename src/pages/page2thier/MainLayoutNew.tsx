@@ -1,16 +1,15 @@
 import React, { useCallback, useMemo, useEffect, useState, useRef, lazy, Suspense } from 'react';
-import { Layout, Dropdown, Input, Avatar } from 'antd';
+import { Layout, Dropdown, Avatar } from 'antd';
+import GlobalSearch from '../../components/GlobalSearch';
 import NotificationsBell from '../../components/NotificationsBell';
 const MessengerChat = lazy(() => import('../../components/MessengerChat'));
 import type { MenuProps } from 'antd';
 import { NavLink, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { 
   SearchOutlined,
-  DownOutlined,
   LogoutOutlined,
   UserOutlined,
   SettingOutlined,
-  CloseOutlined,
   CompassOutlined,
   BarChartOutlined,
 } from '@ant-design/icons';
@@ -237,7 +236,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const { setCenterApp } = useZhiiveNav();
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [showSearch, setShowSearch] = useState(false);
-  const searchInputRef = useRef<any>(null);
   const isMobile = windowWidth < 768;
   const headerHeight = isMobile ? MOBILE_HEADER_HEIGHT : DESKTOP_HEADER_HEIGHT;
 
@@ -275,21 +273,17 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     navigate('/login'); 
   }, [logout, navigate]);
 
-  // Focus search input when opened
+  // Ctrl+K shortcut to open global search
   useEffect(() => {
-    if (showSearch) {
-      setTimeout(() => searchInputRef.current?.focus(), 100);
-    }
-  }, [showSearch]);
-
-  // Close search with Escape
-  useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && showSearch) setShowSearch(false);
+    const handleKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowSearch(prev => !prev);
+      }
     };
-    document.addEventListener('keydown', handleEsc);
-    return () => document.removeEventListener('keydown', handleEsc);
-  }, [showSearch]);
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, []);
 
   // Menu profil utilisateur
   const userProfileMenu = useMemo<MenuProps>(() => ({
@@ -443,36 +437,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         </div>
       </Header>
 
-      {/* Barre de recherche — overlay qui apparaît au clic sur la loupe */}
-      {showSearch && (
-        <div style={{
-          position: 'fixed',
-          top: `${headerHeight}px`,
-          left: 0,
-          right: 0,
-          zIndex: 999,
-          background: 'linear-gradient(135deg, #0B0E2A 0%, #1a1e4e 100%)',
-          padding: '8px 16px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-        }}>
-          <Input
-            ref={searchInputRef}
-            placeholder="Rechercher..."
-            prefix={<SearchOutlined style={{ color: '#93a3aa' }} />}
-            className="search-2thier"
-            allowClear
-            aria-label="Recherche globale"
-            style={{ flex: 1, height: 36 }}
-          />
-          <CloseOutlined 
-            onClick={() => setShowSearch(false)} 
-            style={{ color: 'white', fontSize: 16, cursor: 'pointer', padding: 4 }} 
-          />
-        </div>
-      )}
+      {/* 🔍 Recherche universelle Zhiive — GlobalSearch */}
+      <GlobalSearch
+        visible={showSearch}
+        onClose={() => setShowSearch(false)}
+        headerHeight={headerHeight}
+        isMobile={isMobile}
+      />
 
       <Content style={{ 
         backgroundColor: 'white',

@@ -31,12 +31,16 @@ export default function Connexion() {
     } catch (err: any) {
       console.error('[Connexion] Erreur lors du login:', err);
       // Détecter l'erreur email non vérifié (403 avec emailNotVerified)
-      if (err?.emailNotVerified || err?.status === 403) {
+      if (err?.emailNotVerified || err?.status === 403 || (err?.body as any)?.emailNotVerified) {
         setEmailNotVerified(true);
-        setUnverifiedEmail(err?.email || values.email);
+        setUnverifiedEmail(err?.email || (err?.body as any)?.email || values.email);
         setError('');
+      } else if (err?.status === 429) {
+        setError('Trop de tentatives. Veuillez patienter quelques minutes avant de réessayer.');
+      } else if (err?.status === 401) {
+        setError('Email ou mot de passe incorrect.');
       } else {
-        setError(err instanceof Error ? err.message : 'Une erreur est survenue.');
+        setError(err instanceof Error ? err.message : 'Une erreur est survenue. Vérifiez votre connexion internet.');
       }
     } finally {
       setLoading(false);
@@ -155,12 +159,16 @@ export default function Connexion() {
                   type="warning"
                   showIcon
                   style={{ borderRadius: 12, marginBottom: 24 }}
-                  message="Email non vérifié"
+                  message="Compte pas encore activé"
                   description={
                     <div>
-                      <p style={{ margin: '4px 0 12px' }}>
-                        Votre compte n'est pas encore activé. Vérifiez votre boîte de réception
-                        {unverifiedEmail ? ` (${unverifiedEmail})` : ''} et cliquez sur le lien d'activation.
+                      <p style={{ margin: '4px 0 8px', lineHeight: 1.6 }}>
+                        Avant de pouvoir vous connecter, vous devez activer votre compte
+                        en cliquant sur le lien envoyé par email
+                        {unverifiedEmail ? ` à ${unverifiedEmail}` : ''}.
+                      </p>
+                      <p style={{ margin: '0 0 12px', fontSize: 13, color: '#78350f' }}>
+                        💡 Pensez à vérifier vos <strong>spams / courrier indésirable</strong>.
                       </p>
                       {resendSuccess ? (
                         <Text type="success" style={{ fontSize: 13 }}>
@@ -174,7 +182,7 @@ export default function Connexion() {
                           onClick={handleResendVerification}
                           style={{ padding: 0, fontSize: 13 }}
                         >
-                          Renvoyer le lien d'activation
+                          Vous n'avez pas reçu l'email ? Renvoyer le lien
                         </Button>
                       )}
                     </div>

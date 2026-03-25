@@ -78,7 +78,9 @@ const staticApi = {
         const message =
           (parsedBody && typeof parsedBody === 'object' && 'error' in parsedBody && typeof (parsedBody as { error?: string }).error === 'string')
             ? (parsedBody as { error: string }).error
-            : `API call failed: ${response.status}`;
+            : (parsedBody && typeof parsedBody === 'object' && 'message' in parsedBody && typeof (parsedBody as { message?: string }).message === 'string')
+              ? (parsedBody as { message: string }).message
+              : `API call failed: ${response.status}`;
         const error: ApiError = new Error(message);
         error.status = response.status;
         error.body = parsedBody;
@@ -130,7 +132,9 @@ const staticApi = {
         const message =
           (parsedBody && typeof parsedBody === 'object' && 'error' in parsedBody && typeof (parsedBody as { error?: string }).error === 'string')
             ? (parsedBody as { error: string }).error
-            : `API call failed: ${response.status}`;
+            : (parsedBody && typeof parsedBody === 'object' && 'message' in parsedBody && typeof (parsedBody as { message?: string }).message === 'string')
+              ? (parsedBody as { message: string }).message
+              : `API call failed: ${response.status}`;
         const error: ApiError = new Error(message);
         error.status = response.status;
         error.body = parsedBody;
@@ -555,20 +559,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const seconds = Math.round(retryAfterMs / 1000);
           window.__authMeCooldownUntil = Date.now() + retryAfterMs;
           msgApi.error(`Trop de tentatives de connexion. Patientez ${seconds > 60 ? `${Math.ceil(seconds / 60)} minutes` : `${seconds} secondes`} avant de réessayer.`);
-        } else if (apiError?.status === 403 && (apiError?.body as any)?.emailNotVerified) {
+          throw error;
+        } else if (apiError?.status === 403 && ((apiError?.body as any)?.emailNotVerified || apiError?.message?.includes('vérifié'))) {
           // Email non vérifié — propager l'erreur avec les détails pour le composant Connexion
-          const enrichedError = Object.assign(new Error(apiError.message || 'Email non vérifié'), {
+          const enrichedError = Object.assign(new Error('Votre compte n\'est pas encore activé. Vérifiez votre boîte mail pour le lien d\'activation.'), {
             emailNotVerified: true,
-            email: (apiError.body as any).email,
+            email: (apiError.body as any)?.email || '',
             status: 403,
           });
           throw enrichedError;
         } else if (apiError?.status === 401) {
-          msgApi.error(apiError.message || 'Identifiants invalides.');
+          // Pas de msgApi.error ici — le composant Connexion affiche déjà l'erreur
+          throw Object.assign(new Error('Email ou mot de passe incorrect.'), { status: 401 });
         } else {
-          msgApi.error(apiError?.message || 'Connexion impossible pour le moment.');
+          throw Object.assign(new Error(apiError?.message || 'Connexion impossible pour le moment.'), { status: apiError?.status });
         }
-        throw error;
       } finally {
         // On relâche le verrou avec un micro délai pour prévenir les doubles clics rapides
         setTimeout(() => { window.__authLoginInFlight = false; }, 300);

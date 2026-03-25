@@ -1861,7 +1861,7 @@ export default function DashboardPageUnified() {
   // Hooks must be called before any early return to respect Rules of Hooks
   const { sections: sharedSections } = useSharedSections();
 
-  // Module favorites (double-click to toggle, persisted in localStorage)
+  // Module favorites (long-press to toggle, persisted in localStorage)
   const [favModules, setFavModules] = useState<Set<string>>(() => {
     try { const s = localStorage.getItem('crm_fav_modules'); return s ? new Set(JSON.parse(s)) : new Set(); } catch { return new Set(); }
   });
@@ -1874,8 +1874,25 @@ export default function DashboardPageUnified() {
     });
   }, []);
 
-  // Mobile double-tap detection for module favorites
-  const lastTapRef = useRef<{ route: string; time: number }>({ route: '', time: 0 });
+  // Long-press detection for module favorites (replaces double-click/double-tap)
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTriggered = useRef(false);
+  const startLongPress = useCallback((route: string) => {
+    longPressTriggered.current = false;
+    longPressTimer.current = setTimeout(() => {
+      if (!pillsDrag.current.moved) {
+        longPressTriggered.current = true;
+        toggleFavModule(route);
+        if (navigator.vibrate) navigator.vibrate(50);
+      }
+    }, 500);
+  }, [toggleFavModule]);
+  const cancelLongPress = useCallback(() => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }, []);
 
   // Drag-to-scroll for module pills bar (desktop mouse + mobile touch)
   const pillsRef = useRef<HTMLDivElement>(null);
@@ -2666,18 +2683,16 @@ export default function DashboardPageUnified() {
               <div key={mod.key || mod.id || i}
                 onClick={() => {
                   if (pillsDrag.current.moved) return;
-                  const now = Date.now();
-                  const last = lastTapRef.current;
-                  if (last.route === route && now - last.time < 400) {
-                    // Double-tap detected (works on mobile + desktop)
-                    toggleFavModule(route);
-                    lastTapRef.current = { route: '', time: 0 };
-                    return;
-                  }
-                  lastTapRef.current = { route, time: now };
+                  if (longPressTriggered.current) return;
                   openModule(route); setCenterApp(null);
                 }}
-                onDoubleClick={(e) => { e.preventDefault(); toggleFavModule(route); }}
+                onTouchStart={() => startLongPress(route)}
+                onTouchEnd={cancelLongPress}
+                onTouchMove={cancelLongPress}
+                onMouseDown={(e) => { if (e.button === 0) startLongPress(route); }}
+                onMouseUp={cancelLongPress}
+                onMouseLeave={cancelLongPress}
+                onContextMenu={(e) => e.preventDefault()}
                 style={{ cursor: 'pointer', userSelect: 'none' }}>
                 <div style={{
                   flex: "0 0 auto", display: "flex", alignItems: "center",

@@ -91,6 +91,7 @@ import messengerRoutes from './messenger'; // 💬 Routes Messenger
 import callsRoutes from './calls'; // 📹 Routes Appels Vidéo/Audio
 import pushRoutes from './push'; // 🔔 Routes Push Notifications
 import zhiiveRoutes from './zhiive'; // 🌊 Routes Zhiive — Réseau Social Nouvelle Génération
+import globalSearchRoutes from './globalSearch'; // 🔍 Recherche universelle globale
 import { authenticateToken, fetchFullUser } from '../middleware/auth'; // 🔐 Middleware auth pour TBL
 
 const apiRouter = Router();
@@ -433,6 +434,9 @@ apiRouter.use('/push', pushRoutes);
 apiRouter.use('/zhiive', zhiiveRoutes);
 
 // apiRouter.use('/auth/google', googleAuthRouter); // NOUVEAU: Authentification Google OAuth - Commenté car non défini
+
+// 🔍 RECHERCHE UNIVERSELLE GLOBALE
+apiRouter.use('/search', globalSearchRoutes);
 
 // Route simple pour vérifier que l'API fonctionne (non authentifiée)
 apiRouter.get('/health', (_req, res) => {

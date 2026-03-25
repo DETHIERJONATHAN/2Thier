@@ -9,6 +9,10 @@ export interface User {
   status: string;
   createdAt: string;
   updatedAt: string;
+  emailVerified?: boolean;
+  confirmationEmailSentAt?: string;
+  globalStatus?: string; // Statut global Zhiive ("active" / "inactive")
+  orgStatus?: string;    // Statut dans l'organisation ("ACTIVE" / "INACTIVE")
   // Relations
   UserOrganization?: UserOrganization[];
   organizationRole?: Role;

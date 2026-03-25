@@ -81,6 +81,7 @@ router.post("/register", async (req: Request, res: Response) => {
           emailVerified: false,
           emailVerificationToken,
           emailVerificationExpires,
+          confirmationEmailSentAt: new Date(),
           updatedAt: new Date(),
         },
       });
@@ -295,6 +296,7 @@ router.post("/resend-verification", async (req: Request, res: Response) => {
       data: {
         emailVerificationToken: newToken,
         emailVerificationExpires: newExpires,
+        confirmationEmailSentAt: new Date(),
         updatedAt: new Date(),
       },
     });

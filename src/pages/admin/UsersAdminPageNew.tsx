@@ -169,13 +169,22 @@ const UsersAdminPageNew: React.FC = () => {
     return parts.some(value => value.includes(normalizedSearch));
   }, [normalizedSearch]);
 
-  const filteredUsers = useMemo(() => (
-    normalizedSearch ? users.filter(matchesUserSearch) : users
-  ), [users, normalizedSearch, matchesUserSearch]);
+  // Fusionner les utilisateurs org + libres en une seule liste
+  const allUsers = useMemo(() => {
+    const orgUserIds = new Set(users.map(u => u.id));
+    const processedFree = freeUsers.map(u => ({
+      ...u,
+      key: u.id,
+      globalStatus: (u as Record<string, unknown>).status as string || 'active',
+      orgStatus: 'NONE' as string,
+      status: 'NONE',
+    }));
+    return [...users, ...processedFree.filter(u => !orgUserIds.has(u.id))];
+  }, [users, freeUsers]);
 
-  const filteredFreeUsers = useMemo(() => (
-    normalizedSearch ? freeUsers.filter(u => matchesUserSearch(u)) : freeUsers
-  ), [freeUsers, normalizedSearch, matchesUserSearch]);
+  const filteredUsers = useMemo(() => (
+    normalizedSearch ? allUsers.filter(matchesUserSearch) : allUsers
+  ), [allUsers, normalizedSearch, matchesUserSearch]);
 
   const filteredInvitations = useMemo(() => (
     normalizedSearch
@@ -191,6 +200,7 @@ const UsersAdminPageNew: React.FC = () => {
       const usersResponse = await apiInstance.get('/api/users');
       type RawUserFromApi = {
         id: string; email: string; firstName?: string; lastName?: string;
+        status?: string;
         UserOrganization?: Array<{
           id: string; organizationId: string;
           status: 'ACTIVE' | 'INACTIVE' | string;
@@ -203,13 +213,17 @@ const UsersAdminPageNew: React.FC = () => {
               ? u.UserOrganization.find((r) => r.organizationId === currentOrganization.id) || u.UserOrganization[0]
               : u.UserOrganization[0])
           : undefined;
+        const orgStatus = (rel?.status as string) || 'INACTIVE';
+        const globalStatus = (u as Record<string, unknown>).status as string || 'active';
         return {
           ...(u as unknown as User),
           key: u.id,
           organizationId: rel?.organizationId,
           organizationRole: rel?.Role,
           userOrganizationId: rel?.id,
-          status: (rel?.status as User['status']) || 'INACTIVE',
+          status: orgStatus,
+          orgStatus,
+          globalStatus,
         };
       });
 
@@ -291,6 +305,20 @@ const UsersAdminPageNew: React.FC = () => {
     } catch { /* géré par le hook */ }
   };
 
+  const handleResendVerification = async (user: User) => {
+    try {
+      const response = await api.post(`/api/users/${user.id}/resend-verification`);
+      if (response.success) {
+        if (response.alreadyVerified) {
+          msgApi.info('Cet utilisateur a déjà vérifié son email.');
+        } else {
+          msgApi.success(`Email de confirmation renvoyé à ${user.email}`);
+        }
+        await fetchAllData();
+      }
+    } catch { /* géré par le hook */ }
+  };
+
   const handleStatusChange = async (user: User, newStatus: 'ACTIVE' | 'INACTIVE') => {
     if (!user.userOrganizationId) {
       msgApi.error("ID de relation manquant, impossible de changer le statut.");
@@ -302,7 +330,20 @@ const UsersAdminPageNew: React.FC = () => {
         { status: newStatus }
       );
       if (response.success) {
-        msgApi.success(`Utilisateur ${newStatus === 'ACTIVE' ? 'réactivé' : 'désactivé'}.`);
+        msgApi.success(`Utilisateur ${newStatus === 'ACTIVE' ? 'réactivé' : 'désactivé'} dans l'organisation.`);
+        await fetchAllData();
+      }
+    } catch { /* Le hook gère l'erreur */ }
+  };
+
+  const handleGlobalStatusChange = async (user: User, newStatus: 'active' | 'inactive') => {
+    try {
+      const response = await api.patch(
+        `/api/users/${user.id}/global-status`,
+        { status: newStatus }
+      );
+      if (response.success) {
+        msgApi.success(`Compte Zhiive ${newStatus === 'active' ? 'activé' : 'désactivé'}.`);
         await fetchAllData();
       }
     } catch { /* Le hook gère l'erreur */ }
@@ -406,12 +447,13 @@ const UsersAdminPageNew: React.FC = () => {
     return `${fn} ${ln}`.trim() || u.email || '';
   };
 
-  const activeCount = users.filter(u => u.status === 'ACTIVE').length;
+  const activeOrgCount = allUsers.filter(u => u.orgStatus === 'ACTIVE').length;
+  const activeZhiiveCount = allUsers.filter(u => u.globalStatus === 'active').length;
+  const freeCount = allUsers.filter(u => !u.userOrganizationId).length;
   const pendingInvCount = invitations.filter(i => i.status === 'PENDING').length;
 
   const tabs = [
-    { key: 'users', label: 'Utilisateurs', count: users.length, icon: '👥' },
-    { key: 'free-users', label: 'Libres', count: freeUsers.length, icon: '🆓' },
+    { key: 'users', label: 'Utilisateurs', count: allUsers.length, icon: '👥' },
     { key: 'invitations', label: 'Invitations', count: invitations.length, icon: '📨' },
   ];
 
@@ -455,8 +497,10 @@ const UsersAdminPageNew: React.FC = () => {
     const services = userServices[user.id] || [];
     const emailSvc = services.find(s => s.serviceName === 'email');
     const telnyxSvc = services.find(s => s.serviceName === 'telnyx');
-    const isActive = user.status === 'ACTIVE';
-    const roleName = user.organizationRole?.label || user.organizationRole?.name || '—';
+    const isOrgActive = user.orgStatus === 'ACTIVE';
+    const hasOrg = user.orgStatus !== 'NONE' && !!user.userOrganizationId;
+    const isGlobalActive = user.globalStatus === 'active';
+    const roleName = user.organizationRole?.label || user.organizationRole?.name || (hasOrg ? '—' : 'Libre');
     const showAddToOrg = !user.userOrganizationId && currentOrganization?.id && currentOrganization.id !== 'all' && hasPermission('super_admin');
     const canEdit = hasPermission('admin') || hasPermission('super_admin');
     const canManageOrgs = hasPermission('super_admin');
@@ -494,24 +538,40 @@ const UsersAdminPageNew: React.FC = () => {
                 fontSize: 12, padding: '2px 8px', borderRadius: 12,
                 background: '#e7f3ff', color: FB.blue, fontWeight: 500,
               }}>{roleName}</span>
-              <span style={{
+              <span title="Statut sur le réseau Zhiive" style={{
                 fontSize: 11, padding: '2px 8px', borderRadius: 12,
-                background: isActive ? '#e6f4ea' : '#fce8e6',
-                color: isActive ? FB.green : FB.red, fontWeight: 600,
-              }}>{isActive ? '● Actif' : '○ Inactif'}</span>
+                background: isGlobalActive ? '#e6f4ea' : '#fce8e6',
+                color: isGlobalActive ? FB.green : FB.red, fontWeight: 600,
+              }}>{isGlobalActive ? '🐝 Zhiive' : '○ Zhiive'}</span>
+              <span title="Statut dans l'organisation" style={{
+                fontSize: 11, padding: '2px 8px', borderRadius: 12,
+                background: !hasOrg ? FB.btnGray : isOrgActive ? '#e6f4ea' : '#fce8e6',
+                color: !hasOrg ? FB.textSecondary : isOrgActive ? FB.green : FB.red, fontWeight: 600,
+              }}>{!hasOrg ? '— Aucune org' : isOrgActive ? '🏢 Org' : '○ Org'}</span>
             </div>
             <div style={{ color: FB.textSecondary, fontSize: 13, marginTop: 2, wordBreak: 'break-all' }}>{user.email}</div>
           </div>
 
-          {/* Status toggle */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-            <span style={{ fontSize: 12, color: FB.textSecondary }}>Statut</span>
-            <FBToggle
-              checked={isActive}
-              onChange={(c) => handleStatusChange(user, c ? 'ACTIVE' : 'INACTIVE')}
-              disabled={!user.userOrganizationId}
-              size="small"
-            />
+          {/* Status toggles: Zhiive (global) + Org */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 12, color: FB.textSecondary }}>🐝 Zhiive</span>
+              <FBToggle
+                checked={isGlobalActive}
+                onChange={(c) => handleGlobalStatusChange(user, c ? 'active' : 'inactive')}
+                disabled={!canEdit}
+                size="small"
+              />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 12, color: FB.textSecondary }}>🏢 Org</span>
+              <FBToggle
+                checked={isOrgActive}
+                onChange={(c) => handleStatusChange(user, c ? 'ACTIVE' : 'INACTIVE')}
+                disabled={!user.userOrganizationId}
+                size="small"
+              />
+            </div>
           </div>
         </div>
 
@@ -537,6 +597,46 @@ const UsersAdminPageNew: React.FC = () => {
               size="small"
             />
           </div>
+
+          {/* Email verification indicators */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 13, color: FB.textSecondary }}>📤 Envoyé</span>
+            <FBToggle
+              checked={!!user.confirmationEmailSentAt}
+              onChange={() => {}}
+              disabled
+              size="small"
+            />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 13, color: user.emailVerified ? FB.green : FB.textSecondary }}>
+              {user.emailVerified ? '✅' : '⏳'} Confirmé
+            </span>
+            <FBToggle
+              checked={user.emailVerified || false}
+              onChange={() => {}}
+              disabled
+              size="small"
+            />
+          </div>
+          {/* Resend button - only if not yet verified */}
+          {!user.emailVerified && canEdit && (
+            <button
+              onClick={() => handleResendVerification(user)}
+              title={user.confirmationEmailSentAt
+                ? `Dernier envoi : ${new Date(user.confirmationEmailSentAt).toLocaleString()}`
+                : 'Aucun email envoyé'}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '4px 10px', borderRadius: 6, border: `1px solid ${FB.orange}`,
+                background: '#fff8f0', color: FB.orange,
+                cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                transition: 'background 0.15s', whiteSpace: 'nowrap',
+              }}
+            >
+              <span>📤</span> Renvoyer
+            </button>
+          )}
 
           <div style={{ flex: 1 }} />
 
@@ -564,66 +664,6 @@ const UsersAdminPageNew: React.FC = () => {
                 onConfirm={() => handleDeleteUser(user)}
               >
                 <ActionBtn label="Supprimer" icon="🗑️" onClick={() => {}} danger />
-              </FBConfirm>
-            )}
-          </div>
-        </div>
-      </FBCard>
-    );
-  };
-
-  // ══════════════════════════════════════════
-  // ── RENDER: Free User Card ──
-  // ══════════════════════════════════════════
-  const renderFreeUserCard = (user: User) => {
-    const showAddToOrg = currentOrganization?.id && currentOrganization.id !== 'all' && hasPermission('super_admin');
-    const canDelete = hasPermission('super_admin');
-
-    return (
-      <FBCard key={`free-${user.id}`} style={{ marginBottom: 12 }}>
-        <div style={{
-          display: 'flex', gap: isMobile ? 10 : 14,
-          alignItems: isMobile ? 'flex-start' : 'center',
-          flexDirection: isMobile ? 'column' : 'row',
-        }}>
-          <div style={{
-            width: 44, height: 44, borderRadius: '50%', background: FB.purple,
-            color: FB.white, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontWeight: 700, fontSize: 16, flexShrink: 0,
-          }}>{getInitials(user)}</div>
-
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 600, fontSize: 15, color: FB.text }}>{getFullName(user)}</div>
-            <div style={{ color: FB.textSecondary, fontSize: 13, wordBreak: 'break-all' }}>{user.email}</div>
-            {user.createdAt && (
-              <div style={{ color: FB.textSecondary, fontSize: 12, marginTop: 2 }}>
-                Inscrit le {new Date(user.createdAt).toLocaleDateString()}
-              </div>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {showAddToOrg && (
-              <button onClick={() => handleAttachToOrg(user)} style={{
-                padding: '8px 16px', borderRadius: 6, border: 'none',
-                background: FB.blue, color: FB.white, fontWeight: 600,
-                cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6,
-                whiteSpace: 'nowrap',
-              }}>
-                <span>➕</span> Ajouter à l'org
-              </button>
-            )}
-            {canDelete && (
-              <FBConfirm
-                title="Supprimer l'utilisateur"
-                description={`Êtes-vous sûr de vouloir supprimer ${user.email} ? Cette action est irréversible.`}
-                onConfirm={() => handleDeleteUser(user)}
-              >
-                <button style={{
-                  padding: '8px 12px', borderRadius: 6, border: 'none',
-                  background: '#ffeef0', color: FB.red, fontWeight: 600,
-                  cursor: 'pointer', fontSize: 13,
-                }}>🗑️</button>
               </FBConfirm>
             )}
           </div>
@@ -813,14 +853,15 @@ const UsersAdminPageNew: React.FC = () => {
         {/* ── Stats Grid ── */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
+          gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(5, 1fr)',
           gap: 12, marginBottom: 16,
         }}>
           {[
-            { label: 'Total Utilisateurs', value: users.length, icon: '👥', color: FB.blue },
-            { label: 'Utilisateurs Actifs', value: activeCount, icon: '✅', color: FB.green },
+            { label: 'Total Utilisateurs', value: allUsers.length, icon: '👥', color: FB.blue },
+            { label: 'Actifs Zhiive', value: activeZhiiveCount, icon: '🐝', color: FB.green },
+            { label: 'Actifs Org', value: activeOrgCount, icon: '🏢', color: FB.blue },
+            { label: 'Sans organisation', value: freeCount, icon: '🆓', color: FB.purple },
             { label: 'Invitations en attente', value: pendingInvCount, icon: '⏳', color: FB.orange },
-            { label: 'Utilisateurs Libres', value: freeUsers.length, icon: '🆓', color: FB.purple },
           ].map(stat => (
             <FBCard key={stat.label} style={{ textAlign: 'center', padding: isMobile ? '12px 8px' : '16px 12px' }}>
               <div style={{ fontSize: 24, marginBottom: 4 }}>{stat.icon}</div>
@@ -887,27 +928,6 @@ const UsersAdminPageNew: React.FC = () => {
                   </div>
                 </FBCard>
               )
-            )}
-
-            {/* ── Free Users Tab ── */}
-            {activeTab === 'free-users' && (
-              <>
-                <FBCard style={{ marginBottom: 12, padding: '10px 16px', background: '#e7f3ff' }}>
-                  <span style={{ color: FB.blue, fontSize: 13 }}>
-                    ℹ️ Ces utilisateurs se sont inscrits librement et n'appartiennent à aucune organisation
-                  </span>
-                </FBCard>
-                {filteredFreeUsers.length > 0 ? (
-                  <div>{filteredFreeUsers.map(renderFreeUserCard)}</div>
-                ) : (
-                  <FBCard style={{ textAlign: 'center', padding: 48 }}>
-                    <div style={{ fontSize: 48, marginBottom: 8 }}>🆓</div>
-                    <div style={{ color: FB.textSecondary, fontSize: 15 }}>
-                      {normalizedSearch ? 'Aucun utilisateur libre ne correspond' : 'Aucun utilisateur libre'}
-                    </div>
-                  </FBCard>
-                )}
-              </>
             )}
 
             {/* ── Invitations Tab ── */}
