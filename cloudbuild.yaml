@@ -58,9 +58,9 @@ steps:
       - '--port'
       - '8080'
       - '--set-env-vars'
-      - 'NODE_ENV=production,PGHOST=/cloudsql/thiernew:europe-west1:crm-postgres-prod,PGDATABASE=2thier,PGUSER=postgres,FRONTEND_URL=https://app.2thier.be,BACKEND_URL=https://app.2thier.be'
+      - 'NODE_ENV=production,PGHOST=/cloudsql/thiernew:europe-west1:crm-postgres-prod,PGDATABASE=2thier,PGUSER=postgres,FRONTEND_URL=https://www.zhiive.com,BACKEND_URL=https://www.zhiive.com,GCS_BUCKET=crm-2thier-uploads,SMTP_HOST=send.one.com,SMTP_PORT=465,SMTP_USER=contact@zhiive.com,SMTP_FROM=contact@zhiive.com'
       - '--update-secrets'
-      - 'PGPASSWORD=crm-postgres-password:latest,JWT_SECRET=crm-jwt-secret:latest,SESSION_SECRET=crm-session-secret:latest,ENCRYPTION_KEY=crm-encryption-key:latest,CRYPTO_SECRET_KEY=crm-crypto-secret:latest,GOOGLE_AI_API_KEY=google-ai-api-key:latest,GOOGLE_CLIENT_ID=google-client-id:latest,GOOGLE_CLIENT_SECRET=google-client-secret:latest'
+      - 'PGPASSWORD=crm-postgres-password:latest,JWT_SECRET=crm-jwt-secret:latest,SESSION_SECRET=crm-session-secret:latest,ENCRYPTION_KEY=crm-encryption-key:latest,CRYPTO_SECRET_KEY=crm-crypto-secret:latest,GOOGLE_AI_API_KEY=google-ai-api-key:latest,GOOGLE_CLIENT_ID=google-client-id:latest,GOOGLE_CLIENT_SECRET=google-client-secret:latest,SMTP_PASS=SMTP_PASS:latest'
 
 # Options de build
 options:

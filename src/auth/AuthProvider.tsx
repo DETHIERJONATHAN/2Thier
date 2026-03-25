@@ -555,6 +555,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const seconds = Math.round(retryAfterMs / 1000);
           window.__authMeCooldownUntil = Date.now() + retryAfterMs;
           msgApi.error(`Trop de tentatives de connexion. Patientez ${seconds > 60 ? `${Math.ceil(seconds / 60)} minutes` : `${seconds} secondes`} avant de réessayer.`);
+        } else if (apiError?.status === 403 && (apiError?.body as any)?.emailNotVerified) {
+          // Email non vérifié — propager l'erreur avec les détails pour le composant Connexion
+          const enrichedError = Object.assign(new Error(apiError.message || 'Email non vérifié'), {
+            emailNotVerified: true,
+            email: (apiError.body as any).email,
+            status: 403,
+          });
+          throw enrichedError;
         } else if (apiError?.status === 401) {
           msgApi.error(apiError.message || 'Identifiants invalides.');
         } else {

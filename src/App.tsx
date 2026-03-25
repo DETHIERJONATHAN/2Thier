@@ -14,6 +14,7 @@ const GoogleAuthCallback = lazy(() => import('./pages/GoogleAuthCallback'));
 const TestPage = lazy(() => import('./pages/TestPage'));
 const TestPage2Thier = lazy(() => import('./pages/page2thier/TestPage'));
 const AcceptInvitationPage = lazy(() => import('./pages/AcceptInvitationPage'));
+const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage'));
 const OracleNewStandalonePage = lazy(() => import('./pages/OracleNewStandalonePage'));
 const TblNew = lazy(() => import('./components/TreeBranchLeaf/treebranchleaf-new/TblNew'));
 // const TBL = lazy(() => import('./components/TreeBranchLeaf/treebranchleaf-new/TBL/TBL')); // laissé en commentaire (non utilisé)
@@ -292,6 +293,14 @@ const App: React.FC = () => {
         element={
           <Suspense fallback={<LoadingSpinner />}>
             <AcceptInvitationPage />
+          </Suspense>
+        } 
+      />
+      <Route 
+        path="/verify-email" 
+        element={
+          <Suspense fallback={<LoadingSpinner />}>
+            <VerifyEmailPage />
           </Suspense>
         } 
       />

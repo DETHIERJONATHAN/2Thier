@@ -3,28 +3,55 @@ import { useAuth } from '../auth/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { Form, Input, Button, Typography, Alert, Divider } from 'antd';
 import { MailOutlined, LockOutlined, RocketOutlined, TeamOutlined, SafetyOutlined } from '@ant-design/icons';
+import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 
 const { Title, Text } = Typography;
 
 export default function Connexion() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [emailNotVerified, setEmailNotVerified] = useState(false);
+  const [unverifiedEmail, setUnverifiedEmail] = useState('');
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const { api } = useAuthenticatedApi();
 
   const handleSubmit = async (values: { email: string; password: string }) => {
     setLoading(true);
     setError('');
+    setEmailNotVerified(false);
+    setResendSuccess(false);
     try {
       const cleanEmail = values.email.trim().replace(/[\u200B-\u200D\uFEFF\u00A0\u2060]/g, '');
       const cleanPassword = values.password.trim().replace(/[\u200B-\u200D\uFEFF\u00A0\u2060]/g, '');
       await login(cleanEmail, cleanPassword);
       navigate('/dashboard');
-    } catch (err) {
+    } catch (err: any) {
       console.error('[Connexion] Erreur lors du login:', err);
-      setError(err instanceof Error ? err.message : 'Une erreur est survenue.');
+      // Détecter l'erreur email non vérifié (403 avec emailNotVerified)
+      if (err?.emailNotVerified || err?.status === 403) {
+        setEmailNotVerified(true);
+        setUnverifiedEmail(err?.email || values.email);
+        setError('');
+      } else {
+        setError(err instanceof Error ? err.message : 'Une erreur est survenue.');
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    setResendLoading(true);
+    try {
+      await api.post('/resend-verification', { email: unverifiedEmail });
+      setResendSuccess(true);
+    } catch {
+      setError("Erreur lors de l'envoi. Réessayez dans quelques instants.");
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -120,6 +147,38 @@ export default function Connexion() {
                   closable
                   style={{ borderRadius: 12, marginBottom: 24 }}
                   onClose={() => setError('')}
+                />
+              )}
+
+              {emailNotVerified && (
+                <Alert
+                  type="warning"
+                  showIcon
+                  style={{ borderRadius: 12, marginBottom: 24 }}
+                  message="Email non vérifié"
+                  description={
+                    <div>
+                      <p style={{ margin: '4px 0 12px' }}>
+                        Votre compte n'est pas encore activé. Vérifiez votre boîte de réception
+                        {unverifiedEmail ? ` (${unverifiedEmail})` : ''} et cliquez sur le lien d'activation.
+                      </p>
+                      {resendSuccess ? (
+                        <Text type="success" style={{ fontSize: 13 }}>
+                          ✅ Un nouveau lien d'activation a été envoyé ! Vérifiez aussi vos spams.
+                        </Text>
+                      ) : (
+                        <Button
+                          size="small"
+                          type="link"
+                          loading={resendLoading}
+                          onClick={handleResendVerification}
+                          style={{ padding: 0, fontSize: 13 }}
+                        >
+                          Renvoyer le lien d'activation
+                        </Button>
+                      )}
+                    </div>
+                  }
                 />
               )}
 

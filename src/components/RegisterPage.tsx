@@ -40,11 +40,10 @@ export default function RegisterPage() {
       });
 
       if (response.success !== false) {
-        const messages: Record<string, string> = {
-          createOrg: 'Colony fondée ! Connectez-vous maintenant.',
-          freelance: 'Inscription réussie ! Vous pouvez vous connecter.',
-        };
-        message.success(messages[registrationType]);
+        message.success({
+          content: 'Inscription réussie ! Vérifiez votre boîte mail pour activer votre compte.',
+          duration: 8,
+        });
         navigate('/login');
       } else {
         throw new Error(response.error || "Erreur lors de l'inscription");

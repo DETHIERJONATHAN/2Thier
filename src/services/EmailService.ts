@@ -121,7 +121,7 @@ class EmailService {
             });
 
             await transporter.sendMail({
-                from: `"2Thier CRM" <${smtpUser}>`,
+                from: `"Zhiive" <${process.env.SMTP_FROM || smtpUser}>`,
                 to,
                 subject,
                 html: htmlBody,

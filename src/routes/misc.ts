@@ -7,7 +7,8 @@ import { impersonationMiddleware } from "../middlewares/impersonation"; // Impor
 import type { AuthenticatedRequest } from "../middlewares/auth";
 import { JWT_SECRET } from "../config";
 import { prisma } from '../lib/prisma';
-import { randomUUID } from 'crypto';
+import { randomUUID, randomBytes } from 'crypto';
+import { emailService } from '../services/EmailService';
 
 const router = Router();
 
@@ -54,22 +55,32 @@ router.post("/register", async (req: Request, res: Response) => {
     return res.status(400).json({ error: "Le nom de l'organisation est requis pour créer une organisation" });
   }
 
+  // Normaliser l'email en minuscules pour éviter les problèmes de casse à la connexion
+  const normalizedEmail = email.trim().toLowerCase();
+
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     
+    // Générer un token de vérification d'email (64 caractères hex)
+    const emailVerificationToken = randomBytes(32).toString('hex');
+    const emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
+    
     // Transaction pour créer l'utilisateur + actions selon le type
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Créer l'utilisateur
+      // 1. Créer l'utilisateur (non vérifié)
       const userId = randomUUID();
       const user = await tx.user.create({
         data: {
           id: userId,
-          email,
+          email: normalizedEmail,
           passwordHash: hashedPassword,
           firstName,
           lastName,
           status: 'active',
           role: 'user',
+          emailVerified: false,
+          emailVerificationToken,
+          emailVerificationExpires,
           updatedAt: new Date(),
         },
       });
@@ -135,10 +146,43 @@ router.post("/register", async (req: Request, res: Response) => {
       return { user, organization };
     });
 
+    // Envoyer l'email d'activation
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const verifyUrl = `${frontendUrl}/verify-email?token=${emailVerificationToken}`;
+    
+    try {
+      await emailService.sendEmail({
+        to: normalizedEmail,
+        subject: 'Zhiive — Activez votre compte',
+        html: `
+          <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8f9fa; padding: 40px 20px;">
+            <div style="background: white; border-radius: 12px; padding: 40px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+              <div style="text-align: center; margin-bottom: 30px;">
+                <h1 style="color: #6C5CE7; margin: 0; font-size: 28px;">🐝 Zhiive</h1>
+              </div>
+              <h2 style="color: #1a1a2e; margin-top: 0;">Bienvenue ${firstName} !</h2>
+              <p style="color: #444; line-height: 1.6;">Merci de vous être inscrit(e) sur Zhiive. Pour activer votre compte et commencer à utiliser la plateforme, cliquez sur le bouton ci-dessous :</p>
+              <p style="text-align: center; margin: 35px 0;">
+                <a href="${verifyUrl}" style="background: linear-gradient(135deg, #6C5CE7, #a855f7); color: white; padding: 14px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block;">Activer mon compte</a>
+              </p>
+              <p style="color: #888; font-size: 13px;">Ce lien est valide pendant 24 heures.</p>
+              <p style="color: #888; font-size: 13px;">Si vous n'avez pas créé de compte, ignorez simplement cet email.</p>
+              <hr style="border: none; border-top: 1px solid #eee; margin: 25px 0;">
+              <p style="color: #aaa; font-size: 11px; text-align: center;">Zhiive — The Hive</p>
+            </div>
+          </div>
+        `,
+      });
+      console.log(`[Register] ✅ Email d'activation envoyé à ${normalizedEmail}`);
+    } catch (emailError) {
+      console.error(`[Register] ⚠️ Échec envoi email d'activation à ${normalizedEmail}:`, emailError);
+      // L'inscription reste valide même si l'email échoue
+    }
+
     // Message de succès adapté
-    let successMessage = 'Inscription réussie ! Bienvenue sur le réseau Zhiive.';
+    let successMessage = 'Inscription réussie ! Un email d\'activation a été envoyé à votre adresse. Vérifiez votre boîte de réception (et vos spams).';
     if (registrationType === 'createOrg') {
-      successMessage = `Organisation "${organizationName}" créée avec succès. Vous en êtes l'administrateur.`;
+      successMessage = `Organisation "${organizationName}" créée avec succès. Un email d'activation a été envoyé à votre adresse.`;
     }
 
     res.status(201).json({ 
@@ -167,17 +211,135 @@ router.post("/register", async (req: Request, res: Response) => {
   }
 });
 
+// ============================================================================
+// GET /api/verify-email - Vérification d'email via le token envoyé par email
+// ============================================================================
+router.get("/verify-email", async (req: Request, res: Response) => {
+  const { token } = req.query;
+
+  if (!token || typeof token !== 'string') {
+    return res.status(400).json({ error: "Token de vérification manquant" });
+  }
+
+  try {
+    const user = await prisma.user.findFirst({
+      where: { emailVerificationToken: token },
+    });
+
+    if (!user) {
+      return res.status(400).json({ error: "Token de vérification invalide ou déjà utilisé" });
+    }
+
+    if (user.emailVerified) {
+      return res.json({ success: true, message: "Votre email est déjà vérifié. Vous pouvez vous connecter.", alreadyVerified: true });
+    }
+
+    if (user.emailVerificationExpires && new Date() > user.emailVerificationExpires) {
+      return res.status(400).json({ error: "Ce lien d'activation a expiré. Demandez un nouveau lien depuis la page de connexion.", expired: true });
+    }
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerified: true,
+        emailVerificationToken: null,
+        emailVerificationExpires: null,
+        updatedAt: new Date(),
+      },
+    });
+
+    console.log(`[API][verify-email] ✅ Email vérifié pour ${user.email}`);
+    res.json({ success: true, message: "Votre compte est activé ! Vous pouvez maintenant vous connecter." });
+  } catch (error) {
+    console.error("[API][verify-email] Erreur:", error);
+    res.status(500).json({ error: "Erreur lors de la vérification de l'email" });
+  }
+});
+
+// ============================================================================
+// POST /api/resend-verification - Renvoyer l'email d'activation
+// ============================================================================
+router.post("/resend-verification", async (req: Request, res: Response) => {
+  const { email: rawEmail } = req.body;
+  const email = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : '';
+
+  if (!email) {
+    return res.status(400).json({ error: "L'email est requis" });
+  }
+
+  try {
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
+    });
+
+    // Pour des raisons de sécurité, toujours répondre OK même si l'email n'existe pas
+    if (!user) {
+      return res.json({ success: true, message: "Si cette adresse est enregistrée, un email d'activation a été envoyé." });
+    }
+
+    if (user.emailVerified) {
+      return res.json({ success: true, message: "Votre email est déjà vérifié. Vous pouvez vous connecter." });
+    }
+
+    // Générer un nouveau token
+    const newToken = randomBytes(32).toString('hex');
+    const newExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerificationToken: newToken,
+        emailVerificationExpires: newExpires,
+        updatedAt: new Date(),
+      },
+    });
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const verifyUrl = `${frontendUrl}/verify-email?token=${newToken}`;
+
+    await emailService.sendEmail({
+      to: user.email,
+      subject: 'Zhiive — Nouveau lien d\'activation',
+      html: `
+        <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8f9fa; padding: 40px 20px;">
+          <div style="background: white; border-radius: 12px; padding: 40px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+            <div style="text-align: center; margin-bottom: 30px;">
+              <h1 style="color: #6C5CE7; margin: 0; font-size: 28px;">🐝 Zhiive</h1>
+            </div>
+            <h2 style="color: #1a1a2e; margin-top: 0;">Nouveau lien d'activation</h2>
+            <p style="color: #444; line-height: 1.6;">Voici votre nouveau lien pour activer votre compte Zhiive :</p>
+            <p style="text-align: center; margin: 35px 0;">
+              <a href="${verifyUrl}" style="background: linear-gradient(135deg, #6C5CE7, #a855f7); color: white; padding: 14px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block;">Activer mon compte</a>
+            </p>
+            <p style="color: #888; font-size: 13px;">Ce lien est valide pendant 24 heures.</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 25px 0;">
+            <p style="color: #aaa; font-size: 11px; text-align: center;">Zhiive — The Hive</p>
+          </div>
+        </div>
+      `,
+    });
+
+    console.log(`[API][resend-verification] ✅ Email d'activation renvoyé à ${user.email}`);
+    res.json({ success: true, message: "Si cette adresse est enregistrée, un email d'activation a été envoyé." });
+  } catch (error) {
+    console.error("[API][resend-verification] Erreur:", error);
+    res.status(500).json({ error: "Erreur lors de l'envoi de l'email" });
+  }
+});
+
 // POST /api/login - Connexion d'un utilisateur
 router.post("/login", async (req: Request, res: Response) => {
-  const { email, password } = req.body;
+  const { email: rawEmail, password } = req.body;
+  const email = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : rawEmail;
 
   if (!email || !password) {
     return res.status(400).json({ error: "L'email et le mot de passe sont requis" });
   }
 
   try {
-    const user: UserWithOrgs | null = await prisma.user.findUnique({
-        where: { email },
+    // Recherche case-insensitive pour gérer les emails avec casse différente
+    const user: UserWithOrgs | null = await prisma.user.findFirst({
+        where: { email: { equals: email, mode: 'insensitive' } },
         ...userWithOrgsArgs
     });
 
@@ -189,6 +351,15 @@ router.post("/login", async (req: Request, res: Response) => {
 
     if (!isPasswordValid) {
       return res.status(401).json({ error: "Identifiants invalides" });
+    }
+
+    // Vérifier que l'email est activé (sauf super_admin)
+    if (!user.emailVerified && user.role !== 'super_admin') {
+      return res.status(403).json({ 
+        error: "Votre email n'est pas encore vérifié. Consultez votre boîte de réception pour le lien d'activation.",
+        emailNotVerified: true,
+        email: user.email
+      });
     }
 
     // Re-fetch user with relations to ensure data is fresh, especially after status changes.

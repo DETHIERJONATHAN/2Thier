@@ -37,9 +37,9 @@ const getJWTSecret = (): string => {
 export const login = async (req: Request, res: Response) => {
   try {
     const { email: rawEmail, password: rawPassword } = req.body;
-    // Nettoyage : trim + suppression des caractères invisibles Unicode
+    // Nettoyage : trim + suppression des caractères invisibles Unicode + lowercase pour l'email
     const stripInvisible = (s: string) => s.trim().replace(/[\u200B-\u200D\uFEFF\u00A0\u2060]/g, '');
-    const email = typeof rawEmail === 'string' ? stripInvisible(rawEmail) : rawEmail;
+    const email = typeof rawEmail === 'string' ? stripInvisible(rawEmail).toLowerCase() : rawEmail;
     const password = typeof rawPassword === 'string' ? stripInvisible(rawPassword) : rawPassword;
 
     console.log('[AUTH] 🔐 Tentative de connexion', {
@@ -55,8 +55,9 @@ export const login = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Email et mot de passe requis' });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email },
+    // Recherche case-insensitive : l'email en DB peut avoir une casse différente
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
       include: {
         UserOrganization: {
           include: {
@@ -84,6 +85,16 @@ export const login = async (req: Request, res: Response) => {
     if (!isPasswordValid) {
       console.log(`[AUTH] ❌ Mot de passe incorrect pour: ${email}`);
       return res.status(401).json({ message: 'Identifiants invalides' });
+    }
+
+    // Vérifier que l'email est activé (sauf pour les super_admin)
+    if (!user.emailVerified && user.role !== 'super_admin') {
+      console.log(`[AUTH] ⚠️ Email non vérifié pour: ${email}`);
+      return res.status(403).json({ 
+        message: 'Votre email n\'est pas encore vérifié. Consultez votre boîte de réception pour le lien d\'activation.',
+        emailNotVerified: true,
+        email: user.email
+      });
     }
 
     const { passwordHash: _passwordHash, ...userWithoutPassword } = user;
