@@ -6,6 +6,7 @@
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { TelnyxRTC } from '@telnyx/webrtc';
+import { playNotificationSound } from './useNotificationSound';
 
 // ═══════════════════════════════════════════════════════════════
 // TYPES
@@ -78,6 +79,21 @@ export function useTelnyxCall({
   const currentCallRef = useRef<any>(null);
   const durationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const callStartTimeRef = useRef<number>(0);
+  const ringtoneRef = useRef<{ stop: () => void } | null>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // ─── RINGTONE CONTROL ──────────────────────────────────────
+  const startRingtone = useCallback(() => {
+    if (ringtoneRef.current) ringtoneRef.current.stop();
+    ringtoneRef.current = playNotificationSound('telnyxRing');
+  }, []);
+
+  const stopRingtone = useCallback(() => {
+    if (ringtoneRef.current) {
+      ringtoneRef.current.stop();
+      ringtoneRef.current = null;
+    }
+  }, []);
 
   // ─── DURATION TIMER ────────────────────────────────────────
   const startDurationTimer = useCallback(() => {
@@ -125,11 +141,23 @@ export function useTelnyxCall({
     const { sipUsername, sipPassword } = eligibility.sipCredentials;
 
     try {
+      // Create a hidden audio element for remote audio output
+      if (!remoteAudioRef.current) {
+        const audioEl = document.createElement('audio');
+        audioEl.id = 'telnyx-remote-audio';
+        audioEl.autoplay = true;
+        audioEl.setAttribute('playsinline', '');
+        document.body.appendChild(audioEl);
+        remoteAudioRef.current = audioEl;
+      }
+
       const client = new TelnyxRTC({
         login: sipUsername,
         password: sipPassword,
-        // Telnyx handles TURN/STUN internally
       });
+
+      // Attach remote audio element so SDK plays incoming audio through it
+      client.remoteElement = remoteAudioRef.current;
 
       // ─── EVENT HANDLERS ──────────────────────────────────
       client.on('telnyx.ready', () => {
@@ -139,8 +167,9 @@ export function useTelnyxCall({
       });
 
       client.on('telnyx.error', (error: any) => {
-        console.error('[TELNYX-RTC] ❌ Error:', error);
-        setErrorMessage(error?.message || 'Erreur de connexion Telnyx');
+        console.error('[TELNYX-RTC] ❌ Error:', JSON.stringify(error, null, 2));
+        const msg = error?.message || error?.error?.message || (typeof error === 'string' ? error : 'Erreur de connexion Telnyx');
+        setErrorMessage(msg);
         setIsRegistered(false);
       });
 
@@ -167,12 +196,14 @@ export function useTelnyxCall({
             if (state === 'ringing' || state === 'requesting') {
               setCallState('ringing');
             } else if (state === 'active' || state === 'answering') {
+              stopRingtone();
               setCallState('active');
               startDurationTimer();
             } else if (state === 'held') {
               setCallState('held');
               setIsOnHold(true);
             } else if (state === 'hangup' || state === 'destroy' || state === 'purge') {
+              stopRingtone();
               const duration = stopDurationTimer();
               onCallEnded?.(duration);
               resetCallState();
@@ -198,6 +229,7 @@ export function useTelnyxCall({
             setCallerInfo({ number: callerNumber, name: callerName });
             setCallState('ringing');
             setCurrentNumber(callerNumber);
+            startRingtone();
             onIncomingCall?.(callerNumber, callerName || callerNumber);
           }
         }
@@ -215,8 +247,15 @@ export function useTelnyxCall({
         try { clientRef.current.disconnect(); } catch { /* ignore disconnect errors */ }
         clientRef.current = null;
       }
+      // Remove remote audio element from DOM
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = null;
+        remoteAudioRef.current.remove();
+        remoteAudioRef.current = null;
+      }
       setIsRegistered(false);
       stopDurationTimer();
+      stopRingtone();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eligibility?.eligible, eligibility?.sipCredentials?.sipUsername]);
@@ -257,16 +296,18 @@ export function useTelnyxCall({
   // ─── ANSWER INCOMING ──────────────────────────────────────
   const answer = useCallback(() => {
     if (!currentCallRef.current) return;
+    stopRingtone();
     try {
       currentCallRef.current.answer();
     } catch (err: any) {
       console.error('[TELNYX-RTC] Answer error:', err);
       setErrorMessage(err?.message || 'Erreur en décrochant');
     }
-  }, []);
+  }, [stopRingtone]);
 
   // ─── HANGUP ────────────────────────────────────────────────
   const hangup = useCallback(() => {
+    stopRingtone();
     if (!currentCallRef.current) {
       resetCallState();
       return;
@@ -277,7 +318,7 @@ export function useTelnyxCall({
     } catch {
       resetCallState();
     }
-  }, [resetCallState]);
+  }, [resetCallState, stopRingtone]);
 
   // ─── TOGGLE MUTE ──────────────────────────────────────────
   const toggleMute = useCallback(() => {

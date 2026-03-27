@@ -325,10 +325,10 @@ router.post('/:id/signal', async (req: Request, res: Response): Promise<void> =>
   if (!signalingBuffer.has(key)) signalingBuffer.set(key, []);
   signalingBuffer.get(key)!.push({ from: user.id, to, type, data, ts: Date.now() });
 
-  // Clean old signals (> 30s)
+  // Clean old signals (> 120s) — allows time for callee to join and receive offer
   const now = Date.now();
   const signals = signalingBuffer.get(key)!;
-  const cleaned = signals.filter(s => now - s.ts < 30000);
+  const cleaned = signals.filter(s => now - s.ts < 120000);
   signalingBuffer.set(key, cleaned);
 
   res.json({ success: true });

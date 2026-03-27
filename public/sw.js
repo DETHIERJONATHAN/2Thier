@@ -31,6 +31,7 @@ self.addEventListener('push', (event) => {
     tag: data.tag || 'default',
     requireInteraction: data.requireInteraction || false,
     vibrate: data.vibrate || [200, 100, 200, 100, 200],
+    silent: false,
     data: {
       url: data.url || '/',
       callId: data.callId || null,
@@ -40,49 +41,31 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title || '2Thier CRM', options).then(() => {
+    self.registration.showNotification(data.title || 'Zhiive', options).then(() => {
       // Mettre à jour le badge sur l'icône PWA
       if (navigator.setAppBadge) {
         navigator.setAppBadge().catch(() => {});
       }
+
+      // Notify open clients to play a sound (SW cannot use Web Audio API)
+      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+        const soundType = (data.type === 'incoming-call' || data.type === 'incoming-telnyx-call')
+          ? 'ringtone' : 'messageNotification';
+        clients.forEach((client) => {
+          client.postMessage({ type: 'PLAY_NOTIFICATION_SOUND', soundType });
+        });
+      });
     })
   );
 });
 
-// ─── CLICK SUR NOTIFICATION ─────────────────────────────────
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-
-  const urlToOpen = event.notification.data?.url || '/';
-
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Si une fenêtre est déjà ouverte, la focus
-      for (const client of clientList) {
-        if (client.url.includes(self.location.origin) && 'focus' in client) {
-          // Envoyer un message au client pour gérer l'appel
-          if (event.notification.data?.callId) {
-            client.postMessage({
-              type: 'INCOMING_CALL',
-              callId: event.notification.data.callId,
-            });
-          }
-          return client.focus();
-        }
-      }
-      // Sinon, ouvrir une nouvelle fenêtre
-      if (self.clients.openWindow) {
-        return self.clients.openWindow(urlToOpen);
-      }
-    })
-  );
-});
-
-// ─── ACTION SUR NOTIFICATION (Accepter/Refuser) ─────────────
+// ─── CLICK SUR NOTIFICATION (unifié) ─────────────────────────
 self.addEventListener('notificationclick', (event) => {
   const data = event.notification.data || {};
   const isTelnyxCall = data.type === 'incoming-telnyx-call';
+  const isCall = data.type === 'incoming-call' || isTelnyxCall;
 
+  // ── Action "Rejeter" ──
   if (event.action === 'reject' || event.action === 'decline') {
     event.notification.close();
     if (data.callId) {
@@ -96,23 +79,28 @@ self.addEventListener('notificationclick', (event) => {
     return;
   }
 
-  if (event.action === 'answer' || (isTelnyxCall && !event.action)) {
-    event.notification.close();
-    event.waitUntil(
-      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-        for (const client of clientList) {
-          if (client.url.includes(self.location.origin) && 'focus' in client) {
+  // ── Action "Répondre" ou clic simple sur notification ──
+  event.notification.close();
+  const urlToOpen = data.url || '/';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          // Envoyer un message au client pour gérer l'appel entrant
+          if (isCall && data.callId) {
             client.postMessage({
               type: isTelnyxCall ? 'INCOMING_TELNYX_CALL' : 'INCOMING_CALL',
               callId: data.callId,
             });
-            return client.focus();
           }
+          return client.focus();
         }
-        if (self.clients.openWindow) {
-          return self.clients.openWindow('/');
-        }
-      })
-    );
-  }
-}, false);
+      }
+      // Aucune fenêtre ouverte → en ouvrir une
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(urlToOpen);
+      }
+    })
+  );
+});

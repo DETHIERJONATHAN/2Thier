@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
+import { decrypt } from '../utils/crypto';
+import { sendPushToUser } from './push';
 
 const router = Router();
 
@@ -246,6 +248,24 @@ router.post('/conversations/:id/messages', async (req: Request, res: Response): 
       data: { lastReadAt: new Date() },
     });
 
+    // Send push notifications to other participants
+    const otherParticipants = await db.conversationParticipant.findMany({
+      where: { conversationId, userId: { not: user.id }, isActive: true },
+      select: { userId: true },
+    });
+    const senderName = `${message.sender.firstName} ${message.sender.lastName}`.trim();
+    const msgPreview = content ? (content.length > 80 ? content.slice(0, 80) + '…' : content) : '📎 Média';
+    for (const p of otherParticipants) {
+      sendPushToUser(p.userId, {
+        title: `💬 ${senderName}`,
+        body: msgPreview,
+        icon: message.sender.avatarUrl || '/pwa-192x192.png',
+        tag: `msg-${conversationId}`,
+        type: 'new-message',
+        url: '/',
+      }).catch(() => {});
+    }
+
     res.json(message);
   } catch (err) {
     console.error('[MESSENGER] Error sending message:', err);
@@ -352,7 +372,7 @@ router.get('/telnyx-eligibility', async (req: Request, res: Response): Promise<v
       where: {
         organizationId: orgId,
         active: true,
-        Module: { feature: 'TELNYX' },
+        Module: { feature: { contains: 'telnyx', mode: 'insensitive' } },
       },
     });
 
@@ -389,10 +409,16 @@ router.get('/telnyx-eligibility', async (req: Request, res: Response): Promise<v
         orderBy: { priority: 'asc' },
       });
 
+      // Helper: decrypt SIP password (stored encrypted in DB)
+      const decryptSipPassword = (encrypted: string): string => {
+        try { return decrypt(encrypted); }
+        catch { return encrypted; } // fallback if stored in plaintext
+      };
+
       if (sipEndpoint) {
         sipCredentials = {
           sipUsername: sipEndpoint.sipUsername,
-          sipPassword: sipEndpoint.sipPassword,
+          sipPassword: decryptSipPassword(sipEndpoint.sipPassword),
           sipDomain: sipEndpoint.sipDomain,
         };
       } else {
@@ -409,7 +435,7 @@ router.get('/telnyx-eligibility', async (req: Request, res: Response): Promise<v
         if (orgSipEndpoint) {
           sipCredentials = {
             sipUsername: orgSipEndpoint.sipUsername,
-            sipPassword: orgSipEndpoint.sipPassword,
+            sipPassword: decryptSipPassword(orgSipEndpoint.sipPassword),
             sipDomain: orgSipEndpoint.sipDomain,
           };
         }

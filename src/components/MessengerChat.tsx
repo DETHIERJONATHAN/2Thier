@@ -19,6 +19,7 @@ import TelnyxDialer from './TelnyxDialer';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { useAuth } from '../auth/useAuth';
 import { useTelnyxCall, type TelnyxEligibility } from '../hooks/useTelnyxCall';
+import { useNotificationSound, playNotificationSound } from '../hooks/useNotificationSound';
 
 // ═══════════════════════════════════════════════════════════════
 // TYPES
@@ -115,9 +116,14 @@ const MessengerChat: React.FC = () => {
 
   // Video call state
   const [activeCall, setActiveCall] = useState<{ callId: string; callType: 'video' | 'audio'; isIncoming: boolean; conversationName: string } | null>(null);
+  const lastEndedCallIdRef = useRef<string | null>(null);
   const [_loading, _setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewChat, setShowNewChat] = useState(false);
+
+  // 🔊 Notification sounds
+  const { play: playSound, stop: stopSound } = useNotificationSound();
+  const prevUnreadRef = useRef(0);
 
   // Telnyx phone state
   const [telnyxEligibility, setTelnyxEligibility] = useState<TelnyxEligibility | null>(null);
@@ -244,6 +250,10 @@ const MessengerChat: React.FC = () => {
         setShowDialer(true);
         setActiveConversationId(null);
       }
+      if (event.data?.type === 'PLAY_NOTIFICATION_SOUND' && event.data?.soundType) {
+        // SW asked us to play a sound (SW can't use Web Audio API)
+        playNotificationSound(event.data.soundType);
+      }
     };
     navigator.serviceWorker.addEventListener('message', handleSWMessage);
     return () => navigator.serviceWorker.removeEventListener('message', handleSWMessage);
@@ -267,6 +277,14 @@ const MessengerChat: React.FC = () => {
     }, 5000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [isListOpen, openChats, activeConversationId, fetchUnread, fetchConversations, fetchInlineMessages]);
+
+  // 🔊 Play notification sound when new unread messages arrive
+  useEffect(() => {
+    if (totalUnread > prevUnreadRef.current && prevUnreadRef.current >= 0) {
+      playSound('messageNotification');
+    }
+    prevUnreadRef.current = totalUnread;
+  }, [totalUnread, playSound]);
 
   // Listen for open-messenger custom events (from ExplorePanel People tab, etc.)
   useEffect(() => {
@@ -317,6 +335,8 @@ const MessengerChat: React.FC = () => {
         const data = await api.get('/api/calls/check/incoming') as any;
         if (data?.incoming) {
           const call = data.incoming;
+          // Skip if this is the call we just ended (prevents re-triggering)
+          if (call.id === lastEndedCallIdRef.current) return;
           const callerName = call.initiator ? `${call.initiator.firstName} ${call.initiator.lastName}` : 'Incoming call';
 
           // Browser notification (works even when tab is in background)
@@ -834,7 +854,10 @@ const MessengerChat: React.FC = () => {
           conversationName={activeCall.conversationName}
           api={api}
           userId={user?.id || ''}
-          onClose={() => setActiveCall(null)}
+          onClose={() => {
+            lastEndedCallIdRef.current = activeCall.callId;
+            setActiveCall(null);
+          }}
         />
       )}
     </>

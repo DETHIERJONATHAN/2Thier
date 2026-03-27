@@ -13,6 +13,7 @@ import {
   LoadingOutlined,
   SoundOutlined,
 } from '@ant-design/icons';
+import { useNotificationSound } from '../hooks/useNotificationSound';
 
 // ═══════════════════════════════════════════════════════════════
 // TYPES
@@ -70,7 +71,13 @@ const ICE_SERVERS: RTCConfiguration = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    // Free TURN relays for NAT traversal (STUN alone fails ~30% of connections)
+    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
   ],
+  iceCandidatePoolSize: 10,
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -80,6 +87,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
   callId, callType, isIncoming, conversationName, api, userId, onClose,
 }) => {
   const { t } = useTranslation();
+  const { play: playSound, stop: stopSound } = useNotificationSound();
 
   // State
   const [callData, setCallData] = useState<CallData | null>(null);
@@ -110,7 +118,23 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const micAnimRef = useRef<number | null>(null);
   const mountedAtRef = useRef(Date.now());
+  const statusRef = useRef<'ringing' | 'active' | 'ended'>('ringing');
+  const iceCandidateQueue = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
+  const offerSentAt = useRef<Map<string, number>>(new Map());
   const [, forceUpdate] = useState(0);
+
+  // Keep statusRef in sync with status state
+  useEffect(() => { statusRef.current = status; }, [status]);
+
+  // 🔊 Play ringtone while ringing for incoming calls
+  useEffect(() => {
+    if (isIncoming && status === 'ringing') {
+      playSound('ringtone');
+    } else {
+      stopSound();
+    }
+    return () => stopSound();
+  }, [isIncoming, status, playSound, stopSound]);
 
   // Format duration as HH:MM:SS
   const formatDuration = (s: number) => {
@@ -207,6 +231,12 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
         videoEl.srcObject = remoteStream;
         videoEl.play().catch(() => {});
       }
+      // Attach stream to audio element (critical for hearing remote user)
+      const audioEl = remoteAudiosRef.current.get(remoteUserId);
+      if (audioEl) {
+        audioEl.srcObject = remoteStream;
+        audioEl.play().catch((err) => console.warn('[CALL] Audio autoplay blocked in ontrack:', err.message));
+      }
       // Force re-render so ref callback runs and attaches stream
       forceUpdate(n => n + 1);
     };
@@ -258,6 +288,13 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
       if (type === 'offer') {
         const pc = createPeerConnection(from);
         await pc.setRemoteDescription(new RTCSessionDescription(data));
+        // Flush queued ICE candidates now that remoteDescription is set
+        const queued = iceCandidateQueue.current.get(from) || [];
+        for (const candidate of queued) {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+        }
+        iceCandidateQueue.current.delete(from);
+        if (queued.length) console.log(`[CALL] 🧊 Flushed ${queued.length} queued ICE candidates for ${from.slice(0,8)}`);
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         await api.post(`/api/calls/${callId}/signal`, {
@@ -268,14 +305,27 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
         const pc = peerConnectionsRef.current.get(from);
         if (pc && pc.signalingState === 'have-local-offer') {
           await pc.setRemoteDescription(new RTCSessionDescription(data));
+          // Flush queued ICE candidates
+          const queued = iceCandidateQueue.current.get(from) || [];
+          for (const candidate of queued) {
+            await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+          }
+          iceCandidateQueue.current.delete(from);
+          if (queued.length) console.log(`[CALL] 🧊 Flushed ${queued.length} queued ICE candidates for ${from.slice(0,8)}`);
+          offerSentAt.current.delete(from);
           console.log(`[CALL] ✅ Answer applied from ${from.slice(0,8)}`);
         } else {
           console.warn(`[CALL] ⚠️ Ignoring answer from ${from.slice(0,8)}, state: ${pc?.signalingState}`);
         }
       } else if (type === 'ice-candidate') {
         const pc = peerConnectionsRef.current.get(from);
-        if (pc) {
+        if (pc && pc.remoteDescription) {
           await pc.addIceCandidate(new RTCIceCandidate(data));
+        } else {
+          // Queue ICE candidates until remoteDescription is set
+          if (!iceCandidateQueue.current.has(from)) iceCandidateQueue.current.set(from, []);
+          iceCandidateQueue.current.get(from)!.push(data);
+          console.log(`[CALL] 🧊 Queued ICE candidate from ${from.slice(0,8)} (no remote desc yet)`);
         }
       }
     } catch (err) {
@@ -288,9 +338,8 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
   // ──────────────────────────────────────────────
   useEffect(() => {
     signalPollRef.current = setInterval(async () => {
-      if (status === 'ended') return;
+      if (statusRef.current === 'ended') return;
       // CRITICAL: Don't fetch signals before joining — GET removes them from server buffer!
-      // If we fetch before having local media, offers are consumed and lost.
       if (!hasJoinedRef.current) return;
       try {
         const { signals } = await api.get(`/api/calls/${callId}/signal`);
@@ -306,18 +355,25 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
     }, 1000);
 
     return () => { if (signalPollRef.current) clearInterval(signalPollRef.current); };
-  }, [callId, api, handleSignal, status]);
+  // statusRef is a ref, no need in deps — prevents interval recreation on status change
+  }, [callId, api, handleSignal]);
 
   // Poll call status
   useEffect(() => {
     const poll = async () => {
+      // Stop polling if call is ended
+      if (statusRef.current === 'ended') return;
       try {
         const data = await api.get(`/api/calls/${callId}`);
         if (data) {
           setCallData(data);
           if (data.status === 'ended' || data.status === 'missed') {
             setStatus('ended');
-          } else if (data.status === 'active' && status === 'ringing') {
+            // Stop all polling immediately
+            if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+            if (signalPollRef.current) { clearInterval(signalPollRef.current); signalPollRef.current = null; }
+            return;
+          } else if (data.status === 'active' && statusRef.current === 'ringing') {
             setStatus('active');
           }
 
@@ -325,8 +381,8 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
           if (!isIncoming && data.status === 'ringing' && Date.now() - mountedAtRef.current > 60000) {
             console.log('[CALL] ⏰ Ringing timeout 60s, auto-cancelling');
             try { await api.post(`/api/calls/${callId}/leave`, {}); } catch {}
-            if (pollRef.current) clearInterval(pollRef.current);
-            if (signalPollRef.current) clearInterval(signalPollRef.current);
+            if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+            if (signalPollRef.current) { clearInterval(signalPollRef.current); signalPollRef.current = null; }
             setStatus('ended');
             return;
           }
@@ -337,8 +393,21 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
               (p: CallParticipant) => p.userId !== userId && p.status === 'joined'
             );
             for (const p of joinedParticipants) {
-              if (!peerConnectionsRef.current.has(p.userId) && userId < p.userId) {
+              const pc = peerConnectionsRef.current.get(p.userId);
+              const shouldSendOffer = userId < p.userId;
+
+              if (!pc && shouldSendOffer) {
                 await sendOffer(p.userId);
+                offerSentAt.current.set(p.userId, Date.now());
+              } else if (pc && shouldSendOffer && pc.signalingState === 'have-local-offer') {
+                const sentAt = offerSentAt.current.get(p.userId) || 0;
+                if (Date.now() - sentAt > 5000) {
+                  console.log(`[CALL] 🔄 Re-sending offer to ${p.userId.slice(0,8)} (no answer after 5s)`);
+                  pc.close();
+                  peerConnectionsRef.current.delete(p.userId);
+                  await sendOffer(p.userId);
+                  offerSentAt.current.set(p.userId, Date.now());
+                }
               }
             }
           }
@@ -349,7 +418,8 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
     poll();
     pollRef.current = setInterval(poll, 2000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [callId, api, userId, sendOffer, status]);
+  // Use statusRef instead of status to prevent interval recreation on status change
+  }, [callId, api, userId, sendOffer, isIncoming]);
 
   // Call duration timer
   useEffect(() => {
@@ -430,25 +500,15 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
 
     setStatus('ended');
 
-    // If recording was active, send to Gemini for transcription
+    // If recording was active, send to Gemini for transcription (fire-and-forget)
     if (isRecording && audioChunksRef.current.length > 0) {
-      setIsTranscribing(true);
-      try {
-        const transcriptionText = `Meeting ${callType === 'video' ? 'video' : 'audio'} with ${conversationName} - Duration: ${formatDuration(callDuration)}. [Audio recording captured — Hive Mind transcription]`;
-        const result = await api.post(`/api/calls/${callId}/transcribe`, {
-          transcription: transcriptionText,
-        }) as any;
-        if (result?.summary) {
-          setMeetingSummary(result.summary);
-        }
-      } catch (err) {
-        console.error('[CALL] Transcription error:', err);
-      }
-      setIsTranscribing(false);
+      const transcriptionText = `Meeting ${callType === 'video' ? 'video' : 'audio'} with ${conversationName} - Duration: ${formatDuration(callDuration)}. [Audio recording captured — Hive Mind transcription]`;
+      api.post(`/api/calls/${callId}/transcribe`, { transcription: transcriptionText })
+        .catch((err: any) => console.error('[CALL] Transcription error:', err));
     }
 
-    // Auto-close modal after a short delay so user sees the "ended" screen
-    setTimeout(() => onClose(), 3000);
+    // Close modal immediately — no delay to prevent race condition with incoming call polling
+    onClose();
   }, [api, callId, callDuration, conversationName, isRecording, callType, onClose]);
 
   // Reject incoming call
