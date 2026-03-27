@@ -37,34 +37,24 @@ router.get('/conversations', async (req: Request, res: Response): Promise<void> 
       orderBy: { conversation: { lastMessageAt: 'desc' } },
     });
 
-    // Batch-fetch unread counts for all conversations in one query
-    const unreadCounts = await db.message.groupBy({
-      by: ['conversationId'],
-      where: {
-        conversationId: { in: participations.map(p => p.conversationId) },
-        senderId: { not: user.id },
-        createdAt: { gt: new Date(Math.min(...participations.map(p => p.lastReadAt.getTime()))) },
-      },
-      _count: { id: true },
-    });
+    if (participations.length === 0) {
+      res.json([]);
+      return;
+    }
 
     const conversations = await Promise.all(participations.map(async (p) => {
       const conv = p.conversation;
       const otherParticipants = conv.participants.filter(pp => pp.userId !== user.id);
       const lastMessage = conv.messages[0] || null;
 
-      // Count unread: messages from others after my lastReadAt
-      const unreadRow = unreadCounts.find(uc => uc.conversationId === conv.id);
-      // Refine count per-participant since the grouped query used global min
-      const unreadCount = unreadRow
-        ? await db.message.count({
-            where: {
-              conversationId: conv.id,
-              senderId: { not: user.id },
-              createdAt: { gt: p.lastReadAt },
-            },
-          })
-        : 0;
+      // Count unread: messages from others sent after my last read timestamp
+      const unreadCount = await db.message.count({
+        where: {
+          conversationId: conv.id,
+          senderId: { not: user.id },
+          createdAt: { gt: p.lastReadAt },
+        },
+      });
 
       return {
         id: conv.id,
