@@ -364,30 +364,62 @@ type PlannedCascadeLeg =
   | { type: 'sip'; destination: string; endpointId?: string; priority: number; timeout: number; sipAuthUsername: string; sipAuthPassword: string }
   | { type: 'pstn'; destination: string; priority: number; timeout: number };
 
-async function planInboundCascadeLegs(organizationId: string): Promise<PlannedCascadeLeg[]> {
+async function planInboundCascadeLegs(organizationId: string, calledNumber?: string): Promise<PlannedCascadeLeg[]> {
+  // === ÉTAPE 1 : SIP endpoints (Messenger WebRTC) — 5 sonneries (25s) ===
   const endpoints = await prisma.telnyxSipEndpoint.findMany({
     where: { organizationId, status: 'active' },
     orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
   });
 
+  // Récupérer le timeout configuré par user (ou 25s par défaut = 5 sonneries)
+  const userConfigs = await prisma.telnyxUserConfig.findMany({
+    where: { organizationId, canMakeCalls: true },
+    select: { userId: true, forwardToNumber: true, messengerRingTimeout: true, assignedNumber: true },
+  });
+  const userConfigMap = new Map(userConfigs.map(uc => [uc.userId, uc]));
+
   const legs: PlannedCascadeLeg[] = endpoints.map(ep => {
     const sipPassword = safeDecryptMaybe(ep.sipPassword).trim();
+    const uc = ep.userId ? userConfigMap.get(ep.userId) : null;
+    const timeout = uc?.messengerRingTimeout || 25; // 5 sonneries × 5s
     return {
-      type: 'sip',
+      type: 'sip' as const,
       destination: `sip:${ep.sipUsername}@${ep.sipDomain}`,
       endpointId: ep.id,
       priority: ep.priority,
-      timeout: ep.timeout || 10,
+      timeout,
       sipAuthUsername: ep.sipUsername,
       sipAuthPassword: sipPassword,
     };
   });
 
+  let maxPriority = legs.reduce((max, leg) => Math.max(max, leg.priority), 0);
+
+  // === ÉTAPE 2 : Forward vers numéros perso des users assignés (PSTN) ===
+  // Si on connaît le numéro appelé, on forward vers les users qui ont ce numéro assigné
+  const normalizedCalled = calledNumber ? calledNumber.replace(/[^\d+]/g, '') : '';
+  const relevantUsers = normalizedCalled
+    ? userConfigs.filter(uc => uc.assignedNumber && uc.assignedNumber.includes(normalizedCalled.replace('+', '')))
+    : userConfigs;
+
+  for (const uc of relevantUsers) {
+    const forwardNumber = normalizeE164(uc.forwardToNumber || '');
+    if (forwardNumber) {
+      maxPriority++;
+      legs.push({ type: 'pstn', destination: forwardNumber, priority: maxPriority, timeout: 30 });
+    }
+  }
+
+  // === ÉTAPE 3 : Fallback numéro org (PSTN) ===
   const cfg = await prisma.telnyxConfig.findUnique({ where: { organizationId } }).catch(() => null);
   const fallback = normalizeE164((cfg as any)?.fallbackPstnNumber) || (await getFallbackPstnNumberRaw(organizationId));
   if (fallback) {
-    const maxPriority = legs.reduce((max, leg) => Math.max(max, leg.priority), 0);
-    legs.push({ type: 'pstn', destination: fallback, priority: maxPriority + 1, timeout: 30 });
+    // Éviter les doublons si le fallback org = un forwardTo user
+    const alreadyInLegs = legs.some(l => l.type === 'pstn' && l.destination === fallback);
+    if (!alreadyInLegs) {
+      maxPriority++;
+      legs.push({ type: 'pstn', destination: fallback, priority: maxPriority, timeout: 30 });
+    }
   }
 
   return legs;
@@ -2481,6 +2513,7 @@ async function handleCallWebhook(eventType: string, callData: any, req?: Request
           organizationId,
           assignedNumber: { contains: calledNumber.replace('+', '') },
           canMakeCalls: true,
+          canReceiveCalls: true,
         },
         select: { userId: true },
       });
@@ -2534,7 +2567,7 @@ async function handleCallWebhook(eventType: string, callData: any, req?: Request
         const webhookUrl = selectTelnyxWebhookUrl((req as any) || ({ headers: {} } as any), cfg?.webhookUrl || '__AUTO__').webhookUrl;
 
         if (existingLegs.length === 0) {
-          const planned = await planInboundCascadeLegs(call.organizationId);
+          const planned = await planInboundCascadeLegs(call.organizationId, call.toNumber);
           if (planned.length > 0) {
             for (const leg of planned) {
               await prisma.telnyxCallLeg.create({

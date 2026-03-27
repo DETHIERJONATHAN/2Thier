@@ -1478,9 +1478,12 @@ model TelnyxUserConfig {
   userId         String       @unique
   organizationId String
   assignedNumber String?
+  forwardToNumber String?
   canMakeCalls   Boolean      @default(false)
+  canReceiveCalls Boolean     @default(true)
   canSendSms     Boolean      @default(false)
   monthlyLimit   Float?
+  messengerRingTimeout Int    @default(25)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime
   Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
