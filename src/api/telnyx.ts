@@ -8,6 +8,7 @@ import { decrypt, encrypt } from '../utils/crypto';
 import { getBackendBaseUrl, joinUrl } from '../utils/baseUrl';
 import crypto from 'crypto';
 import { notify } from '../services/NotificationHelper';
+import { sendPushToUser } from '../routes/push';
 
 const router = Router();
 const prisma = db;
@@ -2469,6 +2470,37 @@ async function handleCallWebhook(eventType: string, callData: any, req?: Request
         updatedAt: new Date(),
       },
     });
+
+    // 📱 Send push notification to users assigned to the called number
+    const calledNumber = String(callData.to || '').replace(/[^\d+]/g, '');
+    const callerNumber = String(callData.from || '');
+    if (calledNumber) {
+      // Find users who have this number assigned
+      const assignedUsers = await prisma.telnyxUserConfig.findMany({
+        where: {
+          organizationId,
+          assignedNumber: { contains: calledNumber.replace('+', '') },
+          canMakeCalls: true,
+        },
+        select: { userId: true },
+      });
+
+      for (const userConfig of assignedUsers) {
+        sendPushToUser(userConfig.userId, {
+          title: '📞 Appel entrant',
+          body: `Appel de ${callerNumber}`,
+          type: 'incoming-telnyx-call',
+          tag: `telnyx-call-${call.id}`,
+          callId: call.id,
+          requireInteraction: true,
+          vibrate: [200, 100, 200, 100, 200],
+          actions: [
+            { action: 'answer', title: 'Répondre' },
+            { action: 'decline', title: 'Refuser' },
+          ],
+        }).catch(err => console.warn('[PUSH] Error sending incoming Telnyx call notification:', err));
+      }
+    }
   }
 
   console.log(`🪝 [Telnyx Webhook] ${eventType} pour call ${call.id} -> state: ${state}`);

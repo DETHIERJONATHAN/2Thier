@@ -691,9 +691,18 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                   </div>
                 )}
                 {chantier.Lead?.phone && (
-                  <div style={{ marginBottom: '4px' }}>
-                    <PhoneOutlined style={{ marginRight: '6px', color: '#8c8c8c' }} />
-                    <a href={`tel:${chantier.Lead.phone}`}>{chantier.Lead.phone}</a>
+                  <div style={{ marginBottom: '4px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span>
+                      <PhoneOutlined style={{ marginRight: '6px', color: '#8c8c8c' }} />
+                      <a href={`tel:${chantier.Lead.phone}`}>{chantier.Lead.phone}</a>
+                    </span>
+                    <a
+                      onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('open-messenger-call', { detail: { phoneNumber: chantier.Lead!.phone } })); }}
+                      title="Appeler via Messenger"
+                      style={{ color: '#31a24c', cursor: 'pointer', fontSize: 16 }}
+                    >
+                      <PhoneOutlined />
+                    </a>
                   </div>
                 )}
                 {chantier.leadId && (

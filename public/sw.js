@@ -80,14 +80,39 @@ self.addEventListener('notificationclick', (event) => {
 
 // ─── ACTION SUR NOTIFICATION (Accepter/Refuser) ─────────────
 self.addEventListener('notificationclick', (event) => {
-  if (event.action === 'reject' && event.notification.data?.callId) {
-    // Reject call via API
+  const data = event.notification.data || {};
+  const isTelnyxCall = data.type === 'incoming-telnyx-call';
+
+  if (event.action === 'reject' || event.action === 'decline') {
+    event.notification.close();
+    if (data.callId) {
+      event.waitUntil(
+        fetch(`/api/calls/${data.callId}/reject`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        }).catch(() => {})
+      );
+    }
+    return;
+  }
+
+  if (event.action === 'answer' || (isTelnyxCall && !event.action)) {
     event.notification.close();
     event.waitUntil(
-      fetch(`/api/calls/${event.notification.data.callId}/reject`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      }).catch(() => {})
+      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+        for (const client of clientList) {
+          if (client.url.includes(self.location.origin) && 'focus' in client) {
+            client.postMessage({
+              type: isTelnyxCall ? 'INCOMING_TELNYX_CALL' : 'INCOMING_CALL',
+              callId: data.callId,
+            });
+            return client.focus();
+          }
+        }
+        if (self.clients.openWindow) {
+          return self.clients.openWindow('/');
+        }
+      })
     );
   }
 }, false);

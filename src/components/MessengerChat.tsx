@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Avatar, Input } from 'antd';
 import {
   MessageOutlined,
@@ -15,8 +15,10 @@ import {
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import VideoCallModal from './VideoCallModal';
+import TelnyxDialer from './TelnyxDialer';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { useAuth } from '../auth/useAuth';
+import { useTelnyxCall, type TelnyxEligibility } from '../hooks/useTelnyxCall';
 
 // ═══════════════════════════════════════════════════════════════
 // TYPES
@@ -117,6 +119,11 @@ const MessengerChat: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewChat, setShowNewChat] = useState(false);
 
+  // Telnyx phone state
+  const [telnyxEligibility, setTelnyxEligibility] = useState<TelnyxEligibility | null>(null);
+  const [showDialer, setShowDialer] = useState(false);
+  const [dialerInitialNumber, setDialerInitialNumber] = useState('');
+
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ─── DATA FETCHING ─────────────────────────────────────────
@@ -141,6 +148,27 @@ const MessengerChat: React.FC = () => {
     } catch { /* silent */ }
   }, [api]);
 
+  // ─── TELNYX ELIGIBILITY ─────────────────────────────────────
+  const fetchTelnyxEligibility = useCallback(async () => {
+    try {
+      const data = await api.get('/api/messenger/telnyx-eligibility') as TelnyxEligibility;
+      setTelnyxEligibility(data);
+    } catch { setTelnyxEligibility(null); }
+  }, [api]);
+
+  // Stabilize eligibility for useTelnyxCall hook
+  const stableEligibility = useMemo(() => telnyxEligibility, [telnyxEligibility?.eligible, telnyxEligibility?.sipCredentials?.sipUsername]);
+
+  const telnyxCall = useTelnyxCall({
+    _api: api,
+    eligibility: stableEligibility,
+    onIncomingCall: (callerNumber, callerName) => {
+      // Auto-open dialer on incoming Telnyx call
+      setShowDialer(true);
+      setIsListOpen(true);
+    },
+  });
+
   // Sync org friends on first load
   useEffect(() => {
     if (!user) return;
@@ -150,7 +178,8 @@ const MessengerChat: React.FC = () => {
     fetchConversations();
     fetchFriends();
     fetchUnread();
-  }, [user, api, currentOrganization, fetchConversations, fetchFriends, fetchUnread]);
+    fetchTelnyxEligibility();
+  }, [user, api, currentOrganization, fetchConversations, fetchFriends, fetchUnread, fetchTelnyxEligibility]);
 
   // ─── SERVICE WORKER + WEB PUSH REGISTRATION ────────────────
   useEffect(() => {
@@ -209,6 +238,12 @@ const MessengerChat: React.FC = () => {
         // SW tells us about an incoming call click — the polling will pick it up
         console.log('[SW] Notification call clicked:', event.data.callId);
       }
+      if (event.data?.type === 'INCOMING_TELNYX_CALL') {
+        // Open dialer on incoming Telnyx call notification click
+        setIsListOpen(true);
+        setShowDialer(true);
+        setActiveConversationId(null);
+      }
     };
     navigator.serviceWorker.addEventListener('message', handleSWMessage);
     return () => navigator.serviceWorker.removeEventListener('message', handleSWMessage);
@@ -239,6 +274,7 @@ const MessengerChat: React.FC = () => {
       const detail = (e as CustomEvent).detail;
       if (detail?.conversationId) {
         setIsListOpen(true);
+        setShowDialer(false);
         setActiveConversationId(detail.conversationId);
         setInlineMessages([]);
         setInlineNewMessage('');
@@ -249,6 +285,22 @@ const MessengerChat: React.FC = () => {
     window.addEventListener('open-messenger', handleOpenMessenger);
     return () => window.removeEventListener('open-messenger', handleOpenMessenger);
   }, [api, fetchInlineMessages]);
+
+  // Listen for open-messenger-call events (click-to-call from Lead/Chantier)
+  useEffect(() => {
+    const handleOpenCall = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.phoneNumber && telnyxEligibility?.eligible) {
+        setIsListOpen(true);
+        setActiveConversationId(null);
+        setShowNewChat(false);
+        setShowDialer(true);
+        setDialerInitialNumber(detail.phoneNumber);
+      }
+    };
+    window.addEventListener('open-messenger-call', handleOpenCall);
+    return () => window.removeEventListener('open-messenger-call', handleOpenCall);
+  }, [telnyxEligibility?.eligible]);
 
   // Auto-scroll inline messages
   useEffect(() => {
@@ -555,9 +607,23 @@ const MessengerChat: React.FC = () => {
       }}>
         {/* Header */}
         <div style={{ padding: '12px 16px', borderBottom: `1px solid ${FB.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 20, fontWeight: 800, color: FB.text }}>{t('messenger.whispers')}</span>
+          <span style={{ fontSize: 20, fontWeight: 800, color: FB.text }}>
+            {showDialer ? t('telnyx.phone', 'Téléphone') : t('messenger.whispers')}
+          </span>
           <div style={{ display: 'flex', gap: 8 }}>
-            <div onClick={() => setShowNewChat(!showNewChat)}
+            {telnyxEligibility?.eligible && (
+              <div onClick={() => { setShowDialer(!showDialer); setShowNewChat(false); setActiveConversationId(null); }}
+                title={t('telnyx.phone', 'Téléphone')}
+                style={{
+                  width: 32, height: 32, borderRadius: '50%',
+                  background: showDialer ? FB.blue : FB.hover,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}>
+                <PhoneOutlined style={{ fontSize: 16, color: showDialer ? '#fff' : undefined }} />
+              </div>
+            )}
+            <div onClick={() => { setShowNewChat(!showNewChat); setShowDialer(false); }}
               style={{ width: 32, height: 32, borderRadius: '50%', background: FB.hover, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
               <EditOutlined style={{ fontSize: 16 }} />
             </div>
@@ -568,20 +634,43 @@ const MessengerChat: React.FC = () => {
           </div>
         </div>
 
-        {/* Search */}
-        <div style={{ padding: '8px 12px' }}>
-          <Input
-            prefix={<SearchOutlined style={{ color: FB.textSecondary }} />}
-            placeholder={t('messenger.searchMessenger')}
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            style={{ borderRadius: 20, background: FB.bg, border: 'none' }}
-            size="small"
-          />
-        </div>
+        {/* Search (hidden when dialer is shown) */}
+        {!showDialer && (
+          <div style={{ padding: '8px 12px' }}>
+            <Input
+              prefix={<SearchOutlined style={{ color: FB.textSecondary }} />}
+              placeholder={t('messenger.searchMessenger')}
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              style={{ borderRadius: 20, background: FB.bg, border: 'none' }}
+              size="small"
+            />
+          </div>
+        )}
 
-        {/* New chat: friend list */}
-        {showNewChat ? (
+        {/* Telnyx Dialer view */}
+        {showDialer ? (
+          <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px' }}>
+            <TelnyxDialer
+              callState={telnyxCall.callState}
+              isRegistered={telnyxCall.isRegistered}
+              assignedNumber={telnyxEligibility?.assignedNumber || null}
+              callDuration={telnyxCall.callDuration}
+              isMuted={telnyxCall.isMuted}
+              isOnHold={telnyxCall.isOnHold}
+              callerInfo={telnyxCall.callerInfo}
+              errorMessage={telnyxCall.errorMessage}
+              makeCall={telnyxCall.makeCall}
+              hangup={telnyxCall.hangup}
+              answer={telnyxCall.answer}
+              toggleMute={telnyxCall.toggleMute}
+              toggleHold={telnyxCall.toggleHold}
+              sendDTMF={telnyxCall.sendDTMF}
+              initialNumber={dialerInitialNumber}
+              onClose={() => { setShowDialer(false); setDialerInitialNumber(''); }}
+            />
+          </div>
+        ) : showNewChat ? (
           <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
             <div style={{ padding: '8px 16px', fontSize: 13, fontWeight: 600, color: FB.textSecondary }}>
               {t('messenger.newWhisper')}

@@ -882,6 +882,15 @@ export default function LeadDetail({ leadId, onEdit, onDelete, onCall, onEmail, 
               disabled={!onCall}
             />
           </Tooltip>
+          {displayPhone && (
+            <Tooltip title="Appeler via Messenger">
+              <Button
+                icon={<PhoneOutlined />}
+                onClick={() => window.dispatchEvent(new CustomEvent('open-messenger-call', { detail: { phoneNumber: displayPhone } }))}
+                style={{ background: '#31a24c', borderColor: '#31a24c', color: '#fff' }}
+              />
+            </Tooltip>
+          )}
           <Tooltip title="Gmail Google">
             <Button
               icon={<MailOutlined />}

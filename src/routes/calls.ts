@@ -159,6 +159,8 @@ router.post('/:id/leave', async (req: Request, res: Response): Promise<void> => 
 
       // Insert a system message in the conversation so the call appears in Whispers
       if (call.conversationId) {
+        // Clean up signaling buffer for this call
+        signalingBuffer.delete(req.params.id);
         const callIcon = call.callType === 'video' ? '📹' : '📞';
         let messageContent: string;
 
@@ -299,6 +301,17 @@ router.get('/check/incoming', async (req: Request, res: Response): Promise<void>
 
 // Simple in-memory signaling buffer (works for single-server deployment)
 const signalingBuffer = new Map<string, Array<{ from: string; to: string; type: string; data: any; ts: number }>>();
+
+// Cleanup completed calls from signaling buffer periodically (every 60s)
+setInterval(() => {
+  const now = Date.now();
+  for (const [callId, signals] of signalingBuffer.entries()) {
+    // Remove calls where all signals are >60s old
+    if (signals.length === 0 || signals.every(s => now - s.ts > 60000)) {
+      signalingBuffer.delete(callId);
+    }
+  }
+}, 60000);
 
 router.post('/:id/signal', async (req: Request, res: Response): Promise<void> => {
   const user = (req as any).user;

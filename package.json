@@ -89,6 +89,7 @@
     "@prisma/client": "^6.10.1",
     "@react-google-maps/api": "^2.20.7",
     "@react-pdf/renderer": "^4.3.1",
+    "@telnyx/webrtc": "^2.25.25",
     "@types/array-move": "^1.0.0",
     "@types/bcrypt": "^6.0.0",
     "@types/dompurify": "^3.0.5",

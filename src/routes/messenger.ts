@@ -37,11 +37,34 @@ router.get('/conversations', async (req: Request, res: Response): Promise<void> 
       orderBy: { conversation: { lastMessageAt: 'desc' } },
     });
 
-    const conversations = participations.map(p => {
+    // Batch-fetch unread counts for all conversations in one query
+    const unreadCounts = await db.message.groupBy({
+      by: ['conversationId'],
+      where: {
+        conversationId: { in: participations.map(p => p.conversationId) },
+        senderId: { not: user.id },
+        createdAt: { gt: new Date(Math.min(...participations.map(p => p.lastReadAt.getTime()))) },
+      },
+      _count: { id: true },
+    });
+
+    const conversations = await Promise.all(participations.map(async (p) => {
       const conv = p.conversation;
       const otherParticipants = conv.participants.filter(pp => pp.userId !== user.id);
       const lastMessage = conv.messages[0] || null;
-      const unreadCount = lastMessage && lastMessage.createdAt > p.lastReadAt ? 1 : 0;
+
+      // Count unread: messages from others after my lastReadAt
+      const unreadRow = unreadCounts.find(uc => uc.conversationId === conv.id);
+      // Refine count per-participant since the grouped query used global min
+      const unreadCount = unreadRow
+        ? await db.message.count({
+            where: {
+              conversationId: conv.id,
+              senderId: { not: user.id },
+              createdAt: { gt: p.lastReadAt },
+            },
+          })
+        : 0;
 
       return {
         id: conv.id,
@@ -51,17 +74,17 @@ router.get('/conversations', async (req: Request, res: Response): Promise<void> 
         participants: conv.participants.map(pp => pp.user),
         lastMessage: lastMessage ? {
           id: lastMessage.id,
-          content: lastMessage.isDeleted ? 'Whisper deleted' : lastMessage.content,
+          content: lastMessage.isDeleted ? 'Whisper deleted' : (lastMessage.content ?? ''),
           senderName: `${lastMessage.sender.firstName || ''} ${lastMessage.sender.lastName || ''}`.trim(),
           senderId: lastMessage.senderId,
           createdAt: lastMessage.createdAt,
-          mediaType: lastMessage.mediaType,
+          mediaType: (lastMessage as any).mediaType ?? null,
         } : null,
         unreadCount,
         lastMessageAt: conv.lastMessageAt,
         myLastReadAt: p.lastReadAt,
       };
-    });
+    }));
 
     res.json(conversations);
   } catch (err) {
@@ -294,26 +317,127 @@ router.get('/unread', async (req: Request, res: Response): Promise<void> => {
   try {
     const participations = await db.conversationParticipant.findMany({
       where: { userId: user.id, isActive: true },
-      include: {
-        conversation: {
-          include: {
-            messages: { orderBy: { createdAt: 'desc' }, take: 1 },
-          },
-        },
-      },
+      select: { conversationId: true, lastReadAt: true },
     });
 
+    // Count actual unread messages per conversation (not just 0/1)
     let unread = 0;
     for (const p of participations) {
-      const lastMsg = p.conversation.messages[0];
-      if (lastMsg && lastMsg.createdAt > p.lastReadAt && lastMsg.senderId !== user.id) {
-        unread++;
-      }
+      const count = await db.message.count({
+        where: {
+          conversationId: p.conversationId,
+          senderId: { not: user.id },
+          createdAt: { gt: p.lastReadAt },
+        },
+      });
+      unread += count;
     }
 
     res.json({ unread });
   } catch (err) {
     console.error('[MESSENGER] Error getting unread:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// GET /messenger/telnyx-eligibility — Check if user can make Telnyx calls
+// Returns SIP credentials if eligible (org has Telnyx + user has permission)
+// ═══════════════════════════════════════════════════════════════
+router.get('/telnyx-eligibility', async (req: Request, res: Response): Promise<void> => {
+  const user = (req as any).user;
+  if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
+
+  try {
+    const orgId = user.organizationId || (req.headers['x-organization-id'] as string);
+
+    // If no org, no Telnyx
+    if (!orgId) {
+      res.json({ eligible: false, assignedNumber: null, canMakeCalls: false, canSendSms: false, orgHasTelnyx: false, sipCredentials: null });
+      return;
+    }
+
+    // 1. Check if org has Telnyx module active
+    const moduleStatus = await db.organizationModuleStatus.findFirst({
+      where: {
+        organizationId: orgId,
+        active: true,
+        Module: { feature: 'TELNYX' },
+      },
+    });
+
+    // 2. Check if org has TelnyxConfig (API key configured)
+    const telnyxConfig = await db.telnyxConfig.findUnique({
+      where: { organizationId: orgId },
+    });
+
+    const orgHasTelnyx = !!(moduleStatus && telnyxConfig);
+
+    if (!orgHasTelnyx) {
+      res.json({ eligible: false, assignedNumber: null, canMakeCalls: false, canSendSms: false, orgHasTelnyx: false, sipCredentials: null });
+      return;
+    }
+
+    // 3. Check user-level Telnyx config
+    const userConfig = await db.telnyxUserConfig.findFirst({
+      where: { userId: user.id, organizationId: orgId },
+    });
+
+    const canMakeCalls = userConfig?.canMakeCalls ?? false;
+    const canSendSms = userConfig?.canSendSms ?? false;
+    const assignedNumber = userConfig?.assignedNumber ?? null;
+
+    // 4. Get SIP credentials for this user (if they can make calls)
+    let sipCredentials: { sipUsername: string; sipPassword: string; sipDomain: string } | null = null;
+    if (canMakeCalls) {
+      const sipEndpoint = await db.telnyxSipEndpoint.findFirst({
+        where: {
+          organizationId: orgId,
+          userId: user.id,
+          status: 'active',
+        },
+        orderBy: { priority: 'asc' },
+      });
+
+      if (sipEndpoint) {
+        sipCredentials = {
+          sipUsername: sipEndpoint.sipUsername,
+          sipPassword: sipEndpoint.sipPassword,
+          sipDomain: sipEndpoint.sipDomain,
+        };
+      } else {
+        // Fallback: try org-level SIP endpoint without specific user
+        const orgSipEndpoint = await db.telnyxSipEndpoint.findFirst({
+          where: {
+            organizationId: orgId,
+            status: 'active',
+            userId: null,
+          },
+          orderBy: { priority: 'asc' },
+        });
+
+        if (orgSipEndpoint) {
+          sipCredentials = {
+            sipUsername: orgSipEndpoint.sipUsername,
+            sipPassword: orgSipEndpoint.sipPassword,
+            sipDomain: orgSipEndpoint.sipDomain,
+          };
+        }
+      }
+    }
+
+    const eligible = canMakeCalls && !!sipCredentials;
+
+    res.json({
+      eligible,
+      assignedNumber,
+      canMakeCalls,
+      canSendSms,
+      orgHasTelnyx,
+      sipCredentials: eligible ? sipCredentials : null,
+    });
+  } catch (err) {
+    console.error('[MESSENGER] Error checking Telnyx eligibility:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
