@@ -1125,6 +1125,9 @@ model Organization {
   TimeCapsules               TimeCapsule[]
   Quests                     Quest[]
   SocialEvents               SocialEvent[]
+
+  // Hive Live
+  HiveLiveMoments            HiveLiveMoment[]
 }
 
 model OrganizationModuleStatus {
@@ -2311,6 +2314,9 @@ model User {
   ContentReviews                                      ContentReport[]     @relation("ContentReviewer")
   EventsCreated                                       SocialEvent[]       @relation("EventCreator")
   EventAttendances                                    EventAttendee[]     @relation("EventAttendees")
+
+  // Hive Live
+  HiveLiveMoments                                     HiveLiveMoment[]    @relation("HiveLiveMoments")
 
   @@index([organizationId, commercialSlug])
 }
@@ -3763,6 +3769,7 @@ model WallPost {
   parentPost      WallPost?    @relation("PostEcho", fields: [parentPostId], references: [id], onDelete: SetNull)
   echoes          WallPost[]   @relation("PostEcho")
   savedBy         SavedReel[]
+  hiveLiveMoments HiveLiveMoment[] @relation("HiveLiveLinkedPost")
 
   @@index([organizationId, visibility, createdAt])
   @@index([organizationId, createdAt])
@@ -4395,4 +4402,55 @@ model EventAttendee {
 
   @@unique([eventId, userId])
   @@index([userId])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HIVE LIVE — Ligne de vie / Lifeline
+// ═══════════════════════════════════════════════════════════════
+
+model HiveLiveMoment {
+  id             String    @id @default(uuid())
+  userId         String
+  organizationId String?
+
+  // Content
+  title          String
+  description    String?
+  momentDate     DateTime
+  coverUrl       String?
+
+  // Linked wall post (bidirectional: favorite from Wall → Hive Live)
+  linkedPostId   String?
+
+  // Visibility: public, crew, private
+  visibility     String   @default("public")
+
+  // Ordering within same date range
+  sortOrder      Int      @default(0)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  author         User          @relation("HiveLiveMoments", fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  linkedPost     WallPost?     @relation("HiveLiveLinkedPost", fields: [linkedPostId], references: [id], onDelete: SetNull)
+  media          HiveLiveMomentMedia[]
+
+  @@index([userId, momentDate])
+  @@index([organizationId, momentDate])
+  @@index([linkedPostId])
+}
+
+model HiveLiveMomentMedia {
+  id        String   @id @default(uuid())
+  momentId  String
+  url       String
+  type      String   @default("image")  // image, video
+  caption   String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  moment    HiveLiveMoment @relation(fields: [momentId], references: [id], onDelete: Cascade)
+
+  @@index([momentId])
 }

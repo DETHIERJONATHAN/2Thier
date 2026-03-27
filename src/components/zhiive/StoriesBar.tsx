@@ -50,6 +50,11 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 🐝 Hive Live integration
+  const [hiveLiveModalOpen, setHiveLiveModalOpen] = useState(false);
+  const [hiveLiveTitle, setHiveLiveTitle] = useState('');
+  const [hiveLiveSaving, setHiveLiveSaving] = useState(false);
+
   const fetchStories = useCallback(async () => {
     try {
       const data = await api.get('/api/zhiive/stories/feed');
@@ -185,6 +190,28 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
     if (prevIndex >= 0) {
       setViewingStoryIndex(prevIndex);
       setViewingStory(viewingStoryList[prevIndex]);
+    }
+  };
+
+  const handleAddToHiveLive = async () => {
+    if (!viewingStory || !hiveLiveTitle.trim()) return;
+    setHiveLiveSaving(true);
+    try {
+      const mediaType = viewingStory.mediaType === 'VIDEO' ? 'video' : 'image';
+      await api.post('/api/hive-live', {
+        title: hiveLiveTitle.trim(),
+        momentDate: viewingStory.createdAt,
+        visibility: 'colony',
+        media: viewingStory.mediaUrl ? [{ url: viewingStory.mediaUrl, type: mediaType }] : [],
+        coverUrl: mediaType === 'image' ? viewingStory.mediaUrl : undefined,
+      });
+      message.success(t('hive.addedToHiveLive'));
+      setHiveLiveModalOpen(false);
+      setHiveLiveTitle('');
+    } catch {
+      message.error(t('hive.errorAddingToHiveLive'));
+    } finally {
+      setHiveLiveSaving(false);
     }
   };
 
@@ -403,12 +430,20 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
               <span style={{ fontSize: 10, color: SF.textMuted, marginLeft: 'auto' }}>
                 {new Date(viewingStory.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
               </span>
-              {/* Delete button for own stories */}
+              {/* Actions for own stories */}
               {currentUser?.id === viewingStory.userId && (
-                <span
-                  onClick={() => handleDeleteStory(viewingStory.id)}
-                  style={{ fontSize: 12, color: '#ff4d4f', cursor: 'pointer', fontWeight: 600 }}
-                >🗑️</span>
+                <>
+                  <Tooltip title={t('hive.addToHiveLive')}>
+                    <span
+                      onClick={() => { setHiveLiveTitle(viewingStory.userName + ' — Story'); setHiveLiveModalOpen(true); }}
+                      style={{ fontSize: 14, cursor: 'pointer' }}
+                    >🐝</span>
+                  </Tooltip>
+                  <span
+                    onClick={() => handleDeleteStory(viewingStory.id)}
+                    style={{ fontSize: 12, color: '#ff4d4f', cursor: 'pointer', fontWeight: 600 }}
+                  >🗑️</span>
+                </>
               )}
             </div>
             {viewingStory.mediaUrl ? (
@@ -448,6 +483,24 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
             )}
           </div>
         )}
+      </Modal>
+
+      {/* 🐝 Hive Live modal */}
+      <Modal
+        open={hiveLiveModalOpen}
+        onCancel={() => { if (!hiveLiveSaving) setHiveLiveModalOpen(false); }}
+        onOk={handleAddToHiveLive}
+        confirmLoading={hiveLiveSaving}
+        title={t('hive.addToHiveLive')}
+        okText={t('hive.addToHiveLive')}
+      >
+        <p style={{ color: SF.textMuted, marginBottom: 12 }}>{t('hive.hiveLiveExplanation')}</p>
+        <Input
+          value={hiveLiveTitle}
+          onChange={e => setHiveLiveTitle(e.target.value)}
+          placeholder={t('hive.momentTitle')}
+          maxLength={120}
+        />
       </Modal>
     </div>
   );

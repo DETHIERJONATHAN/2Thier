@@ -14,6 +14,7 @@ import {
   ShopOutlined,
 } from '@ant-design/icons';
 import { WallPostCard, WallPostData } from './DashboardPageUnified';
+import HiveLiveTimeline from '../components/zhiive/HiveLiveTimeline';
 
 /* ═══════════════════════════════════════════════════════════════
    FACEBOOK COLORS — exactement les mêmes tokens
@@ -461,6 +462,7 @@ const ProfilePage = () => {
     { key: 'publications', label: 'Publications' },
     { key: 'media', label: 'Médias' },
     { key: 'photos', label: 'Photos' },
+    { key: 'hivelive', label: 'Hive Live' },
   ];
 
   /* ── Responsive dimensions ─────────────────────────────────── */
@@ -1377,10 +1379,17 @@ const ProfilePage = () => {
             )}
           </div>
         )}
+
+        {activeTab === 'hivelive' && (
+          <div style={{ maxWidth: 900, margin: '0 auto' }}>
+            <HiveLiveTimeline
+              userId={viewUserId || user?.id || ''}
+              isOwner={!isViewingOther}
+            />
+          </div>
+        )}
       </div>
     </div>
-
-    {/* Modal création de Colony (Business) */}
     <Modal
       title="Fonder votre Colony"
       open={isCreateOrgModalVisible}

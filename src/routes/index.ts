@@ -91,6 +91,7 @@ import messengerRoutes from './messenger'; // 💬 Routes Messenger
 import callsRoutes from './calls'; // 📹 Routes Appels Vidéo/Audio
 import pushRoutes from './push'; // 🔔 Routes Push Notifications
 import zhiiveRoutes from './zhiive'; // 🌊 Routes Zhiive — Réseau Social Nouvelle Génération
+import hiveLiveRoutes from './hive-live'; // 🐝 Routes Hive Live — Ligne de vie interactive
 import globalSearchRoutes from './globalSearch'; // 🔍 Recherche universelle globale
 import { authenticateToken, fetchFullUser } from '../middleware/auth'; // 🔐 Middleware auth pour TBL
 
@@ -423,6 +424,9 @@ apiRouter.use('/sync', syncTempRoutes);
 
 // 🏠 MUR / RÉSEAU SOCIAL D'ENTREPRISE
 apiRouter.use('/wall', wallRoutes);
+
+// 🐝 HIVE LIVE — LIGNE DE VIE INTERACTIVE
+apiRouter.use('/hive-live', hiveLiveRoutes);
 
 // 👥 AMIS & 💬 MESSENGER & 📹 APPELS & 🔔 PUSH
 apiRouter.use('/friends', friendsRoutes);

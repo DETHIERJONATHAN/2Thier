@@ -84,6 +84,11 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
   const [shareSheetOpen, setShareSheetOpen] = useState(false);
   const [shareReel, setShareReel] = useState<Reel | null>(null);
   const [savedSet, setSavedSet] = useState<Set<string>>(new Set());
+
+  // === Hive Live ===
+  const [hiveLiveModalOpen, setHiveLiveModalOpen] = useState(false);
+  const [hiveLiveTitle, setHiveLiveTitle] = useState('');
+  const [hiveLiveSaving, setHiveLiveSaving] = useState(false);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
   const [likedComments, setLikedComments] = useState<Set<string>>(new Set());
@@ -218,6 +223,21 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
       navigator.share({ title: t('reels.reelBy', { name: shareReel.authorName }), text: shareReel.caption || t('reels.checkOutReel') }).catch(() => {});
     } else { handleCopyLink(); }
     setShareSheetOpen(false);
+  };
+
+  const handleAddToHiveLive = async () => {
+    if (!shareReel || !hiveLiveTitle.trim()) return;
+    setHiveLiveSaving(true);
+    try {
+      await api.post(`/api/hive-live/from-post/${shareReel.id}`, { title: hiveLiveTitle.trim() });
+      showToast(t('hive.addedToHiveLive', 'Ajouté à votre Hive Live !'));
+      setHiveLiveModalOpen(false);
+      setHiveLiveTitle('');
+    } catch {
+      showToast(t('hive.errorAddingToHiveLive', 'Erreur'), 'err');
+    } finally {
+      setHiveLiveSaving(false);
+    }
   };
 
   const handleSaveReel = async (reelId: string) => {
@@ -1119,6 +1139,18 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                   </div>
                   <span style={{ fontSize: 11, color: '#333', textAlign: 'center' }}>{t('reels.copyLink')}</span>
                 </div>
+                {shareReel?.authorId === currentUser?.id && (
+                  <div onClick={() => {
+                    setHiveLiveTitle(shareReel?.caption?.substring(0, 100) || '');
+                    setHiveLiveModalOpen(true);
+                    setShareSheetOpen(false);
+                  }} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer', padding: 8 }}>
+                    <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#FFF8E1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <span style={{ fontSize: 22 }}>🐝</span>
+                    </div>
+                    <span style={{ fontSize: 11, color: '#333', textAlign: 'center' }}>Hive Live</span>
+                  </div>
+                )}
               </div>
 
               {/* Cancel */}
@@ -1129,6 +1161,59 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
             </div>
           </div>
         </>
+      )}
+
+      {/* 🐝 Hive Live modal */}
+      {hiveLiveModalOpen && (
+        <div style={{ position: 'absolute', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div onClick={() => { setHiveLiveModalOpen(false); setHiveLiveTitle(''); }}
+            style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)' }} />
+          <div style={{
+            position: 'relative', zIndex: 61, background: '#fff', borderRadius: 16,
+            padding: 24, width: '90%', maxWidth: 360,
+          }}>
+            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 16, color: '#333' }}>
+              🐝 {t('hive.addToHiveLive', 'Ajouter à mon Hive Live')}
+            </div>
+            <p style={{ fontSize: 13, color: '#666', marginBottom: 12 }}>
+              {t('hive.hiveLiveExplanation', 'Ce reel sera ajouté à votre ligne de vie.')}
+            </p>
+            <input
+              value={hiveLiveTitle}
+              onChange={e => setHiveLiveTitle(e.target.value)}
+              placeholder={t('hive.momentTitlePlaceholder', 'Donnez un titre à ce moment')}
+              maxLength={200}
+              style={{
+                width: '100%', padding: '10px 12px', borderRadius: 8,
+                border: '1px solid #ddd', fontSize: 14, outline: 'none',
+                marginBottom: 16, boxSizing: 'border-box',
+              }}
+            />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => { setHiveLiveModalOpen(false); setHiveLiveTitle(''); }}
+                style={{
+                  padding: '8px 16px', borderRadius: 8, border: '1px solid #ddd',
+                  background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#666',
+                }}
+              >
+                {t('common.cancel', 'Annuler')}
+              </button>
+              <button
+                onClick={handleAddToHiveLive}
+                disabled={hiveLiveSaving || !hiveLiveTitle.trim()}
+                style={{
+                  padding: '8px 16px', borderRadius: 8, border: 'none',
+                  background: '#6C5CE7', color: '#fff', cursor: 'pointer',
+                  fontSize: 13, fontWeight: 600,
+                  opacity: hiveLiveSaving || !hiveLiveTitle.trim() ? 0.5 : 1,
+                }}
+              >
+                {hiveLiveSaving ? '...' : t('hive.addMoment', 'Ajouter')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
         </>

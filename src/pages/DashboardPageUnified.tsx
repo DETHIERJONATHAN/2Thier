@@ -502,6 +502,9 @@ export const WallPostCard: React.FC<{
   const [shareVisibility, setShareVisibility] = useState<string>('IN');
   const [shareIncludeOriginal, setShareIncludeOriginal] = useState(true);
   const [shareAsOrg, setShareAsOrg] = useState(false);
+  const [showHiveLiveModal, setShowHiveLiveModal] = useState(false);
+  const [hiveLiveTitle, setHiveLiveTitle] = useState('');
+  const [hiveLiveSaving, setHiveLiveSaving] = useState(false);
 
   const authorName = post.publishAsOrg && post.organization?.name
     ? post.organization.name
@@ -609,6 +612,12 @@ export const WallPostCard: React.FC<{
   const handleShare = async (targetType = 'LINK') => {
     const url = `${window.location.origin}/wall/post/${post.id}`;
     const text = post.content ? post.content.substring(0, 200) : `Post de ${authorName}`;
+    if (targetType === 'HIVELIVE') {
+      setShowShareMenu(false);
+      setHiveLiveTitle(post.content ? post.content.substring(0, 100) : '');
+      setShowHiveLiveModal(true);
+      return;
+    }
     if (targetType === 'WALL') {
       setShowShareMenu(false);
       setShareComment("");
@@ -659,6 +668,22 @@ export const WallPostCard: React.FC<{
       }
       setShowShareMenu(false);
     } catch (e) { console.error("[WALL] Share error:", e); }
+  };
+
+  const handleAddToHiveLive = async () => {
+    if (!hiveLiveTitle.trim()) return;
+    setHiveLiveSaving(true);
+    try {
+      await api.post(`/api/hive-live/from-post/${post.id}`, {
+        title: hiveLiveTitle.trim(),
+      });
+      NotificationManager.success(t('hive.addedToHiveLive', 'Ajouté à votre Hive Live !'));
+      setShowHiveLiveModal(false);
+      setHiveLiveTitle('');
+    } catch (e) { 
+      console.error("[HIVE-LIVE] Add from post error:", e);
+      NotificationManager.error(t('hive.errorAddingToHiveLive', 'Erreur'));
+    } finally { setHiveLiveSaving(false); }
   };
 
   const handleConfirmShareToWall = async () => {
@@ -1011,6 +1036,7 @@ export const WallPostCard: React.FC<{
             }}>
               {[
                 { type: "WALL", icon: "📝", label: "Share on my Hive" },
+                { type: "HIVELIVE", icon: "🐝", label: "Hive Live" },
                 { type: "LINK", icon: "🔗", label: "Copier le lien" },
                 { type: "FACEBOOK", icon: "📘", label: "Facebook" },
                 { type: "LINKEDIN", icon: "💼", label: "LinkedIn" },
@@ -1399,6 +1425,35 @@ export const WallPostCard: React.FC<{
           >
             {sharingPost ? 'Buzzing...' : 'Buzz it'}
           </button>
+        </div>
+      </Modal>
+
+      {/* Hive Live — add moment from post */}
+      <Modal
+        open={showHiveLiveModal}
+        onCancel={() => { setShowHiveLiveModal(false); setHiveLiveTitle(''); }}
+        title={<span style={{ fontWeight: 700 }}>🐝 {t('hive.addToHiveLive', 'Ajouter à mon Hive Live')}</span>}
+        okText={t('hive.addMoment', 'Ajouter')}
+        cancelText={t('common.cancel', 'Annuler')}
+        onOk={handleAddToHiveLive}
+        confirmLoading={hiveLiveSaving}
+        width={420}
+        centered
+      >
+        <div style={{ marginTop: 12 }}>
+          <label style={{ fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 6, display: 'block' }}>
+            {t('hive.momentTitle', 'Titre du moment')}
+          </label>
+          <Input
+            value={hiveLiveTitle}
+            onChange={e => setHiveLiveTitle(e.target.value)}
+            placeholder={t('hive.momentTitlePlaceholder', 'Donnez un titre à ce moment')}
+            maxLength={200}
+            style={{ borderRadius: 8 }}
+          />
+          <p style={{ fontSize: 12, color: FB.textSecondary, marginTop: 8 }}>
+            {t('hive.hiveLiveExplanation', 'Ce Buzz sera ajouté comme moment sur votre ligne de vie Hive Live.')}
+          </p>
         </div>
       </Modal>
     </FBCard>
