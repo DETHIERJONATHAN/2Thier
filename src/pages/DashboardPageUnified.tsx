@@ -1562,7 +1562,7 @@ export default function DashboardPageUnified() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Zhiive navigation (shared with header tabs via context)
-  const { leftSidebarApp, rightSidebarApp, leftApps, rightApps, registerMobileScroll, setMobilePanel: setContextMobilePanel, tabOrder, feedMode } = useZhiiveNav();
+  const { centerApp, setCenterApp, leftSidebarApp, rightSidebarApp, leftApps, rightApps, registerMobileScroll, setMobilePanel: setContextMobilePanel, tabOrder, feedMode } = useZhiiveNav();
 
   // 🐝 Identité centralisée — source unique de "qui poste" (org ou personnel)
   // NE JAMAIS recalculer `feedMode === 'org' && !!currentOrganization` localement !
@@ -2791,8 +2791,8 @@ export default function DashboardPageUnified() {
           })}
         </div>}
 
-      {/* Feed content — hidden when a module is active */}
-      {!activeModule && (<>
+      {/* Feed content — hidden when a module or center app is active */}
+      {!activeModule && !centerApp && (<>
       {/* Feed header — single compact line with filter dropdown */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0 4px", marginBottom: 4, position: "relative" }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: FB.text }}>Fil</span>
@@ -3058,7 +3058,7 @@ export default function DashboardPageUnified() {
             </div>
           </div>
 
-          {/* ── CENTER (flex: 1) — ALWAYS Wall (or CRM module) ── */}
+          {/* ── CENTER (flex: 1) — Wall by default, or selected app / CRM module ── */}
           <div style={{
             flex: 1, minWidth: 0, overflowY: "auto", padding: "4px 16px",
           }}>
@@ -3068,6 +3068,10 @@ export default function DashboardPageUnified() {
                   {renderFeed()}
                   {renderEmbeddedModule()}
                 </>
+              ) : centerApp ? (
+                <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
+                  {renderPanel(centerApp)}
+                </Suspense>
               ) : (
                 <>
                   <Suspense fallback={null}>

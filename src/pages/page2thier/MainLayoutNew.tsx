@@ -83,7 +83,7 @@ const SF_TAB_CONFIG: { id: string; label: string; icon: React.ComponentType<{ st
 const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { activeLeftApp, setActiveLeftApp, activeRightApp, setActiveRightApp, leftApps, rightApps, tabOrder, reorderTabs, mobilePanel, scrollMobileToPanel } = useZhiiveNav();
+  const { centerApp, setCenterApp, tabOrder, reorderTabs, mobilePanel, scrollMobileToPanel } = useZhiiveNav();
   const { currentOrganization, isSuperAdmin } = useAuth();
   const isFreeUser = !currentOrganization && !isSuperAdmin;
   const [dragId, setDragId] = useState<string | null>(null);
@@ -115,18 +115,15 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
       if (panelPosition >= 0) scrollMobileToPanel(panelPosition);
     }
     if (tabId === 'mur') {
-      // Mur is always center — just clear any module
+      // Mur = Wall in center — clear centerApp
+      setCenterApp(null);
       setSearchParams({}, { replace: true });
     } else {
-      // Route to the correct sidebar based on position relative to Mur
-      if (leftApps.includes(tabId as any)) {
-        setActiveLeftApp(tabId as any);
-      } else if (rightApps.includes(tabId as any)) {
-        setActiveRightApp(tabId as any);
-      }
+      // Open the app in the center column
+      setCenterApp(tabId as any);
       if (activeModule) setSearchParams({}, { replace: true });
     }
-  }, [isDashboard, navigate, setActiveLeftApp, setActiveRightApp, leftApps, rightApps, setSearchParams, activeModule, isMobile, scrollMobileToPanel, tabOrder]);
+  }, [isDashboard, navigate, setCenterApp, setSearchParams, activeModule, isMobile, scrollMobileToPanel, tabOrder]);
 
   // Mobile: long press to start drag, then slide to reorder
   const onTouchStart = useCallback((tabId: string, e: React.TouchEvent) => {
@@ -192,14 +189,13 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
       touchAction: dragId ? 'none' : 'auto',
     }}>
       {orderedTabs.map(tab => {
-        // Desktop: active = Mur if no module, left/right app matches selection. Mobile: position.
+        // Desktop: active = Mur if no centerApp and no module, else matches centerApp. Mobile: position.
         const isActive = isDashboard && (
           isMobile
             ? mobilePanel === tabOrder.indexOf(tab.id)
             : tab.id === 'mur'
-              ? !activeModule
-              : (leftApps.includes(tab.id as any) && activeLeftApp === tab.id)
-                || (rightApps.includes(tab.id as any) && activeRightApp === tab.id)
+              ? !activeModule && !centerApp
+              : centerApp === tab.id
         );
         return (
           <div
@@ -251,7 +247,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   }, []);
 
   const { logout, user, currentOrganization } = useAuth();
-  const { feedMode, setFeedMode } = useZhiiveNav();
+  const { feedMode, setFeedMode, setCenterApp } = useZhiiveNav();
 
   // 🐝 Identité centralisée — source unique de vérité pour l'avatar/nom du header
   const identity = useActiveIdentity();
@@ -382,7 +378,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             color: 'white',
             letterSpacing: '0.5px'
           }}
-          onClick={() => { navigate('/dashboard'); setSearchParams({}, { replace: true }); }}
+          onClick={() => { navigate('/dashboard'); setCenterApp(null); setSearchParams({}, { replace: true }); }}
         >
           <img src="/zhiive-logo.png" alt="Zhiive" style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'contain', flexShrink: 0 }} />
           {!isMobile && <img src="/zhiive-ecrit.png" alt="Zhiive" style={{ height: 20, objectFit: 'contain' }} />}
