@@ -343,7 +343,20 @@ router.get('/unread', async (req: Request, res: Response): Promise<void> => {
       unread += count;
     }
 
-    res.json({ unread });
+    // Check for latest incoming Wizz (for global notification even when conversation is closed)
+    const convIds = participations.map(p => p.conversationId);
+    const latestWizz = convIds.length > 0 ? await db.message.findFirst({
+      where: {
+        conversationId: { in: convIds },
+        senderId: { not: user.id },
+        mediaType: 'wizz',
+        createdAt: { gt: new Date(Date.now() - 30000) }, // Only wizz from the last 30s
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, senderId: true, conversationId: true, createdAt: true },
+    }) : null;
+
+    res.json({ unread, latestWizz: latestWizz || null });
   } catch (err) {
     console.error('[MESSENGER] Error getting unread:', err);
     res.status(500).json({ error: 'Erreur serveur' });

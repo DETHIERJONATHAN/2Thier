@@ -123,6 +123,7 @@ const MessengerChat: React.FC = () => {
   // 🎭 Wizz (MSN Nudge) state
   const [isShaking, setIsShaking] = useState(false);
   const lastSeenWizzIdRef = useRef<string | null>(null);
+  const lastGlobalWizzIdRef = useRef<string | null>(null);
   const wizzCooldownRef = useRef(false);
 
   // Video call state
@@ -155,8 +156,15 @@ const MessengerChat: React.FC = () => {
     try {
       const data = await api.get('/api/messenger/unread');
       if (data && typeof data.unread === 'number') setTotalUnread(data.unread);
+      // Global Wizz detection — works even when conversation is closed
+      if (data?.latestWizz && data.latestWizz.id !== lastGlobalWizzIdRef.current) {
+        lastGlobalWizzIdRef.current = data.latestWizz.id;
+        // Also update inline ref to prevent double-trigger if conversation is open
+        lastSeenWizzIdRef.current = data.latestWizz.id;
+        triggerWizz();
+      }
     } catch { /* silent */ }
-  }, [api]);
+  }, [api, triggerWizz]);
 
   const fetchFriends = useCallback(async () => {
     try {
@@ -425,7 +433,12 @@ const MessengerChat: React.FC = () => {
   const triggerWizz = useCallback(() => {
     setIsShaking(true);
     playSound('wizz');
-    setTimeout(() => setIsShaking(false), 600);
+    // Global page shake — felt even when messenger is closed
+    document.body.classList.add('global-wizz-shake');
+    setTimeout(() => {
+      setIsShaking(false);
+      document.body.classList.remove('global-wizz-shake');
+    }, 600);
   }, [playSound]);
 
   // Detect incoming wizz messages from others
@@ -548,6 +561,9 @@ const MessengerChat: React.FC = () => {
             100% { transform: translate(0, 0); }
           }
           .messenger-wizz-shake {
+            animation: messengerWizz 0.5s ease-in-out;
+          }
+          .global-wizz-shake {
             animation: messengerWizz 0.5s ease-in-out;
           }
         `}</style>
