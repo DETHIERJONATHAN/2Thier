@@ -10,7 +10,7 @@
  */
 import { useRef, useCallback } from 'react';
 
-type SoundType = 'ringtone' | 'telnyxRing' | 'messageNotification';
+type SoundType = 'ringtone' | 'telnyxRing' | 'messageNotification' | 'wizz';
 
 let sharedAudioContext: AudioContext | null = null;
 
@@ -148,6 +148,46 @@ function createTelnyxRing(ctx: AudioContext, destination: AudioNode): { stop: ()
 }
 
 /**
+ * Play the MSN Messenger-style "Wizz" / Nudge sound
+ * Rapid buzzy vibration sound — short aggressive oscillation
+ */
+function playWizzSound(ctx: AudioContext, destination: AudioNode): void {
+  const now = ctx.currentTime;
+
+  // Main buzz oscillator — sawtooth for that "bzzzz" texture
+  const osc = ctx.createOscillator();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(150, now);
+  osc.frequency.linearRampToValueAtTime(80, now + 0.15);
+  osc.frequency.linearRampToValueAtTime(200, now + 0.3);
+  osc.frequency.linearRampToValueAtTime(60, now + 0.5);
+
+  // LFO to create the "vibrating" feel
+  const lfo = ctx.createOscillator();
+  lfo.type = 'square';
+  lfo.frequency.value = 30;
+  const lfoGain = ctx.createGain();
+  lfoGain.gain.value = 80;
+  lfo.connect(lfoGain);
+  lfoGain.connect(osc.frequency);
+
+  // Envelope
+  const gainNode = ctx.createGain();
+  gainNode.gain.setValueAtTime(0, now);
+  gainNode.gain.linearRampToValueAtTime(0.18, now + 0.03);
+  gainNode.gain.setValueAtTime(0.18, now + 0.4);
+  gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+
+  osc.connect(gainNode);
+  gainNode.connect(destination);
+
+  osc.start(now);
+  lfo.start(now);
+  osc.stop(now + 0.6);
+  lfo.stop(now + 0.6);
+}
+
+/**
  * Play a short notification ding (non-looping)
  */
 function playMessageDing(ctx: AudioContext, destination: AudioNode): void {
@@ -203,6 +243,11 @@ export function useNotificationSound() {
         return;
       }
 
+      if (type === 'wizz') {
+        playWizzSound(ctx, ctx.destination);
+        return;
+      }
+
       // Stop any existing ring before starting a new one
       if (activeRingRef.current) {
         activeRingRef.current.stop();
@@ -241,6 +286,11 @@ export function playNotificationSound(type: SoundType): { stop: () => void } {
 
     if (type === 'messageNotification') {
       playMessageDing(ctx, ctx.destination);
+      return { stop: () => {} };
+    }
+
+    if (type === 'wizz') {
+      playWizzSound(ctx, ctx.destination);
       return { stop: () => {} };
     }
 

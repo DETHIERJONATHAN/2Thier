@@ -354,7 +354,10 @@
     "externalFriends": "External friends",
     "noContactsYet": "No contacts yet",
     "noFriendsFound": "No friends found",
-    "contacts": "Contacts"
+    "contacts": "Contacts",
+    "wizz": "Send a Wizz!",
+    "wizzSent": "You sent a Wizz! 🎭",
+    "wizzReceived": "sent you a Wizz!"
   },
 
   "videocall": {

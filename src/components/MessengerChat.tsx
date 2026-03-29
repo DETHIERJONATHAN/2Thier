@@ -115,6 +115,11 @@ const MessengerChat: React.FC = () => {
   const inlineMessagesEndRef = useRef<HTMLDivElement>(null);
   const inlineInputRef = useRef<HTMLInputElement>(null);
 
+  // 🎭 Wizz (MSN Nudge) state
+  const [isShaking, setIsShaking] = useState(false);
+  const lastSeenWizzIdRef = useRef<string | null>(null);
+  const wizzCooldownRef = useRef(false);
+
   // Video call state
   const [activeCall, setActiveCall] = useState<{ callId: string; callType: 'video' | 'audio'; isIncoming: boolean; conversationName: string } | null>(null);
   const lastEndedCallIdRef = useRef<string | null>(null);
@@ -393,6 +398,45 @@ const MessengerChat: React.FC = () => {
     setInlineSending(false);
   };
 
+  // 🎭 Wizz (MSN Messenger Nudge) — send + trigger
+  const sendWizz = async () => {
+    if (wizzCooldownRef.current || inlineSending || !activeConversationId) return;
+    wizzCooldownRef.current = true;
+    setInlineSending(true);
+    try {
+      await api.post(`/api/messenger/conversations/${activeConversationId}/messages`, {
+        content: '🎭 Wizz!',
+        mediaType: 'wizz',
+      });
+      // Trigger own shake + sound
+      triggerWizz();
+      await fetchInlineMessages();
+      fetchConversations();
+    } catch (e) { console.error('[MESSENGER] Wizz error:', e); }
+    setInlineSending(false);
+    setTimeout(() => { wizzCooldownRef.current = false; }, 3000);
+  };
+
+  const triggerWizz = useCallback(() => {
+    setIsShaking(true);
+    playSound('wizz');
+    setTimeout(() => setIsShaking(false), 600);
+  }, [playSound]);
+
+  // Detect incoming wizz messages from others
+  useEffect(() => {
+    if (!inlineMessages.length || !user?.id) return;
+    const lastMsg = inlineMessages[inlineMessages.length - 1];
+    if (
+      lastMsg.mediaType === 'wizz' &&
+      lastMsg.senderId !== user.id &&
+      lastMsg.id !== lastSeenWizzIdRef.current
+    ) {
+      lastSeenWizzIdRef.current = lastMsg.id;
+      triggerWizz();
+    }
+  }, [inlineMessages, user?.id, triggerWizz]);
+
   const goBackToList = () => {
     setActiveConversationId(null);
     setInlineMessages([]);
@@ -483,7 +527,26 @@ const MessengerChat: React.FC = () => {
       };
 
       return (
-        <div style={{
+        <>
+        <style>{`
+          @keyframes messengerWizz {
+            0% { transform: translate(0, 0); }
+            10% { transform: translate(-4px, -2px); }
+            20% { transform: translate(4px, 2px); }
+            30% { transform: translate(-3px, 3px); }
+            40% { transform: translate(3px, -3px); }
+            50% { transform: translate(-2px, 4px); }
+            60% { transform: translate(2px, -4px); }
+            70% { transform: translate(-4px, 1px); }
+            80% { transform: translate(4px, -1px); }
+            90% { transform: translate(-1px, -3px); }
+            100% { transform: translate(0, 0); }
+          }
+          .messenger-wizz-shake {
+            animation: messengerWizz 0.5s ease-in-out;
+          }
+        `}</style>
+        <div className={isShaking ? 'messenger-wizz-shake' : ''} style={{
           position: 'fixed', bottom: 56, right: 16, width: CHAT_WIDTH, height: LIST_HEIGHT,
           background: FB.white, borderRadius: '8px 8px 0 0', boxShadow: '0 -2px 12px rgba(0,0,0,0.15)',
           display: 'flex', flexDirection: 'column', zIndex: 1100,
@@ -543,6 +606,25 @@ const MessengerChat: React.FC = () => {
             )}
             {inlineMessages.map((msg, i) => {
               const isMine = msg.senderId === user?.id;
+
+              // 🎭 Wizz messages — render as centered system message
+              if (msg.mediaType === 'wizz') {
+                return (
+                  <div key={msg.id} style={{
+                    display: 'flex', justifyContent: 'center', padding: '6px 0',
+                    marginTop: (i > 0 && inlineMessages[i - 1].senderId !== msg.senderId) ? 8 : 0,
+                  }}>
+                    <div style={{
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      color: '#fff', fontSize: 12, padding: '4px 14px', borderRadius: 12,
+                      fontStyle: 'italic', opacity: 0.85,
+                    }}>
+                      🎭 {isMine ? t('messenger.wizzSent') : `${msg.sender.firstName} ${t('messenger.wizzReceived')}`}
+                    </div>
+                  </div>
+                );
+              }
+
               const showAvatar = !isMine && (i === 0 || inlineMessages[i - 1].senderId !== msg.senderId);
               const showName = !isMine && isGroup && showAvatar;
 
@@ -611,6 +693,21 @@ const MessengerChat: React.FC = () => {
               }}
             />
             <div
+              onClick={sendWizz}
+              title={t('messenger.wizz')}
+              style={{
+                width: 32, height: 32, borderRadius: '50%', display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+                cursor: wizzCooldownRef.current ? 'not-allowed' : 'pointer',
+                opacity: wizzCooldownRef.current ? 0.3 : 0.7,
+                transition: 'opacity 0.2s',
+              }}
+              onMouseEnter={e => { if (!wizzCooldownRef.current) e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = FB.hover; }}
+              onMouseLeave={e => { e.currentTarget.style.opacity = wizzCooldownRef.current ? '0.3' : '0.7'; e.currentTarget.style.background = 'transparent'; }}
+            >
+              <span style={{ fontSize: 18 }}>🎭</span>
+            </div>
+            <div
               onClick={sendInlineMessage}
               style={{
                 width: 32, height: 32, borderRadius: '50%', display: 'flex',
@@ -622,6 +719,7 @@ const MessengerChat: React.FC = () => {
             </div>
           </div>
         </div>
+        </>
       );
     }
 
@@ -830,9 +928,11 @@ const MessengerChat: React.FC = () => {
                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   }}>
                     {conv.lastMessage ? (
-                      conv.lastMessage.senderId === user?.id
-                        ? `${t('messenger.youPrefix')}${conv.lastMessage.content || t('messenger.media')}`
-                        : conv.lastMessage.content || t('messenger.media')
+                      conv.lastMessage.mediaType === 'wizz'
+                        ? (conv.lastMessage.senderId === user?.id ? `${t('messenger.youPrefix')}🎭 Wizz!` : '🎭 Wizz!')
+                        : conv.lastMessage.senderId === user?.id
+                          ? `${t('messenger.youPrefix')}${conv.lastMessage.content || t('messenger.media')}`
+                          : conv.lastMessage.content || t('messenger.media')
                     ) : t('messenger.startAWhisper')}
                   </div>
                 </div>
