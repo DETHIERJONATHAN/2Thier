@@ -2020,6 +2020,17 @@ export default function DashboardPageUnified() {
     fetchWallFeed(true);
   }, [user, currentOrganization, isSuperAdmin, fetchDashboardData, fetchWallFeed]);
 
+  // 🐝 Re-fetch wall when feedMode changes (Bee ↔ Colony)
+  const prevFeedModeRef = useRef(feedMode);
+  useEffect(() => {
+    if (prevFeedModeRef.current !== feedMode) {
+      prevFeedModeRef.current = feedMode;
+      setWallPosts([]);
+      setWallCursor(null);
+      fetchWallFeed(true);
+    }
+  }, [feedMode, fetchWallFeed]);
+
   // Les utilisateurs réseau (libres) accèdent au réseau social — la bannière est dans AppLayout
   const isFreeUser = !currentOrganization && !isSuperAdmin;
 

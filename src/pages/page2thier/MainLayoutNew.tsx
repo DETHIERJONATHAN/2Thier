@@ -471,9 +471,13 @@ const MainLayoutWithNav: React.FC<MainLayoutProps> = (props) => {
 
   const initialFeedMode = (user?.preferredFeedMode === 'personal' ? 'personal' : 'org') as FeedMode;
 
+  // Stabilize api reference to prevent infinite re-render loops
+  const apiRef = useRef(api);
+  apiRef.current = api;
+
   const handleFeedModeChange = useCallback((mode: FeedMode) => {
-    api.patch('/api/me/feed-mode', { feedMode: mode }).catch(() => {});
-  }, [api]);
+    apiRef.current.patch('/api/me/feed-mode', { feedMode: mode }).catch(() => {});
+  }, []);
 
   return (
     <ZhiiveNavProvider initialFeedMode={initialFeedMode} onFeedModeChange={handleFeedModeChange}>
