@@ -3,18 +3,20 @@ import { createContext, useContext, useState, useRef, ReactNode, useCallback, us
 export type ZhiiveApp = 'explore' | 'flow' | 'reels' | 'universe' | 'stats';
 export type FeedMode = 'personal' | 'org';
 
-// Sequence ordered by proximity to Mur (closest first)
-// Header order: Explore ← Flow ← Reels ← MUR → Universe → Stats
-const LEFT_SEQUENCE: ZhiiveApp[] = ['reels', 'flow', 'explore'];
-const RIGHT_SEQUENCE: ZhiiveApp[] = ['universe', 'stats'];
-
 interface ZhiiveNavContextType {
-  /** Which Zhiive app is currently displayed in the CENTER column (null = Wall/Mur) */
-  centerApp: ZhiiveApp | null;
-  setCenterApp: (app: ZhiiveApp | null) => void;
-  /** Which Zhiive app to show in the LEFT sidebar (auto-rotates when centerApp takes one) */
+  /** Which app is displayed in the LEFT column (null = default/first left app) */
+  activeLeftApp: ZhiiveApp | null;
+  setActiveLeftApp: (app: ZhiiveApp | null) => void;
+  /** Which app is displayed in the RIGHT column (null = default/first right app) */
+  activeRightApp: ZhiiveApp | null;
+  setActiveRightApp: (app: ZhiiveApp | null) => void;
+  /** Apps to the LEFT of Mur in the nav bar (ordered left→right, closest to Mur is last) */
+  leftApps: ZhiiveApp[];
+  /** Apps to the RIGHT of Mur in the nav bar (ordered left→right, closest to Mur is first) */
+  rightApps: ZhiiveApp[];
+  /** Resolved left sidebar app (always defined) */
   leftSidebarApp: ZhiiveApp;
-  /** Which Zhiive app to show in the RIGHT sidebar (auto-rotates when centerApp takes one) */
+  /** Resolved right sidebar app (always defined) */
   rightSidebarApp: ZhiiveApp;
   tabOrder: string[];
   reorderTabs: (dragId: string, dropId: string) => void;
@@ -27,6 +29,9 @@ interface ZhiiveNavContextType {
   /** Feed mode: 'personal' (public network) vs 'org' (internal to organisation) */
   feedMode: FeedMode;
   setFeedMode: (mode: FeedMode) => void;
+  // Legacy compat — centerApp is always null (Wall always center)
+  centerApp: ZhiiveApp | null;
+  setCenterApp: (app: ZhiiveApp | null) => void;
 }
 
 const defaultTabOrder = ['explore', 'flow', 'reels', 'mur', 'universe', 'stats'];
@@ -43,18 +48,22 @@ function loadTabOrder(): string[] {
 }
 
 const ZhiiveNavContext = createContext<ZhiiveNavContextType>({
-  centerApp: null, setCenterApp: () => {},
+  activeLeftApp: null, setActiveLeftApp: () => {},
+  activeRightApp: null, setActiveRightApp: () => {},
+  leftApps: ['explore', 'flow', 'reels'], rightApps: ['universe', 'stats'],
   leftSidebarApp: 'reels', rightSidebarApp: 'universe',
   tabOrder: defaultTabOrder, reorderTabs: () => {},
-  mobilePanel: 2, setMobilePanel: () => {},
+  mobilePanel: 3, setMobilePanel: () => {},
   registerMobileScroll: () => {}, scrollMobileToPanel: () => {},
   feedMode: 'org', setFeedMode: () => {},
+  centerApp: null, setCenterApp: () => {},
 });
 
 export const ZhiiveNavProvider = ({ children }: { children: ReactNode }) => {
-  const [centerApp, setCenterApp] = useState<ZhiiveApp | null>(null);
+  const [activeLeftApp, setActiveLeftApp] = useState<ZhiiveApp | null>(null);
+  const [activeRightApp, setActiveRightApp] = useState<ZhiiveApp | null>(null);
   const [tabOrder, setTabOrder] = useState<string[]>(loadTabOrder);
-  const [mobilePanel, setMobilePanel] = useState(2); // default: Mur (index 2)
+  const [mobilePanel, setMobilePanel] = useState(0);
   const [feedMode, setFeedMode] = useState<FeedMode>('org');
   const mobileScrollRef = useRef<((panel: number) => void) | null>(null);
 
@@ -67,27 +76,30 @@ export const ZhiiveNavProvider = ({ children }: { children: ReactNode }) => {
     if (mobileScrollRef.current) mobileScrollRef.current(panel);
   }, []);
 
-  // Left sidebar: by default shows Reels (closest to Mur).
-  // If a left-group app moves to center, show the NEXT one outward.
-  // Reels→center: show Flow. Flow→center: show Explore. Explore→center: show Reels (wrap).
-  const leftSidebarApp = useMemo<ZhiiveApp>(() => {
-    if (centerApp && LEFT_SEQUENCE.includes(centerApp)) {
-      const idx = LEFT_SEQUENCE.indexOf(centerApp);
-      return LEFT_SEQUENCE[(idx + 1) % LEFT_SEQUENCE.length];
-    }
-    return 'reels'; // default: closest to Mur
-  }, [centerApp]);
+  // Split tabOrder around 'mur' to get left and right app groups
+  const leftApps = useMemo<ZhiiveApp[]>(() => {
+    const murIndex = tabOrder.indexOf('mur');
+    if (murIndex <= 0) return [];
+    return tabOrder.slice(0, murIndex).filter(id => id !== 'mur') as ZhiiveApp[];
+  }, [tabOrder]);
 
-  // Right sidebar: by default shows Universe (closest to Mur).
-  // If a right-group app moves to center, show the OTHER one.
-  // Universe→center: show Stats. Stats→center: show Universe.
+  const rightApps = useMemo<ZhiiveApp[]>(() => {
+    const murIndex = tabOrder.indexOf('mur');
+    if (murIndex < 0) return [];
+    return tabOrder.slice(murIndex + 1).filter(id => id !== 'mur') as ZhiiveApp[];
+  }, [tabOrder]);
+
+  // Resolved left sidebar: activeLeftApp if valid, else the closest to Mur (last in leftApps)
+  const leftSidebarApp = useMemo<ZhiiveApp>(() => {
+    if (activeLeftApp && leftApps.includes(activeLeftApp)) return activeLeftApp;
+    return leftApps.length > 0 ? leftApps[leftApps.length - 1] : 'reels';
+  }, [activeLeftApp, leftApps]);
+
+  // Resolved right sidebar: activeRightApp if valid, else the closest to Mur (first in rightApps)
   const rightSidebarApp = useMemo<ZhiiveApp>(() => {
-    if (centerApp && RIGHT_SEQUENCE.includes(centerApp)) {
-      const idx = RIGHT_SEQUENCE.indexOf(centerApp);
-      return RIGHT_SEQUENCE[(idx + 1) % RIGHT_SEQUENCE.length];
-    }
-    return 'universe'; // default: closest to Mur
-  }, [centerApp]);
+    if (activeRightApp && rightApps.includes(activeRightApp)) return activeRightApp;
+    return rightApps.length > 0 ? rightApps[0] : 'universe';
+  }, [activeRightApp, rightApps]);
 
   const reorderTabs = useCallback((dragId: string, dropId: string) => {
     if (dragId === 'mur' || dropId === 'mur' || dragId === dropId) return;
@@ -104,8 +116,28 @@ export const ZhiiveNavProvider = ({ children }: { children: ReactNode }) => {
     });
   }, []);
 
+  // Legacy compat: centerApp is always null (Wall is always center now)
+  const centerApp = null;
+  const setCenterApp = useCallback((app: ZhiiveApp | null) => {
+    if (!app) return; // clicking Mur — no-op, Wall is already center
+    // Route to the correct sidebar based on position relative to Mur
+    const murIndex = tabOrder.indexOf('mur');
+    const appIndex = tabOrder.indexOf(app);
+    if (appIndex < murIndex) {
+      setActiveLeftApp(app);
+    } else {
+      setActiveRightApp(app);
+    }
+  }, [tabOrder]);
+
   return (
-    <ZhiiveNavContext.Provider value={{ centerApp, setCenterApp, leftSidebarApp, rightSidebarApp, tabOrder, reorderTabs, mobilePanel, setMobilePanel, registerMobileScroll, scrollMobileToPanel, feedMode, setFeedMode }}>
+    <ZhiiveNavContext.Provider value={{
+      activeLeftApp, setActiveLeftApp, activeRightApp, setActiveRightApp,
+      leftApps, rightApps, leftSidebarApp, rightSidebarApp,
+      tabOrder, reorderTabs, mobilePanel, setMobilePanel,
+      registerMobileScroll, scrollMobileToPanel, feedMode, setFeedMode,
+      centerApp, setCenterApp,
+    }}>
       {children}
     </ZhiiveNavContext.Provider>
   );

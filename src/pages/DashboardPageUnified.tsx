@@ -1562,7 +1562,7 @@ export default function DashboardPageUnified() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Zhiive navigation (shared with header tabs via context)
-  const { centerApp, setCenterApp, leftSidebarApp, rightSidebarApp, registerMobileScroll, setMobilePanel: setContextMobilePanel, tabOrder, feedMode } = useZhiiveNav();
+  const { leftSidebarApp, rightSidebarApp, leftApps, rightApps, registerMobileScroll, setMobilePanel: setContextMobilePanel, tabOrder, feedMode } = useZhiiveNav();
 
   // 🐝 Identité centralisée — source unique de "qui poste" (org ou personnel)
   // NE JAMAIS recalculer `feedMode === 'org' && !!currentOrganization` localement !
@@ -1594,13 +1594,32 @@ export default function DashboardPageUnified() {
   }, [setSearchParams]);
 
   // Scroll-snap handlers (must be before early returns to preserve hooks order)
+  const wrapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleMobileScroll = useCallback(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
     const page = Math.round(el.scrollLeft / el.offsetWidth);
     setMobilePanel(page);
     setContextMobilePanel(page);
-  }, [setContextMobilePanel]);
+
+    // Circular wrap-around: when user reaches the very last or first panel,
+    // wait for scroll to settle then jump to the opposite end (Mur as hub)
+    if (wrapTimeoutRef.current) clearTimeout(wrapTimeoutRef.current);
+    const totalPanels = el.children.length;
+    const murIndex = tabOrder.indexOf('mur');
+    if (totalPanels > 1 && (page === 0 || page === totalPanels - 1)) {
+      wrapTimeoutRef.current = setTimeout(() => {
+        const currentPage = Math.round(el.scrollLeft / el.offsetWidth);
+        if (currentPage === totalPanels - 1) {
+          // At the very end → jump to Mur (center)
+          el.scrollTo({ left: murIndex * el.offsetWidth, behavior: "smooth" });
+        } else if (currentPage === 0) {
+          // At the very start → jump to Mur (center)
+          el.scrollTo({ left: murIndex * el.offsetWidth, behavior: "smooth" });
+        }
+      }, 600);
+    }
+  }, [setContextMobilePanel, tabOrder]);
 
   const scrollToPanel = useCallback((panel: number) => {
     const el = scrollContainerRef.current;
@@ -2739,7 +2758,7 @@ export default function DashboardPageUnified() {
                 onClick={() => {
                   if (pillsDrag.current.moved) return;
                   if (longPressTriggered.current) return;
-                  openModule(route); setCenterApp(null);
+                  openModule(route);
                 }}
                 onTouchStart={() => startLongPress(route)}
                 onTouchEnd={cancelLongPress}
@@ -2772,8 +2791,8 @@ export default function DashboardPageUnified() {
           })}
         </div>}
 
-      {/* Feed content — hidden when a module or Zhiive app is active in center */}
-      {!activeModule && !centerApp && (<>
+      {/* Feed content — hidden when a module is active */}
+      {!activeModule && (<>
       {/* Feed header — single compact line with filter dropdown */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0 4px", marginBottom: 4, position: "relative" }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: FB.text }}>Fil</span>
@@ -2910,6 +2929,18 @@ export default function DashboardPageUnified() {
      ═══════════════════════════════════════════════════════════ */
 
   /** Renders the embedded module component inside the dashboard shell */
+  // Render any Zhiive app panel by its ID
+  const renderPanel = (appId: string) => {
+    switch (appId) {
+      case 'explore': return <LazyExplorePanel api={api} openModule={openModule} />;
+      case 'flow': return <LazyFlowPanel api={api} currentUser={user} />;
+      case 'reels': return <LazyReelsPanel api={api} currentUser={user} />;
+      case 'universe': return <LazyUniversePanel api={api} currentUser={user} />;
+      case 'stats': return !isFreeUser ? renderMobileAnalytics() : null;
+      default: return null;
+    }
+  };
+
   const renderEmbeddedModule = () => {
     if (!activeModule) return null;
     if (!ActiveModuleComponent) {
@@ -2960,8 +2991,9 @@ export default function DashboardPageUnified() {
 
       {!activeModule && isMobile ? (
         /* ═══════════════════════════════════════════════════════
-           MOBILE — DYNAMIC CAROUSEL (swipe)
-           Order follows tabOrder from user's drag-and-drop
+           MOBILE — CIRCULAR CAROUSEL (swipe)
+           Order follows tabOrder. Wall is center.
+           Wrap around: last right app → jumps back to first panel.
            ═══════════════════════════════════════════════════════ */
         <>
           <div
@@ -2976,57 +3008,29 @@ export default function DashboardPageUnified() {
             }}
           >
             {tabOrder.map(tabId => {
-              switch (tabId) {
-                case 'explore':
-                  return (
-                    <div key="explore" style={{ flex: "0 0 100%", width: "100%", scrollSnapAlign: "start", overflowY: "auto" }}>
-                      <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
-                        <LazyExplorePanel api={api} openModule={openModule} />
-                      </Suspense>
-                    </div>
-                  );
-                case 'flow':
-                  return (
-                    <div key="flow" style={{ flex: "0 0 100%", width: "100%", scrollSnapAlign: "start", overflowY: "auto" }}>
-                      <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
-                        <LazyFlowPanel api={api} currentUser={user} />
-                      </Suspense>
-                    </div>
-                  );
-                case 'mur':
-                  return (
-                    <div key="mur" style={{ flex: "0 0 100%", width: "100%", scrollSnapAlign: "start", overflowY: "auto", padding: "4px 8px" }}>
-                      <Suspense fallback={null}>
-                        <LazyStoriesBar api={api} currentUser={user} />
-                      </Suspense>
-                      {renderFeed()}
-                    </div>
-                  );
-                case 'universe':
-                  return (
-                    <div key="universe" style={{ flex: "0 0 100%", width: "100%", scrollSnapAlign: "start", overflowY: "auto" }}>
-                      <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
-                        <LazyUniversePanel api={api} currentUser={user} />
-                      </Suspense>
-                    </div>
-                  );
-                case 'reels':
-                  return (
-                    <div key="reels" style={{ flex: "0 0 100%", width: "100%", scrollSnapAlign: "start", overflowY: "hidden" }}>
-                      <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
-                        <LazyReelsPanel api={api} currentUser={user} />
-                      </Suspense>
-                    </div>
-                  );
-                case 'stats':
-                  return isFreeUser ? null : (
-                    <div key="stats" style={{ flex: "0 0 100%", width: "100%", scrollSnapAlign: "start", overflowY: "auto", padding: "4px 8px" }}>
-                      {renderMobileAnalytics()}
-                    </div>
-                  );
-                default:
-                  return null;
+              if (isFreeUser && tabId === 'stats') return null;
+              const panelStyle: React.CSSProperties = {
+                flex: "0 0 100%", width: "100%", scrollSnapAlign: "start",
+                overflowY: tabId === 'reels' ? "hidden" : "auto",
+                padding: tabId === 'mur' || tabId === 'stats' ? "4px 8px" : undefined,
+              };
+              if (tabId === 'mur') {
+                return (
+                  <div key="mur" style={panelStyle}>
+                    <Suspense fallback={null}>
+                      <LazyStoriesBar api={api} currentUser={user} />
+                    </Suspense>
+                    {renderFeed()}
+                  </div>
+                );
               }
+              return (
+                <div key={tabId} style={panelStyle}>
+                  <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
+                    {renderPanel(tabId)}
+                  </Suspense>
+                </div>
+              );
             })}
           </div>
         </>
@@ -3034,15 +3038,14 @@ export default function DashboardPageUnified() {
 
       {!isMobile && (
         /* ═══════════════════════════════════════════════════════
-           DESKTOP — 3-Column Layout (always visible)
-           Zhiive tabs are in the MainLayoutNew header
-           Left sidebar: auto-computed from context
-           Center: Wall, CRM module, or Zhiive app
-           Right sidebar: auto-computed from context
+           DESKTOP — 3-Column Layout
+           Left sidebar: selected left app (closest to Mur by default)
+           Center: ALWAYS the Wall (Hive) — Mur is the heart
+           Right sidebar: selected right app (closest to Mur by default)
            ═══════════════════════════════════════════════════════ */
         <div style={{ display: "flex", height: "calc(100vh - 48px)" }}>
 
-          {/* ── LEFT SIDEBAR (280px) ── */}
+          {/* ── LEFT SIDEBAR (280px) — shows activeLeftApp ── */}
           <div style={{
             width: 280, minWidth: 280, height: "100%",
             display: "flex", flexDirection: "column",
@@ -3050,18 +3053,12 @@ export default function DashboardPageUnified() {
           }}>
             <div className="sf-sidebar" style={{ flex: 1, overflowY: leftSidebarApp === 'reels' ? "hidden" : "auto", scrollbarWidth: "none" }}>
               <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spin /></div>}>
-                {leftSidebarApp === 'explore' ? (
-                  <LazyExplorePanel api={api} openModule={openModule} />
-                ) : leftSidebarApp === 'flow' ? (
-                  <LazyFlowPanel api={api} currentUser={user} />
-                ) : (
-                  <LazyReelsPanel api={api} currentUser={user} />
-                )}
+                {renderPanel(leftSidebarApp)}
               </Suspense>
             </div>
           </div>
 
-          {/* ── CENTER (flex: 1) — Wall, CRM module, or Zhiive app ── */}
+          {/* ── CENTER (flex: 1) — ALWAYS Wall (or CRM module) ── */}
           <div style={{
             flex: 1, minWidth: 0, overflowY: "auto", padding: "4px 16px",
           }}>
@@ -3070,17 +3067,6 @@ export default function DashboardPageUnified() {
                 <>
                   {renderFeed()}
                   {renderEmbeddedModule()}
-                </>
-              ) : centerApp ? (
-                <>
-                  {renderFeed()}
-                  <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spin /></div>}>
-                    {centerApp === 'explore' && <LazyExplorePanel api={api} openModule={openModule} />}
-                    {centerApp === 'flow' && <LazyFlowPanel api={api} currentUser={user} />}
-                    {centerApp === 'reels' && <LazyReelsPanel api={api} currentUser={user} />}
-                    {centerApp === 'universe' && <LazyUniversePanel api={api} currentUser={user} />}
-                    {centerApp === 'stats' && !isFreeUser && <div style={{ padding: 16 }}>{renderMobileAnalytics()}</div>}
-                  </Suspense>
                 </>
               ) : (
                 <>
@@ -3093,20 +3079,16 @@ export default function DashboardPageUnified() {
             </div>
           </div>
 
-          {/* ── RIGHT SIDEBAR (300px) ── */}
+          {/* ── RIGHT SIDEBAR (300px) — shows activeRightApp ── */}
           <div style={{
             width: 300, minWidth: 300, height: "100%",
             display: "flex", flexDirection: "column",
             borderLeft: `1px solid ${FB.border}`, background: FB.bg,
           }}>
             <div className="sf-sidebar" style={{ flex: 1, overflowY: "auto", scrollbarWidth: "none" }}>
-              {rightSidebarApp === 'universe' ? (
-                <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spin /></div>}>
-                  <LazyUniversePanel api={api} currentUser={user} />
-                </Suspense>
-              ) : (
-                !isFreeUser && renderMobileAnalytics()
-              )}
+              <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spin /></div>}>
+                {renderPanel(rightSidebarApp)}
+              </Suspense>
             </div>
           </div>
         </div>
