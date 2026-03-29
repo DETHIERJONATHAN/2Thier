@@ -26,8 +26,18 @@ export default function Connexion() {
     try {
       const cleanEmail = values.email.trim().replace(/[\u200B-\u200D\uFEFF\u00A0\u2060]/g, '');
       const cleanPassword = values.password.trim().replace(/[\u200B-\u200D\uFEFF\u00A0\u2060]/g, '');
-      await login(cleanEmail, cleanPassword);
-      navigate('/dashboard');
+      const loginResponse = await login(cleanEmail, cleanPassword);
+      
+      // Smart Landing : rediriger selon le rôle de l'utilisateur
+      const orgs = loginResponse?.organizations || [];
+      const mainOrg = orgs.find((o: any) => o.status === 'ACTIVE') || orgs[0];
+      const roleName = mainOrg?.role || loginResponse?.user?.role || '';
+      
+      if (roleName === 'technicien' || roleName === 'Technicien') {
+        navigate('/dashboard?module=chantiers');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err: any) {
       console.error('[Connexion] Erreur lors du login:', err);
       // Détecter l'erreur email non vérifié (403 avec emailNotVerified)

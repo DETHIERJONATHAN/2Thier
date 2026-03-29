@@ -544,6 +544,24 @@ router.get(
   }
 );
 
+// PATCH /api/me/feed-mode - Persister le feedMode préféré de l'utilisateur
+router.patch("/me/feed-mode", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { feedMode } = req.body;
+    if (!feedMode || !['personal', 'org'].includes(feedMode)) {
+      return res.status(400).json({ error: "feedMode doit être 'personal' ou 'org'" });
+    }
+    await prisma.user.update({
+      where: { id: req.user!.userId },
+      data: { preferredFeedMode: feedMode, updatedAt: new Date() },
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[API] Erreur mise à jour feedMode:", err);
+    res.status(500).json({ error: "Erreur interne du serveur." });
+  }
+});
+
 // POST /api/logout - Déconnexion avec nettoyage des cookies
 router.post("/logout", (_req: Request, res: Response) => {
     console.log('🚪 [LOGOUT] Demande de déconnexion reçue');

@@ -51,13 +51,8 @@ router.post('/', authMiddleware, requireRole(['admin', 'super_admin']), async (r
     }
 
     // 2. Vérifier si l'e-mail appartient déjà à un utilisateur existant du réseau
+    // → Si oui, on lie l'invitation à cet utilisateur (targetUserId) au lieu de bloquer
     const existingNetworkUser = await prisma.user.findUnique({ where: { email } });
-    if (existingNetworkUser) {
-      res.status(409).json({ 
-        message: "Cette adresse e-mail est déjà utilisée par un utilisateur du réseau Zhiive. L'invité doit utiliser une adresse e-mail différente."
-      });
-      return;
-    }
 
     // 3. Trouver le rôle (soit spécifique à l'organisation, soit global)
     const role = await prisma.role.findFirst({
@@ -107,6 +102,10 @@ router.post('/', authMiddleware, requireRole(['admin', 'super_admin']), async (r
       User_Invitation_invitedByIdToUser: { connect: { id: inviterId } },
       status: 'PENDING',
       createWorkspaceAccount: createWorkspaceAccount || false,
+      // Si l'utilisateur existe déjà sur le réseau Zhiive, on le lie à l'invitation
+      ...(existingNetworkUser ? {
+        User_Invitation_targetUserIdToUser: { connect: { id: existingNetworkUser.id } },
+      } : {}),
     };
 
     const newInvitation = await prisma.invitation.create({
@@ -122,7 +121,7 @@ router.post('/', authMiddleware, requireRole(['admin', 'super_admin']), async (r
       await emailService.sendInvitationEmail({
         to: newInvitation.email,
         token: newInvitation.token,
-        isExistingUser: !!targetUser,
+        isExistingUser: !!existingNetworkUser,
         organizationName: newInvitation.Organization.name,
         roleName: newInvitation.Role.label || newInvitation.Role.name,
         inviterId: inviterId,
@@ -141,13 +140,26 @@ router.post('/', authMiddleware, requireRole(['admin', 'super_admin']), async (r
       inviterId
     );
 
+    // 🔔 Si l'utilisateur existe déjà sur le réseau, lui envoyer une notification personnelle
+    if (existingNetworkUser) {
+      const org = newInvitation.Organization;
+      notify.invitationReceivedByExistingUser(
+        organizationId,
+        { organizationName: org.name, roleName: newInvitation.Role?.label || newInvitation.Role?.name || '' },
+        existingNetworkUser.id,
+        newInvitation.token
+      );
+    }
+
     res.status(201).json({
       success: true,
-      message: "Invitation envoyée avec succès.",
+      message: existingNetworkUser
+        ? "Invitation envoyée avec succès à un utilisateur existant du réseau Zhiive."
+        : "Invitation envoyée avec succès.",
       data: {
         id: newInvitation.id,
         token: newInvitation.token,
-        isExistingUser: !!targetUser,
+        isExistingUser: !!existingNetworkUser,
       },
     });
 

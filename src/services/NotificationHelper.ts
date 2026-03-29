@@ -190,6 +190,24 @@ export const notify = {
     });
   },
 
+  /** Notification personnelle envoyée à un utilisateur existant qui reçoit une invitation Colony */
+  async invitationReceivedByExistingUser(orgId: string, data: { organizationName: string; roleName: string }, targetUserId: string, invitationToken: string) {
+    await createNotification({
+      organizationId: orgId,
+      type: 'INVITATION_RECEIVED',
+      userId: targetUserId,
+      priority: 'high',
+      actionUrl: `/invitation/accept?token=${invitationToken}`,
+      data: {
+        message: `🐝 ${data.organizationName} vous invite à rejoindre sa Colony en tant que ${data.roleName} !`,
+        organizationName: data.organizationName,
+        roleName: data.roleName,
+        icon: 'user-plus',
+        category: 'invitations',
+      },
+    });
+  },
+
   async joinRequestReceived(orgId: string, data: { userName: string; userId: string; message?: string }) {
     const adminIds = await getOrgAdminIds(orgId);
     await notifyMultipleUsers(adminIds, {

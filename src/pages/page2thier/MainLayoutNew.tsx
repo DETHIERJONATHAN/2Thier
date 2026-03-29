@@ -15,7 +15,8 @@ import {
 } from '@ant-design/icons';
 import Icon from '@ant-design/icons';
 import { useAuth } from '../../auth/useAuth';
-import { useZhiiveNav, ZhiiveNavProvider } from '../../contexts/ZhiiveNavContext';
+import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { useZhiiveNav, ZhiiveNavProvider, FeedMode } from '../../contexts/ZhiiveNavContext';
 import { ActiveIdentityProvider, useActiveIdentity } from '../../contexts/ActiveIdentityContext';
 
 const { Header, Content } = Layout;
@@ -463,12 +464,23 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
 // Wrap with ZhiiveNavProvider + ActiveIdentityProvider so Header tabs & Dashboard share state
 // 🐝 ActiveIdentityProvider = système centralisé d'identité (voir src/contexts/ActiveIdentityContext.tsx)
-const MainLayoutWithNav: React.FC<MainLayoutProps> = (props) => (
-  <ZhiiveNavProvider>
-    <ActiveIdentityProvider>
-      <MainLayout {...props} />
-    </ActiveIdentityProvider>
-  </ZhiiveNavProvider>
-);
+const MainLayoutWithNav: React.FC<MainLayoutProps> = (props) => {
+  const { user } = useAuth();
+  const { api } = useAuthenticatedApi();
+
+  const initialFeedMode = (user?.preferredFeedMode === 'personal' ? 'personal' : 'org') as FeedMode;
+
+  const handleFeedModeChange = useCallback((mode: FeedMode) => {
+    api.patch('/api/me/feed-mode', { feedMode: mode }).catch(() => {});
+  }, [api]);
+
+  return (
+    <ZhiiveNavProvider initialFeedMode={initialFeedMode} onFeedModeChange={handleFeedModeChange}>
+      <ActiveIdentityProvider>
+        <MainLayout {...props} />
+      </ActiveIdentityProvider>
+    </ZhiiveNavProvider>
+  );
+};
 
 export default MainLayoutWithNav;

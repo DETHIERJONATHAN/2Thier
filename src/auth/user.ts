@@ -10,6 +10,7 @@ export interface AuthUser {
   vatNumber?: string;
   role: string; // Rôle global (ex: 'super_admin')
   status?: string;
+  preferredFeedMode?: string;
   isSuperAdmin?: boolean; // compat héritée
   // Renommé pour correspondre à la réponse de l'API Prisma
   UserOrganization?: {

@@ -542,7 +542,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [msgApi]);
 
-    const login = async (email: string, password: string) => {
+    const login = async (email: string, password: string): Promise<any> => {
       if (window.__authLoginInFlight) {
         console.log('[AuthProvider] Login déjà en cours – appel ignoré');
         return;
@@ -557,6 +557,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         // Force un refresh immédiat en ignorant le TTL
         await fetchMe({ force: true });
+        
+        return loginResponse;
       } catch (error) {
         const apiError = error as ApiError;
         if (apiError?.status === 429) {

@@ -937,8 +937,8 @@ const ProfilePage = () => {
                 )}
               </FBCard>
 
-              {/* Colonies (super admin) */}
-              {isSuperAdmin && organizations && organizations.length > 1 && (
+              {/* Colonies — visible pour tout utilisateur membre de plusieurs organisations */}
+              {organizations && organizations.length > 1 && (
                 <FBCard title="Mes Colonies">
                   {organizations.map(org => {
                     const isActive = currentOrganization?.id === org.id;

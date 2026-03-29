@@ -2233,6 +2233,7 @@ model User {
   emailVerificationToken                              String?
   emailVerificationExpires                            DateTime?
   confirmationEmailSentAt                             DateTime?
+  preferredFeedMode                                   String?                                  @default("org")
   CalendarEvent                                       CalendarEvent[]
   CalendarParticipant                                 CalendarParticipant[]
 

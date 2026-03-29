@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useRef, ReactNode, useCallback, useMemo } from 'react';
+import { createContext, useContext, useState, useRef, ReactNode, useCallback, useMemo, useEffect } from 'react';
 
 export type ZhiiveApp = 'explore' | 'flow' | 'reels' | 'universe' | 'stats';
 export type FeedMode = 'personal' | 'org';
@@ -51,12 +51,28 @@ const ZhiiveNavContext = createContext<ZhiiveNavContextType>({
   feedMode: 'org', setFeedMode: () => {},
 });
 
-export const ZhiiveNavProvider = ({ children }: { children: ReactNode }) => {
+interface ZhiiveNavProviderProps {
+  children: ReactNode;
+  initialFeedMode?: FeedMode;
+  onFeedModeChange?: (mode: FeedMode) => void;
+}
+
+export const ZhiiveNavProvider = ({ children, initialFeedMode, onFeedModeChange }: ZhiiveNavProviderProps) => {
   const [centerApp, setCenterApp] = useState<ZhiiveApp | null>(null);
   const [tabOrder, setTabOrder] = useState<string[]>(loadTabOrder);
   const [mobilePanel, setMobilePanel] = useState(0);
-  const [feedMode, setFeedMode] = useState<FeedMode>('org');
+  const [feedMode, setFeedModeInternal] = useState<FeedMode>(initialFeedMode || 'org');
   const mobileScrollRef = useRef<((panel: number) => void) | null>(null);
+
+  // Sync if initialFeedMode changes (e.g. user data loads async)
+  useEffect(() => {
+    if (initialFeedMode) setFeedModeInternal(initialFeedMode);
+  }, [initialFeedMode]);
+
+  const setFeedMode = useCallback((mode: FeedMode) => {
+    setFeedModeInternal(mode);
+    onFeedModeChange?.(mode);
+  }, [onFeedModeChange]);
 
   const registerMobileScroll = useCallback((fn: ((panel: number) => void) | null) => {
     mobileScrollRef.current = fn;
