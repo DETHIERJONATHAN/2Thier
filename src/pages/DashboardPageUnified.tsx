@@ -477,6 +477,7 @@ export const WallPostCard: React.FC<{
   // 🐝 Identité centralisée — on utilise le hook au lieu des props feedMode/currentOrganization
   const cardIdentity = useActiveIdentity();
   const { t } = useTranslation();
+  const postNavigate = useNavigate();
   const feedMode = undefined; // ← BLOQUÉ : forcer l'utilisation de cardIdentity.publishAsOrg
   const currentOrganization = cardIdentity.organization;
   const [myReaction, setMyReaction] = useState(post.myReaction);
@@ -708,6 +709,15 @@ export const WallPostCard: React.FC<{
     setShowComments(!showComments);
   };
 
+  // Navigation vers le profil de l'auteur (Colony ou utilisateur)
+  const handleAuthorClick = () => {
+    if (post.publishAsOrg && post.organization?.id) {
+      postNavigate(`/colony/${post.organization.id}`);
+    } else if (post.author?.id) {
+      postNavigate(`/profile/${post.author.id}`);
+    }
+  };
+
   const isLiked = !!myReaction;
 
   return (
@@ -715,13 +725,17 @@ export const WallPostCard: React.FC<{
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", padding: "12px 16px 0", gap: 8 }}>
         <Avatar size={40} src={authorAvatar}
+          onClick={handleAuthorClick}
           icon={!authorAvatar ? <UserOutlined /> : undefined}
-          style={{ backgroundColor: !authorAvatar ? (post.publishAsOrg ? '#6C5CE7' : FB.blue) : undefined, flexShrink: 0 }}>
+          style={{ backgroundColor: !authorAvatar ? (post.publishAsOrg ? '#6C5CE7' : FB.blue) : undefined, flexShrink: 0, cursor: 'pointer' }}>
           {!authorAvatar && authorInitial}
         </Avatar>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div>
-            <span style={{ fontWeight: 600, fontSize: 14, color: FB.text }}>{authorName}</span>
+            <span onClick={handleAuthorClick} style={{ fontWeight: 600, fontSize: 14, color: FB.text, cursor: 'pointer' }}
+              onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline'; }}
+              onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none'; }}
+            >{authorName}</span>
             {post.parentPost && (
               <span style={{ color: FB.textSecondary, fontSize: 13, fontWeight: 400 }}> a partagé un Buzz</span>
             )}

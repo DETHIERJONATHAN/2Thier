@@ -12,6 +12,7 @@ import {
   SettingOutlined,
   CompassOutlined,
   BarChartOutlined,
+  TeamOutlined,
 } from '@ant-design/icons';
 import Icon from '@ant-design/icons';
 import { useAuth } from '../../auth/useAuth';
@@ -296,6 +297,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         icon: <UserOutlined />,
         label: <NavLink to="/profile">Mon Profil</NavLink>
       },
+      ...(currentOrganization ? [{
+        key: 'colony-profile',
+        icon: <TeamOutlined />,
+        label: <NavLink to={`/colony/${currentOrganization.id}`}>Profil Colony</NavLink>
+      }] : []),
       {
         key: 'settings',
         icon: <SettingOutlined />,

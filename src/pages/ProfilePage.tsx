@@ -794,12 +794,13 @@ const ProfilePage = () => {
                 {displayOrg && (
                   <>
                     <span>·</span>
-                    <span><TeamOutlined style={{ marginRight: 4 }} />{displayOrg.name}</span>
+                    <span onClick={() => navigate(`/colony/${displayOrg.id}`)} style={{ cursor: 'pointer' }}
+                      onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline'; }}
+                      onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none'; }}
+                    ><TeamOutlined style={{ marginRight: 4 }} />{displayOrg.name}</span>
                   </>
                 )}
               </div>
-
-              {/* Mobile action row */}
               {!isViewingOther ? (
                 <div style={{ display: 'flex', gap: 8, marginTop: 12, marginBottom: 12, width: '100%', justifyContent: 'center' }}>
                   <FBButton primary icon={<SettingOutlined />} onClick={() => moduleNavigate('/settings')} isMobile={isMobile} mobileIconOnly>
@@ -872,7 +873,10 @@ const ProfilePage = () => {
                   {displayOrg && (
                     <>
                       <span>·</span>
-                      <span><TeamOutlined style={{ marginRight: 4 }} />{displayOrg.name}</span>
+                      <span onClick={() => navigate(`/colony/${displayOrg.id}`)} style={{ cursor: 'pointer' }}
+                        onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline'; }}
+                        onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none'; }}
+                      ><TeamOutlined style={{ marginRight: 4 }} />{displayOrg.name}</span>
                     </>
                   )}
                 </div>
@@ -1014,7 +1018,12 @@ const ProfilePage = () => {
                   <span style={{ color: rl.color, fontWeight: 600 }}>{rl.icon} {rl.label}</span>
                 </InfoLine>
                 {displayOrg && (
-                  <InfoLine icon={<TeamOutlined />}>{displayOrg.name}</InfoLine>
+                  <InfoLine icon={<TeamOutlined />}>
+                    <span onClick={() => navigate(`/colony/${displayOrg.id}`)} style={{ cursor: 'pointer', color: FB.blue }}
+                      onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline'; }}
+                      onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none'; }}
+                    >{displayOrg.name}</span>
+                  </InfoLine>
                 )}
                 {isSuperAdmin && (
                   <div style={{ marginTop: 4, fontSize: 13, color: FB.textSecondary }}>

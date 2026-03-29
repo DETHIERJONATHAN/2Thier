@@ -430,6 +430,81 @@ router.get('/public', async (_req, res) => {
   }
 });
 
+// 🟢 GET /api/organizations/public/:id — Profil public d'une Colony
+router.get('/public/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ success: false, error: 'ID requis' });
+
+    const org = await prisma.organization.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        address: true,
+        email: true,
+        phone: true,
+        website: true,
+        logoUrl: true,
+        vatNumber: true,
+        createdAt: true,
+        _count: {
+          select: {
+            UserOrganization: { where: { status: 'ACTIVE' } },
+            WallPost: true,
+          }
+        },
+        UserOrganization: {
+          where: { status: 'ACTIVE' },
+          select: {
+            User: {
+              select: { id: true, firstName: true, lastName: true, avatarUrl: true }
+            },
+            Role: { select: { name: true, label: true } }
+          },
+          orderBy: { createdAt: 'asc' },
+          take: 20
+        }
+      }
+    });
+
+    if (!org) {
+      return res.status(404).json({ success: false, error: 'Colony non trouvée' });
+    }
+
+    const members = org.UserOrganization.map(uo => ({
+      id: uo.User.id,
+      firstName: uo.User.firstName,
+      lastName: uo.User.lastName,
+      avatarUrl: uo.User.avatarUrl,
+      role: uo.Role?.label || uo.Role?.name || 'Membre',
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        id: org.id,
+        name: org.name,
+        description: org.description,
+        address: org.address,
+        email: org.email,
+        phone: org.phone,
+        website: org.website,
+        logoUrl: org.logoUrl,
+        vatNumber: org.vatNumber,
+        createdAt: org.createdAt,
+        memberCount: org._count.UserOrganization,
+        postCount: org._count.WallPost,
+        members,
+      }
+    });
+  } catch (error) {
+    console.error('[Organizations] Erreur /public/:id:', error);
+    res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+});
+
 // ============================================================================
 // 🔒 ROUTES AUTHENTIFIÉES
 // ============================================================================

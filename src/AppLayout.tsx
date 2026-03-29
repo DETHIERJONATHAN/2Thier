@@ -92,6 +92,7 @@ const ArchitectIAPanel = lazy(() => import('./components/ArchitectIAPanel'));
 // Pages settings et profil
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const ColonyProfilePage = lazy(() => import('./pages/ColonyProfilePage'));
 const OrganizationSettings = lazy(() => import('./pages/settings/OrganizationSettings'));
 const ProfileSettings = lazy(() => import('./pages/settings/ProfileSettings'));
 const EmailSettings = lazy(() => import('./pages/settings/EmailSettings'));
@@ -344,6 +345,7 @@ export default function AppLayout() {
             </Route>
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/profile/:userId" element={<ProfilePage />} />
+            <Route path="/colony/:orgId" element={<ColonyProfilePage />} />
 
             {/* Fallback pour les routes non trouvées */}
             <Route path="*" element={<div>Page non trouvée</div>} />
