@@ -69,6 +69,7 @@
 | 5 | **Universe** | Pulse, Événements, Capsules, Orbite | 0 | 0 | 2 | 8.5/10 | ✅ |
 | 6 | **Flow** | Spark, Battles, Quêtes (+ boutons action) | 0 | 0 | 2 | 8.5/10 | ✅ |
 | 7 | **Messenger** | Chat, Video Call, Audio Call, Signaling | 0 | 1 | 1 | 7.75/10 | ⚠️ |
+| 11 | **Friends** | Demandes d'ami, Accepter/Refuser, Bloquer, Bouton Profil, Notifications | 0 | 0 | 0 | 8.8/10 | ✅ |
 
 **Total bugs initiaux : 62+6** → **Corrigés : 37** → **Restants : 4** (0 critique, 1 majeur, 3 mineurs)
 

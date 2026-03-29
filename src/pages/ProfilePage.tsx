@@ -11,7 +11,7 @@ import {
   LinkOutlined, SafetyCertificateOutlined, SwapOutlined,
   EllipsisOutlined, DragOutlined, CheckOutlined, CloseOutlined,
   DeleteOutlined, PlayCircleOutlined, VideoCameraOutlined, PictureOutlined,
-  ShopOutlined,
+  ShopOutlined, UserAddOutlined, UserDeleteOutlined, MessageOutlined, StopOutlined,
 } from '@ant-design/icons';
 import { WallPostCard, WallPostData } from './DashboardPageUnified';
 import HiveLiveTimeline from '../components/zhiive/HiveLiveTimeline';
@@ -224,6 +224,12 @@ const ProfilePage = () => {
   const [mediaLoading, setMediaLoading] = useState(false);
   const [mediaFilter, setMediaFilter] = useState<string>('all'); // 'all', 'image', 'video'
   const [mediaCategoryFilter, setMediaCategoryFilter] = useState<string | null>(null);
+
+  // ═══ Friend request state ═══
+  const [friendStatus, setFriendStatus] = useState<string | null>(null); // null | 'pending' | 'accepted' | 'blocked'
+  const [friendDirection, setFriendDirection] = useState<string | null>(null); // 'sent' | 'received'
+  const [friendshipId, setFriendshipId] = useState<string | null>(null);
+  const [friendLoading, setFriendLoading] = useState(false);
 
   // Business: créer une organisation (visible uniquement pour les utilisateurs libres)
   const isFreeUser = !currentOrganization && !isSuperAdmin;
@@ -450,6 +456,85 @@ const ProfilePage = () => {
     finally { setChangingOrg(false); }
   };
 
+  // ═══ Fetch friendship status when viewing another profile ═══
+  useEffect(() => {
+    if (!isViewingOther || !viewUserId) return;
+    (async () => {
+      try {
+        const r: any = await api.get(`/api/friends/status/${viewUserId}`);
+        setFriendStatus(r.status || null);
+        setFriendDirection(r.direction || null);
+        setFriendshipId(r.friendshipId || null);
+      } catch {
+        setFriendStatus(null);
+      }
+    })();
+  }, [api, isViewingOther, viewUserId]);
+
+  // ═══ Friend action handlers ═══
+  const handleFriendAction = async () => {
+    if (!viewUserId || friendLoading) return;
+    setFriendLoading(true);
+    try {
+      if (friendStatus === 'accepted') {
+        // Unfriend
+        if (friendshipId) await api.delete(`/api/friends/${friendshipId}`);
+        setFriendStatus(null);
+        setFriendshipId(null);
+        setFriendDirection(null);
+        message.success('Ami retiré');
+      } else if (friendStatus === 'pending' && friendDirection === 'received') {
+        // Accept request
+        if (friendshipId) await api.post(`/api/friends/${friendshipId}/accept`);
+        setFriendStatus('accepted');
+        message.success('Demande acceptée ! Vous êtes maintenant amis 🎉');
+      } else if (friendStatus === 'pending' && friendDirection === 'sent') {
+        // Cancel request
+        if (friendshipId) await api.delete(`/api/friends/${friendshipId}`);
+        setFriendStatus(null);
+        setFriendshipId(null);
+        setFriendDirection(null);
+        message.info('Demande annulée');
+      } else {
+        // Send friend request
+        const r: any = await api.post('/api/friends/request', { userId: viewUserId });
+        if (r.friendship) {
+          setFriendStatus('pending');
+          setFriendDirection('sent');
+          setFriendshipId(r.friendship.id);
+        }
+        message.success('Demande d\'ami envoyée ! 🐝');
+      }
+    } catch {
+      message.error('Erreur lors de l\'action');
+    } finally {
+      setFriendLoading(false);
+    }
+  };
+
+  const handleBlockUser = async () => {
+    if (!friendshipId || friendLoading) return;
+    setFriendLoading(true);
+    try {
+      await api.post(`/api/friends/${friendshipId}/block`);
+      setFriendStatus('blocked');
+      message.success('Utilisateur bloqué');
+    } catch {
+      message.error('Erreur');
+    } finally {
+      setFriendLoading(false);
+    }
+  };
+
+  // Helper to get friend button label & icon
+  const getFriendButtonProps = () => {
+    if (friendStatus === 'accepted') return { label: 'Ami ✓', icon: <CheckOutlined />, primary: true };
+    if (friendStatus === 'pending' && friendDirection === 'sent') return { label: 'Demande envoyée', icon: <UserAddOutlined />, primary: false };
+    if (friendStatus === 'pending' && friendDirection === 'received') return { label: 'Accepter la demande', icon: <UserAddOutlined />, primary: true };
+    if (friendStatus === 'blocked') return { label: 'Bloqué', icon: <StopOutlined />, primary: false };
+    return { label: 'Ajouter en ami', icon: <UserAddOutlined />, primary: true };
+  };
+
   if (userLoading || loading) {
     return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}><Spin size="large" /></div>;
   }
@@ -620,19 +705,39 @@ const ProfilePage = () => {
               </div>
 
               {/* Mobile action row */}
-              {!isViewingOther && <div style={{ display: 'flex', gap: 8, marginTop: 12, marginBottom: 12, width: '100%', justifyContent: 'center' }}>
-                <FBButton primary icon={<SettingOutlined />} onClick={() => moduleNavigate('/settings')} isMobile={isMobile} mobileIconOnly>
-                  Paramètres
-                </FBButton>
-                <FBButton icon={<EditOutlined />} onClick={() => moduleNavigate('/settings')} isMobile={isMobile} mobileIconOnly>
-                  Modifier
-                </FBButton>
-                {isFreeUser && <FBButton icon={<ShopOutlined />} onClick={() => setIsCreateOrgModalVisible(true)} isMobile={isMobile} mobileIconOnly
-                  style={{ background: '#0f766e', color: '#fff' }}>
-                  Business
-                </FBButton>}
-                <FBButton icon={<EllipsisOutlined />} />
-              </div>}
+              {!isViewingOther ? (
+                <div style={{ display: 'flex', gap: 8, marginTop: 12, marginBottom: 12, width: '100%', justifyContent: 'center' }}>
+                  <FBButton primary icon={<SettingOutlined />} onClick={() => moduleNavigate('/settings')} isMobile={isMobile} mobileIconOnly>
+                    Paramètres
+                  </FBButton>
+                  <FBButton icon={<EditOutlined />} onClick={() => moduleNavigate('/settings')} isMobile={isMobile} mobileIconOnly>
+                    Modifier
+                  </FBButton>
+                  {isFreeUser && <FBButton icon={<ShopOutlined />} onClick={() => setIsCreateOrgModalVisible(true)} isMobile={isMobile} mobileIconOnly
+                    style={{ background: '#0f766e', color: '#fff' }}>
+                    Business
+                  </FBButton>}
+                  <FBButton icon={<EllipsisOutlined />} />
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: 8, marginTop: 12, marginBottom: 12, width: '100%', justifyContent: 'center' }}>
+                  {(() => { const fp = getFriendButtonProps(); return (
+                    <FBButton primary={fp.primary} icon={fp.icon} onClick={handleFriendAction} isMobile={isMobile}
+                      style={friendStatus === 'blocked' ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}>
+                      {friendLoading ? <Spin size="small" /> : fp.label}
+                    </FBButton>
+                  ); })()}
+                  {friendStatus === 'pending' && friendDirection === 'received' && (
+                    <FBButton icon={<CloseOutlined />} onClick={() => { if (friendshipId) api.delete(`/api/friends/${friendshipId}`).then(() => { setFriendStatus(null); setFriendshipId(null); setFriendDirection(null); message.info('Demande refusée'); }); }} isMobile={isMobile}>
+                      Refuser
+                    </FBButton>
+                  )}
+                  <FBButton icon={<MessageOutlined />} onClick={() => navigate('/messenger')} isMobile={isMobile} mobileIconOnly>
+                    Message
+                  </FBButton>
+                  <FBButton icon={<EllipsisOutlined />} />
+                </div>
+              )}
             </div>
           ) : (
             /* ─── DESKTOP: avatar à gauche, nom à côté ─── */
@@ -676,13 +781,31 @@ const ProfilePage = () => {
                 </div>
               </div>
 
-              {!isViewingOther && <div style={{ display: 'flex', gap: 8, paddingBottom: 16, alignItems: 'flex-end' }}>
-                <FBButton primary icon={<SettingOutlined />} onClick={() => moduleNavigate('/settings')}>Paramètres</FBButton>
-                <FBButton icon={<EditOutlined />} onClick={() => moduleNavigate('/settings')}>Modifier</FBButton>
-                {isFreeUser && <FBButton icon={<ShopOutlined />} onClick={() => setIsCreateOrgModalVisible(true)}
-                  style={{ background: '#0f766e', color: '#fff' }}>Business</FBButton>}
-                <FBButton icon={<EllipsisOutlined />} />
-              </div>}
+              {!isViewingOther ? (
+                <div style={{ display: 'flex', gap: 8, paddingBottom: 16, alignItems: 'flex-end' }}>
+                  <FBButton primary icon={<SettingOutlined />} onClick={() => moduleNavigate('/settings')}>Paramètres</FBButton>
+                  <FBButton icon={<EditOutlined />} onClick={() => moduleNavigate('/settings')}>Modifier</FBButton>
+                  {isFreeUser && <FBButton icon={<ShopOutlined />} onClick={() => setIsCreateOrgModalVisible(true)}
+                    style={{ background: '#0f766e', color: '#fff' }}>Business</FBButton>}
+                  <FBButton icon={<EllipsisOutlined />} />
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: 8, paddingBottom: 16, alignItems: 'flex-end' }}>
+                  {(() => { const fp = getFriendButtonProps(); return (
+                    <FBButton primary={fp.primary} icon={fp.icon} onClick={handleFriendAction}
+                      style={friendStatus === 'blocked' ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}>
+                      {friendLoading ? <Spin size="small" /> : fp.label}
+                    </FBButton>
+                  ); })()}
+                  {friendStatus === 'pending' && friendDirection === 'received' && (
+                    <FBButton icon={<CloseOutlined />} onClick={() => { if (friendshipId) api.delete(`/api/friends/${friendshipId}`).then(() => { setFriendStatus(null); setFriendshipId(null); setFriendDirection(null); message.info('Demande refusée'); }); }}>
+                      Refuser
+                    </FBButton>
+                  )}
+                  <FBButton icon={<MessageOutlined />} onClick={() => navigate('/messenger')}>Message</FBButton>
+                  <FBButton icon={<EllipsisOutlined />} />
+                </div>
+              )}
             </div>
           )}
 

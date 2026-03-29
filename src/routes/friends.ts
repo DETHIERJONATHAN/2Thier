@@ -363,6 +363,39 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// GET /friends/status/:userId — Check friendship status with a user
+// ═══════════════════════════════════════════════════════════════
+router.get('/status/:userId', async (req: Request, res: Response): Promise<void> => {
+  const user = (req as any).user;
+  if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
+  const { userId } = req.params;
+  if (!userId || userId === user.id) { res.json({ status: null }); return; }
+
+  try {
+    const friendship = await db.friendship.findFirst({
+      where: {
+        OR: [
+          { requesterId: user.id, addresseeId: userId },
+          { requesterId: userId, addresseeId: user.id },
+        ],
+      },
+      select: { id: true, status: true, requesterId: true, addresseeId: true },
+    });
+
+    if (!friendship) {
+      res.json({ status: null, friendshipId: null, direction: null });
+      return;
+    }
+
+    const direction = friendship.requesterId === user.id ? 'sent' : 'received';
+    res.json({ status: friendship.status, friendshipId: friendship.id, direction });
+  } catch (err) {
+    console.error('[FRIENDS] Error checking status:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
 // GET /friends/search — Search users to add as friends
 // ═══════════════════════════════════════════════════════════════
 router.get('/search', async (req: Request, res: Response): Promise<void> => {

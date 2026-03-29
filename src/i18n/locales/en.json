@@ -263,7 +263,18 @@
     "pendingCancel": "Pending (cancel)",
     "addFriend": "Add friend",
     "acceptRequest": "Accept request",
-    "friendBadge": "Friend ✓"
+    "friendBadge": "Friend ✓",
+    "requestSent": "Request sent",
+    "declineRequest": "Decline",
+    "unfriended": "Friend removed",
+    "requestAcceptedProfile": "Request accepted! You are now friends 🎉",
+    "requestCancelled": "Request cancelled",
+    "requestDeclined": "Request declined",
+    "requestSentSuccess": "Friend request sent! 🐝",
+    "blocked": "Blocked",
+    "userBlocked": "User blocked",
+    "sendMessage": "Message",
+    "friendActionError": "Action error"
   },
 
   "flow": {

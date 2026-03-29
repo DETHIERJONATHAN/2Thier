@@ -263,7 +263,18 @@
     "pendingCancel": "En attente (annuler)",
     "addFriend": "Ajouter en ami",
     "acceptRequest": "Accepter la demande",
-    "friendBadge": "Ami ✓"
+    "friendBadge": "Ami ✓",
+    "requestSent": "Demande envoyée",
+    "declineRequest": "Refuser",
+    "unfriended": "Ami retiré",
+    "requestAcceptedProfile": "Demande acceptée ! Vous êtes maintenant amis 🎉",
+    "requestCancelled": "Demande annulée",
+    "requestDeclined": "Demande refusée",
+    "requestSentSuccess": "Demande d'ami envoyée ! 🐝",
+    "blocked": "Bloqué",
+    "userBlocked": "Utilisateur bloqué",
+    "sendMessage": "Message",
+    "friendActionError": "Erreur lors de l'action"
   },
 
   "flow": {
