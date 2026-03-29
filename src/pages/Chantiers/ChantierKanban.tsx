@@ -1152,7 +1152,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
     <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Toolbar */}
       <div style={{
-        padding: isMobile ? '6px 8px' : '8px 12px',
+        padding: isMobile ? '10px 8px' : '8px 12px',
         display: 'flex',
         flexWrap: isMobile ? 'nowrap' : 'wrap',
         justifyContent: 'space-between',
