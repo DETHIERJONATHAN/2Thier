@@ -181,7 +181,15 @@ const MessengerChat: React.FC = () => {
   const fetchFriends = useCallback(async () => {
     try {
       const data = await api.get('/api/friends');
-      if (data?.friends) setFriends(data.friends);
+      if (data?.friends) {
+        // Sort: online friends first, then alphabetical
+        const sorted = [...data.friends].sort((a: Friend, b: Friend) => {
+          if (a.online && !b.online) return -1;
+          if (!a.online && b.online) return 1;
+          return (a.firstName || '').localeCompare(b.firstName || '');
+        });
+        setFriends(sorted);
+      }
     } catch { /* silent */ }
   }, [api]);
 
@@ -1323,7 +1331,15 @@ export const FriendsWidget: React.FC<FriendsWidgetProps> = ({ onStartChat }) => 
     const fetch = async () => {
       try {
         const data = await api.get('/api/friends');
-        if (data?.friends) setFriends(data.friends);
+        if (data?.friends) {
+          // Sort: online friends first, then alphabetical
+          const sorted = [...data.friends].sort((a: Friend, b: Friend) => {
+            if (a.online && !b.online) return -1;
+            if (!a.online && b.online) return 1;
+            return (a.firstName || '').localeCompare(b.firstName || '');
+          });
+          setFriends(sorted);
+        }
         if (data?.pendingReceived) setPendingCount(data.pendingReceived.length);
       } catch { /* silent */ }
     };
