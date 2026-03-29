@@ -65,20 +65,35 @@ const COLORS = {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// ICE SERVERS (Google STUN)
+// ICE SERVERS — STUN (Google) + dynamically fetched TURN
 // ═══════════════════════════════════════════════════════════════
-const ICE_SERVERS: RTCConfiguration = {
+const FALLBACK_ICE_SERVERS: RTCConfiguration = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
-    // Free TURN relays for NAT traversal (STUN alone fails ~30% of connections)
-    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
   ],
   iceCandidatePoolSize: 10,
 };
+
+// Fetch TURN credentials from backend (cached for session)
+let cachedIceServers: RTCConfiguration | null = null;
+async function getIceServers(api: any): Promise<RTCConfiguration> {
+  if (cachedIceServers) return cachedIceServers;
+  try {
+    const data = await api.get('/api/calls/ice-servers');
+    if (data?.iceServers?.length) {
+      cachedIceServers = { iceServers: data.iceServers, iceCandidatePoolSize: 10 };
+      console.log('[CALL] ✅ Got TURN servers from backend:', data.iceServers.length, 'servers');
+      return cachedIceServers;
+    }
+  } catch (err) {
+    console.warn('[CALL] ⚠️ Failed to fetch TURN servers, using STUN-only fallback:', err);
+  }
+  return FALLBACK_ICE_SERVERS;
+}
 
 // ═══════════════════════════════════════════════════════════════
 // COMPONENT
@@ -122,9 +137,17 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
   const iceCandidateQueue = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   const offerSentAt = useRef<Map<string, number>>(new Map());
   const [, forceUpdate] = useState(0);
+  const [audioBlocked, setAudioBlocked] = useState(false);
+  const iceServersRef = useRef<RTCConfiguration>(FALLBACK_ICE_SERVERS);
+  const leaveCalledRef = useRef(false);
 
   // Keep statusRef in sync with status state
   useEffect(() => { statusRef.current = status; }, [status]);
+
+  // Fetch TURN servers on mount
+  useEffect(() => {
+    getIceServers(api).then(config => { iceServersRef.current = config; });
+  }, [api]);
 
   // 🔊 Play ringtone while ringing for incoming calls
   useEffect(() => {
@@ -196,7 +219,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
   const createPeerConnection = useCallback((remoteUserId: string) => {
     if (peerConnectionsRef.current.has(remoteUserId)) return peerConnectionsRef.current.get(remoteUserId)!;
 
-    const pc = new RTCPeerConnection(ICE_SERVERS);
+    const pc = new RTCPeerConnection(iceServersRef.current);
 
     // Add local tracks
     if (localStreamRef.current) {
@@ -243,10 +266,25 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
 
     pc.onconnectionstatechange = () => {
       console.log(`[CALL] 🔗 Connection (${remoteUserId.slice(0,8)}):`, pc.connectionState);
-      if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-        peerConnectionsRef.current.delete(remoteUserId);
-        remoteStreamsRef.current.delete(remoteUserId);
-        forceUpdate(n => n + 1);
+      if (pc.connectionState === 'failed') {
+        // ICE restart: try to recover the connection instead of dropping it
+        console.log(`[CALL] 🔄 ICE restart for ${remoteUserId.slice(0,8)}`);
+        pc.restartIce();
+        // Re-send offer after ICE restart
+        pc.createOffer({ iceRestart: true }).then(offer => {
+          pc.setLocalDescription(offer);
+          api.post(`/api/calls/${callId}/signal`, { to: remoteUserId, type: 'offer', data: offer }).catch(() => {});
+        }).catch(err => console.error('[CALL] ICE restart error:', err));
+      } else if (pc.connectionState === 'disconnected') {
+        // Wait 5s before giving up — transient disconnections are common on mobile
+        setTimeout(() => {
+          if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+            console.log(`[CALL] ❌ Peer ${remoteUserId.slice(0,8)} disconnected permanently`);
+            peerConnectionsRef.current.delete(remoteUserId);
+            remoteStreamsRef.current.delete(remoteUserId);
+            forceUpdate(n => n + 1);
+          }
+        }, 5000);
       }
     };
 
@@ -401,8 +439,8 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
                 offerSentAt.current.set(p.userId, Date.now());
               } else if (pc && shouldSendOffer && pc.signalingState === 'have-local-offer') {
                 const sentAt = offerSentAt.current.get(p.userId) || 0;
-                if (Date.now() - sentAt > 5000) {
-                  console.log(`[CALL] 🔄 Re-sending offer to ${p.userId.slice(0,8)} (no answer after 5s)`);
+                if (Date.now() - sentAt > 15000) {
+                  console.log(`[CALL] 🔄 Re-sending offer to ${p.userId.slice(0,8)} (no answer after 15s)`);
                   pc.close();
                   peerConnectionsRef.current.delete(p.userId);
                   await sendOffer(p.userId);
@@ -471,6 +509,9 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
   // Leave / End call
   // ──────────────────────────────────────────────
   const leaveCall = useCallback(async () => {
+    if (leaveCalledRef.current) return; // Prevent double-leave
+    leaveCalledRef.current = true;
+
     // Stop media
     localStreamRef.current?.getTracks().forEach(t => t.stop());
     screenStreamRef.current?.getTracks().forEach(t => t.stop());
@@ -493,10 +534,20 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
     if (signalPollRef.current) clearInterval(signalPollRef.current);
     if (timerRef.current) clearInterval(timerRef.current);
 
+    // CRITICAL: Ensure the server knows we left (try fetch + sendBeacon fallback)
     try {
       await api.post(`/api/calls/${callId}/leave`, {});
       console.log('[CALL] 📴 Left call successfully');
-    } catch (err) { console.warn('[CALL] Leave error:', err); }
+    } catch (err) {
+      console.warn('[CALL] Leave error, trying sendBeacon fallback:', err);
+      try {
+        // sendBeacon works even when page is closing
+        navigator.sendBeacon(
+          `/api/calls/${callId}/leave-beacon`,
+          new Blob([JSON.stringify({ userId })], { type: 'application/json' }),
+        );
+      } catch { /* last resort failed */ }
+    }
 
     setStatus('ended');
 
@@ -619,6 +670,8 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
   // Cleanup on unmount
   // ──────────────────────────────────────────────
   useEffect(() => {
+    const callIdCapture = callId;
+    const apiCapture = api;
     const pcs = peerConnectionsRef.current;
     const localStream = localStreamRef.current;
     const screenStream = screenStreamRef.current;
@@ -628,7 +681,17 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
     const recorder = mediaRecorderRef.current;
     const micAnim = micAnimRef.current;
 
+    // beforeunload: ensure leave is sent when user closes tab/navigates
+    const handleBeforeUnload = () => {
+      navigator.sendBeacon(
+        `/api/calls/${callIdCapture}/leave-beacon`,
+        new Blob([JSON.stringify({ userId })], { type: 'application/json' }),
+      );
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
     return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
       localStream?.getTracks().forEach(t => t.stop());
       screenStream?.getTracks().forEach(t => t.stop());
       pcs.forEach(pc => pc.close());
@@ -640,8 +703,12 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
       }
       if (micAnim) cancelAnimationFrame(micAnim);
       analyserRef.current = null;
+      // Fire-and-forget leave on unmount
+      if (!leaveCalledRef.current) {
+        apiCapture.post(`/api/calls/${callIdCapture}/leave`, {}).catch(() => {});
+      }
     };
-  }, []);
+  }, [callId, api]);
 
   // Remote participants that have joined
   const remoteParticipants = callData?.participants.filter(
@@ -891,7 +958,11 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
                     el.srcObject = s;
                     el.play().then(() => {
                       console.log(`[CALL] 🔉 Audio playing for ${p.userId.slice(0,8)}`);
-                    }).catch(err => console.warn('[CALL] Audio autoplay blocked:', err.message));
+                      setAudioBlocked(false);
+                    }).catch(err => {
+                      console.warn('[CALL] Audio autoplay blocked:', err.message);
+                      setAudioBlocked(true);
+                    });
                   }
                 }
               }}
@@ -936,6 +1007,23 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
           </div>
         )}
       </div>
+
+      {/* Audio blocked warning */}
+      {audioBlocked && (
+        <div
+          onClick={() => {
+            // User interaction unlocks audio autoplay
+            remoteAudiosRef.current.forEach(el => el.play().catch(() => {}));
+            setAudioBlocked(false);
+          }}
+          style={{
+            padding: '8px 16px', background: '#ff9800', color: '#000', textAlign: 'center',
+            cursor: 'pointer', fontWeight: 600, fontSize: 13, flexShrink: 0,
+          }}
+        >
+          🔇 {t('videocall.audioBlocked', { defaultValue: 'Audio bloqué par le navigateur — cliquez ici pour activer le son' })}
+        </div>
+      )}
 
       {/* Controls bar */}
       <div style={{

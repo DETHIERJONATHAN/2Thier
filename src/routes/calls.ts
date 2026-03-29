@@ -5,7 +5,77 @@ import { getGeminiService } from '../services/GoogleGeminiService';
 import { sendPushToUser } from './push';
 
 const router = Router();
+
+// ═══════════════════════════════════════════════════════════════
+// POST /calls/:id/leave-beacon — Emergency leave via sendBeacon (no auth, called on tab close)
+// This route MUST be before authenticateToken middleware
+// ═══════════════════════════════════════════════════════════════
+router.post('/:id/leave-beacon', async (req: Request, res: Response): Promise<void> => {
+  const { userId } = req.body || {};
+  if (!userId || !req.params.id) { res.status(400).json({ error: 'Missing data' }); return; }
+
+  try {
+    // Mark participant as left
+    await db.callParticipant.updateMany({
+      where: { callId: req.params.id, userId, status: 'joined' },
+      data: { status: 'left', leftAt: new Date() },
+    });
+
+    // Check if anyone is still in the call
+    const stillJoined = await db.callParticipant.count({
+      where: { callId: req.params.id, status: 'joined' },
+    });
+
+    if (stillJoined === 0) {
+      await db.videoCall.update({
+        where: { id: req.params.id },
+        data: { status: 'ended', endedAt: new Date() },
+      }).catch(() => {});
+    }
+
+    console.log(`[CALLS] 🚨 Beacon leave: user ${userId.slice(0,8)} left call ${req.params.id.slice(0,8)}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[CALLS] Beacon leave error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// All routes below require authentication
 router.use(authenticateToken as any);
+
+// ═══════════════════════════════════════════════════════════════
+// GET /calls/ice-servers — Return TURN credentials for WebRTC
+// ═══════════════════════════════════════════════════════════════
+// Metered.ca free-tier TURN or env-configured TURN
+router.get('/ice-servers', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const turnUrl = process.env.TURN_SERVER_URL;
+    const turnUser = process.env.TURN_USERNAME;
+    const turnCred = process.env.TURN_CREDENTIAL;
+
+    const iceServers: any[] = [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+    ];
+
+    if (turnUrl && turnUser && turnCred) {
+      // TURN configured via environment variables
+      iceServers.push(
+        { urls: turnUrl, username: turnUser, credential: turnCred },
+      );
+      // Also add TCP transport variant if it's a turn: URL
+      if (turnUrl.startsWith('turn:')) {
+        iceServers.push({ urls: `${turnUrl}?transport=tcp`, username: turnUser, credential: turnCred });
+      }
+    }
+
+    res.json({ iceServers });
+  } catch (err) {
+    console.error('[CALLS] Error generating ICE servers:', err);
+    res.json({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+  }
+});
 
 // ═══════════════════════════════════════════════════════════════
 // POST /calls/start — Initiate a call from a conversation
@@ -442,5 +512,58 @@ router.get('/history/list', async (req: Request, res: Response): Promise<void> =
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
+
+// ═══════════════════════════════════════════════════════════════
+// GHOST CALL CLEANUP — Runs every 60s to terminate orphaned calls
+// ═══════════════════════════════════════════════════════════════
+setInterval(async () => {
+  try {
+    const now = new Date();
+
+    // 1. End 'ringing' calls older than 90 seconds (nobody picked up)
+    const ringingCutoff = new Date(now.getTime() - 90_000);
+    const staleRinging = await db.videoCall.findMany({
+      where: { status: 'ringing', createdAt: { lt: ringingCutoff } },
+      select: { id: true, conversationId: true, initiatorId: true, callType: true },
+    });
+    for (const call of staleRinging) {
+      await db.videoCall.update({
+        where: { id: call.id },
+        data: { status: 'missed', endedAt: now },
+      });
+      await db.callParticipant.updateMany({
+        where: { callId: call.id, status: { in: ['invited', 'joined'] } },
+        data: { status: 'left', leftAt: now },
+      });
+      signalingBuffer.delete(call.id);
+      console.log(`[CALLS] 🧹 Cleaned ghost ringing call ${call.id.slice(0,8)}`);
+    }
+
+    // 2. End 'active' calls where all participants left > 2 minutes ago
+    const activeCutoff = new Date(now.getTime() - 120_000);
+    const staleActive = await db.videoCall.findMany({
+      where: {
+        status: 'active',
+        participants: { every: { OR: [{ status: 'left' }, { status: 'rejected' }, { leftAt: { lt: activeCutoff } }] } },
+      },
+      select: { id: true },
+    });
+    for (const call of staleActive) {
+      const stillJoined = await db.callParticipant.count({
+        where: { callId: call.id, status: 'joined' },
+      });
+      if (stillJoined === 0) {
+        await db.videoCall.update({
+          where: { id: call.id },
+          data: { status: 'ended', endedAt: now },
+        });
+        signalingBuffer.delete(call.id);
+        console.log(`[CALLS] 🧹 Cleaned ghost active call ${call.id.slice(0,8)}`);
+      }
+    }
+  } catch (err) {
+    console.error('[CALLS] Ghost cleanup error:', err);
+  }
+}, 60_000);
 
 export default router;
