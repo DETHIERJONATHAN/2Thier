@@ -13,7 +13,7 @@ import {
   LoadingOutlined,
   SoundOutlined,
 } from '@ant-design/icons';
-import { useNotificationSound } from '../hooks/useNotificationSound';
+// Ringtone uses HTML Audio element (not AudioContext) to bypass browser autoplay policy
 
 // ═══════════════════════════════════════════════════════════════
 // TYPES
@@ -102,7 +102,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
   callId, callType, isIncoming, conversationName, api, userId, onClose,
 }) => {
   const { t } = useTranslation();
-  const { play: playSound, stop: stopSound } = useNotificationSound();
+  const ringtoneRef = useRef<HTMLAudioElement | null>(null);
 
   // State
   const [callData, setCallData] = useState<CallData | null>(null);
@@ -164,12 +164,28 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
       (!isIncoming && status !== 'ended' && !hasRemoteParticipants);
 
     if (shouldPlaySound) {
-      playSound('ringtone');
+      if (!ringtoneRef.current) {
+        ringtoneRef.current = new Audio('/ringtone.wav');
+        ringtoneRef.current.loop = true;
+        ringtoneRef.current.volume = 0.4;
+      }
+      ringtoneRef.current.play().catch(err => {
+        console.warn('[CALL] 🔇 Ringtone autoplay blocked:', err.message);
+        setAudioBlocked(true);
+      });
     } else {
-      stopSound();
+      if (ringtoneRef.current) {
+        ringtoneRef.current.pause();
+        ringtoneRef.current.currentTime = 0;
+      }
     }
-    return () => stopSound();
-  }, [status, isIncoming, hasRemoteParticipants, playSound, stopSound]);
+    return () => {
+      if (ringtoneRef.current) {
+        ringtoneRef.current.pause();
+        ringtoneRef.current.currentTime = 0;
+      }
+    };
+  }, [status, isIncoming, hasRemoteParticipants]);
 
   // Format duration as HH:MM:SS
   const formatDuration = (s: number) => {
@@ -278,18 +294,23 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
 
     pc.onconnectionstatechange = () => {
       console.log(`[CALL] 🔗 Connection (${remoteUserId.slice(0,8)}):`, pc.connectionState);
+      // GUARD: Don't process events after we already left or call ended
+      if (leaveCalledRef.current || statusRef.current === 'ended') return;
+
       if (pc.connectionState === 'failed') {
         // ICE restart: try to recover the connection instead of dropping it
         console.log(`[CALL] 🔄 ICE restart for ${remoteUserId.slice(0,8)}`);
         pc.restartIce();
         // Re-send offer after ICE restart
         pc.createOffer({ iceRestart: true }).then(offer => {
+          if (leaveCalledRef.current || statusRef.current === 'ended') return;
           pc.setLocalDescription(offer);
           api.post(`/api/calls/${callId}/signal`, { to: remoteUserId, type: 'offer', data: offer }).catch(() => {});
         }).catch(err => console.error('[CALL] ICE restart error:', err));
       } else if (pc.connectionState === 'disconnected') {
         // Wait 5s before giving up — transient disconnections are common on mobile
         setTimeout(() => {
+          if (leaveCalledRef.current || statusRef.current === 'ended') return;
           if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
             console.log(`[CALL] ❌ Peer ${remoteUserId.slice(0,8)} disconnected permanently`);
             peerConnectionsRef.current.delete(remoteUserId);
@@ -430,6 +451,8 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
             analyserRef.current = null;
             peerConnectionsRef.current.forEach(pc => pc.close());
             peerConnectionsRef.current.clear();
+            // Stop ringtone
+            if (ringtoneRef.current) { ringtoneRef.current.pause(); ringtoneRef.current.currentTime = 0; }
             leaveCalledRef.current = true; // Prevent cleanup from calling /leave again
             setStatus('ended');
             // Auto-close modal after brief delay so user sees the call ended
@@ -437,6 +460,39 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
             return;
           } else if (data.status === 'active' && statusRef.current === 'ringing') {
             setStatus('active');
+          }
+
+          // Auto-leave if all remote participants have left (other party hung up)
+          if (data.status === 'active' && hasJoinedRef.current) {
+            const remoteParticipants = data.participants.filter(
+              (p: CallParticipant) => p.userId !== userId
+            );
+            const anyRemoteEverJoined = remoteParticipants.some(
+              p => p.status === 'joined' || p.status === 'left'
+            );
+            const remoteStillJoined = remoteParticipants.some(p => p.status === 'joined');
+
+            if (anyRemoteEverJoined && !remoteStillJoined) {
+              console.log('[CALL] 📴 All remote participants left, auto-ending call');
+              // Notify server we're leaving too
+              try { await api.post(`/api/calls/${callId}/leave`, {}); } catch {}
+              // Full cleanup
+              if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+              if (signalPollRef.current) { clearInterval(signalPollRef.current); signalPollRef.current = null; }
+              if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+              localStreamRef.current?.getTracks().forEach(t => t.stop());
+              screenStreamRef.current?.getTracks().forEach(t => t.stop());
+              if (micAnimRef.current) cancelAnimationFrame(micAnimRef.current);
+              analyserRef.current = null;
+              peerConnectionsRef.current.forEach(pc => pc.close());
+              peerConnectionsRef.current.clear();
+              // Stop ringtone
+              if (ringtoneRef.current) { ringtoneRef.current.pause(); ringtoneRef.current.currentTime = 0; }
+              leaveCalledRef.current = true;
+              setStatus('ended');
+              setTimeout(() => onCloseRef.current(), 1500);
+              return;
+            }
           }
 
           // Ringing timeout: auto-cancel outgoing calls after 60s
@@ -538,6 +594,9 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
   const leaveCall = useCallback(async () => {
     if (leaveCalledRef.current) return; // Prevent double-leave
     leaveCalledRef.current = true;
+
+    // Stop ringtone
+    if (ringtoneRef.current) { ringtoneRef.current.pause(); ringtoneRef.current.currentTime = 0; }
 
     // Stop media
     localStreamRef.current?.getTracks().forEach(t => t.stop());
@@ -707,6 +766,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
     const timer = timerRef.current;
     const recorder = mediaRecorderRef.current;
     const micAnim = micAnimRef.current;
+    const ringtone = ringtoneRef.current;
 
     // beforeunload: ensure leave is sent when user closes tab/navigates
     const handleBeforeUnload = () => {
@@ -730,6 +790,8 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
       }
       if (micAnim) cancelAnimationFrame(micAnim);
       analyserRef.current = null;
+      // Stop ringtone
+      if (ringtone) { ringtone.pause(); ringtone.currentTime = 0; }
       // Fire-and-forget leave on unmount
       if (!leaveCalledRef.current) {
         apiCapture.post(`/api/calls/${callIdCapture}/leave`, {}).catch(() => {});
