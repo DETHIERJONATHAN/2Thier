@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useGrabScroll } from '../../hooks/useGrabScroll';
-import { Spin, message, Avatar, Tooltip, Empty, Tag, Button, Modal, DatePicker, Input, Select, Popconfirm, Badge } from 'antd';
+import { Spin, message, Avatar, Tooltip, Empty, Tag, Button, Modal, DatePicker, Input, Select, Popconfirm, Badge, Grid } from 'antd';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import 'dayjs/locale/fr';
@@ -823,6 +823,8 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
   const editScope = getScope('chantiers', 'edit');
   const canManageTeams = editScope === 'all' || editScope === '*';
   const canSeeSettings = canDo('chantiers', 'settings');
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
   const canAssign = canDo('chantiers', 'assign');
   const canEdit = canDo('chantiers', 'edit');
   const canFinances = canDo('chantiers', 'finances');
@@ -1150,78 +1152,128 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
     <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Toolbar */}
       <div style={{
-        padding: '8px 12px',
+        padding: isMobile ? '6px 8px' : '8px 12px',
         display: 'flex',
-        flexWrap: 'wrap',
+        flexWrap: isMobile ? 'nowrap' : 'wrap',
         justifyContent: 'space-between',
         alignItems: 'center',
         borderBottom: '1px solid #f0f0f0',
         backgroundColor: '#fff',
-        gap: 8,
+        gap: isMobile ? 6 : 8,
+        overflowX: isMobile ? 'auto' : undefined,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <span style={{ fontSize: 16, fontWeight: 600 }}>🏗️ Chantiers</span>
-          <span style={{ fontSize: 13, color: '#5e6c84' }}>
-            {filteredChantiers.length} chantier{filteredChantiers.length > 1 ? 's' : ''}
-            {(selectedProducts.size > 0 || dateField !== 'createdAt' || dateRange) && ` / ${chantiers.length}`}
-          </span>
+        {/* Title + count badge */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 4 : 8, flexShrink: 0 }}>
+          {isMobile ? (
+            <Badge count={filteredChantiers.length} size="small" offset={[-2, 2]} style={{ backgroundColor: '#5e6c84' }}>
+              <span style={{ fontSize: 15, fontWeight: 600 }}>🏗️</span>
+            </Badge>
+          ) : (
+            <>
+              <span style={{ fontSize: 16, fontWeight: 600 }}>🏗️ Chantiers</span>
+              <span style={{ fontSize: 13, color: '#5e6c84' }}>
+                {filteredChantiers.length} chantier{filteredChantiers.length > 1 ? 's' : ''}
+                {(selectedProducts.size > 0 || dateField !== 'createdAt' || dateRange) && ` / ${chantiers.length}`}
+              </span>
+            </>
+          )}
         </div>
 
-        {/* ─── Filtre dates : panel fixe plein écran (mobile-friendly) ─── */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-          <button
-            onClick={() => setDateDropdownOpen(!dateDropdownOpen)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 5,
-              padding: '3px 10px',
-              borderRadius: 16,
-              border: (dateField !== 'createdAt' || dateRange) ? `2px solid ${DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff'}` : '1px solid #d9d9d9',
-              background: (dateField !== 'createdAt' || dateRange) ? `${DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff'}12` : '#fff',
-              cursor: 'pointer',
-              fontSize: 12,
-              fontWeight: (dateField !== 'createdAt' || dateRange) ? 600 : 400,
-              color: (dateField !== 'createdAt' || dateRange) ? (DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff') : '#595959',
-              transition: 'all 0.2s',
-              whiteSpace: 'nowrap',
-              minHeight: 32,
-            }}
-          >
-            <CalendarOutlined style={{ fontSize: 13 }} />
-            {dateField !== 'createdAt'
-              ? `${DATE_FIELDS.find(f => f.key === dateField)?.icon || '📅'} ${DATE_FIELDS.find(f => f.key === dateField)?.label}${dateRange ? (activePreset && activePreset !== 'custom'
-                ? ` · ${DATE_PRESETS.find(p => p.key === activePreset)?.label}`
-                : ` · ${dateRange[0].format('DD/MM')} — ${dateRange[1].format('DD/MM')}`) : ''}`
-              : dateRange
-                ? (activePreset && activePreset !== 'custom'
-                  ? DATE_PRESETS.find(p => p.key === activePreset)?.label
-                  : `${dateRange[0].format('DD/MM')} — ${dateRange[1].format('DD/MM')}`)
-                : 'Dates'
-            }
-          </button>
-          {(dateField !== 'createdAt' || dateRange) && (
-            <button
-              onClick={clearDateFilter}
+        {/* Tech panel toggle — on mobile, right after the title as a badge icon */}
+        {isMobile && canSeeTeamPanel && (
+          <Badge count={technicians.length} size="small" offset={[-2, 2]} style={{ backgroundColor: techPanelOpen ? '#1677ff' : '#8c8c8c' }}>
+            <div
+              onClick={() => setTechPanelOpen(!techPanelOpen)}
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '3px 6px',
-                borderRadius: '50%',
-                border: 'none',
-                background: '#ff4d4f',
-                color: '#fff',
+                width: 28, height: 28, borderRadius: '50%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: techPanelOpen ? '#e6f4ff' : '#f5f5f5',
                 cursor: 'pointer',
-                fontSize: 10,
-                lineHeight: 1,
-                minWidth: 28,
-                minHeight: 28,
               }}
-              title="Effacer le filtre date"
             >
-              ✕
-            </button>
+              <TeamOutlined style={{ fontSize: 14, color: techPanelOpen ? '#1677ff' : '#595959' }} />
+            </div>
+          </Badge>
+        )}
+
+        {/* ─── Filtre dates ─── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+          {isMobile ? (
+            /* Mobile: just the calendar icon, colored when active */
+            <div
+              onClick={() => setDateDropdownOpen(!dateDropdownOpen)}
+              style={{
+                width: 28, height: 28, borderRadius: '50%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: (dateField !== 'createdAt' || dateRange)
+                  ? `${DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff'}18`
+                  : '#f5f5f5',
+                cursor: 'pointer',
+                border: (dateField !== 'createdAt' || dateRange)
+                  ? `2px solid ${DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff'}`
+                  : '1px solid #e8e8e8',
+              }}
+            >
+              <CalendarOutlined style={{ fontSize: 14, color: (dateField !== 'createdAt' || dateRange) ? (DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff') : '#595959' }} />
+            </div>
+          ) : (
+            /* Desktop: full button with text */
+            <>
+              <button
+                onClick={() => setDateDropdownOpen(!dateDropdownOpen)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  padding: '3px 10px',
+                  borderRadius: 16,
+                  border: (dateField !== 'createdAt' || dateRange) ? `2px solid ${DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff'}` : '1px solid #d9d9d9',
+                  background: (dateField !== 'createdAt' || dateRange) ? `${DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff'}12` : '#fff',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontWeight: (dateField !== 'createdAt' || dateRange) ? 600 : 400,
+                  color: (dateField !== 'createdAt' || dateRange) ? (DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff') : '#595959',
+                  transition: 'all 0.2s',
+                  whiteSpace: 'nowrap',
+                  minHeight: 32,
+                }}
+              >
+                <CalendarOutlined style={{ fontSize: 13 }} />
+                {dateField !== 'createdAt'
+                  ? `${DATE_FIELDS.find(f => f.key === dateField)?.icon || '📅'} ${DATE_FIELDS.find(f => f.key === dateField)?.label}${dateRange ? (activePreset && activePreset !== 'custom'
+                    ? ` · ${DATE_PRESETS.find(p => p.key === activePreset)?.label}`
+                    : ` · ${dateRange[0].format('DD/MM')} — ${dateRange[1].format('DD/MM')}`) : ''}`
+                  : dateRange
+                    ? (activePreset && activePreset !== 'custom'
+                      ? DATE_PRESETS.find(p => p.key === activePreset)?.label
+                      : `${dateRange[0].format('DD/MM')} — ${dateRange[1].format('DD/MM')}`)
+                    : 'Dates'
+                }
+              </button>
+              {(dateField !== 'createdAt' || dateRange) && (
+                <button
+                  onClick={clearDateFilter}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '3px 6px',
+                    borderRadius: '50%',
+                    border: 'none',
+                    background: '#ff4d4f',
+                    color: '#fff',
+                    cursor: 'pointer',
+                    fontSize: 10,
+                    lineHeight: 1,
+                    minWidth: 28,
+                    minHeight: 28,
+                  }}
+                  title="Effacer le filtre date"
+                >
+                  ✕
+                </button>
+              )}
+            </>
           )}
         </div>
 
@@ -1377,74 +1429,117 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
 
         {/* Product filter buttons */}
         {uniqueProducts.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', flex: 1, justifyContent: 'center' }}>
-            {uniqueProducts.map(product => {
-              const isActive = selectedProducts.has(product.value);
-              const bgColor = product.color || '#1677ff';
-              return (
-                <Tooltip key={product.value} title={`${product.label} (${product.count})`}>
-                  <button
-                    onClick={() => toggleProduct(product.value)}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 5,
-                      padding: '4px 10px',
-                      borderRadius: 16,
-                      border: isActive ? `2px solid ${bgColor}` : '1px solid #d9d9d9',
-                      background: isActive ? hexToRgba(bgColor, 0.12) : '#fff',
-                      cursor: 'pointer',
-                      fontSize: 12,
-                      fontWeight: isActive ? 600 : 400,
-                      color: isActive ? bgColor : '#595959',
-                      transition: 'all 0.2s',
-                      whiteSpace: 'nowrap',
-                      minHeight: 32,
-                    }}
-                  >
-                    <span style={{ fontSize: 16, lineHeight: 1 }}>
-                      {product.icon ? renderProductIcon(product.icon, 16) : '📦'}
-                    </span>
-                    <span>{product.label}</span>
-                    <span style={{
-                      background: isActive ? bgColor : '#e8e8e8',
-                      color: isActive ? '#fff' : '#8c8c8c',
-                      borderRadius: 8,
-                      padding: '0 5px',
-                      fontSize: 10,
-                      fontWeight: 600,
-                      lineHeight: '16px',
-                    }}>
-                      {product.count}
-                    </span>
-                  </button>
-                </Tooltip>
-              );
-            })}
-            {selectedProducts.size > 0 && (
-              <button
-                onClick={() => setSelectedProducts(new Set())}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  padding: '3px 8px',
-                  borderRadius: 16,
-                  border: '1px dashed #d9d9d9',
-                  background: '#fafafa',
-                  cursor: 'pointer',
-                  fontSize: 11,
-                  color: '#8c8c8c',
-                }}
-              >
-                ✕ Tous
-              </button>
-            )}
-          </div>
+          isMobile ? (
+            /* Mobile: just icons with badge counts */
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+              {uniqueProducts.map(product => {
+                const isActive = selectedProducts.has(product.value);
+                const bgColor = product.color || '#1677ff';
+                return (
+                  <Tooltip key={product.value} title={`${product.label} (${product.count})`}>
+                    <Badge count={product.count} size="small" offset={[-2, 2]} style={{ backgroundColor: isActive ? bgColor : '#bfbfbf' }}>
+                      <div
+                        onClick={() => toggleProduct(product.value)}
+                        style={{
+                          width: 28, height: 28, borderRadius: '50%',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          background: isActive ? hexToRgba(bgColor, 0.15) : '#f5f5f5',
+                          border: isActive ? `2px solid ${bgColor}` : '1px solid #e8e8e8',
+                          cursor: 'pointer',
+                          fontSize: 15,
+                        }}
+                      >
+                        {product.icon ? renderProductIcon(product.icon, 15) : '📦'}
+                      </div>
+                    </Badge>
+                  </Tooltip>
+                );
+              })}
+              {selectedProducts.size > 0 && (
+                <div
+                  onClick={() => setSelectedProducts(new Set())}
+                  style={{
+                    width: 22, height: 22, borderRadius: '50%',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: '#ff4d4f', color: '#fff', cursor: 'pointer', fontSize: 10,
+                  }}
+                >
+                  ✕
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Desktop: full pill buttons */
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', flex: 1, justifyContent: 'center' }}>
+              {uniqueProducts.map(product => {
+                const isActive = selectedProducts.has(product.value);
+                const bgColor = product.color || '#1677ff';
+                return (
+                  <Tooltip key={product.value} title={`${product.label} (${product.count})`}>
+                    <button
+                      onClick={() => toggleProduct(product.value)}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        padding: '4px 10px',
+                        borderRadius: 16,
+                        border: isActive ? `2px solid ${bgColor}` : '1px solid #d9d9d9',
+                        background: isActive ? hexToRgba(bgColor, 0.12) : '#fff',
+                        cursor: 'pointer',
+                        fontSize: 12,
+                        fontWeight: isActive ? 600 : 400,
+                        color: isActive ? bgColor : '#595959',
+                        transition: 'all 0.2s',
+                        whiteSpace: 'nowrap',
+                        minHeight: 32,
+                      }}
+                    >
+                      <span style={{ fontSize: 16, lineHeight: 1 }}>
+                        {product.icon ? renderProductIcon(product.icon, 16) : '📦'}
+                      </span>
+                      <span>{product.label}</span>
+                      <span style={{
+                        background: isActive ? bgColor : '#e8e8e8',
+                        color: isActive ? '#fff' : '#8c8c8c',
+                        borderRadius: 8,
+                        padding: '0 5px',
+                        fontSize: 10,
+                        fontWeight: 600,
+                        lineHeight: '16px',
+                      }}>
+                        {product.count}
+                      </span>
+                    </button>
+                  </Tooltip>
+                );
+              })}
+              {selectedProducts.size > 0 && (
+                <button
+                  onClick={() => setSelectedProducts(new Set())}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    padding: '3px 8px',
+                    borderRadius: 16,
+                    border: '1px dashed #d9d9d9',
+                    background: '#fafafa',
+                    cursor: 'pointer',
+                    fontSize: 11,
+                    color: '#8c8c8c',
+                  }}
+                >
+                  ✕ Tous
+                </button>
+              )}
+            </div>
+          )
         )}
 
-        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-          {/* Toggle panel techniciens */}
-          {canSeeTeamPanel && (
+        {/* Right actions: tech panel toggle + settings */}
+        <div style={{ display: 'flex', gap: isMobile ? 4 : 8, flexShrink: 0, marginLeft: isMobile ? 'auto' : undefined }}>
+          {/* Toggle panel techniciens — desktop only (mobile uses badge above) */}
+          {!isMobile && canSeeTeamPanel && (
           <Tooltip title={techPanelOpen ? 'Masquer le panel techniciens' : 'Afficher le panel techniciens'}>
             <Button
               icon={techPanelOpen ? <MenuFoldOutlined /> : <MenuUnfoldOutlined />}
@@ -1458,7 +1553,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
           </Tooltip>
           )}
           {/* Filtre technicien actif */}
-          {selectedTechFilter && (
+          {!isMobile && selectedTechFilter && (
             <Tag
               closable
               onClose={() => setSelectedTechFilter(null)}
@@ -1474,9 +1569,23 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
             </Tag>
           )}
           {onSettings && canSeeSettings && (
-            <Button icon={<SettingOutlined />} size="small" onClick={onSettings}>
-              Paramètres
-            </Button>
+            isMobile ? (
+              <div
+                onClick={onSettings}
+                style={{
+                  width: 28, height: 28, borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: '#f5f5f5', cursor: 'pointer',
+                  border: '1px solid #e8e8e8',
+                }}
+              >
+                <SettingOutlined style={{ fontSize: 14, color: '#595959' }} />
+              </div>
+            ) : (
+              <Button icon={<SettingOutlined />} size="small" onClick={onSettings}>
+                Paramètres
+              </Button>
+            )
           )}
         </div>
       </div>
