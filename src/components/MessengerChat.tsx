@@ -484,6 +484,8 @@ const MessengerChat: React.FC = () => {
     try {
       const result = await api.post('/api/calls/start', { conversationId, callType }) as any;
       if (result?.call) {
+        // Don't re-open a call we just ended
+        if (result.call.id === lastEndedCallIdRef.current) return;
         setActiveCall({
           callId: result.call.id,
           callType,

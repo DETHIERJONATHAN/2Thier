@@ -101,9 +101,20 @@ router.post('/start', async (req: Request, res: Response): Promise<void> => {
     // Check no active call exists for this conversation
     const activeCall = await db.videoCall.findFirst({
       where: { conversationId, status: { in: ['ringing', 'active'] } },
+      include: { participants: { select: { userId: true, status: true } } },
     });
     if (activeCall) {
-      res.json({ call: activeCall, existing: true }); return;
+      // If the user already left this call, end the stale call and create a new one
+      const myParticipant = activeCall.participants.find(p => p.userId === user.id);
+      if (myParticipant?.status === 'left') {
+        await db.videoCall.update({
+          where: { id: activeCall.id },
+          data: { status: 'ended', endedAt: new Date() },
+        });
+        // Fall through to create a new call
+      } else {
+        res.json({ call: activeCall, existing: true }); return;
+      }
     }
 
     // Create the call
