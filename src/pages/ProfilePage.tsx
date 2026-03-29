@@ -512,6 +512,19 @@ const ProfilePage = () => {
     }
   };
 
+  const handleOpenMessenger = async () => {
+    if (!viewUserId) return;
+    try {
+      const res: any = await api.post('/api/messenger/conversations', { participantIds: [viewUserId] });
+      const convId = res?.conversation?.id || res?.id;
+      if (convId) {
+        window.dispatchEvent(new CustomEvent('open-messenger', { detail: { conversationId: convId } }));
+      }
+    } catch {
+      message.error('Erreur lors de l\'ouverture du chat');
+    }
+  };
+
   const handleBlockUser = async () => {
     if (!friendshipId || friendLoading) return;
     setFriendLoading(true);
@@ -732,7 +745,7 @@ const ProfilePage = () => {
                       Refuser
                     </FBButton>
                   )}
-                  <FBButton icon={<MessageOutlined />} onClick={() => navigate('/messenger')} isMobile={isMobile} mobileIconOnly>
+                  <FBButton icon={<MessageOutlined />} onClick={handleOpenMessenger} isMobile={isMobile} mobileIconOnly>
                     Message
                   </FBButton>
                   <FBButton icon={<EllipsisOutlined />} />
@@ -802,7 +815,7 @@ const ProfilePage = () => {
                       Refuser
                     </FBButton>
                   )}
-                  <FBButton icon={<MessageOutlined />} onClick={() => navigate('/messenger')}>Message</FBButton>
+                  <FBButton icon={<MessageOutlined />} onClick={handleOpenMessenger}>Message</FBButton>
                   <FBButton icon={<EllipsisOutlined />} />
                 </div>
               )}

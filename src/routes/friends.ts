@@ -40,6 +40,20 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       };
     });
 
+    // Batch fetch online status from userStreak (active within last 5 minutes)
+    const friendIds = friends.map(f => f.id);
+    const streaks = await db.userStreak.findMany({
+      where: { userId: { in: friendIds } },
+      select: { userId: true, lastActiveAt: true },
+    });
+    const streakMap = new Map(streaks.map(s => [s.userId, s.lastActiveAt]));
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+
+    const friendsWithOnline = friends.map(f => ({
+      ...f,
+      online: streakMap.has(f.id) && streakMap.get(f.id)! > fiveMinAgo,
+    }));
+
     // Get pending requests received
     const pendingReceived = await db.friendship.findMany({
       where: { addresseeId: user.id, status: 'pending' },
@@ -59,7 +73,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     });
 
     res.json({
-      friends,
+      friends: friendsWithOnline,
       pendingReceived: pendingReceived.map(p => ({ friendshipId: p.id, ...p.requester })),
       pendingSent: pendingSent.map(p => ({ friendshipId: p.id, ...p.addressee })),
     });

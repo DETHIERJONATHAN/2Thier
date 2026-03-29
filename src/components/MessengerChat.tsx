@@ -71,6 +71,7 @@ interface Friend {
   avatarUrl: string | null;
   isOrgMember: boolean;
   friendshipId: string;
+  online?: boolean;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -449,6 +450,13 @@ const MessengerChat: React.FC = () => {
     !searchQuery || `${f.firstName} ${f.lastName}`.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // When searching in default view, show matching friends that don't have a conversation yet
+  const searchMatchedFriends = searchQuery ? filteredFriends.filter(f => {
+    // Exclude friends that already appear in filtered conversations
+    const friendName = `${f.firstName} ${f.lastName}`.toLowerCase();
+    return !filteredConversations.some(c => c.name.toLowerCase() === friendName);
+  }) : [];
+
   // ═══════════════════════════════════════════════════════════
   // RENDER: Conversation list panel (bottom right)
   // ═══════════════════════════════════════════════════════════
@@ -726,6 +734,74 @@ const MessengerChat: React.FC = () => {
         ) : (
           /* Conversation list */
           <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
+            {/* ─── Horizontal friends bar (like Facebook Messenger) ─── */}
+            {!searchQuery && friends.length > 0 && (
+              <div style={{
+                display: 'flex', gap: 12, padding: '8px 12px 4px', overflowX: 'auto',
+                borderBottom: `1px solid ${FB.border}`, marginBottom: 4,
+                scrollbarWidth: 'none', msOverflowStyle: 'none',
+              }}>
+                {friends.slice(0, 20).map(f => (
+                  <div key={f.id}
+                    onClick={() => startNewChat(f.id)}
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', flexShrink: 0, width: 56 }}
+                  >
+                    <div style={{ position: 'relative' }}>
+                      <Avatar size={48} src={f.avatarUrl} icon={!f.avatarUrl ? <UserOutlined /> : undefined}
+                        style={{ backgroundColor: !f.avatarUrl ? FB.blue : undefined }} />
+                      {f.online && (
+                        <div style={{
+                          position: 'absolute', bottom: 1, right: 1, width: 12, height: 12,
+                          borderRadius: '50%', background: FB.green, border: '2px solid #fff',
+                        }} />
+                      )}
+                    </div>
+                    <span style={{
+                      fontSize: 11, color: FB.text, marginTop: 4, textAlign: 'center',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%',
+                    }}>
+                      {f.firstName}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* ─── Search: matching friends (no existing conversation) ─── */}
+            {searchMatchedFriends.length > 0 && (
+              <>
+                <div style={{ padding: '8px 16px 4px', fontSize: 12, fontWeight: 600, color: FB.textSecondary, textTransform: 'uppercase' }}>
+                  {t('messenger.contacts')}
+                </div>
+                {searchMatchedFriends.map(f => (
+                  <div key={`search-${f.id}`}
+                    onClick={() => startNewChat(f.id)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px',
+                      cursor: 'pointer', transition: 'background 0.15s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = FB.hover}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <div style={{ position: 'relative' }}>
+                      <Avatar size={48} src={f.avatarUrl} icon={!f.avatarUrl ? <UserOutlined /> : undefined}
+                        style={{ backgroundColor: !f.avatarUrl ? FB.blue : undefined, flexShrink: 0 }} />
+                      {f.online && (
+                        <div style={{
+                          position: 'absolute', bottom: 0, right: 0, width: 10, height: 10,
+                          borderRadius: '50%', background: FB.green, border: '2px solid #fff',
+                        }} />
+                      )}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 500, color: FB.text }}>{f.firstName} {f.lastName}</div>
+                      <div style={{ fontSize: 12, color: FB.textSecondary }}>{f.isOrgMember ? '⬡ Colony' : '🐝 Free Bee'}</div>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+
             {filteredConversations.map(conv => (
               <div key={conv.id}
                 onClick={() => openChat(conv.id)}
@@ -767,7 +843,7 @@ const MessengerChat: React.FC = () => {
                 )}
               </div>
             ))}
-            {filteredConversations.length === 0 && !_loading && (
+            {filteredConversations.length === 0 && searchMatchedFriends.length === 0 && !_loading && (
               <div style={{ padding: 30, textAlign: 'center', color: FB.textSecondary, fontSize: 14 }}>
                 <MessageOutlined style={{ fontSize: 40, marginBottom: 12, display: 'block', opacity: 0.3 }} />
                 {t('messenger.noWhispersYet')}
@@ -1155,10 +1231,12 @@ export const FriendsWidget: React.FC<FriendsWidgetProps> = ({ onStartChat }) => 
           <div style={{ position: 'relative' }}>
             <Avatar size={32} src={friend.avatarUrl} icon={!friend.avatarUrl ? <UserOutlined /> : undefined}
               style={{ backgroundColor: !friend.avatarUrl ? FB.blue : undefined }} />
-            <div style={{
-              position: 'absolute', bottom: 0, right: 0, width: 10, height: 10,
-              borderRadius: '50%', background: FB.green, border: '2px solid #fff',
-            }} />
+            {friend.online && (
+              <div style={{
+                position: 'absolute', bottom: 0, right: 0, width: 10, height: 10,
+                borderRadius: '50%', background: FB.green, border: '2px solid #fff',
+              }} />
+            )}
           </div>
           <span style={{ fontSize: 13, fontWeight: 500, color: FB.text }}>
             {friend.firstName} {friend.lastName}
@@ -1185,8 +1263,16 @@ export const FriendsWidget: React.FC<FriendsWidgetProps> = ({ onStartChat }) => 
               onMouseEnter={e => e.currentTarget.style.background = FB.hover}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
-              <Avatar size={32} src={friend.avatarUrl} icon={!friend.avatarUrl ? <UserOutlined /> : undefined}
-                style={{ backgroundColor: !friend.avatarUrl ? '#7c4dff' : undefined }} />
+              <div style={{ position: 'relative' }}>
+                <Avatar size={32} src={friend.avatarUrl} icon={!friend.avatarUrl ? <UserOutlined /> : undefined}
+                  style={{ backgroundColor: !friend.avatarUrl ? '#7c4dff' : undefined }} />
+                {friend.online && (
+                  <div style={{
+                    position: 'absolute', bottom: 0, right: 0, width: 10, height: 10,
+                    borderRadius: '50%', background: FB.green, border: '2px solid #fff',
+                  }} />
+                )}
+              </div>
               <span style={{ fontSize: 13, fontWeight: 500, color: FB.text }}>
                 {friend.firstName} {friend.lastName}
               </span>

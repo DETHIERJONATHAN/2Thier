@@ -353,7 +353,8 @@
     "colonyContacts": "Colony contacts",
     "externalFriends": "External friends",
     "noContactsYet": "No contacts yet",
-    "noFriendsFound": "No friends found"
+    "noFriendsFound": "No friends found",
+    "contacts": "Contacts"
   },
 
   "videocall": {
