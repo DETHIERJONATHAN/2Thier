@@ -75,16 +75,17 @@ router.get('/feed', authenticateToken, async (req: Request, res: Response) => {
     } else if (!orgId && user.isSuperAdmin) {
       // Super admin sans org → tout
     } else if (!orgId) {
-      // Free user sans org → posts ALL publics + ses propres posts
+      // Free user sans org → posts ALL personnels + ses propres posts
       where.OR = [
-        { visibility: 'ALL' },
+        { visibility: 'ALL', publishAsOrg: false },
         { authorId: user.id },
       ];
     } else if (mode === 'personal') {
-      // User avec org en mode personnel → posts ALL de tout le monde + ses propres posts
+      // User avec org en mode personnel → posts personnels ALL + ses propres posts personnels
+      // Exclure les posts publiés en tant que Colony (publishAsOrg=true)
       where.OR = [
-        { visibility: 'ALL' },
-        { authorId: user.id },
+        { visibility: 'ALL', publishAsOrg: false },
+        { authorId: user.id, publishAsOrg: false },
       ];
     } else {
       // User avec org en mode org (défaut) → IN + ALL de son org + ses propres OUT

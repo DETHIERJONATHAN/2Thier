@@ -590,10 +590,10 @@ router.get('/sparks', authenticateToken, async (req: Request, res: Response) => 
 
     const whereClause: any = {};
     if (mode === 'personal' || !orgId) {
-      // Personal mode: public sparks + own sparks
+      // Personal mode: public personal sparks + own personal sparks (exclude Colony)
       whereClause.OR = [
-        { visibility: 'ALL' },
-        { authorId: userId },
+        { visibility: 'ALL', publishAsOrg: false },
+        { authorId: userId, publishAsOrg: false },
       ];
     } else {
       // Org mode: sparks from own org

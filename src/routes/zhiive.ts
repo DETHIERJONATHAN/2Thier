@@ -471,10 +471,11 @@ router.get('/reels', authenticateToken, async (req: Request, res: Response) => {
     };
 
     if (mode === 'personal' || !orgId) {
-      // Personal mode or free user: public videos + own posts
+      // Personal mode or free user: public personal videos + own personal posts
+      // Exclude Colony posts (publishAsOrg=true)
       whereClause.OR = [
-        { visibility: 'ALL' },
-        { authorId: user.id },
+        { visibility: 'ALL', publishAsOrg: false },
+        { authorId: user.id, publishAsOrg: false },
       ];
     } else {
       // Org mode: videos from own org
