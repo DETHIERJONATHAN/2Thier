@@ -455,8 +455,8 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
             if (ringtoneRef.current) { ringtoneRef.current.pause(); ringtoneRef.current.currentTime = 0; }
             leaveCalledRef.current = true; // Prevent cleanup from calling /leave again
             setStatus('ended');
-            // Auto-close modal after brief delay so user sees the call ended
-            setTimeout(() => onCloseRef.current(), 1500);
+            // Close modal immediately — no delay to prevent ghost re-detection
+            onCloseRef.current();
             return;
           } else if (data.status === 'active' && statusRef.current === 'ringing') {
             setStatus('active');
@@ -490,7 +490,8 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
               if (ringtoneRef.current) { ringtoneRef.current.pause(); ringtoneRef.current.currentTime = 0; }
               leaveCalledRef.current = true;
               setStatus('ended');
-              setTimeout(() => onCloseRef.current(), 1500);
+              // Close immediately — no delay to prevent ghost re-detection
+              onCloseRef.current();
               return;
             }
           }
@@ -504,7 +505,8 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
             if (signalPollRef.current) { clearInterval(signalPollRef.current); signalPollRef.current = null; }
             localStreamRef.current?.getTracks().forEach(t => t.stop());
             setStatus('ended');
-            setTimeout(() => onCloseRef.current(), 1500);
+            // Close immediately — no delay to prevent ghost re-detection
+            onCloseRef.current();
             return;
           }
 

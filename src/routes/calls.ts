@@ -217,13 +217,22 @@ router.post('/:id/leave', async (req: Request, res: Response): Promise<void> => 
       data: { status: 'left', leftAt: new Date() },
     });
 
-    // Check if any participants are still joined
+    // Count total and remaining participants
+    const totalParticipants = await db.callParticipant.count({
+      where: { callId: req.params.id },
+    });
     const stillJoined = await db.callParticipant.count({
       where: { callId: req.params.id, status: 'joined' },
     });
 
-    // If no one left, end the call
-    if (stillJoined === 0) {
+    // End call if: nobody joined OR it's a 2-person call and one left
+    const shouldEnd = stillJoined === 0 || (totalParticipants <= 2 && stillJoined <= 1);
+    if (shouldEnd) {
+      // Mark all remaining participants as left
+      await db.callParticipant.updateMany({
+        where: { callId: req.params.id, status: { in: ['joined', 'invited'] } },
+        data: { status: 'left', leftAt: new Date() },
+      });
       const callData = await db.videoCall.findUnique({ where: { id: req.params.id } });
       const durationSec = callData?.startedAt
         ? Math.floor((Date.now() - callData.startedAt.getTime()) / 1000)
