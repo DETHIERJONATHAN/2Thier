@@ -140,6 +140,8 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
   const [audioBlocked, setAudioBlocked] = useState(false);
   const iceServersRef = useRef<RTCConfiguration>(FALLBACK_ICE_SERVERS);
   const leaveCalledRef = useRef(false);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   // Keep statusRef in sync with status state
   useEffect(() => { statusRef.current = status; }, [status]);
@@ -149,15 +151,25 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
     getIceServers(api).then(config => { iceServersRef.current = config; });
   }, [api]);
 
-  // 🔊 Play ringtone while ringing for incoming calls
+  // 🔊 Play ringtone/ringback tone
+  // - Incoming: ringtone while status === 'ringing' (until callee picks up or rejects)
+  // - Outgoing: ringback tone until a remote participant actually connects
+  const hasRemoteParticipants = (callData?.participants || []).some(
+    p => p.userId !== userId && p.status === 'joined'
+  );
+
   useEffect(() => {
-    if (isIncoming && status === 'ringing') {
+    const shouldPlaySound =
+      (isIncoming && status === 'ringing') ||
+      (!isIncoming && status !== 'ended' && !hasRemoteParticipants);
+
+    if (shouldPlaySound) {
       playSound('ringtone');
     } else {
       stopSound();
     }
     return () => stopSound();
-  }, [isIncoming, status, playSound, stopSound]);
+  }, [status, isIncoming, hasRemoteParticipants, playSound, stopSound]);
 
   // Format duration as HH:MM:SS
   const formatDuration = (s: number) => {
@@ -406,10 +418,22 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
         if (data) {
           setCallData(data);
           if (data.status === 'ended' || data.status === 'missed') {
-            setStatus('ended');
+            console.log('[CALL] 📴 Remote party ended call, cleaning up...');
             // Stop all polling immediately
             if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
             if (signalPollRef.current) { clearInterval(signalPollRef.current); signalPollRef.current = null; }
+            if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+            // Stop media & close peer connections
+            localStreamRef.current?.getTracks().forEach(t => t.stop());
+            screenStreamRef.current?.getTracks().forEach(t => t.stop());
+            if (micAnimRef.current) cancelAnimationFrame(micAnimRef.current);
+            analyserRef.current = null;
+            peerConnectionsRef.current.forEach(pc => pc.close());
+            peerConnectionsRef.current.clear();
+            leaveCalledRef.current = true; // Prevent cleanup from calling /leave again
+            setStatus('ended');
+            // Auto-close modal after brief delay so user sees the call ended
+            setTimeout(() => onCloseRef.current(), 1500);
             return;
           } else if (data.status === 'active' && statusRef.current === 'ringing') {
             setStatus('active');
@@ -419,9 +443,12 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
           if (!isIncoming && data.status === 'ringing' && Date.now() - mountedAtRef.current > 60000) {
             console.log('[CALL] ⏰ Ringing timeout 60s, auto-cancelling');
             try { await api.post(`/api/calls/${callId}/leave`, {}); } catch {}
+            leaveCalledRef.current = true;
             if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
             if (signalPollRef.current) { clearInterval(signalPollRef.current); signalPollRef.current = null; }
+            localStreamRef.current?.getTracks().forEach(t => t.stop());
             setStatus('ended');
+            setTimeout(() => onCloseRef.current(), 1500);
             return;
           }
 
@@ -560,7 +587,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
 
     // Close modal immediately — no delay to prevent race condition with incoming call polling
     onClose();
-  }, [api, callId, callDuration, conversationName, isRecording, callType, onClose]);
+  }, [api, callId, callDuration, conversationName, isRecording, callType, onClose, userId]);
 
   // Reject incoming call
   const rejectCall = useCallback(async () => {
