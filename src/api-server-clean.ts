@@ -155,7 +155,7 @@ app.use(helmet({
       connectSrc: ["'self'", "https:", "wss:", "maps.googleapis.com", "*.googleapis.com"],
       frameSrc: ["'self'", "maps.google.com", "*.google.com", "blob:"],
       objectSrc: ["'self'", "blob:"],
-      mediaSrc: ["'self'"],
+      mediaSrc: ["'self'", "https://storage.googleapis.com", "blob:"],
       manifestSrc: ["'self'"],
       workerSrc: ["'self'", "blob:"]
     }

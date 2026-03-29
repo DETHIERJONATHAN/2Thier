@@ -100,6 +100,7 @@ async function uploadToGCS(buffer: Buffer, key: string, mimeType: string): Promi
     await blob.save(buffer, {
       contentType: mimeType,
       resumable: false,
+      public: true,
       metadata: {
         cacheControl: 'public, max-age=3600',
       },
