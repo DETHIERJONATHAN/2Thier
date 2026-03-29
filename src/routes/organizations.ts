@@ -1417,14 +1417,15 @@ router.post('/create-my-org', createMyOrgRateLimit, async (req: AuthenticatedReq
       return res.status(401).json({ success: false, message: 'Non authentifié' });
     }
 
-    // Vérifier que l'utilisateur n'a PAS déjà une organisation
-    const existingMembership = await prisma.userOrganization.findFirst({
-      where: { userId }
+    // Vérifier que l'utilisateur n'est pas déjà admin/fondateur d'une organisation
+    const existingAdminMembership = await prisma.userOrganization.findFirst({
+      where: { userId },
+      include: { Role: true }
     });
-    if (existingMembership) {
+    if (existingAdminMembership && existingAdminMembership.Role?.name === 'admin') {
       return res.status(400).json({
         success: false,
-        message: 'Vous êtes déjà membre d\'une organisation'
+        message: 'Vous êtes déjà fondateur d\'une Colony'
       });
     }
 

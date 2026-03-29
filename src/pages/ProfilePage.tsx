@@ -233,10 +233,12 @@ const ProfilePage = () => {
 
   // ═══ Colony invite state ═══
   const [inviteLoading, setInviteLoading] = useState(false);
-  const canInviteToColony = isViewingOther && currentOrganization && (currentOrganization.role === 'admin' || currentOrganization.role === 'super_admin' || isSuperAdmin);
+  const viewedUserOrgId = (profile as any)?.organization?.id;
+  const isAlreadyInMyColony = !!viewedUserOrgId && viewedUserOrgId === currentOrganization?.id;
+  const canInviteToColony = isViewingOther && currentOrganization && !isAlreadyInMyColony && (currentOrganization.role === 'admin' || currentOrganization.role === 'super_admin' || isSuperAdmin);
 
-  // Business: créer une organisation (visible uniquement pour les utilisateurs libres)
-  const isFreeUser = !currentOrganization && !isSuperAdmin;
+  // Business: créer une Colony (admin d'une org existante ne peut pas, mais un simple membre oui)
+  const canFoundColony = !isSuperAdmin && (!currentOrganization || (currentOrganization.role !== 'admin' && currentOrganization.role !== 'super_admin'));
   const [isCreateOrgModalVisible, setIsCreateOrgModalVisible] = useState(false);
   const [isCreatingOrg, setIsCreatingOrg] = useState(false);
   const [orgForm] = Form.useForm();
@@ -804,7 +806,7 @@ const ProfilePage = () => {
                   <FBButton icon={<EditOutlined />} onClick={() => moduleNavigate('/settings')} isMobile={isMobile} mobileIconOnly>
                     Modifier
                   </FBButton>
-                  {isFreeUser && <FBButton icon={<ShopOutlined />} onClick={() => setIsCreateOrgModalVisible(true)} isMobile={isMobile} mobileIconOnly
+                  {canFoundColony && <FBButton icon={<ShopOutlined />} onClick={() => setIsCreateOrgModalVisible(true)} isMobile={isMobile} mobileIconOnly
                     style={{ background: '#0f766e', color: '#fff' }}>
                     Business
                   </FBButton>}
@@ -878,7 +880,7 @@ const ProfilePage = () => {
                 <div style={{ display: 'flex', gap: 8, paddingBottom: 16, alignItems: 'flex-end' }}>
                   <FBButton primary icon={<SettingOutlined />} onClick={() => moduleNavigate('/settings')}>Paramètres</FBButton>
                   <FBButton icon={<EditOutlined />} onClick={() => moduleNavigate('/settings')}>Modifier</FBButton>
-                  {isFreeUser && <FBButton icon={<ShopOutlined />} onClick={() => setIsCreateOrgModalVisible(true)}
+                  {canFoundColony && <FBButton icon={<ShopOutlined />} onClick={() => setIsCreateOrgModalVisible(true)}
                     style={{ background: '#0f766e', color: '#fff' }}>Business</FBButton>}
                   <FBButton icon={<EllipsisOutlined />} />
                 </div>
