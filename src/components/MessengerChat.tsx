@@ -144,6 +144,18 @@ const MessengerChat: React.FC = () => {
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // 🎭 Wizz trigger (defined early so fetchUnread can reference it)
+  const triggerWizz = useCallback(() => {
+    setIsShaking(true);
+    playSound('wizz');
+    // Global page shake — felt even when messenger is closed
+    document.body.classList.add('global-wizz-shake');
+    setTimeout(() => {
+      setIsShaking(false);
+      document.body.classList.remove('global-wizz-shake');
+    }, 600);
+  }, [playSound]);
+
   // ─── DATA FETCHING ─────────────────────────────────────────
   const fetchConversations = useCallback(async () => {
     try {
@@ -429,17 +441,6 @@ const MessengerChat: React.FC = () => {
     setInlineSending(false);
     setTimeout(() => { wizzCooldownRef.current = false; }, 3000);
   };
-
-  const triggerWizz = useCallback(() => {
-    setIsShaking(true);
-    playSound('wizz');
-    // Global page shake — felt even when messenger is closed
-    document.body.classList.add('global-wizz-shake');
-    setTimeout(() => {
-      setIsShaking(false);
-      document.body.classList.remove('global-wizz-shake');
-    }, 600);
-  }, [playSound]);
 
   // Detect incoming wizz messages from others
   useEffect(() => {
