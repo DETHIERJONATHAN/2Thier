@@ -515,6 +515,9 @@ const MessengerChat: React.FC = () => {
     return `${Math.floor(hrs / 24)}j`;
   };
 
+  // Set of online friend IDs for quick lookup
+  const onlineFriendIds = useMemo(() => new Set(friends.filter(f => f.online).map(f => f.id)), [friends]);
+
   const filteredConversations = conversations.filter(c =>
     !searchQuery || c.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -943,8 +946,16 @@ const MessengerChat: React.FC = () => {
                 onMouseEnter={e => e.currentTarget.style.background = FB.hover}
                 onMouseLeave={e => e.currentTarget.style.background = conv.unreadCount > 0 ? 'rgba(24,119,242,0.05)' : 'transparent'}
               >
-                <Avatar size={48} src={conv.avatarUrl} icon={conv.isGroup ? <TeamOutlined /> : <UserOutlined />}
-                  style={{ backgroundColor: conv.avatarUrl ? undefined : (conv.isGroup ? '#7c4dff' : FB.blue), flexShrink: 0 }} />
+                <div style={{ position: 'relative', flexShrink: 0 }}>
+                  <Avatar size={48} src={conv.avatarUrl} icon={conv.isGroup ? <TeamOutlined /> : <UserOutlined />}
+                    style={{ backgroundColor: conv.avatarUrl ? undefined : (conv.isGroup ? '#7c4dff' : FB.blue) }} />
+                  {!conv.isGroup && conv.participants.some(p => p.id !== user?.id && onlineFriendIds.has(p.id)) && (
+                    <div style={{
+                      position: 'absolute', bottom: 1, right: 1, width: 12, height: 12,
+                      borderRadius: '50%', background: FB.green, border: '2px solid #fff',
+                    }} />
+                  )}
+                </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: 14, fontWeight: conv.unreadCount > 0 ? 700 : 500, color: FB.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
