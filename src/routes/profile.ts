@@ -402,6 +402,7 @@ router.get('/user/:userId', async (req: AuthenticatedRequest, res: Response): Pr
       where: { id: userId },
       include: {
         UserOrganization: {
+          where: { status: 'ACTIVE' },
           include: {
             Organization: true,
             Role: true
@@ -414,18 +415,19 @@ router.get('/user/:userId', async (req: AuthenticatedRequest, res: Response): Pr
       return res.status(404).json({ error: 'Utilisateur non trouvé' });
     }
 
+    const activeOrg = user.UserOrganization?.find(uo => uo.status === 'ACTIVE');
     return res.json({
       id: user.id,
       email: user.email,
       firstName: user.firstName || '',
       lastName: user.lastName || '',
-      role: user.role || 'user',
+      role: activeOrg?.Role?.name || user.role || 'user',
       avatarUrl: buildAvatarUrl(req, user.avatarUrl),
       coverUrl: buildAvatarUrl(req, (user as any).coverUrl),
       coverPositionY: (user as any).coverPositionY ?? 50,
-      organization: user.UserOrganization?.length > 0 ? {
-        id: user.UserOrganization[0].Organization.id,
-        name: user.UserOrganization[0].Organization.name
+      organization: activeOrg ? {
+        id: activeOrg.Organization.id,
+        name: activeOrg.Organization.name
       } : null
     });
   } catch (error) {

@@ -632,7 +632,9 @@ const ProfilePage = () => {
     return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}><Spin size="large" /></div>;
   }
 
-  const rl = ROLE_MAP[user?.role || 'user'] || { label: user?.role || 'Utilisateur', color: FB.textSecondary };
+  const displayRole = isViewingOther ? ((profile as any)?.role || 'user') : (user?.role || 'user');
+  const rl = ROLE_MAP[displayRole] || { label: displayRole || 'Utilisateur', color: FB.textSecondary };
+  const displayOrg = isViewingOther ? (profile as any)?.organization : currentOrganization;
   const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ') || 'Utilisateur';
 
   const tabs = [
@@ -789,10 +791,10 @@ const ProfilePage = () => {
                 fontSize: 14, color: FB.textSecondary,
               }}>
                 <span style={{ color: rl.color, fontWeight: 600 }}>{rl.icon} {rl.label}</span>
-                {currentOrganization && (
+                {displayOrg && (
                   <>
                     <span>·</span>
-                    <span><TeamOutlined style={{ marginRight: 4 }} />{currentOrganization.name}</span>
+                    <span><TeamOutlined style={{ marginRight: 4 }} />{displayOrg.name}</span>
                   </>
                 )}
               </div>
@@ -867,10 +869,10 @@ const ProfilePage = () => {
                 <h1 style={{ fontSize: nameFontSize, fontWeight: 700, color: FB.text, margin: 0, lineHeight: 1.2 }}>{fullName}</h1>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap', fontSize: 15, color: FB.textSecondary }}>
                   <span style={{ color: rl.color, fontWeight: 600 }}>{rl.icon} {rl.label}</span>
-                  {currentOrganization && (
+                  {displayOrg && (
                     <>
                       <span>·</span>
-                      <span><TeamOutlined style={{ marginRight: 4 }} />{currentOrganization.name}</span>
+                      <span><TeamOutlined style={{ marginRight: 4 }} />{displayOrg.name}</span>
                     </>
                   )}
                 </div>
@@ -980,16 +982,16 @@ const ProfilePage = () => {
               </FBCard>
 
               {/* Liens */}
-              <FBCard title="Liens" onEdit={() => moduleNavigate('/settings')}>
-                {currentOrganization?.name && (
+              <FBCard title="Liens" onEdit={!isViewingOther ? () => moduleNavigate('/settings') : undefined}>
+                {displayOrg?.name && (
                   <InfoLine icon={<LinkOutlined />}>
-                    <span style={{ color: FB.blue }}>{currentOrganization.name.toLowerCase().replace(/\s+/g, '')}.be</span>
+                    <span style={{ color: FB.blue }}>{displayOrg.name.toLowerCase().replace(/\s+/g, '')}.be</span>
                   </InfoLine>
                 )}
                 {profile.vatNumber && (
                   <InfoLine icon={<BankOutlined />}>TVA : {profile.vatNumber}</InfoLine>
                 )}
-                {!profile.vatNumber && !currentOrganization && (
+                {!profile.vatNumber && !displayOrg && (
                   <div style={{ padding: '12px 0', color: FB.textSecondary, fontSize: 14 }}>Aucun lien.</div>
                 )}
               </FBCard>
@@ -1011,8 +1013,8 @@ const ProfilePage = () => {
                 <InfoLine icon={<SafetyCertificateOutlined />}>
                   <span style={{ color: rl.color, fontWeight: 600 }}>{rl.icon} {rl.label}</span>
                 </InfoLine>
-                {currentOrganization && (
-                  <InfoLine icon={<TeamOutlined />}>{currentOrganization.name}</InfoLine>
+                {displayOrg && (
+                  <InfoLine icon={<TeamOutlined />}>{displayOrg.name}</InfoLine>
                 )}
                 {isSuperAdmin && (
                   <div style={{ marginTop: 4, fontSize: 13, color: FB.textSecondary }}>
@@ -1122,7 +1124,7 @@ const ProfilePage = () => {
                   <div style={{ background: FB.bg, borderRadius: 8, padding: isMobile ? 16 : 20, textAlign: 'center' }}>
                     <TeamOutlined style={{ fontSize: 28, color: FB.blue }} />
                     <div style={{ fontSize: 15, fontWeight: 600, color: FB.text, marginTop: 8 }}>
-                      {currentOrganization?.name || '-'}
+                      {displayOrg?.name || '-'}
                     </div>
                     <div style={{ fontSize: 13, color: FB.textSecondary }}>Colony</div>
                   </div>
