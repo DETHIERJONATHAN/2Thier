@@ -183,6 +183,122 @@ router.post('/', authMiddleware, requireRole(['admin', 'super_admin']), async (r
   }
 });
 
+// POST /api/invitations/invite-user — Inviter un utilisateur existant dans sa Colony (depuis son profil)
+const inviteUserSchema = z.object({
+  targetUserId: z.string().min(1, "L'ID de l'utilisateur cible est requis."),
+  roleName: z.string().min(1, "Le nom du rôle est requis."),
+});
+
+router.post('/invite-user', authMiddleware, requireRole(['admin', 'super_admin']), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { targetUserId, roleName } = inviteUserSchema.parse(req.body);
+    const inviterId = req.user!.userId;
+    const organizationId = req.headers['x-organization-id'] as string;
+
+    if (!organizationId) {
+      res.status(400).json({ message: "Organisation non spécifiée." });
+      return;
+    }
+
+    // 1. Vérifier que l'utilisateur cible existe
+    const targetUser = await prisma.user.findUnique({ where: { id: targetUserId } });
+    if (!targetUser) {
+      res.status(404).json({ message: "Utilisateur non trouvé." });
+      return;
+    }
+
+    // 2. Vérifier qu'il n'est pas déjà membre de cette organisation
+    const existingMembership = await prisma.userOrganization.findFirst({
+      where: { userId: targetUserId, organizationId },
+    });
+    if (existingMembership) {
+      res.status(409).json({ message: "Cet utilisateur est déjà membre de votre Colony." });
+      return;
+    }
+
+    // 3. Vérifier s'il n'y a pas déjà une invitation active
+    const existingInvitation = await prisma.invitation.findUnique({
+      where: { email_organizationId: { email: targetUser.email, organizationId } },
+    });
+    if (existingInvitation && existingInvitation.status === 'PENDING' && existingInvitation.expiresAt > new Date()) {
+      res.status(409).json({ message: "Une invitation active existe déjà pour cet utilisateur." });
+      return;
+    }
+    if (existingInvitation) {
+      await prisma.invitation.delete({ where: { id: existingInvitation.id } });
+    }
+
+    // 4. Trouver le rôle
+    const role = await prisma.role.findFirst({
+      where: {
+        name: roleName,
+        OR: [{ organizationId }, { organizationId: null }],
+      },
+    });
+    if (!role) {
+      res.status(404).json({ message: `Le rôle '${roleName}' n'a pas été trouvé.` });
+      return;
+    }
+
+    // 5. Créer l'invitation
+    const token = uuidv4();
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    const newInvitation = await prisma.invitation.create({
+      data: {
+        id: uuidv4(),
+        email: targetUser.email,
+        token,
+        expiresAt,
+        updatedAt: new Date(),
+        Organization: { connect: { id: organizationId } },
+        Role: { connect: { id: role.id } },
+        User_Invitation_invitedByIdToUser: { connect: { id: inviterId } },
+        User_Invitation_targetUserIdToUser: { connect: { id: targetUserId } },
+        status: 'PENDING',
+      },
+      include: { Organization: true, Role: true },
+    });
+
+    // 6. Envoyer email
+    try {
+      await emailService.sendInvitationEmail({
+        to: targetUser.email,
+        token: newInvitation.token,
+        isExistingUser: true,
+        organizationName: newInvitation.Organization.name,
+        roleName: newInvitation.Role.label || newInvitation.Role.name,
+        inviterId,
+        organizationId,
+      });
+    } catch (emailError) {
+      console.error("Échec envoi e-mail invitation:", emailError);
+    }
+
+    // 7. Notifications
+    notify.invitationCreated(organizationId, { email: targetUser.email, roleName: newInvitation.Role?.label || newInvitation.Role?.name || '' }, inviterId);
+    notify.invitationReceivedByExistingUser(
+      organizationId,
+      { organizationName: newInvitation.Organization.name, roleName: newInvitation.Role?.label || newInvitation.Role?.name || '' },
+      targetUserId,
+      newInvitation.token
+    );
+
+    res.status(201).json({
+      success: true,
+      message: `Invitation envoyée à ${targetUser.firstName || ''} ${targetUser.lastName || ''} (${targetUser.email}).`,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ message: 'Données invalides.', details: error.errors });
+      return;
+    }
+    console.error("Erreur lors de l'invitation par userId:", error);
+    res.status(500).json({ message: "Erreur interne du serveur." });
+  }
+});
+
 // POST /api/invitations/:id/resend
 // Regénère le token pour une invitation existante.
 router.post('/:id/resend', authMiddleware, requireRole(['admin', 'super_admin']), async (req: AuthenticatedRequest, res: Response): Promise<void> => {

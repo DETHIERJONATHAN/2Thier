@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAuth } from '../auth/useAuth';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useModuleNavigation } from '../contexts/WallNavigationContext';
-import { Avatar, Spin, message, Modal, Form, Input } from 'antd';
+import { Avatar, Spin, message, Modal, Form, Input, Dropdown } from 'antd';
 import {
   UserOutlined, CameraOutlined, MailOutlined, PhoneOutlined,
   HomeOutlined, BankOutlined, TeamOutlined, CrownOutlined,
@@ -230,6 +230,10 @@ const ProfilePage = () => {
   const [friendDirection, setFriendDirection] = useState<string | null>(null); // 'sent' | 'received'
   const [friendshipId, setFriendshipId] = useState<string | null>(null);
   const [friendLoading, setFriendLoading] = useState(false);
+
+  // ═══ Colony invite state ═══
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const canInviteToColony = isViewingOther && currentOrganization && (currentOrganization.role === 'admin' || currentOrganization.role === 'super_admin' || isSuperAdmin);
 
   // Business: créer une organisation (visible uniquement pour les utilisateurs libres)
   const isFreeUser = !currentOrganization && !isSuperAdmin;
@@ -548,6 +552,40 @@ const ProfilePage = () => {
     return { label: 'Ajouter en ami', icon: <UserAddOutlined />, primary: true };
   };
 
+  // ═══ Invite to Colony handler ═══
+  const handleInviteToColony = async (roleName: string = 'user') => {
+    if (!viewUserId || !currentOrganization) return;
+    setInviteLoading(true);
+    try {
+      const result: any = await api.post('/api/invitations/invite-user', {
+        targetUserId: viewUserId,
+        roleName,
+      });
+      message.success(result?.message || 'Invitation envoyée !');
+    } catch (err: any) {
+      const msg = err?.data?.message || err?.message || "Erreur lors de l'envoi de l'invitation";
+      message.error(msg);
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  // ═══ Profile ⋯ menu items ═══
+  const profileMoreMenuItems = useMemo(() => {
+    const items: any[] = [];
+    if (canInviteToColony) {
+      items.push({
+        key: 'invite-colony',
+        icon: <TeamOutlined />,
+        label: inviteLoading ? 'Invitation en cours...' : `Inviter dans ${currentOrganization?.name || 'ma Colony'}`,
+        disabled: inviteLoading,
+        onClick: () => handleInviteToColony('user'),
+      });
+    }
+    items.push({ key: 'block', icon: <StopOutlined />, label: 'Bloquer', danger: true, onClick: handleBlockUser });
+    return items;
+  }, [canInviteToColony, inviteLoading, currentOrganization?.name]);
+
   if (userLoading || loading) {
     return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}><Spin size="large" /></div>;
   }
@@ -748,7 +786,9 @@ const ProfilePage = () => {
                   <FBButton icon={<MessageOutlined />} onClick={handleOpenMessenger} isMobile={isMobile} mobileIconOnly>
                     Message
                   </FBButton>
-                  <FBButton icon={<EllipsisOutlined />} />
+                  <Dropdown menu={{ items: profileMoreMenuItems }} trigger={['click']} placement="bottomRight">
+                    <span><FBButton icon={<EllipsisOutlined />} /></span>
+                  </Dropdown>
                 </div>
               )}
             </div>
@@ -816,7 +856,9 @@ const ProfilePage = () => {
                     </FBButton>
                   )}
                   <FBButton icon={<MessageOutlined />} onClick={handleOpenMessenger}>Message</FBButton>
-                  <FBButton icon={<EllipsisOutlined />} />
+                  <Dropdown menu={{ items: profileMoreMenuItems }} trigger={['click']} placement="bottomRight">
+                    <span><FBButton icon={<EllipsisOutlined />} /></span>
+                  </Dropdown>
                 </div>
               )}
             </div>
