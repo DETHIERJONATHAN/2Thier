@@ -148,43 +148,93 @@ function createTelnyxRing(ctx: AudioContext, destination: AudioNode): { stop: ()
 }
 
 /**
- * Play the MSN Messenger-style "Wizz" / Nudge sound
- * Rapid buzzy vibration sound — short aggressive oscillation
+ * Play the authentic MSN Messenger "Nudge" / Wizz sound
+ * Faithful reproduction: rapid rhythmic "bzt-bzt-bzt-bzt" bursts
+ * like a phone vibrating on a table — the iconic MSN pattern
  */
 function playWizzSound(ctx: AudioContext, destination: AudioNode): void {
   const now = ctx.currentTime;
+  const totalDuration = 0.85;
+  const buzzCount = 8;
+  const buzzOn = 0.045;   // each buzz lasts 45ms
+  const buzzOff = 0.025;  // 25ms silence between buzzes
+  const buzzCycle = buzzOn + buzzOff;
 
-  // Main buzz oscillator — sawtooth for that "bzzzz" texture
-  const osc = ctx.createOscillator();
-  osc.type = 'sawtooth';
-  osc.frequency.setValueAtTime(150, now);
-  osc.frequency.linearRampToValueAtTime(80, now + 0.15);
-  osc.frequency.linearRampToValueAtTime(200, now + 0.3);
-  osc.frequency.linearRampToValueAtTime(60, now + 0.5);
+  // Master gain for overall volume
+  const masterGain = ctx.createGain();
+  masterGain.gain.value = 0.22;
+  masterGain.connect(destination);
 
-  // LFO to create the "vibrating" feel
-  const lfo = ctx.createOscillator();
-  lfo.type = 'square';
-  lfo.frequency.value = 30;
-  const lfoGain = ctx.createGain();
-  lfoGain.gain.value = 80;
-  lfo.connect(lfoGain);
-  lfoGain.connect(osc.frequency);
+  for (let i = 0; i < buzzCount; i++) {
+    const start = now + i * buzzCycle;
 
-  // Envelope
-  const gainNode = ctx.createGain();
-  gainNode.gain.setValueAtTime(0, now);
-  gainNode.gain.linearRampToValueAtTime(0.18, now + 0.03);
-  gainNode.gain.setValueAtTime(0.18, now + 0.4);
-  gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+    // Sawtooth oscillator for metallic buzz texture
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    // Slight pitch variation per buzz for organic feel (descending ~250→180Hz)
+    const freq = 250 - (i * 9);
+    osc.frequency.setValueAtTime(freq, start);
 
-  osc.connect(gainNode);
-  gainNode.connect(destination);
+    // Square-wave LFO for rapid tremolo within each buzz
+    const lfo = ctx.createOscillator();
+    lfo.type = 'square';
+    lfo.frequency.value = 55;
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = 40;
+    lfo.connect(lfoGain);
+    lfoGain.connect(osc.frequency);
 
-  osc.start(now);
-  lfo.start(now);
-  osc.stop(now + 0.6);
-  lfo.stop(now + 0.6);
+    // Per-buzz envelope: sharp attack, sustain, sharp cutoff
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, start);
+    env.gain.linearRampToValueAtTime(1.0, start + 0.005);
+    env.gain.setValueAtTime(1.0, start + buzzOn - 0.005);
+    env.gain.linearRampToValueAtTime(0, start + buzzOn);
+
+    osc.connect(env);
+    env.connect(masterGain);
+
+    osc.start(start);
+    lfo.start(start);
+    osc.stop(start + buzzOn + 0.01);
+    lfo.stop(start + buzzOn + 0.01);
+  }
+
+  // Second wave: 4 faster buzzes after a tiny pause (the MSN "double pattern")
+  const wave2Start = now + buzzCount * buzzCycle + 0.06;
+  const buzz2On = 0.035;
+  const buzz2Off = 0.02;
+  const buzz2Cycle = buzz2On + buzz2Off;
+
+  for (let i = 0; i < 4; i++) {
+    const start = wave2Start + i * buzz2Cycle;
+
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(220 - (i * 12), start);
+
+    const lfo = ctx.createOscillator();
+    lfo.type = 'square';
+    lfo.frequency.value = 65;
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = 35;
+    lfo.connect(lfoGain);
+    lfoGain.connect(osc.frequency);
+
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, start);
+    env.gain.linearRampToValueAtTime(0.8, start + 0.004);
+    env.gain.setValueAtTime(0.8, start + buzz2On - 0.004);
+    env.gain.linearRampToValueAtTime(0, start + buzz2On);
+
+    osc.connect(env);
+    env.connect(masterGain);
+
+    osc.start(start);
+    lfo.start(start);
+    osc.stop(start + buzz2On + 0.01);
+    lfo.stop(start + buzz2On + 0.01);
+  }
 }
 
 /**

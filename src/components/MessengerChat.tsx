@@ -8,6 +8,7 @@ import {
   SendOutlined,
   UserOutlined,
   SearchOutlined,
+  ThunderboltOutlined,
   TeamOutlined,
   PhoneOutlined,
   VideoCameraOutlined,
@@ -405,7 +406,7 @@ const MessengerChat: React.FC = () => {
     setInlineSending(true);
     try {
       await api.post(`/api/messenger/conversations/${activeConversationId}/messages`, {
-        content: '🎭 Wizz!',
+        content: '⚡ Wizz!',  
         mediaType: 'wizz',
       });
       // Trigger own shake + sound
@@ -619,7 +620,7 @@ const MessengerChat: React.FC = () => {
                       color: '#fff', fontSize: 12, padding: '4px 14px', borderRadius: 12,
                       fontStyle: 'italic', opacity: 0.85,
                     }}>
-                      🎭 {isMine ? t('messenger.wizzSent') : `${msg.sender.firstName} ${t('messenger.wizzReceived')}`}
+                      ⚡ {isMine ? t('messenger.wizzSent') : `${msg.sender.firstName} ${t('messenger.wizzReceived')}`}
                     </div>
                   </div>
                 );
@@ -705,7 +706,7 @@ const MessengerChat: React.FC = () => {
               onMouseEnter={e => { if (!wizzCooldownRef.current) e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = FB.hover; }}
               onMouseLeave={e => { e.currentTarget.style.opacity = wizzCooldownRef.current ? '0.3' : '0.7'; e.currentTarget.style.background = 'transparent'; }}
             >
-              <span style={{ fontSize: 18 }}>🎭</span>
+              <ThunderboltOutlined style={{ fontSize: 16, color: '#faad14' }} />
             </div>
             <div
               onClick={sendInlineMessage}
@@ -929,7 +930,7 @@ const MessengerChat: React.FC = () => {
                   }}>
                     {conv.lastMessage ? (
                       conv.lastMessage.mediaType === 'wizz'
-                        ? (conv.lastMessage.senderId === user?.id ? `${t('messenger.youPrefix')}🎭 Wizz!` : '🎭 Wizz!')
+                        ? (conv.lastMessage.senderId === user?.id ? `${t('messenger.youPrefix')}⚡ Wizz!` : '⚡ Wizz!')
                         : conv.lastMessage.senderId === user?.id
                           ? `${t('messenger.youPrefix')}${conv.lastMessage.content || t('messenger.media')}`
                           : conv.lastMessage.content || t('messenger.media')
