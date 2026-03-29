@@ -22,6 +22,7 @@ import {
   AuditOutlined,
   BankOutlined,
   PhoneOutlined,
+  StopOutlined,
   ToolOutlined,
   CrownOutlined,
 } from '@ant-design/icons';
@@ -278,6 +279,7 @@ const SettingsPage = () => {
     // Category 3: Préférences
     const prefItems: MenuItem[] = [
       { key: 'ai-measure', to: '/settings/ai-measure', icon: <CameraOutlined />, label: 'IA Mesure', requiredPermission: 'organization:read' },
+      { key: 'blocked', to: '/settings/blocked', icon: <StopOutlined />, label: 'Blocages', requiredPermission: null },
     ];
 
     // Category 4: Administration (Super Admin + Admin avancé)

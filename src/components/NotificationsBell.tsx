@@ -161,7 +161,14 @@ const NotificationsBell = () => {
       try {
         await api.patch(`/api/notifications/${notif.id}/read`);
       } catch (_) {}
-    } catch (_) {}
+    } catch (err: any) {
+      // If 404 = friendship was cancelled by the other party, remove notification
+      const status = err?.status || err?.response?.status || err?.data?.status;
+      if (status === 404 || err?.message?.includes('404')) {
+        setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, data: { ...n.data, handled: 'cancelled' }, status: 'READ' } : n));
+        try { await api.delete(`/api/notifications/${notif.id}`); } catch (_) {}
+      }
+    }
   }, [api]);
 
   useEffect(() => {
@@ -290,6 +297,9 @@ const NotificationsBell = () => {
           )}
           {notif.type === 'FRIEND_REQUEST_RECEIVED' && notif.data?.handled === 'blocked' && (
             <div style={{ fontSize: 11, marginTop: 4, color: '#cf1322', fontWeight: 600 }}>Utilisateur bloqué 🚫</div>
+          )}
+          {notif.type === 'FRIEND_REQUEST_RECEIVED' && notif.data?.handled === 'cancelled' && (
+            <div style={{ fontSize: 11, marginTop: 4, color: '#8c8c8c', fontWeight: 600 }}>Demande annulée</div>
           )}
         </div>
 

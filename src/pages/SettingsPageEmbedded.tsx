@@ -14,6 +14,7 @@ const RolesSettings = lazy(() => import('./settings/RolesSettings'));
 const EmailSettings = lazy(() => import('./settings/EmailSettings'));
 const GoogleSettings = lazy(() => import('./settings/GoogleSettings'));
 const AIMeasureSettings = lazy(() => import('./settings/AIMeasureSettings'));
+const BlockedSettings = lazy(() => import('./settings/BlockedSettings'));
 
 // Admin sub-pages embedded in settings
 const ModulesAdminPage = lazy(() => import('./admin/ModulesAdminPage'));
@@ -43,6 +44,7 @@ const SettingsPageEmbedded: React.FC = () => {
             <Route path="emails" element={<EmailSettings />} />
             <Route path="google" element={<GoogleSettings />} />
             <Route path="ai-measure" element={<AIMeasureSettings />} />
+            <Route path="blocked" element={<BlockedSettings />} />
             <Route path="modules" element={<ModulesAdminPage />} />
             <Route path="permissions" element={<PermissionsAdminPage />} />
             <Route path="rights-summary" element={<UserRightsSummaryPage />} />

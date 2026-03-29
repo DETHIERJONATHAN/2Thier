@@ -530,17 +530,50 @@ const ProfilePage = () => {
   };
 
   const handleBlockUser = async () => {
-    if (!friendshipId || friendLoading) return;
-    setFriendLoading(true);
-    try {
-      await api.post(`/api/friends/${friendshipId}/block`);
-      setFriendStatus('blocked');
-      message.success('Utilisateur bloqué');
-    } catch {
-      message.error('Erreur');
-    } finally {
-      setFriendLoading(false);
-    }
+    if (!viewUserId || friendLoading) return;
+    Modal.confirm({
+      title: 'Bloquer cet utilisateur ?',
+      content: 'Cette personne ne pourra plus voir vos publications et ne pourra plus vous contacter.',
+      okText: 'Bloquer',
+      cancelText: 'Annuler',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        setFriendLoading(true);
+        try {
+          await api.post('/api/friends/block-user', { userId: viewUserId });
+          setFriendStatus('blocked');
+          message.success('Utilisateur bloqué');
+        } catch {
+          message.error('Erreur');
+        } finally {
+          setFriendLoading(false);
+        }
+      },
+    });
+  };
+
+  const handleBlockColony = async () => {
+    const orgId = (profile as any)?.organization?.id;
+    const orgName = (profile as any)?.organization?.name;
+    if (!orgId || friendLoading) return;
+    Modal.confirm({
+      title: `Bloquer la Colony « ${orgName} » ?`,
+      content: 'Tous les contenus de cette Colony seront masqués de votre fil.',
+      okText: 'Bloquer la Colony',
+      cancelText: 'Annuler',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        setFriendLoading(true);
+        try {
+          await api.post('/api/friends/block-org', { organizationId: orgId });
+          message.success(`Colony « ${orgName} » bloquée`);
+        } catch {
+          message.error('Erreur');
+        } finally {
+          setFriendLoading(false);
+        }
+      },
+    });
   };
 
   // Helper to get friend button label & icon
@@ -582,9 +615,16 @@ const ProfilePage = () => {
         onClick: () => handleInviteToColony('user'),
       });
     }
-    items.push({ key: 'block', icon: <StopOutlined />, label: 'Bloquer', danger: true, onClick: handleBlockUser });
+    if (friendStatus !== 'blocked') {
+      items.push({ key: 'block-user', icon: <StopOutlined />, label: 'Bloquer la personne', danger: true, onClick: handleBlockUser });
+    }
+    const viewedOrgId = (profile as any)?.organization?.id;
+    const viewedOrgName = (profile as any)?.organization?.name;
+    if (viewedOrgId && viewedOrgId !== currentOrganization?.id) {
+      items.push({ key: 'block-colony', icon: <StopOutlined />, label: `Bloquer la Colony « ${viewedOrgName} »`, danger: true, onClick: handleBlockColony });
+    }
     return items;
-  }, [canInviteToColony, inviteLoading, currentOrganization?.name]);
+  }, [canInviteToColony, inviteLoading, currentOrganization?.name, currentOrganization?.id, friendStatus, profile, viewUserId]);
 
   if (userLoading || loading) {
     return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}><Spin size="large" /></div>;

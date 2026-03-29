@@ -1128,6 +1128,9 @@ model Organization {
 
   // Hive Live
   HiveLiveMoments            HiveLiveMoment[]
+
+  // Blocks
+  OrgBlockedBy               OrgBlock[] @relation("OrgBlockOrg")
 }
 
 model OrganizationModuleStatus {
@@ -2286,6 +2289,7 @@ model User {
   // Friends & Messenger
   FriendshipsSent                                     Friendship[]        @relation("FriendshipRequester")
   FriendshipsReceived                                 Friendship[]        @relation("FriendshipAddressee")
+  OrgBlocks                                           OrgBlock[]          @relation("OrgBlockUser")
   ConversationParticipants                            ConversationParticipant[]
   MessagesSent                                        Message[]           @relation("MessageSender")
   CallParticipants                                    CallParticipant[]
@@ -3909,6 +3913,25 @@ model Friendship {
   @@unique([requesterId, addresseeId])
   @@index([requesterId, status])
   @@index([addresseeId, status])
+}
+
+// ═══════════════════════════════════════════════════════
+// ORGANIZATION BLOCKS (block a Colony)
+// ═══════════════════════════════════════════════════════
+
+model OrgBlock {
+  id             String       @id @default(uuid())
+  userId         String
+  blockedOrgId   String
+  reason         String?
+  createdAt      DateTime     @default(now())
+
+  user           User         @relation("OrgBlockUser", fields: [userId], references: [id], onDelete: Cascade)
+  blockedOrg     Organization @relation("OrgBlockOrg", fields: [blockedOrgId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, blockedOrgId])
+  @@index([userId])
+  @@index([blockedOrgId])
 }
 
 // ═══════════════════════════════════════════════════════

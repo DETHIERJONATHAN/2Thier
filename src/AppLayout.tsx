@@ -100,6 +100,7 @@ const UsersSettings = lazy(() => import('./pages/settings/UsersSettings'));
 const RolesSettings = lazy(() => import('./pages/settings/RolesSettings'));
 const CommercialSettings = lazy(() => import('./pages/settings/CommercialSettings'));
 const GoogleSettings = lazy(() => import('./pages/settings/GoogleSettings'));
+const BlockedSettings = lazy(() => import('./pages/settings/BlockedSettings'));
 
 // Pages Documents (Admin)
 const DocumentTemplatesPage = lazy(() => import('./pages/DocumentTemplatesPage'));
@@ -331,6 +332,7 @@ export default function AppLayout() {
               <Route path="emails" element={<EmailSettings />} />
               <Route path="google" element={<GoogleSettings />} />
               <Route path="ai-measure" element={<AIMeasureSettings />} />
+              <Route path="blocked" element={<BlockedSettings />} />
               {/* Pages admin intégrées aux paramètres */}
               {isSuperAdmin && <Route path="modules" element={<ModulesAdminPage />} />}
               {can('role:read') && <Route path="permissions" element={<PermissionsAdminPage />} />}

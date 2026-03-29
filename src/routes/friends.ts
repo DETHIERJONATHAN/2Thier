@@ -196,6 +196,125 @@ router.post('/request', async (req: Request, res: Response): Promise<void> => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// POST /friends/block-user — Block a user (creates friendship if needed)
+// ═══════════════════════════════════════════════════════════════
+router.post('/block-user', async (req: Request, res: Response): Promise<void> => {
+  const user = (req as any).user;
+  const { userId } = req.body;
+  if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
+  if (!userId || userId === user.id) { res.status(400).json({ error: 'userId invalide' }); return; }
+
+  try {
+    // Check if friendship already exists
+    const existing = await db.friendship.findFirst({
+      where: {
+        OR: [
+          { requesterId: user.id, addresseeId: userId },
+          { requesterId: userId, addresseeId: user.id },
+        ],
+      },
+    });
+
+    if (existing) {
+      if (existing.status === 'blocked') {
+        res.json({ success: true, alreadyBlocked: true }); return;
+      }
+      // Update existing friendship to blocked
+      await db.friendship.update({
+        where: { id: existing.id },
+        data: { status: 'blocked' },
+      });
+      // Clean up any FRIEND_REQUEST_RECEIVED notifications
+      try {
+        const notifs = await db.notification.findMany({
+          where: { type: 'FRIEND_REQUEST_RECEIVED', data: { path: ['friendshipId'], equals: existing.id } },
+        });
+        for (const notif of notifs) {
+          await db.notification.update({
+            where: { id: notif.id },
+            data: { status: 'READ', readAt: new Date(), updatedAt: new Date(), data: { ...(notif.data as any), handled: 'blocked' } },
+          });
+        }
+      } catch (_) {}
+      res.json({ success: true, friendshipId: existing.id });
+    } else {
+      // Create new friendship in blocked state
+      const friendship = await db.friendship.create({
+        data: { requesterId: user.id, addresseeId: userId, status: 'blocked', source: 'manual' },
+      });
+      res.json({ success: true, friendshipId: friendship.id });
+    }
+  } catch (err) {
+    console.error('[FRIENDS] Error blocking user:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// POST /friends/unblock-user — Unblock a user (removes friendship)
+// ═══════════════════════════════════════════════════════════════
+router.post('/unblock-user', async (req: Request, res: Response): Promise<void> => {
+  const user = (req as any).user;
+  const { userId } = req.body;
+  if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
+  if (!userId) { res.status(400).json({ error: 'userId requis' }); return; }
+
+  try {
+    const existing = await db.friendship.findFirst({
+      where: {
+        OR: [
+          { requesterId: user.id, addresseeId: userId },
+          { requesterId: userId, addresseeId: user.id },
+        ],
+        status: 'blocked',
+      },
+    });
+
+    if (!existing) { res.json({ success: true, message: 'Non bloqué' }); return; }
+
+    await db.friendship.delete({ where: { id: existing.id } });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[FRIENDS] Error unblocking user:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// GET /friends/blocked — List all blocked users
+// ═══════════════════════════════════════════════════════════════
+router.get('/blocked', async (req: Request, res: Response): Promise<void> => {
+  const user = (req as any).user;
+  if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
+
+  try {
+    const blockedFriendships = await db.friendship.findMany({
+      where: {
+        OR: [
+          { requesterId: user.id, status: 'blocked' },
+          { addresseeId: user.id, status: 'blocked' },
+        ],
+      },
+      include: {
+        requester: { select: { id: true, firstName: true, lastName: true, avatarUrl: true, email: true } },
+        addressee: { select: { id: true, firstName: true, lastName: true, avatarUrl: true, email: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    const blockedUsers = blockedFriendships.map(f => {
+      const blockedUser = f.requesterId === user.id ? f.addressee : f.requester;
+      return { friendshipId: f.id, ...blockedUser, blockedAt: f.updatedAt };
+    });
+
+    res.json({ blockedUsers });
+  } catch (err) {
+    console.error('[FRIENDS] Error listing blocked:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
 // POST /friends/:id/accept — Accept friend request
 // ═══════════════════════════════════════════════════════════════
 router.post('/:id/accept', async (req: Request, res: Response): Promise<void> => {
@@ -344,28 +463,22 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
       res.status(404).json({ error: 'Amitié non trouvée' }); return;
     }
 
-    // Mark FRIEND_REQUEST_RECEIVED notification as handled (rejected)
+    // Delete FRIEND_REQUEST_RECEIVED notification for the OTHER user
+    // When sender cancels: delete notification for addressee
+    // When addressee rejects: delete notification for addressee (self)
     try {
-      const originalNotif = await db.notification.findFirst({
+      const notifs = await db.notification.findMany({
         where: {
           type: 'FRIEND_REQUEST_RECEIVED',
-          userId: user.id,
           data: { path: ['friendshipId'], equals: friendship.id },
         },
       });
-      if (originalNotif) {
-        await db.notification.update({
-          where: { id: originalNotif.id },
-          data: {
-            status: 'READ',
-            readAt: new Date(),
-            updatedAt: new Date(),
-            data: { ...(originalNotif.data as any), handled: 'rejected' },
-          },
-        });
+      // Delete ALL notifications related to this friendship (both sides)
+      for (const notif of notifs) {
+        await db.notification.delete({ where: { id: notif.id } });
       }
     } catch (updateErr) {
-      console.error('[FRIENDS] Update notif on reject error (non-blocking):', updateErr);
+      console.error('[FRIENDS] Delete notif on cancel/reject error (non-blocking):', updateErr);
     }
 
     await db.friendship.delete({ where: { id: req.params.id } });
@@ -456,6 +569,82 @@ router.get('/search', async (req: Request, res: Response): Promise<void> => {
     })));
   } catch (err) {
     console.error('[FRIENDS] Error searching:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// POST /friends/block-org — Block a Colony (organization)
+// ═══════════════════════════════════════════════════════════════
+router.post('/block-org', async (req: Request, res: Response): Promise<void> => {
+  const user = (req as any).user;
+  const { organizationId, reason } = req.body;
+  if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
+  if (!organizationId) { res.status(400).json({ error: 'organizationId requis' }); return; }
+
+  // Prevent blocking own organization
+  if (organizationId === user.organizationId) {
+    res.status(400).json({ error: 'Vous ne pouvez pas bloquer votre propre Colony' }); return;
+  }
+
+  try {
+    const existing = await db.orgBlock.findUnique({
+      where: { userId_blockedOrgId: { userId: user.id, blockedOrgId: organizationId } },
+    });
+    if (existing) { res.json({ success: true, alreadyBlocked: true }); return; }
+
+    const block = await db.orgBlock.create({
+      data: { id: crypto.randomUUID(), userId: user.id, blockedOrgId: organizationId, reason: reason || null },
+    });
+    res.json({ success: true, block });
+  } catch (err) {
+    console.error('[FRIENDS] Error blocking org:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// POST /friends/unblock-org — Unblock a Colony
+// ═══════════════════════════════════════════════════════════════
+router.post('/unblock-org', async (req: Request, res: Response): Promise<void> => {
+  const user = (req as any).user;
+  const { organizationId } = req.body;
+  if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
+  if (!organizationId) { res.status(400).json({ error: 'organizationId requis' }); return; }
+
+  try {
+    const existing = await db.orgBlock.findUnique({
+      where: { userId_blockedOrgId: { userId: user.id, blockedOrgId: organizationId } },
+    });
+    if (!existing) { res.json({ success: true, message: 'Non bloqué' }); return; }
+
+    await db.orgBlock.delete({ where: { id: existing.id } });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[FRIENDS] Error unblocking org:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// GET /friends/blocked-orgs — List blocked organizations
+// ═══════════════════════════════════════════════════════════════
+router.get('/blocked-orgs', async (req: Request, res: Response): Promise<void> => {
+  const user = (req as any).user;
+  if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
+
+  try {
+    const blocks = await db.orgBlock.findMany({
+      where: { userId: user.id },
+      include: {
+        blockedOrg: { select: { id: true, name: true, logoUrl: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json({ blockedOrgs: blocks.map(b => ({ blockId: b.id, id: b.blockedOrg.id, name: b.blockedOrg.name, avatarUrl: b.blockedOrg.logoUrl, blockedAt: b.createdAt, reason: b.reason })) });
+  } catch (err) {
+    console.error('[FRIENDS] Error listing blocked orgs:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
