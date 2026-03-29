@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useGrabScroll } from '../../hooks/useGrabScroll';
 import { Spin, message, Avatar, Tooltip, Empty, Tag, Button, Modal, DatePicker, Input, Select, Popconfirm, Badge } from 'antd';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
@@ -811,6 +812,9 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
     unpaidInvoices: { label: string; type: string; percentage: number }[];
   } | null>(null);
   const [forceLoading, setForceLoading] = useState(false);
+
+  // Grab-to-scroll: click + drag to scroll the kanban board horizontally on desktop
+  const { ref: kanbanScrollRef, grabScrollProps } = useGrabScroll();
 
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, [apiHook.api]);
@@ -1730,6 +1734,8 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
 
           {/* ═══ Kanban Columns ═══ */}
           <div
+            ref={kanbanScrollRef}
+            {...grabScrollProps}
             style={{
               display: 'flex',
               gap: 8,
@@ -1740,6 +1746,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
               WebkitOverflowScrolling: 'touch',
               minHeight: 0,
               height: '100%',
+              ...grabScrollProps.style,
             }}
           >
             {statuses.map(status => (

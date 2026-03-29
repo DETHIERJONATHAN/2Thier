@@ -1,4 +1,5 @@
 ﻿import React, { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
+import { useGrabScroll } from '../../hooks/useGrabScroll';
 import { Button, Spin, message, Alert, Avatar, Tooltip, Grid, Modal, Select, App } from 'antd';
 import { renderProductIcon } from '../../components/TreeBranchLeaf/treebranchleaf-new/components/Parameters/capabilities/ProductFilterPanel';
 import * as XLSX from 'xlsx';
@@ -699,6 +700,9 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
   const [isBoardDragging, setIsBoardDragging] = useState(false);
   const dragLastXRef = useRef<number | null>(null);
 
+  // Grab-to-scroll: click + drag to scroll the kanban board horizontally on desktop
+  const { ref: grabRef, grabScrollProps } = useGrabScroll();
+
   // États pour les filtres
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [filterSource, setFilterSource] = useState<string | undefined>(undefined);
@@ -1374,7 +1378,8 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
 
         {/* Board container - SCROLL HORIZONTAL - RESPONSIVE */}
         <div 
-          ref={boardRef}
+          ref={(el) => { (boardRef as React.MutableRefObject<HTMLDivElement | null>).current = el; (grabRef as React.MutableRefObject<HTMLDivElement | null>).current = el; }}
+          {...grabScrollProps}
           style={{
             padding: boardPadding,
             overflowX: 'auto',
@@ -1383,6 +1388,7 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
             minHeight: 0,
             WebkitOverflowScrolling: 'touch',
             scrollSnapType: isMobile && !isBoardDragging ? 'x mandatory' : undefined,
+            ...grabScrollProps.style,
           }}
         >
           {/* Flex container pour les colonnes - HORIZONTAL */}
