@@ -343,9 +343,17 @@ router.get('/unread', async (req: Request, res: Response): Promise<void> => {
       unread += count;
     }
 
+    // Update presence heartbeat (marks user as online)
+    db.userStreak.upsert({
+      where: { userId: user.id },
+      update: { lastActiveAt: new Date() },
+      create: { userId: user.id, lastActiveAt: new Date() },
+    }).catch(() => {}); // fire-and-forget, don't block response
+
     // Check for latest incoming Wizz (for global notification even when conversation is closed)
     const convIds = participations.map(p => p.conversationId);
     const latestWizz = convIds.length > 0 ? await db.message.findFirst({
+
       where: {
         conversationId: { in: convIds },
         senderId: { not: user.id },

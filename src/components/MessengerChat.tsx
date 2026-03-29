@@ -307,15 +307,22 @@ const MessengerChat: React.FC = () => {
     } catch { /* silent */ }
   }, [api, activeConversationId]);
 
-  // Poll for new messages every 5s
+  // Poll for new messages every 5s, refresh friends every 30s for online status
+  const friendsPollCountRef = useRef(0);
   useEffect(() => {
     pollRef.current = setInterval(() => {
       fetchUnread();
       if (isListOpen || openChats.length > 0) fetchConversations();
       if (activeConversationId) fetchInlineMessages();
+      // Refresh friends list every 30s (every 6th poll) for online status updates
+      friendsPollCountRef.current++;
+      if (friendsPollCountRef.current >= 6) {
+        friendsPollCountRef.current = 0;
+        fetchFriends();
+      }
     }, 5000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [isListOpen, openChats, activeConversationId, fetchUnread, fetchConversations, fetchInlineMessages]);
+  }, [isListOpen, openChats, activeConversationId, fetchUnread, fetchConversations, fetchInlineMessages, fetchFriends]);
 
   // 🔊 Play notification sound when new unread messages arrive
   useEffect(() => {
