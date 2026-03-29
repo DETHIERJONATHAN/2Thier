@@ -254,7 +254,7 @@ router.post('/conversations/:id/messages', async (req: Request, res: Response): 
       select: { userId: true },
     });
     const senderName = `${message.sender.firstName} ${message.sender.lastName}`.trim();
-    const msgPreview = mediaType === 'wizz' ? '⚡ Wizz!' : content ? (content.length > 80 ? content.slice(0, 80) + '…' : content) : '📎 Média';
+    const msgPreview = mediaType === 'wizz' ? '😊~ Wizz!' : content ? (content.length > 80 ? content.slice(0, 80) + '…' : content) : '📎 Média';
     for (const p of otherParticipants) {
       sendPushToUser(p.userId, {
         title: `💬 ${senderName}`,

@@ -8,7 +8,6 @@ import {
   SendOutlined,
   UserOutlined,
   SearchOutlined,
-  ThunderboltOutlined,
   TeamOutlined,
   PhoneOutlined,
   VideoCameraOutlined,
@@ -18,6 +17,11 @@ import { useTranslation } from 'react-i18next';
 import VideoCallModal from './VideoCallModal';
 import TelnyxDialer from './TelnyxDialer';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
+
+/** MSN Wizz icon — uses the actual wizz.png */
+const WizzIcon = ({ size = 20 }: { size?: number }) => (
+  <img src="/wizz.png" alt="Wizz" width={size} height={size} style={{ objectFit: 'contain' }} />
+);
 import { useAuth } from '../auth/useAuth';
 import { useTelnyxCall, type TelnyxEligibility } from '../hooks/useTelnyxCall';
 import { useNotificationSound, playNotificationSound } from '../hooks/useNotificationSound';
@@ -406,7 +410,7 @@ const MessengerChat: React.FC = () => {
     setInlineSending(true);
     try {
       await api.post(`/api/messenger/conversations/${activeConversationId}/messages`, {
-        content: '⚡ Wizz!',  
+        content: '😊~ Wizz!',
         mediaType: 'wizz',
       });
       // Trigger own shake + sound
@@ -620,7 +624,7 @@ const MessengerChat: React.FC = () => {
                       color: '#fff', fontSize: 12, padding: '4px 14px', borderRadius: 12,
                       fontStyle: 'italic', opacity: 0.85,
                     }}>
-                      ⚡ {isMine ? t('messenger.wizzSent') : `${msg.sender.firstName} ${t('messenger.wizzReceived')}`}
+                      <span style={{ display: 'inline-flex', verticalAlign: 'middle', marginRight: 4 }}><WizzIcon size={16} /></span>{isMine ? t('messenger.wizzSent') : `${msg.sender.firstName} ${t('messenger.wizzReceived')}`}
                     </div>
                   </div>
                 );
@@ -706,7 +710,7 @@ const MessengerChat: React.FC = () => {
               onMouseEnter={e => { if (!wizzCooldownRef.current) e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = FB.hover; }}
               onMouseLeave={e => { e.currentTarget.style.opacity = wizzCooldownRef.current ? '0.3' : '0.7'; e.currentTarget.style.background = 'transparent'; }}
             >
-              <ThunderboltOutlined style={{ fontSize: 16, color: '#faad14' }} />
+              <WizzIcon size={24} />
             </div>
             <div
               onClick={sendInlineMessage}
@@ -930,7 +934,7 @@ const MessengerChat: React.FC = () => {
                   }}>
                     {conv.lastMessage ? (
                       conv.lastMessage.mediaType === 'wizz'
-                        ? (conv.lastMessage.senderId === user?.id ? `${t('messenger.youPrefix')}⚡ Wizz!` : '⚡ Wizz!')
+                        ? (conv.lastMessage.senderId === user?.id ? `${t('messenger.youPrefix')}😊~ Wizz!` : '😊~ Wizz!')
                         : conv.lastMessage.senderId === user?.id
                           ? `${t('messenger.youPrefix')}${conv.lastMessage.content || t('messenger.media')}`
                           : conv.lastMessage.content || t('messenger.media')
