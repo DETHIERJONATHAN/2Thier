@@ -528,8 +528,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Erreur transitoire (DB down, proxy, reboot serveur, réseau, 5xx): garder la session locale
         // et laisser la reconnexion se faire au prochain fetch.
         const status = apiError?.status;
-        const suffix = typeof status === 'number' ? ` (HTTP ${status})` : '';
-        msgApi.warning(`Serveur momentanément indisponible${suffix}. On réessaie automatiquement.`, 3);
+        const isNetworkError = !status && (e instanceof TypeError || (e as Error)?.message?.includes('fetch'));
+        if (isNetworkError) {
+          msgApi.warning('Connexion impossible. Si vous êtes sur un réseau d\'entreprise, demandez au service IT d\'autoriser zhiive.com', 5);
+        } else {
+          const suffix = typeof status === 'number' ? ` (HTTP ${status})` : '';
+          msgApi.warning(`Serveur momentanément indisponible${suffix}. On réessaie automatiquement.`, 3);
+        }
       }
     } finally {
       setLoading(false);

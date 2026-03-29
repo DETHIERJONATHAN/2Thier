@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Sitemap: https://www.zhiive.com/sitemap.xml
+
+# Zhiive - Professional Business Collaboration Platform
+# Contact: contact@zhiive.com
+# Category: Business Software

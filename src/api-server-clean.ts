@@ -393,9 +393,12 @@ if (process.env.NODE_ENV === 'production') {
       }
     }));
     
+    // Servir .well-known/ (security.txt etc.)
+    app.use('/.well-known', express.static(path.join(distDir, '.well-known')));
+    
     // 🔥 NOUVEAU: Servir TOUS les fichiers statiques de dist/ (images, JS, CSS, etc.)
     // Cette route intercepte les fichiers avec extension AVANT le catch-all SPA
-    app.get(/^\/[^/]+\.(png|jpg|jpeg|gif|svg|ico|webp|js|css|woff|woff2|ttf|eot|json|webmanifest|html|txt|xml)$/i, (req, res, next) => {
+    app.get(/^\/[^/]+\.(png|jpg|jpeg|gif|svg|ico|webp|js|css|woff|woff2|ttf|eot|json|webmanifest|html|txt|xml|mp3)$/i, (req, res, next) => {
       const filePath = path.join(distDir, req.path);
       if (fs.existsSync(filePath)) {
         // Définir le bon Content-Type selon l'extension
@@ -418,7 +421,8 @@ if (process.env.NODE_ENV === 'production') {
           '.webmanifest': 'application/manifest+json',
           '.html': 'text/html',
           '.txt': 'text/plain',
-          '.xml': 'application/xml'
+          '.xml': 'application/xml',
+          '.mp3': 'audio/mpeg'
         };
         if (mimeTypes[ext]) {
           res.setHeader('Content-Type', mimeTypes[ext]);
