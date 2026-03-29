@@ -3,6 +3,7 @@ import { useAuth } from '../auth/useAuth';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useModuleNavigation } from '../contexts/WallNavigationContext';
+import { useZhiiveNav } from '../contexts/ZhiiveNavContext';
 import { Avatar, Spin, message, Modal, Form, Input, Dropdown } from 'antd';
 import {
   UserOutlined, CameraOutlined, MailOutlined, PhoneOutlined,
@@ -12,6 +13,7 @@ import {
   EllipsisOutlined, DragOutlined, CheckOutlined, CloseOutlined,
   DeleteOutlined, PlayCircleOutlined, VideoCameraOutlined, PictureOutlined,
   ShopOutlined, UserAddOutlined, UserDeleteOutlined, MessageOutlined, StopOutlined,
+  GlobalOutlined, CalendarOutlined,
 } from '@ant-design/icons';
 import { WallPostCard, WallPostData } from './DashboardPageUnified';
 import HiveLiveTimeline from '../components/zhiive/HiveLiveTimeline';
@@ -34,6 +36,8 @@ const FB = {
   shadowHover: '0 2px 8px rgba(0,0,0,0.1)',
   radius: 8,
 };
+
+const ORG_COLOR = '#6C5CE7';
 
 /* ═══════════════════════════════════════════════════════════════
    RESPONSIVE HOOK
@@ -193,6 +197,7 @@ const ProfilePage = () => {
   const { userId: viewUserId } = useParams<{ userId?: string }>();
   const isViewingOther = !!viewUserId && viewUserId !== user?.id;
   const { moduleNavigate } = useModuleNavigation();
+  const { feedMode } = useZhiiveNav();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const orgLogoInputRef = useRef<HTMLInputElement>(null);
@@ -224,6 +229,43 @@ const ProfilePage = () => {
   const [mediaLoading, setMediaLoading] = useState(false);
   const [mediaFilter, setMediaFilter] = useState<string>('all'); // 'all', 'image', 'video'
   const [mediaCategoryFilter, setMediaCategoryFilter] = useState<string | null>(null);
+
+  // ═══ Profile view driven by global feedMode toggle ═══
+  const [colonyData, setColonyData] = useState<{
+    id: string; name: string; description: string | null; address: string | null;
+    email: string | null; phone: string | null; website: string | null;
+    logoUrl: string | null; vatNumber: string | null; createdAt: string;
+    memberCount: number; postCount: number;
+    members: { id: string; firstName: string; lastName: string; avatarUrl: string | null; role: string }[];
+  } | null>(null);
+  const [colonyLoading, setColonyLoading] = useState(false);
+  const [colonyPosts, setColonyPosts] = useState<WallPostData[]>([]);
+  const [colonyPostsLoading, setColonyPostsLoading] = useState(false);
+  const hasColony = !isViewingOther && !!currentOrganization;
+  const isColonyView = feedMode === 'org' && hasColony;
+
+  // Load colony data when switching to colony view
+  useEffect(() => {
+    if (!isColonyView || !currentOrganization?.id) return;
+    setColonyLoading(true);
+    api.get(`/api/organizations/public/${currentOrganization.id}`)
+      .then((r: any) => { setColonyData(r?.data || r); })
+      .catch(() => { message.error('Impossible de charger le profil Colony'); })
+      .finally(() => setColonyLoading(false));
+  }, [isColonyView, currentOrganization?.id, api]);
+
+  // Load colony wall posts when in colony view + publications tab
+  useEffect(() => {
+    if (!isColonyView || activeTab !== 'publications' || !currentOrganization?.id) return;
+    setColonyPostsLoading(true);
+    api.get('/api/wall/feed?mode=org&visibility=ALL')
+      .then((r: any) => {
+        const allPosts: WallPostData[] = r?.posts || [];
+        setColonyPosts(allPosts.filter((p: any) => p.publishAsOrg && p.organization?.id === currentOrganization.id));
+      })
+      .catch(() => setColonyPosts([]))
+      .finally(() => setColonyPostsLoading(false));
+  }, [isColonyView, activeTab, currentOrganization?.id, api]);
 
   // ═══ Friend request state ═══
   const [friendStatus, setFriendStatus] = useState<string | null>(null); // null | 'pending' | 'accepted' | 'blocked'
@@ -402,6 +444,7 @@ const ProfilePage = () => {
     try {
       const params = new URLSearchParams();
       params.set('limit', '10');
+      params.set('mode', feedMode);
       if (!reset && wallCursor) params.set('cursor', wallCursor);
       const r: any = await api.get(`/api/wall/my-feed?${params.toString()}`);
       const posts: WallPostData[] = r.posts || [];
@@ -410,7 +453,7 @@ const ProfilePage = () => {
       setWallHasMore(!!r.nextCursor);
     } catch { /* silently fail */ }
     finally { setWallLoading(false); }
-  }, [api, wallCursor, wallLoading]);
+  }, [api, wallCursor, wallLoading, feedMode]);
 
   useEffect(() => {
     if (user) fetchWallPosts(true);
@@ -628,6 +671,9 @@ const ProfilePage = () => {
     return items;
   }, [canInviteToColony, inviteLoading, currentOrganization?.name, currentOrganization?.id, friendStatus, profile, viewUserId]);
 
+  // Reset to about tab when switching feed mode (must be before early return)
+  useEffect(() => { setActiveTab('about'); }, [feedMode]);
+
   if (userLoading || loading) {
     return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}><Spin size="large" /></div>;
   }
@@ -637,7 +683,20 @@ const ProfilePage = () => {
   const displayOrg = isViewingOther ? (profile as any)?.organization : currentOrganization;
   const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ') || 'Utilisateur';
 
-  const tabs = [
+  // Colony view computed values
+  const cvName = isColonyView && colonyData ? colonyData.name : fullName;
+  const cvAvatar = isColonyView && colonyData ? colonyData.logoUrl : (profile.avatarUrl || undefined);
+  const cvAvatarFallback = isColonyView && colonyData ? (colonyData.name?.[0]?.toUpperCase() || 'C') : undefined;
+  const cvAvatarBg = isColonyView ? ORG_COLOR : '#2C5967';
+  const cvCoverGradient = isColonyView
+    ? `linear-gradient(135deg, ${ORG_COLOR} 0%, #a29bfe 100%)`
+    : 'linear-gradient(135deg, #1a4951 0%, #2C5967 30%, #3d7a8a 60%, #4a9aad 100%)';
+
+  const tabs = isColonyView ? [
+    { key: 'about', label: 'À propos' },
+    { key: 'publications', label: 'Publications' },
+    { key: 'members', label: `Membres${colonyData ? ` (${colonyData.memberCount})` : ''}` },
+  ] : [
     { key: 'about', label: 'À propos' },
     { key: 'publications', label: 'Publications' },
     { key: 'media', label: 'Médias' },
@@ -670,13 +729,15 @@ const ProfilePage = () => {
               position: 'relative',
               cursor: coverRepositioning ? (coverDragging ? 'grabbing' : 'grab') : 'default',
               userSelect: coverRepositioning ? 'none' : undefined,
-              background: !profile.coverUrl
-                ? 'linear-gradient(135deg, #1a4951 0%, #2C5967 30%, #3d7a8a 60%, #4a9aad 100%)'
-                : '#000',
+              background: isColonyView
+                ? cvCoverGradient
+                : (!profile.coverUrl
+                  ? 'linear-gradient(135deg, #1a4951 0%, #2C5967 30%, #3d7a8a 60%, #4a9aad 100%)'
+                  : '#000'),
             }}
           >
             {/* Cover image — <img> for object-position control */}
-            {profile.coverUrl && (
+            {!isColonyView && profile.coverUrl && (
               <img
                 src={profile.coverUrl}
                 alt="Couverture"
@@ -709,7 +770,7 @@ const ProfilePage = () => {
             )}
 
             {/* Bottom action buttons */}
-            {!isViewingOther && <div style={{
+            {!isViewingOther && !isColonyView && <div style={{
               position: 'absolute', bottom: isMobile ? 8 : 16, right: isMobile ? 8 : 16,
               display: 'flex', gap: 8,
             }}>
@@ -750,125 +811,46 @@ const ProfilePage = () => {
             {!isViewingOther && <input type="file" accept="image/*" onChange={handleCoverChange} ref={coverInputRef} style={{ display: 'none' }} />}
           </div>
 
-          {/* ─── MOBILE: avatar centré au-dessus du nom ─── */}
-          {isMobile ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '0 16px' }}>
-              {/* Avatar centré, chevauchant la cover */}
-              <div style={{ marginTop: -avatarOverlap, position: 'relative', zIndex: 2 }}>
-                <Avatar
-                  size={avatarSize}
-                  src={profile.avatarUrl || undefined}
-                  icon={!profile.avatarUrl ? <UserOutlined style={{ fontSize: 48 }} /> : undefined}
-                  style={{
-                    border: '4px solid white', background: '#2C5967',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)', fontSize: 48,
-                  }}
-                />
-                {!isViewingOther && <span
-                  onClick={() => fileInputRef.current?.click()}
-                  style={{
-                    position: 'absolute', bottom: 4, right: 4,
-                    width: cameraBtnSize, height: cameraBtnSize, borderRadius: '50%',
-                    background: FB.btnGray,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    cursor: 'pointer', border: 'none',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                  }}
-                >
-                  {avatarUploading ? <Spin size="small" /> : <CameraOutlined style={{ fontSize: 14, color: FB.text }} />}
-                </span>}
-                {!isViewingOther && <input type="file" accept="image/*" onChange={handleAvatarChange} ref={fileInputRef} style={{ display: 'none' }} />}
-              </div>
+          {/* ─── Avatar à gauche, nom à côté ─── */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', padding: isMobile ? '0 12px' : '0 16px', position: 'relative' }}>
+            <div style={{ marginTop: -avatarOverlap, position: 'relative', zIndex: 2 }}>
+              <Avatar
+                size={avatarSize}
+                src={cvAvatar}
+                icon={!cvAvatar && !cvAvatarFallback ? <UserOutlined style={{ fontSize: isMobile ? 48 : 64 }} /> : undefined}
+                style={{
+                  border: '4px solid white', background: !cvAvatar ? cvAvatarBg : undefined,
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)', fontSize: isMobile ? 48 : 64,
+                }}
+              >
+                {!cvAvatar && cvAvatarFallback}
+              </Avatar>
+              {!isViewingOther && !isColonyView && <span
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  position: 'absolute', bottom: isMobile ? 4 : 12, right: isMobile ? 4 : 12,
+                  width: cameraBtnSize, height: cameraBtnSize, borderRadius: '50%',
+                  background: FB.btnGray,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', border: 'none',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                }}
+              >
+                {avatarUploading ? <Spin size="small" /> : <CameraOutlined style={{ fontSize: isMobile ? 14 : 16, color: FB.text }} />}
+              </span>}
+              {!isViewingOther && <input type="file" accept="image/*" onChange={handleAvatarChange} ref={fileInputRef} style={{ display: 'none' }} />}
+            </div>
 
-              {/* Nom + rôle centré */}
-              <h1 style={{
-                fontSize: nameFontSize, fontWeight: 700, color: FB.text,
-                margin: '8px 0 0', textAlign: 'center', lineHeight: 1.2,
-              }}>{fullName}</h1>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 6, marginTop: 4,
-                flexWrap: 'wrap', justifyContent: 'center',
-                fontSize: 14, color: FB.textSecondary,
-              }}>
-                <span style={{ color: rl.color, fontWeight: 600 }}>{rl.icon} {rl.label}</span>
-                {displayOrg && (
-                  <>
-                    <span>·</span>
-                    <span onClick={() => navigate(`/colony/${displayOrg.id}`)} style={{ cursor: 'pointer' }}
-                      onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline'; }}
-                      onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none'; }}
-                    ><TeamOutlined style={{ marginRight: 4 }} />{displayOrg.name}</span>
-                  </>
-                )}
-              </div>
-              {!isViewingOther ? (
-                <div style={{ display: 'flex', gap: 8, marginTop: 12, marginBottom: 12, width: '100%', justifyContent: 'center' }}>
-                  <FBButton primary icon={<SettingOutlined />} onClick={() => moduleNavigate('/settings')} isMobile={isMobile} mobileIconOnly>
-                    Paramètres
-                  </FBButton>
-                  <FBButton icon={<EditOutlined />} onClick={() => moduleNavigate('/settings')} isMobile={isMobile} mobileIconOnly>
-                    Modifier
-                  </FBButton>
-                  {canFoundColony && <FBButton icon={<ShopOutlined />} onClick={() => setIsCreateOrgModalVisible(true)} isMobile={isMobile} mobileIconOnly
-                    style={{ background: '#0f766e', color: '#fff' }}>
-                    Business
-                  </FBButton>}
-                  <FBButton icon={<EllipsisOutlined />} />
+            <div style={{ marginLeft: isMobile ? 12 : 16, paddingBottom: isMobile ? 8 : 16, flex: 1, minWidth: 0 }}>
+              <h1 style={{ fontSize: nameFontSize, fontWeight: 700, color: FB.text, margin: 0, lineHeight: 1.2 }}>{cvName}</h1>
+              {isColonyView && colonyData ? (
+                <div style={{ fontSize: isMobile ? 13 : 15, color: FB.textSecondary, marginTop: 4 }}>
+                  <TeamOutlined style={{ marginRight: 4 }} />{colonyData.memberCount} membre{colonyData.memberCount > 1 ? 's' : ''}
+                  <span style={{ margin: '0 8px' }}>·</span>
+                  {colonyData.postCount} publication{colonyData.postCount > 1 ? 's' : ''}
                 </div>
               ) : (
-                <div style={{ display: 'flex', gap: 8, marginTop: 12, marginBottom: 12, width: '100%', justifyContent: 'center' }}>
-                  {(() => { const fp = getFriendButtonProps(); return (
-                    <FBButton primary={fp.primary} icon={fp.icon} onClick={handleFriendAction} isMobile={isMobile}
-                      style={friendStatus === 'blocked' ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}>
-                      {friendLoading ? <Spin size="small" /> : fp.label}
-                    </FBButton>
-                  ); })()}
-                  {friendStatus === 'pending' && friendDirection === 'received' && (
-                    <FBButton icon={<CloseOutlined />} onClick={() => { if (friendshipId) api.delete(`/api/friends/${friendshipId}`).then(() => { setFriendStatus(null); setFriendshipId(null); setFriendDirection(null); message.info('Demande refusée'); }); }} isMobile={isMobile}>
-                      Refuser
-                    </FBButton>
-                  )}
-                  <FBButton icon={<MessageOutlined />} onClick={handleOpenMessenger} isMobile={isMobile} mobileIconOnly>
-                    Message
-                  </FBButton>
-                  <Dropdown menu={{ items: profileMoreMenuItems }} trigger={['click']} placement="bottomRight">
-                    <span><FBButton icon={<EllipsisOutlined />} /></span>
-                  </Dropdown>
-                </div>
-              )}
-            </div>
-          ) : (
-            /* ─── DESKTOP: avatar à gauche, nom à côté ─── */
-            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', padding: '0 16px', position: 'relative' }}>
-              <div style={{ marginTop: -avatarOverlap, position: 'relative', zIndex: 2 }}>
-                <Avatar
-                  size={avatarSize}
-                  src={profile.avatarUrl || undefined}
-                  icon={!profile.avatarUrl ? <UserOutlined style={{ fontSize: 64 }} /> : undefined}
-                  style={{
-                    border: '4px solid white', background: '#2C5967',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)', fontSize: 64,
-                  }}
-                />
-                {!isViewingOther && <span
-                  onClick={() => fileInputRef.current?.click()}
-                  style={{
-                    position: 'absolute', bottom: 12, right: 12,
-                    width: cameraBtnSize, height: cameraBtnSize, borderRadius: '50%',
-                    background: FB.btnGray,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    cursor: 'pointer', border: 'none',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                  }}
-                >
-                  {avatarUploading ? <Spin size="small" /> : <CameraOutlined style={{ fontSize: 16, color: FB.text }} />}
-                </span>}
-                {!isViewingOther && <input type="file" accept="image/*" onChange={handleAvatarChange} ref={fileInputRef} style={{ display: 'none' }} />}
-              </div>
-
-              <div style={{ marginLeft: 16, paddingBottom: 16, flex: 1, minWidth: 200 }}>
-                <h1 style={{ fontSize: nameFontSize, fontWeight: 700, color: FB.text, margin: 0, lineHeight: 1.2 }}>{fullName}</h1>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap', fontSize: 15, color: FB.textSecondary }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 6 : 8, marginTop: 4, flexWrap: 'wrap', fontSize: isMobile ? 13 : 15, color: FB.textSecondary }}>
                   <span style={{ color: rl.color, fontWeight: 600 }}>{rl.icon} {rl.label}</span>
                   {displayOrg && (
                     <>
@@ -880,37 +862,37 @@ const ProfilePage = () => {
                     </>
                   )}
                 </div>
-              </div>
-
-              {!isViewingOther ? (
-                <div style={{ display: 'flex', gap: 8, paddingBottom: 16, alignItems: 'flex-end' }}>
-                  <FBButton primary icon={<SettingOutlined />} onClick={() => moduleNavigate('/settings')}>Paramètres</FBButton>
-                  <FBButton icon={<EditOutlined />} onClick={() => moduleNavigate('/settings')}>Modifier</FBButton>
-                  {canFoundColony && <FBButton icon={<ShopOutlined />} onClick={() => setIsCreateOrgModalVisible(true)}
-                    style={{ background: '#0f766e', color: '#fff' }}>Business</FBButton>}
-                  <FBButton icon={<EllipsisOutlined />} />
-                </div>
-              ) : (
-                <div style={{ display: 'flex', gap: 8, paddingBottom: 16, alignItems: 'flex-end' }}>
-                  {(() => { const fp = getFriendButtonProps(); return (
-                    <FBButton primary={fp.primary} icon={fp.icon} onClick={handleFriendAction}
-                      style={friendStatus === 'blocked' ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}>
-                      {friendLoading ? <Spin size="small" /> : fp.label}
-                    </FBButton>
-                  ); })()}
-                  {friendStatus === 'pending' && friendDirection === 'received' && (
-                    <FBButton icon={<CloseOutlined />} onClick={() => { if (friendshipId) api.delete(`/api/friends/${friendshipId}`).then(() => { setFriendStatus(null); setFriendshipId(null); setFriendDirection(null); message.info('Demande refusée'); }); }}>
-                      Refuser
-                    </FBButton>
-                  )}
-                  <FBButton icon={<MessageOutlined />} onClick={handleOpenMessenger}>Message</FBButton>
-                  <Dropdown menu={{ items: profileMoreMenuItems }} trigger={['click']} placement="bottomRight">
-                    <span><FBButton icon={<EllipsisOutlined />} /></span>
-                  </Dropdown>
-                </div>
               )}
             </div>
-          )}
+
+            {!isViewingOther ? (
+              <div style={{ display: 'flex', gap: 8, paddingBottom: isMobile ? 8 : 16, alignItems: 'flex-end' }}>
+                <FBButton primary icon={<SettingOutlined />} onClick={() => moduleNavigate('/settings')} isMobile={isMobile} mobileIconOnly>Paramètres</FBButton>
+                <FBButton icon={<EditOutlined />} onClick={() => moduleNavigate('/settings')} isMobile={isMobile} mobileIconOnly>Modifier</FBButton>
+                {canFoundColony && <FBButton icon={<ShopOutlined />} onClick={() => setIsCreateOrgModalVisible(true)} isMobile={isMobile} mobileIconOnly
+                  style={{ background: '#0f766e', color: '#fff' }}>Business</FBButton>}
+                <FBButton icon={<EllipsisOutlined />} />
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 8, paddingBottom: isMobile ? 8 : 16, alignItems: 'flex-end' }}>
+                {(() => { const fp = getFriendButtonProps(); return (
+                  <FBButton primary={fp.primary} icon={fp.icon} onClick={handleFriendAction} isMobile={isMobile}
+                    style={friendStatus === 'blocked' ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}>
+                    {friendLoading ? <Spin size="small" /> : fp.label}
+                  </FBButton>
+                ); })()}
+                {friendStatus === 'pending' && friendDirection === 'received' && (
+                  <FBButton icon={<CloseOutlined />} onClick={() => { if (friendshipId) api.delete(`/api/friends/${friendshipId}`).then(() => { setFriendStatus(null); setFriendshipId(null); setFriendDirection(null); message.info('Demande refusée'); }); }} isMobile={isMobile} mobileIconOnly>
+                    Refuser
+                  </FBButton>
+                )}
+                <FBButton icon={<MessageOutlined />} onClick={handleOpenMessenger} isMobile={isMobile} mobileIconOnly>Message</FBButton>
+                <Dropdown menu={{ items: profileMoreMenuItems }} trigger={['click']} placement="bottomRight">
+                  <span><FBButton icon={<EllipsisOutlined />} /></span>
+                </Dropdown>
+              </div>
+            )}
+          </div>
 
           {/* Separator */}
           <div style={{ borderTop: `1px solid ${FB.border}`, margin: '0 16px' }} />
@@ -951,7 +933,95 @@ const ProfilePage = () => {
         width: '100%',
         padding: isMobile ? '12px 8px 32px' : '16px 16px 40px',
       }}>
-        {activeTab === 'about' && (
+        {activeTab === 'about' && isColonyView && colonyData && (
+          <div style={{
+            display: 'flex',
+            flexDirection: isMobile ? 'column' : 'row',
+            gap: 16,
+            alignItems: 'flex-start',
+            maxWidth: 940, margin: '0 auto',
+          }}>
+            {/* LEFT: Colony info */}
+            <div style={{
+              position: isMobile ? 'static' : 'sticky', top: 56,
+              width: isMobile ? '100%' : 360, flexShrink: 0, alignSelf: 'flex-start',
+            }}>
+              {colonyData.description && (
+                <FBCard title="Description">
+                  <p style={{ fontSize: 15, color: FB.text, lineHeight: 1.5, margin: 0 }}>{colonyData.description}</p>
+                </FBCard>
+              )}
+              <FBCard title="Informations">
+                {colonyData.address && <InfoLine icon={<HomeOutlined />}>{colonyData.address}</InfoLine>}
+                {colonyData.email && <InfoLine icon={<MailOutlined />}><span style={{ color: FB.blue }}>{colonyData.email}</span></InfoLine>}
+                {colonyData.phone && <InfoLine icon={<PhoneOutlined />}>{colonyData.phone}</InfoLine>}
+                {colonyData.website && (
+                  <InfoLine icon={<GlobalOutlined />}>
+                    <a href={colonyData.website.startsWith('http') ? colonyData.website : `https://${colonyData.website}`}
+                      target="_blank" rel="noopener noreferrer" style={{ color: FB.blue }}>
+                      {colonyData.website}
+                    </a>
+                  </InfoLine>
+                )}
+                {colonyData.vatNumber && <InfoLine icon={<BankOutlined />}>TVA : {colonyData.vatNumber}</InfoLine>}
+                <InfoLine icon={<CalendarOutlined />}>
+                  Fondée le {new Date(colonyData.createdAt).toLocaleDateString('fr-BE', { day: 'numeric', month: 'long', year: 'numeric' })}
+                </InfoLine>
+              </FBCard>
+            </div>
+            {/* RIGHT: Summary + members preview */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <FBCard title="Résumé">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div style={{ background: FB.bg, borderRadius: 8, padding: 20, textAlign: 'center' }}>
+                    <TeamOutlined style={{ fontSize: 28, color: ORG_COLOR }} />
+                    <div style={{ fontSize: 22, fontWeight: 700, color: FB.text, marginTop: 8 }}>{colonyData.memberCount}</div>
+                    <div style={{ fontSize: 13, color: FB.textSecondary }}>Membre{colonyData.memberCount > 1 ? 's' : ''}</div>
+                  </div>
+                  <div style={{ background: FB.bg, borderRadius: 8, padding: 20, textAlign: 'center' }}>
+                    <LinkOutlined style={{ fontSize: 28, color: FB.blue }} />
+                    <div style={{ fontSize: 22, fontWeight: 700, color: FB.text, marginTop: 8 }}>{colonyData.postCount}</div>
+                    <div style={{ fontSize: 13, color: FB.textSecondary }}>Publication{colonyData.postCount > 1 ? 's' : ''}</div>
+                  </div>
+                </div>
+              </FBCard>
+              <FBCard title={`Membres (${colonyData.memberCount})`}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                  {colonyData.members.slice(0, 6).map(m => (
+                    <div key={m.id} onClick={() => navigate(`/profile/${m.id}`)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
+                        borderRadius: 8, background: FB.bg, cursor: 'pointer',
+                        flex: '1 1 calc(50% - 6px)', minWidth: 160, transition: 'background 0.15s',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = FB.btnGray; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = FB.bg; }}
+                    >
+                      <Avatar size={36} src={m.avatarUrl} icon={!m.avatarUrl ? <UserOutlined /> : undefined}
+                        style={{ backgroundColor: !m.avatarUrl ? FB.blue : undefined, flexShrink: 0 }}>
+                        {!m.avatarUrl && (m.firstName?.[0] || '?')}
+                      </Avatar>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: FB.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {[m.firstName, m.lastName].filter(Boolean).join(' ')}
+                        </div>
+                        <div style={{ fontSize: 12, color: FB.textSecondary }}>{m.role}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {colonyData.memberCount > 6 && (
+                  <div onClick={() => setActiveTab('members')}
+                    style={{ textAlign: 'center', paddingTop: 12, fontSize: 14, fontWeight: 600, color: FB.blue, cursor: 'pointer' }}>
+                    Voir tous les membres
+                  </div>
+                )}
+              </FBCard>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'about' && !isColonyView && (
           <div style={{
             display: 'flex',
             flexDirection: isMobile ? 'column' : 'row',
@@ -1196,7 +1266,43 @@ const ProfilePage = () => {
           </div>
         )}
 
-        {activeTab === 'publications' && (
+        {activeTab === 'publications' && isColonyView && (
+          <div style={{ maxWidth: 680, margin: '0 auto' }}>
+            {colonyPostsLoading ? (
+              <div style={{ textAlign: 'center', padding: 40 }}><Spin size="large" /></div>
+            ) : colonyPosts.length === 0 ? (
+              <div style={{
+                background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow,
+                padding: 40, textAlign: 'center', color: FB.textSecondary,
+              }}>
+                Aucune publication pour cette Colony.
+              </div>
+            ) : (
+              colonyPosts.map(post => (
+                <WallPostCard
+                  key={post.id}
+                  post={post}
+                  isMobile={isMobile}
+                  currentUserId={user?.id || ''}
+                  currentUser={user ? { id: user.id, firstName: user.firstName, lastName: user.lastName, avatarUrl: user.avatarUrl } : undefined}
+                  api={api}
+                  onUpdate={() => {
+                    setColonyPostsLoading(true);
+                    api.get('/api/wall/feed?mode=org&visibility=ALL')
+                      .then((r: any) => {
+                        const allPosts: WallPostData[] = r?.posts || [];
+                        setColonyPosts(allPosts.filter((p: any) => p.publishAsOrg && p.organization?.id === currentOrganization?.id));
+                      })
+                      .catch(() => setColonyPosts([]))
+                      .finally(() => setColonyPostsLoading(false));
+                  }}
+                />
+              ))
+            )}
+          </div>
+        )}
+
+        {activeTab === 'publications' && !isColonyView && (
           <div style={{
             maxWidth: 680, margin: '0 auto',
           }}>
@@ -1608,6 +1714,36 @@ const ProfilePage = () => {
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'members' && isColonyView && colonyData && (
+          <div style={{ maxWidth: 940, margin: '0 auto' }}>
+            <FBCard title={`Tous les membres (${colonyData.memberCount})`}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 12 }}>
+                {colonyData.members.map(m => (
+                  <div key={m.id} onClick={() => navigate(`/profile/${m.id}`)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 12, padding: 12,
+                      borderRadius: 8, background: FB.bg, cursor: 'pointer', transition: 'background 0.15s',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = FB.btnGray; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = FB.bg; }}
+                  >
+                    <Avatar size={48} src={m.avatarUrl} icon={!m.avatarUrl ? <UserOutlined /> : undefined}
+                      style={{ backgroundColor: !m.avatarUrl ? FB.blue : undefined, flexShrink: 0 }}>
+                      {!m.avatarUrl && (m.firstName?.[0] || '?')}
+                    </Avatar>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 15, fontWeight: 600, color: FB.text }}>
+                        {[m.firstName, m.lastName].filter(Boolean).join(' ')}
+                      </div>
+                      <div style={{ fontSize: 13, color: FB.textSecondary }}>{m.role}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </FBCard>
           </div>
         )}
 

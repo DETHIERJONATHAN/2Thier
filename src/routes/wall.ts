@@ -166,13 +166,20 @@ router.get('/feed', authenticateToken, async (req: Request, res: Response) => {
 router.get('/my-feed', authenticateToken, async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
-    const { cursor, limit = '20' } = req.query;
+    const { cursor, limit = '20', mode } = req.query;
     const take = Math.min(parseInt(limit as string) || 20, 50);
 
     const where: any = {
       isPublished: true,
       authorId: user.id,
     };
+
+    // Filter by identity mode: personal shows only personal posts, org shows only org posts
+    if (mode === 'personal') {
+      where.publishAsOrg = false;
+    } else if (mode === 'org') {
+      where.publishAsOrg = true;
+    }
 
     if (cursor) where.createdAt = { lt: new Date(cursor as string) };
 

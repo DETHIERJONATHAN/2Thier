@@ -586,9 +586,22 @@ router.get('/sparks', authenticateToken, async (req: Request, res: Response) => 
     const userId = (req as any).user.id;
     const orgId = (req as any).user.organizationId;
     const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+    const mode = (req.query.mode as string) || 'org';
+
+    const whereClause: any = {};
+    if (mode === 'personal' || !orgId) {
+      // Personal mode: public sparks + own sparks
+      whereClause.OR = [
+        { visibility: 'ALL' },
+        { authorId: userId },
+      ];
+    } else {
+      // Org mode: sparks from own org
+      whereClause.organizationId = orgId;
+    }
 
     const sparks = await db.spark.findMany({
-      where: { organizationId: orgId },
+      where: whereClause,
       orderBy: { createdAt: 'desc' },
       take: limit,
       include: {
@@ -620,9 +633,10 @@ router.post('/sparks', authenticateToken, async (req: Request, res: Response) =>
     const userId = (req as any).user.id;
     const orgId = (req as any).user.organizationId;
     const { content } = createSparkSchema.parse(req.body);
+    const publishAsOrg = req.body.publishAsOrg && !!orgId ? true : false;
 
     const spark = await db.spark.create({
-      data: { content, authorId: userId, organizationId: orgId },
+      data: { content, authorId: userId, organizationId: orgId, publishAsOrg },
     });
     res.json({ spark });
   } catch (e: any) {
@@ -668,10 +682,22 @@ router.post('/sparks/:sparkId/vote', authenticateToken, async (req: Request, res
 router.get('/battles', authenticateToken, async (req: Request, res: Response) => {
   try {
     const orgId = (req as any).user.organizationId;
+    const userId = (req as any).user.id;
     const limit = Math.min(parseInt(req.query.limit as string) || 10, 30);
+    const mode = (req.query.mode as string) || 'org';
+
+    const whereClause: any = {};
+    if (mode === 'personal' || !orgId) {
+      whereClause.OR = [
+        { challengerId: userId },
+        { opponentId: userId },
+      ];
+    } else {
+      whereClause.organizationId = orgId;
+    }
 
     const battles = await db.battle.findMany({
-      where: { organizationId: orgId },
+      where: whereClause,
       orderBy: { createdAt: 'desc' },
       take: limit,
       include: {
@@ -715,6 +741,7 @@ router.post('/battles', authenticateToken, async (req: Request, res: Response) =
         challengerId: userId,
         opponentId: opponentId || null,
         organizationId: orgId,
+        publishAsOrg: req.body.publishAsOrg && !!orgId ? true : false,
         endsAt: endsAt ? new Date(endsAt) : new Date(Date.now() + 48 * 60 * 60 * 1000),
       },
     });

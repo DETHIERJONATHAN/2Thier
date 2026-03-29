@@ -295,13 +295,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       {
         key: 'profile',
         icon: <UserOutlined />,
-        label: <NavLink to="/profile">Mon Profil</NavLink>
+        label: <NavLink to="/profile">Profil</NavLink>
       },
-      ...(currentOrganization ? [{
-        key: 'colony-profile',
-        icon: <TeamOutlined />,
-        label: <NavLink to={`/colony/${currentOrganization.id}`}>Profil Colony</NavLink>
-      }] : []),
       {
         key: 'settings',
         icon: <SettingOutlined />,

@@ -896,15 +896,25 @@ router.get('/quests/available', authenticateToken, async (req: Request, res: Res
 router.get('/pulse', authenticateToken, async (req: Request, res: Response) => {
   try {
     const orgId = (req as any).user.organizationId;
+    const userId = (req as any).user.id;
+    const mode = (req.query.mode as string) || 'org';
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-    const whereOrg = orgId ? { organizationId: orgId } : {};
+    // In personal mode or no org: count only user's own activity
+    // In org mode: count org-wide activity
+    const whereOrg = (mode === 'personal' || !orgId)
+      ? { authorId: userId }
+      : { organizationId: orgId };
+    const whereReaction = (mode === 'personal' || !orgId)
+      ? { post: { authorId: userId } }
+      : { post: { organizationId: orgId } };
+    const whereComment = whereReaction;
 
     // Count recent activity in parallel
     const [postsCount, reactionsCount, commentsCount, storiesCount] = await Promise.all([
       db.wallPost.count({ where: { ...whereOrg, createdAt: { gte: sevenDaysAgo } } }),
-      db.reaction.count({ where: { createdAt: { gte: sevenDaysAgo }, post: whereOrg } }),
-      db.comment.count({ where: { createdAt: { gte: sevenDaysAgo }, post: whereOrg } }),
+      db.reaction.count({ where: { createdAt: { gte: sevenDaysAgo }, ...whereReaction } }),
+      db.comment.count({ where: { createdAt: { gte: sevenDaysAgo }, ...whereComment } }),
       db.story.count({ where: { ...whereOrg, createdAt: { gte: sevenDaysAgo } } }),
     ]);
 
@@ -1044,33 +1054,51 @@ router.delete('/events/:eventId/rsvp', authenticateToken, async (req: Request, r
 router.get('/capsules', authenticateToken, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.id;
+    const orgId = (req as any).user.organizationId;
+    const mode = (req.query.mode as string) || 'org';
     const limit = Math.min(parseInt(req.query.limit as string) || 10, 30);
 
+    const whereClause: any = {};
+    if (mode === 'personal' || !orgId) {
+      // Personal mode: capsules created by user without org, or addressed to user
+      whereClause.OR = [
+        { authorId: userId, organizationId: null },
+        { recipientId: userId },
+      ];
+    } else {
+      // Org mode: capsules from own org + addressed to user
+      whereClause.OR = [
+        { organizationId: orgId },
+        { recipientId: userId },
+      ];
+    }
+
     const capsules = await db.timeCapsule.findMany({
-      where: {
-        OR: [
-          { authorId: userId },
-          { recipientId: userId },
-        ],
-      },
+      where: whereClause,
       orderBy: { unlocksAt: 'asc' },
       take: limit,
       include: {
         author: { select: { firstName: true, lastName: true, avatarUrl: true } },
         recipient: { select: { firstName: true, lastName: true } },
+        organization: { select: { id: true, name: true, logoUrl: true } },
       },
     });
 
     res.json({
-      capsules: capsules.map(c => ({
-        id: c.id,
-        content: c.content,
-        creatorName: `${c.author.firstName} ${c.author.lastName}`.trim(),
-        creatorAvatar: c.author.avatarUrl,
-        unlocksAt: c.unlocksAt,
-        isUnlocked: c.isOpened || new Date(c.unlocksAt) <= new Date(),
-        recipientName: c.recipient ? `${c.recipient.firstName} ${c.recipient.lastName}`.trim() : undefined,
-      })),
+      capsules: capsules.map(c => {
+        const isOrg = c.publishAsOrg && c.organization;
+        return {
+          id: c.id,
+          content: c.content,
+          creatorName: isOrg ? c.organization!.name : `${c.author.firstName} ${c.author.lastName}`.trim(),
+          creatorAvatar: isOrg ? (c.organization!.logoUrl || null) : c.author.avatarUrl,
+          publishAsOrg: c.publishAsOrg,
+          organizationId: c.organization?.id || null,
+          unlocksAt: c.unlocksAt,
+          isUnlocked: c.isOpened || new Date(c.unlocksAt) <= new Date(),
+          recipientName: c.recipient ? `${c.recipient.firstName} ${c.recipient.lastName}`.trim() : undefined,
+        };
+      }),
     });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -1091,6 +1119,7 @@ router.post('/capsules', authenticateToken, async (req: Request, res: Response) 
         unlocksAt: new Date(unlocksAt),
         authorId: userId,
         organizationId: publishAsOrg && orgId ? orgId : null,
+        publishAsOrg: publishAsOrg && !!orgId ? true : false,
         recipientId: recipientId || null,
       },
     });
@@ -1105,6 +1134,8 @@ router.post('/capsules', authenticateToken, async (req: Request, res: Response) 
 router.get('/orbit', authenticateToken, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.id;
+    const orgId = (req as any).user.organizationId;
+    const mode = (req.query.mode as string) || 'org';
 
     // Get friends with interaction frequency
     const friendships = await db.friendship.findMany({
@@ -1113,13 +1144,21 @@ router.get('/orbit', authenticateToken, async (req: Request, res: Response) => {
         OR: [{ requesterId: userId }, { addresseeId: userId }],
       },
       include: {
-        requester: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
-        addressee: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+        requester: { select: { id: true, firstName: true, lastName: true, avatarUrl: true, organizationId: true } },
+        addressee: { select: { id: true, firstName: true, lastName: true, avatarUrl: true, organizationId: true } },
       },
     });
 
+    // In org mode, filter to only friends in the same organization
+    const filteredFriendships = (mode === 'org' && orgId)
+      ? friendships.filter(f => {
+          const friend = f.requesterId === userId ? f.addressee : f.requester;
+          return friend.organizationId === orgId;
+        })
+      : friendships;
+
     // Get all friend user IDs to batch-fetch online status
-    const friendUserIds = friendships.map(f => f.requesterId === userId ? f.addresseeId : f.requesterId);
+    const friendUserIds = filteredFriendships.map(f => f.requesterId === userId ? f.addresseeId : f.requesterId);
 
     // Batch fetch streaks for online status (active within last 5 minutes)
     const streaks = await db.userStreak.findMany({
@@ -1130,7 +1169,7 @@ router.get('/orbit', authenticateToken, async (req: Request, res: Response) => {
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
 
     // Compute real interaction scores based on reactions and comments
-    const friends = await Promise.all(friendships.map(async (f) => {
+    const friends = await Promise.all(filteredFriendships.map(async (f) => {
       const friend = f.requesterId === userId ? f.addressee : f.requester;
 
       // Count mutual interactions: reactions on each other's posts + comments

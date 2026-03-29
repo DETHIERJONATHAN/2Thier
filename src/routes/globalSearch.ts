@@ -32,7 +32,7 @@ const TABLE_META: Record<string, TableConfig> = {
   CalendarEvent:     { category: 'events',     label: 'Événement',       icon: 'calendar',  routeFn: id => `/calendar?event=${id}`,   labelCols: ['title'], descCols: ['description', 'location', 'type'] },
   Module:            { category: 'modules',    label: 'Module',          icon: 'appstore',  routeFn: id => `/dashboard?module=${id}`, labelCols: ['label', 'key'], descCols: ['description', 'feature'] },
   Product:           { category: 'products',   label: 'Produit',         icon: 'appstore',  routeFn: id => `/products/${id}`,         labelCols: ['name', 'label'], descCols: ['description', 'category'] },
-  Organization:      { category: 'orgs',       label: 'Organisation',    icon: 'appstore',  routeFn: id => `/organizations/${id}`,    labelCols: ['name'], descCols: ['domain', 'email'] },
+  Organization:      { category: 'orgs',       label: 'Colony',          icon: 'team',      routeFn: id => `/colony/${id}`,           labelCols: ['name'], descCols: ['domain', 'email'] },
   Order:             { category: 'orders',     label: 'Commande',        icon: 'file-text', routeFn: id => `/orders/${id}`,           labelCols: ['orderNumber', 'title'], descCols: ['status', 'notes'] },
   JoinRequest:       { category: 'requests',   label: 'Demande',         icon: 'user',      routeFn: () => `/admin/join-requests`,    labelCols: ['req_name'], descCols: ['addr_name', 'status', 'source'] },
   contact_submissions: { category: 'contacts', label: 'Contact',         icon: 'contacts',  routeFn: id => `/contacts/${id}`,         labelCols: ['name', 'email'], descCols: ['phone', 'message'] },
@@ -197,6 +197,27 @@ router.get('/global', async (req: Request, res: Response): Promise<void> => {
     }
 
     const total = rawResults.length;
+
+    // ── Phase 5 : Dédoublonnage des noms identiques ──
+    // Pour chaque catégorie (users, leads, etc.), si 2+ résultats ont le même _label,
+    // on ajoute un suffixe tiré de la description pour les distinguer
+    for (const cat of Object.keys(grouped)) {
+      const items = grouped[cat];
+      const labelCounts = new Map<string, number>();
+      for (const item of items) {
+        labelCounts.set(item._label, (labelCounts.get(item._label) || 0) + 1);
+      }
+      for (const item of items) {
+        if ((labelCounts.get(item._label) || 0) > 1 && item._desc) {
+          // Extract first useful part of description as suffix
+          const suffix = item._desc.split(' · ')[0]?.trim();
+          if (suffix && suffix.length > 0 && suffix.length < 50) {
+            item._label = `${item._label} (${suffix})`;
+          }
+        }
+      }
+    }
+
     res.json({ results: grouped, query: q, total });
 
   } catch (err) {

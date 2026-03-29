@@ -4176,6 +4176,7 @@ model Battle {
   challengerId   String
   opponentId     String?                  // null = ouvert à tous
   status         String    @default("open") // open, active, voting, ended
+  publishAsOrg   Boolean   @default(false)
   startsAt       DateTime  @default(now())
   endsAt         DateTime                 // deadline
   winnerId       String?
@@ -4217,6 +4218,7 @@ model TimeCapsule {
   content        String?
   mediaUrl       String?
   mediaType      String?
+  publishAsOrg   Boolean   @default(false)
   unlocksAt      DateTime         // date d'ouverture
   isOpened       Boolean   @default(false)
   recipientId    String?          // null = public, sinon destinataire
