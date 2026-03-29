@@ -50,6 +50,7 @@ const LazyTreesAdminPage = React.lazy(() => import('./admin/TreesAdminPage'));
 const LazyWebsitesAdminPage = React.lazy(() => import('./admin/WebsitesAdminPage'));
 const LazyProfilePage = React.lazy(() => import('./ProfilePage'));
 const LazySettingsPageEmbedded = React.lazy(() => import('./SettingsPageEmbedded'));
+const LazySocialSettingsAdminPage = React.lazy(() => import('./admin/SocialSettingsAdminPage'));
 
 /* ═══════════════════════════════════════════════════════════════
    ZHIIVE — Lazy-loaded panel components
@@ -103,6 +104,7 @@ const MODULE_COMPONENTS: Record<string, React.LazyExoticComponent<any>> = {
   '/admin/users': LazyUsersAdminPage,
   '/admin/organizations': LazyOrganizationsAdminPage,
   '/admin/permissions': LazyPermissionsAdminPage,
+  '/admin/social-settings': LazySocialSettingsAdminPage,
   '/admin/integrations': LazyIntegrationsAdminPage,
   '/admin/trees': LazyTreesAdminPage,
   '/admin/sites-web': LazyWebsitesAdminPage,

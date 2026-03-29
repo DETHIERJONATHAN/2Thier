@@ -87,6 +87,7 @@ const IntegrationsAdminPage = lazy(() => import('./pages/admin/IntegrationsAdmin
 const UserRightsSummaryPage = lazy(() => import('./pages/admin/UserRightsSummaryPage'));
 const TreesAdminPage = lazy(() => import('./pages/admin/TreesAdminPage'));
 const AuthDebugPage = lazy(() => import('./pages/admin/AuthDebugPage'));
+const SocialSettingsAdminPage = lazy(() => import('./pages/admin/SocialSettingsAdminPage'));
 const ArchitectIAPanel = lazy(() => import('./components/ArchitectIAPanel'));
 
 // Pages settings et profil
@@ -295,6 +296,7 @@ export default function AppLayout() {
             {isSuperAdmin && <Route path="/admin/integrations" element={<IntegrationsAdminPage />} />}
             {isSuperAdmin && <Route path="/admin/trees" element={<TreesAdminPage />} />}
             {isSuperAdmin && <Route path="/admin/architect" element={<ArchitectIAPanel />} />}
+            {isSuperAdmin && <Route path="/admin/social-settings" element={<SocialSettingsAdminPage />} />}
             
             {/* Routes Admin Devis1Minute (nouvelles) */}
             {isSuperAdmin && <Route path="/devis1minute/admin/dashboard" element={<Devis1minuteAdminDashboard />} />}

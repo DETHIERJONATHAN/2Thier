@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
+import { getSocialContext, buildWallFeedWhere, FeedMode } from '../lib/feed-visibility';
 import { z } from 'zod';
 import path from 'path';
 import fs from 'fs/promises';
@@ -56,45 +57,32 @@ router.get('/feed', authenticateToken, async (req: Request, res: Response) => {
 
     const take = Math.min(parseInt(limit as string) || 20, 50);
 
-    // Construire le filtre
-    const where: any = {
-      isPublished: true,
-    };
-
-    // Filtrage par visibilité
-    if (visibility) {
-      where.visibility = visibility;
+    // ═══ Système centralisé de visibilité (feed-visibility.ts) ═══
+    const feedMode: FeedMode = (mode as string) === 'personal' ? 'personal' 
+      : (mode as string) === 'public' ? 'public' 
+      : 'org';
+    
+    const isSuperAdmin = user.role === 'super_admin' || user.isSuperAdmin;
+    const socialCtx = await getSocialContext(user.id, orgId, isSuperAdmin);
+    
+    // Client mode keeps its own specific logic
+    let where: any;
+    if (user.role === 'client') {
+      where = {
+        isPublished: true,
+        OR: [
+          { visibility: 'IN', organizationId: orgId },
+          { visibility: 'ALL' },
+          { visibility: 'CLIENT', targetLeadId: user.linkedLeadId },
+        ],
+      };
+    } else if (visibility) {
+      // Explicit visibility filter
+      where = { isPublished: true, visibility };
       if (orgId) where.organizationId = orgId;
-    } else if (user.role === 'client') {
-      // Client voit : ses posts CLIENT + posts IN/ALL de son org
-      where.OR = [
-        { visibility: 'IN', organizationId: orgId },
-        { visibility: 'ALL' },
-        { visibility: 'CLIENT', targetLeadId: user.linkedLeadId },
-      ];
-    } else if (!orgId && user.isSuperAdmin) {
-      // Super admin sans org → tout
-    } else if (!orgId) {
-      // Free user sans org → posts ALL personnels + ses propres posts
-      where.OR = [
-        { visibility: 'ALL', publishAsOrg: false },
-        { authorId: user.id },
-      ];
-    } else if (mode === 'personal') {
-      // User avec org en mode personnel → posts personnels ALL + ses propres posts personnels
-      // Exclure les posts publiés en tant que Colony (publishAsOrg=true)
-      where.OR = [
-        { visibility: 'ALL', publishAsOrg: false },
-        { authorId: user.id, publishAsOrg: false },
-      ];
     } else {
-      // User avec org en mode org (défaut) → IN + ALL de son org + ses propres OUT
-      where.OR = [
-        { visibility: 'IN', organizationId: orgId },
-        { visibility: 'ALL', organizationId: orgId },
-        { visibility: 'OUT', authorId: user.id },
-        { visibility: 'CLIENT', organizationId: orgId },
-      ];
+      // Use centralized feed-visibility system
+      where = buildWallFeedWhere(socialCtx, feedMode);
     }
 
     if (category) where.category = category;

@@ -447,6 +447,8 @@ router.get('/public/:id', async (req, res) => {
         phone: true,
         website: true,
         logoUrl: true,
+        coverUrl: true,
+        coverPositionY: true,
         vatNumber: true,
         createdAt: true,
         _count: {
@@ -492,6 +494,8 @@ router.get('/public/:id', async (req, res) => {
         phone: org.phone,
         website: org.website,
         logoUrl: org.logoUrl,
+        coverUrl: org.coverUrl,
+        coverPositionY: org.coverPositionY ?? 50,
         vatNumber: org.vatNumber,
         createdAt: org.createdAt,
         memberCount: org._count.UserOrganization,
@@ -1676,6 +1680,107 @@ router.post('/:id/logo', async (req: AuthenticatedRequest, res) => {
   } catch (error) {
     console.error('❌ [POST /api/organizations/:id/logo] Erreur:', error);
     res.status(500).json({ success: false, message: 'Erreur serveur lors de l\'upload du logo' });
+  }
+});
+
+// 📸 POST /api/organizations/:id/cover - Upload cover de l'organisation
+router.post('/:id/cover', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ success: false, message: 'Non authentifié' });
+
+    const userOrg = await prisma.userOrganization.findFirst({
+      where: { userId, organizationId: id },
+      include: { Role: true },
+    });
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+    const isSuperAdmin = user?.role === 'super_admin';
+    if (!userOrg && !isSuperAdmin) {
+      return res.status(403).json({ success: false, message: 'Accès refusé' });
+    }
+
+    const files = (req as any).files;
+    if (!files || !files.cover) {
+      return res.status(400).json({ success: false, message: 'Aucun fichier uploadé. Envoyez un champ "cover".' });
+    }
+
+    const file = files.cover;
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.mimetype)) {
+      return res.status(400).json({ success: false, message: 'Type de fichier non supporté. Utilisez JPG, PNG, GIF ou WEBP.' });
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      return res.status(400).json({ success: false, message: 'Le fichier ne doit pas dépasser 10 Mo.' });
+    }
+
+    const path = await import('path');
+    const fs = await import('fs');
+    const { uploadExpressFile } = await import('../lib/storage');
+
+    const ext = path.default.extname(file.name);
+    const finalName = `${id}_cover_${Date.now()}${ext}`;
+    const key = `org-covers/${finalName}`;
+
+    if (process.env.NODE_ENV !== 'production') {
+      const destDir = path.default.join('public', 'uploads', 'org-covers');
+      try {
+        if (fs.default.existsSync(destDir)) {
+          const existing = fs.default.readdirSync(destDir);
+          for (const f of existing) {
+            if (f.startsWith(id + '_cover_')) {
+              fs.default.unlinkSync(path.default.join(destDir, f));
+            }
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
+    const coverUrl = await uploadExpressFile(file, key);
+
+    const updatedOrg = await prisma.organization.update({
+      where: { id },
+      data: { coverUrl, coverPositionY: 50 },
+      select: { id: true, name: true, coverUrl: true, coverPositionY: true },
+    });
+
+    res.json({ success: true, data: updatedOrg });
+  } catch (error) {
+    console.error('❌ [POST /api/organizations/:id/cover] Erreur:', error);
+    res.status(500).json({ success: false, message: 'Erreur serveur lors de l\'upload de la couverture' });
+  }
+});
+
+// 📐 PUT /api/organizations/:id/cover-position - Repositionner la cover
+router.put('/:id/cover-position', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ success: false, message: 'Non authentifié' });
+
+    const userOrg = await prisma.userOrganization.findFirst({
+      where: { userId, organizationId: id },
+    });
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+    const isSuperAdmin = user?.role === 'super_admin';
+    if (!userOrg && !isSuperAdmin) {
+      return res.status(403).json({ success: false, message: 'Accès refusé' });
+    }
+
+    const posY = Number(req.body?.positionY);
+    if (isNaN(posY) || posY < 0 || posY > 100) {
+      return res.status(400).json({ success: false, message: 'positionY doit être entre 0 et 100' });
+    }
+
+    await prisma.organization.update({
+      where: { id },
+      data: { coverPositionY: posY },
+    });
+
+    res.json({ success: true, positionY: posY });
+  } catch (error) {
+    console.error('❌ [PUT /api/organizations/:id/cover-position] Erreur:', error);
+    res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });
 

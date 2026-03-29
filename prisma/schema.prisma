@@ -1045,6 +1045,8 @@ model Organization {
   vatNumber                  String?
   website                    String?
   logoUrl                    String?
+  coverUrl                   String?
+  coverPositionY             Float?                                   @default(50)
   AIRecommendation           AIRecommendation[]
   AdCampaign                 AdCampaign[]
   AdPlatformIntegration      AdPlatformIntegration[]
@@ -1131,6 +1133,12 @@ model Organization {
 
   // Blocks
   OrgBlockedBy               OrgBlock[] @relation("OrgBlockOrg")
+
+  // Colony Follow
+  OrgFollowers               OrgFollow[] @relation("OrgFollowOrg")
+
+  // Social Settings
+  SocialSettings             SocialSettings?
 }
 
 model OrganizationModuleStatus {
@@ -2290,6 +2298,7 @@ model User {
   FriendshipsSent                                     Friendship[]        @relation("FriendshipRequester")
   FriendshipsReceived                                 Friendship[]        @relation("FriendshipAddressee")
   OrgBlocks                                           OrgBlock[]          @relation("OrgBlockUser")
+  OrgFollows                                          OrgFollow[]         @relation("OrgFollowUser")
   ConversationParticipants                            ConversationParticipant[]
   MessagesSent                                        Message[]           @relation("MessageSender")
   CallParticipants                                    CallParticipant[]
@@ -3917,6 +3926,24 @@ model Friendship {
 }
 
 // ═══════════════════════════════════════════════════════
+// ORGANIZATION FOLLOW (follow a Colony)
+// ═══════════════════════════════════════════════════════
+
+model OrgFollow {
+  id             String       @id @default(uuid())
+  userId         String
+  organizationId String
+  createdAt      DateTime     @default(now())
+
+  user           User         @relation("OrgFollowUser", fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization @relation("OrgFollowOrg", fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([userId])
+  @@index([organizationId])
+}
+
+// ═══════════════════════════════════════════════════════
 // ORGANIZATION BLOCKS (block a Colony)
 // ═══════════════════════════════════════════════════════
 
@@ -4480,4 +4507,91 @@ model HiveLiveMomentMedia {
   moment    HiveLiveMoment @relation(fields: [momentId], references: [id], onDelete: Cascade)
 
   @@index([momentId])
+}
+
+// ═══════════════════════════════════════════════════════
+// SOCIAL SETTINGS (per-organization social network config)
+// ═══════════════════════════════════════════════════════
+
+model SocialSettings {
+  id             String       @id @default(uuid())
+  organizationId String       @unique
+  
+  // ── Feed Visibility ──
+  wallEnabled           Boolean @default(true)
+  storiesEnabled        Boolean @default(true)
+  reelsEnabled          Boolean @default(true)
+  sparksEnabled         Boolean @default(true)
+  battlesEnabled        Boolean @default(true)
+  exploreEnabled        Boolean @default(true)
+  hiveLiveEnabled       Boolean @default(true)
+  messengerEnabled      Boolean @default(true)
+  callsEnabled          Boolean @default(true)
+  
+  // ── Default Visibility for new posts ──
+  defaultPostVisibility String  @default("IN")  // OUT, IN, ALL
+  
+  // ── Colony Feed Behavior ──
+  allowMembersPost      Boolean @default(true)    // members can post in Colony wall
+  allowMembersStory     Boolean @default(true)    // members can create stories for Colony
+  allowMembersReel      Boolean @default(true)    // members can create reels for Colony
+  allowMembersSpark     Boolean @default(false)   // members can create sparks for Colony
+  requirePostApproval   Boolean @default(false)   // posts need Keeper approval
+  
+  // ── Inter-Colony Visibility ──
+  showPublicPostsInFeed Boolean @default(true)    // show ALL-vis posts from other Colonies
+  showFriendsPostsInFeed Boolean @default(true)   // show friends' posts in personal feed
+  showFollowedColoniesInFeed Boolean @default(true) // show followed Colonies' posts
+  
+  // ── Content Moderation ──
+  maxPostLength         Int     @default(5000)
+  maxCommentLength      Int     @default(2000)
+  maxMediaPerPost       Int     @default(10)
+  maxVideoSizeMB        Int     @default(100)
+  maxImageSizeMB        Int     @default(10)
+  allowGifs             Boolean @default(true)
+  allowLinks            Boolean @default(true)
+  allowHashtags         Boolean @default(true)
+  profanityFilterEnabled Boolean @default(false)
+  
+  // ── Reactions & Comments ──
+  reactionsEnabled      Boolean @default(true)
+  commentsEnabled       Boolean @default(true)
+  sharesEnabled         Boolean @default(true)
+  commentDepthLimit     Int     @default(3)       // nested reply depth
+  
+  // ── Follow & Friends ──
+  allowFollowColony     Boolean @default(true)    // users can follow this Colony
+  autoFollowOnJoin      Boolean @default(true)    // auto-follow Colony when user joins
+  friendRequestsEnabled Boolean @default(true)
+  maxFriendsPerUser     Int     @default(5000)
+  
+  // ── Privacy & Blocking ──
+  allowBlockColony      Boolean @default(true)
+  showMemberList        Boolean @default(true)    // public member list
+  showMemberCount       Boolean @default(true)    // public member count
+  profileVisibility     String  @default("public") // public, members_only, private
+  
+  // ── Notifications ──
+  notifyOnNewPost       Boolean @default(true)
+  notifyOnComment       Boolean @default(true)
+  notifyOnReaction      Boolean @default(false)
+  notifyOnNewFollower   Boolean @default(true)
+  notifyOnFriendRequest Boolean @default(true)
+  notifyOnMention       Boolean @default(true)
+  
+  // ── Analytics & Stats ──
+  showPostAnalytics     Boolean @default(false)   // show view count, engagement
+  showProfileViews      Boolean @default(false)
+  
+  // ── Advanced ──
+  customReactions       Json?     // custom reaction types [{key, emoji, label}]
+  bannedWords           String[]  @default([])    // words to auto-filter
+  pinnedPostsLimit      Int       @default(3)
+  autoArchiveDays       Int       @default(0)     // 0 = never auto-archive
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }

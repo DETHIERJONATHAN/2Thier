@@ -201,6 +201,7 @@ const ProfilePage = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const orgLogoInputRef = useRef<HTMLInputElement>(null);
+  const orgCoverInputRef = useRef<HTMLInputElement>(null);
   const orgLogoTargetId = useRef<string | null>(null);
   const { isMobile, width } = useScreenSize();
 
@@ -234,7 +235,8 @@ const ProfilePage = () => {
   const [colonyData, setColonyData] = useState<{
     id: string; name: string; description: string | null; address: string | null;
     email: string | null; phone: string | null; website: string | null;
-    logoUrl: string | null; vatNumber: string | null; createdAt: string;
+    logoUrl: string | null; coverUrl: string | null; coverPositionY: number;
+    vatNumber: string | null; createdAt: string;
     memberCount: number; postCount: number;
     members: { id: string; firstName: string; lastName: string; avatarUrl: string | null; role: string }[];
   } | null>(null);
@@ -253,6 +255,13 @@ const ProfilePage = () => {
       .catch(() => { message.error('Impossible de charger le profil Colony'); })
       .finally(() => setColonyLoading(false));
   }, [isColonyView, currentOrganization?.id, api]);
+
+  // Sync coverPosY when colony data loads
+  useEffect(() => {
+    if (isColonyView && colonyData?.coverPositionY != null) {
+      setCoverPosY(colonyData.coverPositionY);
+    }
+  }, [isColonyView, colonyData?.coverPositionY]);
 
   // Load colony wall posts when in colony view + publications tab
   useEffect(() => {
@@ -498,6 +507,52 @@ const ProfilePage = () => {
     finally { setCoverUploading(false); }
   };
 
+  // Colony cover upload
+  const handleColonyCoverChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.[0] || !currentOrganization?.id) return;
+    setCoverUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('cover', e.target.files[0]);
+      const r: any = await api.post(`/api/organizations/${currentOrganization.id}/cover`, fd);
+      const newUrl = r?.data?.coverUrl ? `${r.data.coverUrl}?t=${Date.now()}` : '';
+      setColonyData(prev => prev ? { ...prev, coverUrl: newUrl, coverPositionY: 50 } : prev);
+      setCoverPosY(50);
+      setCoverRepositioning(false);
+      message.success('Couverture Colony mise à jour !');
+    } catch { message.error("Erreur lors du téléversement de la couverture."); }
+    finally { setCoverUploading(false); if (orgCoverInputRef.current) orgCoverInputRef.current.value = ''; }
+  };
+
+  // Colony cover position save
+  const saveColonyCoverPosition = async () => {
+    if (!currentOrganization?.id) return;
+    try {
+      await api.put(`/api/organizations/${currentOrganization.id}/cover-position`, { positionY: Math.round(coverPosY * 100) / 100 });
+      setColonyData(prev => prev ? { ...prev, coverPositionY: coverPosY } : prev);
+      setCoverRepositioning(false);
+      message.success('Position de la couverture enregistrée !');
+    } catch { message.error("Erreur lors de la sauvegarde."); }
+  };
+
+  // Colony logo (avatar) upload
+  const handleColonyLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.[0] || !currentOrganization?.id) return;
+    setAvatarUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('logo', e.target.files[0]);
+      const r: any = await api.post(`/api/organizations/${currentOrganization.id}/logo`, fd);
+      if (r?.success || r?.data) {
+        const newUrl = r?.data?.logoUrl ? `${r.data.logoUrl}?t=${Date.now()}` : '';
+        setColonyData(prev => prev ? { ...prev, logoUrl: newUrl } : prev);
+        message.success('Logo Colony mis à jour !');
+        refetchUser?.();
+      }
+    } catch { message.error("Erreur lors du téléversement du logo."); }
+    finally { setAvatarUploading(false); }
+  };
+
   const handleOrgChange = async (orgId: string) => {
     setChangingOrg(true);
     try { await selectOrganization(orgId); message.success('Colony changée'); }
@@ -688,6 +743,8 @@ const ProfilePage = () => {
   const cvAvatar = isColonyView && colonyData ? colonyData.logoUrl : (profile.avatarUrl || undefined);
   const cvAvatarFallback = isColonyView && colonyData ? (colonyData.name?.[0]?.toUpperCase() || 'C') : undefined;
   const cvAvatarBg = isColonyView ? ORG_COLOR : '#2C5967';
+  const cvCoverUrl = isColonyView && colonyData ? colonyData.coverUrl : profile.coverUrl;
+  const cvCoverPosY = isColonyView && colonyData && colonyData.coverUrl ? (colonyData.coverPositionY ?? 50) : coverPosY;
   const cvCoverGradient = isColonyView
     ? `linear-gradient(135deg, ${ORG_COLOR} 0%, #a29bfe 100%)`
     : 'linear-gradient(135deg, #1a4951 0%, #2C5967 30%, #3d7a8a 60%, #4a9aad 100%)';
@@ -729,23 +786,19 @@ const ProfilePage = () => {
               position: 'relative',
               cursor: coverRepositioning ? (coverDragging ? 'grabbing' : 'grab') : 'default',
               userSelect: coverRepositioning ? 'none' : undefined,
-              background: isColonyView
-                ? cvCoverGradient
-                : (!profile.coverUrl
-                  ? 'linear-gradient(135deg, #1a4951 0%, #2C5967 30%, #3d7a8a 60%, #4a9aad 100%)'
-                  : '#000'),
+              background: cvCoverUrl ? '#000' : cvCoverGradient,
             }}
           >
             {/* Cover image — <img> for object-position control */}
-            {!isColonyView && profile.coverUrl && (
+            {cvCoverUrl && (
               <img
-                src={profile.coverUrl}
+                src={cvCoverUrl}
                 alt="Couverture"
                 draggable={false}
                 style={{
                   width: '100%', height: '100%',
                   objectFit: 'cover',
-                  objectPosition: `center ${coverPosY}%`,
+                  objectPosition: `center ${coverRepositioning ? coverPosY : cvCoverPosY}%`,
                   pointerEvents: 'none',
                 }}
               />
@@ -770,19 +823,19 @@ const ProfilePage = () => {
             )}
 
             {/* Bottom action buttons */}
-            {!isViewingOther && !isColonyView && <div style={{
+            {!isViewingOther && <div style={{
               position: 'absolute', bottom: isMobile ? 8 : 16, right: isMobile ? 8 : 16,
               display: 'flex', gap: 8,
             }}>
               {coverRepositioning ? (
                 <>
-                  <div onClick={cancelCoverPosition} style={{
+                  <div onClick={() => { setCoverPosY(isColonyView ? (colonyData?.coverPositionY ?? 50) : (profile.coverPositionY ?? 50)); setCoverRepositioning(false); }} style={{
                     background: 'rgba(0,0,0,0.6)', color: '#fff',
                     padding: isMobile ? '4px 10px' : '6px 16px',
                     borderRadius: 6, fontSize: isMobile ? 12 : 14, fontWeight: 600, cursor: 'pointer',
                     display: 'flex', alignItems: 'center', gap: 6,
                   }}><CloseOutlined /> Annuler</div>
-                  <div onClick={saveCoverPosition} style={{
+                  <div onClick={isColonyView ? saveColonyCoverPosition : saveCoverPosition} style={{
                     background: FB.blue, color: '#fff',
                     padding: isMobile ? '4px 10px' : '6px 16px',
                     borderRadius: 6, fontSize: isMobile ? 12 : 14, fontWeight: 600, cursor: 'pointer',
@@ -791,7 +844,7 @@ const ProfilePage = () => {
                 </>
               ) : (
                 <>
-                  {profile.coverUrl && (
+                  {cvCoverUrl && (
                     <div onClick={() => setCoverRepositioning(true)} style={{
                       background: 'rgba(0,0,0,0.5)', color: '#fff',
                       padding: isMobile ? '4px 10px' : '6px 16px',
@@ -799,7 +852,7 @@ const ProfilePage = () => {
                       display: 'flex', alignItems: 'center', gap: 6,
                     }}><DragOutlined />{!isMobile && ' Repositionner'}</div>
                   )}
-                  <div onClick={() => coverInputRef.current?.click()} style={{
+                  <div onClick={() => isColonyView ? orgCoverInputRef.current?.click() : coverInputRef.current?.click()} style={{
                     background: 'rgba(0,0,0,0.5)', color: '#fff',
                     padding: isMobile ? '4px 10px' : '6px 16px',
                     borderRadius: 6, fontSize: isMobile ? 12 : 14, fontWeight: 600, cursor: 'pointer',
@@ -809,6 +862,7 @@ const ProfilePage = () => {
               )}
             </div>}
             {!isViewingOther && <input type="file" accept="image/*" onChange={handleCoverChange} ref={coverInputRef} style={{ display: 'none' }} />}
+            {!isViewingOther && isColonyView && <input type="file" accept="image/*" onChange={handleColonyCoverChange} ref={orgCoverInputRef} style={{ display: 'none' }} />}
           </div>
 
           {/* ─── Avatar à gauche, nom à côté ─── */}
@@ -825,8 +879,8 @@ const ProfilePage = () => {
               >
                 {!cvAvatar && cvAvatarFallback}
               </Avatar>
-              {!isViewingOther && !isColonyView && <span
-                onClick={() => fileInputRef.current?.click()}
+              {!isViewingOther && <span
+                onClick={() => isColonyView ? fileInputRef.current?.click() : fileInputRef.current?.click()}
                 style={{
                   position: 'absolute', bottom: isMobile ? 4 : 12, right: isMobile ? 4 : 12,
                   width: cameraBtnSize, height: cameraBtnSize, borderRadius: '50%',
@@ -838,7 +892,7 @@ const ProfilePage = () => {
               >
                 {avatarUploading ? <Spin size="small" /> : <CameraOutlined style={{ fontSize: isMobile ? 14 : 16, color: FB.text }} />}
               </span>}
-              {!isViewingOther && <input type="file" accept="image/*" onChange={handleAvatarChange} ref={fileInputRef} style={{ display: 'none' }} />}
+              {!isViewingOther && <input type="file" accept="image/*" onChange={isColonyView ? handleColonyLogoChange : handleAvatarChange} ref={fileInputRef} style={{ display: 'none' }} />}
             </div>
 
             <div style={{ marginLeft: isMobile ? 12 : 16, paddingBottom: isMobile ? 8 : 16, flex: 1, minWidth: 0 }}>
@@ -939,7 +993,6 @@ const ProfilePage = () => {
             flexDirection: isMobile ? 'column' : 'row',
             gap: 16,
             alignItems: 'flex-start',
-            maxWidth: 940, margin: '0 auto',
           }}>
             {/* LEFT: Colony info */}
             <div style={{
@@ -951,10 +1004,16 @@ const ProfilePage = () => {
                   <p style={{ fontSize: 15, color: FB.text, lineHeight: 1.5, margin: 0 }}>{colonyData.description}</p>
                 </FBCard>
               )}
+
               <FBCard title="Informations">
                 {colonyData.address && <InfoLine icon={<HomeOutlined />}>{colonyData.address}</InfoLine>}
-                {colonyData.email && <InfoLine icon={<MailOutlined />}><span style={{ color: FB.blue }}>{colonyData.email}</span></InfoLine>}
-                {colonyData.phone && <InfoLine icon={<PhoneOutlined />}>{colonyData.phone}</InfoLine>}
+                {colonyData.vatNumber && <InfoLine icon={<BankOutlined />}>TVA : {colonyData.vatNumber}</InfoLine>}
+                <InfoLine icon={<CalendarOutlined />}>
+                  Fondée le {new Date(colonyData.createdAt).toLocaleDateString('fr-BE', { day: 'numeric', month: 'long', year: 'numeric' })}
+                </InfoLine>
+              </FBCard>
+
+              <FBCard title="Liens">
                 {colonyData.website && (
                   <InfoLine icon={<GlobalOutlined />}>
                     <a href={colonyData.website.startsWith('http') ? colonyData.website : `https://${colonyData.website}`}
@@ -963,28 +1022,41 @@ const ProfilePage = () => {
                     </a>
                   </InfoLine>
                 )}
-                {colonyData.vatNumber && <InfoLine icon={<BankOutlined />}>TVA : {colonyData.vatNumber}</InfoLine>}
-                <InfoLine icon={<CalendarOutlined />}>
-                  Fondée le {new Date(colonyData.createdAt).toLocaleDateString('fr-BE', { day: 'numeric', month: 'long', year: 'numeric' })}
-                </InfoLine>
+                {!colonyData.website && (
+                  <div style={{ padding: '12px 0', color: FB.textSecondary, fontSize: 14 }}>Aucun lien.</div>
+                )}
+              </FBCard>
+
+              <FBCard title="Coordonnées">
+                {colonyData.email && <InfoLine icon={<MailOutlined />}><span>E-mail : <span style={{ color: FB.blue }}>{colonyData.email}</span></span></InfoLine>}
+                {colonyData.phone && <InfoLine icon={<PhoneOutlined />}>Téléphone : {colonyData.phone}</InfoLine>}
+                {!colonyData.email && !colonyData.phone && (
+                  <div style={{ padding: '12px 0', color: FB.textSecondary, fontSize: 14 }}>Aucune coordonnée.</div>
+                )}
               </FBCard>
             </div>
-            {/* RIGHT: Summary + members preview */}
+
+            {/* RIGHT: Summary + members preview + publications */}
             <div style={{ flex: 1, minWidth: 0 }}>
               <FBCard title="Résumé">
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div style={{ background: FB.bg, borderRadius: 8, padding: 20, textAlign: 'center' }}>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+                  gap: 12,
+                }}>
+                  <div style={{ background: FB.bg, borderRadius: 8, padding: isMobile ? 16 : 20, textAlign: 'center' }}>
                     <TeamOutlined style={{ fontSize: 28, color: ORG_COLOR }} />
                     <div style={{ fontSize: 22, fontWeight: 700, color: FB.text, marginTop: 8 }}>{colonyData.memberCount}</div>
                     <div style={{ fontSize: 13, color: FB.textSecondary }}>Membre{colonyData.memberCount > 1 ? 's' : ''}</div>
                   </div>
-                  <div style={{ background: FB.bg, borderRadius: 8, padding: 20, textAlign: 'center' }}>
+                  <div style={{ background: FB.bg, borderRadius: 8, padding: isMobile ? 16 : 20, textAlign: 'center' }}>
                     <LinkOutlined style={{ fontSize: 28, color: FB.blue }} />
                     <div style={{ fontSize: 22, fontWeight: 700, color: FB.text, marginTop: 8 }}>{colonyData.postCount}</div>
                     <div style={{ fontSize: 13, color: FB.textSecondary }}>Publication{colonyData.postCount > 1 ? 's' : ''}</div>
                   </div>
                 </div>
               </FBCard>
+
               <FBCard title={`Membres (${colonyData.memberCount})`}>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
                   {colonyData.members.slice(0, 6).map(m => (
@@ -1017,6 +1089,60 @@ const ProfilePage = () => {
                   </div>
                 )}
               </FBCard>
+
+              {/* Recent publications in About tab */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow,
+                  padding: 16, marginBottom: 12,
+                }}>
+                  <span style={{ fontSize: 17, fontWeight: 700, color: FB.text }}>Publications</span>
+                  <span
+                    onClick={() => setActiveTab('publications')}
+                    style={{ fontSize: 14, color: FB.blue, cursor: 'pointer', fontWeight: 600 }}
+                  >
+                    Voir tout
+                  </span>
+                </div>
+                {colonyPosts.length === 0 && !colonyPostsLoading && (
+                  <div style={{
+                    background: FB.white, borderRadius: 8, boxShadow: FB.shadow,
+                    padding: 32, textAlign: 'center', color: FB.textSecondary, fontSize: 15,
+                  }}>
+                    Aucune publication pour le moment.
+                  </div>
+                )}
+                {colonyPosts.slice(0, 3).map(post => (
+                  <WallPostCard
+                    key={post.id}
+                    post={post}
+                    isMobile={isMobile}
+                    currentUserId={user?.id || ''}
+                    api={api}
+                    onUpdate={() => {
+                      api.get('/api/wall/feed?mode=org&visibility=ALL')
+                        .then((r: any) => {
+                          const allPosts: WallPostData[] = r?.posts || [];
+                          setColonyPosts(allPosts.filter((p: any) => p.publishAsOrg && p.organization?.id === currentOrganization?.id));
+                        }).catch(() => setColonyPosts([]));
+                    }}
+                  />
+                ))}
+                {colonyPosts.length > 3 && (
+                  <div
+                    onClick={() => setActiveTab('publications')}
+                    style={{
+                      textAlign: 'center', padding: 12, fontSize: 14, fontWeight: 600,
+                      color: FB.blue, cursor: 'pointer', background: FB.white,
+                      borderRadius: 8, boxShadow: FB.shadow,
+                    }}
+                  >
+                    Voir toutes les publications
+                  </div>
+                )}
+                {colonyPostsLoading && <div style={{ textAlign: 'center', padding: 16 }}><Spin /></div>}
+              </div>
             </div>
           </div>
         )}
@@ -1052,21 +1178,6 @@ const ProfilePage = () => {
                       Ajouter
                     </span>
                   </div>
-                )}
-              </FBCard>
-
-              {/* Liens */}
-              <FBCard title="Liens" onEdit={!isViewingOther ? () => moduleNavigate('/settings') : undefined}>
-                {displayOrg?.name && (
-                  <InfoLine icon={<LinkOutlined />}>
-                    <span style={{ color: FB.blue }}>{displayOrg.name.toLowerCase().replace(/\s+/g, '')}.be</span>
-                  </InfoLine>
-                )}
-                {profile.vatNumber && (
-                  <InfoLine icon={<BankOutlined />}>TVA : {profile.vatNumber}</InfoLine>
-                )}
-                {!profile.vatNumber && !displayOrg && (
-                  <div style={{ padding: '12px 0', color: FB.textSecondary, fontSize: 14 }}>Aucun lien.</div>
                 )}
               </FBCard>
 

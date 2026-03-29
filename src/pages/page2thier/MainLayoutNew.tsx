@@ -19,6 +19,7 @@ import { useAuth } from '../../auth/useAuth';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useZhiiveNav, ZhiiveNavProvider, FeedMode } from '../../contexts/ZhiiveNavContext';
 import { ActiveIdentityProvider, useActiveIdentity } from '../../contexts/ActiveIdentityContext';
+import { SocialIdentityProvider } from '../../contexts/SocialIdentityContext';
 
 const { Header, Content } = Layout;
 
@@ -482,7 +483,9 @@ const MainLayoutWithNav: React.FC<MainLayoutProps> = (props) => {
   return (
     <ZhiiveNavProvider initialFeedMode={initialFeedMode} onFeedModeChange={handleFeedModeChange}>
       <ActiveIdentityProvider>
-        <MainLayout {...props} />
+        <SocialIdentityProvider>
+          <MainLayout {...props} />
+        </SocialIdentityProvider>
       </ActiveIdentityProvider>
     </ZhiiveNavProvider>
   );

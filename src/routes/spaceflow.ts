@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
+import { getSocialContext, buildSparkFeedWhere, FeedMode } from '../lib/feed-visibility';
 import { z } from 'zod';
 
 const router = Router();
@@ -586,19 +587,13 @@ router.get('/sparks', authenticateToken, async (req: Request, res: Response) => 
     const userId = (req as any).user.id;
     const orgId = (req as any).user.organizationId;
     const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
-    const mode = (req.query.mode as string) || 'org';
+    const mode: FeedMode = (req.query.mode as string) === 'personal' ? 'personal'
+      : (req.query.mode as string) === 'public' ? 'public' : 'org';
 
-    const whereClause: any = {};
-    if (mode === 'personal' || !orgId) {
-      // Personal mode: public personal sparks + own personal sparks (exclude Colony)
-      whereClause.OR = [
-        { visibility: 'ALL', publishAsOrg: false },
-        { authorId: userId, publishAsOrg: false },
-      ];
-    } else {
-      // Org mode: sparks from own org
-      whereClause.organizationId = orgId;
-    }
+    // Use centralized social context for sparks
+    const isSuperAdmin = (req as any).user.role === 'super_admin' || (req as any).user.isSuperAdmin;
+    const socialCtx = await getSocialContext(userId, orgId, isSuperAdmin);
+    const whereClause: any = buildSparkFeedWhere(socialCtx, mode);
 
     const sparks = await db.spark.findMany({
       where: whereClause,

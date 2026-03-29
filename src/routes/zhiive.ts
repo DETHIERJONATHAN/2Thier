@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
+import { getSocialContext, buildMediaFeedWhere, buildExploreFeedWhere, FeedMode } from '../lib/feed-visibility';
 import { z } from 'zod';
 
 const router = Router();
@@ -73,11 +74,17 @@ router.get('/stories/feed', authenticateToken, async (req: Request, res: Respons
   try {
     const userId = (req as any).user.id;
     const orgId = (req as any).user.organizationId;
+    const mode: FeedMode = (req.query.mode as string) === 'personal' ? 'personal' : 'org';
+    const isSuperAdmin = (req as any).user.role === 'super_admin' || (req as any).user.isSuperAdmin;
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    // Use centralized social context for stories
+    const socialCtx = await getSocialContext(userId, orgId, isSuperAdmin);
+    const visibilityFilter = buildMediaFeedWhere(socialCtx, mode, 'story');
 
     const stories = await db.story.findMany({
       where: {
-        organizationId: orgId,
+        ...visibilityFilter,
         OR: [
           { createdAt: { gt: twentyFourHoursAgo }, expiresAt: { gt: new Date() } },
           { isHighlight: true },
@@ -462,7 +469,8 @@ router.get('/reels', authenticateToken, async (req: Request, res: Response) => {
     const user = (req as any).user;
     const orgId = user.organizationId;
     const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
-    const mode = (req.query.mode as string) || 'org';
+    const mode: FeedMode = (req.query.mode as string) === 'personal' ? 'personal'
+      : (req.query.mode as string) === 'public' ? 'public' : 'org';
 
     const whereClause: any = {
       isPublished: true,
@@ -470,18 +478,11 @@ router.get('/reels', authenticateToken, async (req: Request, res: Response) => {
       NOT: { mediaUrls: { equals: null } },
     };
 
-    if (mode === 'personal' || !orgId) {
-      // Personal mode or free user: public personal videos + own personal posts
-      // Exclude Colony posts (publishAsOrg=true)
-      whereClause.OR = [
-        { visibility: 'ALL', publishAsOrg: false },
-        { authorId: user.id, publishAsOrg: false },
-      ];
-    } else {
-      // Org mode: videos from own org
-      whereClause.organizationId = orgId;
-      whereClause.visibility = { in: ['ALL', 'IN'] };
-    }
+    // Use centralized social context for reels
+    const isSuperAdmin = user.role === 'super_admin' || user.isSuperAdmin;
+    const socialCtx = await getSocialContext(user.id, orgId, isSuperAdmin);
+    const visFilter = buildMediaFeedWhere(socialCtx, mode, 'reel');
+    Object.assign(whereClause, visFilter);
 
     const posts = await db.wallPost.findMany({
       where: whereClause,

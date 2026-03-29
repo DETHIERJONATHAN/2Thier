@@ -103,6 +103,7 @@ const Sidebar = ({ modules }: { modules: Array<ModuleNav> }) => {
     { key: 'admin-orgs', label: 'Organisations', icon: 'FaBuilding', route: '/admin/organizations', permission: 'super_admin' },
     { key: 'admin-sites', label: 'Sites Web', icon: 'FaGlobe', route: '/admin/sites-web', permission: 'admin_panel:view' },
     { key: 'admin-documents', label: 'Documents', icon: 'FaFileAlt', route: '/admin/documents', permission: 'admin_panel:view' },
+    { key: 'admin-social', label: 'Hive Social Settings', icon: 'FaUsers', route: '/admin/social-settings', permission: 'super_admin' },
   ], []);
 
 
