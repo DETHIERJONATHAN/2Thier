@@ -139,23 +139,27 @@ export const login = async (req: Request, res: Response) => {
     );
 
     // Définir le cookie
-    // Codespaces: le frontend est servi en HTTPS, le navigateur a besoin de Secure
-    // Le cookie est défini via le proxy Vite qui est sur le même domaine HTTPS
+    // Codespaces: le frontend passe par un proxy Vite (même origine), lax suffit
+    // Production: HTTPS direct, secure + none pour les sous-domaines
     const isProduction = process.env.NODE_ENV === 'production';
     const isCodespaces = process.env.CODESPACES === 'true';
-    const needsSecureCookie = isProduction || isCodespaces;
     
-    console.log(`[AUTH] 🍪 Cookie config: isProduction=${isProduction}, isCodespaces=${isCodespaces}, needsSecure=${needsSecureCookie}`);
+    // En Codespaces, le proxy Vite fait que tout est same-origin → lax + secure
+    // En production HTTPS direct → none + secure (pour cross-origin si nécessaire)
+    const cookieSecure = isProduction || isCodespaces;
+    const cookieSameSite = isProduction ? 'none' as const : 'lax' as const;
+    
+    console.log(`[AUTH] 🍪 Cookie config: isProduction=${isProduction}, isCodespaces=${isCodespaces}, secure=${cookieSecure}, sameSite=${cookieSameSite}`);
     
     res.cookie('token', token, {
       httpOnly: true,
-      secure: needsSecureCookie,
-      sameSite: needsSecureCookie ? 'none' : 'lax',
+      secure: cookieSecure,
+      sameSite: cookieSameSite,
       maxAge: 24 * 60 * 60 * 1000, // 24 heures
       path: '/',
     });
 
-    console.log(`[AUTH] ✅ Connexion réussie pour ${email} (cookie secure=${needsSecureCookie}, sameSite=${needsSecureCookie ? 'none' : 'lax'})`);
+    console.log(`[AUTH] ✅ Connexion réussie pour ${email} (cookie secure=${cookieSecure}, sameSite=${cookieSameSite})`);
     res.status(200).json(response);
   } catch (error) {
     console.error('[AUTH] Erreur lors de la connexion:', error);
@@ -232,10 +236,19 @@ export const getMe = async (req: Request, res: Response) => {
     };
 
     res.status(200).json(response);
-  } catch (error) {
-    console.error('[AUTH] Erreur lors de la vérification du token:', error);
-    res.clearCookie('token');
-    res.status(401).json({ message: 'Token invalide ou expiré' });
+  } catch (error: unknown) {
+    // Distinguer les erreurs JWT des erreurs Prisma/autres
+    const isJwtError = error instanceof jwt.JsonWebTokenError || error instanceof jwt.TokenExpiredError;
+    if (isJwtError) {
+      const jwtErr = error as jwt.JsonWebTokenError;
+      console.warn(`[AUTH] ⚠️ Erreur JWT: ${jwtErr.name} - ${jwtErr.message}`);
+      res.clearCookie('token');
+      res.status(401).json({ message: 'Token invalide ou expiré' });
+    } else {
+      console.error('[AUTH] ❌ Erreur inattendue dans getMe (DB/serveur?):', error);
+      // Ne pas effacer le cookie sur une erreur serveur
+      res.status(500).json({ message: 'Erreur serveur lors de la vérification' });
+    }
   }
 };
 

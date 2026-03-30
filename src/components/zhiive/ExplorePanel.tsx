@@ -792,7 +792,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
         width="95vw"
         style={{ maxWidth: 500, top: 20 }}
         styles={{ body: { padding: 0 } }}
-        closeIcon={<CloseOutlined style={{ color: SF.textLight, fontSize: 16 }} />}}
+        closeIcon={<CloseOutlined style={{ color: SF.textLight, fontSize: 16 }} />}
       >
         {selectedPost && (
           <div style={{ background: SF.bg, borderRadius: 12, overflow: 'hidden' }}>

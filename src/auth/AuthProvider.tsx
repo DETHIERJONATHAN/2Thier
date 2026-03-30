@@ -552,11 +552,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const loginResponse = await staticApi.post('/auth/login', { email, password });
         console.log('[AuthProvider] ✅ Login réussi, réponse:', loginResponse);
         
-        // Petit délai pour laisser le navigateur stocker le cookie
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // 🔐 Utiliser DIRECTEMENT les données du login pour initialiser l'état
+        // Cela rend le login indépendant du cookie (robuste en Codespaces)
+        if (loginResponse?.currentUser) {
+          const { currentUser } = loginResponse;
+          setUser(currentUser);
+          setPermissions(currentUser.permissions || []);
+          if (currentUser.role === 'super_admin' && !currentUser.permissions?.includes('super_admin')) {
+            setPermissions(prev => [...prev, 'super_admin']);
+          }
+          // Organisations depuis la réponse de login (basique)
+          const loginOrgs = currentUser.organizations || [];
+          setOrganizations(loginOrgs);
+          const activeOrg = loginOrgs.find((o: { status: string }) => o.status === 'ACTIVE' || o.status === 'active') || loginOrgs[0];
+          if (activeOrg) {
+            const orgWithPerms = { ...activeOrg, role: currentUser.role, permissions: currentUser.permissions || [] };
+            setCurrentOrganization(orgWithPerms);
+            localStorage.setItem('organizationId', activeOrg.id);
+          }
+          setLoading(false);
+          console.log('[AuthProvider] ✅ État utilisateur initialisé depuis la réponse du login');
+        }
         
-        // Force un refresh immédiat en ignorant le TTL
-        await fetchMe({ force: true });
+        // Rafraîchir en arrière-plan via fetchMe pour récupérer les données complètes
+        // (toutes les organisations pour super-admin, modules, etc.)
+        // Ne bloque PAS le login si le cookie ne fonctionne pas
+        fetchMe({ force: true }).catch((err: unknown) => {
+          console.warn('[AuthProvider] ⚠️ fetchMe après login a échoué (données du login utilisées en fallback):', (err as Error)?.message);
+        });
         
         return loginResponse;
       } catch (error) {
