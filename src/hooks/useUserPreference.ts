@@ -64,7 +64,6 @@ export function useUserPreference<T>(
         setError('Erreur de sauvegarde');
       }
     }, 300);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api]);
 
   return [value, setValue, { loading, error }];
