@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import DOMPurify from 'dompurify';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import { useImageModal } from './ImageModal';
 
@@ -11,7 +12,7 @@ const RichText: React.FC<{ children: string }> = ({ children }) => {
   return (
     <div 
       style={{ lineHeight: 1.6 }}
-      dangerouslySetInnerHTML={{ __html: html }} 
+      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }} 
     />
   );
 };

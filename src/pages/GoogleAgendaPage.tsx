@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useModuleNavigation } from '../contexts/WallNavigationContext';
 import { useAuth } from '../auth/useAuth';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
+import { useUserPreference } from '../hooks/useUserPreference';
 import {
   Layout,
   Button,
@@ -167,10 +168,14 @@ const GoogleAgendaPage: React.FC = () => {
   interface NoteFormValues { title: string; description?: string; dueDate?: dayjs.Dayjs; priority?: string; category?: string }
   const [showNotes, setShowNotes] = useState(true);
   const [hideDoneNotes, setHideDoneNotes] = useState(true);
-  const [pollInterval, setPollInterval] = useState<number>(() => {
-    const saved = localStorage.getItem('agendaNotesPollMs');
-    return saved ? parseInt(saved, 10) : 60000;
-  });
+  const [savedPollMs, setSavedPollMs] = useUserPreference<number>('agendaNotesPollMs', 60000);
+  const [pollInterval, setPollInterval] = useState<number>(60000);
+  const pollSyncedRef = useRef(false);
+  useEffect(() => {
+    if (pollSyncedRef.current || !savedPollMs) return;
+    pollSyncedRef.current = true;
+    setPollInterval(savedPollMs);
+  }, [savedPollMs]);
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
   const previousOverdueCount = useRef<number>(0);
   const [sseStatus, setSseStatus] = useState<'disconnected'|'connecting'|'connected'>('disconnected');
@@ -752,7 +757,7 @@ const GoogleAgendaPage: React.FC = () => {
             content={(
               <div style={{ width: 220 }}>
                 <p style={{ marginBottom: 4 }}>Intervalle polling (sec):</p>
-                <Slider min={15} max={300} step={15} value={pollInterval / 1000} onChange={(v: number) => setPollInterval(v * 1000)} tooltip={{ open: false }} />
+                <Slider min={15} max={300} step={15} value={pollInterval / 1000} onChange={(v: number) => { const ms = v * 1000; setPollInterval(ms); setSavedPollMs(ms); }} tooltip={{ open: false }} />
                 <small>Actuel: {(pollInterval / 1000)}s</small>
               </div>
             )}

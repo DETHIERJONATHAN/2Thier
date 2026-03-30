@@ -50,6 +50,7 @@ import measurementReferenceRouter from './api/measurement-reference'; // 📐 CO
 
 // 👤 ROUTES UTILISATEURS
 import userFavoritesRouter from './routes/userFavoritesRoutes'; // ⭐ FAVORIS MODULES UTILISATEUR
+import userPreferencesRouter from './routes/userPreferencesRoutes'; // 🔧 PRÉFÉRENCES UTILISATEUR (remplace localStorage)
 
 // 📋 ROUTES FORMULAIRES SITES WEB (style Effy)
 import websiteFormsRouter from './routes/website-forms'; // 📋 CRUD FORMULAIRES ADMIN
@@ -286,32 +287,13 @@ app.use(session({
 
 console.log('✅ [ENTERPRISE-SECURITY] Configuration sécurité niveau Enterprise activée');
 
-// 📸 Servir les fichiers uploadés — GCS en production, local en dev
-const uploadsDir = path.resolve(process.cwd(), 'public', 'uploads');
+// 📸 Rediriger /uploads/* vers Google Cloud Storage (dev ET production)
 const GCS_BUCKET_NAME = process.env.GCS_BUCKET || 'crm-2thier-uploads';
-
-if (process.env.NODE_ENV === 'production') {
-  // En production : rediriger /uploads/* vers Google Cloud Storage
-  app.use('/uploads', (req, res) => {
-    const gcsUrl = `https://storage.googleapis.com/${GCS_BUCKET_NAME}${req.path}`;
-    res.redirect(301, gcsUrl);
-  });
-  console.log('📸 [UPLOADS] Mode production: redirection vers GCS bucket', GCS_BUCKET_NAME);
-} else {
-  // En dev : servir les fichiers locaux avec CORS
-  app.use('/uploads', (req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    next();
-  }, express.static(uploadsDir, {
-    maxAge: '1h',
-    etag: true,
-    lastModified: true
-  }));
-  console.log('📸 [UPLOADS] Mode dev: fichiers locaux depuis', uploadsDir);
-}
+app.use('/uploads', (req, res) => {
+  const gcsUrl = `https://storage.googleapis.com/${GCS_BUCKET_NAME}${req.path}`;
+  res.redirect(301, gcsUrl);
+});
+console.log('📸 [UPLOADS] Redirection /uploads/* → GCS bucket', GCS_BUCKET_NAME);
 
 // Configuration Passport
 console.log('🔧 [API-SERVER-CLEAN] Configuration Passport...');
@@ -345,6 +327,7 @@ app.use('/api/tbl/batch', tblBatchRoutes); // 🚀 BATCH LOADING TBL (réduit ~1
 app.use('/api/batch', batchRoutes); // 🚀 BATCH GLOBAL (Gmail, Leads, Analytics)
 app.use('/api/tree-nodes', calculatedValueController); // 🎯 VALEURS CALCULÉES STOCKÉES DANS PRISMA
 app.use('/api/user/favorites', userFavoritesRouter); // ⭐ FAVORIS MODULES UTILISATEUR
+app.use('/api/user-preferences', userPreferencesRouter); // 🔧 PRÉFÉRENCES UTILISATEUR (remplace localStorage)
 app.use('/api/website-forms', websiteFormsRouter); // 📋 FORMULAIRES SITES WEB (style Effy) - CRUD ADMIN
 app.use('/api/public/forms', publicFormsRouter); // 📋 SOUMISSION PUBLIQUE FORMULAIRES (sans auth)
 // ⚠️ SUPPRIMÉ - Déjà monté via apiRouter ligne 249: app.use('/api/treebranchleaf', tableRoutesNewRouter);

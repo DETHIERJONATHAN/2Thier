@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useRef, ReactNode, useCallback, useMemo, useEffect } from 'react';
+import { useUserPreference } from '../hooks/useUserPreference';
 
 export type ZhiiveApp = 'explore' | 'flow' | 'reels' | 'universe' | 'stats';
 export type FeedMode = 'personal' | 'org';
@@ -30,17 +31,6 @@ interface ZhiiveNavContextType {
 
 const defaultTabOrder = ['explore', 'flow', 'reels', 'mur', 'universe', 'stats'];
 
-function loadTabOrder(): string[] {
-  try {
-    const s = localStorage.getItem('sf_tab_order');
-    if (s) {
-      const parsed = JSON.parse(s);
-      if (Array.isArray(parsed) && parsed.includes('mur')) return parsed;
-    }
-  } catch { /* ignore */ }
-  return defaultTabOrder;
-}
-
 const ZhiiveNavContext = createContext<ZhiiveNavContextType>({
   centerApp: null, setCenterApp: () => {},
   leftApps: ['explore', 'flow', 'reels'], rightApps: ['universe', 'stats'],
@@ -59,10 +49,18 @@ interface ZhiiveNavProviderProps {
 
 export const ZhiiveNavProvider = ({ children, initialFeedMode, onFeedModeChange }: ZhiiveNavProviderProps) => {
   const [centerApp, setCenterApp] = useState<ZhiiveApp | null>(null);
-  const [tabOrder, setTabOrder] = useState<string[]>(loadTabOrder);
+  const [savedTabOrder, setSavedTabOrder] = useUserPreference<string[]>('sf_tab_order', defaultTabOrder);
+  const [tabOrder, setTabOrder] = useState<string[]>(defaultTabOrder);
   const [mobilePanel, setMobilePanel] = useState(0);
   const [feedMode, setFeedModeInternal] = useState<FeedMode>(initialFeedMode || 'org');
   const mobileScrollRef = useRef<((panel: number) => void) | null>(null);
+
+  // Sync tabOrder from DB once loaded
+  useEffect(() => {
+    if (Array.isArray(savedTabOrder) && savedTabOrder.includes('mur')) {
+      setTabOrder(savedTabOrder);
+    }
+  }, [savedTabOrder]);
 
   // Sync if initialFeedMode changes (e.g. user data loads async)
   useEffect(() => {
@@ -118,10 +116,10 @@ export const ZhiiveNavProvider = ({ children, initialFeedMode, onFeedModeChange 
       arr.splice(from, 1);
       const newTo = from < to ? to - 1 : to;
       arr.splice(newTo, 0, dragId);
-      localStorage.setItem('sf_tab_order', JSON.stringify(arr));
+      setSavedTabOrder(arr);
       return arr;
     });
-  }, []);
+  }, [setSavedTabOrder]);
 
   return (
     <ZhiiveNavContext.Provider value={{

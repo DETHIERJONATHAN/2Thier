@@ -288,9 +288,9 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
             <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
               {(currentOrganization ? ['IN', 'ALL', 'OUT'] as const : ['ALL', 'OUT'] as const).map(v => {
                 const labels: Record<string, { icon: string; label: string; color: string }> = {
-                  IN: { icon: '⬡', label: 'Colony', color: '#1890ff' },
-                  ALL: { icon: '🌐', label: 'Public', color: '#52c41a' },
-                  OUT: { icon: '🔒', label: 'Private', color: '#8c8c8c' },
+                  IN: { icon: '⬡', label: 'Colony', color: SF.scopeColony },
+                  ALL: { icon: '🌐', label: 'Public', color: SF.scopePublic },
+                  OUT: { icon: '🔒', label: 'Private', color: SF.scopePrivate },
                 };
                 const opt = labels[v];
                 const active = sparkVisibility === v;
@@ -298,8 +298,8 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
                   <div key={v} onClick={() => setSparkVisibility(v)} style={{
                     display: 'flex', alignItems: 'center', gap: 4, padding: '3px 10px',
                     borderRadius: 14, cursor: 'pointer', fontSize: 12, fontWeight: 600,
-                    background: active ? opt.color + '18' : '#f5f5f5',
-                    color: active ? opt.color : '#999',
+                    background: active ? opt.color + '18' : SF.bgLighter,
+                    color: active ? opt.color : SF.textPlaceholder,
                     border: active ? `1px solid ${opt.color}` : '1px solid transparent',
                     transition: 'all 0.15s',
                   }}>
@@ -402,7 +402,7 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
               onClick={() => setBattleModalOpen(true)}
               style={{
               padding: '8px 20px', borderRadius: 20, display: 'inline-block',
-              background: 'rgba(255,255,255,0.25)', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+              background: SF.overlayLight, fontWeight: 700, fontSize: 13, cursor: 'pointer',
             }}>
               {t('flow.launchBattleBtn')}
             </div>
@@ -571,7 +571,7 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
                     }}
                     style={{
                       marginTop: 8, width: '100%', padding: '6px 0', border: 'none',
-                      borderRadius: SF.radiusSm, background: SF.primary, color: '#fff',
+                      borderRadius: SF.radiusSm, background: SF.primary, color: SF.textLight,
                       fontWeight: 600, fontSize: 12, cursor: 'pointer',
                     }}
                   >

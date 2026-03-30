@@ -198,7 +198,10 @@ export async function syncUserEmails(userId: string): Promise<void> {
 
     // Déchiffrer le mot de passe (pour l'instant on utilise le même)
     // TODO: Implémenter le déchiffrement
-    const password = 'password-temporaire';
+    const password = emailAccount.encryptedPassword || '';
+    if (!password) {
+      throw new Error('Aucun mot de passe configuré pour ce compte email');
+    }
 
     const syncService = new EmailSyncService(emailAccount.emailAddress, password);
     

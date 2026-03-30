@@ -339,7 +339,7 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
       {activeSection === 'pulse' && (
         <div>
           <div style={{
-            background: '#1a1a2e', borderRadius: SF.radius, overflow: 'hidden',
+            background: SF.dark, borderRadius: SF.radius, overflow: 'hidden',
             boxShadow: SF.shadowMd, marginBottom: 12,
           }}>
             <canvas
@@ -398,7 +398,7 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
               onClick={() => setEventModalOpen(true)}
               style={{
               padding: '6px 18px', borderRadius: 20, display: 'inline-block',
-              background: 'rgba(255,255,255,0.25)', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+              background: SF.overlayLight, fontWeight: 700, fontSize: 12, cursor: 'pointer',
             }}>
               📅 Create
             </div>
@@ -431,9 +431,9 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {(currentOrganization ? ['IN', 'ALL', 'OUT'] : ['ALL', 'OUT']).map(v => {
                   const labels: Record<string, { icon: string; label: string; color: string }> = {
-                    IN: { icon: '⬡', label: 'Colony', color: '#1890ff' },
-                    ALL: { icon: '🌐', label: 'Public', color: '#52c41a' },
-                    OUT: { icon: '🔒', label: 'Private', color: '#8c8c8c' },
+                    IN: { icon: '⬡', label: 'Colony', color: SF.scopeColony },
+                    ALL: { icon: '🌐', label: 'Public', color: SF.scopePublic },
+                    OUT: { icon: '🔒', label: 'Private', color: SF.scopePrivate },
                   };
                   const opt = labels[v];
                   const active = eventVisibility === v;
@@ -441,8 +441,8 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
                     <div key={v} onClick={() => setEventVisibility(v)} style={{
                       display: 'flex', alignItems: 'center', gap: 4, padding: '3px 10px',
                       borderRadius: 14, cursor: 'pointer', fontSize: 12, fontWeight: 600,
-                      background: active ? opt.color + '18' : '#f5f5f5',
-                      color: active ? opt.color : '#999',
+                      background: active ? opt.color + '18' : SF.bgLighter,
+                      color: active ? opt.color : SF.textPlaceholder,
                       border: active ? `1px solid ${opt.color}` : '1px solid transparent',
                       transition: 'all 0.15s',
                     }}>
@@ -607,7 +607,7 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
       {activeSection === 'orbit' && (
         <div>
           <div style={{
-            background: '#1a1a2e', borderRadius: SF.radius, padding: 20, marginBottom: 12,
+            background: SF.dark, borderRadius: SF.radius, padding: 20, marginBottom: 12,
             boxShadow: SF.shadowMd, textAlign: 'center', minHeight: 200,
             position: 'relative', overflow: 'hidden',
           }}>
@@ -615,8 +615,8 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
             <Avatar size={48} src={isOrgMode ? (orgLogo || undefined) : (currentUser?.avatarUrl || undefined)}
               icon={!isOrgMode && !currentUser?.avatarUrl ? <UserOutlined /> : undefined}
               style={{
-                background: isOrgMode ? (orgLogo ? 'transparent' : '#6C5CE7') : (!currentUser?.avatarUrl ? SF.primary : undefined),
-                border: `2px solid ${isOrgMode ? '#6C5CE7' : SF.primary}`,
+                background: isOrgMode ? (orgLogo ? 'transparent' : SF.primary) : (!currentUser?.avatarUrl ? SF.primary : undefined),
+                border: `2px solid ${isOrgMode ? SF.primary : SF.primary}`,
                 position: 'relative', zIndex: 2,
               }}
             >

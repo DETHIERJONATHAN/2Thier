@@ -272,8 +272,10 @@ export async function createYandexServiceForUser(userId: string): Promise<Yandex
   }
 
   // TODO: Déchiffrer le mot de passe
-  // Pour l'instant, nous devons demander à l'utilisateur de saisir son mot de passe Yandex
-  const password = 'MOT_DE_PASSE_TEMPORAIRE'; // À remplacer par le vrai mot de passe
+  const password = emailAccount.encryptedPassword || '';
+  if (!password) {
+    throw new Error('Aucun mot de passe Yandex configuré pour ce compte');
+  }
 
   return new YandexMailService(emailAccount.emailAddress, password);
 }

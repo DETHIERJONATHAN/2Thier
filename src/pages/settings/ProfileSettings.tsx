@@ -273,7 +273,7 @@ const ProfileSettings: React.FC = () => {
                 const lang = e.target.value;
                 setLanguageState(lang);
                 i18n.changeLanguage(lang);
-                localStorage.setItem('zhiive_language', lang);
+                // Language is saved to DB via handleSubmit → api.put('/api/profile', { language })
               }}
               style={{
                 flex: 1, border: 'none', outline: 'none', fontSize: 15, color: FB.text,

@@ -45,37 +45,8 @@ interface AuthenticatedRequest extends Request {
 const router = Router();
 const prisma = db;
 
-// 🚀 CACHE: Trigger index par treeId pour éviter 6-7 requêtes prisma par évaluation
-// Le trigger index dépend UNIQUEMENT de la structure de l'arbre (nœuds, formules, tables, variables, conditions)
-// TTL: 60 secondes — suffisant pour couvrir les changements rapides de l'utilisateur
-interface CachedTriggerIndex {
-  triggerIndex: Map<string, Set<string>>;
-  allLinkedNodes: Array<{ id: string; label: string | null; link_targetNodeId: string }>;
-  optionToSelectMap: Map<string, string>;
-  timestamp: number;
-}
-const triggerIndexCache = new Map<string, CachedTriggerIndex>();
-const TRIGGER_INDEX_CACHE_TTL = 60_000; // 60 secondes
-
-// 🚀 CACHE: Nœuds exclus (DISPLAY / hasFormula) par treeId pour saveUserEntriesNeutral
-// Évite 2-3 findMany(nodes) répétés sur chaque frappe (coût ~300-500ms)
-interface CachedExcludedNodes {
-  excludedNodeIds: Set<string>;
-  timestamp: number;
-}
-const excludedNodesCache = new Map<string, CachedExcludedNodes>();
-const EXCLUDED_NODES_CACHE_TTL = 60_000; // 60s
-
-/** Invalider le cache du trigger index pour un treeId donné */
-export function invalidateTriggerIndexCache(treeId?: string) {
-  if (treeId) {
-    triggerIndexCache.delete(treeId);
-    excludedNodesCache.delete(treeId);
-  } else {
-    triggerIndexCache.clear();
-    excludedNodesCache.clear();
-  }
-}
+/** Invalidation hook (no-op — plus de cache) */
+export function invalidateTriggerIndexCache(_treeId?: string) { /* no-op */ }
 
 function normalizeRefForTriggers(ref?: unknown): string {
   if (!ref || typeof ref !== 'string') return '';
@@ -672,43 +643,37 @@ async function saveUserEntriesNeutral(
   // Mais beaucoup de champs calculés (ex: "Main d'œuvre TVAC") ont subType='TEXT' malgré hasFormula=true.
   // Résultat: saveUserEntriesNeutral les sauvegardait comme inputs "neutral", ÉCRASANT la valeur calculée.
   // Lors de l'autosave (mode='autosave', skip DISPLAY), cette valeur stale persistait.
-  // 🚀 CACHE: Nœuds exclus per-tree (DISPLAY / hasFormula) — évite 2 findMany à chaque frappe
+  // 🚀 Nœuds exclus per-tree (DISPLAY / hasFormula)
   let excludedNodeIds: Set<string>;
   if (treeId) {
-    const cached = excludedNodesCache.get(treeId);
-    if (cached && (Date.now() - cached.timestamp < EXCLUDED_NODES_CACHE_TTL)) {
-      excludedNodeIds = cached.excludedNodeIds;
-    } else {
-      // Calcul initial: charger les nœuds exclus + affiner (FIX E2 contraintes)
-      const excludedNodes = await prisma.treeBranchLeafNode.findMany({
-        where: {
-          treeId,
-          OR: [
-            { fieldType: 'DISPLAY' },
-            { type: { in: ['leaf_field', 'LEAF_FIELD'] }, subType: { in: ['display', 'DISPLAY', 'Display'] } },
-            { hasFormula: true },
-            { hasCondition: true },
-          ],
-        },
-        select: { id: true, label: true },
-      });
-      const ids = new Set(excludedNodes.map(n => n.id));
+    // Calcul: charger les nœuds exclus + affiner (FIX E2 contraintes)
+    const excludedNodes = await prisma.treeBranchLeafNode.findMany({
+      where: {
+        treeId,
+        OR: [
+          { fieldType: 'DISPLAY' },
+          { type: { in: ['leaf_field', 'LEAF_FIELD'] }, subType: { in: ['display', 'DISPLAY', 'Display'] } },
+          { hasFormula: true },
+          { hasCondition: true },
+        ],
+      },
+      select: { id: true, label: true },
+    });
+    const ids = new Set(excludedNodes.map(n => n.id));
 
-      // 🔧 FIX E2: Re-inclure les nœuds avec UNIQUEMENT des formules de contrainte (targetProperty non-null)
-      const formulaExcludedIds = excludedNodes.filter(n => ids.has(n.id)).map(n => n.id);
-      if (formulaExcludedIds.length > 0) {
-        const nodesWithCalcFormulas = await prisma.treeBranchLeafNodeFormula.findMany({
-          where: { nodeId: { in: formulaExcludedIds }, targetProperty: null },
-          select: { nodeId: true },
-        });
-        const nodesWithCalcSet = new Set(nodesWithCalcFormulas.map(f => f.nodeId));
-        for (const nodeId of formulaExcludedIds) {
-          if (!nodesWithCalcSet.has(nodeId)) ids.delete(nodeId);
-        }
+    // 🔧 FIX E2: Re-inclure les nœuds avec UNIQUEMENT des formules de contrainte (targetProperty non-null)
+    const formulaExcludedIds = excludedNodes.filter(n => ids.has(n.id)).map(n => n.id);
+    if (formulaExcludedIds.length > 0) {
+      const nodesWithCalcFormulas = await prisma.treeBranchLeafNodeFormula.findMany({
+        where: { nodeId: { in: formulaExcludedIds }, targetProperty: null },
+        select: { nodeId: true },
+      });
+      const nodesWithCalcSet = new Set(nodesWithCalcFormulas.map(f => f.nodeId));
+      for (const nodeId of formulaExcludedIds) {
+        if (!nodesWithCalcSet.has(nodeId)) ids.delete(nodeId);
       }
-      excludedNodeIds = ids;
-      excludedNodesCache.set(treeId, { excludedNodeIds: ids, timestamp: Date.now() });
     }
+    excludedNodeIds = ids;
   } else {
     excludedNodeIds = new Set<string>();
   }
@@ -1508,31 +1473,9 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
   }
   
   if (mode === 'change' && changedFieldId) {
-    // 🚀 CHECK CACHE: Réutiliser le trigger index si déjà construit pour ce tree
-    const cached = triggerIndexCache.get(treeId);
-    const cacheValid = cached && (Date.now() - cached.timestamp < TRIGGER_INDEX_CACHE_TTL);
-    
-    if (cacheValid) {
-      // ✅ CACHE HIT: Copier l'index depuis le cache (O(1) lookup pré-construit)
-      for (const [key, value] of cached.triggerIndex) {
-        triggerIndex.set(key, new Set(value));
-      }
-      
-      // Construire linkedFieldsToRefresh depuis le cache
-      // 🔧 FIX R21 + FIX A: Matcher sur TOUS les changedFieldIds et leurs bases
-      for (const ln of cached.allLinkedNodes) {
-        if (changedFieldIdSet.has(ln.link_targetNodeId!)) {
-          linkedFieldsToRefresh.set(ln.id, {
-            targetNodeId: ln.link_targetNodeId!,
-            nodeLabel: ln.label || ln.id
-          });
-        }
-      }
-      
-      const affectedCount = allChangedFieldIds.reduce((sum, id) => sum + (triggerIndex.get(id)?.size || 0), 0);
-      // console.log(`🚀 [TRIGGER INDEX CACHE HIT] ${affectedCount} impactés par "${changedFieldId}" (cache age: ${Math.round((Date.now() - cached.timestamp) / 1000)}s)`);
-    } else {
-      // 🔧 CACHE MISS: Construire le trigger index complet (pour TOUS les changedFieldIds possibles)
+    // ✅ Zéro cache — on reconstruit le trigger index à chaque évaluation depuis Cloud SQL
+    {
+      // Construire le trigger index complet (pour TOUS les changedFieldIds possibles)
       
       const displayFieldIds = capacities
         .filter(cap => {
@@ -1896,13 +1839,6 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
         }
       }
       
-      // 📦 STOCKER dans le cache pour les prochaines évaluations
-      triggerIndexCache.set(treeId, {
-        triggerIndex: new Map([...triggerIndex].map(([k, v]) => [k, new Set(v)])),
-        allLinkedNodes: allLinkedNodes.map(ln => ({ id: ln.id, label: ln.label, link_targetNodeId: ln.link_targetNodeId! })),
-        optionToSelectMap,
-        timestamp: Date.now()
-      });
       
       const affectedCount = triggerIndex.get(changedFieldId)?.size || 0;
     }

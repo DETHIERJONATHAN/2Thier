@@ -1,9 +1,10 @@
-import React, { useState, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { Modal, Tabs, Button, Space, Row, Col, Empty, Spin } from 'antd';
 import { BgColorsOutlined } from '@ant-design/icons';
 import { PAGE_BACKGROUNDS, buildCustomBackgroundDataUri } from './PageBackgrounds';
 import type { PageBackground } from './PageBackgrounds';
 import { useAuth } from '../../auth/useAuth';
+import { useUserPreference } from '../../hooks/useUserPreference';
 
 interface BackgroundSelectorProps {
   open: boolean;
@@ -35,17 +36,16 @@ export const BackgroundSelector: React.FC<BackgroundSelectorProps> = ({
   const [loading, setLoading] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const { isSuperAdmin } = useAuth();
-  const [customEntries, setCustomEntries] = useState<Array<{ id: string; name: string; rawSvg: string }>>(() => {
-    if (typeof window === 'undefined') return [];
-    try {
-      const raw = window.localStorage.getItem('customBackgrounds');
-      const parsed = raw ? JSON.parse(raw) : [];
-      if (!Array.isArray(parsed)) return [];
-      return parsed.filter((item) => item?.id && item?.rawSvg);
-    } catch {
-      return [];
-    }
-  });
+  const [savedBgs, setSavedBgs] = useUserPreference<Array<{ id: string; name: string; rawSvg: string }>>('customBackgrounds', []);
+  const [customEntries, setCustomEntries] = useState<Array<{ id: string; name: string; rawSvg: string }>>([]);
+  const bgsSyncedRef = useRef(false);
+  
+  // Sync from DB on load
+  useEffect(() => {
+    if (bgsSyncedRef.current || !Array.isArray(savedBgs) || savedBgs.length === 0) return;
+    bgsSyncedRef.current = true;
+    setCustomEntries(savedBgs.filter((item) => item?.id && item?.rawSvg));
+  }, [savedBgs]);
 
   const testBackgroundIds = useMemo(
     () => new Set(['bg_invoice_vecteezy_6314850', 'bg_invoice_vecteezy_6314448', 'bg_invoice_vecteezy_6315045']),
@@ -106,9 +106,7 @@ export const BackgroundSelector: React.FC<BackgroundSelectorProps> = ({
       const entryName = file.name.replace(/\.svg$/i, '');
       const nextEntries = [...customEntries, { id: entryId, name: entryName, rawSvg }];
       setCustomEntries(nextEntries);
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem('customBackgrounds', JSON.stringify(nextEntries));
-      }
+      setSavedBgs(nextEntries);
       onSelect(entryId, svgUri, rawSvg);
       setTimeout(() => {
         setLoading(false);
@@ -123,10 +121,8 @@ export const BackgroundSelector: React.FC<BackgroundSelectorProps> = ({
   const handleDeleteCustom = useCallback((id: string) => {
     const nextEntries = customEntries.filter(entry => entry.id !== id);
     setCustomEntries(nextEntries);
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('customBackgrounds', JSON.stringify(nextEntries));
-    }
-  }, [customEntries]);
+    setSavedBgs(nextEntries);
+  }, [customEntries, setSavedBgs]);
 
   // Composant pour une carte de background
   const BackgroundCard = useCallback(({ background }: { background: PageBackground & { rawSvg?: string } }) => {

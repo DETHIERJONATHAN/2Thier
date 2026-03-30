@@ -511,7 +511,7 @@ const TelnyxConfig: React.FC<TelnyxConfigProps> = ({
       key: 'priority',
       render: (priority: number) => {
         const priorityMap = {
-          1: { text: 'CRM (1)', color: 'red' },
+          1: { text: 'App (1)', color: 'red' },
           2: { text: 'Softphone (2)', color: 'blue' },
           3: { text: 'PSTN (3)', color: 'green' }
         };

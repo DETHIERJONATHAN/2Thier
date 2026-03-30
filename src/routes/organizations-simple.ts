@@ -5,53 +5,12 @@ const router = express.Router();
 
 /**
  * 🏢 ROUTES ORGANIZATIONS - VERSION SIMPLE POUR DEBUG
- * 🚀 CACHE EN MÉMOIRE pour performances (TTL 60s)
+ * ✅ Zéro cache — chaque requête va directement à Cloud SQL
  */
-
-// 🚀 CACHE MÉMOIRE SIMPLE (alternative légère à Redis)
-interface CacheEntry<T> {
-  data: T;
-  expiry: number;
-}
-const cache = new Map<string, CacheEntry<unknown>>();
-const CACHE_TTL_MS = 60_000; // 60 secondes
-
-function getCached<T>(key: string): T | null {
-  const entry = cache.get(key);
-  if (!entry) return null;
-  if (Date.now() > entry.expiry) {
-    cache.delete(key);
-    return null;
-  }
-  return entry.data as T;
-}
-
-function setCache<T>(key: string, data: T): void {
-  cache.set(key, { data, expiry: Date.now() + CACHE_TTL_MS });
-}
-
-function invalidateCache(pattern?: string): void {
-  if (!pattern) {
-    cache.clear();
-  } else {
-    for (const key of cache.keys()) {
-      if (key.includes(pattern)) cache.delete(key);
-    }
-  }
-}
 
 // GET /api/organizations - Récupérer toutes les organisations
 router.get('/', async (req, res) => {
   try {
-    const cacheKey = 'organizations:all';
-    
-    // 🚀 Vérifier le cache d'abord
-    const cached = getCached<unknown[]>(cacheKey);
-    if (cached) {
-      console.log(`⚡ [GET /api/organizations] Cache HIT (${cached.length} orgs)`);
-      return res.json({ success: true, data: cached, cached: true });
-    }
-    
     console.log('📡 [GET /api/organizations] Récupération des organisations...');
     
     const organizations = await prisma.organization.findMany({
@@ -66,10 +25,7 @@ router.get('/', async (req, res) => {
       }
     });
 
-    // 🚀 Mettre en cache
-    setCache(cacheKey, organizations);
-    
-    console.log(`✅ [GET /api/organizations] ${organizations.length} organisations trouvées (cached)`);
+    console.log(`✅ [GET /api/organizations] ${organizations.length} organisations trouvées`);
     res.json({ success: true, data: organizations });
   } catch (error) {
     console.error('❌ [GET /api/organizations] Erreur:', error);
@@ -81,14 +37,6 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const cacheKey = `organizations:${id}`;
-    
-    // 🚀 Vérifier le cache d'abord
-    const cached = getCached<unknown>(cacheKey);
-    if (cached) {
-      console.log(`⚡ [GET /api/organizations/${id}] Cache HIT`);
-      return res.json({ success: true, data: cached, cached: true });
-    }
     
     console.log(`📡 [GET /api/organizations/${id}] Récupération organisation...`);
     
@@ -109,9 +57,6 @@ router.get('/:id', async (req, res) => {
       console.log(`❌ [GET /api/organizations/${id}] Organisation non trouvée`);
       return res.status(404).json({ success: false, error: 'Organisation non trouvée' });
     }
-
-    // 🚀 Mettre en cache
-    setCache(cacheKey, organization);
 
     console.log(`✅ [GET /api/organizations/${id}] Organisation trouvée: ${organization.name}`);
     res.json({ success: true, data: organization });
@@ -142,9 +87,6 @@ router.post('/', async (req, res) => {
         }
       }
     });
-
-    // 🚀 Invalider le cache
-    invalidateCache('organizations');
 
     console.log(`✅ [POST /api/organizations] Organisation créée: ${newOrganization.name}`);
     res.json({ success: true, data: newOrganization });
@@ -183,9 +125,6 @@ router.put('/:id', async (req, res) => {
       }
     });
 
-    // 🚀 Invalider le cache
-    invalidateCache('organizations');
-
     console.log(`✅ [PUT /api/organizations/${id}] Organisation mise à jour: ${updatedOrganization.name}`);
     res.json({ success: true, data: updatedOrganization });
   } catch (error) {
@@ -212,9 +151,6 @@ router.delete('/:id', async (req, res) => {
     console.log(`📡 [DELETE /api/organizations/${id}] Suppression organisation...`);
     
     await prisma.organization.delete({ where: { id } });
-    
-    // 🚀 Invalider le cache
-    invalidateCache('organizations');
     
     console.log(`✅ [DELETE /api/organizations/${id}] Organisation supprimée`);
     res.json({ success: true, message: 'Organisation supprimée avec succès' });

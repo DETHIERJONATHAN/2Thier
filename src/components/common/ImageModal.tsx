@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import DOMPurify from 'dompurify';
 import { Modal } from 'antd';
 
 /**
@@ -121,7 +122,7 @@ export const useImageModal = () => {
                   marginBottom: hasRichImage ? 20 : 0,
                 }}
                 dangerouslySetInnerHTML={{
-                  __html: modalState.htmlContent!.replace(/\n/g, '<br>')
+                  __html: DOMPurify.sanitize(modalState.htmlContent!.replace(/\n/g, '<br>'))
                 }}
               />
             )}

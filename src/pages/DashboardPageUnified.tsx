@@ -1951,18 +1951,33 @@ export default function DashboardPageUnified() {
   // Hooks must be called before any early return to respect Rules of Hooks
   const { sections: sharedSections } = useSharedSections();
 
-  // Module favorites (long-press to toggle, persisted in localStorage)
-  const [favModules, setFavModules] = useState<Set<string>>(() => {
-    try { const s = localStorage.getItem('crm_fav_modules'); return s ? new Set(JSON.parse(s)) : new Set(); } catch { return new Set(); }
-  });
+  // Module favorites (long-press to toggle, persisted in DB)
+  const [favModules, setFavModules] = useState<Set<string>>(new Set());
+  const favModulesLoadedRef = useRef(false);
+  useEffect(() => {
+    if (favModulesLoadedRef.current) return;
+    favModulesLoadedRef.current = true;
+    (async () => {
+      try {
+        const resp = await api.get('/user/favorites');
+        if (resp?.favorites) setFavModules(new Set(resp.favorites));
+      } catch { /* first load, no favorites yet */ }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const toggleFavModule = useCallback((route: string) => {
     setFavModules(prev => {
       const next = new Set(prev);
-      if (next.has(route)) next.delete(route); else next.add(route);
-      localStorage.setItem('crm_fav_modules', JSON.stringify([...next]));
+      if (next.has(route)) {
+        next.delete(route);
+        api.delete(`/user/favorites/${encodeURIComponent(route)}`).catch(() => {});
+      } else {
+        next.add(route);
+        api.post('/user/favorites', { moduleKey: route }).catch(() => {});
+      }
       return next;
     });
-  }, []);
+  }, [api]);
 
   // Long-press detection for module favorites (replaces double-click/double-tap)
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);

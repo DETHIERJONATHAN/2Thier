@@ -16,9 +16,6 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import { renderWebsite } from './websiteRenderer';
 
-// 🚀 CACHE MÉMOIRE pour éviter les requêtes Prisma répétées
-const websiteCache = new Map<string, { data: any; timestamp: number }>();
-const CACHE_TTL = 60_000; // 60 secondes
 const isProduction = process.env.NODE_ENV === 'production';
 
 // Domaines réservés pour le CRM (ne sont PAS des sites vitrines)
@@ -86,19 +83,6 @@ export async function detectWebsite(
     // Nettoyer le hostname (enlever www. si présent)
     const cleanDomain = hostname.replace(/^www\./, '');
 
-    // 🚀 VÉRIFIER LE CACHE D'ABORD
-    const cacheKey = cleanDomain;
-    const cached = websiteCache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
-      if (cached.data) {
-        req.websiteData = cached.data;
-        req.isWebsiteRoute = true;
-      } else {
-        req.isWebsiteRoute = false;
-      }
-      return next();
-    }
-
     if (!isProduction) {
       console.log(`🌐 [WEBSITE-DETECTION] Recherche site pour: ${cleanDomain}`);
     }
@@ -132,13 +116,10 @@ export async function detectWebsite(
         id: website.id,
         slug: website.slug,
         domain: website.domain || cleanDomain,
-        name: website.siteName, // ← Correction: utiliser siteName au lieu de name
+        name: website.siteName,
         config: website.website_configs,
         sections: website.website_sections
       };
-      
-      // 🚀 METTRE EN CACHE
-      websiteCache.set(cacheKey, { data: websiteData, timestamp: Date.now() });
       
       req.websiteData = websiteData;
       req.isWebsiteRoute = true;
@@ -149,8 +130,6 @@ export async function detectWebsite(
       if (!isProduction) {
         console.log(`⚠️ [WEBSITE-DETECTION] Aucun site trouvé pour: ${cleanDomain}`);
       }
-      // 🚀 METTRE EN CACHE (résultat null)
-      websiteCache.set(cacheKey, { data: null, timestamp: Date.now() });
       req.isWebsiteRoute = false;
     }
 

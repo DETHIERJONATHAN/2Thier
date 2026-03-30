@@ -35,6 +35,7 @@ import { DocumentTemplate, instantiateTemplate } from './DocumentTemplates';
 import { DocumentPage, ModuleInstance, DocumentTemplateConfig, EditorState } from './types';
 import { getModuleById } from './ModuleRegistry';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { useUserPreference } from '../../hooks/useUserPreference';
 
 interface PageBuilderProps {
   templateId: string;
@@ -45,6 +46,7 @@ interface PageBuilderProps {
 
 const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilderProps) => {
   const { api } = useAuthenticatedApi();
+  const [savedCustomBgs] = useUserPreference<Array<{ id: string; name: string; rawSvg: string }>>('customBackgrounds', []);
   
   // Détection responsive avec window.innerWidth (plus fiable dans les Drawers)
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200);
@@ -273,18 +275,12 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
         console.log('🔄 [PageBuilder] Regenerating background for page:', p.id, 'backgroundId:', p.backgroundId);
         
         let rawSvg = p.backgroundCustomSvg;
-        if (!rawSvg && p.backgroundId?.startsWith('bg_custom_') && typeof window !== 'undefined') {
-          try {
-            const stored = window.localStorage.getItem('customBackgrounds');
-            const list = stored ? JSON.parse(stored) : [];
-            const match = Array.isArray(list)
-              ? list.find((item) => item?.id === p.backgroundId && item?.rawSvg)
-              : null;
-            if (match?.rawSvg) {
-              rawSvg = match.rawSvg;
-            }
-          } catch {
-            // ignore
+        if (!rawSvg && p.backgroundId?.startsWith('bg_custom_')) {
+          const match = Array.isArray(savedCustomBgs)
+            ? savedCustomBgs.find((item) => item?.id === p.backgroundId && item?.rawSvg)
+            : null;
+          if (match?.rawSvg) {
+            rawSvg = match.rawSvg;
           }
         }
 

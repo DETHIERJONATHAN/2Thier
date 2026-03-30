@@ -31,25 +31,11 @@ const sanitizeText = (value: unknown): string | null | undefined => {
   return trimmed.length === 0 ? null : trimmed;
 };
 
-// Helper: save uploaded file via storage module (local in dev, GCS in prod)
+// Helper: upload file to GCS via storage module
 const saveUploadedFileToStorage = async (file: any, folder: string, filename: string): Promise<string> => {
   const ext = path.extname(file.name);
   const finalName = `${filename}_${Date.now()}${ext}`;
   const key = `${folder}/${finalName}`;
-  // Clean up old local files in dev
-  if (process.env.NODE_ENV !== 'production') {
-    const destDir = path.join('public', 'uploads', folder);
-    try {
-      if (fs.existsSync(destDir)) {
-        const existing = fs.readdirSync(destDir);
-        for (const f of existing) {
-          if (f.startsWith(filename + '_') || f.startsWith(filename + '.')) {
-            fs.unlinkSync(path.join(destDir, f));
-          }
-        }
-      }
-    } catch { /* ignore cleanup errors */ }
-  }
   const url = await uploadExpressFile(file, key);
   return url;
 };
@@ -324,12 +310,7 @@ router.put('/', (async (req: any, res: Response) => {
       if (trimmed.length === 0) {
         normalizedAvatarUrl = null;
       } else {
-        try {
-          const parsed = new URL(trimmed);
-          normalizedAvatarUrl = parsed.pathname.startsWith('/uploads/') ? parsed.pathname : trimmed;
-        } catch {
-          normalizedAvatarUrl = trimmed;
-        }
+        normalizedAvatarUrl = trimmed;
       }
     }
 

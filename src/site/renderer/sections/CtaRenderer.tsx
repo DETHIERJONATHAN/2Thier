@@ -1,4 +1,5 @@
 import React, { Fragment, useCallback, useMemo } from 'react';
+import DOMPurify from 'dompurify';
 import { Button, Space } from 'antd';
 import { motion } from 'framer-motion';
 import { useInView } from 'react-intersection-observer';
@@ -595,7 +596,7 @@ export const CtaRenderer: React.FC<CtaRendererProps> = ({ content, mode = 'previ
                 color: style.titleColor || '#ffffff',
                 lineHeight: '1.2'
               }}
-              dangerouslySetInnerHTML={{ __html: title }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(title) }}
             />
           )}
 

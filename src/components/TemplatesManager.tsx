@@ -1,33 +1,29 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useUserPreference } from '../hooks/useUserPreference';
 
 interface Template {
   name: string;
   data: any;
 }
 
-const LOCAL_STORAGE_KEY = 'fieldBuilderTemplates';
-
-function loadTemplates(): Template[] {
-  try {
-    return JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]');
-  } catch {
-    return [];
-  }
-}
-
-function saveTemplates(templates: Template[]) {
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(templates));
-}
-
 const TemplatesManager: React.FC<{ block: any; onLoad: (data: any) => void }> = ({ block, onLoad }) => {
-  const [templates, setTemplates] = useState<Template[]>(loadTemplates());
+  const [savedTemplates, setSavedTemplates] = useUserPreference<Template[]>('fieldBuilderTemplates', []);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const syncedRef = useRef(false);
   const [templateName, setTemplateName] = useState('');
+
+  // Sync from DB on load
+  useEffect(() => {
+    if (syncedRef.current || !Array.isArray(savedTemplates) || savedTemplates.length === 0) return;
+    syncedRef.current = true;
+    setTemplates(savedTemplates);
+  }, [savedTemplates]);
 
   function handleSave() {
     if (!templateName.trim()) return;
     const newTemplates = [...templates, { name: templateName, data: block }];
     setTemplates(newTemplates);
-    saveTemplates(newTemplates);
+    setSavedTemplates(newTemplates);
     setTemplateName('');
   }
 
@@ -38,7 +34,7 @@ const TemplatesManager: React.FC<{ block: any; onLoad: (data: any) => void }> = 
   function handleDelete(name: string) {
     const newTemplates = templates.filter(t => t.name !== name);
     setTemplates(newTemplates);
-    saveTemplates(newTemplates);
+    setSavedTemplates(newTemplates);
   }
 
   return (

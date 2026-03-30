@@ -98,7 +98,7 @@ const GoogleCalendarPage: React.FC = () => {
       priority: 'medium',
       status: 'confirmed',
       reminders: [10],
-      tags: ['demo', 'CRM'],
+      tags: ['demo', 'hive'],
       organizer: 'contact@2thier.be',
       visibility: 'public'
     },

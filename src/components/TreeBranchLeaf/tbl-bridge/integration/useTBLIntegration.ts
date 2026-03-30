@@ -50,13 +50,14 @@ interface UseTBLIntegrationReturn {
 
 export function useTBLIntegration(config: Partial<TBLIntegrationConfig> = {}): UseTBLIntegrationReturn {
   
-  // Configuration avec valeurs par défaut
+  // Configuration avec valeurs par défaut (— stockage mémoire uniquement, données via API/Cloud SQL)
   const fullConfig: TBLIntegrationConfig = {
     enableAutoGeneration: true,
     enableRealTimeSync: true,
-    storageMode: 'localStorage',
+    storageMode: 'memory',
     debugMode: true,
-    ...config
+    ...config,
+    storageMode: 'memory', // forcé : zéro stockage local
   };
 
   // Instance TBL Bridge
@@ -83,53 +84,15 @@ export function useTBLIntegration(config: Partial<TBLIntegrationConfig> = {}): U
     }
   }, [fullConfig.debugMode]);
 
-  // Clé de stockage localStorage
-  const STORAGE_KEY = 'tbl-bridge-integration-data';
+  // 💾 Sauvegarde en mémoire uniquement (données via API/Cloud SQL)
+  const saveToStorage = useCallback((_elements: Map<string, TBLElement>) => {
+    log('💾 Données TBL en mémoire (Cloud SQL via API)');
+  }, [log]);
 
-  // � Fonction de log stable
-  const log = useCallback((message: string) => {
-    if (fullConfig.debugMode) {
-      console.log(`[TBL Integration] ${message}`);
-    }
-  }, [fullConfig.debugMode]);
-
-  // �💾 Sauvegarde dans le stockage choisi
-  const saveToStorage = useCallback((elements: Map<string, TBLElement>) => {
-    if (fullConfig.storageMode === 'localStorage') {
-      try {
-        const data = Object.fromEntries(elements.entries());
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-        log('💾 Données TBL sauvegardées dans localStorage');
-      } catch (error) {
-        log(`❌ Erreur sauvegarde localStorage: ${error}`);
-      }
-    }
-  }, [fullConfig.storageMode, log]);
-
-  // 📂 Chargement depuis le stockage
+  // 📂 Chargement depuis la mémoire (rien à restaurer)
   const loadFromStorage = useCallback((): Map<string, TBLElement> => {
-    if (fullConfig.storageMode === 'localStorage') {
-      try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-          const data = JSON.parse(stored);
-          const elements = new Map(Object.entries(data));
-          log(`📂 ${elements.size} éléments TBL chargés depuis localStorage`);
-          return elements;
-        }
-      } catch (error) {
-        log(`❌ Erreur chargement localStorage: ${error}`);
-      }
-    }
     return new Map();
-  }, [fullConfig.storageMode, log]);
-
-  // 🔧 Fonction de log
-  const log = useCallback((message: string) => {
-    if (fullConfig.debugMode) {
-      console.log(`[TBL Integration] ${message}`);
-    }
-  }, [fullConfig.debugMode]);
+  }, []);
 
   // 🚀 Initialisation - Charger les données existantes
   useEffect(() => {
@@ -358,13 +321,9 @@ export function useTBLIntegration(config: Partial<TBLIntegrationConfig> = {}): U
       lastSync: null
     }));
     
-    if (fullConfig.storageMode === 'localStorage') {
-      localStorage.removeItem(STORAGE_KEY);
-    }
-    
     tblBridge.current.clear();
     log('🧹 Données TBL effacées');
-  }, [fullConfig.storageMode, log]);
+  }, [log]);
 
   return {
     state,

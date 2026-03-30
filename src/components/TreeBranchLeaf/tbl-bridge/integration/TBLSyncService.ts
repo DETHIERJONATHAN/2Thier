@@ -64,53 +64,14 @@ export class TBLSyncService {
     this.log('🚀 TBL Sync Service initialisé');
   }
 
-  // 📂 STOCKAGE PERSISTANT
+  // 📂 STOCKAGE EN MÉMOIRE (tout passe par Cloud SQL via l'API)
   private saveToStorage(): void {
-    try {
-      const data = {
-        elements: Object.fromEntries(this.elements.entries()),
-        stats: this.stats,
-        timestamp: Date.now()
-      };
-      
-      localStorage.setItem(this.storageKey, JSON.stringify(data));
-      this.log(`💾 ${this.elements.size} éléments sauvegardés`);
-      
-    } catch (error) {
-      this.log(`❌ Erreur sauvegarde: ${error}`);
-    }
+    this.log(`💾 ${this.elements.size} éléments en mémoire`);
   }
 
   private loadFromStorage(): void {
-    try {
-      const stored = localStorage.getItem(this.storageKey);
-      
-      if (stored) {
-        const data = JSON.parse(stored);
-        
-        // Restaurer les éléments
-        this.elements = new Map(Object.entries(data.elements || {}));
-        
-        // Restaurer les stats
-        if (data.stats) {
-          this.stats = {
-            ...data.stats,
-            lastSync: data.stats.lastSync ? new Date(data.stats.lastSync) : null
-          };
-        }
-        
-        // Importer dans le bridge
-        if (this.elements.size > 0) {
-          this.bridge.importElements(Array.from(this.elements.values()));
-        }
-        
-        this.log(`📂 ${this.elements.size} éléments restaurés depuis le stockage`);
-      }
-      
-    } catch (error) {
-      this.log(`❌ Erreur chargement: ${error}`);
-      this.reconstitute();
-    }
+    // Rien à charger — les données sont rechargées depuis l'API
+    this.log('📂 Stockage mémoire initialisé (données via API/Cloud SQL)');
   }
 
   // 🔄 RECONSTITUTION D'URGENCE
@@ -361,7 +322,6 @@ export class TBLSyncService {
     
     this.processingTimes = [];
     
-    localStorage.removeItem(this.storageKey);
     this.log('🧹 Service réinitialisé');
     
     this.emit({

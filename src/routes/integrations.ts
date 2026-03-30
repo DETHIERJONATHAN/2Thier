@@ -12,21 +12,10 @@ import { googleOAuthConfig } from '../auth/googleConfig';
 const prisma = db;
 const router = Router();
 
-// Cache en mémoire (léger) pour éviter des rafales d'appels côté UI et vers Google Ads
-// Clé: string -> Valeur: { expiresAt: number; payload: unknown }
-const memCache = new Map<string, { expiresAt: number; payload: unknown }>();
-function cacheGet<T = unknown>(key: string): T | undefined {
-  const it = memCache.get(key);
-  if (!it) return undefined;
-  if (Date.now() > it.expiresAt) {
-    memCache.delete(key);
-    return undefined;
-  }
-  return it.payload as T;
-}
-function cacheSet(key: string, payload: unknown, ttlMs: number) {
-  memCache.set(key, { expiresAt: Date.now() + ttlMs, payload });
-}
+// ✅ Zéro cache — chaque requête va directement à Cloud SQL / API source
+// Les fonctions existent encore comme no-op pour éviter de modifier 16+ call sites
+function cacheGet<T = unknown>(_key: string): T | undefined { return undefined; }
+function cacheSet(_key: string, _payload: unknown, _ttlMs: number) { /* no-op */ }
 
 // Utilitaire: sécuriser/normaliser le redirectUri provenant des variables d'environnement
 const DEFAULT_ADS_REDIRECT = (() => {

@@ -455,7 +455,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                   flexShrink: 0, padding: '6px 12px', textAlign: 'center', cursor: 'pointer',
                   borderRadius: 20, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
                   background: scope === s.key ? SF.gradientPrimary : SF.cardBg,
-                  color: scope === s.key ? '#fff' : SF.textSecondary,
+                  color: scope === s.key ? SF.textLight : SF.textSecondary,
                   boxShadow: scope === s.key ? SF.shadowMd : SF.shadow,
                   transition: 'all 0.2s',
                 }}
@@ -539,7 +539,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                   position: 'relative', cursor: 'pointer',
                   aspectRatio: '1/1',
                   borderRadius: 4, overflow: 'hidden',
-                  background: '#000',
+                  background: SF.black,
                 }}>
                   {/* Thumbnail */}
                   {item.mediaType === 'video' ? (
@@ -562,7 +562,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                   {item.mediaType === 'video' && (
                     <div style={{
                       position: 'absolute', top: 6, right: 6,
-                      color: '#fff', fontSize: 14, textShadow: '0 1px 3px rgba(0,0,0,0.8)',
+                      color: SF.textLight, fontSize: 14, textShadow: '0 1px 3px rgba(0,0,0,0.8)',
                     }}>
                       <PlayCircleOutlined />
                     </div>
@@ -573,7 +573,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                     <div style={{
                       position: 'absolute', top: 6, left: 6,
                       background: SF.gradientStory, padding: '1px 6px',
-                      borderRadius: 8, fontSize: 9, color: '#fff', fontWeight: 700,
+                      borderRadius: 8, fontSize: 9, color: SF.textLight, fontWeight: 700,
                     }}>
                       {item.isHighlight ? '⭐' : '◉'} Story
                     </div>
@@ -582,10 +582,10 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                   {/* Hover overlay with stats */}
                   <div style={{
                     position: 'absolute', inset: 0,
-                    background: 'rgba(0,0,0,0.3)',
+                    background: SF.overlayDark,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     gap: 12, opacity: 0, transition: 'opacity 0.2s',
-                    color: '#fff', fontSize: 13, fontWeight: 700,
+                    color: SF.textLight, fontSize: 13, fontWeight: 700,
                   }}
                     onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
                     onMouseLeave={e => (e.currentTarget.style.opacity = '0')}
@@ -601,13 +601,13 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                   {/* Bottom gradient for mobile (always visible) */}
                   <div style={{
                     position: 'absolute', bottom: 0, left: 0, right: 0,
-                    background: 'linear-gradient(transparent, rgba(0,0,0,0.5))',
+                    background: `linear-gradient(transparent, ${SF.overlayDarkMd})`,
                     padding: '10px 5px 3px', display: 'flex', gap: 6,
                     color: 'white', fontSize: 9,
                   }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                       {likedSet.has(item.id)
-                        ? <HeartFilled style={{ color: '#ff2d55', fontSize: 10 }} />
+                        ? <HeartFilled style={{ color: SF.like, fontSize: 10 }} />
                         : <HeartOutlined style={{ fontSize: 10 }} />}
                       {item.likesCount}
                     </span>
@@ -646,7 +646,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                   flexShrink: 0, padding: '6px 12px', textAlign: 'center', cursor: 'pointer',
                   borderRadius: 20, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
                   background: peopleScope === s.key ? SF.gradientPrimary : SF.cardBg,
-                  color: peopleScope === s.key ? '#fff' : SF.textSecondary,
+                  color: peopleScope === s.key ? SF.textLight : SF.textSecondary,
                   boxShadow: peopleScope === s.key ? SF.shadowMd : SF.shadow,
                   transition: 'all 0.2s',
                 }}
@@ -679,7 +679,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                 >
                   <div style={{ fontSize: 14, fontWeight: 600, color: SF.text }}>
                     {su.firstName} {su.lastName}
-                    {isFriend && <span style={{ marginLeft: 4, fontSize: 11, color: '#52c41a' }}>{t('explore.isFriend')}</span>}
+                    {isFriend && <span style={{ marginLeft: 4, fontSize: 11, color: SF.successAlt }}>{t('explore.isFriend')}</span>}
                     {su.sameOrg && <span style={{ marginLeft: 4, fontSize: 9, background: SF.primary + '20', color: SF.primary, padding: '1px 5px', borderRadius: 6 }}>Org</span>}
                   </div>
                   <div style={{ fontSize: 11, color: SF.textSecondary }}>{su.role}</div>
@@ -697,7 +697,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                     style={{
                       width: 32, height: 32, borderRadius: '50%', display: 'flex',
                       alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-                      background: '#e6f7ff', color: '#1890ff', fontSize: 14,
+                      background: SF.bgInfoTint, color: SF.info, fontSize: 14,
                       transition: 'all 0.15s',
                     }}
                   >
@@ -711,10 +711,10 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                     style={{
                       width: 32, height: 32, borderRadius: '50%', display: 'flex',
                       alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-                      background: isFriend ? '#f6ffed' : (isPending && su.friendDirection === 'received') ? '#e6f7ff' : isPending ? '#fff7e6' : '#f0f0f0',
-                      color: isFriend ? '#52c41a' : (isPending && su.friendDirection === 'received') ? '#1890ff' : isPending ? '#fa8c16' : '#666',
+                      background: isFriend ? SF.bgSuccessTint : (isPending && su.friendDirection === 'received') ? SF.bgInfoTint : isPending ? SF.bgWarningTint : SF.bgCard,
+                      color: isFriend ? SF.successAlt : (isPending && su.friendDirection === 'received') ? SF.info : isPending ? SF.orangeAlt : SF.textSecondary,
                       fontSize: 14, transition: 'all 0.15s',
-                      border: isFriend ? '1px solid #b7eb8f' : (isPending && su.friendDirection === 'received') ? '2px solid #1890ff' : isPending ? '1px solid #ffd591' : '1px solid #d9d9d9',
+                      border: isFriend ? `1px solid ${SF.successBorder}` : (isPending && su.friendDirection === 'received') ? `2px solid ${SF.info}` : isPending ? `1px solid ${SF.warningBorder}` : `1px solid ${SF.borderLight}`,
                       animation: (isPending && su.friendDirection === 'received') ? 'pulse 1.5s infinite' : 'none',
                     }}
                   >
@@ -792,17 +792,17 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
         width="95vw"
         style={{ maxWidth: 500, top: 20 }}
         styles={{ body: { padding: 0 } }}
-        closeIcon={<CloseOutlined style={{ color: '#fff', fontSize: 16 }} />}
+        closeIcon={<CloseOutlined style={{ color: SF.textLight, fontSize: 16 }} />}}
       >
         {selectedPost && (
           <div style={{ background: SF.bg, borderRadius: 12, overflow: 'hidden' }}>
             {/* Media */}
             {selectedPost.mediaType === 'video' ? (
               <video src={selectedPost.mediaUrl} controls autoPlay muted
-                style={{ width: '100%', maxHeight: '60vh', objectFit: 'contain', background: '#000' }} />
+                style={{ width: '100%', maxHeight: '60vh', objectFit: 'contain', background: SF.black }} />
             ) : (
               <img src={selectedPost.mediaUrl} alt=""
-                style={{ width: '100%', maxHeight: '60vh', objectFit: 'contain', background: '#000' }} />
+                style={{ width: '100%', maxHeight: '60vh', objectFit: 'contain', background: SF.black }} />
             )}
 
             {/* Author & Actions */}
@@ -833,7 +833,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                   <div style={{ display: 'flex', gap: 16, padding: '8px 0', borderTop: `1px solid ${SF.border}`, borderBottom: `1px solid ${SF.border}` }}>
                     <span
                       onClick={() => handleLikePost(selectedPost.id)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 13, color: likedSet.has(selectedPost.id) ? '#ff2d55' : SF.textSecondary }}>
+                      style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 13, color: likedSet.has(selectedPost.id) ? SF.like : SF.textSecondary }}>
                       {likedSet.has(selectedPost.id) ? <HeartFilled style={{ fontSize: 18 }} /> : <HeartOutlined style={{ fontSize: 18 }} />}
                       {selectedPost.likesCount}
                     </span>
@@ -855,7 +855,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                         return (
                         <div key={c.id} style={{ display: 'flex', gap: 8, padding: '6px 0', alignItems: 'flex-start' }}>
                           <Avatar size={24} src={cAvatar} icon={!cAvatar ? <UserOutlined /> : undefined}
-                            style={{ background: !cAvatar ? (cIsOrg ? '#6C5CE7' : SF.primary) : undefined, flexShrink: 0 }} />
+                            style={{ background: !cAvatar ? (cIsOrg ? SF.primary : SF.primary) : undefined, flexShrink: 0 }} />
                           <div style={{ flex: 1 }}>
                             <span style={{ fontWeight: 600, fontSize: 12, color: SF.text }}>{cName} </span>
                             <span style={{ fontSize: 12, color: SF.text }}>{c.content}</span>
@@ -871,7 +871,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                                 });
                               } catch { /* non-blocking */ }
                             }}
-                            style={{ fontSize: 12, color: isCommentLiked ? '#ff2d55' : SF.textMuted, cursor: 'pointer', flexShrink: 0, marginTop: 2 }}
+                            style={{ fontSize: 12, color: isCommentLiked ? SF.like : SF.textMuted, cursor: 'pointer', flexShrink: 0, marginTop: 2 }}
                           />
                         </div>
                       ); })

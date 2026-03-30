@@ -2,35 +2,19 @@
  * 🖼️ UPLOAD D'IMAGES - SYSTÈME COMPLET
  * 
  * API endpoint pour uploader des images (logos, photos projets, etc.)
- * Stockage local ou S3
+ * Stockage 100% GCS
  */
 
 import { Router } from 'express';
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs/promises';
 import { db } from '../lib/database';
-import { uploadFile } from '../lib/storage';
+import { uploadFile, deleteFile } from '../lib/storage';
 
 const router = Router();
 const prisma = db;
 
-const isProduction = process.env.NODE_ENV === 'production';
-
-// Configuration Multer : memoryStorage en prod (pour GCS), diskStorage en dev
-const multerStorage = isProduction
-  ? multer.memoryStorage()
-  : multer.diskStorage({
-      destination: async (req, file, cb) => {
-        const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'websites');
-        await fs.mkdir(uploadDir, { recursive: true });
-        cb(null, uploadDir);
-      },
-      filename: (req, file, cb) => {
-        const uniqueName = `${Date.now()}_${file.originalname.replace(/\s+/g, '_')}`;
-        cb(null, uniqueName);
-      }
-    });
+// Toujours memoryStorage : tout va sur GCS, zéro local
+const multerStorage = multer.memoryStorage();
 
 // Filtre pour n'accepter que les images
 const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
@@ -51,15 +35,12 @@ const upload = multer({
   }
 });
 
-/** Helper: get URL from multer file — delegates to storage module in prod */
+/** Helper: upload multer file to GCS and return absolute URL */
 async function getUploadedFileUrl(file: Express.Multer.File): Promise<{ fileUrl: string }> {
-  const uniqueName = `${Date.now()}_${file.originalname.replace(/\\s+/g, '_')}`;
-  if (isProduction) {
-    const key = `websites/${uniqueName}`;
-    const url = await uploadFile(file.buffer, key, file.mimetype);
-    return { fileUrl: url };
-  }
-  return { fileUrl: `/uploads/websites/${file.filename}` };
+  const uniqueName = `${Date.now()}_${file.originalname.replace(/\s+/g, '_')}`;
+  const key = `websites/${uniqueName}`;
+  const url = await uploadFile(file.buffer, key, file.mimetype);
+  return { fileUrl: url };
 }
 
 // POST - Upload simple pour documents (sans websiteId requis)
@@ -218,9 +199,9 @@ router.delete('/image/:id', async (req, res) => {
       });
     }
 
-    // Supprimer le fichier physique
+    // Supprimer le fichier de GCS
     try {
-      await fs.unlink(mediaFile.filePath);
+      await deleteFile(mediaFile.fileUrl || mediaFile.filePath);
     } catch (err) {
       console.warn('Fichier déjà supprimé ou inexistant');
     }

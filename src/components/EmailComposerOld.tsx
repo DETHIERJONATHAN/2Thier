@@ -21,6 +21,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import DOMPurify from 'dompurify';
 import { Modal, Form, Input, Button, message, Space, Tooltip, Typography, Upload, Collapse } from 'antd';
 import { SaveOutlined, SendOutlined, LoadingOutlined, CloseOutlined, UploadOutlined } from '@ant-design/icons';
 import { useDrafts, CreateDraftData, DraftData } from '../hooks/useDrafts';
@@ -227,7 +228,7 @@ const HtmlEditor: React.FC<{
               fontSize: '15px'
             }}
             dangerouslySetInnerHTML={{ 
-              __html: originalMessage
+              __html: DOMPurify.sanitize(originalMessage
                 // Nettoyage HTML MINIMAL et intelligent pour garder la beauté
                 .replace(/<!DOCTYPE[^>]*>/gi, '')
                 .replace(/<html[^>]*>/gi, '')
@@ -245,7 +246,7 @@ const HtmlEditor: React.FC<{
                 // Nettoyer les retours à la ligne excessifs
                 .replace(/\r\n/g, '')
                 .replace(/\n\s*\n/g, '\n')
-                .trim()
+                .trim())
             }}
           />
           

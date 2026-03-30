@@ -88,8 +88,8 @@ export const GoogleGeminiPage: React.FC = () => {
       };
       
       const productData = {
-        name: 'CRM 2Thier',
-        description: 'Solution CRM complète'
+        name: 'Zhiive',
+        description: 'Solution Hive complète'
       };
       
       const response = await api.post('/api/gemini/generate-proposal', { 

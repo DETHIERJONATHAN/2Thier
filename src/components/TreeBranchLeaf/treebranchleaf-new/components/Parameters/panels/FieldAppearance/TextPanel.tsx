@@ -1,4 +1,5 @@
 import React, { useCallback, useState, useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import { Card, Form, Input, Select, Typography, Tooltip, Upload, Button, message } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import { useDebouncedCallback } from '../../../../hooks/useDebouncedCallback';
@@ -18,7 +19,7 @@ const PreviewField: React.FC<{ localValues: Record<string, unknown> }> = ({ loca
     
     if (helpTooltipType === 'text') {
       return helpTooltipText ? (
-        <div style={{ maxWidth: 250 }} dangerouslySetInnerHTML={{ __html: String(helpTooltipText).replace(/\n/g, '<br>') }} />
+        <div style={{ maxWidth: 250 }} dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(String(helpTooltipText).replace(/\n/g, '<br>')) }} />
       ) : null;
     }
     
@@ -53,7 +54,7 @@ const PreviewField: React.FC<{ localValues: Record<string, unknown> }> = ({ loca
           {helpTooltipText && (
             <div 
               style={{ marginBottom: helpTooltipImage ? 8 : 0 }} 
-              dangerouslySetInnerHTML={{ __html: String(helpTooltipText).replace(/\n/g, '<br>') }} 
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(String(helpTooltipText).replace(/\n/g, '<br>')) }} 
             />
           )}
           {helpTooltipImage && (

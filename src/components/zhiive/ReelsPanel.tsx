@@ -11,15 +11,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useZhiiveNav } from '../../contexts/ZhiiveNavContext';
 import { useActiveIdentity } from '../../contexts/ActiveIdentityContext';
-
-const SF = {
-  primary: '#6C5CE7',
-  secondary: '#00CEC9',
-  accent: '#FD79A8',
-  dark: '#1a1a2e',
-  text: '#fff',
-  textMuted: 'rgba(255,255,255,0.7)',
-};
+import { SF } from './ZhiiveTheme';
 
 interface Reel {
   id: string;
@@ -447,25 +439,25 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
       <div style={{
         position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
         padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        background: 'linear-gradient(180deg, rgba(0,0,0,0.6) 0%, transparent 100%)',
+        background: SF.gradientOverlayTop,
       }}>
-        <span onClick={() => showSaved && setShowSaved(false)} style={{ fontSize: 18, fontWeight: 800, color: SF.text, letterSpacing: -0.5, cursor: showSaved ? 'pointer' : 'default' }}>
+        <span onClick={() => showSaved && setShowSaved(false)} style={{ fontSize: 18, fontWeight: 800, color: SF.textLight, letterSpacing: -0.5, cursor: showSaved ? 'pointer' : 'default' }}>
           {showSaved ? '← Reels' : '🎬 Reels'}
         </span>
         <div style={{ display: 'flex', gap: 8 }}>
           <div onClick={() => setShowSaved(!showSaved)} style={{
             width: 32, height: 32, borderRadius: '50%',
-            background: showSaved ? SF.primary : 'rgba(255,255,255,0.2)',
+            background: showSaved ? SF.primary : SF.overlayLight,
             display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
           }}>
-            {showSaved ? <BookFilled style={{ color: '#FDCB6E', fontSize: 16 }} /> : <BookOutlined style={{ color: SF.text, fontSize: 16 }} />}
+            {showSaved ? <BookFilled style={{ color: SF.gold, fontSize: 16 }} /> : <BookOutlined style={{ color: SF.textLight, fontSize: 16 }} />}
           </div>
           {!showSaved && (
             <div onClick={openCreateModal} style={{
-              width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,0.2)',
+              width: 32, height: 32, borderRadius: '50%', background: SF.overlayLight,
               display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
             }}>
-              <PlusOutlined style={{ color: SF.text, fontSize: 16 }} />
+              <PlusOutlined style={{ color: SF.textLight, fontSize: 16 }} />
             </div>
           )}
         </div>
@@ -496,29 +488,29 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                     }}
                     style={{
                       aspectRatio: '9/16', position: 'relative', cursor: 'pointer',
-                      borderRadius: 4, overflow: 'hidden', background: '#222',
+                      borderRadius: 4, overflow: 'hidden', background: SF.darkBg,
                     }}>
                     {reel.mediaUrl ? (
                       <video src={reel.mediaUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} muted />
                     ) : (
                       <div style={{
                         width: '100%', height: '100%',
-                        background: 'linear-gradient(135deg, #6C5CE7 0%, #FD79A8 100%)',
+                        background: SF.gradientAccent,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                       }}>
-                        <VideoCameraOutlined style={{ fontSize: 24, color: '#fff' }} />
+                        <VideoCameraOutlined style={{ fontSize: 24, color: SF.textLight }} />
                       </div>
                     )}
                     <div style={{
                       position: 'absolute', bottom: 0, left: 0, right: 0,
-                      background: 'linear-gradient(transparent, rgba(0,0,0,0.7))',
+                      background: SF.gradientOverlayThumb,
                       padding: '12px 4px 4px', display: 'flex', alignItems: 'center', gap: 4,
                     }}>
-                      <span style={{ fontSize: 10, color: '#fff' }}>❤️ {reel.likesCount}</span>
+                      <span style={{ fontSize: 10, color: SF.textLight }}>❤️ {reel.likesCount}</span>
                     </div>
                     <div onClick={(e) => { e.stopPropagation(); handleSaveReel(reel.id); }}
                       style={{ position: 'absolute', top: 4, right: 4, cursor: 'pointer' }}>
-                      <BookFilled style={{ fontSize: 14, color: '#FDCB6E' }} />
+                      <BookFilled style={{ fontSize: 14, color: SF.gold }} />
                     </div>
                   </div>
                 ))}
@@ -536,7 +528,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
           paddingTop: 56,
         }}>
           <VideoCameraOutlined style={{ fontSize: 56, marginBottom: 16, opacity: 0.5 }} />
-          <div style={{ fontSize: 18, fontWeight: 700, color: SF.text, marginBottom: 8 }}>{t('reels.noReelsYet')}</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: SF.textLight, marginBottom: 8 }}>{t('reels.noReelsYet')}</div>
           <div style={{ fontSize: 13, marginBottom: 20, textAlign: 'center', maxWidth: 260 }}>
             {t('reels.beFirstToPost')}
           </div>
@@ -544,8 +536,8 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
             onClick={openCreateModal}
             style={{
               padding: '10px 28px', borderRadius: 24,
-              background: 'linear-gradient(135deg, #6C5CE7 0%, #FD79A8 100%)',
-              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+              background: SF.gradientAccent,
+              color: SF.textLight, fontWeight: 700, fontSize: 14, cursor: 'pointer',
             }}
           >
             <PlusOutlined /> {t('reels.createReel')}
@@ -575,18 +567,18 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                 src={reel.mediaUrl}
                 loop muted={muted} playsInline
                 onClick={togglePause}
-                style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000', cursor: 'pointer' }}
+                style={{ width: '100%', height: '100%', objectFit: 'contain', background: SF.black, cursor: 'pointer' }}
               />
             ) : (
               /* Fallback if video URL is missing */
               <div onClick={togglePause} style={{
                 width: '100%', height: '100%', cursor: 'pointer',
-                background: 'linear-gradient(135deg, #6C5CE7 0%, #FD79A8 50%, #FDCB6E 100%)',
+                background: SF.gradientFull,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
                 <div style={{ textAlign: 'center', padding: 32 }}>
-                  <VideoCameraOutlined style={{ fontSize: 48, marginBottom: 16, color: '#fff' }} />
-                  <div style={{ fontSize: 14, color: SF.text, fontWeight: 600 }}>{t('reels.videoUnavailable')}</div>
+                  <VideoCameraOutlined style={{ fontSize: 48, marginBottom: 16, color: SF.textLight }} />
+                  <div style={{ fontSize: 14, color: SF.textLight, fontWeight: 600 }}>{t('reels.videoUnavailable')}</div>
                 </div>
               </div>
             )}
@@ -595,9 +587,9 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
             {paused && index === activeIndex && (
               <div style={{
                 position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: 'rgba(0,0,0,0.3)', pointerEvents: 'none',
+                background: SF.overlayDark, pointerEvents: 'none',
               }}>
-                <PlayCircleOutlined style={{ fontSize: 64, color: 'rgba(255,255,255,0.8)' }} />
+                <PlayCircleOutlined style={{ fontSize: 64, color: SF.overlayPlayBtn }} />
               </div>
             )}
 
@@ -611,18 +603,18 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                 <Avatar size={44} src={reel.authorAvatar}
                   icon={!reel.authorAvatar ? <UserOutlined /> : undefined}
                   onClick={(e) => { e.stopPropagation(); if (reel.authorId) navigate(`/profile/${reel.authorId}`); }}
-                  style={{ border: '2px solid #fff', background: SF.primary, cursor: 'pointer' }} />
+                  style={{ border: `2px solid ${SF.textLight}`, background: SF.primary, cursor: 'pointer' }} />
                 {reel.authorId && reel.authorId !== currentUser?.id && (
                   <div onClick={(e) => { e.stopPropagation(); handleFollow(reel.authorId, reel.authorName); }}
                     style={{
                       position: 'absolute', bottom: -6, left: '50%', transform: 'translateX(-50%)',
                       width: 20, height: 20, borderRadius: '50%',
-                      background: followedSet.has(reel.authorId) ? '#4CAF50' : SF.accent,
+                      background: followedSet.has(reel.authorId) ? SF.successMd : SF.accent,
                       display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
                     }}>
                     {followedSet.has(reel.authorId)
-                      ? <span style={{ fontSize: 10, color: '#fff', lineHeight: 1 }}>✓</span>
-                      : <PlusOutlined style={{ fontSize: 10, color: '#fff' }} />}
+                      ? <span style={{ fontSize: 10, color: SF.textLight, lineHeight: 1 }}>✓</span>
+                      : <PlusOutlined style={{ fontSize: 10, color: SF.textLight }} />}
                   </div>
                 )}
               </div>
@@ -630,27 +622,27 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               {/* Like */}
               <div onClick={() => toggleLike(index)} style={{ cursor: 'pointer', textAlign: 'center' }}>
                 {reel.isLiked ? (
-                  <HeartFilled style={{ fontSize: 28, color: '#ff2d55' }} />
+                  <HeartFilled style={{ fontSize: 28, color: SF.like }} />
                 ) : (
-                  <HeartOutlined style={{ fontSize: 28, color: SF.text }} />
+                  <HeartOutlined style={{ fontSize: 28, color: SF.textLight }} />
                 )}
-                <div style={{ fontSize: 11, color: SF.text, fontWeight: 600, marginTop: 2 }}>
+                <div style={{ fontSize: 11, color: SF.textLight, fontWeight: 600, marginTop: 2 }}>
                   {reel.likesCount > 999 ? `${(reel.likesCount / 1000).toFixed(1)}k` : reel.likesCount}
                 </div>
               </div>
 
               {/* Comment */}
               <div onClick={() => openComments(reel.id)} style={{ cursor: 'pointer', textAlign: 'center' }}>
-                <MessageOutlined style={{ fontSize: 26, color: SF.text }} />
-                <div style={{ fontSize: 11, color: SF.text, fontWeight: 600, marginTop: 2 }}>
+                <MessageOutlined style={{ fontSize: 26, color: SF.textLight }} />
+                <div style={{ fontSize: 11, color: SF.textLight, fontWeight: 600, marginTop: 2 }}>
                   {reel.commentsCount}
                 </div>
               </div>
 
               {/* Share */}
               <div onClick={() => handleShare(reel)} style={{ cursor: 'pointer', textAlign: 'center' }}>
-                <ShareAltOutlined style={{ fontSize: 26, color: SF.text }} />
-                <div style={{ fontSize: 11, color: SF.text, fontWeight: 600, marginTop: 2 }}>
+                <ShareAltOutlined style={{ fontSize: 26, color: SF.textLight }} />
+                <div style={{ fontSize: 11, color: SF.textLight, fontWeight: 600, marginTop: 2 }}>
                   {t('common.share')}
                 </div>
               </div>
@@ -658,11 +650,11 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               {/* Save/Bookmark */}
               <div onClick={() => handleSaveReel(reel.id)} style={{ cursor: 'pointer', textAlign: 'center' }}>
                 {savedSet.has(reel.id) ? (
-                  <BookFilled style={{ fontSize: 26, color: '#FDCB6E' }} />
+                  <BookFilled style={{ fontSize: 26, color: SF.gold }} />
                 ) : (
-                  <BookOutlined style={{ fontSize: 26, color: SF.text }} />
+                  <BookOutlined style={{ fontSize: 26, color: SF.textLight }} />
                 )}
-                <div style={{ fontSize: 11, color: SF.text, fontWeight: 600, marginTop: 2 }}>
+                <div style={{ fontSize: 11, color: SF.textLight, fontWeight: 600, marginTop: 2 }}>
                   {savedSet.has(reel.id) ? t('reels.saved') : t('reels.saveReel')}
                 </div>
               </div>
@@ -670,7 +662,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               {/* Delete (own posts or admin) */}
               {!['d1','d2','d3'].includes(reel.id) && (currentUser?.id === reel.authorId || currentUser?.isSuperAdmin || currentUser?.role === 'admin') && (
                 <div onClick={() => setDeleteConfirmId(reel.id)} style={{ cursor: 'pointer', textAlign: 'center' }}>
-                  <DeleteOutlined style={{ fontSize: 22, color: 'rgba(255,255,255,0.5)' }} />
+                  <DeleteOutlined style={{ fontSize: 22, color: SF.textLightDimmed }} />
                 </div>
               )}
 
@@ -678,17 +670,17 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               <div onClick={() => setMuted(!muted)} style={{ cursor: 'pointer' }}>
                 {muted ? (
                   <div style={{
-                    width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,0.15)',
+                    width: 32, height: 32, borderRadius: '50%', background: SF.overlayLighter,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
-                    <SoundOutlined style={{ fontSize: 14, color: SF.text }} />
+                    <SoundOutlined style={{ fontSize: 14, color: SF.textLight }} />
                   </div>
                 ) : (
                   <div style={{
-                    width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,0.3)',
+                    width: 32, height: 32, borderRadius: '50%', background: SF.overlayLightActive,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
-                    <PauseCircleOutlined style={{ fontSize: 14, color: SF.text }} />
+                    <PauseCircleOutlined style={{ fontSize: 14, color: SF.textLight }} />
                   </div>
                 )}
               </div>
@@ -698,11 +690,11 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
             <div style={{
               position: 'absolute', bottom: 0, left: 0, right: 60,
               padding: '60px 16px 24px',
-              background: 'linear-gradient(0deg, rgba(0,0,0,0.7) 0%, transparent 100%)',
+              background: SF.gradientOverlayBottom,
             }}>
               {/* Author name */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <span style={{ fontSize: 15, fontWeight: 700, color: SF.text }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: SF.textLight }}>
                   @{reel.authorName.replace(/\s+/g, '').toLowerCase()}
                 </span>
                 <span
@@ -710,7 +702,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                   style={{
                   fontSize: 10, padding: '1px 6px', borderRadius: 4,
                   background: followedSet.has(reel.authorId) ? SF.textMuted : SF.primary,
-                  color: '#fff', fontWeight: 600, cursor: 'pointer',
+                  color: SF.textLight, fontWeight: 600, cursor: 'pointer',
                 }}>
                   {followedSet.has(reel.authorId) ? t('common.following') : t('common.follow')}
                 </span>
@@ -718,7 +710,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
 
               {/* Caption */}
               {reel.caption && (
-                <div style={{ fontSize: 13, color: SF.text, lineHeight: 1.4, marginBottom: 8, maxHeight: 60, overflow: 'hidden' }}>
+                <div style={{ fontSize: 13, color: SF.textLight, lineHeight: 1.4, marginBottom: 8, maxHeight: 60, overflow: 'hidden' }}>
                   {reel.caption}
                 </div>
               )}
@@ -738,13 +730,13 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               {reel.musicName && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <div style={{
-                    width: 16, height: 16, borderRadius: '50%', background: SF.text,
+                    width: 16, height: 16, borderRadius: '50%', background: SF.textLight,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     animation: 'spin 3s linear infinite',
                   }}>
                     <div style={{ width: 6, height: 6, borderRadius: '50%', background: SF.dark }} />
                   </div>
-                  <span style={{ fontSize: 12, color: SF.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>
+                  <span style={{ fontSize: 12, color: SF.textLight, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>
                     {reel.musicName}
                   </span>
                 </div>
@@ -759,7 +751,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               {reels.map((_, i) => (
                 <div key={i} style={{
                   width: 4, height: i === activeIndex ? 16 : 4, borderRadius: 2,
-                  background: i === activeIndex ? SF.text : 'rgba(255,255,255,0.3)',
+                  background: i === activeIndex ? SF.textLight : SF.overlayLightActive,
                   transition: 'height 0.2s',
                 }} />
               ))}
@@ -805,7 +797,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
         <div style={{ padding: 20 }}>
           {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-            <span style={{ fontSize: 18, fontWeight: 800, color: SF.text }}>🎬 Nouveau Reel</span>
+            <span style={{ fontSize: 18, fontWeight: 800, color: SF.textLight }}>🎬 Nouveau Reel</span>
             <CloseOutlined
               onClick={() => { if (!submitting) setCreateModalOpen(false); }}
               style={{ color: SF.textMuted, fontSize: 18, cursor: 'pointer' }}
@@ -822,14 +814,14 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                 padding: 40,
                 textAlign: 'center',
                 cursor: 'pointer',
-                background: 'rgba(108, 92, 231, 0.1)',
+                background: SF.bgPrimaryTint,
                 transition: 'all 0.2s',
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginBottom: 16 }}>
                 <VideoCameraOutlined style={{ fontSize: 36, color: SF.primary }} />
               </div>
-              <div style={{ fontSize: 15, color: SF.text, fontWeight: 600, marginBottom: 4 }}>
+              <div style={{ fontSize: 15, color: SF.textLight, fontWeight: 600, marginBottom: 4 }}>
                 {t('reels.selectVideo')}
               </div>
               <div style={{ fontSize: 12, color: SF.textMuted }}>
@@ -849,11 +841,11 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                 style={{
                   position: 'absolute', top: 8, right: 8,
                   width: 28, height: 28, borderRadius: '50%',
-                  background: 'rgba(0,0,0,0.6)', cursor: 'pointer',
+                  background: SF.overlayDarkStrong, cursor: 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}
               >
-                <CloseOutlined style={{ color: '#fff', fontSize: 12 }} />
+                <CloseOutlined style={{ color: SF.textLight, fontSize: 12 }} />
               </div>
             </div>
           )}
@@ -867,10 +859,10 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
             autoSize={{ minRows: 2, maxRows: 4 }}
             style={{
               marginTop: 16,
-              background: 'rgba(255,255,255,0.08)',
-              border: '1px solid rgba(255,255,255,0.15)',
+              background: SF.overlayLightest,
+              border: `1px solid ${SF.overlayLighter}`,
               borderRadius: 12,
-              color: SF.text,
+              color: SF.textLight,
               resize: 'none',
             }}
           />
@@ -889,9 +881,9 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                 <div key={v} onClick={() => setReelVisibility(v)} style={{
                   display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px',
                   borderRadius: 16, cursor: 'pointer', fontSize: 12, fontWeight: 600,
-                  background: active ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.06)',
-                  color: active ? '#fff' : 'rgba(255,255,255,0.5)',
-                  border: active ? '1px solid rgba(255,255,255,0.4)' : '1px solid transparent',
+                  background: active ? SF.overlayLight : SF.overlayLightFaint,
+                  color: active ? SF.textLight : SF.textLightDimmed,
+                  border: active ? `1px solid ${SF.overlayLightBorder}` : '1px solid transparent',
                   transition: 'all 0.15s',
                 }}>
                   <span>{opt.icon}</span> <span>{opt.label}</span>
@@ -907,8 +899,8 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               marginTop: 16,
               padding: '12px 24px',
               borderRadius: 12,
-              background: reelFile ? `linear-gradient(135deg, ${SF.primary}, ${SF.accent})` : 'rgba(255,255,255,0.1)',
-              color: reelFile ? '#fff' : SF.textMuted,
+              background: reelFile ? `linear-gradient(135deg, ${SF.primary}, ${SF.accent})` : SF.overlayLightest,
+              color: reelFile ? SF.textLight : SF.textMuted,
               fontWeight: 700,
               fontSize: 15,
               textAlign: 'center',
@@ -939,10 +931,10 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
         styles={{ body: { padding: 0 }, content: { borderRadius: 16, overflow: 'hidden' } }}
       >
         {/* Header */}
-        <div style={{ padding: '14px 16px', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ padding: '14px 16px', borderBottom: `1px solid ${SF.borderLighter}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: 16, fontWeight: 700 }}>💬 Buzzes</span>
           <CloseOutlined onClick={() => { setCommentModalOpen(false); setComments([]); setCommentText(''); setReplyingTo(null); }}
-            style={{ fontSize: 16, cursor: 'pointer', color: '#999' }} />
+            style={{ fontSize: 16, cursor: 'pointer', color: SF.textPlaceholder }} />
         </div>
 
         {/* Comments list */}
@@ -959,23 +951,23 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                 <Avatar size={32} src={cAvatar}
                   icon={!cAvatar ? <UserOutlined /> : undefined}
-                  style={{ flexShrink: 0, background: cIsOrg ? '#6C5CE7' : '#ddd' }} />
+                  style={{ flexShrink: 0, background: cIsOrg ? SF.primary : SF.borderLight }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ background: '#f0f2f5', borderRadius: 12, padding: '8px 12px', width: 'fit-content', maxWidth: '90%' }}>
-                    <span style={{ fontWeight: 600, fontSize: 13, color: '#1a1a2e', display: 'block' }}>
+                  <div style={{ background: SF.bgLight, borderRadius: 12, padding: '8px 12px', width: 'fit-content', maxWidth: '90%' }}>
+                    <span style={{ fontWeight: 600, fontSize: 13, color: SF.dark, display: 'block' }}>
                       {cName}
                     </span>
-                    <div style={{ fontSize: 14, color: '#333', marginTop: 2, wordBreak: 'break-word' }}>{c.content}</div>
+                    <div style={{ fontSize: 14, color: SF.textDark, marginTop: 2, wordBreak: 'break-word' }}>{c.content}</div>
                   </div>
                   {/* Actions */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingLeft: 4, marginTop: 4 }}>
-                    <span style={{ fontSize: 11, color: '#999' }}>{timeAgo(c.createdAt)}</span>
+                    <span style={{ fontSize: 11, color: SF.textPlaceholder }}>{timeAgo(c.createdAt)}</span>
                     <span onClick={() => handleCommentLike(c.id)}
-                      style={{ fontSize: 12, fontWeight: 600, cursor: 'pointer', color: likedComments.has(c.id) ? '#e74c3c' : '#65676b' }}>
+                      style={{ fontSize: 12, fontWeight: 600, cursor: 'pointer', color: likedComments.has(c.id) ? SF.dangerAlt : SF.textTertiary }}>
                       {likedComments.has(c.id) ? '❤️ ' + t('common.liked') : t('common.like')}
                     </span>
                     <span onClick={() => { setReplyingTo(replyingTo === c.id ? null : c.id); setReplyText(''); }}
-                      style={{ fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#65676b' }}>
+                      style={{ fontSize: 12, fontWeight: 600, cursor: 'pointer', color: SF.textTertiary }}>
                       {t('common.reply')}
                     </span>
                   </div>
@@ -991,18 +983,18 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                         <div key={reply.id} style={{ display: 'flex', gap: 6, alignItems: 'flex-start', marginBottom: 8 }}>
                           <Avatar size={24} src={rrAvatar}
                             icon={!rrAvatar ? <UserOutlined /> : undefined}
-                            style={{ flexShrink: 0, background: rrIsOrg ? '#6C5CE7' : '#ddd' }} />
+                            style={{ flexShrink: 0, background: rrIsOrg ? SF.primary : SF.borderLight }} />
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ background: '#f0f2f5', borderRadius: 10, padding: '6px 10px', width: 'fit-content', maxWidth: '85%' }}>
-                              <span style={{ fontWeight: 600, fontSize: 12, color: '#1a1a2e' }}>
+                            <div style={{ background: SF.bgLight, borderRadius: 10, padding: '6px 10px', width: 'fit-content', maxWidth: '85%' }}>
+                              <span style={{ fontWeight: 600, fontSize: 12, color: SF.dark }}>
                                 {rrName}
                               </span>
-                              <div style={{ fontSize: 13, color: '#333', wordBreak: 'break-word' }}>{reply.content}</div>
+                              <div style={{ fontSize: 13, color: SF.textDark, wordBreak: 'break-word' }}>{reply.content}</div>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingLeft: 4, marginTop: 2 }}>
-                              <span style={{ fontSize: 10, color: '#999' }}>{timeAgo(reply.createdAt)}</span>
+                              <span style={{ fontSize: 10, color: SF.textPlaceholder }}>{timeAgo(reply.createdAt)}</span>
                               <span onClick={() => handleCommentLike(reply.id)}
-                                style={{ fontSize: 11, fontWeight: 600, cursor: 'pointer', color: likedComments.has(reply.id) ? '#e74c3c' : '#65676b' }}>
+                                style={{ fontSize: 11, fontWeight: 600, cursor: 'pointer', color: likedComments.has(reply.id) ? SF.dangerAlt : SF.textTertiary }}>
                                 {likedComments.has(reply.id) ? '❤️' : t('common.like')}
                               </span>
                             </div>
@@ -1017,10 +1009,10 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, marginLeft: 8 }}>
                       <Avatar size={24} src={commentAvatarSrc}
                         icon={!isOrgMode && !currentUser?.avatarUrl ? <UserOutlined /> : undefined}
-                        style={{ flexShrink: 0, background: isOrgMode && !orgLogo ? '#6C5CE7' : '#ddd' }}>
+                        style={{ flexShrink: 0, background: isOrgMode && !orgLogo ? SF.primary : SF.borderLight }}>
                         {isOrgMode && !orgLogo && (currentOrganization?.name?.[0]?.toUpperCase() || 'O')}
                       </Avatar>
-                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', background: '#f0f2f5', borderRadius: 20, padding: '4px 12px' }}>
+                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', background: SF.bgLight, borderRadius: 20, padding: '4px 12px' }}>
                         <input
                           value={replyText}
                           onChange={e => setReplyText(e.target.value)}
@@ -1030,7 +1022,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                           autoFocus
                         />
                         <div onClick={() => handlePostComment(c.id)}
-                          style={{ cursor: replyText.trim() ? 'pointer' : 'default', color: replyText.trim() ? SF.primary : '#999', padding: '0 4px' }}>
+                          style={{ cursor: replyText.trim() ? 'pointer' : 'default', color: replyText.trim() ? SF.primary : SF.textPlaceholder, padding: '0 4px' }}>
                           <SendOutlined style={{ fontSize: 14 }} />
                         </div>
                       </div>
@@ -1040,7 +1032,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               </div>
             </div>
           ); }) : (
-            <div style={{ textAlign: 'center', color: '#999', padding: 30 }}>
+            <div style={{ textAlign: 'center', color: SF.textPlaceholder, padding: 30 }}>
               <MessageOutlined style={{ fontSize: 32, marginBottom: 8, display: 'block' }} />
               {t('reels.noBuzzesYet')}
             </div>
@@ -1048,13 +1040,13 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
         </div>
 
         {/* New comment input */}
-        <div style={{ borderTop: '1px solid #eee', padding: '10px 16px', display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ borderTop: `1px solid ${SF.borderLighter}`, padding: '10px 16px', display: 'flex', gap: 8, alignItems: 'center' }}>
           <Avatar size={28} src={commentAvatarSrc}
             icon={!isOrgMode && !currentUser?.avatarUrl ? <UserOutlined /> : undefined}
-            style={{ flexShrink: 0, background: isOrgMode && !orgLogo ? '#6C5CE7' : '#ddd' }}>
+            style={{ flexShrink: 0, background: isOrgMode && !orgLogo ? SF.primary : SF.borderLight }}>
             {isOrgMode && !orgLogo && (currentOrganization?.name?.[0]?.toUpperCase() || 'O')}
           </Avatar>
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', background: '#f0f2f5', borderRadius: 20, padding: '6px 12px' }}>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', background: SF.bgLight, borderRadius: 20, padding: '6px 12px' }}>
             <input
               value={commentText}
               onChange={e => setCommentText(e.target.value)}
@@ -1063,7 +1055,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', fontSize: 14 }}
             />
             <div onClick={() => handlePostComment()}
-              style={{ cursor: commentText.trim() ? 'pointer' : 'default', color: commentText.trim() ? SF.primary : '#999', padding: '0 4px' }}>
+              style={{ cursor: commentText.trim() ? 'pointer' : 'default', color: commentText.trim() ? SF.primary : SF.textPlaceholder, padding: '0 4px' }}>
               <SendOutlined style={{ fontSize: 16 }} />
             </div>
           </div>
@@ -1081,16 +1073,16 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
         styles={{ body: { padding: 0 }, content: { borderRadius: 16, overflow: 'hidden' } }}
       >
         <div style={{ padding: 24, textAlign: 'center' }}>
-          <DeleteOutlined style={{ fontSize: 36, color: '#ff4d4f', marginBottom: 12 }} />
+          <DeleteOutlined style={{ fontSize: 36, color: SF.danger, marginBottom: 12 }} />
           <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>{t('reels.deleteReel')}</div>
-          <div style={{ fontSize: 13, color: '#666', marginBottom: 20 }}>{t('reels.irreversible')}</div>
+          <div style={{ fontSize: 13, color: SF.textSecondary, marginBottom: 20 }}>{t('reels.irreversible')}</div>
           <div style={{ display: 'flex', gap: 12 }}>
             <div onClick={() => setDeleteConfirmId(null)}
-              style={{ flex: 1, padding: '10px 0', borderRadius: 8, background: '#f0f2f5', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
+              style={{ flex: 1, padding: '10px 0', borderRadius: 8, background: SF.bgLight, fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
               {t('common.cancel')}
             </div>
             <div onClick={async () => { if (deleteConfirmId) { await handleDeleteReel(deleteConfirmId); setDeleteConfirmId(null); } }}
-              style={{ flex: 1, padding: '10px 0', borderRadius: 8, background: '#ff4d4f', color: '#fff', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
+              style={{ flex: 1, padding: '10px 0', borderRadius: 8, background: SF.danger, color: SF.textLight, fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
               {t('common.delete')}
             </div>
           </div>
@@ -1101,43 +1093,43 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
       {shareSheetOpen && (
         <>
           <div onClick={() => setShareSheetOpen(false)}
-            style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 50 }} />
+            style={{ position: 'absolute', inset: 0, background: SF.overlayDarkMd, zIndex: 50 }} />
           <div style={{
             position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 51,
-            background: '#fff', borderRadius: '16px 16px 0 0',
+            background: SF.cardBg, borderRadius: '16px 16px 0 0',
             animation: 'slideUp 0.3s ease',
           }}>
             <div style={{ padding: '12px 0' }}>
               {/* Drag handle */}
-              <div style={{ width: 40, height: 4, borderRadius: 2, background: '#ddd', margin: '0 auto 16px' }} />
+              <div style={{ width: 40, height: 4, borderRadius: 2, background: SF.borderLight, margin: '0 auto 16px' }} />
               <div style={{ fontSize: 16, fontWeight: 700, textAlign: 'center', marginBottom: 16 }}>{t('reels.shareTitle')}</div>
 
               {/* Share options grid */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, padding: '0 16px', marginBottom: 16 }}>
                 <div onClick={handleRepost} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer', padding: 8 }}>
-                  <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#E8F5E9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <RetweetOutlined style={{ fontSize: 22, color: '#4CAF50' }} />
+                  <div style={{ width: 52, height: 52, borderRadius: '50%', background: SF.bgGreenTint, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <RetweetOutlined style={{ fontSize: 22, color: SF.successMd }} />
                   </div>
-                  <span style={{ fontSize: 11, color: '#333', textAlign: 'center' }}>{t('reels.rebuzz')}</span>
+                  <span style={{ fontSize: 11, color: SF.textDark, textAlign: 'center' }}>{t('reels.rebuzz')}</span>
                 </div>
                 <div onClick={handleSendReel} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer', padding: 8 }}>
-                  <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#E3F2FD', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <SendOutlined style={{ fontSize: 22, color: '#2196F3' }} />
+                  <div style={{ width: 52, height: 52, borderRadius: '50%', background: SF.bgBlueTint, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <SendOutlined style={{ fontSize: 22, color: SF.infoAlt }} />
                   </div>
-                  <span style={{ fontSize: 11, color: '#333', textAlign: 'center' }}>{t('common.send')}</span>
+                  <span style={{ fontSize: 11, color: SF.textDark, textAlign: 'center' }}>{t('common.send')}</span>
                 </div>
                 <div onClick={() => { if (shareReel) handleSaveReel(shareReel.id); setShareSheetOpen(false); }}
                   style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer', padding: 8 }}>
-                  <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#FFF3E0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <BookOutlined style={{ fontSize: 22, color: '#FF9800' }} />
+                  <div style={{ width: 52, height: 52, borderRadius: '50%', background: SF.bgDangerTint, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <BookOutlined style={{ fontSize: 22, color: SF.orange }} />
                   </div>
-                  <span style={{ fontSize: 11, color: '#333', textAlign: 'center' }}>{t('reels.saveReel')}</span>
+                  <span style={{ fontSize: 11, color: SF.textDark, textAlign: 'center' }}>{t('reels.saveReel')}</span>
                 </div>
                 <div onClick={handleCopyLink} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer', padding: 8 }}>
-                  <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#F3E5F5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <CopyOutlined style={{ fontSize: 22, color: '#9C27B0' }} />
+                  <div style={{ width: 52, height: 52, borderRadius: '50%', background: SF.bgPurpleTint, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <CopyOutlined style={{ fontSize: 22, color: SF.purple }} />
                   </div>
-                  <span style={{ fontSize: 11, color: '#333', textAlign: 'center' }}>{t('reels.copyLink')}</span>
+                  <span style={{ fontSize: 11, color: SF.textDark, textAlign: 'center' }}>{t('reels.copyLink')}</span>
                 </div>
                 {shareReel?.authorId === currentUser?.id && (
                   <div onClick={() => {
@@ -1145,17 +1137,17 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                     setHiveLiveModalOpen(true);
                     setShareSheetOpen(false);
                   }} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer', padding: 8 }}>
-                    <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#FFF8E1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ width: 52, height: 52, borderRadius: '50%', background: SF.bgWarningTintAlt, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <span style={{ fontSize: 22 }}>🐝</span>
                     </div>
-                    <span style={{ fontSize: 11, color: '#333', textAlign: 'center' }}>Hive Live</span>
+                    <span style={{ fontSize: 11, color: SF.textDark, textAlign: 'center' }}>Hive Live</span>
                   </div>
                 )}
               </div>
 
               {/* Cancel */}
               <div onClick={() => setShareSheetOpen(false)}
-                style={{ textAlign: 'center', padding: '12px 16px', borderTop: '1px solid #eee', fontSize: 15, fontWeight: 600, color: '#999', cursor: 'pointer' }}>
+                style={{ textAlign: 'center', padding: '12px 16px', borderTop: `1px solid ${SF.borderLighter}`, fontSize: 15, fontWeight: 600, color: SF.textPlaceholder, cursor: 'pointer' }}>
                 {t('common.cancel')}
               </div>
             </div>
@@ -1167,15 +1159,15 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
       {hiveLiveModalOpen && (
         <div style={{ position: 'absolute', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div onClick={() => { setHiveLiveModalOpen(false); setHiveLiveTitle(''); }}
-            style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)' }} />
+            style={{ position: 'absolute', inset: 0, background: SF.overlayDarkStrong }} />
           <div style={{
-            position: 'relative', zIndex: 61, background: '#fff', borderRadius: 16,
+            position: 'relative', zIndex: 61, background: SF.cardBg, borderRadius: 16,
             padding: 24, width: '90%', maxWidth: 360,
           }}>
-            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 16, color: '#333' }}>
+            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 16, color: SF.textDark }}>
               🐝 {t('hive.addToHiveLive', 'Ajouter à mon Hive Live')}
             </div>
-            <p style={{ fontSize: 13, color: '#666', marginBottom: 12 }}>
+            <p style={{ fontSize: 13, color: SF.textSecondary, marginBottom: 12 }}>
               {t('hive.hiveLiveExplanation', 'Ce reel sera ajouté à votre ligne de vie.')}
             </p>
             <input
@@ -1185,7 +1177,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               maxLength={200}
               style={{
                 width: '100%', padding: '10px 12px', borderRadius: 8,
-                border: '1px solid #ddd', fontSize: 14, outline: 'none',
+                border: `1px solid ${SF.borderLight}`, fontSize: 14, outline: 'none',
                 marginBottom: 16, boxSizing: 'border-box',
               }}
             />
@@ -1193,8 +1185,8 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               <button
                 onClick={() => { setHiveLiveModalOpen(false); setHiveLiveTitle(''); }}
                 style={{
-                  padding: '8px 16px', borderRadius: 8, border: '1px solid #ddd',
-                  background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#666',
+                  padding: '8px 16px', borderRadius: 8, border: `1px solid ${SF.borderLight}`,
+                  background: SF.cardBg, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: SF.textSecondary,
                 }}
               >
                 {t('common.cancel', 'Annuler')}
@@ -1204,7 +1196,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                 disabled={hiveLiveSaving || !hiveLiveTitle.trim()}
                 style={{
                   padding: '8px 16px', borderRadius: 8, border: 'none',
-                  background: '#6C5CE7', color: '#fff', cursor: 'pointer',
+                  background: SF.primary, color: SF.textLight, cursor: 'pointer',
                   fontSize: 13, fontWeight: 600,
                   opacity: hiveLiveSaving || !hiveLiveTitle.trim() ? 0.5 : 1,
                 }}
@@ -1223,10 +1215,10 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
       {toast && (
         <div style={{
           position: 'absolute', top: 60, left: '50%', transform: 'translateX(-50%)',
-          background: toast.type === 'err' ? '#ff4d4f' : 'rgba(0,0,0,0.85)',
-          color: '#fff', padding: '8px 20px', borderRadius: 20, fontSize: 13,
+          background: toast.type === 'err' ? SF.danger : SF.overlayDarkVeryHeavy,
+          color: SF.textLight, padding: '8px 20px', borderRadius: 20, fontSize: 13,
           fontWeight: 600, zIndex: 9999, whiteSpace: 'nowrap',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          boxShadow: `0 4px 12px ${SF.overlayDark}`,
           animation: 'fadeInToast 0.2s ease-out',
         }}>
           {toast.text}

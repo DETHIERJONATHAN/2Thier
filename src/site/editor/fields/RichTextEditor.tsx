@@ -19,6 +19,7 @@
  */
 
 import React, { useState } from 'react';
+import DOMPurify from 'dompurify';
 import { Input, Space, Button, Tooltip } from 'antd';
 import {
   BoldOutlined,
@@ -140,7 +141,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
           backgroundColor: '#fafafa',
           minHeight: 60
         }}
-        dangerouslySetInnerHTML={{ __html: value }}
+        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(value) }}
       />
     </Space>
   );

@@ -3,6 +3,7 @@
  */
 
 import { useMemo } from 'react';
+import DOMPurify from 'dompurify';
 import { ModuleInstance } from './types';
 import { ModuleDefinition } from './ModuleRegistry';
 import { ConditionalConfig, ConditionRule } from './ConditionEditorModal';
@@ -394,7 +395,7 @@ const ModuleRenderer = ({
           lineHeight: config.lineHeight || 1.6,
           ...themeStyles,
         }}
-        dangerouslySetInnerHTML={{ __html: content }}
+        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(content) }}
       />
     );
   }
@@ -845,7 +846,7 @@ const ModuleRenderer = ({
             columnGap: '24px',
             lineHeight: 1.4,
           }}
-          dangerouslySetInnerHTML={{ __html: config.content || 'Conditions générales...' }}
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(config.content || 'Conditions générales...') }}
         />
       </div>
     );
@@ -964,7 +965,7 @@ const ModuleRenderer = ({
         {config.description && (
           <div 
             style={{ marginBottom: '20px' }}
-            dangerouslySetInnerHTML={{ __html: config.description }}
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(config.description) }}
           />
         )}
         {config.showStats && config.stats && (
@@ -1757,7 +1758,7 @@ const ModuleRenderer = ({
           opacity,
           ...themeStyles,
         }}
-        dangerouslySetInnerHTML={{ __html: energySkylineSVG }}
+        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(energySkylineSVG) }}
       />
     );
   }

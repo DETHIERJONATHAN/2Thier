@@ -121,130 +121,9 @@ router.get('/all', authenticateToken, async (req: Request, res: Response) => {
   }
 });
 
-// GET /social-settings/:orgId — Get settings for a specific org
-router.get('/:orgId', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const { orgId: myOrgId, isSuperAdmin } = getUserContext(req);
-    const targetOrgId = req.params.orgId;
-
-    // Only super admin or member of the org can view
-    if (!isSuperAdmin && myOrgId !== targetOrgId) {
-      return res.status(403).json({ error: 'Accès refusé' });
-    }
-
-    let settings = await db.socialSettings.findUnique({
-      where: { organizationId: targetOrgId },
-    });
-
-    // Auto-create with defaults if not existing
-    if (!settings) {
-      settings = await db.socialSettings.create({
-        data: {
-          id: randomUUID(),
-          organizationId: targetOrgId,
-          updatedAt: new Date(),
-        },
-      });
-    }
-
-    res.json(settings);
-  } catch (error) {
-    console.error('[SOCIAL-SETTINGS] Error fetching:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
-});
-
-// GET /social-settings — Get settings for current org
-router.get('/', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const { orgId } = getUserContext(req);
-    if (!orgId) return res.json(null); // Free user, no org settings
-
-    let settings = await db.socialSettings.findUnique({
-      where: { organizationId: orgId },
-    });
-
-    if (!settings) {
-      settings = await db.socialSettings.create({
-        data: {
-          id: randomUUID(),
-          organizationId: orgId,
-          updatedAt: new Date(),
-        },
-      });
-    }
-
-    res.json(settings);
-  } catch (error) {
-    console.error('[SOCIAL-SETTINGS] Error fetching current:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
-});
-
-// PUT /social-settings/:orgId — Update settings for a specific org
-router.put('/:orgId', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const { orgId: myOrgId, isSuperAdmin } = getUserContext(req);
-    const targetOrgId = req.params.orgId;
-
-    if (!isSuperAdmin && myOrgId !== targetOrgId) {
-      return res.status(403).json({ error: 'Accès refusé' });
-    }
-
-    const parsed = socialSettingsUpdateSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ error: 'Données invalides', details: parsed.error.flatten() });
-    }
-
-    const settings = await db.socialSettings.upsert({
-      where: { organizationId: targetOrgId },
-      update: { ...parsed.data, updatedAt: new Date() },
-      create: {
-        id: randomUUID(),
-        organizationId: targetOrgId,
-        ...parsed.data,
-        updatedAt: new Date(),
-      },
-    });
-
-    res.json(settings);
-  } catch (error) {
-    console.error('[SOCIAL-SETTINGS] Error updating:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
-});
-
-// PUT /social-settings — Update settings for current org
-router.put('/', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const { orgId, isSuperAdmin: _isSuperAdmin } = getUserContext(req);
-    if (!orgId) return res.status(400).json({ error: 'Pas de Colony active' });
-
-    const parsed = socialSettingsUpdateSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ error: 'Données invalides', details: parsed.error.flatten() });
-    }
-
-    const settings = await db.socialSettings.upsert({
-      where: { organizationId: orgId },
-      update: { ...parsed.data, updatedAt: new Date() },
-      create: {
-        id: randomUUID(),
-        organizationId: orgId,
-        ...parsed.data,
-        updatedAt: new Date(),
-      },
-    });
-
-    res.json(settings);
-  } catch (error) {
-    console.error('[SOCIAL-SETTINGS] Error updating current:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
-});
-
 // ═══════════════════════════════════════════════════════
 // SOCIAL CONTEXT — "Carte d'identité sociale"
+// MUST be BEFORE /:orgId to avoid being caught by the param route
 // ═══════════════════════════════════════════════════════
 
 router.get('/context/me', authenticateToken, async (req: Request, res: Response) => {
@@ -272,58 +151,8 @@ router.get('/context/me', authenticateToken, async (req: Request, res: Response)
 
 // ═══════════════════════════════════════════════════════
 // ORG FOLLOW CRUD
+// MUST be BEFORE /:orgId to avoid "org-follow" being matched as orgId
 // ═══════════════════════════════════════════════════════
-
-// POST /org-follow/:orgId — Follow une Colony
-router.post('/org-follow/:orgId', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const { userId } = getUserContext(req);
-    const targetOrgId = req.params.orgId;
-
-    // Check org exists
-    const org = await db.organization.findUnique({ where: { id: targetOrgId }, select: { id: true } });
-    if (!org) return res.status(404).json({ error: 'Colony introuvable' });
-
-    // Check settings allow follow
-    const settings = await db.socialSettings.findUnique({ where: { organizationId: targetOrgId } });
-    if (settings && !settings.allowFollowColony) {
-      return res.status(403).json({ error: 'Cette Colony n\'accepte pas les follows' });
-    }
-
-    // Upsert to avoid duplicate errors
-    const follow = await db.orgFollow.upsert({
-      where: { userId_organizationId: { userId, organizationId: targetOrgId } },
-      update: {},
-      create: {
-        id: randomUUID(),
-        userId,
-        organizationId: targetOrgId,
-      },
-    });
-
-    res.json({ followed: true, follow });
-  } catch (error) {
-    console.error('[ORG-FOLLOW] Error following:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
-});
-
-// DELETE /org-follow/:orgId — Unfollow une Colony
-router.delete('/org-follow/:orgId', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const { userId } = getUserContext(req);
-    const targetOrgId = req.params.orgId;
-
-    await db.orgFollow.deleteMany({
-      where: { userId, organizationId: targetOrgId },
-    });
-
-    res.json({ followed: false });
-  } catch (error) {
-    console.error('[ORG-FOLLOW] Error unfollowing:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
-});
 
 // GET /org-follow/my — Mes Colonies suivies
 router.get('/org-follow/my', authenticateToken, async (req: Request, res: Response) => {
@@ -378,6 +207,183 @@ router.get('/org-follow/count/:orgId', authenticateToken, async (req: Request, r
     res.json({ count, isFollowing: !!isFollowing });
   } catch (error) {
     console.error('[ORG-FOLLOW] Error counting:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /org-follow/:orgId — Follow une Colony
+router.post('/org-follow/:orgId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { userId } = getUserContext(req);
+    const targetOrgId = req.params.orgId;
+
+    // Check org exists
+    const org = await db.organization.findUnique({ where: { id: targetOrgId }, select: { id: true } });
+    if (!org) return res.status(404).json({ error: 'Colony introuvable' });
+
+    // Check settings allow follow
+    const settings = await db.socialSettings.findUnique({ where: { organizationId: targetOrgId } });
+    if (settings && !settings.allowFollowColony) {
+      return res.status(403).json({ error: 'Cette Colony n\'accepte pas les follows' });
+    }
+
+    // Upsert to avoid duplicate errors
+    const follow = await db.orgFollow.upsert({
+      where: { userId_organizationId: { userId, organizationId: targetOrgId } },
+      update: {},
+      create: {
+        id: randomUUID(),
+        userId,
+        organizationId: targetOrgId,
+      },
+    });
+
+    res.json({ followed: true, follow });
+  } catch (error) {
+    console.error('[ORG-FOLLOW] Error following:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// DELETE /org-follow/:orgId — Unfollow une Colony
+router.delete('/org-follow/:orgId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { userId } = getUserContext(req);
+    const targetOrgId = req.params.orgId;
+
+    await db.orgFollow.deleteMany({
+      where: { userId, organizationId: targetOrgId },
+    });
+
+    res.json({ followed: false });
+  } catch (error) {
+    console.error('[ORG-FOLLOW] Error unfollowing:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// PARAMETRIC ROUTES — MUST be LAST (after all static routes)
+// ═══════════════════════════════════════════════════════
+
+// GET /social-settings — Get settings for current org
+router.get('/', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { orgId } = getUserContext(req);
+    if (!orgId) return res.json(null); // Free user, no org settings
+
+    let settings = await db.socialSettings.findUnique({
+      where: { organizationId: orgId },
+    });
+
+    if (!settings) {
+      settings = await db.socialSettings.create({
+        data: {
+          id: randomUUID(),
+          organizationId: orgId,
+          updatedAt: new Date(),
+        },
+      });
+    }
+
+    res.json(settings);
+  } catch (error) {
+    console.error('[SOCIAL-SETTINGS] Error fetching current:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// GET /social-settings/:orgId — Get settings for a specific org
+router.get('/:orgId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { orgId: myOrgId, isSuperAdmin } = getUserContext(req);
+    const targetOrgId = req.params.orgId;
+
+    // Only super admin or member of the org can view
+    if (!isSuperAdmin && myOrgId !== targetOrgId) {
+      return res.status(403).json({ error: 'Accès refusé' });
+    }
+
+    let settings = await db.socialSettings.findUnique({
+      where: { organizationId: targetOrgId },
+    });
+
+    // Auto-create with defaults if not existing
+    if (!settings) {
+      settings = await db.socialSettings.create({
+        data: {
+          id: randomUUID(),
+          organizationId: targetOrgId,
+          updatedAt: new Date(),
+        },
+      });
+    }
+
+    res.json(settings);
+  } catch (error) {
+    console.error('[SOCIAL-SETTINGS] Error fetching:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PUT /social-settings — Update settings for current org
+router.put('/', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { orgId, isSuperAdmin: _isSuperAdmin } = getUserContext(req);
+    if (!orgId) return res.status(400).json({ error: 'Pas de Colony active' });
+
+    const parsed = socialSettingsUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Données invalides', details: parsed.error.flatten() });
+    }
+
+    const settings = await db.socialSettings.upsert({
+      where: { organizationId: orgId },
+      update: { ...parsed.data, updatedAt: new Date() },
+      create: {
+        id: randomUUID(),
+        organizationId: orgId,
+        ...parsed.data,
+        updatedAt: new Date(),
+      },
+    });
+
+    res.json(settings);
+  } catch (error) {
+    console.error('[SOCIAL-SETTINGS] Error updating current:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PUT /social-settings/:orgId — Update settings for a specific org
+router.put('/:orgId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { orgId: myOrgId, isSuperAdmin } = getUserContext(req);
+    const targetOrgId = req.params.orgId;
+
+    if (!isSuperAdmin && myOrgId !== targetOrgId) {
+      return res.status(403).json({ error: 'Accès refusé' });
+    }
+
+    const parsed = socialSettingsUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Données invalides', details: parsed.error.flatten() });
+    }
+
+    const settings = await db.socialSettings.upsert({
+      where: { organizationId: targetOrgId },
+      update: { ...parsed.data, updatedAt: new Date() },
+      create: {
+        id: randomUUID(),
+        organizationId: targetOrgId,
+        ...parsed.data,
+        updatedAt: new Date(),
+      },
+    });
+
+    res.json(settings);
+  } catch (error) {
+    console.error('[SOCIAL-SETTINGS] Error updating:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

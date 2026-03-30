@@ -38,6 +38,9 @@ import { ImageMeasurementPreview } from '../../../../ImageMeasurement/ImageMeasu
 import ImageWithAnnotationsOverlay from '../../../../ImageMeasurement/ImageWithAnnotationsOverlay';
 import type { MeasurementResults, ImageAnnotations } from '../../../../../types/measurement';
 
+// Cache mémoire pour les images annotées (remplace sessionStorage — zéro stockage local)
+const imageMemoryCache = new Map<string, string>();
+
 interface TBLImageFieldWithAIProps {
   // Configuration du champ
   nodeId: string;
@@ -114,13 +117,12 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
   const smartCameraSessionKey = `smartcamera_open_${nodeId}`;
   const annotatedImageStorageKey = `tbl_image_annot_${nodeId}`;
   
-  // États pour les modaux SmartCamera - avec restauration depuis sessionStorage
+  // États pour les modaux SmartCamera - restauration depuis le cache mémoire
   const [showSmartCamera, setShowSmartCamera] = useState(() => {
-    // 🔒 Restaurer l'état au montage (si l'utilisateur était en train de prendre des photos)
     if (typeof window !== 'undefined') {
-      const wasOpen = sessionStorage.getItem(smartCameraSessionKey);
+      const wasOpen = imageMemoryCache.get(smartCameraSessionKey);
       if (wasOpen === 'true') {
-        console.log('📱 [TBLImageFieldWithAI] Restauration SmartCamera ouvert depuis sessionStorage');
+        console.log('📱 [TBLImageFieldWithAI] Restauration SmartCamera ouvert depuis cache mémoire');
         return true;
       }
     }
@@ -128,14 +130,14 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
   });
   const [showReferenceConfig, setShowReferenceConfig] = useState(false);
   
-  // 🔒 Persister l'état showSmartCamera dans sessionStorage
+  // 🔒 Persister l'état showSmartCamera dans le cache mémoire
   useEffect(() => {
     if (typeof window !== 'undefined') {
       if (showSmartCamera) {
-        sessionStorage.setItem(smartCameraSessionKey, 'true');
-        console.log('📱 [TBLImageFieldWithAI] SmartCamera ouvert - sauvegardé dans sessionStorage');
+        imageMemoryCache.set(smartCameraSessionKey, 'true');
+        console.log('📱 [TBLImageFieldWithAI] SmartCamera ouvert - sauvegardé en mémoire');
       } else {
-        sessionStorage.removeItem(smartCameraSessionKey);
+        imageMemoryCache.delete(smartCameraSessionKey);
       }
     }
   }, [showSmartCamera, smartCameraSessionKey]);
@@ -748,42 +750,30 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
     if (nextImageValue) {
       setAnnotatedImageUrl(nextAnnotatedImageUrl || processedImageUrl);
       
-      // 🔒 ESSENTIEL: Persister l'image annotée dans sessionStorage (backend ne persiste pas l'objet {annotated, original})
-      // 🔄 IMPORTANT: Sauvegarder dans TOUS les nœuds (original + dupliqués) pour que l'image persiste partout
+      // 🔒 Cache mémoire pour l'image annotée (zéro stockage local)
       const imageToStore = nextAnnotatedImageUrl || nextImageValue;
       try {
         const storageKey = annotatedImageStorageKey;
         const imageSize = imageToStore?.length || 0;
-        console.log('[TBLImageFieldWithAI] 💾 SAVE sessionStorage');
+        console.log('[TBLImageFieldWithAI] 💾 SAVE cache mémoire');
         console.log(`   Clé: ${storageKey}`);
         console.log(`   Taille image: ${(imageSize / 1024).toFixed(2)}KB`);
         
-        // Sauvegarder dans la clé courante
-        sessionStorage.setItem(storageKey, imageToStore);
-        const verify = sessionStorage.getItem(storageKey);
-        console.log(`   ✅ Vérification: ${verify ? 'SAUVEGARDÉE' : 'ÉCHEC SAUVEGARDE'}`);
+        imageMemoryCache.set(storageKey, imageToStore);
+        console.log(`   ✅ Vérification: SAUVEGARDÉE`);
         
-        // 🔄 NOUVEAU: Si ce nœud est dupliqué (suffixe -1, -2, etc.), sauvegarder AUSSI dans le nœud original
-        // Cela fait que quand on recharge, TOUS les nœuds (original + duplicata) ont l'image annotée
+        // 🔄 Si ce nœud est dupliqué (suffixe -1, -2, etc.), sauvegarder AUSSI dans le nœud original
         if (nodeId.match(/-\d+$/)) {
-          // C'est un nœud dupliqué, extraire l'ID original
           const originalNodeId = nodeId.replace(/-\d+$/, '');
           const originalStorageKey = `tbl_image_annot_${originalNodeId}`;
-          
-          try {
-            sessionStorage.setItem(originalStorageKey, imageToStore);
-            const verifyOriginal = sessionStorage.getItem(originalStorageKey);
-            console.log(`   🔄 SYNC ORIGINAL: ${originalStorageKey}`);
-            console.log(`      ✅ ${verifyOriginal ? 'SAUVEGARDÉE' : 'ÉCHEC'}`);
-          } catch (syncErr) {
-            console.warn('[TBLImageFieldWithAI] ⚠️ Erreur sync sessionStorage original:', syncErr);
-          }
+          imageMemoryCache.set(originalStorageKey, imageToStore);
+          console.log(`   🔄 SYNC ORIGINAL: ${originalStorageKey}`);
         }
       } catch (err) {
-        console.error('[TBLImageFieldWithAI] ❌ ERREUR sessionStorage.setItem:', err);
+        console.error('[TBLImageFieldWithAI] ❌ ERREUR cache mémoire:', err);
       }
       
-      // 🔧 Envoyer au backend (sera rejeté/converti en string, mais on s'en fout)
+      // 🔧 Envoyer au backend
       const persistedValue = {
         annotated: nextAnnotatedImageUrl || nextImageValue,
         original: processedImageUrl || nextImageValue
@@ -854,89 +844,62 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
     setShowMeasurementCanvas(false);
   }, [processedImageUrl, onChange, aiMeasure_keys, onFieldUpdate]);
 
-  // � AVANT TOUT: Copier l'image annotée si ce nœud a été dupliqué (mais pas sa clé sessionStorage)
-  // Cela arrive quand on duplique un nœud : le nouveau nodeId a une clé sessionStorage vide
+  // Copier l'image annotée si ce nœud a été dupliqué (le nouveau nodeId n'a pas de cache)
   useEffect(() => {
     console.log(`[TBLImageFieldWithAI] 🔍 CHECK duplication (nodeId=${nodeId})`);
     
     // Ne chercher que SI la clé courante est vide
-    try {
-      const existing = sessionStorage.getItem(annotatedImageStorageKey);
-      if (existing) {
-        console.log('[TBLImageFieldWithAI] ✅ Image déjà présente pour ce nodeId, skip');
-        return;
-      }
-    } catch (err) {
-      console.warn('[TBLImageFieldWithAI] ⚠️ Erreur sessionStorage check:', err);
+    const existing = imageMemoryCache.get(annotatedImageStorageKey);
+    if (existing) {
+      console.log('[TBLImageFieldWithAI] ✅ Image déjà présente pour ce nodeId, skip');
       return;
     }
 
     // Chercher toutes les clés tbl_image_annot_* et trouver la plus grande (probablement l'originale)
     const imageKeys: Array<{ key: string; size: number }> = [];
-    try {
-      for (let i = 0; i < sessionStorage.length; i++) {
-        const key = sessionStorage.key(i);
-        if (key?.startsWith('tbl_image_annot_')) {
-          const value = sessionStorage.getItem(key);
-          if (value) {
-            imageKeys.push({ key, size: value.length });
-          }
-        }
+    for (const [key, val] of imageMemoryCache.entries()) {
+      if (key.startsWith('tbl_image_annot_') && val) {
+        imageKeys.push({ key, size: val.length });
       }
-    } catch (err) {
-      console.warn('[TBLImageFieldWithAI] ⚠️ Erreur énumération sessionStorage:', err);
-      return;
     }
 
     // Si on trouve UNE SEULE autre image (probable nœud original), la copier
     if (imageKeys.length === 1) {
       const sourceKey = imageKeys[0].key;
-      const sourceValue = sessionStorage.getItem(sourceKey);
+      const sourceValue = imageMemoryCache.get(sourceKey);
       
-      if (sourceValue && sourceValue.length > 10000) { // Au moins 10KB (c'est une vrai image)
+      if (sourceValue && sourceValue.length > 10000) {
         console.log(`[TBLImageFieldWithAI] 🔄 DUPLICATION DÉTECTÉE!`);
         console.log(`   Source: ${sourceKey} (${(sourceValue.length / 1024).toFixed(2)}KB)`);
         console.log(`   Destination: ${annotatedImageStorageKey}`);
         
-        try {
-          sessionStorage.setItem(annotatedImageStorageKey, sourceValue);
-          const verify = sessionStorage.getItem(annotatedImageStorageKey);
-          if (verify) {
-            console.log(`   ✅ Image copiée avec succès!`);
-            setAnnotatedImageUrl(sourceValue);
-            setForceRenderKey(k => k + 1); // Force re-render
-          }
-        } catch (err) {
-          console.error('[TBLImageFieldWithAI] ❌ ERREUR copie sessionStorage:', err);
-        }
+        imageMemoryCache.set(annotatedImageStorageKey, sourceValue);
+        console.log(`   ✅ Image copiée avec succès!`);
+        setAnnotatedImageUrl(sourceValue);
+        setForceRenderKey(k => k + 1);
       }
     }
-  }, [nodeId, annotatedImageStorageKey]); // Ran une seule fois au mount
+  }, [nodeId, annotatedImageStorageKey]);
 
-  // �📥 Hydrater l'image annotée depuis sessionStorage dès que value change (backend ne persiste que original)
+  // 📥 Hydrater l'image annotée depuis le cache mémoire dès que value change
   useEffect(() => {
     console.log('[TBLImageFieldWithAI] 📥 Hydrate effect START');
     console.log(`   value type: ${typeof value}`);
     console.log(`   annotatedImageStorageKey: ${annotatedImageStorageKey}`);
 
-    // Priority: sessionStorage (persiste depuis handleMeasurementsComplete) > value.annotated > value.original > value string
+    // Priority: cache mémoire > value.annotated > value.original > value string
     let nextAnnotated: string | null = null;
     
-    try {
-      console.log('[TBLImageFieldWithAI] 📥 Tentative lecture sessionStorage...');
-      const fromSession = sessionStorage.getItem(annotatedImageStorageKey);
-      if (fromSession) {
-        nextAnnotated = fromSession;
-        console.log('[TBLImageFieldWithAI] ✅ Image annotée restaurée depuis sessionStorage');
-        console.log(`   Taille: ${(fromSession.length / 1024).toFixed(2)}KB`);
-      } else {
-        console.log('[TBLImageFieldWithAI] ⚠️ sessionStorage vide pour cette clé');
-      }
-    } catch (err) {
-      console.error('[TBLImageFieldWithAI] ❌ Erreur sessionStorage.getItem:', err);
+    const fromCache = imageMemoryCache.get(annotatedImageStorageKey);
+    if (fromCache) {
+      nextAnnotated = fromCache;
+      console.log('[TBLImageFieldWithAI] ✅ Image annotée restaurée depuis cache mémoire');
+      console.log(`   Taille: ${(fromCache.length / 1024).toFixed(2)}KB`);
+    } else {
+      console.log('[TBLImageFieldWithAI] ⚠️ Cache mémoire vide pour cette clé');
     }
 
-    // Si pas en sessionStorage, fallback sur value (objet ou string)
+    // Si pas en cache, fallback sur value (objet ou string)
     if (!nextAnnotated) {
       console.log('[TBLImageFieldWithAI] 📥 Fallback sur value...');
       const annotatedFromValue = typeof value === 'object' ? (value as any)?.annotated : undefined;
@@ -952,11 +915,10 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
       console.log(`   Current state: ${annotatedImageUrl?.substring(0, 50)}`);
       console.log(`   New value: ${nextAnnotated.substring(0, 50)}`);
       
-      // FORCE update même si c'est la même référence
       setAnnotatedImageUrl(prev => {
         if (prev === nextAnnotated) {
           console.log('[TBLImageFieldWithAI] 🔄 Image identique, forçage du re-render via key');
-          setForceRenderKey(k => k + 1); // Force re-render
+          setForceRenderKey(k => k + 1);
         }
         return nextAnnotated;
       });
@@ -965,17 +927,12 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
     }
   }, [value, annotatedImageStorageKey]);
 
-  // Restaurer l'image annotée après reload si le backend ne la renvoie pas (ex: champ dupliqué non persisté)
+  // Restaurer l'image annotée si le backend ne la renvoie pas
   useEffect(() => {
-    if (annotatedImageUrl || value) return; // déjà présent
-    try {
-      const stored = sessionStorage.getItem(annotatedImageStorageKey);
-      if (stored) {
-        setAnnotatedImageUrl(stored);
-        // Ne pas forcer onChange ici pour éviter des updates silencieuses : affichage uniquement
-      }
-    } catch (err) {
-      console.warn('⚠️ [TBLImageFieldWithAI] Impossible de restaurer l\'image annotée', err);
+    if (annotatedImageUrl || value) return;
+    const stored = imageMemoryCache.get(annotatedImageStorageKey);
+    if (stored) {
+      setAnnotatedImageUrl(stored);
     }
   }, [annotatedImageUrl, value, annotatedImageStorageKey]);
 

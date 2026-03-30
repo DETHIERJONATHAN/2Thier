@@ -5,6 +5,7 @@
  */
 
 import React, { useState } from 'react';
+import DOMPurify from 'dompurify';
 import { Modal, Button, Space, Row, Col, Card, Tooltip, message } from 'antd';
 import { SwapOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { ALL_THEMES, DocumentTheme } from './DocumentThemes';
@@ -98,7 +99,7 @@ const ThemeSelector: React.FC<ThemeSelectorProps> = ({
               >
                 {/* SVG Header Background */}
                 <div
-                  dangerouslySetInnerHTML={{ __html: theme.headerSvg }}
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(theme.headerSvg) }}
                   style={{
                     width: '100%',
                     height: '100%',

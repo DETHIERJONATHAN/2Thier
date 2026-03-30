@@ -159,7 +159,7 @@ const GoogleSheetsPage: React.FC = () => {
         }
       ],
       version: 24,
-      tags: ['projets', 'crm', 'suivi', '2025'],
+      tags: ['projets', 'hive', 'suivi', '2025'],
       status: 'active',
       editUrl: 'https://docs.google.com/spreadsheets/d/abc123/edit',
       exportUrls: {
@@ -877,7 +877,7 @@ const GoogleSheetsPage: React.FC = () => {
           <Form.Item label="Dossier" name="folderId">
             <Select placeholder="Choisir un dossier">
               <Option value="root">📁 Racine</Option>
-              <Option value="crm">📁 Projets CRM</Option>
+              <Option value="projets">📁 Projets</Option>
               <Option value="finance">📁 Finance</Option>
               <Option value="data">📁 Données</Option>
             </Select>

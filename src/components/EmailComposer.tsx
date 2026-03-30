@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import DOMPurify from 'dompurify';
 import { Modal, Form, Input, Button, message, Space, Tooltip, Upload, Collapse } from 'antd';
 import { SaveOutlined, SendOutlined, LoadingOutlined, CloseOutlined, UploadOutlined } from '@ant-design/icons';
 import { useDrafts, CreateDraftData, DraftData } from '../hooks/useDrafts';
@@ -429,11 +430,12 @@ export const EmailComposer: React.FC<EmailComposerProps> = ({
                   overflowY: 'auto'
                 }}
                 dangerouslySetInnerHTML={{ 
-                  __html: prefilledData.body
+                  __html: DOMPurify.sanitize(prefilledData.body
                     // 🔒 NETTOYAGE SÉCURITAIRE MINIMAL SEULEMENT
                     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '') // Scripts pour sécurité
                     .replace(/<link[^>]*rel=["']?stylesheet["']?[^>]*>/gi, '') // CSS externes
                     // ✨ TOUT LE RESTE RESTE PARFAIT TEL QUEL !
+                  )
                 }}
               />
             </div>

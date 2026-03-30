@@ -21,6 +21,7 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import { TouchBackend } from 'react-dnd-touch-backend';
 import { MultiBackend, TouchTransition, MouseTransition } from 'react-dnd-multi-backend';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { useUserPreference } from '../../hooks/useUserPreference';
 import { useAuth } from '../../auth/useAuth';
 import { useLeadStatuses } from '../../hooks/useLeadStatuses';
 import CreateLeadModal from '../../components/leads/CreateLeadModal';
@@ -712,7 +713,6 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
 
   const [activeAlertsCount, setActiveAlertsCount] = useState(0); // Badge dynamique IA
   // � Système de gestion des notifications IA (snooze)
-  const NOTIFICATION_STORAGE_KEY = 'ai_notifications_snoozed';
   const SNOOZE_DURATIONS = {
     critical: 2 * 60 * 60 * 1000, // 2 heures pour les critiques
     urgent: 4 * 60 * 60 * 1000,   // 4 heures pour les urgents
@@ -720,41 +720,26 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
     default: 24 * 60 * 60 * 1000, // 24 heures pour les autres
   };
 
+  // Snooze data persisted in DB
+  const [snoozedData, setSnoozedData] = useUserPreference<Record<string, { snoozedAt: number; until: number }>>('ai_notifications_snoozed', {});
+
   // Vérifier si une notification est en snooze
   const isNotificationSnoozed = useCallback((type: string): boolean => {
-    try {
-      const snoozed = localStorage.getItem(NOTIFICATION_STORAGE_KEY);
-      if (!snoozed) return false;
-      
-      const snoozedData = JSON.parse(snoozed);
-      const notif = snoozedData[type];
-      
-      if (!notif) return false;
-      
-      // Vérifier si le snooze est encore actif
-      const now = Date.now();
-      return now < notif.until;
-    } catch {
-      return false;
-    }
-  }, []);
+    const notif = snoozedData[type];
+    if (!notif) return false;
+    return Date.now() < notif.until;
+  }, [snoozedData]);
 
   // Mettre en snooze une notification
   const snoozeNotification = useCallback((type: string, duration: number) => {
-    try {
-      const snoozed = localStorage.getItem(NOTIFICATION_STORAGE_KEY);
-      const snoozedData = snoozed ? JSON.parse(snoozed) : {};
-      
-      snoozedData[type] = {
+    setSnoozedData({
+      ...snoozedData,
+      [type]: {
         snoozedAt: Date.now(),
         until: Date.now() + duration,
-      };
-      
-      localStorage.setItem(NOTIFICATION_STORAGE_KEY, JSON.stringify(snoozedData));
-    } catch (error) {
-      console.error('Erreur snooze notification:', error);
-    }
-  }, []);
+      },
+    });
+  }, [snoozedData, setSnoozedData]);
 
   // �📊 Récupération des leads
   const fetchLeads = useCallback(async () => {

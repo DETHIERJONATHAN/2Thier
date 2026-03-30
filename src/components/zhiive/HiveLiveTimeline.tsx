@@ -50,7 +50,7 @@ const HIVE_COLORS = {
   nodeBg: SF.cardBg,
   nodeBorder: SF.primary,
   nodeHover: SF.primaryLight,
-  dateBg: 'rgba(108, 92, 231, 0.08)',
+  dateBg: SF.primaryAlpha08,
   dateText: SF.primary,
   titleText: SF.text,
   descText: SF.textSecondary,
@@ -485,15 +485,15 @@ const MomentCard: React.FC<MomentCardProps> = React.memo(({
             left: 0,
             right: 0,
             height: 40,
-            background: 'linear-gradient(transparent, rgba(0,0,0,0.4))',
+            background: `linear-gradient(transparent, rgba(0,0,0,0.4))`,
           }} />
           {moment.media.length > 1 && (
             <div style={{
               position: 'absolute',
               top: 8,
               right: 8,
-              background: 'rgba(0,0,0,0.5)',
-              color: '#fff',
+              background: SF.overlayDarkMd,
+              color: SF.textLight,
               padding: '2px 8px',
               borderRadius: 12,
               fontSize: 11,
@@ -645,7 +645,7 @@ const MomentDetailModal: React.FC<MomentDetailModalProps> = ({
     >
       {/* Media carousel */}
       {allMedia.length > 0 && (
-        <div style={{ position: 'relative', background: '#000' }}>
+        <div style={{ position: 'relative', background: SF.black }}>
           <Carousel
             arrows
             prevArrow={<LeftOutlined />}
@@ -658,13 +658,13 @@ const MomentDetailModal: React.FC<MomentDetailModalProps> = ({
                   <video
                     src={m.url}
                     controls
-                    style={{ width: '100%', maxHeight: 400, objectFit: 'contain', background: '#000' }}
+                    style={{ width: '100%', maxHeight: 400, objectFit: 'contain', background: SF.black }}
                   />
                 ) : (
                   <img
                     src={m.url}
                     alt={m.caption || moment.title}
-                    style={{ width: '100%', maxHeight: 400, objectFit: 'contain', background: '#000' }}
+                    style={{ width: '100%', maxHeight: 400, objectFit: 'contain', background: SF.black }}
                   />
                 )}
               </div>
@@ -1059,15 +1059,15 @@ const MomentFormModal: React.FC<MomentFormModalProps> = ({
                   borderRadius: 8,
                   overflow: 'hidden',
                   aspectRatio: '1',
-                  background: '#000',
+                  background: SF.black,
                 }}>
                   {item.type === 'video' ? (
                     <div style={{
                       width: '100%', height: '100%',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      background: 'linear-gradient(135deg, #1a1a2e, #16213e)',
+                      background: `linear-gradient(135deg, ${SF.dark}, ${SF.darkDeep})`,
                     }}>
-                      <PlayCircleFilled style={{ fontSize: 32, color: 'rgba(255,255,255,0.8)' }} />
+                      <PlayCircleFilled style={{ fontSize: 32, color: SF.overlayPlayBtn }} />
                     </div>
                   ) : (
                     <img
@@ -1080,18 +1080,18 @@ const MomentFormModal: React.FC<MomentFormModalProps> = ({
                     onClick={() => handleRemoveMedia(item.uid)}
                     style={{
                       position: 'absolute', top: 4, right: 4,
-                      cursor: 'pointer', background: 'rgba(0,0,0,0.5)',
+                      cursor: 'pointer', background: SF.overlayDarkMd,
                       borderRadius: '50%', width: 22, height: 22,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}
                   >
-                    <CloseCircleFilled style={{ fontSize: 16, color: '#fff' }} />
+                    <CloseCircleFilled style={{ fontSize: 16, color: SF.textLight }} />
                   </div>
                   {item.type === 'video' && (
                     <div style={{
                       position: 'absolute', bottom: 4, left: 4,
-                      background: 'rgba(0,0,0,0.6)', borderRadius: 4,
-                      padding: '1px 6px', fontSize: 10, color: '#fff',
+                      background: SF.overlayDarkStrong, borderRadius: 4,
+                      padding: '1px 6px', fontSize: 10, color: SF.textLight,
                     }}>
                       <VideoCameraOutlined /> {t('hive.videoLabel', 'Vidéo')}
                     </div>
@@ -1113,10 +1113,10 @@ const MomentFormModal: React.FC<MomentFormModalProps> = ({
               textAlign: 'center',
               cursor: 'pointer',
               transition: 'all 0.2s',
-              background: 'rgba(108, 92, 231, 0.03)',
+              background: SF.primaryAlpha03,
             }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = SF.primary; e.currentTarget.style.background = 'rgba(108, 92, 231, 0.08)'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = SF.border; e.currentTarget.style.background = 'rgba(108, 92, 231, 0.03)'; }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = SF.primary; e.currentTarget.style.background = SF.primaryAlpha08; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = SF.border; e.currentTarget.style.background = SF.primaryAlpha03; }}
           >
             {mediaItems.length === 0 ? (
               <>

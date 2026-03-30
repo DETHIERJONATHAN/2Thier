@@ -2332,6 +2332,9 @@ model User {
   // Hive Live
   HiveLiveMoments                                     HiveLiveMoment[]    @relation("HiveLiveMoments")
 
+  // User Preferences (replaces localStorage)
+  UserPreferences                                     UserPreference[]
+
   @@index([organizationId, commercialSlug])
 }
 
@@ -4594,4 +4597,23 @@ model SocialSettings {
   updatedAt             DateTime @updatedAt
 
   organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// ═══════════════════════════════════════════════════════
+// USER PREFERENCES (replaces ALL localStorage usage)
+// Key-value store per user, persisted in DB
+// ═══════════════════════════════════════════════════════
+
+model UserPreference {
+  id        String   @id @default(uuid())
+  userId    String
+  key       String
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([userId])
 }

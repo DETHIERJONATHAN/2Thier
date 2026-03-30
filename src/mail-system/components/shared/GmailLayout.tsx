@@ -1,5 +1,6 @@
 // 📧 Interface Gmail complète et fonctionnelle
 import React, { useState, useEffect, useCallback } from 'react';
+import DOMPurify from 'dompurify';
 import { 
   Layout, 
   Menu, 
@@ -167,7 +168,7 @@ const GmailLayout: React.FC = () => {
             <Text type="secondary" className="text-sm">{new Date(selectedEmail.createdAt).toLocaleString('fr-FR')}</Text>
           </div>
         </div>
-        <div className="prose max-w-none flex-grow overflow-y-auto" dangerouslySetInnerHTML={{ __html: selectedEmail.body.replace(/\n/g, '<br />') }} />
+        <div className="prose max-w-none flex-grow overflow-y-auto" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedEmail.body.replace(/\n/g, '<br />')) }} />
         <div className="pt-4 mt-4 border-t">
           <Space>
             <Button type="primary">Répondre</Button>

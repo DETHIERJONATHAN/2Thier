@@ -375,17 +375,12 @@ const FormSections = ({ selectedField, setSelectedField }: { selectedField: Sele
   // Chargement dynamique des formulaires au montage et à chaque changement d'organisation
   useEffect(() => {
     const orgIdFromAuth = currentOrganization?.id;
-    const orgIdFromStorage = localStorage.getItem('organizationId');
 
     // On vide les blocks existants pour éviter d'afficher les données d'une autre organisation
     useCRMStore.setState({ blocks: [] });
 
     // Priorité à l'ID du contexte d'authentification
     if (orgIdFromAuth && orgIdFromAuth !== 'all') {
-      // Si le localStorage n'est pas synchronisé, on le met à jour.
-      if (orgIdFromAuth !== orgIdFromStorage) {
-        localStorage.setItem('organizationId', orgIdFromAuth);
-      }
       fetchBlocks();
     } else {
       // Les blocks sont déjà vidés au début de l'effet.

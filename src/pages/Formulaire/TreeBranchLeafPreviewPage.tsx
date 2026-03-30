@@ -162,10 +162,14 @@ const TreeBranchLeafPreviewPage: React.FC = () => {
             });
           }
 
-          // Évaluer la formule (attention: eval est dangereux en production)
-          // En production, utiliser un parser de formules sécurisé
-          const result = eval(formula);
-          newCalculatedData[node.id] = result;
+          // Évaluer la formule de manière sécurisée (pas d'eval!)
+          const cleanFormula = formula.replace(/[^0-9+\-*/().\s]/g, '');
+          if (cleanFormula) {
+            const result = Function(`"use strict"; return (${cleanFormula})`)();
+            newCalculatedData[node.id] = typeof result === 'number' && !isNaN(result) ? result : 'Erreur';
+          } else {
+            newCalculatedData[node.id] = 'Erreur';
+          }
         } catch (error) {
           console.error('Erreur de calcul pour le nœud', node.id, error);
           newCalculatedData[node.id] = 'Erreur';

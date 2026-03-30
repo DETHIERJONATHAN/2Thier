@@ -61,8 +61,9 @@ interface SmartCameraMobileProps {
   maxPhotos?: number;
 }
 
-// 🔒 Clé pour persister les photos en cours de capture (survit au background/foreground mobile)
-const PHOTOS_SESSION_KEY = 'smartcamera_photos_in_progress';
+// 🔒 Cache mémoire pour les photos en cours de capture (zéro stockage local)
+const photosMemoryCache = new Map<string, string>();
+const PHOTOS_CACHE_KEY = 'smartcamera_photos_in_progress';
 
 const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
   onCapture,
@@ -70,42 +71,34 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
   minPhotos = 1,
   maxPhotos
 }) => {
-  // 🔒 PERSISTANCE: Restaurer les photos depuis sessionStorage au montage
+  // 🔒 Restaurer les photos depuis le cache mémoire au montage
   const [photos, setPhotos] = useState<CapturedPhoto[]>(() => {
-    try {
-      const saved = sessionStorage.getItem(PHOTOS_SESSION_KEY);
-      if (saved) {
+    const saved = photosMemoryCache.get(PHOTOS_CACHE_KEY);
+    if (saved) {
+      try {
         const parsed = JSON.parse(saved);
-        console.log('📱 [SmartCamera] Restauration de', parsed.length, 'photos depuis sessionStorage');
+        console.log('📱 [SmartCamera] Restauration de', parsed.length, 'photos depuis cache mémoire');
         return parsed;
+      } catch (e) {
+        console.warn('📱 [SmartCamera] Erreur restauration photos:', e);
       }
-    } catch (e) {
-      console.warn('📱 [SmartCamera] Erreur restauration photos:', e);
     }
     return [];
   });
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // 🔒 PERSISTANCE: Sauvegarder les photos dans sessionStorage à chaque changement
+  // 🔒 Sauvegarder les photos dans le cache mémoire à chaque changement
   useEffect(() => {
     if (photos.length > 0) {
-      try {
-        sessionStorage.setItem(PHOTOS_SESSION_KEY, JSON.stringify(photos));
-        console.log('📱 [SmartCamera] Sauvegarde de', photos.length, 'photos dans sessionStorage');
-      } catch (e) {
-        console.warn('📱 [SmartCamera] Erreur sauvegarde photos:', e);
-      }
+      photosMemoryCache.set(PHOTOS_CACHE_KEY, JSON.stringify(photos));
+      console.log('📱 [SmartCamera] Sauvegarde de', photos.length, 'photos en mémoire');
     }
   }, [photos]);
 
-  // 🔒 Nettoyer sessionStorage quand on quitte (annuler ou valider)
+  // 🔒 Nettoyer le cache quand on quitte (annuler ou valider)
   const clearPersistedPhotos = useCallback(() => {
-    try {
-      sessionStorage.removeItem(PHOTOS_SESSION_KEY);
-      console.log('📱 [SmartCamera] Photos supprimées de sessionStorage');
-    } catch (e) {
-      // Ignore
-    }
+    photosMemoryCache.delete(PHOTOS_CACHE_KEY);
+    console.log('📱 [SmartCamera] Photos supprimées du cache mémoire');
   }, []);
 
   

@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import DOMPurify from 'dompurify';
 import { Modal, Form, Input, Button, message, Space, Tooltip, Typography, Upload, Collapse } from 'antd';
 import { SaveOutlined, SendOutlined, LoadingOutlined, CloseOutlined, UploadOutlined } from '@ant-design/icons';
 import { useDrafts, CreateDraftData, DraftData } from '../hooks/useDrafts';
@@ -389,11 +390,12 @@ const RevolutionaryHtmlEditor: React.FC<{
                 overflow: 'hidden'
               }}
               dangerouslySetInnerHTML={{ 
-                __html: originalMessage
+                __html: DOMPurify.sanitize(originalMessage
                   // 🔒 NETTOYAGE SÉCURITAIRE MINIMAL SEULEMENT
                   .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '') // Supprimer les scripts pour la sécurité
                   .replace(/<link[^>]*rel=["']?stylesheet["']?[^>]*>/gi, '') // Supprimer les CSS externes
                   // ✨ GARDER TOUT LE RESTE TEL QUEL - LE HTML EST DÉJÀ PARFAIT !
+                )
               }}
             />
             

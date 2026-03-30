@@ -1645,27 +1645,11 @@ router.post('/:id/logo', async (req: AuthenticatedRequest, res) => {
     }
 
     const path = await import('path');
-    const fs = await import('fs');
     const { uploadExpressFile } = await import('../lib/storage');
 
     const ext = path.default.extname(file.name);
     const finalName = `${id}_${Date.now()}${ext}`;
     const key = `org-logos/${finalName}`;
-
-    // Nettoyer les anciens logos en dev
-    if (process.env.NODE_ENV !== 'production') {
-      const destDir = path.default.join('public', 'uploads', 'org-logos');
-      try {
-        if (fs.default.existsSync(destDir)) {
-          const existing = fs.default.readdirSync(destDir);
-          for (const f of existing) {
-            if (f.startsWith(id + '_') || f.startsWith(id + '.')) {
-              fs.default.unlinkSync(path.default.join(destDir, f));
-            }
-          }
-        }
-      } catch { /* ignore */ }
-    }
 
     const logoUrl = await uploadExpressFile(file, key);
 
@@ -1715,26 +1699,11 @@ router.post('/:id/cover', async (req: AuthenticatedRequest, res) => {
     }
 
     const path = await import('path');
-    const fs = await import('fs');
     const { uploadExpressFile } = await import('../lib/storage');
 
     const ext = path.default.extname(file.name);
     const finalName = `${id}_cover_${Date.now()}${ext}`;
     const key = `org-covers/${finalName}`;
-
-    if (process.env.NODE_ENV !== 'production') {
-      const destDir = path.default.join('public', 'uploads', 'org-covers');
-      try {
-        if (fs.default.existsSync(destDir)) {
-          const existing = fs.default.readdirSync(destDir);
-          for (const f of existing) {
-            if (f.startsWith(id + '_cover_')) {
-              fs.default.unlinkSync(path.default.join(destDir, f));
-            }
-          }
-        }
-      } catch { /* ignore */ }
-    }
 
     const coverUrl = await uploadExpressFile(file, key);
 

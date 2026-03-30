@@ -61,7 +61,7 @@ const FormulaireRemplissage: React.FC<FormulaireRemplissageProps> = ({ formDefin
     const allFields = block.sections.flatMap(s => s.fields);
     Promise.all(
       allFields.map(async (field) => {
-        const res = await fetch(`/api/fields/${field.id}/formulas`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+        const res = await fetch(`/api/fields/${field.id}/formulas`, { credentials: 'include' });
         const formulas = await res.json();
         return { fieldId: field.id, formulas };
       })

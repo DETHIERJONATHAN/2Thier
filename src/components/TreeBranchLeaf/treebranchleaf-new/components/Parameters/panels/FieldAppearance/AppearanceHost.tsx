@@ -62,7 +62,7 @@ export const AppearanceHost: React.FC<AppearanceHostProps> = ({ treeId, nodeId, 
         await api.put(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}`, { metadata: next });
         onChange?.(vals);
         // Signal pour TBL de recharger les données
-        localStorage.setItem('treebranchleaf-modified', treeId);
+        window.dispatchEvent(new CustomEvent('treebranchleaf-modified', { detail: treeId }));
         return;
       }
       if (appearanceScope === 'field') {
@@ -71,14 +71,14 @@ export const AppearanceHost: React.FC<AppearanceHostProps> = ({ treeId, nodeId, 
         await api.put(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}`, { metadata: next });
         onChange?.(vals);
         // Signal pour TBL de recharger les données
-        localStorage.setItem('treebranchleaf-modified', treeId);
+        window.dispatchEvent(new CustomEvent('treebranchleaf-modified', { detail: treeId }));
         return;
       }
       const next: Record<string, unknown> = { ...base, appearance: vals };
       await api.put(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}`, { metadata: next });
       onChange?.(vals);
       // Signal pour TBL de recharger les données
-      localStorage.setItem('treebranchleaf-modified', treeId);
+      window.dispatchEvent(new CustomEvent('treebranchleaf-modified', { detail: treeId }));
       return;
     } catch {
       // Feedback minimal pour ne pas gêner la saisie

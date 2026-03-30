@@ -254,7 +254,7 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
           }}>
             <Avatar size={50} src={storyAvatarSrc}
               icon={!storyAvatarSrc ? <UserOutlined /> : undefined}
-              style={{ background: isOrgMode ? (orgLogo ? undefined : '#6C5CE7') : (!storyAvatarSrc ? SF.primary : undefined) }}
+              style={{ background: isOrgMode ? (orgLogo ? undefined : SF.primary) : (!storyAvatarSrc ? SF.primary : undefined) }}
             >
               {isOrgMode && !orgLogo && (currentOrganization?.name?.[0]?.toUpperCase() || 'O')}
             </Avatar>
@@ -342,9 +342,9 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
                 onClick={removeStoryFile}
                 style={{
                   position: 'absolute', top: 6, right: 6, width: 24, height: 24,
-                  borderRadius: '50%', background: 'rgba(0,0,0,0.6)', cursor: 'pointer',
+                  borderRadius: '50%', background: SF.overlayDarkStrong, cursor: 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#fff', fontSize: 12, fontWeight: 700,
+                  color: SF.textLight, fontSize: 12, fontWeight: 700,
                 }}
               >✕</div>
             </div>
@@ -352,18 +352,18 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
             <div
               onClick={() => fileInputRef.current?.click()}
               style={{
-                border: '2px dashed #d9d9d9', borderRadius: 12, padding: '20px 16px',
-                textAlign: 'center', cursor: 'pointer', background: '#fafafa',
+                border: `2px dashed ${SF.borderLight}`, borderRadius: 12, padding: '20px 16px',
+                textAlign: 'center', cursor: 'pointer', background: SF.bgLightest,
                 transition: 'border-color 0.2s',
               }}
             >
-              <CameraOutlined style={{ fontSize: 28, color: '#999', marginBottom: 4 }} />
-              <div style={{ fontSize: 13, color: '#666' }}>{t('stories.tapToAdd')}</div>
-              <div style={{ fontSize: 11, color: '#999' }}>max 50 Mo</div>
+              <CameraOutlined style={{ fontSize: 28, color: SF.textPlaceholder, marginBottom: 4 }} />
+              <div style={{ fontSize: 13, color: SF.textSecondary }}>{t('stories.tapToAdd')}</div>
+              <div style={{ fontSize: 11, color: SF.textPlaceholder }}>max 50 Mo</div>
             </div>
           )}
 
-          <div style={{ fontSize: 11, color: '#999', textAlign: 'center' }}>{t('stories.pasteUrl')}</div>
+          <div style={{ fontSize: 11, color: SF.textPlaceholder, textAlign: 'center' }}>{t('stories.pasteUrl')}</div>
           <Input
             value={storyMediaUrl}
             onChange={e => { setStoryMediaUrl(e.target.value); if (storyFile) removeStoryFile(); }}
@@ -376,9 +376,9 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {(currentOrganization ? ['IN', 'ALL', 'OUT'] : ['ALL', 'OUT']).map(v => {
               const labels: Record<string, { icon: string; label: string; color: string }> = {
-                IN: { icon: '⬡', label: 'Colony', color: '#1890ff' },
-                ALL: { icon: '🌐', label: 'Public', color: '#52c41a' },
-                OUT: { icon: '🔒', label: 'Private', color: '#8c8c8c' },
+                IN: { icon: '⬡', label: 'Colony', color: SF.scopeColony },
+                ALL: { icon: '🌐', label: 'Public', color: SF.scopePublic },
+                OUT: { icon: '🔒', label: 'Private', color: SF.scopePrivate },
               };
               const opt = labels[v];
               const active = storyVisibility === v;
@@ -386,8 +386,8 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
                 <div key={v} onClick={() => setStoryVisibility(v)} style={{
                   display: 'flex', alignItems: 'center', gap: 4, padding: '3px 10px',
                   borderRadius: 14, cursor: 'pointer', fontSize: 12, fontWeight: 600,
-                  background: active ? opt.color + '18' : '#f5f5f5',
-                  color: active ? opt.color : '#999',
+                  background: active ? opt.color + '18' : SF.bgLighter,
+                  color: active ? opt.color : SF.textPlaceholder,
                   border: active ? `1px solid ${opt.color}` : '1px solid transparent',
                   transition: 'all 0.15s',
                 }}>
@@ -425,7 +425,7 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
               <Avatar size={32} src={viewingStory.avatarUrl || undefined}
                 icon={!viewingStory.avatarUrl ? <UserOutlined /> : undefined}
-                style={{ background: viewingStory.publishAsOrg && !viewingStory.avatarUrl ? '#6C5CE7' : undefined }} />
+                style={{ background: viewingStory.publishAsOrg && !viewingStory.avatarUrl ? SF.primary : undefined }} />
               <span style={{ fontWeight: 600 }}>{viewingStory.userName}</span>
               <span style={{ fontSize: 10, color: SF.textMuted, marginLeft: 'auto' }}>
                 {new Date(viewingStory.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
@@ -441,7 +441,7 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
                   </Tooltip>
                   <span
                     onClick={() => handleDeleteStory(viewingStory.id)}
-                    style={{ fontSize: 12, color: '#ff4d4f', cursor: 'pointer', fontWeight: 600 }}
+                    style={{ fontSize: 12, color: SF.danger, cursor: 'pointer', fontWeight: 600 }}
                   >🗑️</span>
                 </>
               )}

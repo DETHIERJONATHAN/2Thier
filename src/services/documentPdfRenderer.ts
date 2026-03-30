@@ -1446,13 +1446,15 @@ export class DocumentPdfRenderer {
           this.renderImagePlaceholder(x, y, width, height, 'Base64 vide');
         }
       } else if (imageUrl.startsWith('/uploads/') || imageUrl.startsWith('uploads/')) {
-        // Image locale
-        const localPath = path.join(process.cwd(), 'public', imageUrl);
-        if (fs.existsSync(localPath)) {
-          this.doc.image(localPath, x, y, imageOptions);
+        // URL relative /uploads/ → fetch depuis GCS
+        const prefix = imageUrl.startsWith('/') ? imageUrl.slice(1) : imageUrl;
+        const gcsUrl = `https://storage.googleapis.com/crm-2thier-uploads/${prefix.replace(/^\/?(uploads\/)?/, '')}`;
+        const cachedBuffer = this.imageCache.get(gcsUrl);
+        if (cachedBuffer) {
+          this.doc.image(cachedBuffer, x, y, imageOptions);
         } else {
-          console.warn(`📄 [PDF] Image locale non trouvée: ${localPath}`);
-          this.renderImagePlaceholder(x, y, width, height, 'Image non trouvée');
+          console.warn(`📄 [PDF] Image /uploads/ non en cache GCS: ${gcsUrl}`);
+          this.renderImagePlaceholder(x, y, width, height, 'Image non chargée');
         }
       } else if (imageUrl.startsWith('http')) {
         // URL externe - vérifier le cache pré-chargé
@@ -1518,13 +1520,15 @@ export class DocumentPdfRenderer {
           }
           console.warn(`📄 [PDF] BACKGROUND: ⚠️ pas de données base64`);
         } else if (imageUrl.startsWith('/uploads/') || imageUrl.startsWith('uploads/')) {
-          const localPath = path.join(process.cwd(), 'public', imageUrl);
-          if (fs.existsSync(localPath)) {
-            this.drawBackgroundImage(fs.readFileSync(localPath), x, y, width, height);
+          const prefix = imageUrl.startsWith('/') ? imageUrl.slice(1) : imageUrl;
+          const gcsUrl = `https://storage.googleapis.com/crm-2thier-uploads/${prefix.replace(/^\/?uploads\//, '')}`;
+          const cachedBuffer = this.imageCache.get(gcsUrl);
+          if (cachedBuffer) {
+            this.drawBackgroundImage(cachedBuffer, x, y, width, height);
             return;
           }
-          console.warn(`📄 [PDF] Image locale non trouvée: ${localPath}`);
-          this.renderImagePlaceholder(x, y, width, height, 'Image non trouvée');
+          console.warn(`📄 [PDF] Image /uploads/ non en cache GCS: ${gcsUrl}`);
+          this.renderImagePlaceholder(x, y, width, height, 'Image non chargée');
           return;
         } else if (imageUrl.startsWith('http')) {
           const cachedBuffer = this.imageCache.get(imageUrl);

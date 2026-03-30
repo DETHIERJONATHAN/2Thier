@@ -673,7 +673,7 @@ const ProductDocumentsPage: React.FC = () => {
           <Card size="small">
             <Statistic
               title="Stockage"
-              value={provider === 'google_drive' ? 'Google Drive' : 'CRM Local'}
+              value={provider === 'google_drive' ? 'Google Drive' : 'Stockage local'}
               prefix={provider === 'google_drive' ? <CloudOutlined /> : <HddOutlined />}
               valueStyle={{ fontSize: 16 }}
             />

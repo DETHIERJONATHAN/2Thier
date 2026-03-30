@@ -44,6 +44,7 @@ import {
 import { useGmailService, FormattedGmailMessage, GmailMessage, GmailLabel } from '../hooks/useGmailService';
 import { useYandexMailService } from '../hooks/useYandexMailService';
 import { useMailProvider } from '../hooks/useMailProvider';
+import { useAuth } from '../auth/useAuth';
 import GoogleAuthError from '../components/GoogleAuthError';
 
 const { Sider } = Layout;
@@ -310,6 +311,8 @@ const SYSTEM_FOLDERS: Record<string, FolderConfig> = {
 // ═══════════════════════════════════════════════════════════════
 
 const UnifiedMailPage: React.FC = () => {
+  // ─── Contexte auth ───
+  const { currentOrganization } = useAuth();
   // ─── Détection du fournisseur ───
   const { provider, isLoading: providerLoading } = useMailProvider();
   const gmailService = useGmailService();
@@ -1552,7 +1555,7 @@ document.querySelectorAll('img').forEach(function(img) {
                               `${window.location.origin}/api/gmail/messages/${selectedMessage.id}/attachments/${encodeURIComponent(att.attachmentId)}?preview=true`,
                               {
                                 credentials: 'include',
-                                headers: { 'x-organization-id': localStorage.getItem('organizationId') || '' },
+                                headers: { 'x-organization-id': currentOrganization?.id || '' },
                               }
                             );
                             if (response.ok) {

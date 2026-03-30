@@ -1,138 +1,139 @@
 /**
- * Module de stockage unifié — local en dev, Google Cloud Storage en production.
+ * Module de stockage unifié — 100% Google Cloud Storage.
  *
- * Usage :
- *   import { uploadFile, getPublicUrl } from '@/lib/storage';
- *   const url = await uploadFile(buffer, 'wall/1234_photo.jpg', 'image/jpeg');
+ * Zéro stockage local. Zéro cache. Zéro fallback.
+ * Tous les fichiers sont sur GCS, toutes les URLs retournées sont absolues.
+ *
+ * - Production (Cloud Run) : ADC automatique via le service account du container.
+ * - Dev (Codespaces)       : gcloud access token via custom auth client.
+ *
+ * Le bucket utilise "uniform bucket-level access" → pas de ACL par objet,
+ * donc on ne passe JAMAIS `public: true` à blob.save().
  */
 
 import { Storage } from '@google-cloud/storage';
-import path from 'path';
+import { execSync } from 'child_process';
 import fs from 'fs/promises';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const GCS_BUCKET = process.env.GCS_BUCKET || 'crm-2thier-uploads';
 
-console.log(`📦 [Storage] Mode: ${isProduction ? 'PRODUCTION (GCS)' : 'DEV (local)'} | Bucket: ${GCS_BUCKET}`);
+console.log(`📦 [Storage] Mode: GCS 100% (${isProduction ? 'production' : 'dev'}) | Bucket: ${GCS_BUCKET}`);
+
+// ── Auth ──────────────────────────────────────────────────────
+
+/**
+ * Custom auth client for dev: wraps `gcloud auth print-access-token`.
+ * Needed because the service account key is expired but gcloud CLI works.
+ */
+class GcloudAuth {
+  private token: string;
+  constructor(token: string) {
+    this.token = token;
+  }
+  async getAccessToken() {
+    return { token: this.token };
+  }
+  async getRequestHeaders() {
+    return { Authorization: `Bearer ${this.token}` };
+  }
+  async request(opts: { url: string; method?: string; headers?: Record<string, string>; body?: unknown }) {
+    const resp = await fetch(opts.url, {
+      method: opts.method || 'GET',
+      headers: { ...opts.headers, Authorization: `Bearer ${this.token}` },
+      body: opts.body ? (typeof opts.body === 'string' ? opts.body : JSON.stringify(opts.body)) : undefined,
+    });
+    return { data: await resp.json(), status: resp.status };
+  }
+}
 
 let storage: Storage | null = null;
 
 function getStorage(): Storage {
   if (!storage) {
-    storage = new Storage(); // Uses ADC in Cloud Run (automatic)
+    if (isProduction) {
+      storage = new Storage();
+    } else {
+      try {
+        const token = execSync('gcloud auth print-access-token', {
+          encoding: 'utf-8',
+          env: { ...process.env, GOOGLE_APPLICATION_CREDENTIALS: undefined },
+        }).trim();
+        storage = new Storage({
+          projectId: process.env.GCLOUD_PROJECT || 'thiernew',
+          authClient: new GcloudAuth(token) as any,
+        });
+        console.log('📦 [Storage] ✅ Auth via gcloud access token');
+      } catch {
+        console.warn('📦 [Storage] ⚠️ gcloud token failed, trying default credentials');
+        storage = new Storage();
+      }
+    }
   }
   return storage;
 }
 
+// ── Public API ────────────────────────────────────────────────
+
 /**
- * Upload a file buffer to storage.
- * @param buffer  - The file content as a Buffer
- * @param key     - The storage path, e.g. "wall/1710000000_photo.jpg"
- * @param mimeType - The MIME type, e.g. "image/jpeg"
- * @returns The public URL that can be used to access the file
+ * Upload a Buffer to GCS and return the absolute public URL.
  */
 export async function uploadFile(
   buffer: Buffer,
   key: string,
   mimeType: string,
 ): Promise<string> {
-  if (isProduction) {
-    return uploadToGCS(buffer, key, mimeType);
-  }
-  return uploadToLocal(buffer, key);
+  const bucket = getStorage().bucket(GCS_BUCKET);
+  const blob = bucket.file(key);
+  await blob.save(buffer, {
+    contentType: mimeType,
+    resumable: false,
+    metadata: { cacheControl: 'no-cache' },
+  });
+  const url = `https://storage.googleapis.com/${GCS_BUCKET}/${key}`;
+  console.log(`📦 [Storage] ✅ Upload OK: ${key} (${(buffer.length / 1024).toFixed(1)} KB)`);
+  return url;
 }
 
 /**
- * Upload a file using express-fileupload — reads from tempFilePath when useTempFiles is enabled.
- * @param file     - express-fileupload file object (.data, .tempFilePath, .mimetype, .mv)
- * @param key      - The storage path, e.g. "wall/1710000000_photo.jpg"
- * @returns The public URL
+ * Upload an express-fileupload file to GCS.
+ * Handles the case where file.data is empty (useTempFiles mode).
  */
 export async function uploadExpressFile(
   file: { data: Buffer; mimetype: string; tempFilePath?: string; mv: (path: string) => Promise<void> },
   key: string,
 ): Promise<string> {
-  if (isProduction) {
-    // When useTempFiles is enabled, file.data is empty — read from temp file instead
-    let buffer = file.data;
-    if ((!buffer || buffer.length === 0) && file.tempFilePath) {
-      buffer = await fs.readFile(file.tempFilePath);
-    }
-    return uploadToGCS(buffer, key, file.mimetype);
+  let buffer = file.data;
+  if ((!buffer || buffer.length === 0) && file.tempFilePath) {
+    buffer = await fs.readFile(file.tempFilePath);
   }
-  // In dev, save locally under public/uploads/
-  const localPath = path.join(process.cwd(), 'public', 'uploads', key);
-  const dir = path.dirname(localPath);
-  await fs.mkdir(dir, { recursive: true });
-  await file.mv(localPath);
-  return `/uploads/${key}`;
+  return uploadFile(buffer, key, file.mimetype);
 }
 
 /**
- * Delete a file from storage by its key or URL.
+ * Delete a file from GCS.
  */
 export async function deleteFile(keyOrUrl: string): Promise<void> {
   const key = extractKey(keyOrUrl);
   if (!key) return;
-
-  if (isProduction) {
-    try {
-      await getStorage().bucket(GCS_BUCKET).file(key).delete();
-    } catch {
-      // File may not exist — ignore
-    }
-  } else {
-    const localPath = path.join(process.cwd(), 'public', 'uploads', key);
-    try {
-      await fs.unlink(localPath);
-    } catch {
-      // File may not exist — ignore
-    }
-  }
-}
-
-// ── Internal ──────────────────────────────────────────────────
-
-async function uploadToGCS(buffer: Buffer, key: string, mimeType: string): Promise<string> {
   try {
-    const bucket = getStorage().bucket(GCS_BUCKET);
-    const blob = bucket.file(key);
-    await blob.save(buffer, {
-      contentType: mimeType,
-      resumable: false,
-      public: true,
-      metadata: {
-        cacheControl: 'public, max-age=3600',
-      },
-    });
-    const url = `https://storage.googleapis.com/${GCS_BUCKET}/${key}`;
-    console.log(`📦 [Storage] ✅ GCS upload OK: ${key} (${(buffer.length / 1024).toFixed(1)} KB)`);
-    return url;
-  } catch (error) {
-    console.error(`📦 [Storage] ❌ GCS upload FAILED for ${key}:`, error);
-    throw error;
+    await getStorage().bucket(GCS_BUCKET).file(key).delete();
+    console.log(`📦 [Storage] 🗑️ Deleted: ${key}`);
+  } catch {
+    // File may not exist — ignore
   }
 }
 
-async function uploadToLocal(buffer: Buffer, key: string): Promise<string> {
-  const localPath = path.join(process.cwd(), 'public', 'uploads', key);
-  const dir = path.dirname(localPath);
-  await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(localPath, buffer);
-  return `/uploads/${key}`;
-}
+// ── Helpers ───────────────────────────────────────────────────
 
 function extractKey(keyOrUrl: string): string | null {
   if (!keyOrUrl) return null;
-  // GCS URL  →  extract path after bucket
   const gcsPrefix = `https://storage.googleapis.com/${GCS_BUCKET}/`;
   if (keyOrUrl.startsWith(gcsPrefix)) {
     return keyOrUrl.slice(gcsPrefix.length);
   }
-  // Local URL  →  strip /uploads/ prefix
   if (keyOrUrl.startsWith('/uploads/')) {
     return keyOrUrl.slice('/uploads/'.length);
   }
-  // Assume it's already a key
   return keyOrUrl;
 }

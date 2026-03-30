@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Alert, Card, Typography, Spin, Button, Segmented, Switch, Tooltip, message, Tag, Space } from 'antd';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
+import { useUserPreference } from '../../../hooks/useUserPreference';
 import { Lead } from '../../../types/leads';
 import { BulbOutlined, CheckCircleOutlined } from '@ant-design/icons';
 
@@ -71,25 +72,20 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({ lead, onSelectSlot
     fetchSuggestions();
   }, [api, lead.id]);
 
-  // Charger préférences persistées
+  // Charger préférences persistées depuis la DB
+  const [savedCalPrefs, setSavedCalPrefs] = useUserPreference<{ viewMode?: string; granularity?: number; highlightMain?: boolean }>('smartCal_prefs', {});
+  const calPrefsAppliedRef = React.useRef(false);
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('smartCal_prefs');
-      if (raw) {
-        const p = JSON.parse(raw);
-        if (p.viewMode) setViewMode(p.viewMode);
-        if (p.granularity) setSlotMinutes(p.granularity);
-        if (typeof p.highlightMain === 'boolean') setHighlightMain(p.highlightMain);
-      }
-    } catch {
-      // ignore
-    }
-  }, []);
-  useEffect(() => {
-    try { localStorage.setItem('smartCal_prefs', JSON.stringify({ viewMode, granularity: slotMinutes, highlightMain })); } catch {
-      // ignore quota
-    }
-  }, [viewMode, slotMinutes, highlightMain]);
+    if (calPrefsAppliedRef.current || !savedCalPrefs) return;
+    calPrefsAppliedRef.current = true;
+    if (savedCalPrefs.viewMode) setViewMode(savedCalPrefs.viewMode as 'day' | 'week');
+    if (savedCalPrefs.granularity) setSlotMinutes(savedCalPrefs.granularity);
+    if (typeof savedCalPrefs.highlightMain === 'boolean') setHighlightMain(savedCalPrefs.highlightMain);
+  }, [savedCalPrefs]);
+  const saveCalPrefs = useCallback(() => {
+    setSavedCalPrefs({ viewMode, granularity: slotMinutes, highlightMain });
+  }, [viewMode, slotMinutes, highlightMain, setSavedCalPrefs]);
+  useEffect(() => { saveCalPrefs(); }, [saveCalPrefs]);
 
   const bestSuggestion = useMemo(() => suggestions.find(s => s.type === 'best') || suggestions[0], [suggestions]);
 

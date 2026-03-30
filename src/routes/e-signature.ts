@@ -27,20 +27,6 @@ import { notify } from '../services/NotificationHelper';
 const router = Router();
 
 // ═══════════════════════════════════════════════════
-// CACHE PDF signé (évite régénération lente → 502 proxy Codespaces)
-// ═══════════════════════════════════════════════════
-const signedPdfCache = new Map<string, { buffer: Buffer; filename: string; timestamp: number }>();
-const PDF_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
-
-function cacheSignedPdf(signatureId: string, buffer: Buffer, filename: string) {
-  signedPdfCache.set(signatureId, { buffer, filename, timestamp: Date.now() });
-  // Nettoyage des entrées expirées
-  for (const [key, entry] of signedPdfCache) {
-    if (Date.now() - entry.timestamp > PDF_CACHE_TTL_MS) signedPdfCache.delete(key);
-  }
-}
-
-// ═══════════════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════════════
 
@@ -744,13 +730,6 @@ router.get('/:id/download-signed-pdf', async (req: Request, res: Response) => {
       if (extra) Object.entries(extra).forEach(([k, v]) => res.setHeader(k, v));
       return res.send(buffer);
     };
-    
-    // ⚡ Vérifier le cache d'abord (évite 2.5s de génération → 502 proxy)
-    const cached = signedPdfCache.get(id);
-    if (cached && (Date.now() - cached.timestamp < PDF_CACHE_TTL_MS)) {
-      console.log(`[E-Signature] ⚡ PDF servi depuis le cache pour ${id}`);
-      return sendPdf(cached.buffer, cached.filename);
-    }
 
     const signature = await db.electronicSignature.findUnique({ where: { id } });
     if (!signature) return res.status(404).json({ success: false, message: 'Signature non trouvée' });
@@ -781,9 +760,6 @@ router.get('/:id/download-signed-pdf', async (req: Request, res: Response) => {
       const { buffer, filename } = await generateClientPdfBuffer(signature.documentId, { electronicSignatures });
       const signedFilename = filename.replace('.pdf', '-signé.pdf');
       
-      // ⚡ Cacher pour les prochains appels
-      cacheSignedPdf(id, buffer, signedFilename);
-      
       return sendPdf(buffer, signedFilename, { 'X-Signature-Count': allSignatures.length.toString() });
     }
 
@@ -804,9 +780,6 @@ router.get('/:id/download-signed-pdf', async (req: Request, res: Response) => {
 
     const { buffer, hash } = await generateTblPdfWithHash(pdfData);
     const tblFilename = `devis-signe-${signature.submissionId.substring(0, 8)}.pdf`;
-    
-    // ⚡ Cacher pour les prochains appels
-    cacheSignedPdf(id, buffer, tblFilename);
     
     return sendPdf(buffer, tblFilename, { 'X-PDF-Hash': hash, 'X-Signature-Count': allSignatures.length.toString() });
   } catch (error) {
@@ -1250,10 +1223,9 @@ router.post('/sign/:token/submit', async (req: Request, res: Response) => {
             console.warn('[E-Signature] ⚠️ Erreur génération PDF pour email:', pdfErr);
           }
 
-          // ⚡ Pré-cacher le PDF pour servir instantanément au CRM
+          // PDF généré pour l'email
           if (pdfBuffer) {
-            cacheSignedPdf(signature.id, pdfBuffer, pdfFilename);
-            console.log(`[E-Signature] ⚡ PDF pré-caché pour ${signature.id}`);
+            console.log(`[E-Signature] PDF généré pour ${signature.id}`);
           }
 
           const attachments = pdfBuffer ? [{ filename: pdfFilename, content: pdfBuffer, mimeType: 'application/pdf' }] : [];
