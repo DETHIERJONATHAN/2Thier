@@ -1,0 +1,336 @@
+/**
+ * ============================================================
+ *  PostalEmailService — Service email via Postal (self-hosted)
+ * ============================================================
+ *
+ *  Fournit une interface complète pour gérer les emails via
+ *  un serveur Postal self-hosted (https://docs.postalserver.io/).
+ *
+ *  Fonctionnalités :
+ *    - Envoi d'email via l'API REST Postal
+ *    - Réception d'emails via webhooks Postal
+ *    - Gestion des credentials (création/suppression de boîtes)
+ *    - Sauvegarde des emails dans la base de données
+ *
+ *  L'API Postal utilise des clés d'API serveur, pas de
+ *  mot de passe utilisateur. Chaque organisation a un
+ *  "credential" (boîte mail) sur le serveur Postal.
+ * ============================================================
+ */
+
+import { db } from '../lib/database.js';
+
+// ─── Types ───────────────────────────────────────────────────
+
+interface PostalSendOptions {
+  from: string;
+  to: string | string[];
+  subject: string;
+  body: string;
+  isHtml?: boolean;
+  cc?: string[];
+  bcc?: string[];
+  replyTo?: string;
+  attachments?: PostalAttachment[];
+}
+
+interface PostalAttachment {
+  name: string;
+  contentType: string;
+  data: string; // base64
+}
+
+interface PostalApiResponse {
+  status: 'success' | 'error';
+  data?: Record<string, unknown>;
+  error?: string;
+}
+
+interface PostalMessageResult {
+  message_id: string;
+  token: string;
+}
+
+interface PostalInboundPayload {
+  id: number;
+  rcpt_to: string;
+  mail_from: string;
+  subject: string;
+  message_id: string;
+  timestamp: number;
+  size: number;
+  spam_status: string;
+  bounce: boolean;
+  plain_body?: string;
+  html_body?: string;
+  attachments?: Array<{
+    filename: string;
+    content_type: string;
+    size: number;
+    data: string; // base64
+  }>;
+}
+
+// ─── Service ─────────────────────────────────────────────────
+
+export class PostalEmailService {
+  private apiUrl: string;
+  private apiKey: string;
+
+  constructor(apiUrl?: string, apiKey?: string) {
+    this.apiUrl = apiUrl || process.env.POSTAL_API_URL || '';
+    this.apiKey = apiKey || process.env.POSTAL_API_KEY || '';
+
+    if (!this.apiUrl || !this.apiKey) {
+      console.warn('⚠️ [POSTAL] Configuration manquante: POSTAL_API_URL ou POSTAL_API_KEY');
+    }
+  }
+
+  // ─── Envoi d'email ───────────────────────────────────────
+
+  /**
+   * Envoie un email via l'API REST de Postal.
+   * Doc: https://docs.postalserver.io/developer/api/send-message
+   */
+  async sendEmail(options: PostalSendOptions): Promise<PostalMessageResult> {
+    const { from, to, subject, body, isHtml = false, cc, bcc, replyTo, attachments } = options;
+
+    const toArray = Array.isArray(to) ? to : [to];
+
+    const payload: Record<string, unknown> = {
+      to: toArray,
+      from,
+      subject,
+      reply_to: replyTo || from,
+    };
+
+    if (isHtml) {
+      payload.html_body = body;
+    } else {
+      payload.plain_body = body;
+    }
+
+    if (cc?.length) payload.cc = cc;
+    if (bcc?.length) payload.bcc = bcc;
+
+    if (attachments?.length) {
+      payload.attachments = attachments.map(a => ({
+        name: a.name,
+        content_type: a.contentType,
+        data: a.data,
+      }));
+    }
+
+    console.log(`📤 [POSTAL] Envoi email de ${from} vers ${toArray.join(', ')}`);
+
+    const result = await this.apiCall<{ messages: Record<string, PostalMessageResult> }>('send/message', payload);
+
+    if (!result.data?.messages) {
+      throw new Error('Réponse Postal invalide: pas de messages');
+    }
+
+    // Postal retourne un objet { messages: { "recipient@email.com": { id, token } } }
+    const firstRecipient = Object.keys(result.data.messages)[0];
+    const messageResult = result.data.messages[firstRecipient] as PostalMessageResult;
+
+    console.log(`✅ [POSTAL] Email envoyé: ${messageResult.message_id}`);
+
+    return messageResult;
+  }
+
+  // ─── Gestion des credentials (boîtes mail) ──────────────
+
+  /**
+   * Crée un "credential" SMTP sur Postal pour un utilisateur.
+   * Cela permet à Postal de recevoir les emails destinés à cette adresse.
+   * Doc: https://docs.postalserver.io/developer/api/credentials
+   */
+  async createMailbox(emailAddress: string, name?: string): Promise<{ key: string }> {
+    const [localPart, domain] = emailAddress.split('@');
+
+    if (!localPart || !domain) {
+      throw new Error(`Adresse email invalide: ${emailAddress}`);
+    }
+
+    console.log(`📬 [POSTAL] Création boîte mail: ${emailAddress}`);
+
+    // Créer une route pour recevoir les emails de cette adresse
+    const _routeResult = await this.apiCall<{ route: { id: number } }>('routes/create', {
+      domain,
+      endpoint_type: 'HTTPEndpoint',
+      endpoint_id: await this.getWebhookEndpointId(),
+      name: name || `Mailbox: ${emailAddress}`,
+      // Match exact sur l'adresse
+      mode: 'Endpoint',
+    });
+
+    // Créer un credential SMTP pour l'envoi
+    const credentialResult = await this.apiCall<{ credential: { key: string } }>('credentials/create', {
+      type: 'SMTP',
+      name: name || emailAddress,
+      hold: false,
+    });
+
+    const key = credentialResult.data?.credential?.key || '';
+    console.log(`✅ [POSTAL] Boîte mail créée: ${emailAddress}`);
+
+    return { key };
+  }
+
+  /**
+   * Récupère ou crée l'endpoint webhook pour la réception.
+   */
+  private async getWebhookEndpointId(): Promise<number> {
+    // On cherche l'endpoint HTTP existant
+    const endpoints = await this.apiCall<{ http_endpoints: Array<{ id: number; url: string }> }>('http_endpoints/list', {});
+
+    const webhookUrl = process.env.POSTAL_WEBHOOK_URL || `${process.env.API_URL || ''}/api/postal/inbound`;
+
+    const existing = endpoints.data?.http_endpoints?.find(
+      (ep: { url: string }) => ep.url === webhookUrl
+    );
+
+    if (existing) return existing.id;
+
+    // Créer l'endpoint
+    const created = await this.apiCall<{ http_endpoint: { id: number } }>('http_endpoints/create', {
+      name: 'Zhiive Inbound',
+      url: webhookUrl,
+      encoding: 'BodyAsJSON',
+      format: 'Hash',
+      strip_replies: true,
+      include_attachments: true,
+    });
+
+    return created.data?.http_endpoint?.id || 0;
+  }
+
+  // ─── Traitement des emails entrants (webhook) ───────────
+
+  /**
+   * Traite un email entrant reçu via le webhook Postal.
+   * Sauvegarde l'email dans la base de données.
+   */
+  async processInboundEmail(payload: PostalInboundPayload): Promise<string | null> {
+    try {
+      const recipientEmail = payload.rcpt_to;
+      const senderEmail = payload.mail_from;
+
+      console.log(`📥 [POSTAL] Email entrant de ${senderEmail} vers ${recipientEmail}`);
+
+      // Trouver l'utilisateur propriétaire de cette adresse
+      const emailAccount = await db.emailAccount.findFirst({
+        where: {
+          emailAddress: recipientEmail,
+          mailProvider: 'postal',
+        },
+        select: { userId: true, emailAddress: true },
+      });
+
+      if (!emailAccount) {
+        console.warn(`⚠️ [POSTAL] Aucun compte trouvé pour ${recipientEmail}`);
+        return null;
+      }
+
+      // Vérifier que cet email n'existe pas déjà (déduplication par message_id)
+      const existing = await db.email.findFirst({
+        where: {
+          userId: emailAccount.userId,
+          uid: payload.message_id,
+        },
+      });
+
+      if (existing) {
+        console.log(`📧 [POSTAL] Email déjà existant: ${payload.message_id}`);
+        return existing.id;
+      }
+
+      // Sauvegarder dans la DB
+      const email = await db.email.create({
+        data: {
+          userId: emailAccount.userId,
+          from: senderEmail,
+          to: recipientEmail,
+          subject: payload.subject || 'Sans sujet',
+          body: payload.html_body || payload.plain_body || '',
+          contentType: payload.html_body ? 'text/html' : 'text/plain',
+          folder: payload.spam_status === 'spam' ? 'spam' : 'inbox',
+          isRead: false,
+          isStarred: false,
+          uid: payload.message_id,
+          createdAt: new Date(payload.timestamp * 1000),
+        },
+      });
+
+      console.log(`✅ [POSTAL] Email sauvegardé: ${email.id} (${payload.subject})`);
+
+      return email.id;
+    } catch (error) {
+      console.error('❌ [POSTAL] Erreur traitement email entrant:', error);
+      throw error;
+    }
+  }
+
+  // ─── Test de connexion ──────────────────────────────────
+
+  /**
+   * Teste la connexion à l'API Postal.
+   */
+  async testConnection(): Promise<boolean> {
+    try {
+      console.log(`🧪 [POSTAL] Test connexion vers ${this.apiUrl}`);
+      const result = await this.apiCall('deliverability/domain_check', { domain: 'test.com' });
+      console.log(`✅ [POSTAL] Connexion OK`);
+      return result.status === 'success';
+    } catch (error) {
+      console.error('❌ [POSTAL] Erreur connexion:', error);
+      return false;
+    }
+  }
+
+  // ─── API REST helper ────────────────────────────────────
+
+  /**
+   * Effectue un appel à l'API REST de Postal.
+   * L'authentification se fait via le header X-Server-API-Key.
+   */
+  private async apiCall<T = Record<string, unknown>>(
+    endpoint: string,
+    payload: Record<string, unknown>
+  ): Promise<PostalApiResponse & { data?: T }> {
+    const url = `${this.apiUrl}/api/v1/${endpoint}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Server-API-Key': this.apiKey,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Postal API error ${response.status}: ${errorText}`);
+    }
+
+    const result = await response.json() as PostalApiResponse & { data?: T };
+
+    if (result.status === 'error') {
+      throw new Error(`Postal API error: ${result.error || 'Unknown error'}`);
+    }
+
+    return result;
+  }
+}
+
+// ─── Singleton pour utilisation dans les routes ────────────
+
+let _postalService: PostalEmailService | null = null;
+
+export function getPostalService(): PostalEmailService {
+  if (!_postalService) {
+    _postalService = new PostalEmailService();
+  }
+  return _postalService;
+}

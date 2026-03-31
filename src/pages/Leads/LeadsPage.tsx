@@ -95,8 +95,8 @@ export default function LeadsPage() {
         <Route path="agenda/:leadId" element={
           <div className="p-6">
             <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4">
-              <h2 className="text-lg font-semibold text-blue-800 mb-2">📅 Module Agenda Google</h2>
-              <p className="text-blue-700">Intégration Google Calendar en cours de développement. Redirection vers Google Agenda...</p>
+              <h2 className="text-lg font-semibold text-blue-800 mb-2">📅 Module Agenda</h2>
+              <p className="text-blue-700">Intégration Agenda en cours de développement...</p>
             </div>
           </div>
         } />

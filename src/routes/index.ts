@@ -73,7 +73,8 @@ import partnerRoutes from './partner'; // 🤝 Routes portal partenaires
 import publicFormsRoutes from './publicForms'; // 📝 Routes formulaires publics
 import landingPagesRoutes from './landingPages'; // 🌐 Routes landing pages
 import yandexMailRoutes from './yandex-mail'; // 📧 Routes Yandex Mail (IMAP/SMTP)
-import mailProviderRoutes from './mail-provider'; // 🔍 Détection fournisseur mail (Gmail/Yandex)
+import postalMailRoutes from './postal-mail'; // 📬 Routes Postal Mail (self-hosted)
+import mailProviderRoutes from './mail-provider'; // 🔍 Détection fournisseur mail (Gmail/Yandex/Postal)
 import campaignAnalyticsRoutes from './campaignAnalytics'; // 📊 Routes analytics campagnes
 import dispatchRoutes from './dispatch'; // 🚚 Rules engine (Dispatch)
 import integrationsStatusRoutes from './integrationsStatus'; // 🔌 État des intégrations
@@ -265,7 +266,11 @@ apiRouter.use('/gmail', gmailRoutes);
 apiRouter.use('/yandex', yandexMailRoutes);
 
 
-// Routes détection fournisseur mail (🔍 Gmail ou Yandex ?)
+// Routes Postal Mail (📬 self-hosted — @zhiive.com natif)
+apiRouter.use('/postal', postalMailRoutes);
+
+
+// Routes détection fournisseur mail (🔍 Gmail, Yandex ou Postal ?)
 apiRouter.use('/mail', mailProviderRoutes);
 
 

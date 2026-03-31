@@ -182,29 +182,29 @@ export const GoogleConnectionCard: React.FC<GoogleConnectionCardProps> = ({ orga
       'https://www.googleapis.com/auth/userinfo.profile': 'Profil (informations)',
       
       // Gmail COMPLET
-      'https://mail.google.com/': 'Gmail (accès complet)',
-      'https://www.googleapis.com/auth/gmail.readonly': 'Gmail (lecture)',
-      'https://www.googleapis.com/auth/gmail.send': 'Gmail (envoi)',
-      'https://www.googleapis.com/auth/gmail.modify': 'Gmail (modification)',
-      'https://www.googleapis.com/auth/gmail.labels': 'Gmail (étiquettes)',
+      'https://mail.google.com/': 'Zhiive Mail (accès complet)',
+      'https://www.googleapis.com/auth/gmail.readonly': 'Zhiive Mail (lecture)',
+      'https://www.googleapis.com/auth/gmail.send': 'Zhiive Mail (envoi)',
+      'https://www.googleapis.com/auth/gmail.modify': 'Zhiive Mail (modification)',
+      'https://www.googleapis.com/auth/gmail.labels': 'Zhiive Mail (étiquettes)',
       
       // Calendar COMPLET
-      'https://www.googleapis.com/auth/calendar': 'Calendrier',
-      'https://www.googleapis.com/auth/calendar.events': 'Calendrier (événements)',
+      'https://www.googleapis.com/auth/calendar': 'Agenda',
+      'https://www.googleapis.com/auth/calendar.events': 'Agenda (événements)',
       
       // Google Workspace Apps
-      'https://www.googleapis.com/auth/drive': 'Google Drive',
-      'https://www.googleapis.com/auth/documents': 'Google Docs',
-      'https://www.googleapis.com/auth/spreadsheets': 'Google Sheets',
-      'https://www.googleapis.com/auth/presentations': 'Google Slides',
+      'https://www.googleapis.com/auth/drive': 'Stockage',
+      'https://www.googleapis.com/auth/documents': 'Documents',
+      'https://www.googleapis.com/auth/spreadsheets': 'Tableurs',
+      'https://www.googleapis.com/auth/presentations': 'Présentations',
       
       // Communication
-      'https://www.googleapis.com/auth/meetings': 'Google Meet',
-      'https://www.googleapis.com/auth/contacts': 'Google Contacts',
+      'https://www.googleapis.com/auth/meetings': 'Conférences',
+      'https://www.googleapis.com/auth/contacts': 'Contacts',
       
       // Formulaires et automation
-      'https://www.googleapis.com/auth/forms': 'Google Forms',
-      'https://www.googleapis.com/auth/script.projects': 'Apps Script',
+      'https://www.googleapis.com/auth/forms': 'Formulaires',
+      'https://www.googleapis.com/auth/script.projects': 'Scripts',
       
       // Administration
       'https://www.googleapis.com/auth/admin.directory.user': 'Admin Utilisateurs',
@@ -394,7 +394,7 @@ export const GoogleConnectionCard: React.FC<GoogleConnectionCardProps> = ({ orga
         <div>
           <Alert
             message="Connexion requise"
-            description="Connectez votre compte Google Workspace pour utiliser Gmail, Calendar, Drive et Meet directement dans le Hive."
+            description="Connectez votre compte professionnel pour utiliser Zhiive Mail, Agenda, Stockage et Conférences directement dans la Ruche."
             type="info"
             showIcon
             style={{ marginBottom: 16 }}
@@ -402,10 +402,10 @@ export const GoogleConnectionCard: React.FC<GoogleConnectionCardProps> = ({ orga
           
           <Title level={5}>Fonctionnalités disponibles après connexion :</Title>
           <ul>
-            <li>📧 <strong>Gmail :</strong> Gestion des emails, envoi, réception et organisation</li>
-            <li>📅 <strong>Calendar :</strong> Synchronisation des événements et création de réunions</li>
-            <li>💾 <strong>Drive :</strong> Stockage et partage de fichiers</li>
-            <li>📹 <strong>Meet :</strong> Création et gestion des visioconférences</li>
+            <li>📧 <strong>Zhiive Mail :</strong> Gestion des emails, envoi, réception et organisation</li>
+            <li>📅 <strong>Agenda :</strong> Synchronisation des événements et création de réunions</li>
+            <li>💾 <strong>Stockage :</strong> Stockage et partage de fichiers</li>
+            <li>📹 <strong>Conférences :</strong> Création et gestion des visioconférences</li>
           </ul>
         </div>
       )}

@@ -39,16 +39,16 @@ const GoogleAuthError: React.FC<GoogleAuthErrorProps> = ({ onReconnect }) => {
         </div>
 
         <Alert
-          message="Connexion Gmail expirée"
-          description="Votre connexion à Gmail a expiré. Vous devez vous reconnecter pour accéder à vos emails."
+          message="Connexion email expirée"
+          description="Votre connexion email a expiré. Vous devez vous reconnecter pour accéder à vos emails."
           type="warning"
           showIcon
           style={{ marginBottom: '24px', textAlign: 'left' }}
         />
 
         <Paragraph style={{ fontSize: '14px', color: '#666', marginBottom: '24px' }}>
-          Cliquez sur le bouton ci-dessous pour vous reconnecter à votre compte Google
-          et réactiver l'accès à Gmail.
+          Cliquez sur le bouton ci-dessous pour vous reconnecter à votre compte
+          et réactiver l'accès à vos emails.
         </Paragraph>
 
         <Button

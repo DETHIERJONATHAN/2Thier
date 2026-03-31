@@ -12,7 +12,7 @@
  *       - Présence d'un EmailAccount avec encryptedPassword → "yandex"
  *       - Par défaut → "none" (pas de fournisseur configuré)
  *
- *  Réponse : { provider: "gmail" | "yandex" | "none", email?: string }
+ *  Réponse : { provider: "gmail" | "yandex" | "postal" | "none", email?: string }
  * ============================================================
  */
 
@@ -43,7 +43,7 @@ router.get('/provider', authMiddleware, async (req: AuthenticatedRequest, res) =
     });
 
     if (emailAccount?.mailProvider && emailAccount.mailProvider !== 'gmail') {
-      // Le provider a été explicitement configuré (yandex, etc.)
+      // Le provider a été explicitement configuré (postal, yandex, etc.)
       return res.json({
         provider: emailAccount.mailProvider,
         email: emailAccount.emailAddress

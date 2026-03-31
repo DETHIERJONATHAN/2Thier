@@ -1007,14 +1007,14 @@ const LeadsSettingsPage = () => {
             </Card>
           </Col>
           <Col span={12}>
-            <Card title="Google Workspace">
+            <Card title="Espace de Travail">
               <Space direction="vertical" className="w-full">
                 <div className="flex justify-between items-center">
-                  <Text>Google Calendar</Text>
+                  <Text>Agenda</Text>
                   <Switch defaultChecked />
                 </div>
                 <div className="flex justify-between items-center">
-                  <Text>Gmail Integration</Text>
+                  <Text>Zhiive Mail</Text>
                   <Switch defaultChecked />
                 </div>
                 <div className="flex justify-between items-center">

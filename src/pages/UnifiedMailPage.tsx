@@ -1,10 +1,10 @@
 /**
  * ============================================================
- *  PAGE UNIFIÉE DE MESSAGERIE — Gmail & Yandex
+ *  PAGE UNIFIÉE DE MESSAGERIE — Gmail, Yandex & Postal
  * ============================================================
  *
  *  Interface de messagerie complète, inspirée du design Gmail.
- *  Détection automatique du provider (Gmail / Yandex).
+ *  Détection automatique du provider (Gmail / Yandex / Postal).
  *
  *  Fonctionnalités :
  *    ✅ Sidebar permanente (desktop) / drawer (mobile)
@@ -43,6 +43,7 @@ import {
 } from '@ant-design/icons';
 import { useGmailService, FormattedGmailMessage, GmailMessage, GmailLabel } from '../hooks/useGmailService';
 import { useYandexMailService } from '../hooks/useYandexMailService';
+import { usePostalMailService } from '../hooks/usePostalMailService';
 import { useMailProvider } from '../hooks/useMailProvider';
 import { useAuth } from '../auth/useAuth';
 import GoogleAuthError from '../components/GoogleAuthError';
@@ -317,8 +318,10 @@ const UnifiedMailPage: React.FC = () => {
   const { provider, isLoading: providerLoading } = useMailProvider();
   const gmailService = useGmailService();
   const yandexService = useYandexMailService();
+  const postalService = usePostalMailService();
 
   // Provider actif : fallback sur Gmail si "none"
+  const isPostal = provider === 'postal';
   const isYandex = provider === 'yandex';
   const isGmail = provider === 'gmail' || provider === 'none';
 
@@ -367,9 +370,9 @@ const UnifiedMailPage: React.FC = () => {
   const _messageListRef = useRef<HTMLDivElement>(null);
 
   // ─── Service actif ───
-  const activeGetMessages = isYandex ? yandexService.getMessages : gmailService.getMessages;
-  const activeGetMessage = isYandex ? yandexService.getMessage : gmailService.getMessage;
-  const activeGetLabels = isYandex ? yandexService.getLabels : gmailService.getLabels;
+  const activeGetMessages = isPostal ? postalService.getMessages : isYandex ? yandexService.getMessages : gmailService.getMessages;
+  const activeGetMessage = isPostal ? postalService.getMessage : isYandex ? yandexService.getMessage : gmailService.getMessage;
+  const activeGetLabels = isPostal ? postalService.getLabels : isYandex ? yandexService.getLabels : gmailService.getLabels;
 
   // Utilitaire de normalisation
   type MessagesPayload = { data?: FormattedGmailMessage[]; messages?: FormattedGmailMessage[]; nextPageToken?: string };
@@ -587,7 +590,9 @@ const UnifiedMailPage: React.FC = () => {
   const handleSendCommand = async (values: ComposeFormData) => {
     try {
       const htmlBody = composeBody || values.body || '';
-      if (isYandex) {
+      if (isPostal) {
+        await postalService.sendMessage(values.to, values.subject, htmlBody, values.cc, values.bcc);
+      } else if (isYandex) {
         await yandexService.sendMessage(values.to, values.subject, htmlBody, values.cc, values.bcc);
       } else {
         // Utiliser le format SendEmailRequest avec attachments
@@ -612,9 +617,11 @@ const UnifiedMailPage: React.FC = () => {
 
   /** Supprimer un message */
   const handleDeleteMessage = async (messageId: string) => {
-    const result = isYandex
-      ? await yandexService.deleteMessage(messageId)
-      : await gmailService.deleteMessage(messageId);
+    const result = isPostal
+      ? await postalService.deleteMessage(messageId)
+      : isYandex
+        ? await yandexService.deleteMessage(messageId)
+        : await gmailService.deleteMessage(messageId);
 
     if (result) {
       setMessages(prev => prev.filter(m => m.id !== messageId));
@@ -632,7 +639,12 @@ const UnifiedMailPage: React.FC = () => {
 
   /** Toggle étoile */
   const handleToggleStar = async (messageId: string, isStarred: boolean) => {
-    if (isYandex) {
+    if (isPostal) {
+      const result = await postalService.toggleStar(messageId);
+      if (result) {
+        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, isStarred: !isStarred } : m));
+      }
+    } else if (isYandex) {
       const result = await yandexService.toggleStar(messageId);
       if (result) {
         setMessages(prev => prev.map(m => m.id === messageId ? { ...m, isStarred: !isStarred } : m));
@@ -666,11 +678,15 @@ const UnifiedMailPage: React.FC = () => {
     ));
   };
 
-  /** Synchronisation Yandex IMAP */
-  const handleYandexSync = async () => {
+  /** Synchronisation manuelle (IMAP pour Yandex, no-op pour Postal) */
+  const handleMailSync = async () => {
     setIsSyncing(true);
     try {
-      await yandexService.syncEmails('INBOX');
+      if (isPostal) {
+        await postalService.syncEmails('INBOX');
+      } else {
+        await yandexService.syncEmails('INBOX');
+      }
       msgApi.success('Synchronisation terminée !');
       await loadMessages(currentLabelId, searchQuery);
     } catch {
@@ -710,9 +726,11 @@ const UnifiedMailPage: React.FC = () => {
 
     let successCount = 0;
     for (const id of ids) {
-      const result = isYandex
-        ? await yandexService.deleteMessage(id)
-        : await gmailService.deleteMessage(id);
+      const result = isPostal
+        ? await postalService.deleteMessage(id)
+        : isYandex
+          ? await yandexService.deleteMessage(id)
+          : await gmailService.deleteMessage(id);
       if (result) successCount++;
     }
 
@@ -864,11 +882,11 @@ const UnifiedMailPage: React.FC = () => {
       {/* Badge provider en bas */}
       <div className="p-4 border-t" style={{ borderColor: '#e0e0e0' }}>
         <Tag
-          icon={isYandex ? <MailOutlined /> : <GoogleOutlined />}
-          color={isYandex ? 'purple' : 'blue'}
+          icon={isPostal ? <MailOutlined /> : isYandex ? <MailOutlined /> : <GoogleOutlined />}
+          color={isPostal ? 'gold' : isYandex ? 'purple' : 'blue'}
           className="text-xs"
         >
-          {isYandex ? 'Yandex Mail' : 'Gmail'}
+          {isPostal ? 'Zhiive Mail' : isYandex ? 'Yandex Mail' : 'Gmail'}
         </Tag>
       </div>
     </div>
@@ -957,9 +975,9 @@ const UnifiedMailPage: React.FC = () => {
           <Tooltip title="Actualiser">
             <Button type="text" size="small" icon={<ReloadOutlined />} onClick={() => loadMessages(currentLabelId, searchQuery)} loading={isLoading} />
           </Tooltip>
-          {isYandex && (
-            <Tooltip title="Synchroniser Yandex">
-              <Button type="text" size="small" icon={<CloudSyncOutlined />} onClick={handleYandexSync} loading={isSyncing} style={{ color: '#722ed1' }} />
+          {(isYandex || isPostal) && (
+            <Tooltip title="Synchroniser">
+              <Button type="text" size="small" icon={<CloudSyncOutlined />} onClick={handleMailSync} loading={isSyncing} style={{ color: isPostal ? '#d48806' : '#722ed1' }} />
             </Tooltip>
           )}
           <Tooltip title="Plus">

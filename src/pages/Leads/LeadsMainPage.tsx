@@ -53,10 +53,10 @@ export default function LeadsMainPage() {
     console.log('📅 [LeadsMainPage] Ouverture module agenda:', leadId);
     setSelectedLeadId(leadId);
     setIsCalendarOpen(true);
-    // TODO: Implémenter module agenda Google Calendar
+    // TODO: Implémenter module agenda
     notification.info({
       message: 'Module Agenda',
-      description: 'Module Google Calendar à implémenter'
+      description: 'Module Agenda à implémenter'
     });
   }, []);
 
@@ -152,9 +152,9 @@ export default function LeadsMainPage() {
         )}
       </Modal>
 
-      {/* 📅 MODULE AGENDA - Modal Google Calendar selon cahier des charges */}
+      {/* 📅 MODULE AGENDA - Modal Agenda selon cahier des charges */}
       <Modal
-        title="📅 Google Calendar - Planifier RDV"
+        title="📅 Agenda - Planifier RDV"
         open={isCalendarOpen}
         onCancel={() => setIsCalendarOpen(false)}
         width={1100}
@@ -164,8 +164,8 @@ export default function LeadsMainPage() {
       >
         {selectedLeadId && (
           <div className="p-4">
-            <p>Module Google Calendar à implémenter pour le lead {selectedLeadId}</p>
-            {/* TODO: Intégrer le vrai module Google Calendar */}
+            <p>Module Agenda à implémenter pour le lead {selectedLeadId}</p>
+            {/* TODO: Intégrer le vrai module Agenda */}
           </div>
         )}
       </Modal>

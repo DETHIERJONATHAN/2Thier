@@ -891,7 +891,7 @@ export default function LeadDetail({ leadId, onEdit, onDelete, onCall, onEmail, 
               />
             </Tooltip>
           )}
-          <Tooltip title="Gmail Google">
+          <Tooltip title="Envoyer un email">
             <Button
               icon={<MailOutlined />}
               onClick={() => onEmail?.(lead.id)}

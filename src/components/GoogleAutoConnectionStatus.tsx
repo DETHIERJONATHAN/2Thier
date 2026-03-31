@@ -186,7 +186,7 @@ export const GoogleAutoConnectionStatus: React.FC<GoogleAutoConnectionStatusProp
               {connectionStatus.isConnected ? (
                 <div>
                   <p>✅ Votre compte Google Workspace est connecté automatiquement.</p>
-                  <p>Vous avez accès à Gmail, Calendar, Drive et toutes les applications Google.</p>
+                  <p>Vous avez accès à Zhiive Mail, Agenda, Stockage et toutes les fonctionnalités intégrées.</p>
                   {getLastConnectedText() && (
                     <small style={{ color: '#8c8c8c' }}>{getLastConnectedText()}</small>
                   )}

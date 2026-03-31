@@ -683,7 +683,7 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
                   <div>🔗 <strong>Connexion OAuth :</strong> Établie et fonctionnelle</div>
                   <div>⚙️ <strong>Configuration :</strong> Complète et activée</div>
                   <div>📧 <strong>Services :</strong> 
-                    {config.gmailEnabled && " Gmail"}
+                    {config.gmailEnabled && " Zhiive Mail"}
                     {config.calendarEnabled && " • Calendrier"}
                     {config.driveEnabled && " • Drive"}
                   </div>
@@ -958,7 +958,7 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
               <div>
                 <p>✅ <strong>Domaine :</strong> {config.domain}</p>
                 <p>✅ <strong>Connexion Google :</strong> Active</p>
-                <p>✅ <strong>Services :</strong> Gmail, Calendrier, Drive activés</p>
+                <p>✅ <strong>Services :</strong> Zhiive Mail, Agenda, Stockage activés</p>
                 <p>✅ <strong>Admin :</strong> {config.adminEmail}</p>
               </div>
             }
