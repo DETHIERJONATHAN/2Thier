@@ -6,7 +6,7 @@ import {
   PlusOutlined, SearchOutlined, FileTextOutlined, CheckCircleOutlined,
   ClockCircleOutlined, ExclamationCircleOutlined, SendOutlined, DeleteOutlined,
   EditOutlined, EyeOutlined, DollarOutlined, DownloadOutlined,
-  EuroCircleOutlined,
+  EuroCircleOutlined, ThunderboltOutlined,
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { useAuth } from '../auth/useAuth';
@@ -152,6 +152,12 @@ const FacturePage: React.FC = () => {
   });
   const [creating, setCreating] = useState(false);
 
+  // Peppol state
+  const [peppolActive, setPeppolActive] = useState(false);
+  const [peppolModalInvoice, setPeppolModalInvoice] = useState<UnifiedInvoice | null>(null);
+  const [peppolEndpoint, setPeppolEndpoint] = useState('');
+  const [peppolSending, setPeppolSending] = useState(false);
+
   // ── Data fetching ──
   const loadData = useCallback(async () => {
     try {
@@ -162,6 +168,13 @@ const FacturePage: React.FC = () => {
       ]);
       if (invoicesRes.success) setInvoices(invoicesRes.data);
       if (statsRes.success) setStats(statsRes.data);
+      // Check Peppol config
+      try {
+        const peppolRes = await api.get<{ success: boolean; data: { registrationStatus: string; enabled: boolean } }>('/api/peppol/config');
+        setPeppolActive(peppolRes.success && peppolRes.data?.registrationStatus === 'ACTIVE' && peppolRes.data?.enabled);
+      } catch {
+        setPeppolActive(false);
+      }
     } catch (err) {
       console.error('Erreur chargement factures:', err);
     } finally {
@@ -243,6 +256,29 @@ const FacturePage: React.FC = () => {
         }
       },
     });
+  };
+
+  const handlePeppolSend = async () => {
+    if (!peppolModalInvoice || !peppolEndpoint.trim()) {
+      message.warning('Identifiant Peppol (n° BCE) requis');
+      return;
+    }
+    try {
+      setPeppolSending(true);
+      await api.post(`/api/peppol/send/${peppolModalInvoice.id}`, {
+        partnerName: peppolModalInvoice.clientName,
+        partnerVat: peppolModalInvoice.clientVat || undefined,
+        partnerPeppolEndpoint: peppolEndpoint.trim(),
+      });
+      message.success('Facture envoyée via Peppol !');
+      setPeppolModalInvoice(null);
+      setPeppolEndpoint('');
+      loadData();
+    } catch (err: any) {
+      message.error(err?.message || 'Erreur d\'envoi Peppol');
+    } finally {
+      setPeppolSending(false);
+    }
   };
 
   const resetForm = () => {
@@ -425,6 +461,10 @@ const FacturePage: React.FC = () => {
             const isEditable = inv.source === 'standalone' && inv.status === 'DRAFT';
             const canMarkPaid = ['SENT', 'OVERDUE'].includes(inv.status) && inv.source !== 'incoming';
             const canMarkSent = inv.source === 'standalone' && inv.status === 'DRAFT';
+            const canSendPeppol = peppolActive
+              && inv.source !== 'incoming'
+              && ['SENT', 'OVERDUE'].includes(inv.status)
+              && !inv.peppolStatus;
 
             return (
               <FBCard key={`${inv.source}-${inv.id}`}>
@@ -538,6 +578,21 @@ const FacturePage: React.FC = () => {
                       onMouseLeave={e => (e.currentTarget.style.background = FB.btnGray)}
                     >
                       <DollarOutlined /> Marquer payée
+                    </button>
+                  )}
+                  {canSendPeppol && (
+                    <button
+                      onClick={() => { setPeppolModalInvoice(inv); setPeppolEndpoint(inv.clientVat || ''); }}
+                      style={{
+                        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        padding: '8px 0', background: FB.purple + '10', border: 'none', borderRadius: 6,
+                        color: FB.purple, fontWeight: 600, fontSize: 14, cursor: 'pointer',
+                        transition: 'background 0.15s',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = FB.purple + '20')}
+                      onMouseLeave={e => (e.currentTarget.style.background = FB.purple + '10')}
+                    >
+                      <ThunderboltOutlined /> Peppol
                     </button>
                   )}
                   {inv.source === 'chantier' && inv.chantierId && (
@@ -864,6 +919,106 @@ const FacturePage: React.FC = () => {
             }}
           >
             {creating ? 'Création...' : 'Créer la facture'}
+          </button>
+        </div>
+      </Modal>
+
+      {/* ═══════════════════════════════════════════════════════════
+          PEPPOL SEND MODAL
+         ═══════════════════════════════════════════════════════════ */}
+      <Modal
+        open={!!peppolModalInvoice}
+        onCancel={() => { setPeppolModalInvoice(null); setPeppolEndpoint(''); }}
+        footer={null}
+        width={480}
+        centered
+        title={null}
+        closable={false}
+        styles={{ body: { padding: 0 } }}
+      >
+        <div style={{
+          padding: '16px 20px', borderBottom: `1px solid ${FB.border}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <ThunderboltOutlined style={{ color: FB.purple, fontSize: 20 }} />
+            <div style={{ fontSize: 18, fontWeight: 700, color: FB.text }}>Envoyer via Peppol</div>
+          </div>
+          <button
+            onClick={() => { setPeppolModalInvoice(null); setPeppolEndpoint(''); }}
+            style={{
+              width: 36, height: 36, borderRadius: '50%', background: FB.btnGray,
+              border: 'none', cursor: 'pointer', fontSize: 18, color: FB.textSecondary,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        <div style={{ padding: 20 }}>
+          {peppolModalInvoice && (
+            <>
+              <div style={{
+                background: FB.bg, borderRadius: FB.radius, padding: 14, marginBottom: 16,
+              }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: FB.text }}>
+                  {peppolModalInvoice.invoiceNumber}
+                </div>
+                <div style={{ fontSize: 13, color: FB.textSecondary }}>
+                  {peppolModalInvoice.clientName} — €{(peppolModalInvoice.amount || 0).toFixed(2)}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: FB.text, display: 'block', marginBottom: 6 }}>
+                  Identifiant Peppol du destinataire (n° BCE) *
+                </label>
+                <input
+                  value={peppolEndpoint}
+                  onChange={e => setPeppolEndpoint(e.target.value)}
+                  placeholder="0123456789"
+                  style={{
+                    width: '100%', padding: '10px 12px', border: `1px solid ${FB.border}`,
+                    borderRadius: 6, fontSize: 14, outline: 'none', background: FB.bg,
+                    boxSizing: 'border-box',
+                  }}
+                  onFocus={e => (e.currentTarget.style.borderColor = FB.purple)}
+                  onBlur={e => (e.currentTarget.style.borderColor = FB.border)}
+                />
+                <div style={{ fontSize: 12, color: FB.textSecondary, marginTop: 4 }}>
+                  Numéro d'entreprise du destinataire (sans préfixe BE)
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div style={{
+          padding: '12px 20px', borderTop: `1px solid ${FB.border}`,
+          display: 'flex', gap: 10, justifyContent: 'flex-end',
+        }}>
+          <button
+            onClick={() => { setPeppolModalInvoice(null); setPeppolEndpoint(''); }}
+            style={{
+              padding: '10px 20px', background: FB.btnGray, border: 'none',
+              borderRadius: 6, fontSize: 15, fontWeight: 600,
+              color: FB.text, cursor: 'pointer',
+            }}
+          >
+            Annuler
+          </button>
+          <button
+            onClick={handlePeppolSend}
+            disabled={peppolSending || !peppolEndpoint.trim()}
+            style={{
+              padding: '10px 24px', background: peppolSending || !peppolEndpoint.trim() ? FB.btnGray : FB.purple,
+              border: 'none', borderRadius: 6, fontSize: 15, fontWeight: 600,
+              color: '#fff', cursor: peppolSending || !peppolEndpoint.trim() ? 'not-allowed' : 'pointer',
+              opacity: peppolSending ? 0.6 : 1,
+            }}
+          >
+            {peppolSending ? 'Envoi...' : '⚡ Envoyer via Peppol'}
           </button>
         </div>
       </Modal>

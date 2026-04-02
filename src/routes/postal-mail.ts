@@ -149,12 +149,24 @@ router.post('/send', authMiddleware, async (req: AuthenticatedRequest, res) => {
       console.log(`📤 [POSTAL] Envoi email de ${fromEmail} vers ${to} (via SMTP port ${process.env.POSTAL_SMTP_PORT || 25})`);
       const transporter = getSmtpTransporter();
 
+      // Extraire le nom d'affichage depuis l'adresse email (prénom.nom → Prénom Nom)
+      const localPart = fromEmail.split('@')[0] || '';
+      const displayName = localPart.split('.').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+
       const mailOptions: nodemailer.SendMailOptions = {
-        from: `"${fromEmail}" <${fromEmail}>`,
+        from: `"${displayName}" <${fromEmail}>`,
+        sender: fromEmail,
         replyTo: replyTo || fromEmail,
         to: Array.isArray(to) ? to.join(', ') : to,
         subject,
         ...(isHtml ? { html: body } : { text: body }),
+        headers: {
+          'X-Mailer': 'ZhiiveMail/1.0',
+          'X-Entity-Ref-ID': crypto.randomUUID(),
+          'List-Unsubscribe': `<mailto:unsubscribe@zhiive.com?subject=unsubscribe>`,
+          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+          'Feedback-ID': `zhiive:postal:${req.user?.userId || 'unknown'}`,
+        },
       };
 
       if (cc) mailOptions.cc = Array.isArray(cc) ? cc.join(', ') : cc;

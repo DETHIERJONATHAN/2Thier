@@ -89,6 +89,7 @@ const UserRightsSummaryPage = lazy(() => import('./pages/admin/UserRightsSummary
 const TreesAdminPage = lazy(() => import('./pages/admin/TreesAdminPage'));
 const AuthDebugPage = lazy(() => import('./pages/admin/AuthDebugPage'));
 const SocialSettingsAdminPage = lazy(() => import('./pages/admin/SocialSettingsAdminPage'));
+const ZhiiveMailAdminPage = lazy(() => import('./pages/admin/ZhiiveMailAdminPage'));
 const ArchitectIAPanel = lazy(() => import('./components/ArchitectIAPanel'));
 
 // Pages settings et profil
@@ -299,6 +300,7 @@ export default function AppLayout() {
             {isSuperAdmin && <Route path="/admin/trees" element={<TreesAdminPage />} />}
             {isSuperAdmin && <Route path="/admin/architect" element={<ArchitectIAPanel />} />}
             {isSuperAdmin && <Route path="/admin/social-settings" element={<SocialSettingsAdminPage />} />}
+            {isSuperAdmin && <Route path="/admin/zhiivemail" element={<ZhiiveMailAdminPage />} />}
             
             {/* Routes Admin Devis1Minute (nouvelles) */}
             {isSuperAdmin && <Route path="/devis1minute/admin/dashboard" element={<Devis1minuteAdminDashboard />} />}
@@ -347,6 +349,7 @@ export default function AppLayout() {
               {isSuperAdmin && <Route path="trees" element={<TreesAdminPage />} />}
               {isSuperAdmin && <Route path="documents" element={<DocumentTemplatesPage />} />}
               {isSuperAdmin && <Route path="integrations" element={<IntegrationsAdminPage />} />}
+              {isSuperAdmin && <Route path="zhiivemail" element={<ZhiiveMailAdminPage />} />}
             </Route>
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/profile/:userId" element={<ProfilePage />} />

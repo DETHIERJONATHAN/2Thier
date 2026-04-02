@@ -145,8 +145,8 @@ router.post("/register", async (req: Request, res: Response) => {
       }
 
       // ─── Auto-créer le compte email @zhiive.com ───
-      const orgId = organization?.id || null;
-      if (orgId && firstName) {
+      // Chaque utilisateur Zhiive reçoit une boîte mail, même les freelance sans orga
+      if (firstName) {
         const normalize = (s: string) =>
           s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, '.').replace(/[^a-z0-9.]/g, '');
         const zhiiveEmail = `${normalize(firstName)}.${normalize(lastName || '')}@zhiive.com`;
@@ -158,7 +158,7 @@ router.post("/register", async (req: Request, res: Response) => {
               encryptedPassword: '',
               mailProvider: 'postal',
               userId: user.id,
-              organizationId: orgId,
+              organizationId: organization?.id || undefined,
               updatedAt: new Date(),
             },
           });

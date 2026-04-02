@@ -276,7 +276,7 @@ const PeppolSettings: React.FC = () => {
         setConfig(prev => ({
           ...prev,
           enabled: true,
-          registrationStatus: result.data.registrationStatus === 'active' ? 'ACTIVE' : 'PENDING',
+          registrationStatus: result.data.registrationStatus === 'ACTIVE' ? 'ACTIVE' : 'PENDING',
         }));
       } else {
         // Cas 409 : enregistré ailleurs

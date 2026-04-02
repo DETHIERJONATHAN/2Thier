@@ -74,6 +74,7 @@ import publicFormsRoutes from './publicForms'; // 📝 Routes formulaires public
 import landingPagesRoutes from './landingPages'; // 🌐 Routes landing pages
 import yandexMailRoutes from './yandex-mail'; // 📧 Routes Yandex Mail (IMAP/SMTP)
 import postalMailRoutes from './postal-mail'; // 📬 Routes Postal Mail (self-hosted)
+import zhiivemailAdminRoutes from './zhiivemail-admin'; // 📧 Admin ZhiiveMail (Postal/Hetzner)
 import mailProviderRoutes from './mail-provider'; // 🔍 Détection fournisseur mail (Gmail/Yandex/Postal)
 import campaignAnalyticsRoutes from './campaignAnalytics'; // 📊 Routes analytics campagnes
 import dispatchRoutes from './dispatch'; // 🚚 Rules engine (Dispatch)
@@ -268,6 +269,9 @@ apiRouter.use('/yandex', yandexMailRoutes);
 
 // Routes Postal Mail (📬 self-hosted — @zhiive.com natif)
 apiRouter.use('/postal', postalMailRoutes);
+
+// Routes Admin ZhiiveMail (📧 Dashboard Postal/Hetzner — Super Admin)
+apiRouter.use('/zhiivemail', zhiivemailAdminRoutes);
 
 
 // Routes détection fournisseur mail (🔍 Gmail, Yandex ou Postal ?)

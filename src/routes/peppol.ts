@@ -223,9 +223,10 @@ router.post('/register', authenticateToken, isAdmin, async (req: Request, res: R
       },
     });
 
+    const finalStatus = result.status === 'active' ? 'ACTIVE' : 'PENDING';
     res.json({
       success: true,
-      data: { registrationStatus: result.status, odooCompanyId },
+      data: { registrationStatus: finalStatus, odooCompanyId },
     });
   } catch (error) {
     console.error('[Peppol] Erreur POST /register:', error);
@@ -276,10 +277,11 @@ router.get('/status', authenticateToken, async (req: Request, res: Response) => 
         realStatus = 'MIGRATION_PENDING';
       }
     } else {
-      // Pas enregistré sur Peppol du tout
+      // Pas encore visible dans l'annuaire public Peppol
       if (odooStatus === 'active') {
-        // Odoo dit actif, mais l'annuaire ne montre rien encore (propagation DNS)
-        realStatus = 'PENDING';
+        // Odoo (Access Point certifié) confirme ACTIVE → faire confiance à Odoo
+        // L'annuaire Peppol peut mettre du temps à propager l'enregistrement
+        realStatus = 'ACTIVE';
       } else if (odooStatus === 'pending') {
         realStatus = 'PENDING';
       } else if (!config.odooCompanyId) {
@@ -353,20 +355,70 @@ router.post('/send/:invoiceId', authenticateToken, isAdmin, async (req: Request,
       });
     }
 
-    // Récupérer la facture avec le Chantier et le Lead associé
-    const invoice = await db.chantierInvoice.findFirst({
+    // Récupérer la facture — chercher d'abord dans ChantierInvoice, puis StandaloneInvoice
+    let invoiceSource: 'chantier' | 'standalone' = 'chantier';
+    let invoiceData: {
+      id: string;
+      peppolStatus: string | null;
+      invoiceNumber: string | null;
+      dueDate: Date | null;
+      label: string;
+      amount: number;
+      taxRate: number;
+      clientName: string | null;
+      clientVat: string | null;
+    } | null = null;
+
+    const chantierInvoice = await db.chantierInvoice.findFirst({
       where: { id: invoiceId, organizationId },
       include: { Chantier: { include: { Lead: true } } },
     });
 
-    if (!invoice) {
+    if (chantierInvoice) {
+      invoiceSource = 'chantier';
+      const lead = chantierInvoice.Chantier?.Lead;
+      invoiceData = {
+        id: chantierInvoice.id,
+        peppolStatus: chantierInvoice.peppolStatus,
+        invoiceNumber: chantierInvoice.invoiceNumber,
+        dueDate: chantierInvoice.dueDate,
+        label: chantierInvoice.label,
+        amount: chantierInvoice.amount,
+        taxRate: 21,
+        clientName: lead?.company
+          || (lead?.firstName && lead?.lastName ? `${lead.firstName} ${lead.lastName}` : null)
+          || chantierInvoice.Chantier?.clientName
+          || null,
+        clientVat: null,
+      };
+    } else {
+      const standaloneInvoice = await db.standaloneInvoice.findFirst({
+        where: { id: invoiceId, organizationId },
+      });
+      if (standaloneInvoice) {
+        invoiceSource = 'standalone';
+        invoiceData = {
+          id: standaloneInvoice.id,
+          peppolStatus: standaloneInvoice.peppolStatus,
+          invoiceNumber: standaloneInvoice.invoiceNumber,
+          dueDate: standaloneInvoice.dueDate,
+          label: standaloneInvoice.description || `Facture ${standaloneInvoice.invoiceNumber}`,
+          amount: standaloneInvoice.totalAmount,
+          taxRate: standaloneInvoice.taxRate,
+          clientName: standaloneInvoice.clientName,
+          clientVat: standaloneInvoice.clientVat,
+        };
+      }
+    }
+
+    if (!invoiceData) {
       return res.status(404).json({ success: false, message: 'Facture non trouvée' });
     }
 
-    if (invoice.peppolStatus === 'PROCESSING' || invoice.peppolStatus === 'DONE') {
+    if (invoiceData.peppolStatus === 'PROCESSING' || invoiceData.peppolStatus === 'DONE') {
       return res.status(400).json({
         success: false,
-        message: `Facture déjà ${invoice.peppolStatus === 'DONE' ? 'envoyée' : 'en cours d\'envoi'} via Peppol`,
+        message: `Facture déjà ${invoiceData.peppolStatus === 'DONE' ? 'envoyée' : 'en cours d\'envoi'} via Peppol`,
       });
     }
 
@@ -376,23 +428,16 @@ router.post('/send/:invoiceId', authenticateToken, isAdmin, async (req: Request,
     }
 
     const partnerInput = validation.data;
-    const lead = invoice.Chantier?.Lead;
-    const chantier = invoice.Chantier;
 
     // Résolution intelligente des données partenaire :
-    // 1. Données explicites du body > 2. Lead > 3. Chantier.clientName
-    const partnerName = partnerInput.partnerName
-      || lead?.company
-      || (lead?.firstName && lead?.lastName ? `${lead.firstName} ${lead.lastName}` : null)
-      || chantier?.clientName
-      || null;
-
+    // 1. Données explicites du body > 2. Données de la facture
+    const partnerName = partnerInput.partnerName || invoiceData.clientName || null;
     const partnerPeppolEndpoint = partnerInput.partnerPeppolEndpoint || null;
 
     if (!partnerName) {
       return res.status(400).json({
         success: false,
-        message: 'Impossible de déterminer le nom du partenaire. Renseignez un nom de société sur le Lead ou le Chantier.',
+        message: 'Impossible de déterminer le nom du partenaire. Renseignez un nom de société.',
       });
     }
     if (!partnerPeppolEndpoint) {
@@ -405,38 +450,71 @@ router.post('/send/:invoiceId', authenticateToken, isAdmin, async (req: Request,
     const bridge = getPeppolBridge();
 
     // Marquer comme en cours
-    await db.chantierInvoice.update({
-      where: { id: invoiceId },
-      data: { peppolStatus: 'PROCESSING', updatedAt: new Date() },
-    });
+    if (invoiceSource === 'chantier') {
+      await db.chantierInvoice.update({
+        where: { id: invoiceId },
+        data: { peppolStatus: 'PROCESSING', updatedAt: new Date() },
+      });
+    } else {
+      await db.standaloneInvoice.update({
+        where: { id: invoiceId },
+        data: { peppolStatus: 'PROCESSING' },
+      });
+    }
+
+    // Construire les lignes pour l'envoi
+    let sendLines: { description: string; quantity: number; unitPrice: number; taxPercent: number }[];
+    if (invoiceSource === 'standalone') {
+      // Utiliser les lignes détaillées de la StandaloneInvoice si disponibles
+      const standaloneInv = await db.standaloneInvoice.findUnique({ where: { id: invoiceId }, select: { lines: true, taxRate: true } });
+      const parsedLines = standaloneInv?.lines as { description: string; quantity: number; unitPrice: number }[] | null;
+      if (parsedLines && Array.isArray(parsedLines) && parsedLines.length > 0) {
+        sendLines = parsedLines.map(l => ({
+          description: l.description,
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+          taxPercent: invoiceData!.taxRate,
+        }));
+      } else {
+        sendLines = [{ description: invoiceData.label, quantity: 1, unitPrice: invoiceData.amount, taxPercent: invoiceData.taxRate }];
+      }
+    } else {
+      sendLines = [{ description: invoiceData.label, quantity: 1, unitPrice: invoiceData.amount, taxPercent: 21 }];
+    }
 
     // Envoyer via Odoo
     const result = await bridge.sendInvoice(config.odooCompanyId!, {
       partnerName,
-      partnerVat: partnerInput.partnerVat,
+      partnerVat: partnerInput.partnerVat || invoiceData.clientVat || undefined,
       partnerPeppolEas: partnerInput.partnerPeppolEas,
       partnerPeppolEndpoint,
-      invoiceNumber: invoice.invoiceNumber || `INV-${invoice.id.slice(0, 8)}`,
+      invoiceNumber: invoiceData.invoiceNumber || `INV-${invoiceData.id.slice(0, 8)}`,
       invoiceDate: new Date().toISOString().split('T')[0],
-      dueDate: invoice.dueDate?.toISOString().split('T')[0],
-      lines: [{
-        description: invoice.label,
-        quantity: 1,
-        unitPrice: invoice.amount,
-        taxPercent: 21, // TVA belge standard
-      }],
+      dueDate: invoiceData.dueDate?.toISOString().split('T')[0],
+      lines: sendLines,
     });
 
     // Mettre à jour la facture
-    await db.chantierInvoice.update({
-      where: { id: invoiceId },
-      data: {
-        peppolStatus: 'PROCESSING',
-        peppolMessageId: result.peppolMessageId || null,
-        peppolSentAt: new Date(),
-        updatedAt: new Date(),
-      },
-    });
+    if (invoiceSource === 'chantier') {
+      await db.chantierInvoice.update({
+        where: { id: invoiceId },
+        data: {
+          peppolStatus: 'PROCESSING',
+          peppolMessageId: result.peppolMessageId || null,
+          peppolSentAt: new Date(),
+          updatedAt: new Date(),
+        },
+      });
+    } else {
+      await db.standaloneInvoice.update({
+        where: { id: invoiceId },
+        data: {
+          peppolStatus: 'PROCESSING',
+          peppolMessageId: result.peppolMessageId || null,
+          peppolSentAt: new Date(),
+        },
+      });
+    }
 
     res.json({
       success: true,
@@ -449,16 +527,16 @@ router.post('/send/:invoiceId', authenticateToken, isAdmin, async (req: Request,
   } catch (error) {
     console.error('[Peppol] Erreur POST /send/:invoiceId:', error);
 
-    // Marquer l'erreur sur la facture
+    // Marquer l'erreur sur la facture — essayer les deux tables
     const { invoiceId } = req.params;
     if (invoiceId) {
       await db.chantierInvoice.update({
         where: { id: invoiceId },
-        data: {
-          peppolStatus: 'ERROR',
-          peppolError: (error as Error).message,
-          updatedAt: new Date(),
-        },
+        data: { peppolStatus: 'ERROR', peppolError: (error as Error).message, updatedAt: new Date() },
+      }).catch(() => {});
+      await db.standaloneInvoice.update({
+        where: { id: invoiceId },
+        data: { peppolStatus: 'ERROR', peppolError: (error as Error).message },
       }).catch(() => {});
     }
 
@@ -475,10 +553,18 @@ router.get('/send/:invoiceId/status', authenticateToken, async (req: Request, re
       return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
     }
 
-    const invoice = await db.chantierInvoice.findFirst({
+    // Chercher dans ChantierInvoice puis StandaloneInvoice
+    let invoice = await db.chantierInvoice.findFirst({
       where: { id: req.params.invoiceId, organizationId },
       select: { peppolStatus: true, peppolMessageId: true, peppolError: true, peppolSentAt: true },
     });
+
+    if (!invoice) {
+      invoice = await db.standaloneInvoice.findFirst({
+        where: { id: req.params.invoiceId, organizationId },
+        select: { peppolStatus: true, peppolMessageId: true, peppolError: true, peppolSentAt: true },
+      });
+    }
 
     if (!invoice) {
       return res.status(404).json({ success: false, message: 'Facture non trouvée' });

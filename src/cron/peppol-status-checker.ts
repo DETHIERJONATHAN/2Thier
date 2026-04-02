@@ -71,8 +71,10 @@ export const checkTransitionStatuses = cron.schedule('*/30 * * * *', async () =>
               const bridge = getPeppolBridge();
               const odooStatus = await bridge.checkRegistrationStatus(config.odooCompanyId);
               if (odooStatus === 'active') {
-                // Odoo dit actif, annuaire pas encore propagé — rester PENDING
-                console.log(`${LOG_PREFIX} ⏳ ${orgName}: actif côté service, propagation DNS en cours`);
+                // Odoo (Access Point certifié) confirme ACTIVE → faire confiance
+                updateData.registrationStatus = 'ACTIVE';
+                updateData.enabled = true;
+                console.log(`${LOG_PREFIX} ✅ ${orgName}: ${oldStatus} → ACTIVE (confirmé par Odoo AP)`);
               } else if (odooStatus === 'not_registered' && oldStatus === 'MIGRATION_PENDING') {
                 // L'ancien AP a libéré le numéro, mais notre enregistrement n'est pas encore fait
                 console.log(`${LOG_PREFIX} 🔓 ${orgName}: ancien AP a libéré le numéro — prêt pour enregistrement`);
@@ -168,12 +170,98 @@ export const checkActiveStatuses = cron.schedule('0 */6 * * *', async () => {
 }, { scheduled: false });
 
 /**
+ * Récupère automatiquement les factures entrantes Peppol
+ * Toutes les 4 heures, pour toutes les orgs avec autoReceiveEnabled + ACTIVE
+ */
+export const fetchIncomingInvoices = cron.schedule('0 */4 * * *', async () => {
+  try {
+    const configs = await db.peppolConfig.findMany({
+      where: {
+        registrationStatus: 'ACTIVE',
+        enabled: true,
+        autoReceiveEnabled: true,
+        odooCompanyId: { not: null },
+      },
+      include: {
+        organization: { select: { name: true } },
+      },
+    });
+
+    if (configs.length === 0) return;
+
+    console.log(`${LOG_PREFIX} 📥 Récupération des factures entrantes pour ${configs.length} organisation(s)...`);
+
+    for (const config of configs) {
+      try {
+        const orgName = config.organization?.name || config.organizationId;
+        const bridge = getPeppolBridge();
+
+        // 1. Déclencher le fetch dans Odoo
+        await bridge.fetchIncomingDocuments(config.odooCompanyId!);
+
+        // 2. Récupérer les nouvelles factures depuis Odoo
+        const lastFetch = await db.peppolIncomingInvoice.findFirst({
+          where: { organizationId: config.organizationId },
+          orderBy: { createdAt: 'desc' },
+          select: { createdAt: true },
+        });
+
+        const incomingBills = await bridge.getIncomingInvoices(config.odooCompanyId!, {
+          since: lastFetch?.createdAt.toISOString(),
+        });
+
+        // 3. Importer dans Zhiive DB
+        let imported = 0;
+        for (const bill of incomingBills) {
+          if (!bill.peppolMessageId) continue;
+
+          const exists = await db.peppolIncomingInvoice.findUnique({
+            where: { peppolMessageId: bill.peppolMessageId },
+          });
+
+          if (!exists) {
+            await db.peppolIncomingInvoice.create({
+              data: {
+                organizationId: config.organizationId,
+                peppolMessageId: bill.peppolMessageId,
+                senderEas: '0208',
+                senderEndpoint: bill.partnerVat || '',
+                senderName: bill.partnerName,
+                senderVat: bill.partnerVat,
+                invoiceNumber: bill.name,
+                invoiceDate: bill.invoiceDate ? new Date(bill.invoiceDate) : null,
+                dueDate: bill.dueDate ? new Date(bill.dueDate) : null,
+                totalAmount: bill.amountTotal,
+                taxAmount: bill.amountTax,
+                currency: bill.currency,
+                status: 'RECEIVED',
+              },
+            });
+            imported++;
+          }
+        }
+
+        if (imported > 0) {
+          console.log(`${LOG_PREFIX} 📥 ${orgName}: ${imported} nouvelle(s) facture(s) importée(s)`);
+        }
+      } catch (err) {
+        console.error(`${LOG_PREFIX} ❌ Erreur fetch incoming org ${config.organizationId}:`, (err as Error).message);
+      }
+    }
+  } catch (error) {
+    console.error(`${LOG_PREFIX} ❌ Erreur globale fetch incoming:`, error);
+  }
+}, { scheduled: false });
+
+/**
  * Démarrer tous les jobs Peppol
  */
 export function startPeppolCronJobs() {
   checkTransitionStatuses.start();
   checkActiveStatuses.start();
+  fetchIncomingInvoices.start();
   console.log(`${LOG_PREFIX} ✅ Jobs démarrés:`);
   console.log(`${LOG_PREFIX}   - Transition (PENDING/MIGRATION): toutes les 30 min`);
   console.log(`${LOG_PREFIX}   - Santé (ACTIVE): toutes les 6h`);
+  console.log(`${LOG_PREFIX}   - Factures entrantes: toutes les 4h`);
 }
