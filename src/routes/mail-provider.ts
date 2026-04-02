@@ -3,28 +3,47 @@
  *  ROUTE: /api/mail/provider
  * ============================================================
  *
- *  Détecte le fournisseur de messagerie de l'utilisateur connecté.
+ *  Retourne le fournisseur de messagerie de l'utilisateur connecté.
  *
- *  Logique de détection :
- *    1. Si l'utilisateur a un EmailAccount avec mailProvider renseigné → on le retourne.
- *    2. Sinon, on tente une auto-détection :
- *       - Présence d'un GoogleToken valide → "gmail"
- *       - Présence d'un EmailAccount avec encryptedPassword → "yandex"
- *       - Par défaut → "none" (pas de fournisseur configuré)
+ *  Logique :
+ *    - Postal (@zhiive.com) est TOUJOURS le provider principal.
+ *    - Auto-provisionne le compte Postal si nécessaire.
+ *    - Les comptes externes (Gmail, Outlook, etc.) sont secondaires.
  *
- *  Réponse : { provider: "gmail" | "yandex" | "postal" | "none", email?: string }
+ *  Réponse : { provider: "postal", email: "prenom.nom@zhiive.com" }
  * ============================================================
  */
 
 import { Router } from 'express';
+import crypto from 'crypto';
 import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.js';
 import { db } from '../lib/database.js';
 
 const router = Router();
 
 /**
+ * Génère l'adresse email Zhiive à partir du prénom/nom.
+ * Format: prenom.nom@zhiive.com (normalisé: sans accents, minuscules)
+ */
+function generateZhiiveEmail(firstName?: string | null, lastName?: string | null, fallbackEmail?: string): string {
+  if (firstName && lastName) {
+    const normalize = (s: string) =>
+      s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, '.').replace(/[^a-z0-9.]/g, '');
+    return `${normalize(firstName)}.${normalize(lastName)}@zhiive.com`;
+  }
+  // Fallback: utiliser la partie locale du login email
+  if (fallbackEmail) {
+    const local = fallbackEmail.split('@')[0].toLowerCase().replace(/[^a-z0-9.]/g, '');
+    return `${local}@zhiive.com`;
+  }
+  return 'user@zhiive.com';
+}
+
+/**
  * @route   GET /api/mail/provider
- * @desc    Retourne le fournisseur de messagerie de l'utilisateur connecté
+ * @desc    Retourne le fournisseur de messagerie de l'utilisateur connecté.
+ *          La boîte Zhiive (@zhiive.com) est TOUJOURS le provider principal.
+ *          Auto-provisionne le compte Postal si nécessaire.
  * @access  Private (authentifié)
  */
 router.get('/provider', authMiddleware, async (req: AuthenticatedRequest, res) => {
@@ -36,50 +55,56 @@ router.get('/provider', authMiddleware, async (req: AuthenticatedRequest, res) =
 
     const organizationId = req.user?.organizationId;
 
-    // ─── 1. Vérifier si l'utilisateur a un EmailAccount avec provider explicite ───
-    const emailAccount = await db.emailAccount.findUnique({
+    // ─── 1. Récupérer le user pour générer l'email Zhiive ───
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      select: { firstName: true, lastName: true, email: true, organizationId: true }
+    });
+
+    // ─── 2. Récupérer ou créer l'EmailAccount Postal ───
+    let emailAccount = await db.emailAccount.findUnique({
       where: { userId },
-      select: { mailProvider: true, emailAddress: true, encryptedPassword: true }
+      select: { id: true, mailProvider: true, emailAddress: true }
     });
 
-    if (emailAccount?.mailProvider && emailAccount.mailProvider !== 'gmail') {
-      // Le provider a été explicitement configuré (postal, yandex, etc.)
-      return res.json({
-        provider: emailAccount.mailProvider,
-        email: emailAccount.emailAddress
+    const zhiiveEmail = generateZhiiveEmail(user?.firstName, user?.lastName, user?.email);
+
+    if (!emailAccount) {
+      // Auto-provisionnement : créer le compte Postal Zhiive
+      const orgId = organizationId || user?.organizationId;
+      if (orgId) {
+        emailAccount = await db.emailAccount.create({
+          data: {
+            id: crypto.randomUUID(),
+            emailAddress: zhiiveEmail,
+            encryptedPassword: '', // Postal n'a pas besoin de mot de passe utilisateur
+            mailProvider: 'postal',
+            userId,
+            organizationId: orgId,
+            updatedAt: new Date(),
+          },
+          select: { id: true, mailProvider: true, emailAddress: true }
+        });
+        console.log(`📬 [MAIL-PROVIDER] Auto-provisionnement Zhiive: ${zhiiveEmail}`);
+      }
+    } else if (emailAccount.mailProvider === 'gmail' || emailAccount.mailProvider === 'none') {
+      // Migration: les anciens comptes "gmail" sans Google tokens → passer en postal
+      await db.emailAccount.update({
+        where: { userId },
+        data: {
+          mailProvider: 'postal',
+          emailAddress: emailAccount.emailAddress || zhiiveEmail,
+          updatedAt: new Date(),
+        }
       });
+      emailAccount = { ...emailAccount, mailProvider: 'postal', emailAddress: emailAccount.emailAddress || zhiiveEmail };
+      console.log(`🔄 [MAIL-PROVIDER] Migration vers Postal: ${emailAccount.emailAddress}`);
     }
 
-    // ─── 2. Auto-détection : vérifier la présence de tokens Google ───
-    // Note : le modèle GoogleToken n'a pas de champ "isValid",
-    //        la simple présence d'un token indique un accès Gmail configuré.
-    const googleToken = await db.googleToken.findFirst({
-      where: {
-        userId,
-        ...(organizationId ? { organizationId } : {}),
-      },
-      select: { id: true, googleEmail: true }
-    });
-
-    if (googleToken) {
-      return res.json({
-        provider: 'gmail',
-        email: googleToken.googleEmail || emailAccount?.emailAddress || null
-      });
-    }
-
-    // ─── 3. Fallback: EmailAccount avec mot de passe chiffré → Yandex ───
-    if (emailAccount?.encryptedPassword) {
-      return res.json({
-        provider: 'yandex',
-        email: emailAccount.emailAddress
-      });
-    }
-
-    // ─── 4. Aucun provider configuré ───
+    // ─── 3. Réponse : toujours Postal comme provider principal ───
     return res.json({
-      provider: 'none',
-      email: null
+      provider: 'postal',
+      email: emailAccount?.emailAddress || zhiiveEmail,
     });
 
   } catch (error) {

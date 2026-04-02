@@ -56,6 +56,12 @@ import userPreferencesRouter from './routes/userPreferencesRoutes'; // 🔧 PRÉ
 import websiteFormsRouter from './routes/website-forms'; // 📋 CRUD FORMULAIRES ADMIN
 import publicFormsRouter from './routes/public-forms'; // 📋 SOUMISSION PUBLIQUE FORMULAIRES
 
+// 📨 ROUTES PEPPOL e-INVOICING
+import peppolRouter from './routes/peppol'; // 📨 e-FACTURATION PEPPOL (via Odoo headless)
+
+// 🧾 ROUTES FACTURES (standalone + chantier + peppol incoming unifiées)
+import invoicesRouter from './routes/invoices';
+
 // 🌐 MIDDLEWARE DÉTECTION SITES VITRINES AUTOMATIQUE
 import { detectWebsite, websiteInterceptor } from './middleware/websiteDetection';
 import { renderWebsite } from './middleware/websiteRenderer';
@@ -330,6 +336,8 @@ app.use('/api/user/favorites', userFavoritesRouter); // ⭐ FAVORIS MODULES UTIL
 app.use('/api/user-preferences', userPreferencesRouter); // 🔧 PRÉFÉRENCES UTILISATEUR (remplace localStorage)
 app.use('/api/website-forms', websiteFormsRouter); // 📋 FORMULAIRES SITES WEB (style Effy) - CRUD ADMIN
 app.use('/api/public/forms', publicFormsRouter); // 📋 SOUMISSION PUBLIQUE FORMULAIRES (sans auth)
+app.use('/api/peppol', peppolRouter); // 📨 PEPPOL e-FACTURATION (Odoo Bridge)
+app.use('/api/invoices', invoicesRouter); // 🧾 FACTURES UNIFIÉES (standalone + chantier + incoming)
 // ⚠️ SUPPRIMÉ - Déjà monté via apiRouter ligne 249: app.use('/api/treebranchleaf', tableRoutesNewRouter);
 const repeatRouter = createRepeatRouter(prisma);
 app.use('/api/treebranchleaf/repeat', repeatRouter); // 🔁 Compatibilité historique
@@ -606,6 +614,7 @@ app.use(errorHandler);
 // Import du hook de synchronisation TreeBranchLeaf
 import { initializeTreeBranchLeafSync } from './components/TreeBranchLeaf/treebranchleaf-new/api/sync-variable-hook';
 import { connectDatabase } from './lib/database';
+import { startPeppolCronJobs } from './cron/peppol-status-checker';
 
 // 🎯 FONCTION PRINCIPALE DE DÉMARRAGE
 async function startServer() {
@@ -654,6 +663,9 @@ async function startServer() {
       console.log(`   - Blocks: http://localhost:${port}/api/blocks`);
       console.log(`   - Auto Google Auth (POST): http://localhost:${port}/api/auto-google-auth/connect`);
       console.log(`   - Auto Google Status (GET): http://localhost:${port}/api/auto-google-auth/status`);
+
+      // 🔄 Démarrage des jobs cron Peppol (vérification statuts)
+      startPeppolCronJobs();
     });
 
     return server;

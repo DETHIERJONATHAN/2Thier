@@ -24,6 +24,7 @@ const OrganizationsAdminPage = lazy(() => import('./admin/OrganizationsAdminPage
 const TreesAdminPage = lazy(() => import('./admin/TreesAdminPage'));
 const DocumentTemplatesPage = lazy(() => import('./DocumentTemplatesPage'));
 const IntegrationsAdminPage = lazy(() => import('./admin/IntegrationsAdminPage'));
+const ZhiiveMailAdminPage = lazy(() => import('./admin/ZhiiveMailAdminPage'));
 
 /**
  * Wraps SettingsPage in an isolated MemoryRouter so its
@@ -52,6 +53,7 @@ const SettingsPageEmbedded: React.FC = () => {
             <Route path="trees" element={<TreesAdminPage />} />
             <Route path="documents" element={<DocumentTemplatesPage />} />
             <Route path="integrations" element={<IntegrationsAdminPage />} />
+            <Route path="zhiivemail" element={<ZhiiveMailAdminPage />} />
           </Route>
         </Routes>
       </Suspense>

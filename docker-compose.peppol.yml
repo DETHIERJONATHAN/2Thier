@@ -1,0 +1,76 @@
+# Docker Compose - Peppol e-Invoicing (Odoo Community Headless)
+# Usage: docker compose -f docker-compose.peppol.yml up -d
+#
+# Architecture:
+#   Zhiive (Node.js) ──JSON-RPC──▶ Odoo Community 17.0 ──HTTPS──▶ peppol.api.odoo.com
+#                                        │
+#                                   PostgreSQL (Odoo DB)
+#
+# Odoo fonctionne en mode "headless" : aucun utilisateur n'y accède directement.
+# Zhiive communique avec Odoo via JSON-RPC pour l'envoi/réception de factures Peppol.
+
+services:
+  # ── Base de données dédiée à Odoo ──
+  odoo-db:
+    image: postgres:16-alpine
+    container_name: zhiive-odoo-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${ODOO_DB_USER:-odoo}
+      POSTGRES_PASSWORD: ${ODOO_DB_PASSWORD:-odoo_peppol_secret}
+      POSTGRES_DB: ${ODOO_DB_NAME:-odoo_peppol}
+    volumes:
+      - odoo-db-data:/var/lib/postgresql/data
+    ports:
+      - "${ODOO_DB_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ODOO_DB_USER:-odoo}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - peppol-network
+
+  # ── Odoo Community 17.0 (Headless AP Peppol) ──
+  odoo:
+    image: odoo:17.0
+    container_name: zhiive-odoo-peppol
+    restart: unless-stopped
+    depends_on:
+      odoo-db:
+        condition: service_healthy
+    environment:
+      HOST: odoo-db
+      PORT: 5432
+      USER: ${ODOO_DB_USER:-odoo}
+      PASSWORD: ${ODOO_DB_PASSWORD:-odoo_peppol_secret}
+    volumes:
+      - odoo-data:/var/lib/odoo
+      - odoo-addons:/mnt/extra-addons
+      - ./peppol/odoo-config/odoo.conf:/etc/odoo/odoo.conf:ro
+    ports:
+      - "${ODOO_PORT:-8069}:8069"
+    command: >
+      -- --database=${ODOO_DB_NAME:-odoo_peppol}
+         --init=base,account,l10n_be,account_edi_ubl_cii,account_peppol
+         --without-demo=all
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8069/web/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    networks:
+      - peppol-network
+
+volumes:
+  odoo-db-data:
+    driver: local
+  odoo-data:
+    driver: local
+  odoo-addons:
+    driver: local
+
+networks:
+  peppol-network:
+    driver: bridge

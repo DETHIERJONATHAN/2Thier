@@ -19,6 +19,7 @@
  */
 
 import { db } from '../lib/database.js';
+import crypto from 'crypto';
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -248,6 +249,7 @@ export class PostalEmailService {
       // Sauvegarder dans la DB
       const email = await db.email.create({
         data: {
+          id: crypto.randomUUID(),
           userId: emailAccount.userId,
           from: senderEmail,
           to: recipientEmail,

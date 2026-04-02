@@ -423,7 +423,7 @@ model EmailAccount {
   organizationId    String
   createdAt         DateTime     @default(now())
   updatedAt         DateTime
-  mailProvider      String       @default("gmail")
+  mailProvider      String       @default("postal")
   Organization      Organization @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   User              User         @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -1139,6 +1139,13 @@ model Organization {
 
   // Social Settings
   SocialSettings             SocialSettings?
+
+  // Peppol e-Invoicing
+  PeppolConfig               PeppolConfig?
+  PeppolIncomingInvoice      PeppolIncomingInvoice[]
+
+  // Standalone Invoices (hors chantier)
+  StandaloneInvoice          StandaloneInvoice[]
 }
 
 model OrganizationModuleStatus {
@@ -3316,6 +3323,13 @@ model ChantierInvoice {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime
 
+  // Peppol e-Invoicing
+  peppolStatus          String?   // PENDING | PROCESSING | DONE | ERROR
+  peppolMessageId       String?   // ID du message Peppol (retourné par le proxy)
+  peppolError           String?   // Message d'erreur Peppol
+  peppolSentAt          DateTime? // Date d'envoi via Peppol
+  peppolXmlUrl          String?   // URL du fichier UBL XML généré
+
   Chantier              Chantier       @relation(fields: [chantierId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   Organization          Organization   @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -4616,4 +4630,112 @@ model UserPreference {
 
   @@unique([userId, key])
   @@index([userId])
+}
+
+// ═══════════════════════════════════════════════════════════
+// ── PEPPOL e-INVOICING ───────────────────────────────────
+// ═══════════════════════════════════════════════════════════
+
+// Configuration Peppol par organisation (1 par Colony)
+model PeppolConfig {
+  id                  String    @id @default(uuid())
+  organizationId      String    @unique
+  enabled             Boolean   @default(false)
+  peppolEas           String    @default("0208") // Electronic Address Scheme (0208 = Belgium BCE)
+  peppolEndpoint      String?   // Numéro d'entreprise BCE (ex: 0123456789)
+  registrationStatus  String    @default("NOT_REGISTERED") // NOT_REGISTERED | PENDING | ACTIVE | REJECTED | DEREGISTERED
+  odooCompanyId       Int?      // ID de la company dans Odoo headless
+  odooProxyUserId     Int?      // ID du proxy user dans Odoo
+  contactEmail        String?   // Email de contact pour Peppol
+  contactPhone        String?   // Téléphone (avec code pays, ex: +32...)
+  migrationKey        String?   // Clé de migration si changement d'AP
+  previousAccessPoint String?   // Ancien Access Point détecté (ex: "Accountable", "Billit")
+  previousApDetectedAt DateTime? // Date de détection de l'ancien AP
+  lastCheckedAt       DateTime? // Dernière vérification automatique du statut
+  autoSendEnabled     Boolean   @default(false) // Envoi automatique via Peppol
+  autoReceiveEnabled  Boolean   @default(true)  // Réception automatique
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  Organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// Factures entrantes reçues via Peppol
+model PeppolIncomingInvoice {
+  id                String    @id @default(uuid())
+  organizationId    String
+  peppolMessageId   String    @unique // ID unique du message Peppol
+  senderEas         String    // EAS de l'expéditeur
+  senderEndpoint    String    // Endpoint de l'expéditeur
+  senderName        String?   // Nom de l'expéditeur (extrait du XML)
+  senderVat         String?   // TVA de l'expéditeur
+  invoiceNumber     String?   // Numéro de facture du fournisseur
+  invoiceDate       DateTime? // Date de la facture
+  dueDate           DateTime? // Date d'échéance
+  totalAmount       Float?    // Montant total TTC
+  taxAmount         Float?    // Montant TVA
+  currency          String    @default("EUR")
+  xmlContent        String?   // Contenu UBL XML brut (stocké pour audit)
+  xmlUrl            String?   // URL vers le fichier XML dans le storage
+  pdfUrl            String?   // URL vers le PDF rendu
+  status            String    @default("RECEIVED") // RECEIVED | REVIEWED | ACCEPTED | REJECTED | ARCHIVED
+  reviewedBy        String?   // userId qui a traité la facture
+  reviewedAt        DateTime?
+  notes             String?
+  metadata          Json?     // Données supplémentaires extraites du XML
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  Organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([senderEndpoint])
+  @@index([createdAt])
+}
+
+// ═══════════════════════════════════════════════════════════
+// ── FACTURES INDÉPENDANTES (hors Chantier) ───────────────
+// ═══════════════════════════════════════════════════════════
+
+model StandaloneInvoice {
+  id                String    @id @default(uuid())
+  organizationId    String
+  invoiceNumber     String    // Numéro de facture (ex: FAC-2026-001)
+  type              String    @default("OUTGOING") // OUTGOING (émise) | CREDIT_NOTE (note de crédit)
+  clientName        String    // Nom du client/entreprise
+  clientVat         String?   // Numéro TVA du client
+  clientEmail       String?   // Email du client
+  clientAddress     String?   // Adresse du client
+  description       String?   // Description / objet de la facture
+  status            String    @default("DRAFT") // DRAFT | SENT | PAID | OVERDUE | CANCELLED
+  issueDate         DateTime  @default(now()) // Date d'émission
+  dueDate           DateTime? // Date d'échéance
+  paidAt            DateTime? // Date de paiement
+  subtotal          Float     @default(0) // Montant HT
+  taxRate           Float     @default(21) // Taux TVA (%)
+  taxAmount         Float     @default(0) // Montant TVA
+  totalAmount       Float     @default(0) // Montant TTC
+  currency          String    @default("EUR")
+  notes             String?   // Notes internes
+  paymentTerms      String?   // Conditions de paiement
+  documentUrl       String?   // Lien vers le PDF généré
+  createdById       String?   // Utilisateur qui a créé
+  lines             Json?     // Lignes de facture [{description, quantity, unitPrice, taxRate, total}]
+
+  // Peppol
+  peppolStatus      String?   // PENDING | PROCESSING | DONE | ERROR
+  peppolMessageId   String?
+  peppolError       String?
+  peppolSentAt      DateTime?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  Organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([invoiceNumber])
+  @@index([organizationId, createdAt])
 }

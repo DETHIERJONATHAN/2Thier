@@ -89,6 +89,7 @@ const quickCards = [
   { to: '/settings/rights-summary', emoji: '📊', bg: '#e3f2fd', title: 'Synthèse des droits', desc: 'Vue matricielle des droits utilisateurs.', permission: 'user:read', superAdminOnly: false },
   { to: '/settings/documents', emoji: '📄', bg: '#fce4ec', title: 'Documents', desc: 'Templates et modèles de documents.', permission: null, superAdminOnly: true },
   { to: '/settings/integrations', emoji: '🔌', bg: '#e0f2f1', title: 'Intégrations', desc: 'Connexions avec services externes.', permission: null, superAdminOnly: true },
+  { to: '/settings/zhiivemail', emoji: '🐝', bg: '#f3e5f5', title: 'ZhiiveMail', desc: 'Gestion du système email @zhiive.com.', permission: null, superAdminOnly: true },
 ];
 
 /* ═══════════════════════════════════════════════════════════════
@@ -269,6 +270,7 @@ const SettingsPage = () => {
       { key: 'users', to: '/settings/users', icon: <UserOutlined />, label: 'Utilisateurs', requiredPermission: 'user:read' },
       { key: 'roles', to: '/settings/roles', icon: <SafetyCertificateOutlined />, label: 'Rôles & Permissions', requiredPermission: 'role:read' },
       { key: 'emails', to: '/settings/emails', icon: <MailOutlined />, label: 'Emails', requiredPermission: 'user:read' },
+      { key: 'peppol', to: '/settings/peppol', icon: <FileTextOutlined />, label: 'e-Facturation Peppol', requiredPermission: 'organization:read' },
       { key: 'rights-summary', to: '/settings/rights-summary', icon: <AuditOutlined />, label: 'Synthèse des droits', requiredPermission: 'user:read' },
     ];
     if (isAdmin) {
@@ -291,6 +293,7 @@ const SettingsPage = () => {
         { key: 'trees', to: '/settings/trees', icon: <ApartmentOutlined />, label: 'Arbres & Formulaires', requiredPermission: null },
         { key: 'documents', to: '/settings/documents', icon: <FileTextOutlined />, label: 'Documents', requiredPermission: null },
         { key: 'integrations', to: '/settings/integrations', icon: <ApiOutlined />, label: 'Intégrations', requiredPermission: null },
+        { key: 'zhiivemail', to: '/settings/zhiivemail', icon: <MailOutlined />, label: 'ZhiiveMail', requiredPermission: null },
       );
     }
 

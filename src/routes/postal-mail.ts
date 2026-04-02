@@ -23,9 +23,46 @@
 
 import { Router } from 'express';
 import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.js';
-import { getPostalService } from '../services/PostalEmailService.js';
 import { db } from '../lib/database.js';
+import { getPostalService } from '../services/PostalEmailService.js';
+import nodemailer from 'nodemailer';
 import crypto from 'crypto';
+
+// ─── Vérifie si Postal API est configuré ────────────────────
+function isPostalApiConfigured(): boolean {
+  return !!(process.env.POSTAL_API_URL && process.env.POSTAL_API_KEY);
+}
+
+// ─── SMTP Transporter (fallback si Postal API non configuré) ──
+function getSmtpTransporter() {
+  // Si POSTAL_SMTP_HOST est configuré, utiliser le SMTP Postal
+  const host = process.env.POSTAL_SMTP_HOST || process.env.SMTP_HOST || 'send.one.com';
+  const port = parseInt(process.env.POSTAL_SMTP_PORT || process.env.SMTP_PORT || '465', 10);
+
+  // SMTP Postal (port 25) n'a pas besoin d'auth — les credentials sont optionnels
+  if (host.includes('postal') && port === 25) {
+    return nodemailer.createTransport({
+      host,
+      port,
+      secure: false,
+      tls: { rejectUnauthorized: false },
+    });
+  }
+
+  const user = process.env.SMTP_USER || '';
+  const pass = process.env.SMTP_PASS || '';
+
+  if (!user || !pass) {
+    throw new Error('Configuration SMTP manquante: SMTP_USER et SMTP_PASS requis');
+  }
+
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure: port === 465,
+    auth: { user, pass },
+  });
+}
 
 const router = Router();
 
@@ -52,28 +89,53 @@ router.post('/send', authMiddleware, async (req: AuthenticatedRequest, res) => {
       select: { emailAddress: true, mailProvider: true },
     });
 
-    if (!emailAccount || emailAccount.mailProvider !== 'postal') {
-      return res.status(400).json({ error: 'Aucun compte Postal configuré pour cet utilisateur' });
+    if (!emailAccount) {
+      return res.status(400).json({ error: 'Aucun compte email configuré pour cet utilisateur' });
     }
 
     const fromEmail = emailAccount.emailAddress;
-    console.log(`📤 [POSTAL] Envoi email de ${fromEmail} vers ${to}`);
+    let messageId: string | undefined;
 
-    const postal = getPostalService();
-    const result = await postal.sendEmail({
-      from: fromEmail,
-      to,
-      subject,
-      body,
-      isHtml,
-      cc: cc ? (Array.isArray(cc) ? cc : [cc]) : undefined,
-      bcc: bcc ? (Array.isArray(bcc) ? bcc : [bcc]) : undefined,
-      replyTo,
-    });
+    // ─── Priorité 1 : API Postal (recommandé) ───
+    if (isPostalApiConfigured()) {
+      console.log(`📤 [POSTAL] Envoi email de ${fromEmail} vers ${to} (via API Postal)`);
+      const postal = getPostalService();
+      const result = await postal.sendEmail({
+        from: fromEmail,
+        to: Array.isArray(to) ? to : [to],
+        subject,
+        body,
+        isHtml: isHtml || (body.includes('<') && body.includes('>')),
+        cc: cc ? (Array.isArray(cc) ? cc : [cc]) : undefined,
+        bcc: bcc ? (Array.isArray(bcc) ? bcc : [bcc]) : undefined,
+        replyTo,
+      });
+      messageId = result.message_id;
+    }
+    // ─── Priorité 2 : SMTP Postal (port 25) ───
+    else {
+      console.log(`📤 [POSTAL] Envoi email de ${fromEmail} vers ${to} (via SMTP)`);
+      const transporter = getSmtpTransporter();
+
+      const mailOptions: nodemailer.SendMailOptions = {
+        from: `"${fromEmail}" <${fromEmail}>`,
+        replyTo: replyTo || fromEmail,
+        to: Array.isArray(to) ? to.join(', ') : to,
+        subject,
+        ...(isHtml ? { html: body } : { text: body }),
+      };
+
+      if (cc) mailOptions.cc = Array.isArray(cc) ? cc.join(', ') : cc;
+      if (bcc) mailOptions.bcc = Array.isArray(bcc) ? bcc.join(', ') : bcc;
+
+      const info = await transporter.sendMail(mailOptions);
+      messageId = info.messageId;
+    }
 
     // Sauvegarder l'email envoyé dans la DB
     await db.email.create({
       data: {
+        id: crypto.randomUUID(),
         userId: req.user.userId,
         from: fromEmail,
         to: Array.isArray(to) ? to.join(', ') : to,
@@ -83,16 +145,16 @@ router.post('/send', authMiddleware, async (req: AuthenticatedRequest, res) => {
         folder: 'sent',
         isRead: true,
         isStarred: false,
-        uid: result.message_id || null,
+        uid: messageId || null,
       },
     });
 
-    console.log(`✅ [POSTAL] Email envoyé et sauvegardé`);
+    console.log(`✅ [POSTAL] Email envoyé (messageId: ${messageId})`);
 
     res.json({
       success: true,
       message: 'Email envoyé avec succès',
-      messageId: result.message_id,
+      messageId,
     });
   } catch (error) {
     console.error('❌ [POSTAL] Erreur envoi:', error);
@@ -148,16 +210,31 @@ router.post('/test', authMiddleware, async (req: AuthenticatedRequest, res) => {
       select: { emailAddress: true, mailProvider: true },
     });
 
-    const postal = getPostalService();
-    const isConnected = await postal.testConnection();
+    // Test connexion — API Postal en priorité, SMTP en fallback
+    let isConnected = false;
+    let method = '';
+    try {
+      if (isPostalApiConfigured()) {
+        const postal = getPostalService();
+        isConnected = await postal.testConnection();
+        method = 'API Postal';
+      } else {
+        const transporter = getSmtpTransporter();
+        await transporter.verify();
+        isConnected = true;
+        method = 'SMTP';
+      }
+    } catch (e) {
+      console.warn(`⚠️ [POSTAL] Test connexion failed:`, e);
+    }
 
-    console.log(`${isConnected ? '✅' : '❌'} [POSTAL] Test connexion: ${isConnected ? 'SUCCESS' : 'FAILED'}`);
+    console.log(`${isConnected ? '✅' : '❌'} [POSTAL] Test connexion ${method}: ${isConnected ? 'SUCCESS' : 'FAILED'}`);
 
     res.json({
       success: isConnected,
       message: isConnected
-        ? 'Connexion Postal réussie'
-        : 'Échec de la connexion au serveur Postal',
+        ? `Connexion ${method} réussie`
+        : `Échec de la connexion — vérifiez POSTAL_API_URL/POSTAL_API_KEY`,
       emailAddress: emailAccount?.emailAddress || null,
     });
   } catch (error) {

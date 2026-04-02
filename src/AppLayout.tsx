@@ -66,6 +66,7 @@ const Devis1minuteAdminSite = lazy(() => import('./pages/devis1minute/admin/Devi
 
 // Pages Google Workspace (très lourdes)
 const GoogleGmailPageV2 = lazy(() => import('./pages/UnifiedMailPage'));  // ✅ Page mail unifiée Gmail + Yandex
+const MailSettingsPage = lazy(() => import('./pages/MailSettingsPage'));  // ⚙️ Paramètres comptes email
 const GoogleAgendaPage = lazy(() => import('./pages/GoogleAgendaPage'));
 const GoogleDrivePage = lazy(() => import('./google-workspace/pages/GoogleDrivePageV2'));
 const GoogleMeetPage = lazy(() => import('./pages/GoogleMeetPage'));
@@ -103,6 +104,7 @@ const RolesSettings = lazy(() => import('./pages/settings/RolesSettings'));
 const CommercialSettings = lazy(() => import('./pages/settings/CommercialSettings'));
 const GoogleSettings = lazy(() => import('./pages/settings/GoogleSettings'));
 const BlockedSettings = lazy(() => import('./pages/settings/BlockedSettings'));
+const PeppolSettings = lazy(() => import('./pages/settings/PeppolSettings'));
 
 // Pages Documents (Admin)
 const DocumentTemplatesPage = lazy(() => import('./pages/DocumentTemplatesPage'));
@@ -336,6 +338,7 @@ export default function AppLayout() {
               <Route path="google" element={<GoogleSettings />} />
               <Route path="ai-measure" element={<AIMeasureSettings />} />
               <Route path="blocked" element={<BlockedSettings />} />
+              <Route path="peppol" element={<PeppolSettings />} />
               {/* Pages admin intégrées aux paramètres */}
               {isSuperAdmin && <Route path="modules" element={<ModulesAdminPage />} />}
               {can('role:read') && <Route path="permissions" element={<PermissionsAdminPage />} />}

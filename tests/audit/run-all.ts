@@ -1003,6 +1003,255 @@ async function auditDataLocal() {
 }
 
 // ══════════════════════════════════════════════════════════════
+// SECTION 9: PEPPOL e-FACTURATION
+// ══════════════════════════════════════════════════════════════
+async function auditPeppol() {
+  startSection('Peppol e-Facturation', '📨');
+
+  // ── 9a. Fichiers critiques Peppol existent ──
+  const peppolFiles: Record<string, string> = {
+    'services/peppolBridge.ts': 'PeppolBridge (Odoo JSON-RPC)',
+    'routes/peppol.ts':         'Routes API Peppol',
+    'pages/settings/PeppolSettings.tsx': 'UI PeppolSettings',
+  };
+  for (const [rel, label] of Object.entries(peppolFiles)) {
+    const src = readSrc(rel);
+    if (src) ok(`${label} : fichier existe`);
+    else fail(`${label} : fichier manquant (${rel})`);
+  }
+
+  // Docker compose + Odoo config
+  const dockerCompose = path.join(ROOT, 'docker-compose.peppol.yml');
+  if (fs.existsSync(dockerCompose)) ok('docker-compose.peppol.yml : existe');
+  else fail('docker-compose.peppol.yml : manquant');
+
+  const odooConf = path.join(ROOT, 'peppol', 'odoo-config', 'odoo.conf');
+  if (fs.existsSync(odooConf)) ok('peppol/odoo-config/odoo.conf : existe');
+  else fail('peppol/odoo-config/odoo.conf : manquant');
+
+  // ── 9b. Prisma schema — modèles Peppol ──
+  const schemaPath = path.join(ROOT, 'prisma', 'schema.prisma');
+  if (fs.existsSync(schemaPath)) {
+    const schema = fs.readFileSync(schemaPath, 'utf-8');
+
+    if (schema.includes('model PeppolConfig {'))           ok('Schema : model PeppolConfig existe');
+    else fail('Schema : model PeppolConfig manquant');
+
+    if (schema.includes('model PeppolIncomingInvoice {'))   ok('Schema : model PeppolIncomingInvoice existe');
+    else fail('Schema : model PeppolIncomingInvoice manquant');
+
+    // Champs Peppol sur ChantierInvoice
+    const peppolFields = ['peppolStatus', 'peppolMessageId', 'peppolError', 'peppolSentAt', 'peppolXmlUrl'];
+    for (const field of peppolFields) {
+      if (schema.includes(field)) ok(`Schema ChantierInvoice : ${field} présent`);
+      else fail(`Schema ChantierInvoice : ${field} manquant`);
+    }
+
+    // Relations Organisation ← PeppolConfig / PeppolIncomingInvoice
+    if (schema.includes('PeppolConfig') && schema.includes('PeppolIncomingInvoice'))
+      ok('Schema : relations PeppolConfig + PeppolIncomingInvoice déclarées');
+    else warn('Schema : vérifier les relations Peppol sur Organization');
+  } else {
+    fail('prisma/schema.prisma : fichier non trouvé');
+  }
+
+  // ── 9c. API Server — route Peppol enregistrée ──
+  const apiSrc = readSrc('api-server-clean.ts');
+  if (apiSrc.includes("import peppolRouter"))       ok('api-server : import peppolRouter');
+  else fail('api-server : import peppolRouter manquant');
+
+  if (apiSrc.includes("'/api/peppol'"))             ok('api-server : route /api/peppol montée');
+  else fail('api-server : route /api/peppol non montée');
+
+  // ── 9d. PeppolBridge — conventions ──
+  const bridgeSrc = readSrc('services/peppolBridge.ts');
+  if (bridgeSrc) {
+    // Singleton pattern
+    if (bridgeSrc.includes('getPeppolBridge'))        ok('peppolBridge : singleton getPeppolBridge exporté');
+    else fail('peppolBridge : getPeppolBridge manquant');
+
+    // Utilise process.env (pas de hardcode URL)
+    if (bridgeSrc.includes('process.env.ODOO_URL'))   ok('peppolBridge : ODOO_URL depuis env');
+    else fail('peppolBridge : ODOO_URL hardcodé ou manquant');
+
+    if (bridgeSrc.includes('process.env.ODOO_DB_NAME'))
+      ok('peppolBridge : ODOO_DB_NAME depuis env');
+    else fail('peppolBridge : ODOO_DB_NAME hardcodé ou manquant');
+
+    // Pas de new PrismaClient
+    if (!bridgeSrc.includes('new PrismaClient'))      ok('peppolBridge : zéro new PrismaClient()');
+    else fail('peppolBridge : new PrismaClient() trouvé (utiliser db singleton)');
+
+    // Méthodes critiques
+    const bridgeMethods = ['authenticate', 'syncOrganization', 'registerPeppol', 'sendInvoice', 'healthCheck'];
+    for (const m of bridgeMethods) {
+      if (bridgeSrc.includes(m)) ok(`peppolBridge : méthode ${m}() présente`);
+      else warn(`peppolBridge : méthode ${m}() manquante`);
+    }
+  }
+
+  // ── 9e. Routes Peppol — sécurité et conventions ──
+  const routesSrc = readSrc('routes/peppol.ts');
+  if (routesSrc) {
+    // Auth middleware
+    if (routesSrc.includes('authenticateToken'))      ok('peppol routes : authenticateToken utilisé');
+    else fail('peppol routes : authenticateToken manquant (routes non protégées !)');
+
+    if (routesSrc.includes('isAdmin'))                ok('peppol routes : isAdmin pour routes sensibles');
+    else warn('peppol routes : isAdmin non trouvé');
+
+    // Zod validation
+    if (routesSrc.includes('z.object'))               ok('peppol routes : validation Zod présente');
+    else warn('peppol routes : validation Zod manquante');
+
+    // Org isolation
+    if (routesSrc.includes("x-organization-id") || routesSrc.includes('getOrganizationId'))
+      ok('peppol routes : isolation par organisation');
+    else fail('peppol routes : pas d\'isolation org (header x-organization-id)');
+
+    // DB singleton
+    if (routesSrc.includes("from '../lib/database'") || routesSrc.includes("from '@/lib/database'"))
+      ok('peppol routes : import db singleton');
+    else fail('peppol routes : n\'importe pas db depuis lib/database');
+
+    if (!routesSrc.includes('new PrismaClient'))      ok('peppol routes : zéro new PrismaClient()');
+    else fail('peppol routes : new PrismaClient() trouvé');
+
+    // Endpoints critiques (11 routes)
+    const expectedRoutes = [
+      { method: 'get', path: '/config' },
+      { method: 'put', path: '/config' },
+      { method: 'post', path: '/register' },
+      { method: 'get', path: '/status' },
+      { method: 'post', path: '/send/' },
+      { method: 'get', path: '/send/' },
+      { method: 'post', path: '/fetch-incoming' },
+      { method: 'get', path: '/incoming' },
+      { method: 'put', path: '/incoming/' },
+      { method: 'post', path: '/verify-endpoint' },
+      { method: 'get', path: '/health' },
+    ];
+    let routeCount = 0;
+    for (const { method, path: p } of expectedRoutes) {
+      if (routesSrc.includes(`router.${method}('${p}`) || routesSrc.includes(`router.${method}("${p}`))
+        routeCount++;
+    }
+    if (routeCount >= 10) ok(`peppol routes : ${routeCount}/11 endpoints trouvés`);
+    else warn(`peppol routes : seulement ${routeCount}/11 endpoints trouvés`);
+  }
+
+  // ── 9f. UI — PeppolSettings enregistré dans AppLayout ──
+  const appLayoutSrc = readSrc('AppLayout.tsx');
+  if (appLayoutSrc) {
+    if (appLayoutSrc.includes('PeppolSettings'))      ok('AppLayout : PeppolSettings importé (lazy)');
+    else fail('AppLayout : PeppolSettings non importé');
+
+    if (appLayoutSrc.includes('path="peppol"') || appLayoutSrc.includes("path='peppol'"))
+      ok('AppLayout : route /settings/peppol déclarée');
+    else fail('AppLayout : route peppol non déclarée');
+  }
+
+  // SettingsPage menu item
+  const settingsPageSrc = readSrc('pages/SettingsPage.tsx');
+  if (settingsPageSrc) {
+    if (settingsPageSrc.includes('peppol'))           ok('SettingsPage : menu item peppol présent');
+    else fail('SettingsPage : menu item peppol manquant');
+  }
+
+  // ── 9g. PeppolSettings — conventions UI ──
+  const uiSrc = readSrc('pages/settings/PeppolSettings.tsx');
+  if (uiSrc) {
+    if (uiSrc.includes('useAuthenticatedApi'))        ok('PeppolSettings : utilise useAuthenticatedApi');
+    else fail('PeppolSettings : n\'utilise pas useAuthenticatedApi (fetch direct interdit)');
+
+    if (uiSrc.includes('useAuth'))                    ok('PeppolSettings : utilise useAuth');
+    else warn('PeppolSettings : n\'utilise pas useAuth');
+
+    // Pas de fetch() ou axios direct
+    if (!codeOnly(uiSrc).includes("fetch('") && !codeOnly(uiSrc).includes('fetch("') && !codeOnly(uiSrc).includes('axios'))
+      ok('PeppolSettings : zéro fetch()/axios direct');
+    else fail('PeppolSettings : fetch()/axios direct trouvé (utiliser useAuthenticatedApi)');
+  }
+
+  // ── 9h. Docker Compose — structure correcte ──
+  if (fs.existsSync(dockerCompose)) {
+    const dcContent = fs.readFileSync(dockerCompose, 'utf-8');
+
+    if (dcContent.includes('odoo:17') || dcContent.includes('odoo:18'))
+      ok('Docker : image Odoo 17+ configurée');
+    else warn('Docker : version Odoo non reconnue');
+
+    if (dcContent.includes('account_peppol'))         ok('Docker : module account_peppol initialisé');
+    else fail('Docker : module account_peppol manquant');
+
+    if (dcContent.includes('l10n_be'))                ok('Docker : module l10n_be (plan comptable belge)');
+    else warn('Docker : module l10n_be non trouvé');
+
+    if (dcContent.includes('without-demo'))           ok('Docker : without-demo activé');
+    else warn('Docker : sans --without-demo (données démo en prod !)');
+
+    if (dcContent.includes('postgres'))               ok('Docker : PostgreSQL backend pour Odoo');
+    else fail('Docker : pas de service PostgreSQL pour Odoo');
+  }
+
+  // ── 9i. Env vars Peppol dans .env.example ──
+  const envExamplePath = path.join(ROOT, '.env.example');
+  if (fs.existsSync(envExamplePath)) {
+    const envExample = fs.readFileSync(envExamplePath, 'utf-8');
+    const requiredEnvVars = ['ODOO_URL', 'ODOO_DB_NAME', 'ODOO_USER', 'ODOO_PASSWORD'];
+    for (const v of requiredEnvVars) {
+      if (envExample.includes(v))                     ok(`.env.example : ${v} documenté`);
+      else fail(`.env.example : ${v} manquant`);
+    }
+  } else {
+    warn('.env.example : fichier non trouvé');
+  }
+
+  // ── 9j. Zéro hardcode Odoo URL dans le code ──
+  const hardcodedOdooUrls = grepFiles(
+    /['"`]https?:\/\/(?:localhost|127\.0\.0\.1):8069/,
+    SRC,
+    ['.ts', '.tsx'],
+    ['audit', '_deprecated', '_backup']
+  );
+  if (hardcodedOdooUrls.length === 0) ok('Code : zéro URL Odoo hardcodée');
+  else {
+    warn(`Code : ${hardcodedOdooUrls.length} URL(s) Odoo hardcodée(s) (utiliser process.env.ODOO_URL)`);
+    hardcodedOdooUrls.forEach(h => console.log(`     → ${h.file}:${h.line}`));
+  }
+
+  // ── 9k. ChantierInvoicesTab — intégration Peppol ──
+  const invoicesTabSrc = readSrc('pages/Chantiers/ChantierInvoicesTab.tsx');
+  if (invoicesTabSrc) {
+    if (invoicesTabSrc.includes('peppolStatus'))      ok('ChantierInvoicesTab : champ peppolStatus affiché');
+    else warn('ChantierInvoicesTab : peppolStatus non trouvé');
+
+    if (invoicesTabSrc.includes('handlePeppolSend') || invoicesTabSrc.includes('peppol'))
+      ok('ChantierInvoicesTab : action envoi Peppol intégrée');
+    else warn('ChantierInvoicesTab : pas d\'action envoi Peppol');
+  }
+
+  // ── 9l. Sécurité — pas de credentials Odoo hardcodés ──
+  const odooCredsHardcoded = grepFiles(
+    /(?:odooPassword|ODOO_PASSWORD|odoo_password)\s*[:=]\s*['"][^'"]{4,}['"]/i,
+    SRC,
+    ['.ts', '.tsx'],
+    ['audit', '_deprecated', '.env']
+  ).filter(h =>
+    !h.text.includes('process.env') &&
+    !h.text.includes('config.') &&
+    !h.text.includes('config?.') &&
+    !h.text.includes("|| '") &&
+    !h.text.includes('interface ') &&
+    !h.text.includes('type ')
+  );
+  if (odooCredsHardcoded.length === 0) ok('Code : zéro credential Odoo hardcodé');
+  else {
+    odooCredsHardcoded.forEach(h => fail(`Credential Odoo hardcodé: ${h.file}:${h.line}`, h.text));
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
 // RUNNER
 // ══════════════════════════════════════════════════════════════
 async function main() {
@@ -1021,6 +1270,7 @@ async function main() {
     tbl:      auditTbl,
     google:   auditGoogle,
     dataloc:  auditDataLocal,
+    peppol:   auditPeppol,
   };
 
   if (sectionArg === 'all') {

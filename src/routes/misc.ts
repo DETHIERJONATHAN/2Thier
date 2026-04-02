@@ -144,6 +144,30 @@ router.post("/register", async (req: Request, res: Response) => {
         console.log(`[Register] Nouvel utilisateur réseau: ${email}`);
       }
 
+      // ─── Auto-créer le compte email @zhiive.com ───
+      const orgId = organization?.id || null;
+      if (orgId && firstName) {
+        const normalize = (s: string) =>
+          s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, '.').replace(/[^a-z0-9.]/g, '');
+        const zhiiveEmail = `${normalize(firstName)}.${normalize(lastName || '')}@zhiive.com`;
+        try {
+          await tx.emailAccount.create({
+            data: {
+              id: randomUUID(),
+              emailAddress: zhiiveEmail,
+              encryptedPassword: '',
+              mailProvider: 'postal',
+              userId: user.id,
+              organizationId: orgId,
+              updatedAt: new Date(),
+            },
+          });
+          console.log(`📬 [Register] Boîte @zhiive.com créée: ${zhiiveEmail}`);
+        } catch (emailAccErr) {
+          console.error(`⚠️ [Register] Erreur création EmailAccount:`, emailAccErr);
+        }
+      }
+
       return { user, organization };
     });
 

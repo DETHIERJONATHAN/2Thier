@@ -1,10 +1,10 @@
 /**
  * ============================================================
- *  PAGE UNIFIÉE DE MESSAGERIE — Gmail, Yandex & Postal
+ *  PAGE UNIFIÉE DE MESSAGERIE — Zhiive Mail (@zhiive.com)
  * ============================================================
  *
- *  Interface de messagerie complète, inspirée du design Gmail.
- *  Détection automatique du provider (Gmail / Yandex / Postal).
+ *  Interface de messagerie native Zhiive via Postal (Hetzner).
+ *  Chaque utilisateur/colony reçoit une adresse @zhiive.com.
  *
  *  Fonctionnalités :
  *    ✅ Sidebar permanente (desktop) / drawer (mobile)
@@ -14,9 +14,7 @@
  *    ✅ Avatars colorés + dates intelligentes
  *    ✅ Compteur non-lus par dossier
  *    ✅ Composition riche (CC/BCC + éditeur WYSIWYG)
- *    ✅ Densité confortable (style Gmail)
- *
- *  Route : /google-gmail (conservée pour compatibilité)
+ *    ✅ Densité confortable
  * ============================================================
  */
 
@@ -33,20 +31,17 @@ import type { CheckboxChangeEvent } from 'antd/es/checkbox';
 import {
   EditOutlined, ReloadOutlined, InboxOutlined, SendOutlined,
   FileTextOutlined, StarOutlined, DeleteOutlined, ExclamationCircleOutlined,
-  FolderOutlined, RollbackOutlined, ShareAltOutlined, StarFilled,
+  _FolderOutlined, RollbackOutlined, ShareAltOutlined, StarFilled,
   CloseOutlined, CloudSyncOutlined,
-  GoogleOutlined, MailOutlined, MenuOutlined,
+  MailOutlined, MenuOutlined,
   EyeOutlined, EyeInvisibleOutlined,
   MoreOutlined, CaretDownOutlined, SearchOutlined,
   PaperClipOutlined, LinkOutlined, DownloadOutlined,
   PictureOutlined, LockOutlined,
 } from '@ant-design/icons';
-import { useGmailService, FormattedGmailMessage, GmailMessage, GmailLabel } from '../hooks/useGmailService';
-import { useYandexMailService } from '../hooks/useYandexMailService';
 import { usePostalMailService } from '../hooks/usePostalMailService';
-import { useMailProvider } from '../hooks/useMailProvider';
 import { useAuth } from '../auth/useAuth';
-import GoogleAuthError from '../components/GoogleAuthError';
+import type { FormattedGmailMessage, GmailMessage, GmailLabel } from '../hooks/useGmailService';
 
 const { Sider } = Layout;
 const { Text } = Typography;
@@ -314,16 +309,8 @@ const SYSTEM_FOLDERS: Record<string, FolderConfig> = {
 const UnifiedMailPage: React.FC = () => {
   // ─── Contexte auth ───
   const { currentOrganization } = useAuth();
-  // ─── Détection du fournisseur ───
-  const { provider, isLoading: providerLoading } = useMailProvider();
-  const gmailService = useGmailService();
-  const yandexService = useYandexMailService();
+  // ─── Service Postal (boîte @zhiive.com) ───
   const postalService = usePostalMailService();
-
-  // Provider actif : fallback sur Gmail si "none"
-  const isPostal = provider === 'postal';
-  const isYandex = provider === 'yandex';
-  const isGmail = provider === 'gmail' || provider === 'none';
 
   // ─── State principal ───
   const [msgApi, msgCtx] = message.useMessage();
@@ -337,7 +324,6 @@ const UnifiedMailPage: React.FC = () => {
   const searchInputRef = React.useRef<any>(null);
   const [pageToken, setPageToken] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
-  const [authError, setAuthError] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [composeForm] = Form.useForm<ComposeFormData>();
   const screens = Grid.useBreakpoint();
@@ -369,10 +355,10 @@ const UnifiedMailPage: React.FC = () => {
   // Ref pour scroll
   const _messageListRef = useRef<HTMLDivElement>(null);
 
-  // ─── Service actif ───
-  const activeGetMessages = isPostal ? postalService.getMessages : isYandex ? yandexService.getMessages : gmailService.getMessages;
-  const activeGetMessage = isPostal ? postalService.getMessage : isYandex ? yandexService.getMessage : gmailService.getMessage;
-  const activeGetLabels = isPostal ? postalService.getLabels : isYandex ? yandexService.getLabels : gmailService.getLabels;
+  // ─── Service actif : Postal uniquement ───
+  const activeGetMessages = postalService.getMessages;
+  const activeGetMessage = postalService.getMessage;
+  const activeGetLabels = postalService.getLabels;
 
   // Utilitaire de normalisation
   type MessagesPayload = { data?: FormattedGmailMessage[]; messages?: FormattedGmailMessage[]; nextPageToken?: string };
@@ -419,21 +405,14 @@ const UnifiedMailPage: React.FC = () => {
     }
   }, [pageToken, activeGetMessages, msgApi]);
 
-  /** Initialisation au montage + quand le provider change */
+  /** Initialisation au montage */
   useEffect(() => {
-    if (providerLoading) return;
-
     const init = async () => {
       setIsLoading(true);
       try {
         // 1. Charger les labels
         const labelsResult = await activeGetLabels();
         const normalizedLabels = normalizeArrayPayload<GmailLabel>(labelsResult);
-
-        if (isGmail && !labelsResult && normalizedLabels.length === 0) {
-          setAuthError(true);
-          return;
-        }
         setLabels(normalizedLabels);
 
         // Calculer les compteurs non-lus
@@ -459,7 +438,6 @@ const UnifiedMailPage: React.FC = () => {
         setPageToken(nextToken || '');
       } catch (error) {
         console.error('Erreur chargement initial:', error);
-        if (isGmail) setAuthError(true);
       } finally {
         setIsLoading(false);
       }
@@ -467,7 +445,7 @@ const UnifiedMailPage: React.FC = () => {
 
     init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [provider, providerLoading]);
+  }, []);
 
   // ═══════════════════════════════════════════════════════════
   //  HANDLERS
@@ -503,9 +481,7 @@ const UnifiedMailPage: React.FC = () => {
         setSplitOpen(true);
         // Marquer comme lu
         if (!msg.isRead) {
-          if (isGmail) {
-            gmailService.modifyMessage(msg.id, [], ['UNREAD']);
-          }
+          postalService.markRead(msg.id, true);
           setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, isRead: true } : m));
           setUnreadCounts(prev => ({
             ...prev,
@@ -590,21 +566,7 @@ const UnifiedMailPage: React.FC = () => {
   const handleSendCommand = async (values: ComposeFormData) => {
     try {
       const htmlBody = composeBody || values.body || '';
-      if (isPostal) {
-        await postalService.sendMessage(values.to, values.subject, htmlBody, values.cc, values.bcc);
-      } else if (isYandex) {
-        await yandexService.sendMessage(values.to, values.subject, htmlBody, values.cc, values.bcc);
-      } else {
-        // Utiliser le format SendEmailRequest avec attachments
-        await gmailService.sendMessage({
-          to: values.to,
-          subject: values.subject,
-          body: htmlBody,
-          cc: values.cc,
-          bcc: values.bcc,
-          attachments: composeAttachments.length > 0 ? composeAttachments : undefined,
-        });
-      }
+      await postalService.sendMessage(values.to, values.subject, htmlBody, values.cc, values.bcc);
       msgApi.success('Message envoyé !');
       setComposeModalVisible(false);
       setComposeBody('');
@@ -617,11 +579,7 @@ const UnifiedMailPage: React.FC = () => {
 
   /** Supprimer un message */
   const handleDeleteMessage = async (messageId: string) => {
-    const result = isPostal
-      ? await postalService.deleteMessage(messageId)
-      : isYandex
-        ? await yandexService.deleteMessage(messageId)
-        : await gmailService.deleteMessage(messageId);
+    const result = await postalService.deleteMessage(messageId);
 
     if (result) {
       setMessages(prev => prev.filter(m => m.id !== messageId));
@@ -639,54 +597,25 @@ const UnifiedMailPage: React.FC = () => {
 
   /** Toggle étoile */
   const handleToggleStar = async (messageId: string, isStarred: boolean) => {
-    if (isPostal) {
-      const result = await postalService.toggleStar(messageId);
-      if (result) {
-        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, isStarred: !isStarred } : m));
-      }
-    } else if (isYandex) {
-      const result = await yandexService.toggleStar(messageId);
-      if (result) {
-        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, isStarred: !isStarred } : m));
-      }
-    } else {
-      const addLabelIds = isStarred ? [] : ['STARRED'];
-      const removeLabelIds = isStarred ? ['STARRED'] : [];
-      const result = await gmailService.modifyMessage(messageId, addLabelIds, removeLabelIds);
-      if (result) {
-        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, isStarred: !isStarred } : m));
-        setSelectedMessage(prev => {
-          if (!prev || prev.id !== messageId) return prev;
-          const updatedLabels = isStarred
-            ? prev.labelIds?.filter(l => l !== 'STARRED')
-            : [...(prev.labelIds || []), 'STARRED'];
-          return { ...prev, labelIds: updatedLabels };
-        });
-      }
+    const result = await postalService.toggleStar(messageId);
+    if (result) {
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, isStarred: !isStarred } : m));
     }
   };
 
   /** Marquer lu / non-lu */
   const handleToggleRead = async (messageId: string, currentlyRead: boolean) => {
-    if (isGmail) {
-      const addLabels = currentlyRead ? ['UNREAD'] : [];
-      const removeLabels = currentlyRead ? [] : ['UNREAD'];
-      await gmailService.modifyMessage(messageId, addLabels, removeLabels);
-    }
+    await postalService.markRead(messageId, !currentlyRead);
     setMessages(prev => prev.map(m =>
       m.id === messageId ? { ...m, isRead: !currentlyRead } : m
     ));
   };
 
-  /** Synchronisation manuelle (IMAP pour Yandex, no-op pour Postal) */
+  /** Synchronisation manuelle */
   const handleMailSync = async () => {
     setIsSyncing(true);
     try {
-      if (isPostal) {
-        await postalService.syncEmails('INBOX');
-      } else {
-        await yandexService.syncEmails('INBOX');
-      }
+      await postalService.syncEmails('INBOX');
       msgApi.success('Synchronisation terminée !');
       await loadMessages(currentLabelId, searchQuery);
     } catch {
@@ -726,11 +655,7 @@ const UnifiedMailPage: React.FC = () => {
 
     let successCount = 0;
     for (const id of ids) {
-      const result = isPostal
-        ? await postalService.deleteMessage(id)
-        : isYandex
-          ? await yandexService.deleteMessage(id)
-          : await gmailService.deleteMessage(id);
+      const result = await postalService.deleteMessage(id);
       if (result) successCount++;
     }
 
@@ -750,12 +675,8 @@ const UnifiedMailPage: React.FC = () => {
   const handleBulkToggleRead = async (markAsRead: boolean) => {
     const ids = Array.from(selectedIds);
 
-    if (isGmail) {
-      for (const id of ids) {
-        const addLabels = markAsRead ? [] : ['UNREAD'];
-        const removeLabels = markAsRead ? ['UNREAD'] : [];
-        await gmailService.modifyMessage(id, addLabels, removeLabels);
-      }
+    for (const id of ids) {
+      await postalService.markRead(id, markAsRead);
     }
 
     setMessages(prev => prev.map(m =>
@@ -837,56 +758,16 @@ const UnifiedMailPage: React.FC = () => {
             </div>
           );
         })}
-
-        {/* Labels personnalisés (Gmail) */}
-        {isGmail && labels.filter(l => !SYSTEM_FOLDERS[l.id]).length > 0 && (
-          <>
-            <Divider style={{ margin: '8px 0', borderColor: '#e0e0e0' }} />
-            <div style={{ padding: '4px 12px 4px 16px', fontSize: 11, fontWeight: 600, color: '#444746', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Libellés
-            </div>
-            {labels.filter(l => !SYSTEM_FOLDERS[l.id]).map(label => (
-              <div
-                key={label.id}
-                onClick={() => {
-                  handleLabelClick(label.id);
-                  setMobileSidebarOpen(false);
-                }}
-                className="cursor-pointer hover:bg-gray-100 transition-colors"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '0 24px 0 12px',
-                  height: 32,
-                  borderRadius: '0 20px 20px 0',
-                  marginRight: 12,
-                  fontSize: 14,
-                  color: '#444746',
-                  fontWeight: currentLabelId === label.id ? 600 : 400,
-                  backgroundColor: currentLabelId === label.id ? '#d3e3fd' : 'transparent',
-                }}
-              >
-                <span style={{ width: 32, display: 'flex', justifyContent: 'center' }}>
-                  <FolderOutlined />
-                </span>
-                <span className="flex-1 ml-2 truncate">{label.name}</span>
-                {(label.messagesUnread || 0) > 0 && (
-                  <span style={{ fontSize: 12, fontWeight: 600 }}>{label.messagesUnread}</span>
-                )}
-              </div>
-            ))}
-          </>
-        )}
       </div>
 
       {/* Badge provider en bas */}
       <div className="p-4 border-t" style={{ borderColor: '#e0e0e0' }}>
         <Tag
-          icon={isPostal ? <MailOutlined /> : isYandex ? <MailOutlined /> : <GoogleOutlined />}
-          color={isPostal ? 'gold' : isYandex ? 'purple' : 'blue'}
+          icon={<MailOutlined />}
+          color="gold"
           className="text-xs"
         >
-          {isPostal ? 'Zhiive Mail' : isYandex ? 'Yandex Mail' : 'Gmail'}
+          Zhiive Mail
         </Tag>
       </div>
     </div>
@@ -975,9 +856,9 @@ const UnifiedMailPage: React.FC = () => {
           <Tooltip title="Actualiser">
             <Button type="text" size="small" icon={<ReloadOutlined />} onClick={() => loadMessages(currentLabelId, searchQuery)} loading={isLoading} />
           </Tooltip>
-          {(isYandex || isPostal) && (
+          {(
             <Tooltip title="Synchroniser">
-              <Button type="text" size="small" icon={<CloudSyncOutlined />} onClick={handleMailSync} loading={isSyncing} style={{ color: isPostal ? '#d48806' : '#722ed1' }} />
+              <Button type="text" size="small" icon={<CloudSyncOutlined />} onClick={handleMailSync} loading={isSyncing} style={{ color: '#d48806' }} />
             </Tooltip>
           )}
           <Tooltip title="Plus">
@@ -1245,9 +1126,7 @@ const UnifiedMailPage: React.FC = () => {
     const internalDate = formatDateFull(selectedMessage.internalDate);
     const fallbackDate = selectedMessageMeta?.timestamp ? formatDateFull(selectedMessageMeta.timestamp) : '';
     const displayedDate = internalDate || fallbackDate || '—';
-    const isStarred = isYandex
-      ? selectedMessageMeta?.isStarred
-      : selectedMessage.labelIds?.includes('STARRED');
+    const isStarred = selectedMessageMeta?.isStarred ?? false;
     const senderName = extractSenderName(from);
 
     // Extraction du body
@@ -1640,7 +1519,7 @@ document.querySelectorAll('img').forEach(function(img) {
                           icon={<DownloadOutlined />}
                           onClick={(e) => {
                             e.stopPropagation();
-                            gmailService.downloadAttachment(selectedMessage.id, att.attachmentId, att.filename);
+                            postalService.downloadAttachment?.(selectedMessage.id, att.attachmentId, att.filename);
                           }}
                           style={{ color: '#5f6368', flexShrink: 0 }}
                         />
@@ -1713,11 +1592,11 @@ document.querySelectorAll('img').forEach(function(img) {
             {composeType === 'reply' ? 'Répondre' : composeType === 'forward' ? 'Transférer' : 'Nouveau message'}
           </span>
           <Tag
-            icon={isYandex ? <MailOutlined /> : <GoogleOutlined />}
-            color={isYandex ? 'purple' : 'blue'}
+            icon={<MailOutlined />}
+            color="gold"
             className="text-xs"
           >
-            {isYandex ? 'Yandex' : 'Gmail'}
+            Zhiive Mail
           </Tag>
         </div>
       }
@@ -1799,7 +1678,7 @@ document.querySelectorAll('img').forEach(function(img) {
           {/* Droite : Supprimer brouillon */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <span style={{ fontSize: 11, color: '#5f6368' }}>
-              {isYandex ? 'Yandex SMTP' : 'Gmail API'}
+              Zhiive Mail
             </span>
             <Tooltip title="Annuler">
               <Button
@@ -1970,20 +1849,8 @@ document.querySelectorAll('img').forEach(function(img) {
   //  RENDU : ÉTATS SPÉCIAUX
   // ═══════════════════════════════════════════════════════════
 
-  if (providerLoading) {
-    return (
-      <div className="flex items-center justify-center" style={{ height: '100vh', backgroundColor: '#fff' }}>
-        <Spin size="large" tip="Chargement de la messagerie..." />
-      </div>
-    );
-  }
-
-  if (authError && isGmail) {
-    return <GoogleAuthError onReconnect={() => window.location.href = '/api/google-auth'} />;
-  }
-
   // ═══════════════════════════════════════════════════════════
-  //  RENDU PRINCIPAL : Layout Gmail-like
+  //  RENDU PRINCIPAL : Layout
   //
   //  Desktop:  [Sidebar 220px] [Toolbar + ListeMessages] [DétailMessage ~55%]
   //  Mobile:   [Toolbar + ListeMessages plein écran]
@@ -2073,7 +1940,7 @@ document.querySelectorAll('img').forEach(function(img) {
               icon={<DownloadOutlined />}
               onClick={() => {
                 if (previewAttachment) {
-                  gmailService.downloadAttachment(
+                  postalService.downloadAttachment?.(
                     previewAttachment.messageId,
                     previewAttachment.attachmentId,
                     previewAttachment.filename
@@ -2145,7 +2012,7 @@ document.querySelectorAll('img').forEach(function(img) {
                 type="primary"
                 icon={<DownloadOutlined />}
                 onClick={() => {
-                  gmailService.downloadAttachment(
+                  postalService.downloadAttachment?.(
                     previewAttachment.messageId,
                     previewAttachment.attachmentId,
                     previewAttachment.filename

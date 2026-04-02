@@ -9,6 +9,7 @@ import {
   SaveOutlined, ReloadOutlined, SafetyCertificateOutlined, MinusCircleOutlined,
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { SF } from '../../components/zhiive/ZhiiveTheme';
 import { useAuth } from '../../auth/useAuth';
 import { useChantierStatuses } from '../../hooks/useChantierStatuses';
 import dayjs from 'dayjs';
@@ -32,6 +33,11 @@ interface ChantierInvoice {
   order: number;
   createdAt: string;
   updatedAt: string;
+  // Peppol e-Invoicing
+  peppolStatus?: string | null;
+  peppolMessageId?: string | null;
+  peppolError?: string | null;
+  peppolSentAt?: string | null;
 }
 
 interface InvoiceTemplate {
@@ -214,6 +220,51 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
       message.error('Erreur suppression');
     }
   }, [api, fetchInvoices]);
+
+  const handlePeppolSend = useCallback(async (invoice: ChantierInvoice) => {
+    let peppolEndpointInput = '';
+    modal.confirm({
+      title: 'Envoyer via Peppol',
+      icon: <SafetyCertificateOutlined style={{ color: SF.primary }} />,
+      width: 500,
+      content: (
+        <div>
+          <p>La facture <strong>{invoice.label}</strong> ({invoice.amount.toLocaleString('fr-BE', { minimumFractionDigits: 2 })} €) sera envoyée via le réseau Peppol.</p>
+          <div style={{ marginTop: 12 }}>
+            <Text strong style={{ display: 'block', marginBottom: 4 }}>N° BCE du destinataire *</Text>
+            <Input
+              placeholder="0123.456.789"
+              onChange={(e) => { peppolEndpointInput = e.target.value.replace(/\./g, '').trim(); }}
+              style={{ marginBottom: 8 }}
+            />
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              Numéro d&apos;entreprise belge (sans points). Le destinataire doit être enregistré sur Peppol.
+            </Text>
+          </div>
+        </div>
+      ),
+      okText: 'Envoyer via Peppol',
+      okButtonProps: { style: { background: SF.primary, borderColor: SF.primary } },
+      cancelText: 'Annuler',
+      async onOk() {
+        if (!peppolEndpointInput) {
+          message.warning('Veuillez renseigner le n° BCE du destinataire');
+          throw new Error('cancelled');
+        }
+        try {
+          await api.post(`/api/peppol/send/${invoice.id}`, {
+            partnerPeppolEas: '0208',
+            partnerPeppolEndpoint: peppolEndpointInput,
+          });
+          message.success('Facture envoyée via Peppol !');
+          fetchInvoices();
+        } catch (err: any) {
+          if (err?.message === 'cancelled') throw err;
+          message.error(err?.data?.message || err?.message || 'Erreur envoi Peppol');
+        }
+      },
+    });
+  }, [api, fetchInvoices, modal]);
 
   const handlePercentageChange = useCallback((pct: number | null) => {
     if (pct && chantierAmount) {
@@ -420,9 +471,9 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
     {
       title: 'Actions',
       key: 'actions',
-      width: 200,
+      width: 240,
       render: (_: any, record: ChantierInvoice) => (
-        <Space size="small">
+        <Space size="small" wrap>
           {record.status === 'DRAFT' && (
             <Button size="small" icon={<SendOutlined />} onClick={() => handleStatusChange(record.id, 'SENT')}>
               Envoyer
@@ -432,6 +483,16 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
             <Button size="small" type="primary" icon={<CheckCircleOutlined />} onClick={() => handleStatusChange(record.id, 'PAID')}>
               Payée
             </Button>
+          )}
+          {record.status === 'SENT' && !record.peppolStatus && (
+            <Button size="small" style={{ background: SF.primary, borderColor: SF.primary, color: '#fff' }} icon={<SafetyCertificateOutlined />} onClick={() => handlePeppolSend(record)}>
+              Peppol
+            </Button>
+          )}
+          {record.peppolStatus && (
+            <Tag color={record.peppolStatus === 'DONE' ? 'success' : record.peppolStatus === 'ERROR' ? 'error' : 'processing'}>
+              {record.peppolStatus === 'DONE' ? '✅ Peppol' : record.peppolStatus === 'ERROR' ? '❌ Peppol' : '⏳ Peppol'}
+            </Tag>
           )}
           <Button size="small" icon={<EditOutlined />} onClick={() => handleOpenModal(record)} />
           <Popconfirm title="Supprimer cette facture ?" onConfirm={() => handleDelete(record.id)}>

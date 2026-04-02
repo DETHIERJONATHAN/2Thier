@@ -1,4 +1,4 @@
-import prisma from '../prisma.js';
+import { db } from '../lib/database.js';
 import bcrypt from 'bcryptjs';
 import { getPostalService } from './PostalEmailService.js';
 
@@ -29,7 +29,7 @@ const DEFAULT_EMAIL_DOMAIN = process.env.DEFAULT_EMAIL_DOMAIN || '';
  * @returns Le compte e-mail créé ou mis à jour.
  */
 export const createOrUpdateEmailAccount = async (userId: string) => {
-  const user = await prisma.user.findUnique({
+  const user = await db.user.findUnique({
     where: { id: userId },
     include: {
       UserOrganization: {
@@ -66,7 +66,7 @@ export const createOrUpdateEmailAccount = async (userId: string) => {
   const emailAddress = `${localPart}@${domain}`;
 
   // Vérifier/Créer le domaine email
-  await prisma.emailDomain.upsert({
+  await db.emailDomain.upsert({
     where: { domain },
     update: {},
     create: {
@@ -80,7 +80,7 @@ export const createOrUpdateEmailAccount = async (userId: string) => {
   const encryptedPassword = await bcrypt.hash(temporaryPassword, 10);
 
   // Créer le compte email en DB
-  const emailAccount = await prisma.emailAccount.create({
+  const emailAccount = await db.emailAccount.create({
     data: {
       emailAddress,
       encryptedPassword,
@@ -116,7 +116,7 @@ export const createOrUpdateEmailAccount = async (userId: string) => {
  * Récupère le compte email d'un utilisateur
  */
 export const getUserEmailAccount = async (userId: string) => {
-  return await prisma.emailAccount.findUnique({
+  return await db.emailAccount.findUnique({
     where: { userId },
     include: {
       user: true,

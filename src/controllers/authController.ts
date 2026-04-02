@@ -56,7 +56,8 @@ export const login = async (req: Request, res: Response) => {
     }
 
     // Recherche case-insensitive : l'email en DB peut avoir une casse différente
-    const user = await prisma.user.findFirst({
+    // Supporte aussi la connexion avec l'adresse @zhiive.com (EmailAccount)
+    let user = await prisma.user.findFirst({
       where: { email: { equals: email, mode: 'insensitive' } },
       include: {
         UserOrganization: {
@@ -71,6 +72,32 @@ export const login = async (req: Request, res: Response) => {
         },
       },
     });
+
+    // Si pas trouvé par email principal, chercher par adresse @zhiive.com (EmailAccount)
+    if (!user && email.endsWith('@zhiive.com')) {
+      const emailAccount = await prisma.emailAccount.findFirst({
+        where: { emailAddress: { equals: email, mode: 'insensitive' } },
+        select: { userId: true },
+      });
+      if (emailAccount) {
+        user = await prisma.user.findFirst({
+          where: { id: emailAccount.userId },
+          include: {
+            UserOrganization: {
+              include: {
+                Organization: true,
+                Role: {
+                  include: {
+                    Permission: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+        console.log(`[AUTH] 🔄 Connexion via @zhiive.com: ${email} → user ${user?.email}`);
+      }
+    }
 
     if (!user || !user.passwordHash) {
       console.log(`[AUTH] ❌ Utilisateur non trouvé ou pas de passwordHash pour: ${email}`);

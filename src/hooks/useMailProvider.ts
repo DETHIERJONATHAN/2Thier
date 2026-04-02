@@ -23,7 +23,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
 
 /** Fournisseurs de messagerie supportés */
-export type MailProviderType = 'gmail' | 'yandex' | 'postal' | 'none';
+export type MailProviderType = 'gmail' | 'yandex' | 'postal' | 'imap' | 'none';
 
 export interface MailProviderInfo {
   /** Le fournisseur détecté */

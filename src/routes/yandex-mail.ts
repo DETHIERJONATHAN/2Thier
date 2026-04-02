@@ -31,6 +31,7 @@ import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.j
 import { YandexMailService } from '../services/YandexMailService.js';
 import { db } from '../lib/database.js';
 import { encrypt, decrypt } from '../utils/crypto.js';
+import crypto from 'crypto';
 
 const router = Router();
 
@@ -187,6 +188,7 @@ router.post('/send', authMiddleware, async (req: AuthenticatedRequest, res) => {
     // Sauvegarder l'email envoyé dans la base pour traçabilité
     await db.email.create({
       data: {
+        id: crypto.randomUUID(),
         userId: req.user.userId,
         from: emailAddress,
         to,

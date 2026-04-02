@@ -198,6 +198,14 @@ export const usePostalMailService = () => {
   const trashMessage = useCallback(async (messageId: string) => deleteMessage(messageId), [deleteMessage]);
   const untrashMessage = useCallback(async () => null, []);
   const emptyTrash = useCallback(async () => null, []);
+
+  // ─── markRead ────────────────────────────────────────────
+  const markRead = useCallback(async (messageId: string, isRead: boolean) => {
+    return handleApiCall(async () => {
+      const response = await apiRef.current.post(`/api/postal/emails/${messageId}/read`, { isRead });
+      return response;
+    });
+  }, [handleApiCall]);
   const addLabel = useCallback(async () => null, []);
   const removeLabel = useCallback(async () => null, []);
   const createLabel = useCallback(async () => null, []);
@@ -216,6 +224,7 @@ export const usePostalMailService = () => {
     getLabels,
     syncEmails,
     toggleStar,
+    markRead,
     testConnection,
     modifyMessage,
     trashMessage,
@@ -230,7 +239,7 @@ export const usePostalMailService = () => {
     downloadAttachment,
   }), [
     isLoading, error, getMessages, getMessage, sendMessage, deleteMessage,
-    getLabels, syncEmails, toggleStar, testConnection,
+    getLabels, syncEmails, toggleStar, markRead, testConnection,
     modifyMessage, trashMessage, untrashMessage, emptyTrash,
     addLabel, removeLabel, createLabel, updateLabel, deleteLabel,
     getAttachment, downloadAttachment
