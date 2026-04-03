@@ -30,6 +30,12 @@ interface ZhiiveNavContextType {
   /** In-app browser: URL to display in iframe (null = not browsing) */
   browseUrl: string | null;
   setBrowseUrl: (url: string | null) => void;
+  /** Wall search query: when set, search results appear in the wall feed */
+  wallSearchQuery: string | null;
+  setWallSearchQuery: (query: string | null) => void;
+  /** Wall view URL: when set, site is displayed inline in the wall */
+  wallViewUrl: string | null;
+  setWallViewUrl: (url: string | null) => void;
 }
 
 const defaultTabOrder = ['explore', 'flow', 'reels', 'mur', 'universe', 'mail', 'agenda', 'stats'];
@@ -43,6 +49,8 @@ const ZhiiveNavContext = createContext<ZhiiveNavContextType>({
   registerMobileScroll: () => {}, scrollMobileToPanel: () => {},
   feedMode: 'org', setFeedMode: () => {},
   browseUrl: null, setBrowseUrl: () => {},
+  wallSearchQuery: null, setWallSearchQuery: () => {},
+  wallViewUrl: null, setWallViewUrl: () => {},
 });
 
 interface ZhiiveNavProviderProps {
@@ -58,6 +66,8 @@ export const ZhiiveNavProvider = ({ children, initialFeedMode, onFeedModeChange 
   const [mobilePanel, setMobilePanel] = useState(0);
   const [feedMode, setFeedModeInternal] = useState<FeedMode>(initialFeedMode || 'org');
   const [browseUrl, setBrowseUrl] = useState<string | null>(null);
+  const [wallSearchQuery, setWallSearchQuery] = useState<string | null>(null);
+  const [wallViewUrl, setWallViewUrl] = useState<string | null>(null);
   const mobileScrollRef = useRef<((panel: number) => void) | null>(null);
 
   // Sync tabOrder from DB once loaded — merge new tabs that didn't exist before
@@ -149,6 +159,8 @@ export const ZhiiveNavProvider = ({ children, initialFeedMode, onFeedModeChange 
       centerApp, setCenterApp,
       leftApps, rightApps, leftSidebarApp, rightSidebarApp,
       browseUrl, setBrowseUrl,
+      wallSearchQuery, setWallSearchQuery,
+      wallViewUrl, setWallViewUrl,
       tabOrder, reorderTabs, mobilePanel, setMobilePanel,
       registerMobileScroll, scrollMobileToPanel, feedMode, setFeedMode,
     }}>

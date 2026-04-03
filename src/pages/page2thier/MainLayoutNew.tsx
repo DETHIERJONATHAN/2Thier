@@ -1,8 +1,9 @@
 import React, { useCallback, useMemo, useEffect, useState, useRef, lazy, Suspense } from 'react';
-import { Layout, Dropdown, Avatar } from 'antd';
+import { Layout, Dropdown, Avatar, Spin } from 'antd';
 import GlobalSearch from '../../components/GlobalSearch';
 import NotificationsBell from '../../components/NotificationsBell';
 const MessengerChat = lazy(() => import('../../components/MessengerChat'));
+const WebBrowserPanel = lazy(() => import('../../components/WebBrowserPanel'));
 import type { MenuProps } from 'antd';
 import { NavLink, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { 
@@ -189,10 +190,14 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
   }, [reorderTabs]);
 
   return (
-    <div ref={containerRef} style={{
-      display: 'flex', alignItems: 'center', gap: isMobile ? 0 : 2,
-      flex: 1, justifyContent: 'center',
-      overflow: 'hidden', margin: '0 4px',
+    <>
+    <style>{`.zhiive-tabs-scroll::-webkit-scrollbar{display:none}`}</style>
+    <div ref={containerRef} className="zhiive-tabs-scroll" style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: isMobile ? 0 : 2,
+      flex: 1,
+      overflowX: 'auto', overflowY: 'hidden',
+      scrollbarWidth: 'none',
+      margin: '0 4px',
       touchAction: dragId ? 'none' : 'auto',
     }}>
       {orderedTabs.map(tab => {
@@ -221,7 +226,7 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
               display: 'flex', flexDirection: isMobile ? 'column' : 'row',
               alignItems: 'center', gap: isMobile ? 0 : 5,
               padding: isMobile ? '4px 6px' : '5px 12px', borderRadius: 8,
-              cursor: 'pointer',
+              cursor: 'pointer', flexShrink: 0,
               fontSize: isMobile ? 9 : 13, fontWeight: isActive ? 700 : 500, whiteSpace: 'nowrap',
               background: (isActive || hoveredTab === tab.id) ? 'rgba(255,255,255,0.08)' : 'transparent',
               transition: 'all 0.2s',
@@ -236,6 +241,7 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
         );
       })}
     </div>
+    </>
   );
 };
 
@@ -254,7 +260,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   }, []);
 
   const { logout, user, currentOrganization } = useAuth();
-  const { feedMode, setFeedMode, setCenterApp } = useZhiiveNav();
+  const { feedMode, setFeedMode, setCenterApp, browseUrl, setBrowseUrl, wallViewUrl, setWallViewUrl } = useZhiiveNav();
 
   // 🐝 Identité centralisée — source unique de vérité pour l'avatar/nom du header
   const identity = useActiveIdentity();
@@ -455,15 +461,32 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
       <Content style={{ 
         backgroundColor: 'white',
-        minHeight: '100vh',
+        height: '100vh',
         paddingTop: `${headerHeight}px`,
-        overflow: 'auto'
+        boxSizing: 'border-box' as const,
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column' as const,
       }}>
         {children}
       </Content>
       <Suspense fallback={null}>
         <MessengerChat />
       </Suspense>
+
+      {/* 🌐 In-app browser overlay — plein écran au-dessus de tout */}
+      {wallViewUrl && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          zIndex: 2000,
+          background: '#fff',
+        }}>
+          <Suspense fallback={<div style={{ padding: 40, textAlign: 'center' }}><Spin size="large" /></div>}>
+            <WebBrowserPanel url={wallViewUrl} onClose={() => setWallViewUrl(null)} />
+          </Suspense>
+        </div>
+      )}
     </Layout>
   );
 };

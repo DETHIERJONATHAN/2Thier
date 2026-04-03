@@ -123,6 +123,11 @@ import {
   TeamOutlined,
   CalendarOutlined,
   TrophyOutlined,
+  ArrowLeftOutlined,
+  ExportOutlined,
+  CloseOutlined,
+  LoadingOutlined,
+  LinkOutlined,
   RiseOutlined,
   ClockCircleOutlined,
   CheckCircleOutlined,
@@ -1576,12 +1581,19 @@ export default function DashboardPageUnified() {
   const [postCategory, setPostCategory] = useState<string | null>(null);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  // Wall search results (displayed below "Quoi de neuf" when wallSearchQuery is set)
+  const [wallSearchResults, setWallSearchResults] = useState<Array<{ title: string; content: string; url: string; img_src?: string; favicon?: string }>>([]);
+  const [wallSearchPage, setWallSearchPage] = useState(1);
+  const [wallSearchLoading, setWallSearchLoading] = useState(false);
+  const [wallSearchHasMore, setWallSearchHasMore] = useState(true);
+  const [iframeError, setIframeError] = useState(false);
+
   const [mobilePanel, setMobilePanel] = useState(2); // Zhiive: 0=Explore, 1=Flow, 2=Mur(centre), 3=Universe, 4=Reels, 5=Stats
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Zhiive navigation (shared with header tabs via context)
-  const { centerApp, setCenterApp, leftSidebarApp, rightSidebarApp, leftApps, rightApps, registerMobileScroll, setMobilePanel: setContextMobilePanel, tabOrder, feedMode, browseUrl, setBrowseUrl } = useZhiiveNav();
+  const { centerApp, setCenterApp, leftSidebarApp, rightSidebarApp, leftApps, rightApps, registerMobileScroll, setMobilePanel: setContextMobilePanel, tabOrder, feedMode, browseUrl, setBrowseUrl, wallSearchQuery, setWallSearchQuery, wallViewUrl, setWallViewUrl } = useZhiiveNav();
 
   // 🐝 Identité centralisée — source unique de "qui poste" (org ou personnel)
   // NE JAMAIS recalculer `feedMode === 'org' && !!currentOrganization` localement !
@@ -1613,32 +1625,51 @@ export default function DashboardPageUnified() {
   }, [setSearchParams]);
 
   // Scroll-snap handlers (must be before early returns to preserve hooks order)
-  const wrapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleMobileScroll = useCallback(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
     const page = Math.round(el.scrollLeft / el.offsetWidth);
     setMobilePanel(page);
     setContextMobilePanel(page);
+  }, [setContextMobilePanel]);
 
-    // Circular wrap-around: when user reaches the very last or first panel,
-    // wait for scroll to settle then jump to the opposite end (Mur as hub)
-    if (wrapTimeoutRef.current) clearTimeout(wrapTimeoutRef.current);
+  // Detect swipe attempts beyond the first/last panel → navigate to Mur
+  const boundarySwipeRef = useRef<{ startX: number; page: number } | null>(null);
+  const handleBoundaryTouchStart = useCallback((e: React.TouchEvent) => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const page = Math.round(el.scrollLeft / el.offsetWidth);
+    boundarySwipeRef.current = { startX: e.touches[0].clientX, page };
+  }, []);
+  const handleBoundaryTouchEnd = useCallback((e: React.TouchEvent) => {
+    const ref = boundarySwipeRef.current;
+    if (!ref) return;
+    const el = scrollContainerRef.current;
+    if (!el) return;
     const totalPanels = el.children.length;
     const murIndex = tabOrder.indexOf('mur');
-    if (totalPanels > 1 && (page === 0 || page === totalPanels - 1)) {
-      wrapTimeoutRef.current = setTimeout(() => {
-        const currentPage = Math.round(el.scrollLeft / el.offsetWidth);
-        if (currentPage === totalPanels - 1) {
-          // At the very end → jump to Mur (center)
-          el.scrollTo({ left: murIndex * el.offsetWidth, behavior: "smooth" });
-        } else if (currentPage === 0) {
-          // At the very start → jump to Mur (center)
+    const dx = ref.startX - e.changedTouches[0].clientX; // positive = swipe left (→ next)
+    const MIN_SWIPE = 50;
+    // At last panel and swiped left (trying to go beyond) → go to Mur
+    if (ref.page === totalPanels - 1 && dx > MIN_SWIPE) {
+      setTimeout(() => {
+        const cur = Math.round(el.scrollLeft / el.offsetWidth);
+        if (cur === totalPanels - 1) {
           el.scrollTo({ left: murIndex * el.offsetWidth, behavior: "smooth" });
         }
-      }, 600);
+      }, 300);
     }
-  }, [setContextMobilePanel, tabOrder]);
+    // At first panel and swiped right (trying to go beyond) → go to Mur
+    else if (ref.page === 0 && dx < -MIN_SWIPE) {
+      setTimeout(() => {
+        const cur = Math.round(el.scrollLeft / el.offsetWidth);
+        if (cur === 0) {
+          el.scrollTo({ left: murIndex * el.offsetWidth, behavior: "smooth" });
+        }
+      }, 300);
+    }
+    boundarySwipeRef.current = null;
+  }, [tabOrder]);
 
   const scrollToPanel = useCallback((panel: number) => {
     const el = scrollContainerRef.current;
@@ -1849,6 +1880,50 @@ export default function DashboardPageUnified() {
       setWallLoading(false);
     }
   }, [api, wallCursor, feedFilter, feedMode]);
+
+  // ── Wall Search: fetch web results to display in feed ──
+  const fetchWallSearchResults = useCallback(async (query: string, page: number, reset: boolean) => {
+    if (!query || query.length < 2) return;
+    setWallSearchLoading(true);
+    try {
+      const data = await api.get(`/api/search/web?q=${encodeURIComponent(query)}&limit=20&pageno=${page}`) as { results?: Array<{ title: string; content: string; url: string; img_src?: string; favicon?: string }> };
+      const results = data?.results || [];
+      if (reset) {
+        setWallSearchResults(results);
+      } else {
+        setWallSearchResults(prev => [...prev, ...results]);
+      }
+      setWallSearchHasMore(results.length >= 10);
+    } catch {
+      if (reset) setWallSearchResults([]);
+      setWallSearchHasMore(false);
+    } finally {
+      setWallSearchLoading(false);
+    }
+  }, [api]);
+
+  // When wallSearchQuery changes, reset and fetch page 1
+  useEffect(() => {
+    setWallViewUrl(null);
+    setIframeError(false);
+    setIframeError(false);
+    if (wallSearchQuery && wallSearchQuery.length >= 2) {
+      setWallSearchPage(1);
+      setWallSearchHasMore(true);
+      fetchWallSearchResults(wallSearchQuery, 1, true);
+    } else {
+      setWallSearchResults([]);
+      setWallSearchPage(1);
+      setWallSearchHasMore(true);
+    }
+  }, [wallSearchQuery, fetchWallSearchResults]);
+
+  const loadMoreSearchResults = useCallback(() => {
+    if (!wallSearchQuery || wallSearchLoading || !wallSearchHasMore) return;
+    const nextPage = wallSearchPage + 1;
+    setWallSearchPage(nextPage);
+    fetchWallSearchResults(wallSearchQuery, nextPage, false);
+  }, [wallSearchQuery, wallSearchLoading, wallSearchHasMore, wallSearchPage, fetchWallSearchResults]);
 
   /* ─── CREATE POST ──────────────────────────────────────────── */
   const handleMediaSelect = useCallback((accept: string) => {
@@ -2838,6 +2913,139 @@ export default function DashboardPageUnified() {
 
       {/* Feed content — hidden when a module or center app is active */}
       {!activeModule && !centerApp && (<>
+
+      {/* ── Wall Search Results (when user clicks "Plus de recherche") ── */}
+      {wallSearchQuery && (
+        <div style={{ background: FB.white, marginBottom: 8, overflow: "hidden" }}>
+
+          {/* ── Search results as rich cards ── */}
+
+              {/* Search header */}
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "8px 12px", borderBottom: `1px solid ${FB.border}`,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <GlobalOutlined style={{ fontSize: 15, color: FB.blue }} />
+                  <span style={{ fontSize: 15, fontWeight: 700, color: FB.text }}>
+                    {wallSearchQuery}
+                  </span>
+                  <span style={{ fontSize: 11, color: FB.textSecondary, fontWeight: 500 }}>
+                    — {wallSearchResults.length} résultat{wallSearchResults.length > 1 ? 's' : ''}
+                  </span>
+                </div>
+                <div onClick={() => setWallSearchQuery(null)}
+                  style={{ cursor: "pointer", fontSize: 18, color: FB.textSecondary, lineHeight: 1, padding: "0 4px" }}>
+                  ×
+                </div>
+              </div>
+
+              {/* Results list — rich cards with preview */}
+              {wallSearchResults.map((result, idx) => (
+                <div
+                  key={`ws-${idx}`}
+                  onClick={async () => {
+                    if (!result.url) return;
+                    // Native (Android/iOS) → Custom Tab / InAppBrowser
+                    const { openInNativeBrowser } = await import('../utils/capacitor');
+                    const opened = await openInNativeBrowser(result.url);
+                    if (!opened) {
+                      // Web → overlay in-app browser (stays on Zhiive)
+                      setWallViewUrl(result.url);
+                    }
+                  }}
+                  style={{
+                    padding: "12px",
+                    cursor: "pointer",
+                    borderBottom: `1px solid ${FB.btnGray}`,
+                    transition: "background 0.12s",
+                    display: "flex",
+                    gap: 12,
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = '#f8f9fa'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                >
+                  {/* Preview image */}
+                  {result.img_src ? (
+                    <div style={{
+                      width: 120, minWidth: 120, height: 80, borderRadius: 8,
+                      overflow: "hidden", background: FB.btnGray, flexShrink: 0,
+                    }}>
+                      <img
+                        src={result.img_src}
+                        alt=""
+                        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                        onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    </div>
+                  ) : null}
+
+                  {/* Text content */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {/* Favicon + domain */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                      {result.favicon && (
+                        <img src={result.favicon} alt="" style={{ width: 16, height: 16, borderRadius: 2 }}
+                          onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                      )}
+                      <span style={{ fontSize: 11, color: FB.green, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {result.url?.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
+                      </span>
+                    </div>
+                    {/* Title */}
+                    <div style={{ fontSize: 15, fontWeight: 600, color: FB.blue, marginBottom: 3, lineHeight: 1.3 }}>
+                      {result.title}
+                    </div>
+                    {/* Description */}
+                    {result.content && (
+                      <div style={{
+                        fontSize: 13, color: FB.textSecondary, lineHeight: 1.45,
+                        display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
+                      }}>
+                        {result.content}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {wallSearchLoading && (
+                <div style={{ textAlign: "center", padding: "24px 16px" }}>
+                  <Spin size="default" />
+                  <div style={{ color: FB.textSecondary, fontSize: 13, marginTop: 8 }}>Chargement...</div>
+                </div>
+              )}
+
+              {!wallSearchLoading && wallSearchHasMore && wallSearchResults.length > 0 && (
+                <div style={{ textAlign: "center", padding: "14px 0", borderTop: `1px solid ${FB.btnGray}` }}>
+                  <button onClick={loadMoreSearchResults}
+                    style={{
+                      padding: "8px 28px", background: FB.blue, color: FB.white,
+                      border: "none", borderRadius: 4, fontWeight: 600,
+                      fontSize: 14, cursor: "pointer",
+                    }}>
+                    Plus de résultats
+                  </button>
+                </div>
+              )}
+
+              {!wallSearchLoading && wallSearchResults.length === 0 && (
+                <div style={{ textAlign: "center", padding: "40px 16px" }}>
+                  <GlobalOutlined style={{ fontSize: 36, color: FB.border, marginBottom: 12 }} />
+                  <div style={{ fontSize: 15, fontWeight: 600, color: FB.text, marginBottom: 6 }}>Aucun résultat</div>
+                  <div style={{ color: FB.textSecondary, fontSize: 13 }}>Essayez avec d'autres mots-clés</div>
+                </div>
+              )}
+
+              {!wallSearchLoading && !wallSearchHasMore && wallSearchResults.length > 0 && (
+                <div style={{ textAlign: "center", padding: "16px 0", color: FB.textSecondary, fontSize: 13, borderTop: `1px solid ${FB.btnGray}` }}>
+                  Fin des résultats
+                </div>
+              )}
+
+        </div>
+      )}
+
       {/* Feed header — single compact line with filter dropdown */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0 4px", marginBottom: 4, position: "relative" }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: FB.text }}>Fil</span>
@@ -3018,10 +3226,11 @@ export default function DashboardPageUnified() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: FB.bg }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: FB.bg, minHeight: 0 }}>
       <style>{`.mobile-swipe::-webkit-scrollbar { display: none; }
         .sf-sidebar::-webkit-scrollbar { display: none; }
         .sf-sidebar-panel::-webkit-scrollbar { display: none; }
+        .sf-center-col::-webkit-scrollbar { display: none; }
       `}</style>
 
       {activeModule ? (
@@ -3046,6 +3255,8 @@ export default function DashboardPageUnified() {
           <div
             ref={scrollContainerRef}
             onScroll={handleMobileScroll}
+            onTouchStart={handleBoundaryTouchStart}
+            onTouchEnd={handleBoundaryTouchEnd}
             className="mobile-swipe"
             style={{
               display: "flex", overflowX: "auto", overflowY: "hidden",
@@ -3090,7 +3301,7 @@ export default function DashboardPageUnified() {
            Center: ALWAYS the Wall (Hive) — Mur is the heart
            Right sidebar: selected right app (closest to Mur by default)
            ═══════════════════════════════════════════════════════ */
-        <div style={{ display: "flex", height: "calc(100vh - 48px)" }}>
+        <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
 
           {/* ── LEFT SIDEBAR (280px) — shows activeLeftApp ── */}
           <div style={{
@@ -3105,20 +3316,13 @@ export default function DashboardPageUnified() {
             </div>
           </div>
 
-          {/* ── CENTER (flex: 1) — Wall by default, or selected app / CRM module / web browser ── */}
-          <div style={{
-            flex: 1, minWidth: 0, overflowY: browseUrl ? "hidden" : "auto", padding: browseUrl ? 0 : "4px 16px",
+          {/* ── CENTER (flex: 1) — Wall by default, or selected app / CRM module ── */}
+          <div className="sf-center-col" style={{
+            flex: 1, minWidth: 0, overflowY: "auto", padding: "8px 16px",
             display: 'flex', flexDirection: 'column',
+            scrollbarWidth: 'none', msOverflowStyle: 'none' as any,
           }}>
-            {browseUrl ? (
-              <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
-                <LazyWebBrowserPanel
-                  url={browseUrl}
-                  onClose={() => setBrowseUrl(null)}
-                />
-              </Suspense>
-            ) : (
-            <div style={{ maxWidth: '100%', margin: "0 auto", flex: 1 }}>
+            <div style={{ width: '100%', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
               {activeModule ? (
                 <>
                   {renderFeed()}
@@ -3126,18 +3330,19 @@ export default function DashboardPageUnified() {
                 </>
               ) : centerApp ? (
                 <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
-                  {renderPanel(centerApp)}
+                  <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                    {renderPanel(centerApp)}
+                  </div>
                 </Suspense>
               ) : (
-                <>
+                <div style={{ padding: '8px 12px' }}>
                   <Suspense fallback={null}>
                     <LazyStoriesBar api={api} currentUser={user} />
                   </Suspense>
                   {renderFeed()}
-                </>
+                </div>
               )}
             </div>
-            )}
           </div>
 
           {/* ── RIGHT SIDEBAR (300px) — shows activeRightApp ── */}

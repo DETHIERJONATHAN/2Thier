@@ -302,7 +302,7 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
   ];
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto', padding: '8px 12px', scrollbarWidth: 'none', background: SF.bg }}>
+    <div style={{ flex: 1, height: '100%', overflowY: 'auto', padding: '8px 12px', scrollbarWidth: 'none', background: SF.bg }}>
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: 12, paddingTop: 4 }}>
         <span style={{ fontSize: 20, fontWeight: 800, background: SF.gradientHot, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>

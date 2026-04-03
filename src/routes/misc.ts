@@ -9,6 +9,7 @@ import { JWT_SECRET } from "../config";
 import { prisma } from '../lib/prisma';
 import { randomUUID, randomBytes } from 'crypto';
 import { emailService } from '../services/EmailService';
+import { getPostalService } from '../services/PostalEmailService.js';
 
 const router = Router();
 
@@ -146,10 +147,11 @@ router.post("/register", async (req: Request, res: Response) => {
 
       // ─── Auto-créer le compte email @zhiive.com ───
       // Chaque utilisateur Zhiive reçoit une boîte mail, même les freelance sans orga
+      const normalize = (s: string) =>
+        s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, '.').replace(/[^a-z0-9.]/g, '');
+      let zhiiveEmail: string | null = null;
       if (firstName) {
-        const normalize = (s: string) =>
-          s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, '.').replace(/[^a-z0-9.]/g, '');
-        const zhiiveEmail = `${normalize(firstName)}.${normalize(lastName || '')}@zhiive.com`;
+        zhiiveEmail = `${normalize(firstName)}.${normalize(lastName || '')}@zhiive.com`;
         try {
           await tx.emailAccount.create({
             data: {
@@ -168,8 +170,36 @@ router.post("/register", async (req: Request, res: Response) => {
         }
       }
 
-      return { user, organization };
+      return { user, organization, zhiiveEmail };
     });
+
+    // ─── Provisionner la boîte mail sur le serveur Postal ───
+    if (result.zhiiveEmail) {
+      try {
+        const postal = getPostalService();
+        await postal.createMailbox(result.zhiiveEmail, `${firstName} ${lastName || ''}`.trim());
+        console.log(`✅ [Register] Boîte Postal provisionnée: ${result.zhiiveEmail}`);
+      } catch (postalErr) {
+        console.error(`⚠️ [Register] Erreur provisionnement Postal (non bloquant):`, postalErr);
+      }
+    }
+
+    // ─── Provisionner l'email de l'organisation (colonie) ───
+    if (result.organization) {
+      try {
+        const normalize = (s: string) =>
+          s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, '.').replace(/[^a-z0-9.]/g, '');
+        const orgEmail = `${normalize(result.organization.name)}@zhiive.com`;
+        // Mettre à jour l'organisation avec son email
+        await prisma.organization.update({
+          where: { id: result.organization.id },
+          data: { email: orgEmail },
+        });
+        console.log(`🏢 [Register] Email organisation: ${orgEmail}`);
+      } catch (orgEmailErr) {
+        console.error(`⚠️ [Register] Erreur email organisation (non bloquant):`, orgEmailErr);
+      }
+    }
 
     // Envoyer l'email d'activation
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';

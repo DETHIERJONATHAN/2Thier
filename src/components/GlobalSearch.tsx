@@ -49,7 +49,9 @@ const SEARCH_TABS: { id: SearchTab; label: string; icon: React.ReactNode; catego
 ];
 
 const DEBOUNCE_MS = 300;
+const WEB_DEBOUNCE_MS = 300;
 const MIN_QUERY_LENGTH = 2;
+const MIN_WEB_QUERY_LENGTH = 2;
 
 const CATEGORY_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
   users:      { label: 'Utilisateurs',   icon: <UserOutlined />,     color: SF.primary },
@@ -99,7 +101,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { api } = useAuthenticatedApi();
-  const { setBrowseUrl } = useZhiiveNav();
+  const { setBrowseUrl, setWallSearchQuery, setCenterApp, setWallViewUrl } = useZhiiveNav();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const apiStable = useMemo(() => api, []);
 
@@ -191,9 +193,9 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
     }
   }, [apiStable]);
 
-  // ── Web search via backend proxy (SearXNG) ──
+  // ── Zhiive Search — recherche web intégrée ──
   const doWebSearch = useCallback(async (q: string) => {
-    if (q.length < MIN_QUERY_LENGTH) { setWebResults([]); return; }
+    if (q.length < MIN_WEB_QUERY_LENGTH) { setWebResults([]); return; }
     setWebLoading(true);
     try {
       const data = await apiStable.get(`/api/search/web?q=${encodeURIComponent(q)}&limit=10`) as { results: any[] };
@@ -205,17 +207,17 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
         _route: r.url,
         _icon: 'search',
         imageUrl: r.img_src || r.thumbnail || undefined,
+        favicon: r.favicon || undefined,
       }));
       setWebResults(mapped);
       setSelectedIndex(-1);
     } catch {
-      // SearXNG not yet deployed — show placeholder
       setWebResults([{
-        id: 'web-placeholder',
+        id: 'web-error',
         _type: 'web',
-        _label: `Rechercher "${q}" sur le web`,
-        _desc: 'Zhiive Search (SearXNG) sera bientôt disponible. En attendant, cliquez pour rechercher.',
-        _route: `https://duckduckgo.com/?q=${encodeURIComponent(q)}`,
+        _label: `Recherche temporairement indisponible`,
+        _desc: 'Réessayez dans quelques instants',
+        _route: '',
         _icon: 'search',
       }]);
     } finally {
@@ -223,16 +225,21 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
     }
   }, [apiStable]);
 
+  const webDebounceRef = useRef<ReturnType<typeof setTimeout>>();
+
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setQuery(val);
+    // Internal search: fast debounce
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      const trimmed = val.trim();
-      doSearch(trimmed);
-      // Always trigger web search so results are ready when user clicks Web tab
-      doWebSearch(trimmed);
+      doSearch(val.trim());
     }, DEBOUNCE_MS);
+    // Web search: slower debounce (avoid spamming external APIs)
+    if (webDebounceRef.current) clearTimeout(webDebounceRef.current);
+    webDebounceRef.current = setTimeout(() => {
+      doWebSearch(val.trim());
+    }, WEB_DEBOUNCE_MS);
   }, [doSearch, doWebSearch]);
 
   const handleTabChange = useCallback((tabId: SearchTab) => {
@@ -243,17 +250,22 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
     }
   }, [query, doWebSearch]);
 
-  const handleSelect = useCallback((item: SearchResult) => {
+  const handleSelect = useCallback(async (item: SearchResult) => {
     if (item._route) {
       if (item._route.startsWith('http')) {
-        // Open web pages in-app via the embedded browser
-        setBrowseUrl(item._route);
+        // Sur plateforme native (Android/iOS), ouvrir dans le WebView natif
+        const { openInNativeBrowser } = await import('../utils/capacitor');
+        const opened = await openInNativeBrowser(item._route);
+        if (!opened) {
+          // Sur le web → overlay in-app browser (l'utilisateur reste sur Zhiive)
+          setWallViewUrl(item._route);
+        }
       } else {
         navigate(item._route);
       }
     }
     onClose();
-  }, [navigate, onClose, setBrowseUrl]);
+  }, [navigate, onClose, query]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     const total = flatResults.length;
@@ -272,10 +284,13 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
 
   if (!visible) return null;
 
-  const isActiveLoading = activeTab === 'web' ? webLoading : loading;
+  const isActiveLoading = activeTab === 'web' ? webLoading : (activeTab === 'tous' ? (loading && webLoading) : loading);
+  const hasDbResults = filteredResults && Object.keys(filteredResults).length > 0;
   const hasResults = activeTab === 'web'
     ? webResults.length > 0
-    : filteredResults && Object.keys(filteredResults).length > 0;
+    : activeTab === 'tous'
+      ? (hasDbResults || webResults.length > 0)
+      : hasDbResults;
   const showDropdown = query.length >= MIN_QUERY_LENGTH;
 
   return (
@@ -380,18 +395,25 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
             <div style={{ padding: 20 }}>
               <Empty
                 description={activeTab === 'web'
-                  ? `Recherche web pour "${query}"...`
+                  ? `Aucun résultat pour "${query}"`
                   : `Aucun résultat pour "${query}"`}
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
               />
             </div>
           )}
 
-          {/* ── Web results ── */}
+          {/* ── Web results — rich cards ── */}
           {!isActiveLoading && activeTab === 'web' && webResults.length > 0 && (
             <div style={{ padding: '4px 0' }}>
-              <div style={{ padding: '4px 16px 6px', fontSize: 12, color: SF.textMuted }}>
-                {webResults.length} résultat{webResults.length > 1 ? 's' : ''} web
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '10px 16px 6px',
+                fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
+                color: SF.primary, letterSpacing: 0.5,
+              }}>
+                <GlobalOutlined />
+                <span>{webResults.length} résultat{webResults.length > 1 ? 's' : ''} web</span>
+                {webLoading && <Spin size="small" style={{ marginLeft: 6 }} />}
               </div>
               {webResults.map((item, idx) => {
                 const isSelected = selectedIndex === idx;
@@ -401,54 +423,73 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
                     onClick={() => handleSelect(item)}
                     onMouseEnter={() => setSelectedIndex(idx)}
                     style={{
-                      display: 'flex', alignItems: 'flex-start', gap: 10,
-                      padding: '8px 16px', cursor: 'pointer', transition: 'background 0.1s',
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '8px 16px', cursor: 'pointer', transition: 'background 0.12s',
                       background: isSelected ? 'rgba(108,92,231,0.08)' : 'transparent',
                     }}
                   >
+                    {/* Thumbnail */}
                     {item.imageUrl ? (
-                      <img
-                        src={item.imageUrl}
-                        alt=""
-                        style={{ width: 48, height: 36, borderRadius: 4, objectFit: 'cover', flexShrink: 0, background: '#f0f0f0' }}
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                      />
+                      <div style={{
+                        width: 80, minWidth: 80, height: 56, borderRadius: 6,
+                        overflow: 'hidden', background: '#f0f0f0', flexShrink: 0,
+                      }}>
+                        <img src={item.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                          onError={e => { (e.target as HTMLImageElement).parentElement!.style.display = 'none'; }} />
+                      </div>
                     ) : (
                       <div style={{
-                        width: 28, height: 28, borderRadius: '50%',
-                        background: 'rgba(108,92,231,0.12)', display: 'flex',
+                        width: 80, minWidth: 80, height: 56, borderRadius: 6,
+                        background: `${SF.primary}10`, display: 'flex',
                         alignItems: 'center', justifyContent: 'center',
-                        fontSize: 13, color: '#6C5CE7', flexShrink: 0,
+                        flexShrink: 0,
                       }}>
-                        <GlobalOutlined />
+                        <GlobalOutlined style={{ fontSize: 22, color: SF.primary, opacity: 0.5 }} />
                       </div>
                     )}
                     <div style={{ flex: 1, minWidth: 0 }}>
+                      {/* Favicon + domain */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
+                        {item.favicon && (
+                          <img src={item.favicon} alt="" style={{ width: 14, height: 14, borderRadius: 2 }}
+                            onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        )}
+                        <span style={{ fontSize: 10, color: SF.textMuted }}>
+                          {item._route?.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
+                        </span>
+                      </div>
+                      {/* Title */}
                       <div style={{
-                        fontSize: 13, fontWeight: 500, color: SF.primary,
+                        fontSize: 13, fontWeight: 600, color: SF.primary,
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }}>
                         {item._label}
                       </div>
+                      {/* Description */}
                       {item._desc && (
                         <div style={{
-                          fontSize: 11, color: SF.textSecondary,
+                          fontSize: 11, color: SF.textSecondary, lineHeight: 1.35, marginTop: 1,
                           overflow: 'hidden', textOverflow: 'ellipsis',
                           display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
                         }}>
                           {item._desc}
                         </div>
                       )}
-                      {item._route && (
-                        <div style={{ fontSize: 10, color: SF.textMuted, marginTop: 1 }}>
-                          {item._route.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
-                        </div>
-                      )}
                     </div>
-                    <ArrowRightOutlined style={{ fontSize: 10, color: SF.textMuted, marginTop: 4 }} />
+                    <ArrowRightOutlined style={{ fontSize: 10, color: SF.textMuted, flexShrink: 0 }} />
                   </div>
                 );
               })}
+              <div
+                onClick={() => { setCenterApp(null); setBrowseUrl(null); setWallSearchQuery(query.trim()); navigate('/dashboard'); onClose(); }}
+                style={{
+                  padding: '8px 16px', fontSize: 12, color: SF.primary,
+                  cursor: 'pointer', fontWeight: 600, textAlign: 'center',
+                  borderTop: '1px solid rgba(0,0,0,0.06)', marginTop: 4,
+                }}
+              >
+                Plus de recherche →
+              </div>
             </div>
           )}
 
@@ -540,64 +581,87 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
                 );
               })}
 
-              {/* ── Web results preview in "Tous" tab ── */}
-              {activeTab === 'tous' && webResults.length > 0 && (
-                <div>
-                  <div style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    padding: '10px 16px 2px',
-                    fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
-                    color: '#6C5CE7', letterSpacing: 0.5,
-                    borderTop: '1px solid rgba(0,0,0,0.06)',
-                    marginTop: 4,
-                  }}>
-                    <GlobalOutlined />
-                    <span>Recherche Web</span>
-                  </div>
-                  {webResults.slice(0, 3).map((item) => (
-                    <div
-                      key={item.id}
-                      onClick={() => handleSelect(item)}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 10,
-                        padding: '6px 16px', cursor: 'pointer', transition: 'background 0.1s',
-                      }}
-                    >
+            </div>
+          )}
+
+          {/* ── Web results preview in "Tous" tab — rich cards ── */}
+          {!isActiveLoading && activeTab === 'tous' && webResults.length > 0 && (
+            <div style={{ padding: '4px 0' }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '10px 16px 6px',
+                fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
+                color: SF.primary, letterSpacing: 0.5,
+                borderTop: hasDbResults ? '1px solid rgba(0,0,0,0.06)' : 'none',
+                marginTop: hasDbResults ? 4 : 0,
+              }}>
+                <GlobalOutlined />
+                <span>Recherche Web</span>
+                {webLoading && <Spin size="small" style={{ marginLeft: 6 }} />}
+              </div>
+              {webResults.slice(0, 4).map((item) => (
+                <div
+                  key={item.id}
+                  onClick={() => handleSelect(item)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '8px 16px', cursor: 'pointer', transition: 'background 0.12s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(108,92,231,0.06)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                >
+                  {/* Thumbnail */}
+                  {item.imageUrl ? (
+                    <div style={{
+                      width: 80, minWidth: 80, height: 56, borderRadius: 6,
+                      overflow: 'hidden', background: '#f0f0f0', flexShrink: 0,
+                    }}>
+                      <img src={item.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                        onError={e => { (e.target as HTMLImageElement).parentElement!.style.display = 'none'; }} />
+                    </div>
+                  ) : null}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {/* Favicon + domain */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
+                      {item.favicon && (
+                        <img src={item.favicon} alt="" style={{ width: 14, height: 14, borderRadius: 2 }}
+                          onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                      )}
+                      <span style={{ fontSize: 10, color: SF.textMuted }}>
+                        {item._route?.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
+                      </span>
+                    </div>
+                    {/* Title */}
+                    <div style={{
+                      fontSize: 13, fontWeight: 600, color: SF.primary,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {item._label}
+                    </div>
+                    {/* Description */}
+                    {item._desc && (
                       <div style={{
-                        width: 28, height: 28, borderRadius: '50%',
-                        background: 'rgba(108,92,231,0.12)', display: 'flex',
-                        alignItems: 'center', justifyContent: 'center',
-                        fontSize: 13, color: '#6C5CE7', flexShrink: 0,
+                        fontSize: 11, color: SF.textSecondary, lineHeight: 1.35, marginTop: 1,
+                        overflow: 'hidden', textOverflow: 'ellipsis',
+                        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
                       }}>
-                        <GlobalOutlined />
+                        {item._desc}
                       </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{
-                          fontSize: 13, fontWeight: 500, color: SF.primary,
-                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                        }}>
-                          {item._label}
-                        </div>
-                        {item._route && (
-                          <div style={{ fontSize: 10, color: SF.textMuted }}>
-                            {item._route.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
-                          </div>
-                        )}
-                      </div>
-                      <ArrowRightOutlined style={{ fontSize: 10, color: SF.textMuted }} />
-                    </div>
-                  ))}
-                  {webResults.length > 3 && (
-                    <div
-                      onClick={() => setActiveTab('web')}
-                      style={{
-                        padding: '6px 16px', fontSize: 12, color: '#6C5CE7',
-                        cursor: 'pointer', fontWeight: 500, textAlign: 'center',
-                      }}
-                    >
-                      Voir tous les résultats web →
-                    </div>
-                  )}
+                    )}
+                  </div>
+                  <ArrowRightOutlined style={{ fontSize: 10, color: SF.textMuted, flexShrink: 0 }} />
+                </div>
+              ))}
+              {webResults.length > 4 && (
+                <div
+                  onClick={() => { setCenterApp(null); setBrowseUrl(null); setWallSearchQuery(query.trim()); navigate('/dashboard'); onClose(); }}
+                  style={{
+                    padding: '8px 16px', fontSize: 12, color: SF.primary,
+                    cursor: 'pointer', fontWeight: 600, textAlign: 'center',
+                    borderTop: '1px solid rgba(0,0,0,0.06)', marginTop: 4,
+                  }}
+                >
+                  Plus de recherche →
                 </div>
               )}
             </div>

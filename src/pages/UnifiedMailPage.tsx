@@ -1858,7 +1858,7 @@ document.querySelectorAll('img').forEach(function(img) {
   // ═══════════════════════════════════════════════════════════
 
   return (
-    <Layout style={{ height: 'calc(100vh - 64px)', overflow: 'hidden', backgroundColor: '#fff' }}>
+    <Layout style={{ flex: 1, height: '100%', overflow: 'hidden', backgroundColor: '#fff' }}>
       {msgCtx}
 
       {/* ─── Sidebar desktop (≥768px) ─── */}
