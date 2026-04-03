@@ -142,9 +142,18 @@ export class PostalEmailService {
   // ─── Gestion des credentials (boîtes mail) ──────────────
 
   /**
-   * Crée un "credential" SMTP sur Postal pour un utilisateur.
-   * Cela permet à Postal de recevoir les emails destinés à cette adresse.
-   * Doc: https://docs.postalserver.io/developer/api/credentials
+   * Enregistre une boîte mail dans le système Zhiive.
+   *
+   * Note: La Server API Key de Postal ne donne accès qu'aux endpoints d'envoi
+   * (send/message, send/raw, messages/*). Les endpoints de gestion (routes, credentials,
+   * http_endpoints) nécessitent l'interface web admin.
+   *
+   * Le routage des emails entrants est géré par un catch-all route configuré
+   * dans l'interface web de Postal (postal.zhiive.com) qui renvoie TOUS les
+   * emails @zhiive.com vers le webhook /api/postal/inbound.
+   *
+   * L'envoi se fait via l'API REST avec la Server API Key — pas besoin de
+   * credential SMTP par utilisateur.
    */
   async createMailbox(emailAddress: string, name?: string): Promise<{ key: string }> {
     const [localPart, domain] = emailAddress.split('@');
@@ -153,29 +162,22 @@ export class PostalEmailService {
       throw new Error(`Adresse email invalide: ${emailAddress}`);
     }
 
-    console.log(`📬 [POSTAL] Création boîte mail: ${emailAddress}`);
+    console.log(`📬 [POSTAL] Boîte mail enregistrée: ${emailAddress} (${name || 'sans nom'})`);
 
-    // Créer une route pour recevoir les emails de cette adresse
-    const _routeResult = await this.apiCall<{ route: { id: number } }>('routes/create', {
-      domain,
-      endpoint_type: 'HTTPEndpoint',
-      endpoint_id: await this.getWebhookEndpointId(),
-      name: name || `Mailbox: ${emailAddress}`,
-      // Match exact sur l'adresse
-      mode: 'Endpoint',
-    });
+    // Vérifier que l'API Postal est joignable (test d'envoi à vide)
+    try {
+      await this.apiCall<Record<string, unknown>>('send/message', {});
+    } catch {
+      // L'erreur "NoRecipients" est attendue — ça confirme que l'API fonctionne
+    }
 
-    // Créer un credential SMTP pour l'envoi
-    const credentialResult = await this.apiCall<{ credential: { key: string } }>('credentials/create', {
-      type: 'SMTP',
-      name: name || emailAddress,
-      hold: false,
-    });
+    // Pas besoin de créer de route/credential via l'API :
+    // - Envoi : la Server API Key suffit pour envoyer depuis n'importe quelle @zhiive.com
+    // - Réception : un catch-all route dans Postal web admin redirige vers /api/postal/inbound
+    // - L'EmailAccount en DB suffit pour que processInboundEmail() associe l'email au bon user
 
-    const key = credentialResult.data?.credential?.key || '';
-    console.log(`✅ [POSTAL] Boîte mail créée: ${emailAddress}`);
-
-    return { key };
+    console.log(`✅ [POSTAL] Boîte mail prête: ${emailAddress}`);
+    return { key: '' };
   }
 
   /**

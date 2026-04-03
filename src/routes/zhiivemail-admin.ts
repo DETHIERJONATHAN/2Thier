@@ -229,6 +229,16 @@ router.post('/provision', authMiddleware, requireSuperAdmin, async (req: Authent
 
     console.log(`📬 [ZHIIVEMAIL] Compte provisionné: ${zhiiveEmail} pour ${user.firstName} ${user.lastName}`);
 
+    // Provisionner la boîte sur le serveur Postal
+    try {
+      const { getPostalService } = await import('../services/PostalEmailService.js');
+      const postal = getPostalService();
+      await postal.createMailbox(zhiiveEmail, `${user.firstName || ''} ${user.lastName || ''}`.trim());
+      console.log(`✅ [ZHIIVEMAIL] Boîte Postal provisionnée: ${zhiiveEmail}`);
+    } catch (postalErr) {
+      console.error(`⚠️ [ZHIIVEMAIL] Erreur provisionnement Postal (non bloquant):`, postalErr);
+    }
+
     res.json({ success: true, account: { ...account, user: (account as any).User, User: undefined } });
   } catch (error) {
     console.error('❌ [ZHIIVEMAIL] Erreur provisionnement:', error);
@@ -268,6 +278,14 @@ router.post('/provision-all', authMiddleware, requireSuperAdmin, async (req: Aut
             updatedAt: new Date(),
           }
         });
+        // Provisionner sur Postal
+        try {
+          const { getPostalService } = await import('../services/PostalEmailService.js');
+          const postal = getPostalService();
+          await postal.createMailbox(zhiiveEmail, `${user.firstName || ''} ${user.lastName || ''}`.trim());
+        } catch (postalErr) {
+          console.error(`⚠️ [ZHIIVEMAIL] Erreur provisionnement Postal pour ${zhiiveEmail}:`, postalErr);
+        }
         results.push({ userId: user.id, email: zhiiveEmail, status: 'created' });
         created++;
       } catch (e) {

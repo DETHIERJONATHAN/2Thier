@@ -10,6 +10,7 @@ import { emailService } from "../services/EmailService";
 import { prisma } from '../lib/prisma';
 import { GoogleWorkspaceIntegrationService } from "../services/GoogleWorkspaceIntegrationService";
 import { notify } from '../services/NotificationHelper';
+import { getPostalService } from '../services/PostalEmailService.js';
 
 const router = Router();
 
@@ -516,6 +517,37 @@ router.post('/accept', async (req: Request, res: Response): Promise<void> => {
                 });
             });
 
+            // ─── Auto-créer le compte email @zhiive.com (utilisateur existant) ───
+            const existingEmailAccount = await prisma.emailAccount.findUnique({ where: { userId: user.id } });
+            if (!existingEmailAccount) {
+              const normalize = (s: string) =>
+                s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, '.').replace(/[^a-z0-9.]/g, '');
+              const zhiiveEmail = `${normalize(user.firstName || '')}.${normalize(user.lastName || '')}@zhiive.com`;
+              try {
+                await prisma.emailAccount.create({
+                  data: {
+                    id: uuidv4(),
+                    emailAddress: zhiiveEmail,
+                    encryptedPassword: '',
+                    mailProvider: 'postal',
+                    userId: user.id,
+                    organizationId: invitation.organizationId,
+                    updatedAt: new Date(),
+                  },
+                });
+                // Provisionner sur Postal
+                try {
+                  const postal = getPostalService();
+                  await postal.createMailbox(zhiiveEmail, `${user.firstName} ${user.lastName}`);
+                  console.log(`✅ [Invitation] Boîte Postal provisionnée (existant): ${zhiiveEmail}`);
+                } catch (postalErr) {
+                  console.error(`⚠️ [Invitation] Erreur provisionnement Postal (non bloquant):`, postalErr);
+                }
+              } catch (emailAccErr) {
+                console.error(`⚠️ [Invitation] Erreur création EmailAccount (existant):`, emailAccErr);
+              }
+            }
+
             // ✅ Si createWorkspaceAccount est activé, créer le compte Google Workspace
             if (invitation.createWorkspaceAccount) {
                 try {
@@ -643,8 +675,19 @@ router.post('/accept', async (req: Request, res: Response): Promise<void> => {
               console.error(`⚠️ [Invitation] Erreur création EmailAccount:`, emailAccErr);
             }
 
-            return createdUser;
+            return { user: createdUser, zhiiveEmail };
         });
+
+        // ─── Provisionner la boîte mail sur le serveur Postal ───
+        if (newUser.zhiiveEmail) {
+          try {
+            const postal = getPostalService();
+            await postal.createMailbox(newUser.zhiiveEmail, `${firstName} ${lastName}`);
+            console.log(`✅ [Invitation] Boîte Postal provisionnée: ${newUser.zhiiveEmail}`);
+          } catch (postalErr) {
+            console.error(`⚠️ [Invitation] Erreur provisionnement Postal (non bloquant):`, postalErr);
+          }
+        }
 
         // ✅ Si createWorkspaceAccount est activé, créer le compte Google Workspace
         let workspaceEmail: string | null = null;
@@ -654,7 +697,7 @@ router.post('/accept', async (req: Request, res: Response): Promise<void> => {
                 await workspaceService.initialize();
                 
                 const workspaceResult = await workspaceService.createUserAccount(
-                    newUser.id,
+                    newUser.user.id,
                     firstName,
                     lastName
                 );
@@ -683,7 +726,7 @@ router.post('/accept', async (req: Request, res: Response): Promise<void> => {
                 ? "Inscription réussie! Votre compte Google Workspace est en cours de création."
                 : "Inscription réussie!",
             data: { 
-                userId: newUser.id,
+                userId: newUser.user.id,
                 workspaceEmail: workspaceEmail
             } 
         });
