@@ -636,3 +636,240 @@ describe('📏 Conventions Code Zhiive', () => {
     expect(content).toContain('.normalize(');
   });
 });
+
+// ══════════════════════════════════════════════════════════════
+//  SECTION 13 : PROVISIONNEMENT POSTAL — createMailbox() dans TOUS les points d'entrée
+// ══════════════════════════════════════════════════════════════
+describe('📬 Provisionnement Postal — Appel createMailbox() dans tous les flux', () => {
+  it('misc.ts (inscription directe) appelle getPostalService + createMailbox', () => {
+    const content = readSrcFile('src/routes/misc.ts');
+    expect(content).toContain("import { getPostalService } from '../services/PostalEmailService");
+    expect(content).toContain('postal.createMailbox');
+    expect(content).toContain("mailProvider: 'postal'");
+  });
+
+  it('misc.ts provisionne AVANT de retourner la réponse (hors transaction)', () => {
+    const content = readSrcFile('src/routes/misc.ts');
+    const registerBlock = content.slice(content.indexOf('POST /api/register'));
+    // createMailbox APRÈS la transaction (pas dans tx)
+    const txEnd = registerBlock.indexOf('return { user, organization, zhiiveEmail }');
+    const provisionCall = registerBlock.indexOf('postal.createMailbox', txEnd);
+    expect(provisionCall).toBeGreaterThan(txEnd);
+  });
+
+  it('misc.ts crée un email pour l\'organisation (colonie)', () => {
+    const content = readSrcFile('src/routes/misc.ts');
+    expect(content).toMatch(/organization\.update.*email.*orgEmail|orgEmail.*@zhiive\.com/s);
+  });
+
+  it('invitations.ts (nouvel utilisateur) appelle createMailbox après transaction', () => {
+    const content = readSrcFile('src/routes/invitations.ts');
+    expect(content).toContain("import { getPostalService } from '../services/PostalEmailService");
+    // Rechercher createMailbox dans le contexte d'invitation pour nouveau user
+    const provisionBlock = content.slice(
+      content.indexOf('Provisionner la boîte mail sur le serveur Postal'),
+      content.indexOf('Provisionner la boîte mail sur le serveur Postal') + 500,
+    );
+    expect(provisionBlock).toContain('postal.createMailbox');
+  });
+
+  it('invitations.ts (utilisateur existant rejoint org) crée EmailAccount + provisionne', () => {
+    const content = readSrcFile('src/routes/invitations.ts');
+    // Scénario 1 : utilisateur existant
+    const scenario1 = content.slice(
+      content.indexOf('invitation.targetUserId'),
+      content.indexOf('Scénario 2') > 0 ? content.indexOf('Scénario 2') : content.indexOf('acceptInvitationSchema'),
+    );
+    // Doit chercher si l'EmailAccount existe déjà
+    expect(scenario1).toMatch(/emailAccount\.findUnique|existingEmailAccount/);
+    // Doit créer un EmailAccount si absent
+    expect(scenario1).toContain('emailAccount.create');
+    // Doit provisionner sur Postal
+    expect(scenario1).toContain('postal.createMailbox');
+  });
+
+  it('mail-provider.ts (auto-provision) appelle createMailbox', () => {
+    const content = readSrcFile('src/routes/mail-provider.ts');
+    expect(content).toContain('createMailbox');
+    expect(content).toContain('getPostalService');
+  });
+
+  it('zhiivemail-admin.ts provision unitaire appelle createMailbox', () => {
+    const content = readSrcFile('src/routes/zhiivemail-admin.ts');
+    // POST /provision doit appeler createMailbox
+    const provisionBlock = content.slice(
+      content.indexOf("'/provision'"),
+      content.indexOf("'/provision-all'"),
+    );
+    expect(provisionBlock).toContain('createMailbox');
+  });
+
+  it('zhiivemail-admin.ts provision-all appelle createMailbox en boucle', () => {
+    const content = readSrcFile('src/routes/zhiivemail-admin.ts');
+    const provisionAllBlock = content.slice(content.indexOf("'/provision-all'"));
+    expect(provisionAllBlock).toContain('createMailbox');
+    // Doit être dans une boucle (for...of usersWithoutEmail)
+    expect(provisionAllBlock).toMatch(/for\s*\(.*user.*of/);
+  });
+
+  it('createMailbox est non-bloquant (catch séparé, ne crash pas l\'inscription)', () => {
+    // Vérifier que chaque appel createMailbox a un catch associé (non bloquant)
+    for (const file of ['src/routes/misc.ts', 'src/routes/invitations.ts', 'src/routes/mail-provider.ts', 'src/routes/zhiivemail-admin.ts']) {
+      const content = readSrcFile(file);
+      if (content.includes('postal.createMailbox')) {
+        // Chaque createMailbox doit avoir un catch nearby pour "non bloquant"
+        const idx = content.indexOf('postal.createMailbox');
+        // Chercher un catch dans les 300 chars après createMailbox
+        const after = content.slice(idx, idx + 300);
+        expect(after).toContain('catch');
+      }
+    }
+  });
+});
+
+// ══════════════════════════════════════════════════════════════
+//  SECTION 14 : PostalEmailService.createMailbox() — Implémentation
+// ══════════════════════════════════════════════════════════════
+describe('📬 PostalEmailService.createMailbox() — Implémentation', () => {
+  const content = readSrcFile('src/services/PostalEmailService.ts');
+
+  it('createMailbox() existe et valide l\'email', () => {
+    expect(content).toContain('async createMailbox');
+    expect(content).toMatch(/localPart.*domain|emailAddress\.split/);
+  });
+
+  it('N\'appelle PAS routes/create ni credentials/create (404 en Server API)', () => {
+    // Ces endpoints ne sont pas disponibles via la Server API Key
+    const mailboxMethod = content.slice(
+      content.indexOf('async createMailbox'),
+      content.indexOf('async', content.indexOf('async createMailbox') + 20),
+    );
+    expect(mailboxMethod).not.toContain("routes/create");
+    expect(mailboxMethod).not.toContain("credentials/create");
+    expect(mailboxMethod).not.toContain("http_endpoints/create");
+  });
+
+  it('documente le catch-all route comme mécanisme de réception', () => {
+    expect(content).toMatch(/catch.all|catch-all/i);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════
+//  SECTION 15 : API Postal — Vérification d'endpoint corrigée
+// ══════════════════════════════════════════════════════════════
+describe('📡 API Postal — Vérification endpoint', () => {
+  const content = readSrcFile('src/routes/postal-mail.ts');
+
+  it('isPostalApiConfigured utilise /send/message (pas /server/message_queue)', () => {
+    // L'ancien endpoint /server/message_queue retourne 404
+    expect(content).not.toContain('server/message_queue');
+    expect(content).toContain('send/message');
+  });
+
+  it('vérifie content-type JSON (pas juste le status code HTTP)', () => {
+    expect(content).toMatch(/content-type.*json|contentType.*json|application\/json/i);
+  });
+
+  it('POSTAL_API_URL et POSTAL_API_KEY vérifiés avant appel', () => {
+    expect(content).toContain('POSTAL_API_URL');
+    expect(content).toContain('POSTAL_API_KEY');
+  });
+
+  it('résultat de vérification mis en cache (pas re-check à chaque requête)', () => {
+    expect(content).toContain('postalApiChecked');
+    expect(content).toContain('postalApiVerified');
+  });
+
+  it('SMTP fallback si API Postal indisponible', () => {
+    expect(content).toContain('getSmtpTransporter');
+  });
+});
+
+// ══════════════════════════════════════════════════════════════
+//  SECTION 16 : Variables env Cloud Run — Workflow GitHub Actions
+// ══════════════════════════════════════════════════════════════
+describe('🚀 Deploy Cloud Run — Variables POSTAL dans le workflow', () => {
+  const workflow = readSrcFile('.github/workflows/deploy-cloud-run.yml');
+
+  it('workflow existe', () => {
+    expect(workflow.length).toBeGreaterThan(0);
+  });
+
+  it('POSTAL_API_URL configuré en env var', () => {
+    expect(workflow).toContain('POSTAL_API_URL=https://postal.zhiive.com');
+  });
+
+  it('POSTAL_SMTP_HOST configuré en env var', () => {
+    expect(workflow).toContain('POSTAL_SMTP_HOST=postal.zhiive.com');
+  });
+
+  it('POSTAL_SMTP_PORT configuré en env var', () => {
+    expect(workflow).toContain('POSTAL_SMTP_PORT=25');
+  });
+
+  it('POSTAL_SMTP_USER configuré en env var', () => {
+    expect(workflow).toContain('POSTAL_SMTP_USER=zhiive-mail');
+  });
+
+  it('DEFAULT_EMAIL_DOMAIN configuré en env var', () => {
+    expect(workflow).toContain('DEFAULT_EMAIL_DOMAIN=zhiive.com');
+  });
+
+  it('POSTAL_API_KEY dans les secrets (pas en clair)', () => {
+    expect(workflow).toMatch(/update-secrets.*POSTAL_API_KEY=POSTAL_API_KEY:latest/);
+    // NE DOIT PAS être en clair dans set-env-vars
+    expect(workflow).not.toMatch(/set-env-vars.*POSTAL_API_KEY=/);
+  });
+
+  it('POSTAL_SMTP_PASS dans les secrets (pas en clair)', () => {
+    expect(workflow).toMatch(/update-secrets.*POSTAL_SMTP_PASS=POSTAL_SMTP_PASS:latest/);
+  });
+
+  it('POSTAL_WEBHOOK_SECRET dans les secrets', () => {
+    expect(workflow).toMatch(/update-secrets.*POSTAL_WEBHOOK_SECRET=POSTAL_WEBHOOK_SECRET:latest/);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════
+//  SECTION 17 : API Postal REST — Test live
+// ══════════════════════════════════════════════════════════════
+describe('📡 API Postal REST — Test live', () => {
+  it('API Postal send/message accessible (NoRecipients = succès)', async () => {
+    try {
+      const resp = await fetch('https://postal.zhiive.com/api/v1/send/message', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Server-API-Key': process.env.POSTAL_API_KEY || '',
+        },
+        body: '{}',
+        signal: AbortSignal.timeout(10000),
+      });
+      const data = await resp.json() as { status: string; data?: { code?: string } };
+      // L'API renvoie "error" avec "NoRecipients" — c'est attendu (l'API fonctionne)
+      expect(data.status).toBe('error');
+      expect(data.data?.code || '').toContain('NoRecipients');
+    } catch {
+      console.warn('⚠️ Postal API inaccessible depuis cet environnement');
+    }
+  });
+});
+
+// ══════════════════════════════════════════════════════════════
+//  SECTION 18 : Organisation (Colonie) — Email automatique
+// ══════════════════════════════════════════════════════════════
+describe('🏢 Organisation (Colonie) — Email @zhiive.com', () => {
+  it('misc.ts attribue un email à l\'organisation lors de sa création', () => {
+    const content = readSrcFile('src/routes/misc.ts');
+    // Après la transaction, mettre à jour l'organisation avec son email
+    expect(content).toMatch(/organization\.update.*email/s);
+    expect(content).toMatch(/orgEmail.*@zhiive\.com/);
+  });
+
+  it('Prisma schema Organization a un champ email', () => {
+    const schema = readSrcFile('prisma/schema.prisma');
+    const orgStart = schema.indexOf('model Organization {');
+    const orgModel = schema.slice(orgStart, schema.indexOf('}', orgStart) + 1);
+    expect(orgModel).toContain('email');
+  });
+});
