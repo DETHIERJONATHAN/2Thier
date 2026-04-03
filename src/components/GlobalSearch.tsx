@@ -4,7 +4,8 @@ import {
   SearchOutlined, CloseOutlined, UserOutlined, ContactsOutlined,
   ToolOutlined, AppstoreOutlined, FilePdfOutlined, MessageOutlined,
   MailOutlined, FileTextOutlined, CalendarOutlined, FormOutlined,
-  ArrowRightOutlined,
+  ArrowRightOutlined, GlobalOutlined, PictureOutlined,
+  PlayCircleOutlined, FileSearchOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -22,6 +23,7 @@ interface SearchResult {
   _matchedColumn?: string;
   avatarUrl?: string;
   firstName?: string;
+  imageUrl?: string;
   [key: string]: any;
 }
 
@@ -30,6 +32,20 @@ interface SearchResponse {
   query: string;
   total: number;
 }
+
+// ── Search sub-tabs (Google-style) ──
+type SearchTab = 'tous' | 'bees' | 'posts' | 'mails' | 'agenda' | 'images' | 'docs' | 'web';
+
+const SEARCH_TABS: { id: SearchTab; label: string; icon: React.ReactNode; categories?: string[] }[] = [
+  { id: 'tous', label: 'Tous', icon: <SearchOutlined /> },
+  { id: 'bees', label: 'Abeilles', icon: <UserOutlined />, categories: ['users', 'contacts', 'orgs'] },
+  { id: 'posts', label: 'Buzz', icon: <MessageOutlined />, categories: ['posts'] },
+  { id: 'mails', label: 'Mails', icon: <MailOutlined />, categories: ['emails'] },
+  { id: 'agenda', label: 'Agenda', icon: <CalendarOutlined />, categories: ['events'] },
+  { id: 'images', label: 'Images', icon: <PictureOutlined />, categories: ['documents', 'products'] },
+  { id: 'docs', label: 'Docs', icon: <FileSearchOutlined />, categories: ['documents', 'quotes', 'orders', 'templates', 'forms', 'trees'] },
+  { id: 'web', label: 'Web', icon: <GlobalOutlined /> },
+];
 
 const DEBOUNCE_MS = 300;
 const MIN_QUERY_LENGTH = 2;
@@ -89,15 +105,31 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<SearchResponse | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [activeTab, setActiveTab] = useState<SearchTab>('tous');
+  const [webResults, setWebResults] = useState<SearchResult[]>([]);
+  const [webLoading, setWebLoading] = useState(false);
 
   const inputRef = useRef<any>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Filter results based on active tab
+  const filteredResults = useMemo(() => {
+    if (!results?.results) return {};
+    if (activeTab === 'tous' || activeTab === 'web') return results.results;
+    const tabConfig = SEARCH_TABS.find(t => t.id === activeTab);
+    if (!tabConfig?.categories) return results.results;
+    const filtered: Record<string, SearchResult[]> = {};
+    for (const cat of tabConfig.categories) {
+      if (results.results[cat]?.length) filtered[cat] = results.results[cat];
+    }
+    return filtered;
+  }, [results, activeTab]);
+
   const flatResults = useMemo(() => {
-    if (!results?.results) return [];
+    if (activeTab === 'web') return webResults;
     const flat: SearchResult[] = [];
-    for (const category of Object.keys(results.results)) {
+    for (const category of Object.keys(filteredResults)) {
       for (const item of results.results[category]) {
         flat.push(item);
       }
@@ -111,6 +143,8 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
       setQuery('');
       setResults(null);
       setSelectedIndex(-1);
+      setActiveTab('tous');
+      setWebResults([]);
     }
   }, [visible]);
 
@@ -152,12 +186,56 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
     }
   }, [apiStable]);
 
+  // ── Web search via backend proxy (SearXNG) ──
+  const doWebSearch = useCallback(async (q: string) => {
+    if (q.length < MIN_QUERY_LENGTH) { setWebResults([]); return; }
+    setWebLoading(true);
+    try {
+      const data = await apiStable.get(`/api/search/web?q=${encodeURIComponent(q)}&limit=10`) as { results: any[] };
+      const mapped: SearchResult[] = (data.results || []).map((r: any, i: number) => ({
+        id: `web-${i}`,
+        _type: 'web',
+        _label: r.title || r.url,
+        _desc: r.content || r.snippet || '',
+        _route: r.url,
+        _icon: 'search',
+        imageUrl: r.img_src || r.thumbnail || undefined,
+      }));
+      setWebResults(mapped);
+      setSelectedIndex(-1);
+    } catch {
+      // SearXNG not yet deployed — show placeholder
+      setWebResults([{
+        id: 'web-placeholder',
+        _type: 'web',
+        _label: `Rechercher "${q}" sur le web`,
+        _desc: 'Zhiive Search (SearXNG) sera bientôt disponible. En attendant, cliquez pour rechercher.',
+        _route: `https://duckduckgo.com/?q=${encodeURIComponent(q)}`,
+        _icon: 'search',
+      }]);
+    } finally {
+      setWebLoading(false);
+    }
+  }, [apiStable]);
+
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setQuery(val);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => doSearch(val.trim()), DEBOUNCE_MS);
-  }, [doSearch]);
+    debounceRef.current = setTimeout(() => {
+      const trimmed = val.trim();
+      doSearch(trimmed);
+      if (activeTab === 'web') doWebSearch(trimmed);
+    }, DEBOUNCE_MS);
+  }, [doSearch, doWebSearch, activeTab]);
+
+  const handleTabChange = useCallback((tabId: SearchTab) => {
+    setActiveTab(tabId);
+    setSelectedIndex(-1);
+    if (tabId === 'web' && query.trim().length >= MIN_QUERY_LENGTH) {
+      doWebSearch(query.trim());
+    }
+  }, [query, doWebSearch]);
 
   const handleSelect = useCallback((item: SearchResult) => {
     if (item._route) {
@@ -187,7 +265,10 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
 
   if (!visible) return null;
 
-  const hasResults = results && Object.keys(results.results).length > 0;
+  const isActiveLoading = activeTab === 'web' ? webLoading : loading;
+  const hasResults = activeTab === 'web'
+    ? webResults.length > 0
+    : filteredResults && Object.keys(filteredResults).length > 0;
   const showDropdown = query.length >= MIN_QUERY_LENGTH;
 
   return (
@@ -209,24 +290,67 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
         padding: isMobile ? '8px 12px' : '8px 16px',
         boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
         display: 'flex',
-        alignItems: 'center',
-        gap: 8,
+        flexDirection: 'column',
+        gap: 0,
       }}>
-        <Input
-          ref={inputRef}
-          placeholder={t('common.search') + '...'}
-          prefix={<SearchOutlined style={{ color: SF.textMuted }} />}
-          suffix={loading ? <Spin size="small" /> : null}
-          value={query}
-          onChange={handleInputChange}
-          onKeyDown={handleKeyDown}
-          allowClear
-          style={{ flex: 1, height: 36, borderRadius: SF.radiusSm, fontSize: 14 }}
-        />
-        <CloseOutlined
-          onClick={onClose}
-          style={{ color: 'white', fontSize: 16, cursor: 'pointer', padding: 4 }}
-        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Input
+            ref={inputRef}
+            placeholder={t('common.search') + '...'}
+            prefix={<SearchOutlined style={{ color: SF.textMuted }} />}
+            suffix={isActiveLoading ? <Spin size="small" /> : null}
+            value={query}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            allowClear
+            style={{ flex: 1, height: 36, borderRadius: SF.radiusSm, fontSize: 14 }}
+          />
+          <CloseOutlined
+            onClick={onClose}
+            style={{ color: 'white', fontSize: 16, cursor: 'pointer', padding: 4 }}
+          />
+        </div>
+
+        {/* ── Sub-tabs Google-style ── */}
+        {showDropdown && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: isMobile ? 0 : 2,
+            marginTop: 6,
+            overflowX: 'auto',
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+          }}>
+            {SEARCH_TABS.map(tab => {
+              const isActive = activeTab === tab.id;
+              return (
+                <div
+                  key={tab.id}
+                  onClick={() => handleTabChange(tab.id)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    padding: isMobile ? '4px 8px' : '5px 12px',
+                    borderRadius: 16,
+                    cursor: 'pointer',
+                    fontSize: isMobile ? 11 : 12,
+                    fontWeight: isActive ? 600 : 400,
+                    whiteSpace: 'nowrap',
+                    color: isActive ? '#fff' : 'rgba(255,255,255,0.6)',
+                    background: isActive ? 'rgba(255,255,255,0.15)' : 'transparent',
+                    borderBottom: isActive ? '2px solid #8c7ae6' : '2px solid transparent',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  {React.cloneElement(tab.icon as React.ReactElement, {
+                    style: { fontSize: isMobile ? 12 : 13 },
+                  })}
+                  <span>{tab.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Résultats — uniquement quand on tape */}
@@ -239,28 +363,97 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
           maxHeight: isMobile ? '70vh' : '60vh',
           margin: isMobile ? '0 4px' : '0 16px',
         }}>
-          {loading && (
+          {isActiveLoading && (
             <div style={{ padding: 20, textAlign: 'center' }}>
               <Spin size="small" />
             </div>
           )}
 
-          {!loading && !hasResults && (
+          {!isActiveLoading && !hasResults && (
             <div style={{ padding: 20 }}>
               <Empty
-                description={`Aucun résultat pour "${query}"`}
+                description={activeTab === 'web'
+                  ? `Recherche web pour "${query}"...`
+                  : `Aucun résultat pour "${query}"`}
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
               />
             </div>
           )}
 
-          {!loading && hasResults && results && (
+          {/* ── Web results ── */}
+          {!isActiveLoading && activeTab === 'web' && webResults.length > 0 && (
             <div style={{ padding: '4px 0' }}>
               <div style={{ padding: '4px 16px 6px', fontSize: 12, color: SF.textMuted }}>
-                {results.total} résultat{results.total > 1 ? 's' : ''}
+                {webResults.length} résultat{webResults.length > 1 ? 's' : ''} web
+              </div>
+              {webResults.map((item, idx) => {
+                const isSelected = selectedIndex === idx;
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => handleSelect(item)}
+                    onMouseEnter={() => setSelectedIndex(idx)}
+                    style={{
+                      display: 'flex', alignItems: 'flex-start', gap: 10,
+                      padding: '8px 16px', cursor: 'pointer', transition: 'background 0.1s',
+                      background: isSelected ? 'rgba(108,92,231,0.08)' : 'transparent',
+                    }}
+                  >
+                    {item.imageUrl ? (
+                      <img
+                        src={item.imageUrl}
+                        alt=""
+                        style={{ width: 48, height: 36, borderRadius: 4, objectFit: 'cover', flexShrink: 0, background: '#f0f0f0' }}
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    ) : (
+                      <div style={{
+                        width: 28, height: 28, borderRadius: '50%',
+                        background: 'rgba(108,92,231,0.12)', display: 'flex',
+                        alignItems: 'center', justifyContent: 'center',
+                        fontSize: 13, color: '#6C5CE7', flexShrink: 0,
+                      }}>
+                        <GlobalOutlined />
+                      </div>
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontSize: 13, fontWeight: 500, color: SF.primary,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {item._label}
+                      </div>
+                      {item._desc && (
+                        <div style={{
+                          fontSize: 11, color: SF.textSecondary,
+                          overflow: 'hidden', textOverflow: 'ellipsis',
+                          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                        }}>
+                          {item._desc}
+                        </div>
+                      )}
+                      {item._route && (
+                        <div style={{ fontSize: 10, color: SF.textMuted, marginTop: 1 }}>
+                          {item._route.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
+                        </div>
+                      )}
+                    </div>
+                    <ArrowRightOutlined style={{ fontSize: 10, color: SF.textMuted, marginTop: 4 }} />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ── Internal results (Zhiive data) ── */}
+          {!isActiveLoading && activeTab !== 'web' && hasResults && results && (
+            <div style={{ padding: '4px 0' }}>
+              <div style={{ padding: '4px 16px 6px', fontSize: 12, color: SF.textMuted }}>
+                {flatResults.length} résultat{flatResults.length > 1 ? 's' : ''}
+                {activeTab !== 'tous' && ` dans ${SEARCH_TABS.find(t => t.id === activeTab)?.label || ''}`}
               </div>
 
-              {Object.entries(results.results).map(([category, items]) => {
+              {Object.entries(filteredResults).map(([category, items]) => {
                 const config = CATEGORY_CONFIG[category] || CATEGORY_CONFIG.other;
                 if (!items.length) return null;
 

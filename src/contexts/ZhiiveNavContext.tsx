@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useRef, ReactNode, useCallback, useMemo, useEffect } from 'react';
 import { useUserPreference } from '../hooks/useUserPreference';
 
-export type ZhiiveApp = 'explore' | 'flow' | 'reels' | 'universe' | 'stats';
+export type ZhiiveApp = 'explore' | 'flow' | 'reels' | 'universe' | 'stats' | 'mail' | 'agenda';
 export type FeedMode = 'personal' | 'org';
 
 interface ZhiiveNavContextType {
@@ -29,11 +29,11 @@ interface ZhiiveNavContextType {
   setFeedMode: (mode: FeedMode) => void;
 }
 
-const defaultTabOrder = ['explore', 'flow', 'reels', 'mur', 'universe', 'stats'];
+const defaultTabOrder = ['explore', 'flow', 'reels', 'mur', 'universe', 'mail', 'agenda', 'stats'];
 
 const ZhiiveNavContext = createContext<ZhiiveNavContextType>({
   centerApp: null, setCenterApp: () => {},
-  leftApps: ['explore', 'flow', 'reels'], rightApps: ['universe', 'stats'],
+  leftApps: ['explore', 'flow', 'reels'], rightApps: ['universe', 'mail', 'agenda', 'stats'],
   leftSidebarApp: 'reels', rightSidebarApp: 'universe',
   tabOrder: defaultTabOrder, reorderTabs: () => {},
   mobilePanel: 3, setMobilePanel: () => {},

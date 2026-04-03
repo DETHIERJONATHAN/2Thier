@@ -13,6 +13,8 @@ import {
   CompassOutlined,
   BarChartOutlined,
   TeamOutlined,
+  MailOutlined,
+  CalendarOutlined,
 } from '@ant-design/icons';
 import Icon from '@ant-design/icons';
 import { useAuth } from '../../auth/useAuth';
@@ -80,6 +82,8 @@ const SF_TAB_CONFIG: { id: string; label: string; icon: React.ComponentType<{ st
   { id: 'reels', label: 'Reels', icon: ClapperboardIcon, color: '#e84393' },
   { id: 'flow', label: 'Flow', icon: FlowWaveIcon, color: '#6C5CE7' },
   { id: 'universe', label: 'Universe', icon: UniverseIcon, color: '#FD79A8' },
+  { id: 'mail', label: 'Mail', icon: MailOutlined, color: '#00B894' },
+  { id: 'agenda', label: 'Agenda', icon: CalendarOutlined, color: '#0984E3' },
   { id: 'stats', label: 'Stats', icon: BarChartOutlined, color: '#FDCB6E' },
 ];
 

@@ -226,4 +226,69 @@ router.get('/global', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════
+// GET /api/search/web?q=query&limit=10
+// Recherche web via SearXNG self-hosted (proxy backend)
+// ═══════════════════════════════════════════════════════════════
+const SEARXNG_URL = process.env.SEARXNG_URL || 'https://search.zhiive.com';
+const WEB_SEARCH_RATE_LIMIT = new Map<string, { count: number; resetAt: number }>();
+const MAX_WEB_SEARCHES_PER_MINUTE = 10;
+
+router.get('/web', async (req: Request, res: Response): Promise<void> => {
+  const user = (req as any).user;
+  if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
+
+  const q = (req.query.q as string || '').trim();
+  if (q.length < 2) { res.json({ results: [], query: q }); return; }
+
+  // Rate limiting per user
+  const now = Date.now();
+  const userLimit = WEB_SEARCH_RATE_LIMIT.get(user.id);
+  if (userLimit && userLimit.resetAt > now) {
+    if (userLimit.count >= MAX_WEB_SEARCHES_PER_MINUTE) {
+      res.status(429).json({ error: 'Trop de recherches web. Réessayez dans un instant.' });
+      return;
+    }
+    userLimit.count++;
+  } else {
+    WEB_SEARCH_RATE_LIMIT.set(user.id, { count: 1, resetAt: now + 60000 });
+  }
+
+  const limit = Math.min(parseInt(req.query.limit as string) || 10, 20);
+
+  try {
+    const searchUrl = `${SEARXNG_URL}/search?q=${encodeURIComponent(q)}&format=json&categories=general&language=fr&pageno=1`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
+    const response = await fetch(searchUrl, {
+      headers: { 'Accept': 'application/json' },
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      throw new Error(`SearXNG returned ${response.status}`);
+    }
+
+    const data = await response.json() as { results?: Array<{ title?: string; content?: string; url?: string; img_src?: string; thumbnail?: string }> };
+    const results = (data.results || []).slice(0, limit).map((r) => ({
+      title: r.title || '',
+      content: r.content || '',
+      url: r.url || '',
+      img_src: r.img_src || r.thumbnail || '',
+    }));
+
+    res.json({ results, query: q });
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      console.warn('[WEB SEARCH] SearXNG timeout');
+      res.status(504).json({ error: 'Recherche web expirée' });
+    } else {
+      console.warn('[WEB SEARCH] SearXNG unavailable:', err.message);
+      res.status(503).json({ error: 'Recherche web indisponible' });
+    }
+  }
+});
+
 export default router;

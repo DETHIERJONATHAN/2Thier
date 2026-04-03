@@ -2980,6 +2980,8 @@ export default function DashboardPageUnified() {
       case 'flow': return <LazyFlowPanel api={api} currentUser={user} />;
       case 'reels': return <LazyReelsPanel api={api} currentUser={user} />;
       case 'universe': return <LazyUniversePanel api={api} currentUser={user} />;
+      case 'mail': return <LazyGoogleGmailPageV2 />;
+      case 'agenda': return <LazyAgendaWrapper />;
       case 'stats': return !isFreeUser ? renderMobileAnalytics() : null;
       default: return null;
     }
