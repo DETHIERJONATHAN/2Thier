@@ -55,10 +55,28 @@ export const ZhiiveNavProvider = ({ children, initialFeedMode, onFeedModeChange 
   const [feedMode, setFeedModeInternal] = useState<FeedMode>(initialFeedMode || 'org');
   const mobileScrollRef = useRef<((panel: number) => void) | null>(null);
 
-  // Sync tabOrder from DB once loaded
+  // Sync tabOrder from DB once loaded — merge new tabs that didn't exist before
   useEffect(() => {
     if (Array.isArray(savedTabOrder) && savedTabOrder.includes('mur')) {
-      setTabOrder(savedTabOrder);
+      // Add any new tabs from defaultTabOrder that are missing from the saved order
+      const merged = [...savedTabOrder];
+      const murIdx = merged.indexOf('mur');
+      for (const tab of defaultTabOrder) {
+        if (!merged.includes(tab)) {
+          // Insert new tabs after 'mur' but before 'stats' (or at end)
+          const statsIdx = merged.indexOf('stats');
+          if (statsIdx >= 0) {
+            merged.splice(statsIdx, 0, tab);
+          } else {
+            merged.push(tab);
+          }
+        }
+      }
+      setTabOrder(merged);
+      // Persist the merged order if it changed
+      if (merged.length !== savedTabOrder.length) {
+        setSavedTabOrder(merged);
+      }
     }
   }, [savedTabOrder]);
 

@@ -130,12 +130,15 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
     if (activeTab === 'web') return webResults;
     const flat: SearchResult[] = [];
     for (const category of Object.keys(filteredResults)) {
-      for (const item of results.results[category]) {
-        flat.push(item);
+      const items = filteredResults[category];
+      if (items) {
+        for (const item of items) {
+          flat.push(item);
+        }
       }
     }
     return flat;
-  }, [results]);
+  }, [filteredResults, activeTab, webResults]);
 
   useEffect(() => {
     if (visible) {
@@ -225,9 +228,10 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
     debounceRef.current = setTimeout(() => {
       const trimmed = val.trim();
       doSearch(trimmed);
-      if (activeTab === 'web') doWebSearch(trimmed);
+      // Always trigger web search so results are ready when user clicks Web tab
+      doWebSearch(trimmed);
     }, DEBOUNCE_MS);
-  }, [doSearch, doWebSearch, activeTab]);
+  }, [doSearch, doWebSearch]);
 
   const handleTabChange = useCallback((tabId: SearchTab) => {
     setActiveTab(tabId);
@@ -532,6 +536,67 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
                   </div>
                 );
               })}
+
+              {/* ── Web results preview in "Tous" tab ── */}
+              {activeTab === 'tous' && webResults.length > 0 && (
+                <div>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '10px 16px 2px',
+                    fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
+                    color: '#6C5CE7', letterSpacing: 0.5,
+                    borderTop: '1px solid rgba(0,0,0,0.06)',
+                    marginTop: 4,
+                  }}>
+                    <GlobalOutlined />
+                    <span>Recherche Web</span>
+                  </div>
+                  {webResults.slice(0, 3).map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => handleSelect(item)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        padding: '6px 16px', cursor: 'pointer', transition: 'background 0.1s',
+                      }}
+                    >
+                      <div style={{
+                        width: 28, height: 28, borderRadius: '50%',
+                        background: 'rgba(108,92,231,0.12)', display: 'flex',
+                        alignItems: 'center', justifyContent: 'center',
+                        fontSize: 13, color: '#6C5CE7', flexShrink: 0,
+                      }}>
+                        <GlobalOutlined />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          fontSize: 13, fontWeight: 500, color: SF.primary,
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}>
+                          {item._label}
+                        </div>
+                        {item._route && (
+                          <div style={{ fontSize: 10, color: SF.textMuted }}>
+                            {item._route.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
+                          </div>
+                        )}
+                      </div>
+                      <ArrowRightOutlined style={{ fontSize: 10, color: SF.textMuted }} />
+                    </div>
+                  ))}
+                  {webResults.length > 3 && (
+                    <div
+                      onClick={() => setActiveTab('web')}
+                      style={{
+                        padding: '6px 16px', fontSize: 12, color: '#6C5CE7',
+                        cursor: 'pointer', fontWeight: 500, textAlign: 'center',
+                      }}
+                    >
+                      Voir tous les résultats web →
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
