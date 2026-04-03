@@ -3183,13 +3183,13 @@ export default function DashboardPageUnified() {
 
   /** Renders the embedded module component inside the dashboard shell */
   // Render any Zhiive app panel by its ID
-  const renderPanel = (appId: string) => {
+  const renderPanel = (appId: string, sidebar?: boolean) => {
     switch (appId) {
       case 'explore': return <LazyExplorePanel api={api} openModule={openModule} />;
       case 'flow': return <LazyFlowPanel api={api} currentUser={user} />;
       case 'reels': return <LazyReelsPanel api={api} currentUser={user} />;
       case 'universe': return <LazyUniversePanel api={api} currentUser={user} />;
-      case 'mail': return <LazyGoogleGmailPageV2 />;
+      case 'mail': return <LazyGoogleGmailPageV2 compact={sidebar} />;
       case 'agenda': return <LazyAgendaWrapper />;
       case 'stats': return !isFreeUser ? renderMobileAnalytics() : null;
       default: return null;
@@ -3303,16 +3303,24 @@ export default function DashboardPageUnified() {
            ═══════════════════════════════════════════════════════ */
         <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
 
-          {/* ── LEFT SIDEBAR (280px) — shows activeLeftApp ── */}
+          {/* ── LEFT SIDEBAR (280px) — all left apps stacked ── */}
           <div style={{
             width: 280, minWidth: 280, height: "100%",
             display: "flex", flexDirection: "column",
             borderRight: `1px solid ${FB.border}`, background: FB.bg,
           }}>
-            <div className="sf-sidebar" style={{ flex: 1, overflowY: leftSidebarApp === 'reels' ? "hidden" : "auto", scrollbarWidth: "none" }}>
-              <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spin /></div>}>
-                {renderPanel(leftSidebarApp)}
-              </Suspense>
+            <div className="sf-sidebar" style={{ flex: 1, overflowY: "auto", scrollbarWidth: "none" }}>
+              {[...leftApps].filter(a => a !== centerApp).reverse().map(appId => (
+                <div key={appId} style={{
+                  minHeight: appId === 'reels' ? '100%' : '60vh',
+                  borderBottom: `1px solid ${FB.border}`,
+                  display: 'flex', flexDirection: 'column',
+                }}>
+                  <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spin /></div>}>
+                    {renderPanel(appId, true)}
+                  </Suspense>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -3345,16 +3353,24 @@ export default function DashboardPageUnified() {
             </div>
           </div>
 
-          {/* ── RIGHT SIDEBAR (300px) — shows activeRightApp ── */}
+          {/* ── RIGHT SIDEBAR (300px) — all right apps stacked ── */}
           <div style={{
             width: 300, minWidth: 300, height: "100%",
             display: "flex", flexDirection: "column",
             borderLeft: `1px solid ${FB.border}`, background: FB.bg,
           }}>
             <div className="sf-sidebar" style={{ flex: 1, overflowY: "auto", scrollbarWidth: "none" }}>
-              <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spin /></div>}>
-                {renderPanel(rightSidebarApp)}
-              </Suspense>
+              {rightApps.filter(a => a !== centerApp).map(appId => (
+                <div key={appId} style={{
+                  minHeight: '60vh',
+                  borderBottom: `1px solid ${FB.border}`,
+                  display: 'flex', flexDirection: 'column',
+                }}>
+                  <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spin /></div>}>
+                    {renderPanel(appId, true)}
+                  </Suspense>
+                </div>
+              ))}
             </div>
           </div>
         </div>

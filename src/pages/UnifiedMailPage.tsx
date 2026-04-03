@@ -306,7 +306,7 @@ const SYSTEM_FOLDERS: Record<string, FolderConfig> = {
 //  COMPOSANT PRINCIPAL
 // ═══════════════════════════════════════════════════════════════
 
-const UnifiedMailPage: React.FC = () => {
+const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
   // ─── Contexte auth ───
   const { currentOrganization } = useAuth();
   // ─── Service Postal (boîte @zhiive.com) ───
@@ -327,8 +327,8 @@ const UnifiedMailPage: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [composeForm] = Form.useForm<ComposeFormData>();
   const screens = Grid.useBreakpoint();
-  const isMobile = !screens.md;
-  const isDesktop = !!screens.lg; // ≥992px : split view uniquement sur desktop
+  const isMobile = compact || !screens.md;
+  const isDesktop = !compact && !!screens.lg; // ≥992px : split view uniquement sur desktop
 
   // ─── State : sélection multiple ───
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
