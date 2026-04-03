@@ -10,6 +10,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
+import { useZhiiveNav } from '../contexts/ZhiiveNavContext';
 import { SF } from './zhiive/ZhiiveTheme';
 
 interface SearchResult {
@@ -98,6 +99,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { api } = useAuthenticatedApi();
+  const { setBrowseUrl } = useZhiiveNav();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const apiStable = useMemo(() => api, []);
 
@@ -244,13 +246,14 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
   const handleSelect = useCallback((item: SearchResult) => {
     if (item._route) {
       if (item._route.startsWith('http')) {
-        window.open(item._route, '_blank', 'noopener,noreferrer');
+        // Open web pages in-app via the embedded browser
+        setBrowseUrl(item._route);
       } else {
         navigate(item._route);
       }
     }
     onClose();
-  }, [navigate, onClose]);
+  }, [navigate, onClose, setBrowseUrl]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     const total = flatResults.length;

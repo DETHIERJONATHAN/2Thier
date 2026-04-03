@@ -27,6 +27,9 @@ interface ZhiiveNavContextType {
   /** Feed mode: 'personal' (public network) vs 'org' (internal to organisation) */
   feedMode: FeedMode;
   setFeedMode: (mode: FeedMode) => void;
+  /** In-app browser: URL to display in iframe (null = not browsing) */
+  browseUrl: string | null;
+  setBrowseUrl: (url: string | null) => void;
 }
 
 const defaultTabOrder = ['explore', 'flow', 'reels', 'mur', 'universe', 'mail', 'agenda', 'stats'];
@@ -39,6 +42,7 @@ const ZhiiveNavContext = createContext<ZhiiveNavContextType>({
   mobilePanel: 3, setMobilePanel: () => {},
   registerMobileScroll: () => {}, scrollMobileToPanel: () => {},
   feedMode: 'org', setFeedMode: () => {},
+  browseUrl: null, setBrowseUrl: () => {},
 });
 
 interface ZhiiveNavProviderProps {
@@ -53,6 +57,7 @@ export const ZhiiveNavProvider = ({ children, initialFeedMode, onFeedModeChange 
   const [tabOrder, setTabOrder] = useState<string[]>(defaultTabOrder);
   const [mobilePanel, setMobilePanel] = useState(0);
   const [feedMode, setFeedModeInternal] = useState<FeedMode>(initialFeedMode || 'org');
+  const [browseUrl, setBrowseUrl] = useState<string | null>(null);
   const mobileScrollRef = useRef<((panel: number) => void) | null>(null);
 
   // Sync tabOrder from DB once loaded — merge new tabs that didn't exist before
@@ -143,6 +148,7 @@ export const ZhiiveNavProvider = ({ children, initialFeedMode, onFeedModeChange 
     <ZhiiveNavContext.Provider value={{
       centerApp, setCenterApp,
       leftApps, rightApps, leftSidebarApp, rightSidebarApp,
+      browseUrl, setBrowseUrl,
       tabOrder, reorderTabs, mobilePanel, setMobilePanel,
       registerMobileScroll, scrollMobileToPanel, feedMode, setFeedMode,
     }}>

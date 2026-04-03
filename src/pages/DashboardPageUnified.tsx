@@ -52,6 +52,7 @@ const LazyProfilePage = React.lazy(() => import('./ProfilePage'));
 const LazySettingsPageEmbedded = React.lazy(() => import('./SettingsPageEmbedded'));
 const LazySocialSettingsAdminPage = React.lazy(() => import('./admin/SocialSettingsAdminPage'));
 const LazyZhiiveMailAdminPage = React.lazy(() => import('./admin/ZhiiveMailAdminPage'));
+const LazyWebBrowserPanel = React.lazy(() => import('../components/WebBrowserPanel'));
 
 /* ═══════════════════════════════════════════════════════════════
    ZHIIVE — Lazy-loaded panel components
@@ -1580,7 +1581,7 @@ export default function DashboardPageUnified() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Zhiive navigation (shared with header tabs via context)
-  const { centerApp, setCenterApp, leftSidebarApp, rightSidebarApp, leftApps, rightApps, registerMobileScroll, setMobilePanel: setContextMobilePanel, tabOrder, feedMode } = useZhiiveNav();
+  const { centerApp, setCenterApp, leftSidebarApp, rightSidebarApp, leftApps, rightApps, registerMobileScroll, setMobilePanel: setContextMobilePanel, tabOrder, feedMode, browseUrl, setBrowseUrl } = useZhiiveNav();
 
   // 🐝 Identité centralisée — source unique de "qui poste" (org ou personnel)
   // NE JAMAIS recalculer `feedMode === 'org' && !!currentOrganization` localement !
@@ -3104,11 +3105,20 @@ export default function DashboardPageUnified() {
             </div>
           </div>
 
-          {/* ── CENTER (flex: 1) — Wall by default, or selected app / CRM module ── */}
+          {/* ── CENTER (flex: 1) — Wall by default, or selected app / CRM module / web browser ── */}
           <div style={{
-            flex: 1, minWidth: 0, overflowY: "auto", padding: "4px 16px",
+            flex: 1, minWidth: 0, overflowY: browseUrl ? "hidden" : "auto", padding: browseUrl ? 0 : "4px 16px",
+            display: 'flex', flexDirection: 'column',
           }}>
-            <div style={{ maxWidth: '100%', margin: "0 auto" }}>
+            {browseUrl ? (
+              <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
+                <LazyWebBrowserPanel
+                  url={browseUrl}
+                  onClose={() => setBrowseUrl(null)}
+                />
+              </Suspense>
+            ) : (
+            <div style={{ maxWidth: '100%', margin: "0 auto", flex: 1 }}>
               {activeModule ? (
                 <>
                   {renderFeed()}
@@ -3127,6 +3137,7 @@ export default function DashboardPageUnified() {
                 </>
               )}
             </div>
+            )}
           </div>
 
           {/* ── RIGHT SIDEBAR (300px) — shows activeRightApp ── */}

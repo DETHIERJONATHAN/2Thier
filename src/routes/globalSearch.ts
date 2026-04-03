@@ -291,4 +291,109 @@ router.get('/web', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════
+// GET /api/search/browse-proxy?url=<encoded_url>
+// Proxy pour afficher des pages web dans un iframe in-app
+// Contourne X-Frame-Options / CSP en servant le HTML via notre domaine
+// ═══════════════════════════════════════════════════════════════
+const BROWSE_RATE_LIMIT = new Map<string, { count: number; resetAt: number }>();
+const MAX_BROWSE_PER_MINUTE = 30;
+
+// Security: block internal/private IPs
+function isUrlAllowed(urlStr: string): boolean {
+  try {
+    const parsed = new URL(urlStr);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return false;
+    const host = parsed.hostname.toLowerCase();
+    // Block private ranges
+    if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host === '::1') return false;
+    if (host.startsWith('10.') || host.startsWith('192.168.') || host.startsWith('172.')) return false;
+    if (host.endsWith('.local') || host.endsWith('.internal')) return false;
+    // Block cloud metadata endpoints
+    if (host === '169.254.169.254' || host === 'metadata.google.internal') return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+router.get('/browse-proxy', async (req: Request, res: Response): Promise<void> => {
+  const user = (req as any).user;
+  if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
+
+  const targetUrl = (req.query.url as string || '').trim();
+  if (!targetUrl) { res.status(400).json({ error: 'URL manquante' }); return; }
+
+  // Validate URL
+  if (!isUrlAllowed(targetUrl)) {
+    res.status(403).json({ error: 'URL non autorisée' });
+    return;
+  }
+
+  // Rate limiting per user
+  const now = Date.now();
+  const userLimit = BROWSE_RATE_LIMIT.get(user.id);
+  if (userLimit && userLimit.resetAt > now) {
+    if (userLimit.count >= MAX_BROWSE_PER_MINUTE) {
+      res.status(429).json({ error: 'Trop de requêtes. Réessayez dans un instant.' });
+      return;
+    }
+    userLimit.count++;
+  } else {
+    BROWSE_RATE_LIMIT.set(user.id, { count: 1, resetAt: now + 60000 });
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
+
+    const response = await fetch(targetUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; ZhiiveBrowser/1.0)',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'fr,en;q=0.5',
+      },
+      signal: controller.signal,
+      redirect: 'follow',
+    });
+    clearTimeout(timeout);
+
+    const contentType = response.headers.get('content-type') || '';
+
+    // For HTML content: inject <base> tag and serve without restrictive headers
+    if (contentType.includes('text/html') || contentType.includes('application/xhtml')) {
+      let html = await response.text();
+
+      // Inject <base> tag so relative resources (CSS, JS, images) resolve correctly
+      const baseTag = `<base href="${targetUrl}">`;
+      if (html.includes('<head>')) {
+        html = html.replace('<head>', `<head>${baseTag}`);
+      } else if (html.includes('<HEAD>')) {
+        html = html.replace('<HEAD>', `<HEAD>${baseTag}`);
+      } else {
+        html = baseTag + html;
+      }
+
+      // Serve with permissive headers — no X-Frame-Options, no restrictive CSP
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.removeHeader('X-Frame-Options');
+      res.setHeader('Content-Security-Policy', "frame-ancestors 'self'");
+      res.send(html);
+    } else {
+      // For non-HTML (images, PDFs, etc): pipe through
+      res.setHeader('Content-Type', contentType);
+      res.removeHeader('X-Frame-Options');
+      const buffer = Buffer.from(await response.arrayBuffer());
+      res.send(buffer);
+    }
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      res.status(504).json({ error: 'La page ne répond pas' });
+    } else {
+      console.warn('[BROWSE PROXY] Error:', err.message);
+      res.status(502).json({ error: 'Impossible de charger cette page' });
+    }
+  }
+});
+
 export default router;
