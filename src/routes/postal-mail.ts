@@ -39,8 +39,9 @@ async function isPostalApiConfigured(): Promise<boolean> {
   if (postalApiChecked) return postalApiVerified;
 
   // Vérifier une seule fois si l'API répond vraiment
+  // On utilise /api/v1/send/message avec un body vide — retourne "NoRecipients" si l'API est active
   try {
-    const resp = await fetch(`${process.env.POSTAL_API_URL}/api/v1/server/message_queue`, {
+    const resp = await fetch(`${process.env.POSTAL_API_URL}/api/v1/send/message`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -49,9 +50,13 @@ async function isPostalApiConfigured(): Promise<boolean> {
       body: '{}',
       signal: AbortSignal.timeout(5000),
     });
-    postalApiVerified = resp.ok || resp.status === 401; // 401 = API active mais mauvaise clé
+    // L'API est fonctionnelle si on reçoit une réponse JSON (même une erreur NoRecipients)
+    const contentType = resp.headers.get('content-type') || '';
+    postalApiVerified = contentType.includes('application/json');
     if (!postalApiVerified) {
-      console.warn(`⚠️ [POSTAL] API REST non fonctionnelle (${resp.status}) — utilisation SMTP direct`);
+      console.warn(`⚠️ [POSTAL] API REST non fonctionnelle (${resp.status}, content-type: ${contentType}) — utilisation SMTP direct`);
+    } else {
+      console.log('✅ [POSTAL] API REST vérifiée et fonctionnelle');
     }
   } catch {
     console.warn('⚠️ [POSTAL] API REST inaccessible — utilisation SMTP direct');
