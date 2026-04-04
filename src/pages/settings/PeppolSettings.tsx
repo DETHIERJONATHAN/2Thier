@@ -19,6 +19,7 @@ import {
   ExclamationCircleOutlined,
   StopOutlined,
   DeleteOutlined,
+  MobileOutlined,
 } from '@ant-design/icons';
 
 const FB = {
@@ -71,6 +72,7 @@ interface VatLookupResult {
 
 const STATUS_MAP: Record<string, { color: string; label: string; icon: React.ReactNode }> = {
   NOT_REGISTERED: { color: 'default', label: 'Non enregistré', icon: <CloseCircleOutlined /> },
+  VERIFICATION_NEEDED: { color: 'warning', label: 'Vérification SMS requise', icon: <MobileOutlined /> },
   PENDING: { color: 'processing', label: 'En cours d\'activation', icon: <SyncOutlined spin /> },
   ACTIVE: { color: 'success', label: 'Actif sur Peppol (chez nous)', icon: <CheckCircleOutlined /> },
   REJECTED: { color: 'error', label: 'Rejeté', icon: <CloseCircleOutlined /> },
@@ -115,6 +117,19 @@ const PeppolSettings: React.FC = () => {
   const [deregistering, setDeregistering] = useState(false);
   const [showDeregisterModal, setShowDeregisterModal] = useState(false);
   const [registeredAt, setRegisteredAt] = useState<string | null>(null);
+  const [smsCode, setSmsCode] = useState('');
+  const [sendingSms, setSendingSms] = useState(false);
+  const [verifyingCode, setVerifyingCode] = useState(false);
+
+  // ── Responsive mobile detection ──
+  const [windowWidth, setWindowWidth] = useState(() => typeof window !== 'undefined' ? window.innerWidth : 1024);
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+  const isMobile = windowWidth < 640;
+  const cardPad = isMobile ? 12 : 20;
 
   const handleVatLookup = useCallback(async (vat?: string) => {
     const vatToLookup = vat || vatInput;
@@ -196,6 +211,44 @@ const PeppolSettings: React.FC = () => {
     }
   }, [api]);
 
+  const handleSendSmsCode = useCallback(async () => {
+    try {
+      setSendingSms(true);
+      const result = await api.post<ApiResponse<unknown>>('/api/peppol/send-verification-code', {});
+      if (result?.success) {
+        message.success('SMS de vérification envoyé à votre numéro de téléphone');
+      } else {
+        message.error(result?.message || 'Erreur lors de l\'envoi du SMS');
+      }
+    } catch (error) {
+      message.error(`Erreur: ${(error as Error).message}`);
+    } finally {
+      setSendingSms(false);
+    }
+  }, [api]);
+
+  const handleVerifyCode = useCallback(async () => {
+    if (!smsCode || smsCode.length < 4) {
+      message.warning('Entrez le code de vérification reçu par SMS');
+      return;
+    }
+    try {
+      setVerifyingCode(true);
+      const result = await api.post<ApiResponse<{ registrationStatus: string }>>('/api/peppol/verify-code', { code: smsCode });
+      if (result?.success) {
+        message.success(result.message || 'Code vérifié !');
+        setConfig(prev => ({ ...prev, registrationStatus: result.data.registrationStatus }));
+        setSmsCode('');
+      } else {
+        message.error(result?.message || 'Code incorrect');
+      }
+    } catch (error) {
+      message.error(`Erreur: ${(error as Error).message}`);
+    } finally {
+      setVerifyingCode(false);
+    }
+  }, [smsCode, api]);
+
   const fetchConfig = useCallback(async () => {
     try {
       setLoading(true);
@@ -272,12 +325,19 @@ const PeppolSettings: React.FC = () => {
       // Then register
       const result = await api.post<ApiResponse<{ registrationStatus: string; registeredAt?: string }>>('/api/peppol/register', {});
       if (result?.success) {
-        message.success('Demande d\'enregistrement Peppol envoyée !');
+        const newStatus = result.data.registrationStatus;
         setConfig(prev => ({
           ...prev,
           enabled: true,
-          registrationStatus: result.data.registrationStatus === 'ACTIVE' ? 'ACTIVE' : 'PENDING',
+          registrationStatus: newStatus,
         }));
+        if (newStatus === 'VERIFICATION_NEEDED') {
+          message.info('Enregistrement lancé ! Un SMS de vérification va être envoyé.');
+        } else if (newStatus === 'ACTIVE') {
+          message.success('Peppol activé avec succès !');
+        } else {
+          message.success('Demande d\'enregistrement Peppol envoyée !');
+        }
       } else {
         // Cas 409 : enregistré ailleurs
         const data = (result as any)?.data;
@@ -340,7 +400,7 @@ const PeppolSettings: React.FC = () => {
 
   // 🔄 Auto-polling pendant les états de transition (PENDING / MIGRATION_PENDING)
   useEffect(() => {
-    const isTransitioning = config.registrationStatus === 'PENDING' || config.registrationStatus === 'MIGRATION_PENDING';
+    const isTransitioning = config.registrationStatus === 'PENDING' || config.registrationStatus === 'MIGRATION_PENDING' || config.registrationStatus === 'VERIFICATION_NEEDED';
     if (!isTransitioning || !currentOrganization?.id || currentOrganization.id === 'all') return;
 
     const intervalId = setInterval(() => {
@@ -385,25 +445,27 @@ const PeppolSettings: React.FC = () => {
   const isRegistered = config.registrationStatus === 'ACTIVE';
 
   return (
-    <div style={{ maxWidth: 720 }}>
+    <div style={{ maxWidth: 720, width: '100%', padding: isMobile ? '0 4px' : undefined }}>
       {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: FB.text }}>
+      <div style={{ marginBottom: isMobile ? 16 : 24 }}>
+        <h2 style={{ margin: 0, fontSize: isMobile ? 17 : 20, fontWeight: 700, color: FB.text }}>
           <SendOutlined style={{ marginRight: 8 }} />
           e-Facturation Peppol
         </h2>
-        <p style={{ margin: '4px 0 0', color: FB.textSecondary, fontSize: 14 }}>
-          Envoyez et recevez des factures électroniques via le réseau Peppol (obligatoire B2B en Belgique).
+        <p style={{ margin: '4px 0 0', color: FB.textSecondary, fontSize: isMobile ? 13 : 14 }}>
+          {isMobile
+            ? 'Factures électroniques via Peppol (obligatoire B2B Belgique).'
+            : 'Envoyez et recevez des factures électroniques via le réseau Peppol (obligatoire B2B en Belgique).'}
         </p>
       </div>
 
       {/* Statut du service */}
-      <div style={{ background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow, padding: 16, marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <CloudServerOutlined style={{ fontSize: 20, color: serviceHealthy ? FB.green : FB.danger }} />
+      <div style={{ background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow, padding: isMobile ? 12 : 16, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: isMobile ? 'flex-start' : 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: isMobile ? 8 : 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 12 }}>
+            <CloudServerOutlined style={{ fontSize: isMobile ? 18 : 20, color: serviceHealthy ? FB.green : FB.danger }} />
             <div>
-              <div style={{ fontWeight: 600, color: FB.text }}>Service Peppol</div>
+              <div style={{ fontWeight: 600, color: FB.text, fontSize: isMobile ? 13 : 14 }}>Service Peppol</div>
               <div style={{ fontSize: 12, color: FB.textSecondary }}>
                 {checkingHealth ? 'Vérification...' : serviceHealthy ? 'Connecté' : 'Non disponible'}
               </div>
@@ -483,6 +545,61 @@ const PeppolSettings: React.FC = () => {
           </div>
         )}
 
+        {config.registrationStatus === 'VERIFICATION_NEEDED' && (
+          <div style={{
+            marginTop: 10, padding: '12px 16px', borderRadius: 6,
+            background: FB.warningBg, border: `1px solid ${FB.warningBorder}`, fontSize: 13,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <MobileOutlined style={{ color: FB.orange, fontSize: 16 }} />
+              <strong style={{ color: FB.warningText }}>Vérification SMS requise</strong>
+            </div>
+            <p style={{ margin: '4px 0 12px', color: FB.warningText }}>
+              Un code de vérification a été envoyé par SMS au numéro renseigné.
+              Entrez le code ci-dessous pour finaliser votre inscription Peppol.
+            </p>
+            <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 8, alignItems: isMobile ? 'stretch' : 'center', marginBottom: 8 }}>
+              <input
+                type="text"
+                value={smsCode}
+                onChange={(e) => setSmsCode(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleVerifyCode(); }}
+                placeholder="Code SMS (6 chiffres)"
+                maxLength={10}
+                style={{
+                  width: isMobile ? '100%' : 180, padding: '10px 12px', borderRadius: 6,
+                  border: `1px solid ${FB.border}`, fontSize: 18, letterSpacing: 4,
+                  textAlign: 'center', fontWeight: 700, boxSizing: 'border-box',
+                }}
+              />
+              <button
+                onClick={handleVerifyCode}
+                disabled={verifyingCode || smsCode.length < 4}
+                style={{
+                  padding: isMobile ? '12px 16px' : '8px 16px', borderRadius: 6, border: 'none',
+                  background: FB.green, color: '#fff', fontWeight: 600,
+                  fontSize: 14, cursor: verifyingCode ? 'wait' : 'pointer',
+                  opacity: (verifyingCode || smsCode.length < 4) ? 0.7 : 1,
+                }}
+              >
+                {verifyingCode ? <LoadingOutlined /> : <CheckCircleOutlined />}
+                {' '}Vérifier
+              </button>
+            </div>
+            <button
+              onClick={handleSendSmsCode}
+              disabled={sendingSms}
+              style={{
+                background: 'none', border: 'none', cursor: sendingSms ? 'wait' : 'pointer',
+                color: FB.blue, fontSize: 12, padding: 0, textDecoration: 'underline',
+              }}
+            >
+              {sendingSms ? <LoadingOutlined style={{ marginRight: 4 }} /> : null}
+              Renvoyer le code SMS
+            </button>
+          </div>
+        )}
+
         {config.registrationStatus === 'PENDING' && (
           <div style={{
             marginTop: 10, padding: '12px 16px', borderRadius: 6,
@@ -515,7 +632,7 @@ const PeppolSettings: React.FC = () => {
       </div>
 
       {/* Configuration */}
-      <div style={{ background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow, padding: 20, marginBottom: 16 }}>
+      <div style={{ background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow, padding: cardPad, marginBottom: 16 }}>
         <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 600, color: FB.text }}>
           <SafetyCertificateOutlined style={{ marginRight: 8 }} />
           Identification Peppol
@@ -530,7 +647,7 @@ const PeppolSettings: React.FC = () => {
                 <SearchOutlined style={{ marginRight: 6 }} />
                 Recherche par numéro de TVA
               </label>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 8 }}>
                 <input
                   type="text"
                   value={vatInput}
@@ -538,7 +655,7 @@ const PeppolSettings: React.FC = () => {
                   onKeyDown={(e) => { if (e.key === 'Enter') handleVatLookup(); }}
                   placeholder="BE0123456789 ou 0123.456.789"
                   style={{
-                    flex: 1, padding: '8px 12px', borderRadius: 6,
+                    flex: 1, padding: '10px 12px', borderRadius: 6,
                     border: `1px solid ${FB.border}`, fontSize: 14, boxSizing: 'border-box',
                   }}
                 />
@@ -546,9 +663,9 @@ const PeppolSettings: React.FC = () => {
                   onClick={() => handleVatLookup()}
                   disabled={lookingUp}
                   style={{
-                    padding: '8px 16px', borderRadius: 6, border: 'none',
+                    padding: isMobile ? '12px 16px' : '8px 16px', borderRadius: 6, border: 'none',
                     background: FB.blue, color: '#fff', fontWeight: 600,
-                    fontSize: 13, cursor: lookingUp ? 'wait' : 'pointer',
+                    fontSize: 14, cursor: lookingUp ? 'wait' : 'pointer',
                     opacity: lookingUp ? 0.7 : 1, whiteSpace: 'nowrap',
                   }}
                 >
@@ -747,7 +864,7 @@ const PeppolSettings: React.FC = () => {
       </div>
 
       {/* Options d'automatisation */}
-      <div style={{ background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow, padding: 20, marginBottom: 16 }}>
+      <div style={{ background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow, padding: cardPad, marginBottom: 16 }}>
         <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 600, color: FB.text }}>
           Options d'automatisation
         </h3>
@@ -792,13 +909,13 @@ const PeppolSettings: React.FC = () => {
       </div>
 
       {/* Actions */}
-      <div style={{ display: 'flex', gap: 12 }}>
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 12 }}>
         <button
           onClick={handleSave}
           disabled={saving}
           style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            padding: '10px 20px', borderRadius: 6, border: 'none',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            padding: isMobile ? '12px 20px' : '10px 20px', borderRadius: 6, border: 'none',
             background: FB.blue, color: '#fff', fontWeight: 600,
             fontSize: 14, cursor: saving ? 'wait' : 'pointer',
             opacity: saving ? 0.7 : 1,
@@ -808,13 +925,13 @@ const PeppolSettings: React.FC = () => {
           Sauvegarder
         </button>
 
-        {!isRegistered && config.registrationStatus !== 'PENDING' && (
+        {!isRegistered && config.registrationStatus !== 'PENDING' && config.registrationStatus !== 'VERIFICATION_NEEDED' && (
           <button
             onClick={handleRegister}
             disabled={registering || !serviceHealthy}
             style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '10px 20px', borderRadius: 6, border: 'none',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              padding: isMobile ? '12px 20px' : '10px 20px', borderRadius: 6, border: 'none',
               background: FB.green, color: '#fff', fontWeight: 600,
               fontSize: 14, cursor: registering ? 'wait' : 'pointer',
               opacity: (registering || !serviceHealthy) ? 0.7 : 1,
@@ -825,13 +942,13 @@ const PeppolSettings: React.FC = () => {
           </button>
         )}
 
-        {(isRegistered || config.registrationStatus === 'PENDING') && (
+        {(isRegistered || config.registrationStatus === 'PENDING' || config.registrationStatus === 'VERIFICATION_NEEDED') && (
           <button
             onClick={() => setShowDeregisterModal(true)}
             disabled={deregistering}
             style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '10px 20px', borderRadius: 6,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              padding: isMobile ? '12px 20px' : '10px 20px', borderRadius: 6,
               border: `1px solid ${FB.danger}`,
               background: FB.white, color: FB.danger, fontWeight: 600,
               fontSize: 14, cursor: deregistering ? 'wait' : 'pointer',
@@ -846,7 +963,7 @@ const PeppolSettings: React.FC = () => {
 
       {/* Info box */}
       <div style={{
-        marginTop: 24, padding: 16, borderRadius: FB.radius,
+        marginTop: isMobile ? 16 : 24, padding: isMobile ? 12 : 16, borderRadius: FB.radius,
         background: FB.infoBg, border: `1px solid ${FB.infoBorder}`,
       }}>
         <div style={{ fontSize: 13, color: FB.infoTitle }}>

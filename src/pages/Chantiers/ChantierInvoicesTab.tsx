@@ -490,8 +490,8 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
             </Button>
           )}
           {record.peppolStatus && (
-            <Tag color={record.peppolStatus === 'DONE' ? 'success' : record.peppolStatus === 'ERROR' ? 'error' : 'processing'}>
-              {record.peppolStatus === 'DONE' ? '✅ Peppol' : record.peppolStatus === 'ERROR' ? '❌ Peppol' : '⏳ Peppol'}
+            <Tag color={(record.peppolStatus === 'SENT' || record.peppolStatus === 'DONE') ? 'success' : record.peppolStatus === 'ERROR' ? 'error' : 'processing'}>
+              {record.peppolStatus === 'DONE' ? '✅ Peppol Délivré' : record.peppolStatus === 'SENT' ? '✅ Peppol' : record.peppolStatus === 'ERROR' ? '❌ Peppol' : '⏳ Peppol'}
             </Tag>
           )}
           <Button size="small" icon={<EditOutlined />} onClick={() => handleOpenModal(record)} />

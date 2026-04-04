@@ -28,7 +28,7 @@ export const checkTransitionStatuses = cron.schedule('*/30 * * * *', async () =>
   try {
     const configs = await db.peppolConfig.findMany({
       where: {
-        registrationStatus: { in: ['PENDING', 'MIGRATION_PENDING'] },
+        registrationStatus: { in: ['PENDING', 'MIGRATION_PENDING', 'VERIFICATION_NEEDED'] },
         peppolEndpoint: { not: null },
       },
       include: {
@@ -77,6 +77,16 @@ export const checkTransitionStatuses = cron.schedule('*/30 * * * *', async () =>
                 updateData.registrationStatus = 'ACTIVE';
                 updateData.enabled = true;
                 console.log(`${LOG_PREFIX} ✅ ${orgName}: ${oldStatus} → ACTIVE (confirmé par Odoo AP)`);
+              } else if (odooStatus === 'pending') {
+                if (oldStatus !== 'PENDING') {
+                  updateData.registrationStatus = 'PENDING';
+                  console.log(`${LOG_PREFIX} ⏳ ${orgName}: ${oldStatus} → PENDING (Odoo confirme pending)`);
+                }
+              } else if (odooStatus === 'not_verified' || odooStatus === 'sent_verification') {
+                if (oldStatus !== 'VERIFICATION_NEEDED') {
+                  updateData.registrationStatus = 'VERIFICATION_NEEDED';
+                  console.log(`${LOG_PREFIX} 📱 ${orgName}: ${oldStatus} → VERIFICATION_NEEDED (SMS requis)`);
+                }
               } else if (odooStatus === 'not_registered' && oldStatus === 'MIGRATION_PENDING') {
                 // L'ancien AP a libéré le numéro, mais notre enregistrement n'est pas encore fait
                 console.log(`${LOG_PREFIX} 🔓 ${orgName}: ancien AP a libéré le numéro — prêt pour enregistrement`);
@@ -257,19 +267,47 @@ export const fetchIncomingInvoices = cron.schedule('0 */4 * * *', async () => {
 
 /**
  * Vérifie le statut de livraison des factures Peppol en cours (PROCESSING)
- * Toutes les 5 minutes — notifie l'utilisateur quand ça passe à SENT/DELIVERED
+ * Toutes les 2 minutes — détecte et corrige automatiquement les factures bloquées
+ * 
+ * Gère 3 cas critiques :
+ *   1. Odoo peppol_move_state = 'done'  → SENT + notification
+ *   2. Odoo peppol_move_state = 'error' → ERROR + notification
+ *   3. Odoo peppol_move_state = 'ready' → Re-trigger l'envoi Peppol (retry auto)
+ *   4. Facture PROCESSING > 30 min sans changement → Alerte utilisateur
  */
-export const checkInvoiceDeliveryStatuses = cron.schedule('*/5 * * * *', async () => {
+const MAX_PEPPOL_RETRIES = 5;
+const STUCK_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+
+export const checkInvoiceDeliveryStatuses = cron.schedule('*/2 * * * *', async () => {
   try {
-    // 1. Trouver toutes les factures PROCESSING
+    // 1. Trouver les factures PROCESSING + ERROR récentes (< 24h) pour rechecks
+    const recentErrorCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const [standaloneInvoices, chantierInvoices] = await Promise.all([
       db.standaloneInvoice.findMany({
-        where: { peppolStatus: 'PROCESSING' },
-        select: { id: true, invoiceNumber: true, organizationId: true, clientName: true, totalAmount: true, createdById: true, peppolSentAt: true },
+        where: {
+          OR: [
+            { peppolStatus: 'PROCESSING' },
+            { peppolStatus: 'ERROR', peppolSentAt: { gte: recentErrorCutoff } },
+          ],
+        },
+        select: {
+          id: true, invoiceNumber: true, organizationId: true, clientName: true,
+          totalAmount: true, createdById: true, peppolSentAt: true,
+          peppolRetryCount: true, peppolOdooInvoiceId: true, peppolStatus: true,
+        },
       }),
       db.chantierInvoice.findMany({
-        where: { peppolStatus: 'PROCESSING' },
-        select: { id: true, invoiceNumber: true, organizationId: true, label: true, amount: true, peppolSentAt: true },
+        where: {
+          OR: [
+            { peppolStatus: 'PROCESSING' },
+            { peppolStatus: 'ERROR', peppolSentAt: { gte: recentErrorCutoff } },
+          ],
+        },
+        select: {
+          id: true, invoiceNumber: true, organizationId: true, label: true,
+          amount: true, peppolSentAt: true,
+          peppolRetryCount: true, peppolOdooInvoiceId: true, peppolStatus: true,
+        },
       }),
     ]);
 
@@ -295,11 +333,12 @@ export const checkInvoiceDeliveryStatuses = cron.schedule('*/5 * * * *', async (
         const bridge = getPeppolBridge();
 
         // Récupérer TOUTES les factures out_invoice de cette company dans Odoo
+        // INCLURE 'ready', 'processing' pour détecter les envois et les recoveries
         const odooInvoices = await bridge.call('account.move', 'search_read', [
           [
             ['company_id', '=', peppolConfig.odooCompanyId],
             ['move_type', '=', 'out_invoice'],
-            ['peppol_move_state', 'in', ['done', 'error', 'to_send']],
+            ['peppol_move_state', 'in', ['done', 'error', 'to_send', 'ready', 'processing']],
           ],
         ], { fields: ['name', 'ref', 'peppol_move_state', 'peppol_message_uuid'] }) as Array<{
           id: number; name: string; ref?: string; peppol_move_state: string; peppol_message_uuid?: string;
@@ -317,103 +356,238 @@ export const checkInvoiceDeliveryStatuses = cron.schedule('*/5 * * * *', async (
           return odooByName.get(invoiceNumber) || odooByRef.get(invoiceNumber);
         };
 
-        // 3. Vérifier les standalone invoices de cette org
+        /**
+         * Tente de re-trigger l'envoi Peppol dans Odoo quand peppol_move_state = 'ready'
+         * Utilise le wizard account.move.send (Odoo 17) — la seule méthode qui fonctionne
+         */
+        const retriggerPeppolSend = async (odooInvoiceId: number, invoiceNumber: string | null): Promise<boolean> => {
+          try {
+            console.log(`${LOG_PREFIX} 🔄 Re-trigger Peppol send via wizard pour Odoo invoice ${odooInvoiceId} (${invoiceNumber})...`);
+            const success = await bridge.sendViaWizard(odooInvoiceId, peppolConfig.odooCompanyId!);
+            if (success) {
+              console.log(`${LOG_PREFIX} ✅ Re-trigger réussi pour ${invoiceNumber}`);
+            } else {
+              console.warn(`${LOG_PREFIX} ⚠️ Re-trigger wizard retourné false pour ${invoiceNumber}`);
+            }
+            return success;
+          } catch (err) {
+            console.error(`${LOG_PREFIX} ❌ Re-trigger échoué pour ${invoiceNumber}:`, (err as Error).message);
+            return false;
+          }
+        };
+
+        /**
+         * Gère le traitement d'une facture selon l'état Odoo
+         */
+        const processInvoice = async (
+          inv: { id: string; invoiceNumber: string | null; peppolSentAt: Date | null; peppolRetryCount: number; peppolOdooInvoiceId: number | null; createdById?: string | null; peppolStatus?: string | null },
+          type: 'standalone' | 'chantier',
+          displayName: string,
+          amount: number,
+        ) => {
+          const odooMatch = findOdooMatch(inv.invoiceNumber);
+          const now = Date.now();
+          const sentAt = inv.peppolSentAt ? new Date(inv.peppolSentAt).getTime() : now;
+          const isStuck = (now - sentAt) > STUCK_THRESHOLD_MS;
+
+          if (odooMatch) {
+            const odooState = odooMatch.peppol_move_state;
+
+            if (odooState === 'done') {
+              // ✅ DELIVERED !
+              const updateData = {
+                peppolStatus: 'SENT' as const,
+                peppolMessageId: odooMatch.peppol_message_uuid || inv.id,
+                peppolError: null,
+                ...(type === 'chantier' ? { updatedAt: new Date() } : {}),
+              };
+
+              if (type === 'standalone') {
+                await db.standaloneInvoice.update({ where: { id: inv.id }, data: updateData });
+              } else {
+                await db.chantierInvoice.update({ where: { id: inv.id }, data: updateData });
+              }
+
+              console.log(`${LOG_PREFIX} ✅ Facture ${inv.invoiceNumber} → SENT (Peppol delivered)`);
+
+              // Notification
+              const targetUserId = inv.createdById || undefined;
+              if (targetUserId) {
+                await notify.peppolInvoiceDelivered(orgId, {
+                  invoiceNumber: inv.invoiceNumber || inv.id,
+                  clientName: displayName,
+                  amount,
+                }, targetUserId, inv.id);
+
+                await sendPushToUser(targetUserId, {
+                  title: '✅ Facture Peppol envoyée',
+                  body: `${inv.invoiceNumber} (${displayName}) a été livrée via Peppol`,
+                  icon: '/icons/peppol-success.png',
+                  tag: `peppol-sent-${inv.id}`,
+                  url: `/facture?id=${inv.id}`,
+                  type: 'peppol_delivered',
+                });
+              }
+
+            } else if (odooState === 'error') {
+              // ❌ ERROR — only update if not already ERROR (avoid re-notifying)
+              if (inv.peppolStatus !== 'ERROR') {
+                const updateData = {
+                  peppolStatus: 'ERROR' as const,
+                  peppolError: 'Erreur détectée par Odoo lors de la livraison Peppol',
+                  ...(type === 'chantier' ? { updatedAt: new Date() } : {}),
+                };
+
+                if (type === 'standalone') {
+                  await db.standaloneInvoice.update({ where: { id: inv.id }, data: updateData });
+                } else {
+                  await db.chantierInvoice.update({ where: { id: inv.id }, data: updateData });
+                }
+
+                console.warn(`${LOG_PREFIX} ❌ Facture ${inv.invoiceNumber} → ERROR (Odoo peppol_move_state=error)`);
+
+                const targetUserId = inv.createdById || undefined;
+                if (targetUserId) {
+                  await sendPushToUser(targetUserId, {
+                    title: '❌ Erreur Peppol',
+                    body: `${inv.invoiceNumber} n'a pas pu être livrée via Peppol`,
+                    icon: '/icons/peppol-error.png',
+                    tag: `peppol-error-${inv.id}`,
+                    url: `/facture?id=${inv.id}`,
+                  type: 'peppol_error',
+                });
+              }
+              } // end if not already ERROR
+
+            } else if (odooState === 'processing') {
+              // 🔄 Odoo est en train de traiter — si Zhiive dit ERROR, c'était prématuré → revert to PROCESSING
+              if (inv.peppolStatus === 'ERROR') {
+                const updateData = {
+                  peppolStatus: 'PROCESSING' as const,
+                  peppolError: 'Odoo traite encore la facture — statut corrigé automatiquement',
+                  ...(type === 'chantier' ? { updatedAt: new Date() } : {}),
+                };
+                if (type === 'standalone') {
+                  await db.standaloneInvoice.update({ where: { id: inv.id }, data: updateData });
+                } else {
+                  await db.chantierInvoice.update({ where: { id: inv.id }, data: updateData });
+                }
+                console.log(`${LOG_PREFIX} 🔄 Facture ${inv.invoiceNumber}: ERROR → PROCESSING (Odoo dit processing, recovery auto)`);
+              }
+              // Sinon, déjà PROCESSING dans Zhiive — rien à faire
+
+            } else if (odooState === 'ready' || odooState === 'to_send') {
+              // 🔄 L'envoi Peppol n'a jamais été déclenché ou est bloqué → RETRY AUTO
+              if (inv.peppolRetryCount < MAX_PEPPOL_RETRIES) {
+                const newRetryCount = inv.peppolRetryCount + 1;
+                console.warn(`${LOG_PREFIX} ⚠️ Facture ${inv.invoiceNumber}: Odoo state="${odooState}" — retry ${newRetryCount}/${MAX_PEPPOL_RETRIES}`);
+
+                const retriggerSuccess = await retriggerPeppolSend(odooMatch.id, inv.invoiceNumber);
+
+                const updateData = {
+                  peppolRetryCount: newRetryCount,
+                  peppolOdooInvoiceId: odooMatch.id,
+                  peppolError: retriggerSuccess
+                    ? `Retry ${newRetryCount}/${MAX_PEPPOL_RETRIES} — re-trigger envoyé`
+                    : `Retry ${newRetryCount}/${MAX_PEPPOL_RETRIES} — re-trigger échoué`,
+                  ...(type === 'chantier' ? { updatedAt: new Date() } : {}),
+                };
+
+                if (type === 'standalone') {
+                  await db.standaloneInvoice.update({ where: { id: inv.id }, data: updateData });
+                } else {
+                  await db.chantierInvoice.update({ where: { id: inv.id }, data: updateData });
+                }
+              } else {
+                // Max retries atteint → ERROR
+                console.error(`${LOG_PREFIX} 🚨 Facture ${inv.invoiceNumber}: MAX RETRIES (${MAX_PEPPOL_RETRIES}) atteint → ERROR`);
+
+                const updateData = {
+                  peppolStatus: 'ERROR' as const,
+                  peppolError: `Échec après ${MAX_PEPPOL_RETRIES} tentatives. L'envoi Peppol via Odoo n'a pas abouti (state: ${odooState}). Contactez le support.`,
+                  ...(type === 'chantier' ? { updatedAt: new Date() } : {}),
+                };
+
+                if (type === 'standalone') {
+                  await db.standaloneInvoice.update({ where: { id: inv.id }, data: updateData });
+                } else {
+                  await db.chantierInvoice.update({ where: { id: inv.id }, data: updateData });
+                }
+
+                const targetUserId = inv.createdById || undefined;
+                if (targetUserId) {
+                  await sendPushToUser(targetUserId, {
+                    title: '🚨 Peppol: échec définitif',
+                    body: `${inv.invoiceNumber} n'a pas pu être envoyée après ${MAX_PEPPOL_RETRIES} tentatives`,
+                    icon: '/icons/peppol-error.png',
+                    tag: `peppol-maxretry-${inv.id}`,
+                    url: `/facture?id=${inv.id}`,
+                    type: 'peppol_error',
+                  });
+                }
+              }
+            }
+          } else if (isStuck) {
+            // Pas trouvé dans Odoo ET bloqué depuis > 30 min → Alerte
+            console.warn(`${LOG_PREFIX} 🚨 Facture ${inv.invoiceNumber} PROCESSING depuis ${Math.round((now - sentAt) / 60000)} min — non trouvée dans Odoo !`);
+
+            if (inv.peppolRetryCount >= MAX_PEPPOL_RETRIES) {
+              // Max retries + pas dans Odoo → ERROR définitif
+              const updateData = {
+                peppolStatus: 'ERROR' as const,
+                peppolError: `Facture introuvable dans Odoo après ${MAX_PEPPOL_RETRIES} tentatives. Réessayez manuellement.`,
+                ...(type === 'chantier' ? { updatedAt: new Date() } : {}),
+              };
+
+              if (type === 'standalone') {
+                await db.standaloneInvoice.update({ where: { id: inv.id }, data: updateData });
+              } else {
+                await db.chantierInvoice.update({ where: { id: inv.id }, data: updateData });
+              }
+            } else {
+              // Juste mettre à jour l'erreur pour info mais laisser en PROCESSING
+              const updateData = {
+                peppolError: `⏳ En attente depuis ${Math.round((now - sentAt) / 60000)} min — vérification en cours`,
+                ...(type === 'chantier' ? { updatedAt: new Date() } : {}),
+              };
+
+              if (type === 'standalone') {
+                await db.standaloneInvoice.update({ where: { id: inv.id }, data: updateData });
+              } else {
+                await db.chantierInvoice.update({ where: { id: inv.id }, data: updateData });
+              }
+
+              // Notifier après 30 min
+              const targetUserId = inv.createdById || undefined;
+              if (targetUserId && inv.peppolRetryCount === 0) {
+                await sendPushToUser(targetUserId, {
+                  title: '⏳ Peppol: envoi lent',
+                  body: `${inv.invoiceNumber} est en cours d'envoi depuis ${Math.round((now - sentAt) / 60000)} min`,
+                  icon: '/icons/peppol-warning.png',
+                  tag: `peppol-slow-${inv.id}`,
+                  url: `/facture?id=${inv.id}`,
+                  type: 'peppol_warning',
+                });
+              }
+            }
+          }
+        };
+
+        // 3. Traiter les standalone invoices
         const orgStandalone = standaloneInvoices.filter(i => i.organizationId === orgId);
         for (const inv of orgStandalone) {
-          const odooMatch = findOdooMatch(inv.invoiceNumber);
-          if (!odooMatch) continue;
-
-          const odooState = odooMatch.peppol_move_state;
-          if (odooState === 'done') {
-            // DELIVERED !
-            await db.standaloneInvoice.update({
-              where: { id: inv.id },
-              data: {
-                peppolStatus: 'SENT',
-                peppolMessageId: odooMatch.peppol_message_uuid || inv.id,
-              },
-            });
-
-            console.log(`${LOG_PREFIX} ✅ Facture ${inv.invoiceNumber} → SENT (Peppol delivered)`);
-
-            // Notification + Push
-            const targetUserId = inv.createdById;
-            if (targetUserId) {
-              await notify.peppolInvoiceDelivered(orgId, {
-                invoiceNumber: inv.invoiceNumber || inv.id,
-                clientName: inv.clientName || 'Client',
-                amount: inv.totalAmount,
-              }, targetUserId, inv.id);
-
-              await sendPushToUser(targetUserId, {
-                title: 'Facture Peppol envoyée',
-                body: `${inv.invoiceNumber} (${inv.clientName}) a été livrée via Peppol`,
-                icon: '/icons/peppol-success.png',
-                tag: `peppol-sent-${inv.id}`,
-                url: `/facture?id=${inv.id}`,
-                type: 'peppol_delivered',
-              });
-            }
-          } else if (odooState === 'error') {
-            await db.standaloneInvoice.update({
-              where: { id: inv.id },
-              data: {
-                peppolStatus: 'ERROR',
-                peppolError: 'Erreur détectée par Odoo lors de la livraison Peppol',
-              },
-            });
-            console.warn(`${LOG_PREFIX} ❌ Facture ${inv.invoiceNumber} → ERROR (Odoo peppol_move_state=error)`);
-
-            const targetUserId = inv.createdById;
-            if (targetUserId) {
-              await sendPushToUser(targetUserId, {
-                title: 'Erreur Peppol',
-                body: `${inv.invoiceNumber} n'a pas pu être livrée via Peppol`,
-                icon: '/icons/peppol-error.png',
-                tag: `peppol-error-${inv.id}`,
-                url: `/facture?id=${inv.id}`,
-                type: 'peppol_error',
-              });
-            }
-          }
+          await processInvoice(inv, 'standalone', inv.clientName || 'Client', inv.totalAmount);
         }
 
-        // 4. Vérifier les chantier invoices de cette org
+        // 4. Traiter les chantier invoices
         const orgChantier = chantierInvoices.filter(i => i.organizationId === orgId);
         for (const inv of orgChantier) {
-          const odooMatch = findOdooMatch(inv.invoiceNumber);
-          if (!odooMatch) continue;
-
-          const odooState = odooMatch.peppol_move_state;
-          if (odooState === 'done') {
-            await db.chantierInvoice.update({
-              where: { id: inv.id },
-              data: {
-                peppolStatus: 'SENT',
-                peppolMessageId: odooMatch.peppol_message_uuid || inv.id,
-                updatedAt: new Date(),
-              },
-            });
-            console.log(`${LOG_PREFIX} ✅ Facture chantier ${inv.invoiceNumber} → SENT (Peppol delivered)`);
-
-            // Notifier les admins de l'org
-            await notify.peppolInvoiceDelivered(orgId, {
-              invoiceNumber: inv.invoiceNumber || inv.id,
-              clientName: inv.label,
-              amount: inv.amount,
-            }, undefined, inv.id);
-
-          } else if (odooState === 'error') {
-            await db.chantierInvoice.update({
-              where: { id: inv.id },
-              data: {
-                peppolStatus: 'ERROR',
-                peppolError: 'Erreur détectée par Odoo lors de la livraison Peppol',
-                updatedAt: new Date(),
-              },
-            });
-            console.warn(`${LOG_PREFIX} ❌ Facture chantier ${inv.invoiceNumber} → ERROR`);
-          }
+          await processInvoice(
+            { ...inv, createdById: null },
+            'chantier',
+            inv.label,
+            inv.amount,
+          );
         }
 
       } catch (err) {
@@ -437,5 +611,5 @@ export function startPeppolCronJobs() {
   console.log(`${LOG_PREFIX}   - Transition (PENDING/MIGRATION): toutes les 30 min`);
   console.log(`${LOG_PREFIX}   - Santé (ACTIVE): toutes les 6h`);
   console.log(`${LOG_PREFIX}   - Factures entrantes: toutes les 4h`);
-  console.log(`${LOG_PREFIX}   - Statut livraison factures: toutes les 5 min`);
+  console.log(`${LOG_PREFIX}   - Statut livraison factures: toutes les 2 min (retry auto + alerte stuck)`);
 }

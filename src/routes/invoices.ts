@@ -799,7 +799,7 @@ router.post('/:id/mark-peppol-sent', authenticateToken, async (req: Request, res
   }
 });
 
-interface OrgData {
+export interface OrgData {
   name: string;
   legalName?: string | null;
   vatNumber?: string | null;
@@ -822,7 +822,7 @@ async function fetchLogoBuffer(url: string): Promise<Buffer | null> {
   }
 }
 
-async function generateInvoicePdf(invoice: {
+export async function generateInvoicePdf(invoice: {
   invoiceNumber: string;
   clientName: string;
   clientVat?: string | null;
@@ -1091,7 +1091,7 @@ async function generateInvoicePdf(invoice: {
   });
 }
 
-const orgSelectForPdf = {
+export const orgSelectForPdf = {
   name: true, legalName: true, vatNumber: true, address: true,
   phone: true, email: true, logoUrl: true, iban: true, bankAccountHolder: true,
 };

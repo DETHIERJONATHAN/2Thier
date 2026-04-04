@@ -62,6 +62,9 @@ import peppolRouter from './routes/peppol'; // 📨 e-FACTURATION PEPPOL (via Od
 // 🧾 ROUTES FACTURES (standalone + chantier + peppol incoming unifiées)
 import invoicesRouter from './routes/invoices';
 
+// 💰 ROUTES DÉPENSES (scan tickets IA + suivi comptable)
+import expensesRouter from './routes/expenses';
+
 // 🌐 MIDDLEWARE DÉTECTION SITES VITRINES AUTOMATIQUE
 import { detectWebsite, websiteInterceptor } from './middleware/websiteDetection';
 import { renderWebsite } from './middleware/websiteRenderer';
@@ -338,6 +341,7 @@ app.use('/api/website-forms', websiteFormsRouter); // 📋 FORMULAIRES SITES WEB
 app.use('/api/public/forms', publicFormsRouter); // 📋 SOUMISSION PUBLIQUE FORMULAIRES (sans auth)
 app.use('/api/peppol', peppolRouter); // 📨 PEPPOL e-FACTURATION (Odoo Bridge)
 app.use('/api/invoices', invoicesRouter); // 🧾 FACTURES UNIFIÉES (standalone + chantier + incoming)
+app.use('/api/expenses', expensesRouter); // 💰 DÉPENSES (scan tickets IA + suivi)
 // ⚠️ SUPPRIMÉ - Déjà monté via apiRouter ligne 249: app.use('/api/treebranchleaf', tableRoutesNewRouter);
 const repeatRouter = createRepeatRouter(prisma);
 app.use('/api/treebranchleaf/repeat', repeatRouter); // 🔁 Compatibilité historique

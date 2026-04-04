@@ -127,7 +127,7 @@ export class PeppolBridge {
     return this.uid;
   }
 
-  private async call(model: string, method: string, args: unknown[] = [], kwargs: Record<string, unknown> = {}): Promise<unknown> {
+  async call(model: string, method: string, args: unknown[] = [], kwargs: Record<string, unknown> = {}): Promise<unknown> {
     await this.authenticate();
     return this.jsonRpc('/web/dataset/call_kw', {
       model,
@@ -270,6 +270,10 @@ export class PeppolBridge {
       console.error(`[PeppolBridge] Erreur installation plan comptable pour company ${odooCompanyId}:`, e);
       // Ne pas bloquer — on essaiera de créer des comptes à la volée lors de l'envoi
     }
+
+    // TOUJOURS garantir les taxes belges standard après l'installation du plan comptable
+    // Même si try_loading a fonctionné, on s'assure que les taxes sont bien présentes
+    await this.ensureBelgianTaxes(odooCompanyId);
   }
 
   /**
@@ -316,30 +320,8 @@ export class PeppolBridge {
       }
     }
 
-    // Copier aussi les taxes de vente
-    const sourceTaxes = await this.call('account.tax', 'search_read', [
-      [['company_id', '=', sourceCompanyId], ['type_tax_use', '=', 'sale']],
-    ], { fields: ['name', 'amount', 'type_tax_use', 'amount_type'], limit: 10 }) as Array<{
-      name: string; amount: number; type_tax_use: string; amount_type: string;
-    }>;
-
-    let taxCreated = 0;
-    for (const tax of sourceTaxes) {
-      try {
-        await this.call('account.tax', 'create', [{
-          name: tax.name,
-          amount: tax.amount,
-          type_tax_use: tax.type_tax_use,
-          amount_type: tax.amount_type,
-          company_id: targetCompanyId,
-        }]);
-        taxCreated++;
-      } catch {
-        // Skip si existe déjà
-      }
-    }
-
-    console.log(`[PeppolBridge] ✅ Comptes copiés: ${created}/${accountsToCopy.length}, Taxes: ${taxCreated}/${sourceTaxes.length}`);
+    // Les taxes sont gérées par ensureBelgianTaxes() — appelé automatiquement après
+    console.log(`[PeppolBridge] ✅ Comptes copiés: ${created}/${accountsToCopy.length} (taxes via ensureBelgianTaxes)`);
   }
 
   // ── Enregistrement Peppol ──
@@ -355,6 +337,9 @@ export class PeppolBridge {
     contactPhone: string;
     migrationKey?: string;
   }): Promise<{ status: string }> {
+    await this.authenticate();
+    const adminUid = this.uid!;
+
     // 1. Configurer les paramètres Peppol sur la company
     await this.call('res.company', 'write', [
       [odooCompanyId],
@@ -373,41 +358,141 @@ export class PeppolBridge {
     ], { fields: ['id', 'edi_mode'], limit: 1 }) as Array<{ id: number; edi_mode: string }>;
 
     if (proxyUsers.length === 0) {
-      // 3. Créer un settings wizard et déclencher l'enregistrement via la méthode publique
+      // 3. Switcher l'admin sur la company cible (obligatoire pour res.config.settings)
+      await this.call('res.users', 'write', [[adminUid], { company_id: odooCompanyId }]);
+
+      try {
+        const companyContext = {
+          lang: 'fr_BE',
+          allowed_company_ids: [odooCompanyId],
+          force_company: odooCompanyId,
+        };
+
+        const settingsId = await this.call('res.config.settings', 'create', [{
+          is_account_peppol_participant: true,
+          account_peppol_eas: params.peppolEas,
+          account_peppol_endpoint: params.peppolEndpoint,
+          account_peppol_contact_email: params.contactEmail,
+          account_peppol_phone_number: params.contactPhone,
+          account_peppol_edi_mode: 'prod',
+          ...(params.migrationKey ? { account_peppol_migration_key: params.migrationKey } : {}),
+        }], { context: companyContext }) as number;
+
+        // 4. Appeler le bouton d'enregistrement Peppol (méthode publique)
+        await this.call('res.config.settings', 'button_create_peppol_proxy_user', [
+          [settingsId],
+        ], { context: companyContext });
+      } finally {
+        // 5. TOUJOURS restaurer l'admin sur company 1
+        await this.call('res.users', 'write', [[adminUid], { company_id: 1 }]).catch(e =>
+          console.error('[PeppolBridge] Erreur restauration admin company:', e)
+        );
+      }
+    }
+
+    // 6. Vérifier le statut final
+    const company = await this.call('res.company', 'read', [
+      [odooCompanyId],
+    ], { fields: ['account_peppol_proxy_state'] }) as OdooCompany[];
+
+    const state = company[0]?.account_peppol_proxy_state || 'not_registered';
+    console.log(`[PeppolBridge] registerPeppol company ${odooCompanyId} → state: ${state}`);
+    return { status: state };
+  }
+
+  /**
+   * Envoie le SMS de vérification Peppol pour une company
+   */
+  async sendVerificationCode(odooCompanyId: number): Promise<{ success: boolean }> {
+    await this.authenticate();
+    const adminUid = this.uid!;
+
+    // Switcher l'admin sur la company cible
+    await this.call('res.users', 'write', [[adminUid], { company_id: odooCompanyId }]);
+
+    try {
       const companyContext = {
         lang: 'fr_BE',
         allowed_company_ids: [odooCompanyId],
         force_company: odooCompanyId,
       };
 
-      const settingsId = await this.call('res.config.settings', 'create', [{
-        is_account_peppol_participant: true,
-        account_peppol_eas: params.peppolEas,
-        account_peppol_endpoint: params.peppolEndpoint,
-        account_peppol_contact_email: params.contactEmail,
-        account_peppol_phone_number: params.contactPhone,
-        account_peppol_edi_mode: 'demo',
-        ...(params.migrationKey ? { account_peppol_migration_key: params.migrationKey } : {}),
-      }], { context: companyContext }) as number;
+      const settingsId = await this.call('res.config.settings', 'create', [{}], {
+        context: companyContext,
+      }) as number;
 
-      // 4. Appeler le bouton d'enregistrement Peppol (méthode publique)
-      await this.call('res.config.settings', 'button_create_peppol_proxy_user', [
+      await this.call('res.config.settings', 'button_send_peppol_verification_code', [
         [settingsId],
       ], { context: companyContext });
+
+      console.log(`[PeppolBridge] SMS de vérification envoyé pour company ${odooCompanyId}`);
+      return { success: true };
+    } finally {
+      await this.call('res.users', 'write', [[adminUid], { company_id: 1 }]).catch(e =>
+        console.error('[PeppolBridge] Erreur restauration admin company:', e)
+      );
     }
-
-    // 5. Vérifier le statut final
-    const company = await this.call('res.company', 'read', [
-      [odooCompanyId],
-    ], { fields: ['account_peppol_proxy_state'] }) as OdooCompany[];
-
-    return { status: company[0]?.account_peppol_proxy_state || 'pending' };
   }
 
   /**
-   * Vérifie le statut d'enregistrement Peppol d'une company
+   * Vérifie le code SMS Peppol pour une company
+   */
+  async verifyCode(odooCompanyId: number, code: string): Promise<{ status: string }> {
+    await this.authenticate();
+    const adminUid = this.uid!;
+
+    // Switcher l'admin sur la company cible
+    await this.call('res.users', 'write', [[adminUid], { company_id: odooCompanyId }]);
+
+    try {
+      const companyContext = {
+        lang: 'fr_BE',
+        allowed_company_ids: [odooCompanyId],
+        force_company: odooCompanyId,
+      };
+
+      // Créer un wizard et écrire le code
+      const settingsId = await this.call('res.config.settings', 'create', [{}], {
+        context: companyContext,
+      }) as number;
+
+      await this.call('res.config.settings', 'write', [
+        [settingsId],
+        { account_peppol_verification_code: code },
+      ], { context: companyContext });
+
+      await this.call('res.config.settings', 'button_check_peppol_verification_code', [
+        [settingsId],
+      ], { context: companyContext });
+
+      // Vérifier le statut après vérification
+      const company = await this.call('res.company', 'read', [
+        [odooCompanyId],
+      ], { fields: ['account_peppol_proxy_state'] }) as OdooCompany[];
+
+      const state = company[0]?.account_peppol_proxy_state || 'not_verified';
+      console.log(`[PeppolBridge] Vérification SMS company ${odooCompanyId} → state: ${state}`);
+      return { status: state };
+    } finally {
+      await this.call('res.users', 'write', [[adminUid], { company_id: 1 }]).catch(e =>
+        console.error('[PeppolBridge] Erreur restauration admin company:', e)
+      );
+    }
+  }
+
+  /**
+   * Vérifie le statut d'enregistrement Peppol d'une company.
+   * Déclenche d'abord le cron Odoo pour forcer la mise à jour depuis le réseau Peppol.
    */
   async checkRegistrationStatus(odooCompanyId: number): Promise<string> {
+    // Déclencher le cron Odoo "PEPPOL: update participant status" (id=20)
+    // pour que Odoo contacte peppol.api.odoo.com et mette à jour pending → active
+    try {
+      await this.call('ir.cron', 'method_direct_trigger', [[20]]);
+    } catch (e) {
+      console.warn('[PeppolBridge] Cron Peppol trigger échoué (non bloquant):', (e as Error).message?.substring(0, 100));
+    }
+
     const company = await this.call('res.company', 'read', [
       [odooCompanyId],
     ], { fields: ['account_peppol_proxy_state'] }) as OdooCompany[];
@@ -451,6 +536,138 @@ export class PeppolBridge {
     } catch (e) {
       console.warn('[PeppolBridge] Erreur recherche compte:', e);
       return undefined;
+    }
+  }
+
+  // ── Auto-provisioning Taxes Belges ──
+
+  /**
+   * Taxes belges standard — identiques pour TOUTES les colonies Zhiive.
+   * Crée les tax groups + taxes de vente si manquants pour une company.
+   * C'est le coeur du système self-service : quand une Colony active Peppol,
+   * on garantit que toute l'infrastructure fiscale est en place.
+   */
+  private static readonly BELGIAN_TAX_GROUPS = [
+    { name: 'VAT 21%' },
+    { name: 'VAT 12%' },
+    { name: 'VAT 6%' },
+    { name: 'VAT 0%' },
+  ];
+
+  private static readonly BELGIAN_SALES_TAXES = [
+    { name: '21%', amount: 21, groupName: 'VAT 21%' },
+    { name: '12%', amount: 12, groupName: 'VAT 12%' },
+    { name: '6%', amount: 6, groupName: 'VAT 6%' },
+    { name: '0%', amount: 0, groupName: 'VAT 0%' },
+    { name: '0% Cocont', amount: 0, groupName: 'VAT 0%' },
+  ];
+
+  async ensureBelgianTaxes(odooCompanyId: number): Promise<void> {
+    await this.authenticate();
+
+    // 1. Vérifier si cette company a déjà des taxes de vente
+    const existingTaxes = await this.call('account.tax', 'search_read', [
+      [['company_id', '=', odooCompanyId], ['type_tax_use', '=', 'sale']],
+    ], { fields: ['id', 'name', 'amount'], limit: 20 }) as Array<{ id: number; name: string; amount: number }>;
+
+    if (existingTaxes.length >= 4) {
+      // Déjà provisionné (au moins 21%, 12%, 6%, 0%)
+      console.log(`[PeppolBridge] Company ${odooCompanyId}: ${existingTaxes.length} taxes de vente existantes, skip provisioning`);
+      return;
+    }
+
+    console.log(`[PeppolBridge] 🏗️ Auto-provisioning taxes belges pour company ${odooCompanyId} (actuellement: ${existingTaxes.length} taxes)...`);
+
+    // 2. Garantir les tax groups pour cette company
+    const existingGroups = await this.call('account.tax.group', 'search_read', [
+      [['company_id', '=', odooCompanyId]],
+    ], { fields: ['id', 'name'], limit: 20 }) as Array<{ id: number; name: string }>;
+
+    const groupMap = new Map(existingGroups.map(g => [g.name, g.id]));
+
+    for (const tg of PeppolBridge.BELGIAN_TAX_GROUPS) {
+      if (!groupMap.has(tg.name)) {
+        try {
+          const newId = await this.call('account.tax.group', 'create', [{
+            name: tg.name,
+            company_id: odooCompanyId,
+          }]) as number;
+          groupMap.set(tg.name, newId);
+          console.log(`[PeppolBridge]   ✅ Tax group '${tg.name}' créé (id=${newId})`);
+        } catch (e) {
+          console.warn(`[PeppolBridge]   ⚠️ Tax group '${tg.name}' création échouée:`, (e as Error).message?.substring(0, 100));
+        }
+      }
+    }
+
+    // 3. Créer les taxes de vente manquantes
+    const existingAmounts = new Set(existingTaxes.map(t => `${t.name}|${t.amount}`));
+
+    for (const tax of PeppolBridge.BELGIAN_SALES_TAXES) {
+      const key = `${tax.name}|${tax.amount}`;
+      if (existingAmounts.has(key)) continue;
+
+      const taxGroupId = groupMap.get(tax.groupName);
+      if (!taxGroupId) {
+        console.warn(`[PeppolBridge]   ⚠️ Pas de tax group '${tax.groupName}' pour la taxe '${tax.name}', skip`);
+        continue;
+      }
+
+      try {
+        const taxId = await this.call('account.tax', 'create', [{
+          name: tax.name,
+          amount: tax.amount,
+          amount_type: 'percent',
+          type_tax_use: 'sale',
+          company_id: odooCompanyId,
+          tax_group_id: taxGroupId,
+        }]) as number;
+        console.log(`[PeppolBridge]   ✅ Taxe '${tax.name}' (${tax.amount}%) créée (id=${taxId})`);
+      } catch (e) {
+        console.warn(`[PeppolBridge]   ⚠️ Taxe '${tax.name}' création échouée:`, (e as Error).message?.substring(0, 100));
+      }
+    }
+
+    console.log(`[PeppolBridge] ✅ Auto-provisioning taxes terminé pour company ${odooCompanyId}`);
+  }
+
+  // ── Envoi Peppol via Wizard Odoo 17 ──
+
+  /**
+   * Envoie une facture via Peppol en utilisant le wizard account.move.send (Odoo 17).
+   * C'est la SEULE méthode correcte — action_send_and_print retourne un wizard
+   * au lieu d'envoyer directement dans Odoo 17.
+   */
+  async sendViaWizard(odooInvoiceId: number, odooCompanyId: number): Promise<boolean> {
+    try {
+      const companyContext = {
+        active_model: 'account.move',
+        active_ids: [odooInvoiceId],
+        allowed_company_ids: [odooCompanyId],
+        company_id: odooCompanyId,
+      };
+
+      // 1. Créer le wizard pour cette facture
+      const wizardId = await this.call('account.move.send', 'create', [{
+        move_ids: [[6, 0, [odooInvoiceId]]],
+      }], { context: companyContext }) as number;
+
+      // 2. Activer l'envoi Peppol sur le wizard
+      await this.call('account.move.send', 'write', [[wizardId], {
+        checkbox_send_peppol: true,
+        checkbox_send_mail: false,
+      }]);
+
+      // 3. Exécuter le wizard (action_send_and_print sur le wizard, pas sur account.move)
+      await this.call('account.move.send', 'action_send_and_print', [[wizardId]], {
+        context: companyContext,
+      });
+
+      console.log(`[PeppolBridge] ✅ Wizard Peppol exécuté pour facture Odoo ${odooInvoiceId}`);
+      return true;
+    } catch (e) {
+      console.error(`[PeppolBridge] ❌ Wizard Peppol échoué pour facture ${odooInvoiceId}:`, (e as Error).message);
+      return false;
     }
   }
 
@@ -524,26 +741,43 @@ export class PeppolBridge {
       );
     }
 
-    // Trouver la taxe TVA de vente correspondante
-    const taxPercent = invoice.lines[0]?.taxPercent || 21;
-    let taxIds: number[] = [];
-    try {
-      const taxes = await this.call('account.tax', 'search_read', [
-        [['company_id', '=', odooCompanyId], ['type_tax_use', '=', 'sale'], ['amount', '=', taxPercent]],
-      ], { fields: ['id'], limit: 1 }) as Array<{ id: number }>;
-      if (taxes.length > 0) taxIds = [taxes[0].id];
-    } catch (e) {
-      console.warn('[PeppolBridge] Impossible de trouver la taxe TVA:', e);
-    }
+    // Garantir que les taxes belges existent pour cette company
+    await this.ensureBelgianTaxes(odooCompanyId);
 
-    // Créer la facture dans Odoo
-    const invoiceLines = invoice.lines.map((line) => [0, 0, {
-      name: line.description,
-      quantity: line.quantity,
-      price_unit: line.unitPrice,
-      ...(accountId ? { account_id: accountId } : {}),
-      ...(taxIds.length > 0 ? { tax_ids: [[6, 0, taxIds]] } : {}),
-    }]);
+    // Trouver la taxe TVA de vente correspondante pour chaque ligne
+    // Cache des taxes par pourcentage pour cette company
+    const taxCache = new Map<number, number[]>();
+    const findTaxForPercent = async (percent: number): Promise<number[]> => {
+      if (taxCache.has(percent)) return taxCache.get(percent)!;
+      try {
+        const taxes = await this.call('account.tax', 'search_read', [
+          [['company_id', '=', odooCompanyId], ['type_tax_use', '=', 'sale'], ['amount', '=', percent]],
+        ], { fields: ['id'], limit: 1 }) as Array<{ id: number }>;
+        const ids = taxes.length > 0 ? [taxes[0].id] : [];
+        taxCache.set(percent, ids);
+        return ids;
+      } catch (e) {
+        console.warn(`[PeppolBridge] Impossible de trouver la taxe TVA ${percent}%:`, e);
+        return [];
+      }
+    };
+
+    // Créer la facture dans Odoo — chaque ligne avec sa propre taxe
+    const invoiceLines = [];
+    for (const line of invoice.lines) {
+      const lineTaxIds = await findTaxForPercent(line.taxPercent);
+      if (lineTaxIds.length === 0) {
+        console.warn(`[PeppolBridge] ⚠️ Aucune taxe trouvée pour ${line.taxPercent}% — UBL requiert au minimum une taxe par ligne !`);
+      }
+      invoiceLines.push([0, 0, {
+        name: line.description,
+        quantity: line.quantity,
+        price_unit: line.unitPrice,
+        ...(accountId ? { account_id: accountId } : {}),
+        // UBL BIS Billing 3.0 EXIGE au moins une taxe par ligne, même 0%
+        ...(lineTaxIds.length > 0 ? { tax_ids: [[6, 0, lineTaxIds]] } : {}),
+      }]);
+    }
 
     const odooInvoiceId = await this.call('account.move', 'create', [{
       move_type: 'out_invoice',
@@ -558,16 +792,10 @@ export class PeppolBridge {
     // 3. Valider (poster) la facture
     await this.call('account.move', 'action_post', [[odooInvoiceId]]);
 
-    // 4. Envoyer via Peppol
-    try {
-      await this.call('account.move', 'action_send_and_print', [[odooInvoiceId]], {
-        context: {
-          force_send_peppol: true,
-          company_id: odooCompanyId,
-        },
-      });
-    } catch {
-      console.warn(`[PeppolBridge] Peppol send may require manual trigger for invoice ${odooInvoiceId}`);
+    // 4. Envoyer via Peppol — utiliser le wizard Odoo 17 (la SEULE méthode qui fonctionne)
+    const wizardSuccess = await this.sendViaWizard(odooInvoiceId, odooCompanyId);
+    if (!wizardSuccess) {
+      console.error(`[PeppolBridge] ❌ L'envoi Peppol via wizard a échoué pour facture ${odooInvoiceId}. Le cron auto-retry prendra le relais.`);
     }
 
     // 5. Récupérer le message ID Peppol

@@ -7,6 +7,8 @@ import {
   ClockCircleOutlined, ExclamationCircleOutlined, SendOutlined, DeleteOutlined,
   EditOutlined, EyeOutlined, DollarOutlined, DownloadOutlined,
   EuroCircleOutlined, ThunderboltOutlined, CopyOutlined,
+  CameraOutlined, WalletOutlined, BarChartOutlined,
+  ShoppingCartOutlined, LoadingOutlined,
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { useAuth } from '../auth/useAuth';
@@ -69,6 +71,64 @@ interface Stats {
   totalDrafts: number;
 }
 
+interface Expense {
+  id: string;
+  supplierName: string;
+  supplierVat?: string;
+  supplierAddress?: string;
+  subtotal: number;
+  taxRate: number;
+  taxAmount: number;
+  totalAmount: number;
+  currency: string;
+  category: string;
+  description?: string;
+  reference?: string;
+  expenseDate: string;
+  paidAt?: string;
+  paymentMethod?: string;
+  status: string;
+  receiptUrl?: string;
+  aiExtracted: boolean;
+  aiConfidence?: number;
+  chantierId?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+interface ExpenseStats {
+  totalExpenses: number;
+  totalThisMonth: number;
+  totalPending: number;
+  totalPaid: number;
+  count: number;
+  byCategory: Record<string, number>;
+}
+
+interface ExpenseCategory {
+  key: string;
+  label: string;
+  icon: string;
+  color: string;
+}
+
+interface ScanResult {
+  supplierName: string;
+  supplierVat: string;
+  supplierAddress: string;
+  totalAmount: number;
+  subtotal: number;
+  taxAmount: number;
+  taxRate: number;
+  currency: string;
+  reference: string;
+  expenseDate: string;
+  category: string;
+  description: string;
+  items: { name: string; quantity: number; price: number }[];
+  confidence: number;
+}
+
 interface InvoiceLine {
   description: string;
   quantity: number;
@@ -126,13 +186,31 @@ const SOURCE_BADGE: Record<string, { label: string; color: string }> = {
 };
 
 // ── Tabs ──
-type TabKey = 'all' | 'outgoing' | 'incoming' | 'draft';
+type TabKey = 'all' | 'outgoing' | 'incoming' | 'draft' | 'expenses' | 'accounting';
 const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   { key: 'all', label: 'Toutes', icon: <FileTextOutlined /> },
   { key: 'outgoing', label: 'Émises', icon: <SendOutlined /> },
   { key: 'incoming', label: 'Reçues', icon: <DownloadOutlined /> },
+  { key: 'expenses', label: 'Dépenses', icon: <WalletOutlined /> },
+  { key: 'accounting', label: 'Compta', icon: <BarChartOutlined /> },
   { key: 'draft', label: 'Brouillons', icon: <EditOutlined /> },
 ];
+
+// ── Expense category helpers ──
+const CATEGORY_MAP: Record<string, { label: string; icon: string; color: string }> = {
+  fuel: { label: 'Carburant', icon: '⛽', color: '#e74c3c' },
+  material: { label: 'Matériaux', icon: '🧱', color: '#e67e22' },
+  tools: { label: 'Outillage', icon: '🔧', color: '#f39c12' },
+  food: { label: 'Restauration', icon: '🍽️', color: '#27ae60' },
+  transport: { label: 'Transport', icon: '🚗', color: '#3498db' },
+  office: { label: 'Bureau', icon: '📎', color: '#9b59b6' },
+  telecom: { label: 'Télécom', icon: '📱', color: '#1abc9c' },
+  insurance: { label: 'Assurance', icon: '🛡️', color: '#34495e' },
+  subscription: { label: 'Abonnement', icon: '📅', color: '#8e44ad' },
+  maintenance: { label: 'Entretien', icon: '🔩', color: '#d35400' },
+  other: { label: 'Autre', icon: '📦', color: '#95a5a6' },
+};
+const getCategoryInfo = (key: string) => CATEGORY_MAP[key] || CATEGORY_MAP.other;
 
 // ═══════════════════════════════════════════════════════════
 // MAIN COMPONENT
@@ -202,6 +280,26 @@ const FacturePage: React.FC = () => {
   const [peppolManualInvoice, setPeppolManualInvoice] = useState<UnifiedInvoice | null>(null);
   const [peppolManualRecipient, setPeppolManualRecipient] = useState('');
 
+  // ── Expense state ──
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [expenseStats, setExpenseStats] = useState<ExpenseStats | null>(null);
+  const [expensesLoading, setExpensesLoading] = useState(false);
+  const [showScanModal, setShowScanModal] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
+  const [scanPreview, setScanPreview] = useState<string | null>(null);
+  const [showExpenseForm, setShowExpenseForm] = useState(false);
+  const [expenseForm, setExpenseForm] = useState({
+    supplierName: '', supplierVat: '', supplierAddress: '',
+    totalAmount: 0, subtotal: 0, taxAmount: 0, taxRate: 21,
+    category: 'other', description: '', reference: '',
+    expenseDate: dayjs().format('YYYY-MM-DD'), paymentMethod: 'card',
+    notes: '',
+  });
+  const [savingExpense, setSavingExpense] = useState(false);
+  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
   // ── Data fetching ──
   const loadData = useCallback(async () => {
     try {
@@ -227,6 +325,128 @@ const FacturePage: React.FC = () => {
   }, [api, activeTab, search]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // ── Load expenses when tab is active ──
+  const loadExpenses = useCallback(async () => {
+    try {
+      setExpensesLoading(true);
+      const [expRes, statsRes] = await Promise.all([
+        api.get<{ success: boolean; data: Expense[] }>(`/api/expenses?search=${encodeURIComponent(search)}`),
+        api.get<{ success: boolean; data: ExpenseStats }>('/api/expenses/stats'),
+      ]);
+      if (expRes.success) setExpenses(expRes.data);
+      if (statsRes.success) setExpenseStats(statsRes.data);
+    } catch (err) {
+      console.error('Erreur chargement dépenses:', err);
+    } finally {
+      setExpensesLoading(false);
+    }
+  }, [api, search]);
+
+  useEffect(() => {
+    if (activeTab === 'expenses' || activeTab === 'accounting') {
+      loadExpenses();
+    }
+  }, [activeTab, loadExpenses]);
+
+  // ── Scan ticket via Gemini ──
+  const handleScanTicket = useCallback(async (file: File) => {
+    try {
+      setScanning(true);
+      setScanResult(null);
+
+      // Preview the image
+      const reader = new FileReader();
+      reader.onload = (e) => setScanPreview(e.target?.result as string);
+      reader.readAsDataURL(file);
+
+      // Convert to base64
+      const buffer = await file.arrayBuffer();
+      const base64 = btoa(
+        new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
+
+      const res = await api.post<{ success: boolean; data: ScanResult; message?: string }>('/api/expenses/scan', {
+        imageBase64: base64,
+        mimeType: file.type,
+      });
+
+      if (res.success && res.data) {
+        setScanResult(res.data);
+        // Pré-remplir le formulaire
+        setExpenseForm({
+          supplierName: res.data.supplierName || '',
+          supplierVat: res.data.supplierVat || '',
+          supplierAddress: res.data.supplierAddress || '',
+          totalAmount: res.data.totalAmount || 0,
+          subtotal: res.data.subtotal || 0,
+          taxAmount: res.data.taxAmount || 0,
+          taxRate: res.data.taxRate || 21,
+          category: res.data.category || 'other',
+          description: res.data.description || '',
+          reference: res.data.reference || '',
+          expenseDate: res.data.expenseDate || dayjs().format('YYYY-MM-DD'),
+          paymentMethod: 'card',
+          notes: '',
+        });
+        setShowExpenseForm(true);
+        message.success(`Ticket analysé — ${res.data.supplierName || 'Fournisseur'} €${res.data.totalAmount?.toFixed(2) || '?'}`);
+      } else {
+        message.warning(res.message || 'Analyse impossible, saisissez manuellement');
+        setShowExpenseForm(true);
+      }
+    } catch (err) {
+      console.error('Scan error:', err);
+      message.error('Erreur lors du scan');
+    } finally {
+      setScanning(false);
+    }
+  }, [api, message]);
+
+  // ── Save expense ──
+  const handleSaveExpense = useCallback(async () => {
+    if (!expenseForm.supplierName.trim()) {
+      message.warning('Nom du fournisseur requis');
+      return;
+    }
+    try {
+      setSavingExpense(true);
+      await api.post('/api/expenses', {
+        ...expenseForm,
+        aiExtracted: !!scanResult,
+        aiConfidence: scanResult?.confidence || undefined,
+        status: 'PAID',
+      });
+      message.success('Dépense enregistrée');
+      setShowExpenseForm(false);
+      setShowScanModal(false);
+      setScanResult(null);
+      setScanPreview(null);
+      setExpenseForm({
+        supplierName: '', supplierVat: '', supplierAddress: '',
+        totalAmount: 0, subtotal: 0, taxAmount: 0, taxRate: 21,
+        category: 'other', description: '', reference: '',
+        expenseDate: dayjs().format('YYYY-MM-DD'), paymentMethod: 'card',
+        notes: '',
+      });
+      loadExpenses();
+    } catch {
+      message.error('Erreur lors de l\'enregistrement');
+    } finally {
+      setSavingExpense(false);
+    }
+  }, [api, expenseForm, scanResult, message, loadExpenses]);
+
+  // ── Delete expense ──
+  const handleDeleteExpense = useCallback(async (id: string) => {
+    try {
+      await api.delete(`/api/expenses/${id}`);
+      message.success('Dépense supprimée');
+      loadExpenses();
+    } catch {
+      message.error('Erreur');
+    }
+  }, [api, message, loadExpenses]);
 
   // ── Open create modal with auto-generated number ──
   const openCreateModal = useCallback(async () => {
@@ -459,6 +679,16 @@ const FacturePage: React.FC = () => {
       message.error(err?.message || 'Erreur d\'envoi Peppol');
     } finally {
       setPeppolSending(false);
+    }
+  };
+
+  const handlePeppolRetry = async (invoiceId: string) => {
+    try {
+      await api.post(`/api/peppol/retry/${invoiceId}`);
+      message.success('Envoi Peppol relancé ! Vérification automatique toutes les 2 min.');
+      loadData();
+    } catch (err: any) {
+      message.error(err?.message || 'Erreur lors du retry Peppol');
     }
   };
 
@@ -714,59 +944,80 @@ const FacturePage: React.FC = () => {
               <FileTextOutlined style={{ color: '#fff', fontSize: isMobile ? 18 : 22 }} />
             </div>
             <div>
-              <div style={{ fontSize: isMobile ? 17 : 20, fontWeight: 700, color: FB.text }}>Facturation</div>
+              <div style={{ fontSize: isMobile ? 17 : 20, fontWeight: 700, color: FB.text }}>Comptabilité</div>
               {!isMobile && (
                 <div style={{ fontSize: 13, color: FB.textSecondary }}>
-                  Gérez toutes vos factures — émises, reçues et brouillons
+                  Factures émises, reçues, dépenses et vue comptable
                 </div>
               )}
             </div>
           </div>
-          <button
-            onClick={() => openCreateModal()}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 8, padding: isMobile ? '8px 14px' : '10px 20px',
-              background: FB.blue, color: '#fff', border: 'none', borderRadius: FB.radius,
-              fontSize: isMobile ? 13 : 15, fontWeight: 600, cursor: 'pointer', transition: 'background 0.2s',
-            }}
-            onMouseEnter={e => (e.currentTarget.style.background = FB.blueHover)}
-            onMouseLeave={e => (e.currentTarget.style.background = FB.blue)}
-          >
-            <PlusOutlined /> {isMobile ? 'Nouvelle' : 'Nouvelle facture'}
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => { setShowScanModal(true); setScanResult(null); setScanPreview(null); setShowExpenseForm(false); }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, padding: isMobile ? '8px 12px' : '10px 16px',
+                background: '#27ae60', color: '#fff', border: 'none', borderRadius: FB.radius,
+                fontSize: isMobile ? 13 : 14, fontWeight: 600, cursor: 'pointer', transition: 'background 0.2s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#219a52')}
+              onMouseLeave={e => (e.currentTarget.style.background = '#27ae60')}
+            >
+              <CameraOutlined /> {isMobile ? 'Scanner' : 'Scanner ticket'}
+            </button>
+            <button
+              onClick={() => openCreateModal()}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: isMobile ? '8px 14px' : '10px 20px',
+                background: FB.blue, color: '#fff', border: 'none', borderRadius: FB.radius,
+                fontSize: isMobile ? 13 : 15, fontWeight: 600, cursor: 'pointer', transition: 'background 0.2s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = FB.blueHover)}
+              onMouseLeave={e => (e.currentTarget.style.background = FB.blue)}
+            >
+              <PlusOutlined /> {isMobile ? 'Facture' : 'Nouvelle facture'}
+            </button>
+          </div>
         </div>
       </FBCard>
 
-      {/* ── Stats Bar ── */}
-      {stats && (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : 'repeat(6, 1fr)',
-          borderBottom: `1px solid ${FB.border}`,
-          background: FB.white,
-        }}>
-          {[
-            { label: 'Émises', value: stats.totalEmises, icon: <SendOutlined />, color: FB.blue },
-            { label: 'Total', value: `€${stats.totalAmount.toFixed(0)}`, icon: <EuroCircleOutlined />, color: FB.text },
-            { label: 'Payé', value: `€${stats.totalPaid.toFixed(0)}`, icon: <CheckCircleOutlined />, color: FB.green },
-            { label: 'Attente', value: `€${stats.totalPending.toFixed(0)}`, icon: <ClockCircleOutlined />, color: FB.orange },
-            { label: 'Retard', value: `€${stats.totalOverdue.toFixed(0)}`, icon: <ExclamationCircleOutlined />, color: FB.red },
-            { label: 'Reçues', value: stats.totalRecues, icon: <DownloadOutlined />, color: FB.purple },
-          ].map((s, i) => (
-            <div key={i} style={{
-              padding: isMobile ? '10px 8px' : '14px 16px',
-              textAlign: 'center',
-              borderRight: isMobile ? ((i % 3 !== 2) ? `1px solid ${FB.border}` : undefined) : (i < 5 ? `1px solid ${FB.border}` : undefined),
-              borderBottom: isMobile && i < 3 ? `1px solid ${FB.border}` : undefined,
-            }}>
-              <div style={{ fontSize: isMobile ? 10 : 11, color: FB.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>
-                <span style={{ marginRight: 4, color: s.color }}>{s.icon}</span>{s.label}
+      {/* ── Stats Bar (toujours visible) ── */}
+      {stats && (() => {
+        const netBalance = (stats.totalPaid || 0) - (expenseStats?.totalExpenses || 0);
+        const statItems = [
+          { label: 'Émises', value: stats.totalEmises, icon: <SendOutlined />, color: FB.blue },
+          { label: 'Entrées', value: `€${stats.totalAmount.toFixed(0)}`, icon: <EuroCircleOutlined />, color: FB.text },
+          { label: 'Payé', value: `€${stats.totalPaid.toFixed(0)}`, icon: <CheckCircleOutlined />, color: FB.green },
+          { label: 'Attente', value: `€${stats.totalPending.toFixed(0)}`, icon: <ClockCircleOutlined />, color: FB.orange },
+          { label: 'Retard', value: `€${stats.totalOverdue.toFixed(0)}`, icon: <ExclamationCircleOutlined />, color: FB.red },
+          { label: 'Reçues', value: stats.totalRecues, icon: <DownloadOutlined />, color: FB.purple },
+          { label: 'Dépenses', value: `€${(expenseStats?.totalExpenses || 0).toFixed(0)}`, icon: <WalletOutlined />, color: '#e74c3c' },
+          { label: 'Solde', value: `${netBalance >= 0 ? '+' : ''}€${netBalance.toFixed(0)}`, icon: <BarChartOutlined />, color: netBalance >= 0 ? '#27ae60' : '#e74c3c' },
+        ];
+        const cols = statItems.length;
+        return (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? 'repeat(4, 1fr)' : `repeat(${cols}, 1fr)`,
+            borderBottom: `1px solid ${FB.border}`,
+            background: FB.white,
+          }}>
+            {statItems.map((s, i) => (
+              <div key={i} style={{
+                padding: isMobile ? '10px 6px' : '14px 12px',
+                textAlign: 'center',
+                borderRight: isMobile ? ((i % 4 !== 3) ? `1px solid ${FB.border}` : undefined) : (i < cols - 1 ? `1px solid ${FB.border}` : undefined),
+                borderBottom: isMobile && i < 4 ? `1px solid ${FB.border}` : undefined,
+              }}>
+                <div style={{ fontSize: isMobile ? 9 : 11, color: FB.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>
+                  <span style={{ marginRight: 3, color: s.color }}>{s.icon}</span>{s.label}
+                </div>
+                <div style={{ fontSize: isMobile ? 14 : 18, fontWeight: 700, color: s.color }}>{s.value}</div>
               </div>
-              <div style={{ fontSize: isMobile ? 15 : 18, fontWeight: 700, color: s.color }}>{s.value}</div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        );
+      })()}
 
       {/* ── Tab bar + Search ── */}
       <div style={{ background: FB.white, borderBottom: `1px solid ${FB.border}`, padding: '0 16px' }}>
@@ -861,6 +1112,176 @@ const FacturePage: React.FC = () => {
       {/* ── Content ── */}
       <div style={{ maxWidth: 900, margin: '0 auto', padding: isMobile ? '8px 8px 80px' : '16px 16px 80px' }}>
 
+        {/* ═══ EXPENSES TAB ═══ */}
+        {activeTab === 'expenses' && (
+          <>
+            {/* Scan button prominent */}
+            <FBCard style={{ marginBottom: 16, padding: 20, textAlign: 'center', borderLeft: `4px solid #27ae60` }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 600, color: FB.text }}>Scanner un ticket ou reçu</div>
+                  <div style={{ fontSize: 13, color: FB.textSecondary }}>
+                    Prenez une photo — l'IA extrait automatiquement les données
+                  </div>
+                </div>
+                <button
+                  onClick={() => { setShowScanModal(true); setScanResult(null); setScanPreview(null); setShowExpenseForm(false); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8, padding: '12px 24px',
+                    background: '#27ae60', color: '#fff', border: 'none', borderRadius: FB.radius,
+                    fontSize: 15, fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  <CameraOutlined style={{ fontSize: 18 }} /> Scanner
+                </button>
+                <button
+                  onClick={() => {
+                    setShowExpenseForm(true);
+                    setScanResult(null);
+                    setExpenseForm({
+                      supplierName: '', supplierVat: '', supplierAddress: '',
+                      totalAmount: 0, subtotal: 0, taxAmount: 0, taxRate: 21,
+                      category: 'other', description: '', reference: '',
+                      expenseDate: dayjs().format('YYYY-MM-DD'), paymentMethod: 'card', notes: '',
+                    });
+                    setShowScanModal(true);
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8, padding: '12px 24px',
+                    background: FB.blue, color: '#fff', border: 'none', borderRadius: FB.radius,
+                    fontSize: 15, fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  <PlusOutlined /> Saisie manuelle
+                </button>
+              </div>
+            </FBCard>
+
+            {/* Expense list */}
+            {expensesLoading ? (
+              <div style={{ textAlign: 'center', padding: 40 }}><Spin size="large" /></div>
+            ) : expenses.length === 0 ? (
+              <FBCard style={{ textAlign: 'center', padding: 48 }}>
+                <WalletOutlined style={{ fontSize: 48, color: FB.border, marginBottom: 16 }} />
+                <div style={{ fontSize: 17, fontWeight: 600, color: FB.text, marginBottom: 8 }}>Aucune dépense</div>
+                <div style={{ color: FB.textSecondary }}>Scannez un ticket pour commencer</div>
+              </FBCard>
+            ) : (
+              expenses.map(exp => {
+                const cat = getCategoryInfo(exp.category);
+                return (
+                  <FBCard key={exp.id} onClick={() => setSelectedExpense(exp)} style={{ cursor: 'pointer' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          width: 42, height: 42, borderRadius: '50%', background: cat.color + '15',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0,
+                        }}>
+                          {cat.icon}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontWeight: 600, color: FB.text, fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {exp.supplierName}
+                            </span>
+                            {exp.aiExtracted && (
+                              <span style={{
+                                fontSize: 10, padding: '1px 5px', borderRadius: 4,
+                                background: '#9b59b620', color: '#9b59b6', fontWeight: 600,
+                              }}>IA</span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: 12, color: FB.textSecondary }}>
+                            {cat.label} • {dayjs(exp.expenseDate).format('DD/MM/YYYY')}
+                            {exp.description && ` • ${exp.description}`}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: '#e74c3c' }}>
+                          -€{exp.totalAmount.toFixed(2)}
+                        </div>
+                        <div style={{
+                          fontSize: 11, fontWeight: 600,
+                          color: exp.status === 'PAID' ? FB.green : FB.orange,
+                        }}>
+                          {exp.status === 'PAID' ? 'Payé' : 'En attente'}
+                        </div>
+                      </div>
+                    </div>
+                  </FBCard>
+                );
+              })
+            )}
+          </>
+        )}
+
+        {/* ═══ ACCOUNTING TAB ═══ */}
+        {activeTab === 'accounting' && (
+          <>
+            {/* Breakdown — les chiffres clés sont dans la barre du haut */}
+            <FBCard style={{ padding: 20 }}>
+              <div style={{ fontSize: 16, fontWeight: 600, color: FB.text, marginBottom: 16 }}>Détail des flux</div>
+
+              {/* Entrées */}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#27ae60', marginBottom: 8, textTransform: 'uppercase' }}>
+                  ↗ Entrées
+                </div>
+                {[
+                  { label: 'Factures payées', value: stats?.totalPaid || 0 },
+                  { label: 'En attente de paiement', value: stats?.totalPending || 0, sub: true },
+                  { label: 'En retard', value: stats?.totalOverdue || 0, sub: true, warn: true },
+                ].map((item, i) => (
+                  <div key={i} style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '8px 0', borderBottom: `1px solid ${FB.border}`,
+                    paddingLeft: item.sub ? 16 : 0,
+                  }}>
+                    <span style={{ fontSize: 14, color: item.warn ? FB.red : item.sub ? FB.textSecondary : FB.text }}>
+                      {item.label}
+                    </span>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: item.warn ? FB.red : '#27ae60' }}>
+                      €{item.value.toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Sorties */}
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#e74c3c', marginBottom: 8, textTransform: 'uppercase' }}>
+                  ↘ Sorties
+                </div>
+                {expenseStats && Object.entries(expenseStats.byCategory)
+                  .sort(([, a], [, b]) => b - a)
+                  .map(([cat, amount]) => {
+                    const info = getCategoryInfo(cat);
+                    return (
+                      <div key={cat} style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        padding: '8px 0', borderBottom: `1px solid ${FB.border}`,
+                      }}>
+                        <span style={{ fontSize: 14, color: FB.text }}>
+                          {info.icon} {info.label}
+                        </span>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: '#e74c3c' }}>
+                          -€{amount.toFixed(2)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                {(!expenseStats || Object.keys(expenseStats.byCategory).length === 0) && (
+                  <div style={{ fontSize: 13, color: FB.textSecondary, padding: '8px 0' }}>Aucune dépense enregistrée</div>
+                )}
+              </div>
+            </FBCard>
+          </>
+        )}
+
+        {/* ═══ INVOICE TABS (all, outgoing, incoming, draft) ═══ */}
+        {activeTab !== 'expenses' && activeTab !== 'accounting' && (
+        <>
         {loading ? (
           <div style={{ textAlign: 'center', padding: 60 }}>
             <Spin size="large" />
@@ -983,15 +1404,38 @@ const FacturePage: React.FC = () => {
                     )}
                   </div>
                   {inv.peppolStatus && (
-                    <Tooltip title={`Peppol: ${inv.peppolStatus}`}>
-                      <div style={{
-                        background: inv.peppolStatus === 'DONE' ? FB.green + '20' : FB.purple + '20',
-                        color: inv.peppolStatus === 'DONE' ? FB.green : FB.purple,
-                        padding: '4px 10px', borderRadius: 4, fontSize: 12, fontWeight: 600,
-                      }}>
-                        ⚡ Peppol {inv.peppolStatus === 'DONE' ? '✓' : inv.peppolStatus}
-                      </div>
-                    </Tooltip>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Tooltip title={`Peppol: ${inv.peppolStatus}`}>
+                        <div style={{
+                          background: (inv.peppolStatus === 'SENT' || inv.peppolStatus === 'DONE') ? FB.green + '20'
+                            : inv.peppolStatus === 'ERROR' ? FB.red + '20'
+                            : FB.purple + '20',
+                          color: (inv.peppolStatus === 'SENT' || inv.peppolStatus === 'DONE') ? FB.green
+                            : inv.peppolStatus === 'ERROR' ? FB.red
+                            : FB.purple,
+                          padding: '4px 10px', borderRadius: 4, fontSize: 12, fontWeight: 600,
+                        }}>
+                          {inv.peppolStatus === 'DONE' ? '✅ Peppol Délivré'
+                            : inv.peppolStatus === 'SENT' ? '✅ Peppol ✓'
+                            : inv.peppolStatus === 'ERROR' ? '❌ Peppol'
+                            : '⏳ Peppol PROCESSING'}
+                        </div>
+                      </Tooltip>
+                      {(inv.peppolStatus === 'PROCESSING' || inv.peppolStatus === 'ERROR') && (
+                        <Tooltip title="Réessayer l'envoi Peppol">
+                          <button
+                            onClick={e => { e.stopPropagation(); handlePeppolRetry(inv.id); }}
+                            style={{
+                              background: FB.purple + '20', color: FB.purple, border: 'none',
+                              borderRadius: 4, padding: '4px 8px', fontSize: 11, fontWeight: 600,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            🔄
+                          </button>
+                        </Tooltip>
+                      )}
+                    </div>
                   )}
                 </div>
 
@@ -1127,6 +1571,8 @@ const FacturePage: React.FC = () => {
               </FBCard>
             );
           })
+        )}
+        </>
         )}
       </div>
 
@@ -1849,6 +2295,19 @@ const FacturePage: React.FC = () => {
                     <ThunderboltOutlined /> Peppol
                   </button>
                 )}
+                {(inv.peppolStatus === 'PROCESSING' || inv.peppolStatus === 'ERROR') && (
+                  <button
+                    onClick={() => { handlePeppolRetry(inv.id); setSelectedInvoice(null); }}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                      padding: isMobile ? '8px 10px' : '10px 16px', background: FB.orange + '10', border: 'none', borderRadius: 6,
+                      color: FB.orange, fontWeight: 600, fontSize: isMobile ? 13 : 14, cursor: 'pointer',
+                      flex: isMobile ? '1 1 auto' : undefined,
+                    }}
+                  >
+                    🔄 {isMobile ? 'Retry' : 'Réessayer Peppol'}
+                  </button>
+                )}
                 {inv.source === 'chantier' && inv.chantierId && (
                   <button
                     onClick={() => { window.location.href = `/chantiers?id=${inv.chantierId}`; }}
@@ -2262,6 +2721,434 @@ const FacturePage: React.FC = () => {
             </button>
           </div>
         </div>
+      </Modal>
+
+      {/* ═══════════════════════════════════════════════════════════
+          SCAN TICKET / CREATE EXPENSE MODAL
+         ═══════════════════════════════════════════════════════════ */}
+      <Modal
+        open={showScanModal}
+        onCancel={() => { setShowScanModal(false); setScanResult(null); setScanPreview(null); setShowExpenseForm(false); }}
+        footer={null}
+        width={isMobile ? '100%' : 640}
+        centered
+        title={null}
+        closable={false}
+        styles={{ body: { padding: 0 } }}
+      >
+        <div style={{ padding: isMobile ? 16 : 24 }}>
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: '50%', background: '#27ae6020',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <CameraOutlined style={{ color: '#27ae60', fontSize: 18 }} />
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 17, color: FB.text }}>
+                  {showExpenseForm ? 'Nouvelle dépense' : 'Scanner un ticket'}
+                </div>
+                <div style={{ fontSize: 12, color: FB.textSecondary }}>
+                  {showExpenseForm ? 'Vérifiez et ajustez les données' : 'L\'IA Gemini extrait les données automatiquement'}
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => { setShowScanModal(false); setScanResult(null); setScanPreview(null); setShowExpenseForm(false); }}
+              style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: FB.textSecondary }}
+            >✕</button>
+          </div>
+
+          {/* Step 1: Upload / Camera */}
+          {!showExpenseForm && (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleScanTicket(file);
+                  e.target.value = '';
+                }}
+              />
+
+              {scanning ? (
+                <div style={{ textAlign: 'center', padding: 40 }}>
+                  <div style={{ marginBottom: 16 }}>
+                    {scanPreview && (
+                      <img src={scanPreview} alt="ticket" style={{
+                        maxWidth: '100%', maxHeight: 200, borderRadius: 8, opacity: 0.6,
+                      }} />
+                    )}
+                  </div>
+                  <Spin indicator={<LoadingOutlined style={{ fontSize: 32, color: '#27ae60' }} spin />} />
+                  <div style={{ marginTop: 12, fontWeight: 600, color: FB.text }}>Analyse en cours...</div>
+                  <div style={{ fontSize: 13, color: FB.textSecondary }}>Gemini AI extrait les données du ticket</div>
+                </div>
+              ) : (
+                <div style={{
+                  border: `2px dashed ${FB.border}`, borderRadius: 12, padding: 40,
+                  textAlign: 'center', cursor: 'pointer', transition: 'border-color 0.2s',
+                }}
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = '#27ae60'; }}
+                  onDragLeave={(e) => { e.currentTarget.style.borderColor = FB.border; }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.style.borderColor = FB.border;
+                    const file = e.dataTransfer.files[0];
+                    if (file && file.type.startsWith('image/')) handleScanTicket(file);
+                  }}
+                >
+                  <CameraOutlined style={{ fontSize: 48, color: FB.border, marginBottom: 12 }} />
+                  <div style={{ fontWeight: 600, fontSize: 16, color: FB.text, marginBottom: 4 }}>
+                    {isMobile ? 'Touchez pour prendre une photo' : 'Glissez une image ou cliquez'}
+                  </div>
+                  <div style={{ fontSize: 13, color: FB.textSecondary }}>
+                    Photo de ticket, facture, reçu, note de frais
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Step 2: Expense form (after scan or manual) */}
+          {showExpenseForm && (
+            <div>
+              {/* Confidence badge */}
+              {scanResult && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16,
+                  padding: '8px 14px', borderRadius: 8,
+                  background: (scanResult.confidence || 0) > 0.7 ? '#27ae6015' : '#e67e2215',
+                  border: `1px solid ${(scanResult.confidence || 0) > 0.7 ? '#27ae6040' : '#e67e2240'}`,
+                }}>
+                  <span style={{ fontSize: 16 }}>{(scanResult.confidence || 0) > 0.7 ? '✅' : '⚠️'}</span>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: (scanResult.confidence || 0) > 0.7 ? '#27ae60' : '#e67e22' }}>
+                    Confiance IA : {((scanResult.confidence || 0) * 100).toFixed(0)}% — Vérifiez les données
+                  </span>
+                </div>
+              )}
+
+              {/* Scan preview on the side */}
+              {scanPreview && (
+                <div style={{ marginBottom: 14, textAlign: 'center' }}>
+                  <img src={scanPreview} alt="ticket" style={{ maxWidth: '100%', maxHeight: 120, borderRadius: 8, border: `1px solid ${FB.border}` }} />
+                </div>
+              )}
+
+              {/* Form */}
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
+                {/* Supplier */}
+                <div style={{ gridColumn: isMobile ? undefined : '1 / -1' }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: FB.textSecondary, display: 'block', marginBottom: 4 }}>Fournisseur *</label>
+                  <input
+                    value={expenseForm.supplierName}
+                    onChange={e => setExpenseForm(p => ({ ...p, supplierName: e.target.value }))}
+                    placeholder="Nom du magasin / fournisseur"
+                    style={{
+                      width: '100%', padding: '10px 12px', border: `1px solid ${FB.border}`,
+                      borderRadius: 6, fontSize: 14, outline: 'none', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                {/* Amount */}
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: FB.textSecondary, display: 'block', marginBottom: 4 }}>Montant TTC (€) *</label>
+                  <InputNumber
+                    value={expenseForm.totalAmount}
+                    onChange={v => {
+                      const total = v || 0;
+                      const sub = total / (1 + expenseForm.taxRate / 100);
+                      setExpenseForm(p => ({ ...p, totalAmount: total, subtotal: Math.round(sub * 100) / 100, taxAmount: Math.round((total - sub) * 100) / 100 }));
+                    }}
+                    min={0} step={0.01} precision={2} prefix="€"
+                    style={{ width: '100%' }}
+                  />
+                </div>
+
+                {/* Tax rate */}
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: FB.textSecondary, display: 'block', marginBottom: 4 }}>Taux TVA (%)</label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {[6, 12, 21].map(rate => (
+                      <button key={rate} onClick={() => {
+                        const sub = expenseForm.totalAmount / (1 + rate / 100);
+                        setExpenseForm(p => ({ ...p, taxRate: rate, subtotal: Math.round(sub * 100) / 100, taxAmount: Math.round((p.totalAmount - sub) * 100) / 100 }));
+                      }}
+                        style={{
+                          flex: 1, padding: '8px 0', border: `1px solid ${expenseForm.taxRate === rate ? '#27ae60' : FB.border}`,
+                          borderRadius: 6, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                          background: expenseForm.taxRate === rate ? '#27ae6015' : '#fff',
+                          color: expenseForm.taxRate === rate ? '#27ae60' : FB.text,
+                        }}
+                      >{rate}%</button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Category */}
+                <div style={{ gridColumn: isMobile ? undefined : '1 / -1' }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: FB.textSecondary, display: 'block', marginBottom: 4 }}>Catégorie</label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {Object.entries(CATEGORY_MAP).map(([key, info]) => (
+                      <button key={key} onClick={() => setExpenseForm(p => ({ ...p, category: key }))}
+                        style={{
+                          padding: '6px 10px', borderRadius: 16, fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                          border: `1px solid ${expenseForm.category === key ? info.color : FB.border}`,
+                          background: expenseForm.category === key ? info.color + '15' : '#fff',
+                          color: expenseForm.category === key ? info.color : FB.textSecondary,
+                        }}
+                      >{info.icon} {info.label}</button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Date */}
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: FB.textSecondary, display: 'block', marginBottom: 4 }}>Date</label>
+                  <DatePicker
+                    value={expenseForm.expenseDate ? dayjs(expenseForm.expenseDate) : null}
+                    onChange={d => setExpenseForm(p => ({ ...p, expenseDate: d?.format('YYYY-MM-DD') || dayjs().format('YYYY-MM-DD') }))}
+                    format="DD/MM/YYYY"
+                    style={{ width: '100%' }}
+                  />
+                </div>
+
+                {/* Payment method */}
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: FB.textSecondary, display: 'block', marginBottom: 4 }}>Moyen de paiement</label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {[
+                      { key: 'card', label: '💳 Carte' },
+                      { key: 'cash', label: '💵 Cash' },
+                      { key: 'transfer', label: '🏦 Virement' },
+                    ].map(pm => (
+                      <button key={pm.key} onClick={() => setExpenseForm(p => ({ ...p, paymentMethod: pm.key }))}
+                        style={{
+                          flex: 1, padding: '8px 0', border: `1px solid ${expenseForm.paymentMethod === pm.key ? FB.blue : FB.border}`,
+                          borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                          background: expenseForm.paymentMethod === pm.key ? FB.lightBlue : '#fff',
+                          color: expenseForm.paymentMethod === pm.key ? FB.blue : FB.textSecondary,
+                        }}
+                      >{pm.label}</button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div style={{ gridColumn: isMobile ? undefined : '1 / -1' }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: FB.textSecondary, display: 'block', marginBottom: 4 }}>Description</label>
+                  <input
+                    value={expenseForm.description}
+                    onChange={e => setExpenseForm(p => ({ ...p, description: e.target.value }))}
+                    placeholder="Ex: Achat matériel chantier Dupont"
+                    style={{
+                      width: '100%', padding: '10px 12px', border: `1px solid ${FB.border}`,
+                      borderRadius: 6, fontSize: 14, outline: 'none', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                {/* Reference */}
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: FB.textSecondary, display: 'block', marginBottom: 4 }}>N° ticket / référence</label>
+                  <input
+                    value={expenseForm.reference}
+                    onChange={e => setExpenseForm(p => ({ ...p, reference: e.target.value }))}
+                    placeholder="Optionnel"
+                    style={{
+                      width: '100%', padding: '10px 12px', border: `1px solid ${FB.border}`,
+                      borderRadius: 6, fontSize: 14, outline: 'none', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                {/* Supplier VAT */}
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: FB.textSecondary, display: 'block', marginBottom: 4 }}>TVA fournisseur</label>
+                  <input
+                    value={expenseForm.supplierVat}
+                    onChange={e => setExpenseForm(p => ({ ...p, supplierVat: e.target.value }))}
+                    placeholder="BE0123456789"
+                    style={{
+                      width: '100%', padding: '10px 12px', border: `1px solid ${FB.border}`,
+                      borderRadius: 6, fontSize: 14, outline: 'none', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Summary */}
+              <div style={{
+                marginTop: 16, padding: 14, borderRadius: 8, background: '#f8f9fa',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              }}>
+                <div style={{ fontSize: 13, color: FB.textSecondary }}>
+                  HT: €{expenseForm.subtotal.toFixed(2)} + TVA {expenseForm.taxRate}%: €{expenseForm.taxAmount.toFixed(2)}
+                </div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: '#e74c3c' }}>
+                  €{expenseForm.totalAmount.toFixed(2)}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: 10, marginTop: 16, justifyContent: 'flex-end' }}>
+                {!scanResult && (
+                  <button
+                    onClick={() => { setShowExpenseForm(false); }}
+                    style={{
+                      padding: '10px 20px', background: FB.btnGray, border: 'none',
+                      borderRadius: 6, fontSize: 14, fontWeight: 600, color: FB.text, cursor: 'pointer',
+                    }}
+                  >Annuler</button>
+                )}
+                {scanResult && (
+                  <button
+                    onClick={() => { setShowExpenseForm(false); setScanResult(null); setScanPreview(null); }}
+                    style={{
+                      padding: '10px 20px', background: FB.btnGray, border: 'none',
+                      borderRadius: 6, fontSize: 14, fontWeight: 600, color: FB.text, cursor: 'pointer',
+                    }}
+                  >Re-scanner</button>
+                )}
+                <button
+                  onClick={handleSaveExpense}
+                  disabled={savingExpense || !expenseForm.supplierName.trim() || expenseForm.totalAmount <= 0}
+                  style={{
+                    padding: '10px 24px',
+                    background: savingExpense || !expenseForm.supplierName.trim() || expenseForm.totalAmount <= 0 ? FB.btnGray : '#27ae60',
+                    border: 'none', borderRadius: 6, fontSize: 15, fontWeight: 600,
+                    color: '#fff', cursor: savingExpense ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {savingExpense ? 'Enregistrement...' : '✅ Enregistrer la dépense'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* ═══════════════════════════════════════════════════════════
+          EXPENSE DETAIL MODAL
+         ═══════════════════════════════════════════════════════════ */}
+      <Modal
+        open={!!selectedExpense}
+        onCancel={() => setSelectedExpense(null)}
+        footer={null}
+        width={isMobile ? '100%' : 480}
+        centered
+        title={null}
+        closable={false}
+        styles={{ body: { padding: 0 } }}
+      >
+        {selectedExpense && (() => {
+          const cat = getCategoryInfo(selectedExpense.category);
+          return (
+            <div style={{ padding: isMobile ? 16 : 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{
+                    width: 48, height: 48, borderRadius: '50%', background: cat.color + '15',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24,
+                  }}>{cat.icon}</div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 18, color: FB.text }}>{selectedExpense.supplierName}</div>
+                    <div style={{ fontSize: 13, color: FB.textSecondary }}>{cat.label} • {dayjs(selectedExpense.expenseDate).format('DD/MM/YYYY')}</div>
+                  </div>
+                </div>
+                <button onClick={() => setSelectedExpense(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: FB.textSecondary }}>✕</button>
+              </div>
+
+              <div style={{ fontSize: 32, fontWeight: 700, color: '#e74c3c', textAlign: 'center', marginBottom: 20 }}>
+                -€{selectedExpense.totalAmount.toFixed(2)}
+              </div>
+
+              <div style={{ background: '#f8f9fa', borderRadius: 8, padding: 14, marginBottom: 16 }}>
+                {[
+                  { label: 'HT', value: `€${selectedExpense.subtotal.toFixed(2)}` },
+                  { label: `TVA ${selectedExpense.taxRate}%`, value: `€${selectedExpense.taxAmount.toFixed(2)}` },
+                  { label: 'TTC', value: `€${selectedExpense.totalAmount.toFixed(2)}`, bold: true },
+                ].map((row, i) => (
+                  <div key={i} style={{
+                    display: 'flex', justifyContent: 'space-between', padding: '4px 0',
+                    fontWeight: row.bold ? 700 : 400, fontSize: row.bold ? 15 : 13,
+                    color: row.bold ? FB.text : FB.textSecondary,
+                  }}>
+                    <span>{row.label}</span><span>{row.value}</span>
+                  </div>
+                ))}
+              </div>
+
+              {selectedExpense.description && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: FB.textSecondary }}>Description</div>
+                  <div style={{ fontSize: 14, color: FB.text }}>{selectedExpense.description}</div>
+                </div>
+              )}
+              {selectedExpense.reference && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: FB.textSecondary }}>Référence</div>
+                  <div style={{ fontSize: 14, color: FB.text }}>{selectedExpense.reference}</div>
+                </div>
+              )}
+              {selectedExpense.supplierVat && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: FB.textSecondary }}>TVA Fournisseur</div>
+                  <div style={{ fontSize: 14, color: FB.text }}>{selectedExpense.supplierVat}</div>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+                {selectedExpense.aiExtracted && (
+                  <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: '#9b59b620', color: '#9b59b6', fontWeight: 600 }}>
+                    Extrait par IA {selectedExpense.aiConfidence ? `(${(selectedExpense.aiConfidence * 100).toFixed(0)}%)` : ''}
+                  </span>
+                )}
+                <span style={{
+                  fontSize: 11, padding: '2px 8px', borderRadius: 4, fontWeight: 600,
+                  background: selectedExpense.status === 'PAID' ? '#27ae6020' : '#e67e2220',
+                  color: selectedExpense.status === 'PAID' ? '#27ae60' : '#e67e22',
+                }}>
+                  {selectedExpense.status === 'PAID' ? 'Payé' : 'En attente'}
+                </span>
+                {selectedExpense.paymentMethod && (
+                  <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: FB.btnGray, color: FB.textSecondary }}>
+                    {selectedExpense.paymentMethod === 'card' ? '💳 Carte' : selectedExpense.paymentMethod === 'cash' ? '💵 Cash' : '🏦 Virement'}
+                  </span>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => {
+                    modal.confirm({
+                      title: 'Supprimer cette dépense ?',
+                      content: `${selectedExpense.supplierName} — €${selectedExpense.totalAmount.toFixed(2)}`,
+                      okText: 'Supprimer',
+                      okType: 'danger',
+                      cancelText: 'Annuler',
+                      onOk: () => { handleDeleteExpense(selectedExpense.id); setSelectedExpense(null); },
+                    });
+                  }}
+                  style={{
+                    padding: '8px 16px', background: FB.lightRed, border: 'none',
+                    borderRadius: 6, fontSize: 13, fontWeight: 600, color: FB.red, cursor: 'pointer',
+                  }}
+                >
+                  <DeleteOutlined /> Supprimer
+                </button>
+              </div>
+            </div>
+          );
+        })()}
       </Modal>
     </div>
   );

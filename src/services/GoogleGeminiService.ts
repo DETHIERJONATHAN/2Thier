@@ -685,7 +685,18 @@ Bien à vous`;
   }
 
   /**
-   * 📝 Construit le prompt pour l'extraction de mesures
+   * � Appel public à l'API Vision Gemini (pour scan de tickets, etc.)
+   */
+  async callVisionAPIPublic(
+    imageBase64: string,
+    mimeType: string,
+    prompt: string
+  ): Promise<{ success: boolean; content?: string; error?: string; modelUsed: string }> {
+    return this.callVisionAPI(imageBase64, mimeType, prompt);
+  }
+
+  /**
+   * �📝 Construit le prompt pour l'extraction de mesures
    */
   private buildMeasurePrompt(userPrompt: string, measureKeys: string[]): string {
     const keysDescription = measureKeys.map(k => `"${k}"`).join(', ');

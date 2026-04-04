@@ -7,6 +7,7 @@
  *   POST   /api/peppol/register              — Enregistrer l'organisation sur Peppol
  *   GET    /api/peppol/status                — Vérifier le statut d'enregistrement
  *   POST   /api/peppol/send/:invoiceId       — Envoyer une facture via Peppol
+ *   POST   /api/peppol/retry/:invoiceId      — Réessayer l'envoi d'une facture bloquée
  *   GET    /api/peppol/send/:invoiceId/status — Statut d'envoi d'une facture
  *   POST   /api/peppol/fetch-incoming        — Déclencher la réception de factures
  *   GET    /api/peppol/incoming              — Lister les factures entrantes
@@ -21,6 +22,8 @@ import { authenticateToken, isAdmin } from '../middleware/auth';
 import { z } from 'zod';
 import { getPeppolBridge } from '../services/peppolBridge';
 import { vatLookup, checkPeppolStatus, normalizeVatNumber, extractVatDigits } from '../services/vatLookupService';
+import { emailService } from '../services/EmailService';
+import { generateInvoicePdf, orgSelectForPdf } from './invoices';
 
 const router = Router();
 
@@ -213,17 +216,25 @@ router.post('/register', authenticateToken, isAdmin, async (req: Request, res: R
       migrationKey: config.migrationKey || undefined,
     });
 
-    // 3. Mettre à jour la config DB
+    // 3. Mapper le statut Odoo → statut Zhiive
+    const statusMap: Record<string, string> = {
+      active: 'ACTIVE',
+      pending: 'PENDING',
+      not_verified: 'VERIFICATION_NEEDED',
+      sent_verification: 'VERIFICATION_NEEDED',
+    };
+    const finalStatus = statusMap[result.status] || 'PENDING';
+
+    // 4. Mettre à jour la config DB
     await db.peppolConfig.update({
       where: { organizationId },
       data: {
         enabled: true,
         odooCompanyId,
-        registrationStatus: result.status === 'active' ? 'ACTIVE' : 'PENDING',
+        registrationStatus: finalStatus,
       },
     });
 
-    const finalStatus = result.status === 'active' ? 'ACTIVE' : 'PENDING';
     res.json({
       success: true,
       data: { registrationStatus: finalStatus, odooCompanyId },
@@ -279,11 +290,11 @@ router.get('/status', authenticateToken, async (req: Request, res: Response) => 
     } else {
       // Pas encore visible dans l'annuaire public Peppol
       if (odooStatus === 'active') {
-        // Odoo (Access Point certifié) confirme ACTIVE → faire confiance à Odoo
-        // L'annuaire Peppol peut mettre du temps à propager l'enregistrement
         realStatus = 'ACTIVE';
       } else if (odooStatus === 'pending') {
         realStatus = 'PENDING';
+      } else if (odooStatus === 'not_verified' || odooStatus === 'sent_verification') {
+        realStatus = 'VERIFICATION_NEEDED';
       } else if (!config.odooCompanyId) {
         realStatus = 'NOT_REGISTERED';
       }
@@ -328,6 +339,90 @@ router.get('/status', authenticateToken, async (req: Request, res: Response) => 
   }
 });
 
+// ── POST /send-verification-code — Envoyer le SMS de vérification Peppol ──
+
+router.post('/send-verification-code', authenticateToken, isAdmin, async (req: Request, res: Response) => {
+  try {
+    const organizationId = getOrganizationId(req);
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const config = await db.peppolConfig.findUnique({ where: { organizationId } });
+    if (!config?.odooCompanyId) {
+      return res.status(400).json({ success: false, message: 'Organisation non enregistrée sur Peppol' });
+    }
+
+    const bridge = getPeppolBridge();
+    await bridge.sendVerificationCode(config.odooCompanyId);
+
+    await db.peppolConfig.update({
+      where: { organizationId },
+      data: { registrationStatus: 'VERIFICATION_NEEDED' },
+    });
+
+    res.json({ success: true, message: 'SMS de vérification envoyé' });
+  } catch (error) {
+    console.error('[Peppol] Erreur POST /send-verification-code:', error);
+    res.status(500).json({ success: false, message: `Erreur d'envoi SMS: ${(error as Error).message}` });
+  }
+});
+
+// ── POST /verify-code — Vérifier le code SMS Peppol ──
+
+const verifyCodeSchema = z.object({
+  code: z.string().min(4).max(10),
+});
+
+router.post('/verify-code', authenticateToken, isAdmin, async (req: Request, res: Response) => {
+  try {
+    const organizationId = getOrganizationId(req);
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const validation = verifyCodeSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({ success: false, message: 'Code invalide' });
+    }
+
+    const config = await db.peppolConfig.findUnique({ where: { organizationId } });
+    if (!config?.odooCompanyId) {
+      return res.status(400).json({ success: false, message: 'Organisation non enregistrée sur Peppol' });
+    }
+
+    const bridge = getPeppolBridge();
+    const result = await bridge.verifyCode(config.odooCompanyId, validation.data.code);
+
+    // Mapper le statut Odoo → statut Zhiive
+    const statusMap: Record<string, string> = {
+      active: 'ACTIVE',
+      pending: 'PENDING',
+      not_verified: 'VERIFICATION_NEEDED',
+      sent_verification: 'VERIFICATION_NEEDED',
+    };
+    const finalStatus = statusMap[result.status] || 'PENDING';
+
+    await db.peppolConfig.update({
+      where: { organizationId },
+      data: { registrationStatus: finalStatus },
+    });
+
+    res.json({
+      success: true,
+      data: { registrationStatus: finalStatus },
+      message: finalStatus === 'PENDING'
+        ? 'Code vérifié ! Activation en cours sur le réseau Peppol...'
+        : finalStatus === 'ACTIVE'
+          ? 'Peppol activé avec succès !'
+          : 'Code vérifié',
+    });
+  } catch (error) {
+    console.error('[Peppol] Erreur POST /verify-code:', error);
+    res.status(500).json({ success: false, message: `Erreur de vérification: ${(error as Error).message}` });
+  }
+});
+
 // ── POST /send/:invoiceId — Envoyer une facture via Peppol ──
 
 const sendInvoiceSchema = z.object({
@@ -366,6 +461,7 @@ router.post('/send/:invoiceId', authenticateToken, isAdmin, async (req: Request,
       taxRate: number;
       clientName: string | null;
       clientVat: string | null;
+      clientEmail: string | null;
     } | null = null;
 
     const chantierInvoice = await db.chantierInvoice.findFirst({
@@ -389,6 +485,7 @@ router.post('/send/:invoiceId', authenticateToken, isAdmin, async (req: Request,
           || chantierInvoice.Chantier?.clientName
           || null,
         clientVat: null,
+        clientEmail: lead?.email || null,
       };
     } else {
       const standaloneInvoice = await db.standaloneInvoice.findFirst({
@@ -406,6 +503,7 @@ router.post('/send/:invoiceId', authenticateToken, isAdmin, async (req: Request,
           taxRate: standaloneInvoice.taxRate,
           clientName: standaloneInvoice.clientName,
           clientVat: standaloneInvoice.clientVat,
+          clientEmail: standaloneInvoice.clientEmail,
         };
       }
     }
@@ -414,10 +512,10 @@ router.post('/send/:invoiceId', authenticateToken, isAdmin, async (req: Request,
       return res.status(404).json({ success: false, message: 'Facture non trouvée' });
     }
 
-    if (invoiceData.peppolStatus === 'PROCESSING' || invoiceData.peppolStatus === 'DONE') {
+    if (invoiceData.peppolStatus === 'DONE' || invoiceData.peppolStatus === 'SENT') {
       return res.status(400).json({
         success: false,
-        message: `Facture déjà ${invoiceData.peppolStatus === 'DONE' ? 'envoyée' : 'en cours d\'envoi'} via Peppol`,
+        message: 'Facture déjà envoyée via Peppol',
       });
     }
 
@@ -506,6 +604,9 @@ router.post('/send/:invoiceId', authenticateToken, isAdmin, async (req: Request,
           peppolStatus: 'PROCESSING',
           peppolMessageId: result.peppolMessageId || null,
           peppolSentAt: new Date(),
+          peppolOdooInvoiceId: result.odooInvoiceId,
+          peppolRetryCount: 0,
+          peppolError: null,
           updatedAt: new Date(),
         },
       });
@@ -516,8 +617,113 @@ router.post('/send/:invoiceId', authenticateToken, isAdmin, async (req: Request,
           peppolStatus: 'PROCESSING',
           peppolMessageId: result.peppolMessageId || null,
           peppolSentAt: new Date(),
+          peppolOdooInvoiceId: result.odooInvoiceId,
+          peppolRetryCount: 0,
+          peppolError: null,
         },
       });
+    }
+
+    // 📧 Envoyer une copie email à l'adresse zhiive.com de l'utilisateur + email de la Colony + facture au client
+    try {
+      const userId = getUserId(req);
+      const org = await db.organization.findUnique({
+        where: { id: organizationId },
+        select: orgSelectForPdf,
+      });
+      const orgName = org?.legalName || org?.name || 'Zhiive';
+      const invoiceNum = invoiceData.invoiceNumber || invoiceId;
+      const clientName = invoiceData.clientName || 'destinataire';
+
+      const emailHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #1877f2;">Facture envoyée via Peppol</h2>
+          <p>La facture <strong>${invoiceNum}</strong> a été transmise au réseau Peppol.</p>
+          <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+            <tr><td style="padding: 8px; color: #666;">Destinataire</td><td style="padding: 8px; font-weight: 600;">${clientName}</td></tr>
+            <tr><td style="padding: 8px; color: #666;">Montant</td><td style="padding: 8px; font-weight: 600;">&euro;${invoiceData.amount.toFixed(2)}</td></tr>
+            <tr><td style="padding: 8px; color: #666;">Statut</td><td style="padding: 8px; font-weight: 600; color: #1877f2;">En cours de livraison Peppol</td></tr>
+          </table>
+          <p style="font-size: 13px; color: #888;">Une confirmation sera envoyée dès que la facture sera délivrée au destinataire.</p>
+          <p style="font-size: 12px; color: #aaa;">— ${orgName} via Zhiive</p>
+        </div>
+      `;
+      const emailSubject = `Copie Peppol — ${invoiceNum} envoyée à ${clientName}`;
+
+      // Collecter les destinataires internes (sans doublons)
+      const copyRecipients = new Set<string>();
+
+      // 1. Email zhiive.com de l'utilisateur
+      if (userId) {
+        const emailAccount = await db.emailAccount.findUnique({ where: { userId }, select: { emailAddress: true } });
+        if (emailAccount?.emailAddress) copyRecipients.add(emailAccount.emailAddress);
+      }
+
+      // 2. Email de la Colony (organisation)
+      if (org?.email) copyRecipients.add(org.email);
+
+      // Envoyer copie interne (sans PDF)
+      for (const recipient of copyRecipients) {
+        try {
+          await emailService.sendEmail({
+            to: recipient,
+            subject: emailSubject,
+            html: emailHtml,
+            fromName: orgName,
+            replyTo: org?.email || undefined,
+            organizationId,
+          });
+          console.log(`[Peppol] Copie email envoyée à ${recipient} pour ${invoiceNum}`);
+        } catch (err) {
+          console.warn(`[Peppol] Erreur copie email vers ${recipient}:`, (err as Error).message);
+        }
+      }
+
+      // 3. Email au CLIENT avec la facture PDF en pièce jointe
+      const clientEmail = invoiceData.clientEmail;
+      if (clientEmail && org) {
+        try {
+          // Charger la facture complète pour générer le PDF
+          const fullInvoice = invoiceSource === 'standalone'
+            ? await db.standaloneInvoice.findUnique({ where: { id: invoiceId } })
+            : null; // ChantierInvoice: PDF non supporté pour l'instant
+
+          if (fullInvoice) {
+            const pdfBuffer = await generateInvoicePdf(fullInvoice, org);
+            const pdfFilename = `${(invoiceNum || 'facture').replace(/\s+/g, '_')}.pdf`;
+
+            const clientEmailHtml = `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #2980B9;">Facture ${invoiceNum}</h2>
+                <p>Bonjour,</p>
+                <p>Veuillez trouver ci-joint la facture <strong>${invoiceNum}</strong> émise par <strong>${orgName}</strong>.</p>
+                <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+                  <tr><td style="padding: 8px; color: #666;">Montant total</td><td style="padding: 8px; font-weight: 600;">&euro;${invoiceData.amount.toFixed(2)}</td></tr>
+                  ${invoiceData.dueDate ? `<tr><td style="padding: 8px; color: #666;">Échéance</td><td style="padding: 8px; font-weight: 600;">${new Date(invoiceData.dueDate).toLocaleDateString('fr-BE', { timeZone: 'Europe/Brussels' })}</td></tr>` : ''}
+                </table>
+                <p>Cette facture a également été transmise via le réseau Peppol.</p>
+                <p style="font-size: 12px; color: #aaa;">— ${orgName}</p>
+              </div>
+            `;
+
+            await emailService.sendEmail({
+              to: clientEmail,
+              subject: `${invoiceNum} — ${orgName}`,
+              html: clientEmailHtml,
+              fromName: orgName,
+              replyTo: org.email || undefined,
+              organizationId,
+              attachments: [{ filename: pdfFilename, content: pdfBuffer, contentType: 'application/pdf' }],
+            });
+            console.log(`[Peppol] Facture PDF envoyée au client ${clientEmail} pour ${invoiceNum}`);
+          }
+        } catch (clientErr) {
+          console.warn(`[Peppol] Erreur envoi facture au client ${clientEmail}:`, (clientErr as Error).message);
+        }
+      }
+    } catch (emailErr) {
+      // Non bloquant — l'envoi Peppol a réussi même si l'email échoue
+      console.warn('[Peppol] Erreur envoi copie email:', (emailErr as Error).message);
     }
 
     res.json({
@@ -580,6 +786,130 @@ router.get('/send/:invoiceId/status', authenticateToken, async (req: Request, re
   } catch (error) {
     console.error('[Peppol] Erreur GET /send/:id/status:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+// ── POST /retry/:invoiceId — Réessayer l'envoi Peppol d'une facture bloquée ──
+
+router.post('/retry/:invoiceId', authenticateToken, isAdmin, async (req: Request, res: Response) => {
+  const { invoiceId } = req.params;
+  try {
+    const organizationId = getOrganizationId(req);
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
+    }
+
+    const config = await db.peppolConfig.findUnique({ where: { organizationId } });
+    if (!config?.enabled || config.registrationStatus !== 'ACTIVE') {
+      return res.status(400).json({ success: false, message: 'Peppol n\'est pas activé' });
+    }
+
+    // Trouver la facture dans les deux tables
+    let invoiceSource: 'chantier' | 'standalone' = 'standalone';
+    let invoice: { id: string; peppolStatus: string | null; peppolOdooInvoiceId: number | null; invoiceNumber: string | null } | null = null;
+
+    const chantierInv = await db.chantierInvoice.findFirst({
+      where: { id: invoiceId, organizationId },
+      select: { id: true, peppolStatus: true, peppolOdooInvoiceId: true, invoiceNumber: true },
+    });
+
+    if (chantierInv) {
+      invoiceSource = 'chantier';
+      invoice = chantierInv;
+    } else {
+      const standaloneInv = await db.standaloneInvoice.findFirst({
+        where: { id: invoiceId, organizationId },
+        select: { id: true, peppolStatus: true, peppolOdooInvoiceId: true, invoiceNumber: true },
+      });
+      if (standaloneInv) {
+        invoiceSource = 'standalone';
+        invoice = standaloneInv;
+      }
+    }
+
+    if (!invoice) {
+      return res.status(404).json({ success: false, message: 'Facture non trouvée' });
+    }
+
+    // Seules les factures PROCESSING ou ERROR peuvent être retentées
+    if (!['PROCESSING', 'ERROR'].includes(invoice.peppolStatus || '')) {
+      return res.status(400).json({
+        success: false,
+        message: `Impossible de réessayer : statut actuel "${invoice.peppolStatus}"`,
+      });
+    }
+
+    if (!invoice.peppolOdooInvoiceId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Pas d\'ID Odoo enregistré pour cette facture. Renvoyez-la via le bouton Peppol standard.',
+      });
+    }
+
+    const bridge = getPeppolBridge();
+
+    // Vérifier l'état actuel dans Odoo
+    const odooInvoiceData = await bridge.call('account.move', 'read', [
+      [invoice.peppolOdooInvoiceId],
+    ], { fields: ['peppol_move_state', 'peppol_message_uuid', 'state'] }) as Array<{
+      peppol_move_state: string; peppol_message_uuid?: string; state: string;
+    }>;
+
+    if (!odooInvoiceData?.length) {
+      return res.status(400).json({ success: false, message: 'Facture non trouvée dans Odoo' });
+    }
+
+    const odooState = odooInvoiceData[0].peppol_move_state;
+
+    // Si déjà done dans Odoo, juste mettre à jour en base
+    if (odooState === 'done') {
+      const updateData = {
+        peppolStatus: 'SENT',
+        peppolMessageId: odooInvoiceData[0].peppol_message_uuid || invoice.id,
+        peppolError: null,
+      };
+
+      if (invoiceSource === 'chantier') {
+        await db.chantierInvoice.update({ where: { id: invoiceId }, data: { ...updateData, updatedAt: new Date() } });
+      } else {
+        await db.standaloneInvoice.update({ where: { id: invoiceId }, data: updateData });
+      }
+
+      return res.json({ success: true, data: { peppolStatus: 'SENT', message: 'Facture déjà livrée dans Odoo !' } });
+    }
+
+    // Re-trigger l'envoi Peppol via le wizard Odoo 17
+    const wizardSuccess = await bridge.sendViaWizard(invoice.peppolOdooInvoiceId, config.odooCompanyId!);
+    if (!wizardSuccess) {
+      console.warn(`[Peppol] Retry wizard partiel pour invoice ${invoiceId}`);
+    }
+
+    // Remettre en PROCESSING avec compteur reset
+    const retryData = {
+      peppolStatus: 'PROCESSING' as const,
+      peppolSentAt: new Date(),
+      peppolRetryCount: 0,
+      peppolError: 'Retry lancé manuellement',
+    };
+
+    if (invoiceSource === 'chantier') {
+      await db.chantierInvoice.update({ where: { id: invoiceId }, data: { ...retryData, updatedAt: new Date() } });
+    } else {
+      await db.standaloneInvoice.update({ where: { id: invoiceId }, data: retryData });
+    }
+
+    console.log(`[Peppol] 🔄 Retry manuel lancé pour facture ${invoice.invoiceNumber} (${invoiceId})`);
+
+    res.json({
+      success: true,
+      data: {
+        peppolStatus: 'PROCESSING',
+        message: 'Envoi Peppol relancé. Le cron vérifiera le statut toutes les 2 minutes.',
+      },
+    });
+  } catch (error) {
+    console.error('[Peppol] Erreur POST /retry/:invoiceId:', error);
+    res.status(500).json({ success: false, message: `Erreur de retry: ${(error as Error).message}` });
   }
 });
 
