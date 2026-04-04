@@ -228,13 +228,55 @@ const OrganizationSettings: React.FC = () => {
   const [logoUploading, setLogoUploading] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
+  // Billing fields
+  const [legalName, setLegalName] = useState('');
+  const [vatNumber, setVatNumber] = useState('');
+  const [iban, setIban] = useState('');
+  const [bankAccountHolder, setBankAccountHolder] = useState('');
+  const [billingStreet, setBillingStreet] = useState('');
+  const [billingZip, setBillingZip] = useState('');
+  const [billingCity, setBillingCity] = useState('');
+  const [billingCountry, setBillingCountry] = useState('');
+  const [billingPhone, setBillingPhone] = useState('');
+  const [billingEmail, setBillingEmail] = useState('');
+  const [billingSaving, setBillingSaving] = useState(false);
+  // Track what's actually saved in DB for visual feedback
+  const [savedBilling, setSavedBilling] = useState<Record<string, string>>({});
+
   const userRole = user?.role;
   const isAdmin = userRole === 'admin' || userRole === 'super_admin';
 
   const orgLogo = (currentOrganization as any)?.logoUrl || null;
 
   useEffect(() => {
-    if (currentOrganization) setName(currentOrganization.name);
+    if (currentOrganization) {
+      setName(currentOrganization.name);
+      const org = currentOrganization as any;
+      setLegalName(org.legalName || '');
+      setVatNumber(org.vatNumber || '');
+      setIban(org.iban || '');
+      setBankAccountHolder(org.bankAccountHolder || '');
+      // Parse address into parts (stored as "street, zip, city, country")
+      const addrParts = (org.address || '').split(',').map((s: string) => s.trim());
+      setBillingStreet(addrParts[0] || '');
+      setBillingZip(addrParts[1] || '');
+      setBillingCity(addrParts[2] || '');
+      setBillingCountry(addrParts[3] || '');
+      setBillingPhone(org.phone || '');
+      setBillingEmail(org.email || '');
+      setSavedBilling({
+        legalName: org.legalName || '',
+        vatNumber: org.vatNumber || '',
+        iban: org.iban || '',
+        bankAccountHolder: org.bankAccountHolder || '',
+        street: addrParts[0] || '',
+        zip: addrParts[1] || '',
+        city: addrParts[2] || '',
+        country: addrParts[3] || '',
+        phone: org.phone || '',
+        email: org.email || '',
+      });
+    }
   }, [currentOrganization]);
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -276,6 +318,50 @@ const OrganizationSettings: React.FC = () => {
     } catch (error: any) {
       message.error(error.message || "Erreur lors de la mise à jour.");
     } finally { setIsLoading(false); }
+  };
+
+  const handleBillingSave = async () => {
+    if (!currentOrganization || !isAdmin) return;
+    setBillingSaving(true);
+    const fullAddress = [billingStreet, billingZip, billingCity, billingCountry].filter(Boolean).join(', ');
+    try {
+      const resp: any = await api.put(`/api/organizations/${currentOrganization.id}`, {
+        legalName: legalName || null,
+        vatNumber: vatNumber || null,
+        iban: iban || null,
+        bankAccountHolder: bankAccountHolder || null,
+        address: fullAddress || null,
+        phone: billingPhone || null,
+        email: billingEmail || null,
+      });
+      if (resp.success) {
+        message.success('Informations de facturation mises à jour.');
+        setSavedBilling({
+          legalName, vatNumber, iban, bankAccountHolder,
+          street: billingStreet, zip: billingZip, city: billingCity, country: billingCountry,
+          phone: billingPhone, email: billingEmail,
+        });
+        if (refetchUser) await refetchUser();
+      } else {
+        throw new Error(resp.message || 'Erreur');
+      }
+    } catch (error: any) {
+      message.error(error.message || 'Erreur lors de la mise à jour.');
+    } finally { setBillingSaving(false); }
+  };
+
+  // Visual feedback: green = saved in DB, orange = unsaved change, gray = empty
+  const billingInputStyle = (value: string, savedKey: string): React.CSSProperties => {
+    const saved = savedBilling[savedKey] || '';
+    const isSaved = value !== '' && value === saved;
+    const isModified = value !== '' && value !== saved;
+    return {
+      width: '100%', borderRadius: 6, padding: '10px 12px', fontSize: 14,
+      color: FB.text, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' as const,
+      border: isSaved ? '1.5px solid ' + FB.green : isModified ? '1.5px solid #f0a030' : '1px solid ' + FB.border,
+      background: isSaved ? '#f0fdf0' : isModified ? '#fffbf0' : FB.white,
+      transition: 'border-color 0.3s, background 0.3s',
+    };
   };
 
   if (!currentOrganization) return (
@@ -365,6 +451,123 @@ const OrganizationSettings: React.FC = () => {
           </button>
         </form>
       </FBCard>
+
+      {/* Billing / Invoice Settings */}
+      {isAdmin && (
+        <FBCard style={{ marginTop: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 4 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: FB.text }}>Informations de facturation</div>
+            <div style={{ display: 'flex', gap: 12, fontSize: 11, color: FB.textSecondary }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#f0fdf0', border: '1.5px solid ' + FB.green, display: 'inline-block' }} />
+                Enregistré
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#fffbf0', border: '1.5px solid #f0a030', display: 'inline-block' }} />
+                Modifié
+              </span>
+            </div>
+          </div>
+          <div style={{ fontSize: 13, color: FB.textSecondary, marginBottom: 16 }}>
+            Ces informations apparaissent sur vos factures PDF (émetteur, pied de page).
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 4 }}>Nom légal de la société</label>
+              <input type="text" value={legalName} onChange={e => setLegalName(e.target.value)}
+                placeholder="Ex: 2Thier SRL"
+                style={billingInputStyle(legalName, 'legalName')}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 4 }}>Numéro de TVA</label>
+              <input type="text" value={vatNumber} onChange={e => setVatNumber(e.target.value)}
+                placeholder="Ex: BE1025391354"
+                style={billingInputStyle(vatNumber, 'vatNumber')}
+              />
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 4 }}>Rue</label>
+            <input type="text" value={billingStreet} onChange={e => setBillingStreet(e.target.value)}
+              placeholder="Ex: Rue de Floreffe 37"
+              style={billingInputStyle(billingStreet, 'street')}
+            />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr', gap: 14, marginBottom: 14 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 4 }}>Code postal</label>
+              <input type="text" value={billingZip} onChange={e => setBillingZip(e.target.value)}
+                placeholder="5100"
+                style={billingInputStyle(billingZip, 'zip')}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 4 }}>Ville</label>
+              <input type="text" value={billingCity} onChange={e => setBillingCity(e.target.value)}
+                placeholder="Franière"
+                style={billingInputStyle(billingCity, 'city')}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 4 }}>Pays</label>
+              <input type="text" value={billingCountry} onChange={e => setBillingCountry(e.target.value)}
+                placeholder="BE"
+                style={billingInputStyle(billingCountry, 'country')}
+              />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 4 }}>Téléphone</label>
+              <input type="text" value={billingPhone} onChange={e => setBillingPhone(e.target.value)}
+                placeholder="Ex: +32470295077"
+                style={billingInputStyle(billingPhone, 'phone')}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 4 }}>Email</label>
+              <input type="email" value={billingEmail} onChange={e => setBillingEmail(e.target.value)}
+                placeholder="Ex: contact@2thier.be"
+                style={billingInputStyle(billingEmail, 'email')}
+              />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 4 }}>IBAN</label>
+              <input type="text" value={iban} onChange={e => setIban(e.target.value)}
+                placeholder="Ex: BE35 0020 1049 3637"
+                style={billingInputStyle(iban, 'iban')}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 4 }}>Titulaire du compte</label>
+              <input type="text" value={bankAccountHolder} onChange={e => setBankAccountHolder(e.target.value)}
+                placeholder="Ex: 2Thier SRL"
+                style={billingInputStyle(bankAccountHolder, 'bankAccountHolder')}
+              />
+            </div>
+          </div>
+
+          <button onClick={handleBillingSave} disabled={billingSaving}
+            style={{
+              padding: '9px 20px', borderRadius: 6, border: 'none',
+              background: billingSaving ? FB.btnGray : FB.blue,
+              color: billingSaving ? FB.textSecondary : FB.white,
+              fontSize: 14, fontWeight: 600, cursor: billingSaving ? 'not-allowed' : 'pointer',
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}
+          >
+            {billingSaving ? <LoadingOutlined /> : <SaveOutlined />}
+            {billingSaving ? 'Enregistrement...' : 'Enregistrer la facturation'}
+          </button>
+        </FBCard>
+      )}
 
       {/* Google Workspace */}
       {isAdmin && (

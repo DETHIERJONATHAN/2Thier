@@ -193,7 +193,153 @@ export class PeppolBridge {
     }]) as number;
 
     console.log(`[PeppolBridge] Created Odoo company ${companyId} for org "${org.name}"`);
+
+    // Installer le plan comptable belge pour cette nouvelle company
+    await this.installChartOfAccounts(companyId);
+
     return { odooCompanyId: companyId };
+  }
+
+  /**
+   * Installe le plan comptable belge (l10n_be) pour une company Odoo.
+   * Sans plan comptable, Odoo ne crée pas de comptes (account.account) pour cette company,
+   * et toute création de facture échoue avec "Missing required account on accountable line".
+   */
+  async installChartOfAccounts(odooCompanyId: number): Promise<void> {
+    await this.authenticate();
+    const companyContext = { allowed_company_ids: [odooCompanyId], company_id: odooCompanyId };
+
+    try {
+      // Vérifier si la company a déjà des comptes
+      const existingAccounts = await this.call('account.account', 'search_read', [
+        [['company_id', '=', odooCompanyId]],
+      ], { fields: ['id'], limit: 1 }) as Array<{ id: number }>;
+
+      if (existingAccounts.length > 0) {
+        console.log(`[PeppolBridge] Company ${odooCompanyId} a déjà ${existingAccounts.length}+ comptes, skip chart install`);
+        return;
+      }
+
+      console.log(`[PeppolBridge] Installation plan comptable belge pour company ${odooCompanyId}...`);
+
+      // Méthode 1: Odoo 17+ — account.chart.template.try_loading('be')
+      try {
+        await this.call('account.chart.template', 'try_loading', ['be'], {
+          context: companyContext,
+        });
+        console.log(`[PeppolBridge] ✅ Plan comptable 'be' installé via try_loading pour company ${odooCompanyId}`);
+        return;
+      } catch (e1) {
+        console.warn(`[PeppolBridge] try_loading('be') échoué:`, (e1 as Error).message);
+      }
+
+      // Méthode 2: Odoo 16 — via res.config.settings
+      try {
+        // Chercher le template belge
+        const templates = await this.call('account.chart.template', 'search_read', [
+          [['name', 'ilike', 'belg']],
+        ], { fields: ['id', 'name'], limit: 1 }) as Array<{ id: number; name: string }>;
+
+        if (templates.length > 0) {
+          const templateId = templates[0].id;
+          console.log(`[PeppolBridge] Template trouvé: ${templates[0].name} (id=${templateId})`);
+
+          // Créer un wizard res.config.settings avec le chart_template
+          const settingsId = await this.call('res.config.settings', 'create', [{
+            company_id: odooCompanyId,
+            chart_template_id: templateId,
+          }], { context: companyContext }) as number;
+
+          // Exécuter le wizard
+          await this.call('res.config.settings', 'set_chart_of_accounts', [[settingsId]], {
+            context: companyContext,
+          });
+
+          console.log(`[PeppolBridge] ✅ Plan comptable installé via res.config.settings pour company ${odooCompanyId}`);
+          return;
+        }
+      } catch (e2) {
+        console.warn(`[PeppolBridge] res.config.settings chart échoué:`, (e2 as Error).message);
+      }
+
+      // Méthode 3: Fallback — copier les comptes essentiels depuis la company principale
+      console.log(`[PeppolBridge] Fallback: copie des comptes essentiels pour company ${odooCompanyId}`);
+      await this.copyEssentialAccounts(odooCompanyId);
+
+    } catch (e) {
+      console.error(`[PeppolBridge] Erreur installation plan comptable pour company ${odooCompanyId}:`, e);
+      // Ne pas bloquer — on essaiera de créer des comptes à la volée lors de l'envoi
+    }
+  }
+
+  /**
+   * Copie les comptes essentiels (ventes, achats, banque) depuis la company principale vers une nouvelle company.
+   * Utilisé en dernier recours si l'installation du plan comptable échoue.
+   */
+  private async copyEssentialAccounts(targetCompanyId: number): Promise<void> {
+    // Trouver la première company qui a des comptes (normalement company_id=1)
+    const sourceAccounts = await this.call('account.account', 'search_read', [
+      [['account_type', 'in', ['income', 'income_other']]],
+    ], { fields: ['id', 'code', 'name', 'account_type', 'company_id', 'reconcile'], limit: 5 }) as Array<{
+      id: number; code: string; name: string; account_type: string; company_id: [number, string]; reconcile: boolean;
+    }>;
+
+    if (sourceAccounts.length === 0) {
+      console.warn('[PeppolBridge] Aucun compte source trouvé pour copie');
+      return;
+    }
+
+    const sourceCompanyId = sourceAccounts[0].company_id[0];
+    console.log(`[PeppolBridge] Source company pour comptes: ${sourceCompanyId} (${sourceAccounts[0].company_id[1]})`);
+
+    // Comptes essentiels à copier: revenus + taxes
+    const accountsToCopy = await this.call('account.account', 'search_read', [
+      [['company_id', '=', sourceCompanyId], ['account_type', 'in', ['income', 'income_other', 'expense', 'asset_receivable', 'liability_payable']]],
+    ], { fields: ['code', 'name', 'account_type', 'reconcile'], limit: 20 }) as Array<{
+      code: string; name: string; account_type: string; reconcile: boolean;
+    }>;
+
+    let created = 0;
+    for (const acc of accountsToCopy) {
+      try {
+        await this.call('account.account', 'create', [{
+          code: acc.code,
+          name: acc.name,
+          account_type: acc.account_type,
+          company_id: targetCompanyId,
+          reconcile: acc.reconcile,
+        }]);
+        created++;
+      } catch (e) {
+        // Peut échouer si le code existe déjà pour cette company
+        console.warn(`[PeppolBridge] Skip compte ${acc.code}: ${(e as Error).message?.substring(0, 80)}`);
+      }
+    }
+
+    // Copier aussi les taxes de vente
+    const sourceTaxes = await this.call('account.tax', 'search_read', [
+      [['company_id', '=', sourceCompanyId], ['type_tax_use', '=', 'sale']],
+    ], { fields: ['name', 'amount', 'type_tax_use', 'amount_type'], limit: 10 }) as Array<{
+      name: string; amount: number; type_tax_use: string; amount_type: string;
+    }>;
+
+    let taxCreated = 0;
+    for (const tax of sourceTaxes) {
+      try {
+        await this.call('account.tax', 'create', [{
+          name: tax.name,
+          amount: tax.amount,
+          type_tax_use: tax.type_tax_use,
+          amount_type: tax.amount_type,
+          company_id: targetCompanyId,
+        }]);
+        taxCreated++;
+      } catch {
+        // Skip si existe déjà
+      }
+    }
+
+    console.log(`[PeppolBridge] ✅ Comptes copiés: ${created}/${accountsToCopy.length}, Taxes: ${taxCreated}/${sourceTaxes.length}`);
   }
 
   // ── Enregistrement Peppol ──
@@ -269,6 +415,45 @@ export class PeppolBridge {
     return company[0]?.account_peppol_proxy_state || 'not_registered';
   }
 
+  // ── Recherche de comptes comptables ──
+
+  /**
+   * Cherche un compte de type revenu pour une company Odoo spécifique.
+   * Renvoie l'id du compte ou undefined si aucun trouvé.
+   * NE cherche JAMAIS dans d'autres companies (évite "Incompatible companies" Odoo).
+   */
+  private async findIncomeAccount(odooCompanyId: number): Promise<number | undefined> {
+    try {
+      // Odoo 17+: account_type = 'income' ou 'income_other'
+      const accounts = await this.call('account.account', 'search_read', [
+        [['company_id', '=', odooCompanyId], ['account_type', 'in', ['income', 'income_other']]],
+      ], { fields: ['id', 'code', 'name'], limit: 5 }) as Array<{ id: number; code: string; name: string }>;
+      console.log(`[PeppolBridge] Comptes revenus (company=${odooCompanyId}):`, accounts.map(a => `${a.id}:${a.code}:${a.name}`));
+      if (accounts.length > 0) {
+        // Préférer le 700000 (ventes marchandises Belgique)
+        const preferred = accounts.find(a => a.code?.startsWith('7000')) || accounts[0];
+        return preferred.id;
+      }
+
+      // Fallback: code commençant par 7
+      const accByCode = await this.call('account.account', 'search_read', [
+        [['company_id', '=', odooCompanyId], ['code', '=like', '7%']],
+      ], { fields: ['id', 'code'], limit: 5 }) as Array<{ id: number; code: string }>;
+      if (accByCode.length > 0) return accByCode[0].id;
+
+      // Dernier fallback: n'importe quel compte non-receivable/payable DE CETTE company uniquement
+      const anyAccounts = await this.call('account.account', 'search_read', [
+        [['company_id', '=', odooCompanyId], ['account_type', 'not in', ['asset_receivable', 'liability_payable', 'off_balance']]],
+      ], { fields: ['id', 'code', 'account_type'], limit: 1 }) as Array<{ id: number; code: string; account_type: string }>;
+      if (anyAccounts.length > 0) return anyAccounts[0].id;
+
+      return undefined;
+    } catch (e) {
+      console.warn('[PeppolBridge] Erreur recherche compte:', e);
+      return undefined;
+    }
+  }
+
   // ── Envoi de factures ──
 
   /**
@@ -316,12 +501,48 @@ export class PeppolBridge {
       }]) as number;
     }
 
-    // 2. Créer la facture dans Odoo
+    // 2. Trouver le compte de vente par défaut pour les lignes de facture
+    let accountId: number | undefined;
+    console.log('[PeppolBridge] Recherche compte pour odooCompanyId:', odooCompanyId);
+
+    // Première passe : chercher les comptes de cette company
+    accountId = await this.findIncomeAccount(odooCompanyId);
+
+    // Si aucun compte trouvé, c'est que le plan comptable n'est pas installé pour cette company
+    // → On l'installe à la volée et on réessaie
+    if (!accountId) {
+      console.log(`[PeppolBridge] Aucun compte trouvé pour company ${odooCompanyId}, installation du plan comptable...`);
+      await this.installChartOfAccounts(odooCompanyId);
+      accountId = await this.findIncomeAccount(odooCompanyId);
+    }
+
+    console.log('[PeppolBridge] account_id résolu:', accountId);
+    if (!accountId) {
+      throw new Error(
+        `Aucun compte comptable trouvé dans Odoo pour company_id=${odooCompanyId}. ` +
+        `Le plan comptable belge n'a pas pu être installé. Vérifiez la configuration Odoo.`
+      );
+    }
+
+    // Trouver la taxe TVA de vente correspondante
+    const taxPercent = invoice.lines[0]?.taxPercent || 21;
+    let taxIds: number[] = [];
+    try {
+      const taxes = await this.call('account.tax', 'search_read', [
+        [['company_id', '=', odooCompanyId], ['type_tax_use', '=', 'sale'], ['amount', '=', taxPercent]],
+      ], { fields: ['id'], limit: 1 }) as Array<{ id: number }>;
+      if (taxes.length > 0) taxIds = [taxes[0].id];
+    } catch (e) {
+      console.warn('[PeppolBridge] Impossible de trouver la taxe TVA:', e);
+    }
+
+    // Créer la facture dans Odoo
     const invoiceLines = invoice.lines.map((line) => [0, 0, {
       name: line.description,
       quantity: line.quantity,
       price_unit: line.unitPrice,
-      // La taxe sera recherchée dans le plan comptable belge
+      ...(accountId ? { account_id: accountId } : {}),
+      ...(taxIds.length > 0 ? { tax_ids: [[6, 0, taxIds]] } : {}),
     }]);
 
     const odooInvoiceId = await this.call('account.move', 'create', [{

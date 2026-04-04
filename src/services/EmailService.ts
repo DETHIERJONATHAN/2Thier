@@ -12,14 +12,22 @@ interface InvitationEmailPayload {
     organizationId?: string;
 }
 
+interface EmailAttachment {
+    filename: string;
+    content: Buffer;
+    contentType?: string;
+}
+
 interface SendEmailPayload {
     to: string;
     subject: string;
     html: string;
     text?: string;
     replyTo?: string;
+    fromName?: string;
     inviterId?: string;
     organizationId?: string;
+    attachments?: EmailAttachment[];
 }
 
 class EmailService {
@@ -144,7 +152,7 @@ ${content}
     /**
      * Fallback: envoie via Nodemailer SMTP (noreply@2thier.be ou config SMTP)
      */
-    private async sendViaSMTP(to: string, subject: string, htmlBody: string, plainText?: string): Promise<boolean> {
+    private async sendViaSMTP(to: string, subject: string, htmlBody: string, plainText?: string, attachments?: EmailAttachment[], options?: { replyTo?: string; fromName?: string }): Promise<boolean> {
         const smtpHost = process.env.SMTP_HOST;
         const smtpUser = process.env.SMTP_USER;
         const smtpPass = process.env.SMTP_PASS;
@@ -158,6 +166,8 @@ ${content}
         const fromDomain = fromAddress.split('@')[1] || 'zhiive.com';
 
         try {
+            const displayName = options?.fromName || 'Zhiive';
+            const replyToAddr = options?.replyTo || fromAddress;
             const transporter = nodemailer.createTransport({
                 host: smtpHost,
                 port: parseInt(process.env.SMTP_PORT || '465'),
@@ -169,12 +179,13 @@ ${content}
             const text = plainText || this.htmlToPlainText(htmlBody);
 
             await transporter.sendMail({
-                from: `"Zhiive" <${fromAddress}>`,
-                replyTo: `"Zhiive" <${fromAddress}>`,
+                from: `"${displayName}" <${fromAddress}>`,
+                replyTo: `"${displayName}" <${replyToAddr}>`,
                 to,
                 subject,
                 html: wrappedHtml,
                 text,
+                attachments: attachments?.map(a => ({ filename: a.filename, content: a.content, contentType: a.contentType })),
                 headers: {
                     'X-Mailer': 'Zhiive Mailer',
                     'List-Unsubscribe': `<mailto:${fromAddress}?subject=unsubscribe>`,
@@ -227,16 +238,16 @@ ${content}
      * Stratégie : Gmail API > SMTP > Throw (pour que l'appelant sache)
      */
     async sendEmail(payload: SendEmailPayload): Promise<void> {
-        const { to, subject, html, text, inviterId, organizationId } = payload;
+        const { to, subject, html, text, replyTo, fromName, inviterId, organizationId, attachments } = payload;
 
-        // 1. Gmail API
-        if (inviterId && organizationId) {
+        // 1. Gmail API (no attachment support for now)
+        if (inviterId && organizationId && !attachments?.length) {
             const sent = await this.sendViaGmail(organizationId, inviterId, to, subject, html);
             if (sent) return;
         }
 
-        // 2. SMTP
-        const sent = await this.sendViaSMTP(to, subject, html, text);
+        // 2. SMTP (supports attachments)
+        const sent = await this.sendViaSMTP(to, subject, html, text, attachments, { replyTo, fromName });
         if (sent) return;
 
         // 3. Aucun transport — throw pour que l'appelant sache

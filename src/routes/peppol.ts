@@ -338,13 +338,13 @@ const sendInvoiceSchema = z.object({
 });
 
 router.post('/send/:invoiceId', authenticateToken, isAdmin, async (req: Request, res: Response) => {
+  const { invoiceId } = req.params;
+  let invoiceSource: 'chantier' | 'standalone' = 'chantier';
   try {
     const organizationId = getOrganizationId(req);
     if (!organizationId) {
       return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
     }
-
-    const { invoiceId } = req.params;
 
     // Vérifier que la config Peppol est active
     const config = await db.peppolConfig.findUnique({ where: { organizationId } });
@@ -356,7 +356,6 @@ router.post('/send/:invoiceId', authenticateToken, isAdmin, async (req: Request,
     }
 
     // Récupérer la facture — chercher d'abord dans ChantierInvoice, puis StandaloneInvoice
-    let invoiceSource: 'chantier' | 'standalone' = 'chantier';
     let invoiceData: {
       id: string;
       peppolStatus: string | null;
@@ -432,7 +431,12 @@ router.post('/send/:invoiceId', authenticateToken, isAdmin, async (req: Request,
     // Résolution intelligente des données partenaire :
     // 1. Données explicites du body > 2. Données de la facture
     const partnerName = partnerInput.partnerName || invoiceData.clientName || null;
-    const partnerPeppolEndpoint = partnerInput.partnerPeppolEndpoint || null;
+    // Nettoyer l'endpoint Peppol : retirer préfixe BE, points, tirets, espaces
+    // Fallback: dériver depuis partnerVat ou clientVat de la facture
+    const rawEndpoint = partnerInput.partnerPeppolEndpoint || partnerInput.partnerVat || invoiceData.clientVat || null;
+    const partnerPeppolEndpoint = rawEndpoint
+      ? rawEndpoint.replace(/^BE/i, '').replace(/[\s.\-]/g, '')
+      : null;
 
     if (!partnerName) {
       return res.status(400).json({
@@ -527,17 +531,19 @@ router.post('/send/:invoiceId', authenticateToken, isAdmin, async (req: Request,
   } catch (error) {
     console.error('[Peppol] Erreur POST /send/:invoiceId:', error);
 
-    // Marquer l'erreur sur la facture — essayer les deux tables
-    const { invoiceId } = req.params;
+    // Marquer l'erreur sur la facture
     if (invoiceId) {
-      await db.chantierInvoice.update({
-        where: { id: invoiceId },
-        data: { peppolStatus: 'ERROR', peppolError: (error as Error).message, updatedAt: new Date() },
-      }).catch(() => {});
-      await db.standaloneInvoice.update({
-        where: { id: invoiceId },
-        data: { peppolStatus: 'ERROR', peppolError: (error as Error).message },
-      }).catch(() => {});
+      if (invoiceSource === 'chantier') {
+        await db.chantierInvoice.update({
+          where: { id: invoiceId },
+          data: { peppolStatus: 'ERROR', peppolError: (error as Error).message, updatedAt: new Date() },
+        }).catch(() => {});
+      } else {
+        await db.standaloneInvoice.update({
+          where: { id: invoiceId },
+          data: { peppolStatus: 'ERROR', peppolError: (error as Error).message },
+        }).catch(() => {});
+      }
     }
 
     res.status(500).json({ success: false, message: `Erreur d'envoi Peppol: ${(error as Error).message}` });

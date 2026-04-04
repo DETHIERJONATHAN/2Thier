@@ -420,6 +420,44 @@ export const notify = {
       },
     });
   },
+
+  // ───────── PEPPOL ─────────
+  async peppolInvoiceDelivered(orgId: string, invoiceData: { invoiceNumber: string; clientName: string; amount: number }, targetUserId?: string, invoiceId?: string) {
+    if (targetUserId) {
+      await createNotification({
+        organizationId: orgId,
+        type: 'PEPPOL_INVOICE_DELIVERED',
+        userId: targetUserId,
+        priority: 'high',
+        actionUrl: invoiceId ? `/facture?id=${invoiceId}` : '/facture',
+        data: {
+          message: `📨 Facture ${invoiceData.invoiceNumber} livrée via Peppol à ${invoiceData.clientName} (${invoiceData.amount}€)`,
+          invoiceNumber: invoiceData.invoiceNumber,
+          clientName: invoiceData.clientName,
+          amount: invoiceData.amount,
+          icon: 'check-circle',
+          category: 'peppol',
+        },
+      });
+    } else {
+      // Notifier tous les admins de l'org
+      const adminIds = await getOrgAdminIds(orgId);
+      await notifyMultipleUsers(adminIds, {
+        organizationId: orgId,
+        type: 'PEPPOL_INVOICE_DELIVERED',
+        priority: 'high',
+        actionUrl: invoiceId ? `/facture?id=${invoiceId}` : '/facture',
+        data: {
+          message: `📨 Facture ${invoiceData.invoiceNumber} livrée via Peppol à ${invoiceData.clientName} (${invoiceData.amount}€)`,
+          invoiceNumber: invoiceData.invoiceNumber,
+          clientName: invoiceData.clientName,
+          amount: invoiceData.amount,
+          icon: 'check-circle',
+          category: 'peppol',
+        },
+      });
+    }
+  },
 };
 
 export default notify;

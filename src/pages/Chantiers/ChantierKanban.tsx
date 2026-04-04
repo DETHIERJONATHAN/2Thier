@@ -57,7 +57,7 @@ const DATE_PRESETS: { key: DatePreset; label: string; getRange: () => [Dayjs, Da
   { key: 'this_quarter', label: 'Ce trimestre', getRange: () => [dayjs().startOf('quarter'), dayjs().endOf('quarter')] },
 ];
 import { renderProductIcon } from '../../components/TreeBranchLeaf/treebranchleaf-new/components/Parameters/capabilities/ProductFilterPanel';
-import { DndProvider, useDrag, useDrop } from 'react-dnd';
+import { DndProvider, useDrag, useDrop, useDragLayer } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { TouchBackend } from 'react-dnd-touch-backend';
 import { MultiBackend, TouchTransition, MouseTransition } from 'react-dnd-multi-backend';
@@ -89,6 +89,105 @@ const HTML5toTouch = {
 const ITEM_TYPE = 'CHANTIER_CARD';
 const TECH_DRAG_TYPE = 'TECHNICIAN';
 const TEAM_DRAG_TYPE = 'TEAM';
+
+// 🎯 Custom Drag Layer — affiche "En déplacement..." pendant le drag (comme les Leads)
+const CustomDragLayer: React.FC = () => {
+  const { isDragging, currentOffset } = useDragLayer((monitor) => ({
+    currentOffset: monitor.getSourceClientOffset(),
+    isDragging: monitor.isDragging(),
+  }));
+
+  if (!isDragging || !currentOffset) return null;
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        pointerEvents: 'none',
+        zIndex: 9999,
+        left: currentOffset.x,
+        top: currentOffset.y,
+        transform: 'rotate(5deg)',
+        opacity: 0.9,
+      }}
+    >
+      <div
+        style={{
+          backgroundColor: '#FFFFFF',
+          borderRadius: '8px',
+          boxShadow: '0 8px 24px rgba(9,30,66,.35)',
+          padding: '12px 16px',
+          minWidth: '180px',
+          border: '2px solid #0079BF',
+        }}
+      >
+        <span style={{ fontSize: '14px', fontWeight: 500, color: '#172B4D' }}>
+          🚚 En déplacement...
+        </span>
+      </div>
+    </div>
+  );
+};
+
+// 🎯 Auto-scroll du board pendant le drag (comme les Leads)
+const AutoScrollDragTracker: React.FC<{ boardRef: React.RefObject<HTMLDivElement | null> }> = ({ boardRef }) => {
+  const dragXRef = useRef<number | null>(null);
+  const dragActiveRef = useRef(false);
+  const { isDragging, clientOffset } = useDragLayer((monitor) => ({
+    isDragging: monitor.isDragging(),
+    clientOffset: monitor.getClientOffset(),
+  }));
+
+  useEffect(() => {
+    dragActiveRef.current = isDragging;
+    dragXRef.current = clientOffset?.x ?? null;
+  }, [isDragging, clientOffset]);
+
+  useEffect(() => {
+    if (!boardRef.current) return;
+    const boardEl = boardRef.current;
+    let rafId: number | null = null;
+    let lastScrollTime = 0;
+
+    const tick = () => {
+      if (!dragActiveRef.current || dragXRef.current === null) {
+        rafId = requestAnimationFrame(tick);
+        return;
+      }
+      const now = Date.now();
+      if (now - lastScrollTime < 16) {
+        rafId = requestAnimationFrame(tick);
+        return;
+      }
+      lastScrollTime = now;
+
+      const rect = boardEl.getBoundingClientRect();
+      const x = dragXRef.current;
+      const distFromLeft = x - rect.left;
+      const distFromRight = rect.right - x;
+      const edgeSize = 160;
+      const maxSpeed = 40;
+
+      if (distFromLeft >= 0 && distFromLeft < edgeSize) {
+        const ratio = 1 - (distFromLeft / edgeSize);
+        const speed = Math.pow(ratio, 1.6) * maxSpeed;
+        boardEl.scrollLeft = Math.max(0, boardEl.scrollLeft - speed);
+      } else if (distFromRight >= 0 && distFromRight < edgeSize) {
+        const ratio = 1 - (distFromRight / edgeSize);
+        const speed = Math.pow(ratio, 1.6) * maxSpeed;
+        const maxScrollLeft = boardEl.scrollWidth - boardEl.clientWidth;
+        boardEl.scrollLeft = Math.min(maxScrollLeft, boardEl.scrollLeft + speed);
+      }
+
+      rafId = requestAnimationFrame(tick);
+    };
+
+    rafId = requestAnimationFrame(tick);
+    return () => { if (rafId) cancelAnimationFrame(rafId); };
+  }, [boardRef]);
+
+  return null;
+};
 
 const hexToRgba = (hex: string, alpha: number) => {
   const h = hex.replace('#', '');
@@ -1592,6 +1691,8 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
 
       {/* Kanban Board + Panel techniciens */}
       <DndProvider backend={MultiBackend} options={HTML5toTouch}>
+        <CustomDragLayer />
+        <AutoScrollDragTracker boardRef={kanbanScrollRef} />
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative', minHeight: 0 }}>
           {/* ═══ Backdrop overlay (mobile) ═══ */}
           {canSeeTeamPanel && techPanelOpen && (

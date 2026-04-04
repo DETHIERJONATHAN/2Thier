@@ -40,7 +40,6 @@ git push origin main
 
 ### Script de démarrage rapide**
 
-bash scripts/start-local.sh
 ```bash
 # Démarrer tout l'environnement de développement (proxy + serveur)
 ```

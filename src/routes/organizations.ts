@@ -312,6 +312,23 @@ const organizationUpdateSchema = z.object({
   address: z.string()
     .max(500, 'Adresse maximum 500 caractères')
     .nullish(),
+  // Champs facturation
+  vatNumber: z.string()
+    .max(30, 'Numéro TVA maximum 30 caractères')
+    .nullish(),
+  legalName: z.string()
+    .max(200, 'Nom légal maximum 200 caractères')
+    .nullish(),
+  iban: z.string()
+    .max(40, 'IBAN maximum 40 caractères')
+    .nullish(),
+  bankAccountHolder: z.string()
+    .max(200, 'Titulaire du compte maximum 200 caractères')
+    .nullish(),
+  email: z.string()
+    .email('Email invalide')
+    .max(255, 'Email maximum 255 caractères')
+    .nullish(),
   googleWorkspace: z.object({
     enabled: z.boolean().optional(),
     domain: z.string().optional(),
@@ -998,6 +1015,11 @@ router.put('/:id', requireRole(['super_admin']), async (req: AuthenticatedReques
       website?: string | null;
       phone?: string | null;
       address?: string | null;
+      vatNumber?: string | null;
+      legalName?: string | null;
+      iban?: string | null;
+      bankAccountHolder?: string | null;
+      email?: string | null;
     } = {};
     if (data.name) updateData.name = sanitizeString(data.name);
     if (data.description !== undefined) {
@@ -1014,6 +1036,23 @@ router.put('/:id', requireRole(['super_admin']), async (req: AuthenticatedReques
     }
     if (data.address !== undefined) {
       updateData.address = data.address ? sanitizeString(data.address) : null;
+    }
+
+    // 🧾 CHAMPS FACTURATION
+    if (data.vatNumber !== undefined) {
+      updateData.vatNumber = data.vatNumber ? sanitizeString(data.vatNumber) : null;
+    }
+    if (data.legalName !== undefined) {
+      updateData.legalName = data.legalName ? sanitizeString(data.legalName) : null;
+    }
+    if (data.iban !== undefined) {
+      updateData.iban = data.iban ? sanitizeString(data.iban) : null;
+    }
+    if (data.bankAccountHolder !== undefined) {
+      updateData.bankAccountHolder = data.bankAccountHolder ? sanitizeString(data.bankAccountHolder) : null;
+    }
+    if (data.email !== undefined) {
+      updateData.email = data.email ? sanitizeString(data.email) : null;
     }
     
     console.log('[ORGANIZATIONS] Données de mise à jour sanitisées:', updateData);

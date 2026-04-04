@@ -1047,6 +1047,9 @@ model Organization {
   logoUrl                    String?
   coverUrl                   String?
   coverPositionY             Float?                                   @default(50)
+  legalName                  String?
+  iban                       String?
+  bankAccountHolder          String?
   AIRecommendation           AIRecommendation[]
   AdCampaign                 AdCampaign[]
   AdPlatformIntegration      AdPlatformIntegration[]
@@ -1146,6 +1149,9 @@ model Organization {
 
   // Standalone Invoices (hors chantier)
   StandaloneInvoice          StandaloneInvoice[]
+
+  // Clients facturation
+  InvoiceClient              InvoiceClient[]
 }
 
 model OrganizationModuleStatus {
@@ -3065,6 +3071,8 @@ enum NotificationType {
   // Social / Amis
   FRIEND_REQUEST_RECEIVED
   FRIEND_REQUEST_ACCEPTED
+  // Peppol
+  PEPPOL_INVOICE_DELIVERED
 }
 
 enum OperationSource {
@@ -4706,6 +4714,7 @@ model StandaloneInvoice {
   clientName        String    // Nom du client/entreprise
   clientVat         String?   // Numéro TVA du client
   clientEmail       String?   // Email du client
+  clientPhone       String?   // Téléphone du client
   clientAddress     String?   // Adresse du client
   description       String?   // Description / objet de la facture
   status            String    @default("DRAFT") // DRAFT | SENT | PAID | OVERDUE | CANCELLED
@@ -4738,4 +4747,29 @@ model StandaloneInvoice {
   @@index([organizationId, status])
   @@index([invoiceNumber])
   @@index([organizationId, createdAt])
+}
+
+// ═══════════════════════════════════════════════════════════
+// ── CLIENTS FACTURATION (auto-enregistrés) ───────────────
+// ═══════════════════════════════════════════════════════════
+
+model InvoiceClient {
+  id                String    @id @default(uuid())
+  organizationId    String
+  name              String    // Nom du client/entreprise
+  vatNumber         String?   // Numéro TVA
+  email             String?   // Email
+  address           String?   // Adresse complète
+  phone             String?   // Téléphone
+  invoiceCount      Int       @default(1) // Nombre de factures créées
+  totalInvoiced     Float     @default(0) // Montant total facturé
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  Organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, vatNumber])
+  @@index([organizationId])
+  @@index([organizationId, name])
 }

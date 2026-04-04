@@ -2370,7 +2370,7 @@ export default function DashboardPageUnified() {
             Évolution mensuelle
           </span>
           <div style={{ height: 140, minWidth: 0, minHeight: 0 }}>
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <BarChart data={analytics.monthlyData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                 <XAxis dataKey="month" tick={{ fontSize: 10, fill: FB.textSecondary }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 10, fill: FB.textSecondary }} axisLine={false} tickLine={false} />
@@ -2392,7 +2392,7 @@ export default function DashboardPageUnified() {
             CA mensuel
           </span>
           <div style={{ height: 120, minWidth: 0, minHeight: 0 }}>
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <AreaChart data={analytics.monthlyData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
@@ -2602,8 +2602,8 @@ export default function DashboardPageUnified() {
       {analytics?.monthlyData?.length > 0 && (
         <FBCard>
           <span style={{ fontSize: 13, fontWeight: 700, color: FB.text, display: "block", marginBottom: 6 }}>Évolution mensuelle</span>
-          <div style={{ height: 130 }}>
-            <ResponsiveContainer width="100%" height="100%">
+          <div style={{ height: 130, minWidth: 0, minHeight: 0 }}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <BarChart data={analytics.monthlyData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                 <XAxis dataKey="month" tick={{ fontSize: 10, fill: FB.textSecondary }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 10, fill: FB.textSecondary }} axisLine={false} tickLine={false} />
@@ -2619,8 +2619,8 @@ export default function DashboardPageUnified() {
       {analytics?.monthlyData?.length > 0 && analytics.monthlyData.some((d: any) => d.revenue > 0) && (
         <FBCard>
           <span style={{ fontSize: 13, fontWeight: 700, color: FB.text, display: "block", marginBottom: 6 }}>CA mensuel</span>
-          <div style={{ height: 110 }}>
-            <ResponsiveContainer width="100%" height="100%">
+          <div style={{ height: 110, minWidth: 0, minHeight: 0 }}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <AreaChart data={analytics.monthlyData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="mobileRevenueGrad" x1="0" y1="0" x2="0" y2="1">
@@ -2642,8 +2642,8 @@ export default function DashboardPageUnified() {
       {chartData.leadsByStatus.length > 0 && (
         <FBCard>
           <span style={{ fontSize: 13, fontWeight: 700, color: FB.text, display: "block", marginBottom: 6 }}>Leads par statut</span>
-          <div style={{ height: 130 }}>
-            <ResponsiveContainer width="100%" height="100%">
+          <div style={{ height: 130, minWidth: 0, minHeight: 0 }}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <PieChart>
                 <Pie data={chartData.leadsByStatus.filter(d => d.value > 0)}
                   cx="50%" cy="50%" outerRadius={50} innerRadius={25} dataKey="value" paddingAngle={2}>

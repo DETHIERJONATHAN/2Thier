@@ -319,7 +319,7 @@ const SettingsPage = () => {
   /* ═══ MOBILE LAYOUT ═══ */
   if (isMobile) {
     return (
-      <div style={{ background: FB.bg, minHeight: '100vh' }}>
+      <div style={{ background: FB.bg, height: '100%', overflowY: 'auto' }}>
         {/* Mobile top bar */}
         <div style={{
           background: FB.white, boxShadow: FB.shadow,
@@ -379,8 +379,8 @@ const SettingsPage = () => {
 
   /* ═══ DESKTOP LAYOUT ═══ */
   return (
-    <div style={{ background: FB.bg, minHeight: '100vh' }}>
-      <div style={{ width: '100%', display: 'flex', padding: isMobile ? 0 : '0 16px' }}>
+    <div style={{ background: FB.bg, height: '100%', overflowY: 'auto' }}>
+      <div style={{ width: '100%', display: 'flex', padding: isMobile ? 0 : '0 16px', minHeight: '100%' }}>
 
         {/* ── LEFT SIDEBAR ── */}
         <aside style={{ width: 360, flexShrink: 0, padding: '24px 16px 24px 0' }}>

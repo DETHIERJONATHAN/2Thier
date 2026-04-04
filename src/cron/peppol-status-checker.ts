@@ -15,6 +15,8 @@ import cron from 'node-cron';
 import { db } from '../lib/database';
 import { checkPeppolStatus } from '../services/vatLookupService';
 import { getPeppolBridge } from '../services/peppolBridge';
+import { notify } from '../services/NotificationHelper';
+import { sendPushToUser } from '../routes/push';
 
 const LOG_PREFIX = '🔄 [PEPPOL-CRON]';
 
@@ -30,7 +32,7 @@ export const checkTransitionStatuses = cron.schedule('*/30 * * * *', async () =>
         peppolEndpoint: { not: null },
       },
       include: {
-        organization: { select: { name: true } },
+        Organization: { select: { name: true } },
       },
     });
 
@@ -42,7 +44,7 @@ export const checkTransitionStatuses = cron.schedule('*/30 * * * *', async () =>
       try {
         const vatNumber = `${config.peppolEas === '0208' ? 'BE' : ''}${config.peppolEndpoint}`;
         const peppolCheck = await checkPeppolStatus(vatNumber);
-        const orgName = config.organization?.name || config.organizationId;
+        const orgName = config.Organization?.name || config.organizationId;
         const oldStatus = config.registrationStatus;
 
         const updateData: Record<string, unknown> = {};
@@ -120,7 +122,7 @@ export const checkActiveStatuses = cron.schedule('0 */6 * * *', async () => {
         peppolEndpoint: { not: null },
       },
       include: {
-        organization: { select: { name: true } },
+        Organization: { select: { name: true } },
       },
     });
 
@@ -132,7 +134,7 @@ export const checkActiveStatuses = cron.schedule('0 */6 * * *', async () => {
       try {
         const vatNumber = `${config.peppolEas === '0208' ? 'BE' : ''}${config.peppolEndpoint}`;
         const peppolCheck = await checkPeppolStatus(vatNumber);
-        const orgName = config.organization?.name || config.organizationId;
+        const orgName = config.Organization?.name || config.organizationId;
 
         if (peppolCheck.isRegistered && peppolCheck.isRegisteredWithUs) {
           // Tout est OK
@@ -183,7 +185,7 @@ export const fetchIncomingInvoices = cron.schedule('0 */4 * * *', async () => {
         odooCompanyId: { not: null },
       },
       include: {
-        organization: { select: { name: true } },
+        Organization: { select: { name: true } },
       },
     });
 
@@ -193,7 +195,7 @@ export const fetchIncomingInvoices = cron.schedule('0 */4 * * *', async () => {
 
     for (const config of configs) {
       try {
-        const orgName = config.organization?.name || config.organizationId;
+        const orgName = config.Organization?.name || config.organizationId;
         const bridge = getPeppolBridge();
 
         // 1. Déclencher le fetch dans Odoo
@@ -254,14 +256,186 @@ export const fetchIncomingInvoices = cron.schedule('0 */4 * * *', async () => {
 }, { scheduled: false });
 
 /**
+ * Vérifie le statut de livraison des factures Peppol en cours (PROCESSING)
+ * Toutes les 5 minutes — notifie l'utilisateur quand ça passe à SENT/DELIVERED
+ */
+export const checkInvoiceDeliveryStatuses = cron.schedule('*/5 * * * *', async () => {
+  try {
+    // 1. Trouver toutes les factures PROCESSING
+    const [standaloneInvoices, chantierInvoices] = await Promise.all([
+      db.standaloneInvoice.findMany({
+        where: { peppolStatus: 'PROCESSING' },
+        select: { id: true, invoiceNumber: true, organizationId: true, clientName: true, totalAmount: true, createdById: true, peppolSentAt: true },
+      }),
+      db.chantierInvoice.findMany({
+        where: { peppolStatus: 'PROCESSING' },
+        select: { id: true, invoiceNumber: true, organizationId: true, label: true, amount: true, peppolSentAt: true },
+      }),
+    ]);
+
+    const totalProcessing = standaloneInvoices.length + chantierInvoices.length;
+    if (totalProcessing === 0) return;
+
+    console.log(`${LOG_PREFIX} 📬 Vérification statut de ${totalProcessing} facture(s) PROCESSING...`);
+
+    // 2. Grouper par organization pour optimiser les appels Odoo
+    const orgIds = [...new Set([
+      ...standaloneInvoices.map(i => i.organizationId),
+      ...chantierInvoices.map(i => i.organizationId),
+    ])];
+
+    for (const orgId of orgIds) {
+      try {
+        const peppolConfig = await db.peppolConfig.findUnique({
+          where: { organizationId: orgId },
+          select: { odooCompanyId: true },
+        });
+        if (!peppolConfig?.odooCompanyId) continue;
+
+        const bridge = getPeppolBridge();
+
+        // Récupérer TOUTES les factures out_invoice de cette company dans Odoo
+        const odooInvoices = await bridge.call('account.move', 'search_read', [
+          [
+            ['company_id', '=', peppolConfig.odooCompanyId],
+            ['move_type', '=', 'out_invoice'],
+            ['peppol_move_state', 'in', ['done', 'error', 'to_send']],
+          ],
+        ], { fields: ['name', 'ref', 'peppol_move_state', 'peppol_message_uuid'] }) as Array<{
+          id: number; name: string; ref?: string; peppol_move_state: string; peppol_message_uuid?: string;
+        }>;
+
+        // Map par numéro de facture Odoo (name) ET par référence CRM (ref)
+        const odooByName = new Map(odooInvoices.map(inv => [inv.name, inv]));
+        const odooByRef = new Map(odooInvoices.filter(inv => inv.ref).map(inv => [inv.ref!, inv]));
+
+        console.log(`${LOG_PREFIX} Odoo: ${odooInvoices.length} facture(s) trouvée(s) pour company ${peppolConfig.odooCompanyId}`);
+        odooInvoices.forEach(inv => console.log(`${LOG_PREFIX}   - ${inv.name} (ref: ${inv.ref || 'N/A'}) → ${inv.peppol_move_state}`));
+
+        const findOdooMatch = (invoiceNumber: string | null) => {
+          if (!invoiceNumber) return undefined;
+          return odooByName.get(invoiceNumber) || odooByRef.get(invoiceNumber);
+        };
+
+        // 3. Vérifier les standalone invoices de cette org
+        const orgStandalone = standaloneInvoices.filter(i => i.organizationId === orgId);
+        for (const inv of orgStandalone) {
+          const odooMatch = findOdooMatch(inv.invoiceNumber);
+          if (!odooMatch) continue;
+
+          const odooState = odooMatch.peppol_move_state;
+          if (odooState === 'done') {
+            // DELIVERED !
+            await db.standaloneInvoice.update({
+              where: { id: inv.id },
+              data: {
+                peppolStatus: 'SENT',
+                peppolMessageId: odooMatch.peppol_message_uuid || inv.id,
+              },
+            });
+
+            console.log(`${LOG_PREFIX} ✅ Facture ${inv.invoiceNumber} → SENT (Peppol delivered)`);
+
+            // Notification + Push
+            const targetUserId = inv.createdById;
+            if (targetUserId) {
+              await notify.peppolInvoiceDelivered(orgId, {
+                invoiceNumber: inv.invoiceNumber || inv.id,
+                clientName: inv.clientName || 'Client',
+                amount: inv.totalAmount,
+              }, targetUserId, inv.id);
+
+              await sendPushToUser(targetUserId, {
+                title: 'Facture Peppol envoyée',
+                body: `${inv.invoiceNumber} (${inv.clientName}) a été livrée via Peppol`,
+                icon: '/icons/peppol-success.png',
+                tag: `peppol-sent-${inv.id}`,
+                url: `/facture?id=${inv.id}`,
+                type: 'peppol_delivered',
+              });
+            }
+          } else if (odooState === 'error') {
+            await db.standaloneInvoice.update({
+              where: { id: inv.id },
+              data: {
+                peppolStatus: 'ERROR',
+                peppolError: 'Erreur détectée par Odoo lors de la livraison Peppol',
+              },
+            });
+            console.warn(`${LOG_PREFIX} ❌ Facture ${inv.invoiceNumber} → ERROR (Odoo peppol_move_state=error)`);
+
+            const targetUserId = inv.createdById;
+            if (targetUserId) {
+              await sendPushToUser(targetUserId, {
+                title: 'Erreur Peppol',
+                body: `${inv.invoiceNumber} n'a pas pu être livrée via Peppol`,
+                icon: '/icons/peppol-error.png',
+                tag: `peppol-error-${inv.id}`,
+                url: `/facture?id=${inv.id}`,
+                type: 'peppol_error',
+              });
+            }
+          }
+        }
+
+        // 4. Vérifier les chantier invoices de cette org
+        const orgChantier = chantierInvoices.filter(i => i.organizationId === orgId);
+        for (const inv of orgChantier) {
+          const odooMatch = findOdooMatch(inv.invoiceNumber);
+          if (!odooMatch) continue;
+
+          const odooState = odooMatch.peppol_move_state;
+          if (odooState === 'done') {
+            await db.chantierInvoice.update({
+              where: { id: inv.id },
+              data: {
+                peppolStatus: 'SENT',
+                peppolMessageId: odooMatch.peppol_message_uuid || inv.id,
+                updatedAt: new Date(),
+              },
+            });
+            console.log(`${LOG_PREFIX} ✅ Facture chantier ${inv.invoiceNumber} → SENT (Peppol delivered)`);
+
+            // Notifier les admins de l'org
+            await notify.peppolInvoiceDelivered(orgId, {
+              invoiceNumber: inv.invoiceNumber || inv.id,
+              clientName: inv.label,
+              amount: inv.amount,
+            }, undefined, inv.id);
+
+          } else if (odooState === 'error') {
+            await db.chantierInvoice.update({
+              where: { id: inv.id },
+              data: {
+                peppolStatus: 'ERROR',
+                peppolError: 'Erreur détectée par Odoo lors de la livraison Peppol',
+                updatedAt: new Date(),
+              },
+            });
+            console.warn(`${LOG_PREFIX} ❌ Facture chantier ${inv.invoiceNumber} → ERROR`);
+          }
+        }
+
+      } catch (err) {
+        console.error(`${LOG_PREFIX} ❌ Erreur vérification delivery org ${orgId}:`, (err as Error).message);
+      }
+    }
+  } catch (error) {
+    console.error(`${LOG_PREFIX} ❌ Erreur globale check delivery:`, error);
+  }
+}, { scheduled: false });
+
+/**
  * Démarrer tous les jobs Peppol
  */
 export function startPeppolCronJobs() {
   checkTransitionStatuses.start();
   checkActiveStatuses.start();
   fetchIncomingInvoices.start();
+  checkInvoiceDeliveryStatuses.start();
   console.log(`${LOG_PREFIX} ✅ Jobs démarrés:`);
   console.log(`${LOG_PREFIX}   - Transition (PENDING/MIGRATION): toutes les 30 min`);
   console.log(`${LOG_PREFIX}   - Santé (ACTIVE): toutes les 6h`);
   console.log(`${LOG_PREFIX}   - Factures entrantes: toutes les 4h`);
+  console.log(`${LOG_PREFIX}   - Statut livraison factures: toutes les 5 min`);
 }
