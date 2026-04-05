@@ -50,25 +50,21 @@ function getFrontendUrl(): string {
   if (codespaceName) {
     // Format Codespaces: https://<codespace-name>-5173.app.github.dev (sans port explicite)
     const codespaceUrl = `https://${codespaceName}-5173.app.github.dev`;
-    console.log('[GOOGLE-AUTH] 🚀 Codespaces détecté, FRONTEND_URL:', codespaceUrl);
     return codespaceUrl;
   }
   
   // PRIORITÉ 2: Variable d'environnement explicite
   const frontendUrl = process.env.FRONTEND_URL;
   if (frontendUrl) {
-    console.log('[GOOGLE-AUTH] 📌 FRONTEND_URL explicite:', frontendUrl);
     return frontendUrl;
   }
   
   // PRIORITÉ 3: Production → https://www.zhiive.com
   if (process.env.NODE_ENV === 'production') {
-    console.log('[GOOGLE-AUTH] 🌐 Production détectée, FRONTEND_URL: https://www.zhiive.com');
     return 'https://www.zhiive.com';
   }
   
   // PRIORITÉ 4: Fallback local
-  console.log('[GOOGLE-AUTH] 🏠 Local détecté, FRONTEND_URL: http://localhost:5173');
   return 'http://localhost:5173';
 }
 
@@ -87,7 +83,6 @@ function getOAuthRedirectUri(hostHeader?: string): string {
   // Déterminer le host
   const host = hostHeader || 'localhost:4000';
   
-  console.log('[GOOGLE-AUTH] 📍 Détection environnement - Host reçu:', host);
   
   // CAS 1: Codespaces (hostname contient app.github.dev)
   if (host.includes('app.github.dev')) {
@@ -103,7 +98,6 @@ function getOAuthRedirectUri(hostHeader?: string): string {
     
     const redirectUri = `https://${codespaceName}-4000.app.github.dev/api/google-auth/callback`;
     
-    console.log('[GOOGLE-AUTH] 🚀 Codespaces détecté:', {
       originalHost: host,
       hostWithoutPort,
       codespaceName,
@@ -115,13 +109,11 @@ function getOAuthRedirectUri(hostHeader?: string): string {
   // CAS 2: Production (www.zhiive.com ou app.2thier.be)
   if (host.includes('zhiive.com') || host.includes('app.2thier.be') || host.includes('2thier.be')) {
     const redirectUri = 'https://www.zhiive.com/api/google-auth/callback';
-    console.log('[GOOGLE-AUTH] 🌐 Production détectée:', { host, redirectUri });
     return redirectUri;
   }
   
   // CAS 3: Local (localhost ou 127.0.0.1)
   const redirectUri = 'http://localhost:4000/api/google-auth/callback';
-  console.log('[GOOGLE-AUTH] 🏠 Local détecté:', { host, redirectUri });
   return redirectUri;
 }
 
@@ -150,21 +142,15 @@ function parseOAuthState(raw: string): OAuthState {
 // Fonction utilitaire pour récupérer la configuration Google Workspace
 async function getGoogleWorkspaceConfig(organizationId: string) {
   try {
-    console.log('[GOOGLE-AUTH] 📋 Recherche config pour organisation:', organizationId);
     
     const config = await db.googleWorkspaceConfig.findUnique({
       where: { organizationId }
     });
 
-    console.log('[GOOGLE-AUTH] 📊 Config brute depuis BDD:', config ? 'Trouvée' : 'Non trouvée');
     if (config) {
-      console.log('[GOOGLE-AUTH] 🔑 clientId crypté:', config.clientId ? 'Présent' : 'Manquant');
-      console.log('[GOOGLE-AUTH] 🔐 clientSecret crypté:', config.clientSecret ? 'Présent' : 'Manquant');
-      console.log('[GOOGLE-AUTH] 🔗 redirectUri:', config.redirectUri);
     }
 
     if (!config) {
-      console.log('[GOOGLE-AUTH] ❌ Aucune configuration trouvée');
       return null;
     }
 
@@ -176,12 +162,6 @@ async function getGoogleWorkspaceConfig(organizationId: string) {
       isConfigured: !!config.clientId && !!config.clientSecret && !!config.redirectUri
     };
 
-    console.log('[GOOGLE-AUTH] 🔓 Config décryptée:');
-    console.log('[GOOGLE-AUTH] 🆔 clientId décrypté:', decryptedConfig.clientId ? 'OK' : 'ERREUR');
-    console.log('[GOOGLE-AUTH] 🔐 clientSecret décrypté:', decryptedConfig.clientSecret ? 'OK' : 'ERREUR');
-    console.log('[GOOGLE-AUTH] 🔗 redirectUri final:', decryptedConfig.redirectUri);
-    console.log('[GOOGLE-AUTH] 📧 adminEmail:', decryptedConfig.adminEmail);
-    console.log('[GOOGLE-AUTH] ✅ isConfigured:', decryptedConfig.isConfigured);
 
     return decryptedConfig;
   } catch (error) {
@@ -193,8 +173,6 @@ async function getGoogleWorkspaceConfig(organizationId: string) {
 // Fonction pour activer automatiquement les modules Google Workspace
 async function activateGoogleModules(organizationId: string, grantedScopes: string) {
   try {
-    console.log('[GOOGLE-AUTH] 🔧 Début activation modules pour org:', organizationId);
-    console.log('[GOOGLE-AUTH] 🔐 Scopes accordés:', grantedScopes);
 
     const scopesArray = grantedScopes.split(' ');
     
@@ -241,15 +219,12 @@ async function activateGoogleModules(organizationId: string, grantedScopes: stri
       if (hasRequiredScopes) {
         modulesToActivate.push(module.name);
         configUpdates[module.configField] = true;
-        console.log('[GOOGLE-AUTH] ✅ Module activable:', module.name);
       } else {
-        console.log('[GOOGLE-AUTH] ❌ Module non activable (scopes manquants):', module.name);
       }
     }
 
     // Mettre à jour la configuration Google Workspace
     if (Object.keys(configUpdates).length > 0) {
-      console.log('[GOOGLE-AUTH] 💾 Mise à jour config avec modules:', configUpdates);
       await db.googleWorkspaceConfig.update({
         where: { organizationId },
         data: {
@@ -262,7 +237,6 @@ async function activateGoogleModules(organizationId: string, grantedScopes: stri
     }
 
     // Activer les modules correspondants dans la table modules
-    console.log('[GOOGLE-AUTH] 🔧 Activation des modules CRM...');
     for (const moduleName of modulesToActivate) {
       try {
         // Trouver le module par nom
@@ -297,16 +271,13 @@ async function activateGoogleModules(organizationId: string, grantedScopes: stri
             }
           });
 
-          console.log('[GOOGLE-AUTH] ✅ Module CRM activé:', moduleName, '(', module.id, ')');
         } else {
-          console.log('[GOOGLE-AUTH] ⚠️ Module CRM non trouvé:', moduleName);
         }
       } catch (moduleError) {
         console.error('[GOOGLE-AUTH] ❌ Erreur activation module', moduleName, ':', moduleError);
       }
     }
 
-    console.log('[GOOGLE-AUTH] ✅ Activation des modules terminée. Modules activés:', modulesToActivate);
     return modulesToActivate;
 
   } catch (error) {
@@ -372,7 +343,6 @@ router.get('/url', authMiddleware, async (req: AuthenticatedRequest, res) => {
     // DYNAMIQUE: Utiliser getOAuthRedirectUri() avec le Host header pour détecter l'environnement automatiquement
     const hostHeader1 = req.headers.host || 'localhost:4000';
     const actualRedirectUri = getOAuthRedirectUri(hostHeader1);
-    console.log('[GOOGLE-AUTH] 🎯 Redirect URI (auto-détecté):', actualRedirectUri);
 
     // 🔒 Verrouiller le redirectUri dans le state pour garantir qu'il sera IDENTIQUE lors de l'échange de tokens
     stateObj.redirectUri = actualRedirectUri;
@@ -414,13 +384,8 @@ router.get('/connect', authMiddleware, async (req: AuthenticatedRequest, res) =>
     const organizationId = req.query.organizationId as string || req.user?.organizationId?.toString();
     const forceConsent = req.query.force_consent === 'true'; // Nouveau paramètre pour forcer le consentement
     
-    console.log('[GOOGLE-AUTH] 🔍 OrganizationId extrait:', organizationId);
-    console.log('[GOOGLE-AUTH] 🔄 Force consent:', forceConsent);
-    console.log('[GOOGLE-AUTH] 👤 User info:', req.user ? 'Présent' : 'Absent');
-    console.log('[GOOGLE-AUTH] 🏢 User organizationId:', req.user?.organizationId);
     
     if (!organizationId) {
-      console.log('[GOOGLE-AUTH] ❌ Aucun organizationId trouvé (query ou user)');
       return res.status(400).json({
         success: false,
         message: 'Organization ID requis (non trouvé dans query ou profil utilisateur)'
@@ -429,7 +394,6 @@ router.get('/connect', authMiddleware, async (req: AuthenticatedRequest, res) =>
 
     // Si force_consent, supprimer l'ancien token pour forcer un nouveau consentement
     if (forceConsent && req.user?.userId) {
-      console.log('[GOOGLE-AUTH] 🗑️ Suppression de l\'ancien token pour forcer le consentement...');
       try {
         await db.googleToken.deleteMany({
           where: {
@@ -437,7 +401,6 @@ router.get('/connect', authMiddleware, async (req: AuthenticatedRequest, res) =>
             organizationId: organizationId
           }
         });
-        console.log('[GOOGLE-AUTH] ✅ Ancien token supprimé');
       } catch (deleteError) {
         console.warn('[GOOGLE-AUTH] ⚠️ Erreur suppression ancien token:', deleteError);
         // Continue anyway
@@ -447,25 +410,18 @@ router.get('/connect', authMiddleware, async (req: AuthenticatedRequest, res) =>
     // Récupérer la configuration Google Workspace pour cette organisation
     const config = await getGoogleWorkspaceConfig(organizationId);
     
-    console.log('[GOOGLE-AUTH] 🔍 Configuration récupérée pour org:', organizationId);
-    console.log('[GOOGLE-AUTH] 🔧 Config complète:', JSON.stringify(config, null, 2));
     
     if (!config || !config.isConfigured) {
-      console.log('[GOOGLE-AUTH] ❌ Configuration manquante ou incomplète');
       return res.status(400).json({
         success: false,
         message: 'Google Workspace non configuré pour cette organisation'
       });
     }
 
-    console.log('[GOOGLE-AUTH] ✅ Configuration valide détectée');
-    console.log('[GOOGLE-AUTH] 🆔 ClientId:', config.clientId);
-    console.log('[GOOGLE-AUTH] 🏢 Domain:', config.domain);
 
     // DYNAMIQUE: Utiliser getOAuthRedirectUri() avec le Host header pour détecter l'environnement automatiquement
     const hostHeader = req.headers.host || 'localhost:4000';
     const actualRedirectUri = getOAuthRedirectUri(hostHeader);
-    console.log('[GOOGLE-AUTH] 🎯 Redirect URI (auto-détecté):', actualRedirectUri);
 
     // 🔒 Verrouiller le redirectUri dans le state (évite redirect_uri_mismatch entre /connect et /callback)
     const stateParam = encodeOAuthState({
@@ -486,7 +442,6 @@ router.get('/connect', authMiddleware, async (req: AuthenticatedRequest, res) =>
       `enable_granular_consent=true&` +
       `state=${encodeURIComponent(stateParam)}`;
 
-    console.log('[GOOGLE-AUTH] 🌐 URL générée:', authUrl);
 
     res.json({
       success: true,
@@ -512,18 +467,12 @@ router.get('/callback', async (req, res) => {
   try {
     const { code, state, error } = req.query;
 
-    console.log('[GOOGLE-AUTH] 🔄 Callback OAuth reçu');
-    console.log('[GOOGLE-AUTH] 📋 State (organizationId):', state);
-    console.log('[GOOGLE-AUTH] 🔑 Code présent:', !!code);
-    console.log('[GOOGLE-AUTH] ❌ Erreur présente:', !!error);
 
     if (error) {
-      console.log('[GOOGLE-AUTH] ❌ Erreur OAuth:', error);
       return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_error=${error}`);
     }
 
     if (!code || !state) {
-      console.log('[GOOGLE-AUTH] ❌ Paramètres manquants - Code:', !!code, 'State:', !!state);
       return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_error=missing_params`);
     }
 
@@ -545,7 +494,6 @@ router.get('/callback', async (req, res) => {
       
       // Si c'est un callback pour les intégrations publicitaires, rediriger
       if (platform && (platform === 'google_ads' || platform === 'meta_ads')) {
-        console.log('[GOOGLE-AUTH] 🔄 Redirection vers gestionnaire intégrations publicitaires:', platform);
         const callbackPath = `/api/integrations/advertising/oauth/${platform}/callback`;
         const redirectUrl = `${callbackPath}?${new URLSearchParams(req.query as Record<string, string>).toString()}`;
         return res.redirect(redirectUrl);
@@ -556,18 +504,14 @@ router.get('/callback', async (req, res) => {
       return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_error=invalid_state`);
     }
 
-    console.log('[GOOGLE-AUTH] 🏢 Organisation cible:', organizationId, 'pour utilisateur:', userId);
     
     // Récupérer la configuration Google Workspace pour cette organisation
     const config = await getGoogleWorkspaceConfig(organizationId);
     
     if (!config || !config.isConfigured || !config.adminEmail) {
-      console.log('[GOOGLE-AUTH] ❌ Configuration manquante ou email admin non défini pour org:', organizationId);
       return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_error=config_incomplete`);
     }
 
-    console.log('[GOOGLE-AUTH] ✅ Configuration trouvée, email admin cible:', config.adminEmail);
-    console.log('[GOOGLE-AUTH] 🔄 Échange du code contre les tokens...');
 
     // DYNAMIQUE: Utiliser getOAuthRedirectUri() avec le Host header pour détecter l'environnement automatiquement
     // L'URI DOIT être identique à celle utilisée lors de l'initiation OAuth
@@ -575,7 +519,6 @@ router.get('/callback', async (req, res) => {
     const actualRedirectUri = (redirectUriFromState && typeof redirectUriFromState === 'string')
       ? redirectUriFromState
       : getOAuthRedirectUri(hostHeader2);
-    console.log('[GOOGLE-AUTH] 🎯 Callback - Redirect URI pour échange de tokens:', {
       hostHeader: hostHeader2,
       redirectUri: actualRedirectUri,
       environment: hostHeader2.includes('app.github.dev') ? 'Codespaces' : 
@@ -591,14 +534,12 @@ router.get('/callback', async (req, res) => {
 
     try {
       // Échanger le code d'autorisation contre les tokens
-      console.log('[GOOGLE-AUTH] 🔑 Tentative d\'échange de code avec Google:', {
         clientId: config.clientId.substring(0, 20) + '...',
         redirectUri: actualRedirectUri,
         code: (code as string).substring(0, 20) + '...'
       });
       
       const { tokens } = await oauth2Client.getToken(code as string);
-      console.log('[GOOGLE-AUTH] ✅ Tokens reçus:', {
         accessToken: !!tokens.access_token,
         refreshToken: !!tokens.refresh_token,
         expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
@@ -612,7 +553,6 @@ router.get('/callback', async (req, res) => {
       const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
       const userInfo = await oauth2.userinfo.get();
       
-      console.log('[GOOGLE-AUTH] ✅ Informations du compte Google connecté:', {
         email: userInfo.data.email,
         name: userInfo.data.name,
       });
@@ -623,22 +563,17 @@ router.get('/callback', async (req, res) => {
         return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_error=account_mismatch&expected=${encodeURIComponent(config.adminEmail)}&connected_as=${encodeURIComponent(userInfo.data.email || '')}`);
       }
 
-      console.log('[GOOGLE-AUTH] ✅ Connexion Google validée pour l\'admin:', config.adminEmail);
 
       // Sauvegarder ou mettre à jour les tokens pour l'utilisateur dans cette organisation
-      console.log('[GOOGLE-AUTH] 💾 Sauvegarde des tokens pour l\'utilisateur:', userId, 'dans l\'organisation:', organizationId);
       await googleOAuthService.saveUserTokens(userId, organizationId, tokens, userInfo.data.email || undefined);
       const googleTokenRecord = await db.googleToken.findFirst({ 
         where: { userId, organizationId } 
       });
 
-      console.log('[GOOGLE-AUTH] ✅ Tokens sauvegardés pour l\'utilisateur:', googleTokenRecord?.id);
 
       // Activer automatiquement les modules Google Workspace pour cette organisation
-      console.log('[GOOGLE-AUTH] 🔧 Activation des modules Google Workspace...');
       await activateGoogleModules(organizationId, tokens.scope || '');
 
-      console.log('[GOOGLE-AUTH] 🎉 Authentification Google complète avec succès !');
       
       // Redirection vers notre page de callback spécialisée
       return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_success=1&organizationId=${organizationId}&admin_email=${encodeURIComponent(config.adminEmail)}`);
@@ -675,7 +610,6 @@ router.get('/callback', async (req, res) => {
 // GET /api/google-auth/status - Statut de la connexion Google  
 router.get('/status', authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {
-    console.log('[GOOGLE-AUTH] 📊 Vérification statut connexion pour user:', req.user?.userId);
     
     if (!req.user?.userId) {
       return res.json({
@@ -706,13 +640,11 @@ router.get('/status', authMiddleware, async (req: AuthenticatedRequest, res) => 
     }
 
     const userId = req.user?.userId;
-    console.log('[GOOGLE-AUTH] 🔄 Tentative de refresh automatique pour organisation:', organizationId, 'userId:', userId);
 
     // 🆕 NOUVEAU: Utiliser le système de refresh automatique avec userId
     const refreshResult = await refreshGoogleTokenIfNeeded(organizationId, userId);
     
     if (!refreshResult.success) {
-      console.log('[GOOGLE-AUTH] ❌ Refresh automatique échoué:', refreshResult.error);
       
       // Gérer les différents types d'erreurs
       if (refreshResult.error === 'no_token_found') {
@@ -762,7 +694,6 @@ router.get('/status', authMiddleware, async (req: AuthenticatedRequest, res) => 
       }
     }
 
-    console.log('[GOOGLE-AUTH] ✅ Token valide ou rafraîchi avec succès');
 
     // Récupérer les informations utilisateur avec le token valide
     let userEmail = null;
@@ -798,10 +729,8 @@ router.get('/status', authMiddleware, async (req: AuthenticatedRequest, res) => 
       }
       scopes = googleToken?.scope ? googleToken.scope.split(' ') : [];
       
-      console.log('[GOOGLE-AUTH] ✅ Token validé avec succès, email:', userEmail);
 
     } catch (tokenError) {
-      console.log('[GOOGLE-AUTH] ❌ Erreur validation token final:', tokenError);
       tokenValid = false;
     }
 
@@ -843,7 +772,6 @@ router.get('/status', authMiddleware, async (req: AuthenticatedRequest, res) => 
 // POST /api/google-auth/disconnect - Déconnecter Google
 router.post('/disconnect', authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {
-    console.log('[GOOGLE-AUTH] 🔄 Début déconnexion pour user:', req.user?.userId);
     
     if (!req.user?.userId) {
       return res.status(401).json({
@@ -890,21 +818,17 @@ router.post('/disconnect', authMiddleware, async (req: AuthenticatedRequest, res
     if (googleToken) {
       try {
         // Révoquer le token côté Google
-        console.log('[GOOGLE-AUTH] 🚫 Révocation du token côté Google...');
         const oauth2Client = new google.auth.OAuth2();
         oauth2Client.setCredentials({
           access_token: googleToken.accessToken
         });
 
         await oauth2Client.revokeCredentials();
-        console.log('[GOOGLE-AUTH] ✅ Token révoqué côté Google');
 
       } catch (revokeError) {
-        console.log('[GOOGLE-AUTH] ⚠️ Erreur révocation côté Google (peut-être déjà révoqué):', revokeError);
       }
 
       // Supprimer le token de notre base de données
-      console.log('[GOOGLE-AUTH] 🗑️ Suppression du token de la base...');
       if (currentUserId) {
         await db.googleToken.delete({
           where: { userId_organizationId: { userId: currentUserId, organizationId } }
@@ -915,11 +839,9 @@ router.post('/disconnect', authMiddleware, async (req: AuthenticatedRequest, res
         });
       }
 
-      console.log('[GOOGLE-AUTH] ✅ Token supprimé de la base');
     }
 
     // Désactiver les modules Google Workspace pour l'organisation
-    console.log('[GOOGLE-AUTH] 🔧 Désactivation des modules Google...');
     await db.googleWorkspaceConfig.update({
       where: { organizationId: organizationId },
       data: {
@@ -958,9 +880,7 @@ router.post('/disconnect', authMiddleware, async (req: AuthenticatedRequest, res
       });
     }
 
-    console.log('[GOOGLE-AUTH] ✅ Modules Google désactivés');
 
-    console.log('[GOOGLE-AUTH] 🎉 Déconnexion Google complète');
     try {
       logSecurityEvent('GOOGLE_DISCONNECT_COMPLETED', {
         userId: req.user.userId,
@@ -1007,7 +927,6 @@ router.post('/toggle-module', authMiddleware, async (req: AuthenticatedRequest, 
     // Récupérer l'organizationId depuis le body
     const { moduleName, enabled, organizationId } = req.body;
     
-    console.log('[GOOGLE-AUTH] 🔧 Toggle module:', moduleName, 'enabled:', enabled, 'pour organization:', organizationId);
     
     if (!organizationId) {
       return res.status(400).json({
@@ -1105,7 +1024,6 @@ router.post('/toggle-module', authMiddleware, async (req: AuthenticatedRequest, 
       });
     }
 
-    console.log('[GOOGLE-AUTH] ✅ Module', moduleName, enabled ? 'activé' : 'désactivé');
 
     res.json({
       success: true,

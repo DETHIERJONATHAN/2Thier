@@ -93,16 +93,12 @@ router.post('/lead-statuses', async (req, res) => {
 
 // PUT /api/settings/lead-statuses/reorder (DOIT ÊTRE AVANT la route :id)
 router.put('/lead-statuses/reorder', async (req, res) => {
-  console.log('🚨 [DEBUG] LEAD-STATUSES REORDER - ROUTE APPELÉE !');
-  console.log('🚨 [DEBUG] Body received:', req.body);
-  console.log('🚨 [DEBUG] Headers:', req.headers);
   
   try {
     const authReq = req as AuthenticatedRequest;
     const organizationId = authReq.user?.organizationId;
     
     if (!organizationId) {
-      console.log('🚨 [DEBUG] PAS D\'ORG ID');
       return res.status(400).json({ 
         error: 'Organisation non spécifiée' 
       });
@@ -111,7 +107,6 @@ router.put('/lead-statuses/reorder', async (req, res) => {
     const { statuses } = req.body; // Format: [{ id: 'uuid', order: 0 }]
     
     if (!Array.isArray(statuses)) {
-      console.log('🚨 [DEBUG] PAS UN ARRAY:', typeof statuses, statuses);
       return res.status(400).json({ 
         error: 'Array de statuts requis' 
       });

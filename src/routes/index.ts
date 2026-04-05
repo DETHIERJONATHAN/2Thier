@@ -12,8 +12,7 @@ import invitationRoutes from './invitations';
 import organizationsRoutes from './organizations';
 import autoGoogleAuthRoutes from './autoGoogleAuthRoutes';
 import googleAuthRoutes from './google-auth'; // ✅ NOUVELLE ROUTE GOOGLE AUTH
-import googleSchedulerRoutes from './google-scheduler'; // 🔄 ROUTES SCHEDULER REFRESH TOKENS GOOGLE
-import googleTokensRoutes from './google-tokens'; // 🔍 ROUTES MONITORING TOKENS GOOGLE
+// Google Workspace routes supprimées (Scheduler, Tokens, Drive, Meet, Calendar)
 import googleWorkspaceRoutes from './googleWorkspace'; // ✅ CONFIGURATION GOOGLE WORKSPACE
 import blocksRoutes from './blocks';
 import notificationsRoutes from './notifications';
@@ -32,15 +31,14 @@ import servicesRoutes from './services'; // 🔧 **AJOUT ULTRA-SÉCURISÉ** : Ro
 import permissionsRoutes from './permissions'; // ✅ Routes permissions
 import adminRoutes from './admin'; // ✅ Routes admin
 import impersonateRoutes from './impersonate'; // ✅ Routes usurpation
-import calendarRoutes from './calendar'; // ✅ Routes calendar
+// Calendar routes supprimées — Google Calendar n'est plus utilisé
 import clientsRoutes from './clients'; // ✅ Routes clients
 import projectsRoutes from './projects'; // ✅ Routes projects
 import emailsRoutes from './emails'; // ✅ Routes emails
 import geminiRoutes from './gemini'; // 🤖 Routes Gemini AI
 import telnyxRoutes from './telnyx'; // 📞 Routes Telnyx Communications
 import quotesRoutes from './quotes'; // 📄 Routes Devis (Quotes)
-import googleDriveRoutes from './google-drive'; // 📁 Routes Google Drive
-import googleMeetRoutes from './google-meet'; // 📹 Routes Google Meet
+// Google Drive & Meet routes supprimées
 import analyticsRoutes from './analytics'; // 📊 Routes Analytics
 import aiRoutes from './ai'; // 🤖 Routes Intelligence Artificielle
 import aiCodeRoutes from './ai-code'; // 🧩 Exploration code IA (SuperAdmin)
@@ -278,20 +276,8 @@ apiRouter.use('/zhiivemail', zhiivemailAdminRoutes);
 apiRouter.use('/mail', mailProviderRoutes);
 
 
-// Routes Calendar
-apiRouter.use('/calendar', calendarRoutes);
-
-
 // Routes Google Auth (OAuth)
 apiRouter.use('/google-auth', googleAuthRoutes);
-
-
-// Routes Google Scheduler (Refresh automatique des tokens)
-apiRouter.use('/google/scheduler', googleSchedulerRoutes);
-
-
-// Routes Google Tokens Monitoring
-apiRouter.use('/google-tokens', googleTokensRoutes);
 
 
 // Routes Google Auth - Alias pour compatibilité Google Cloud Console
@@ -308,14 +294,6 @@ apiRouter.use('/telnyx', telnyxRoutes);
 
 // Routes Devis (Quotes)
 apiRouter.use('/quotes', quotesRoutes);
-
-
-// Routes Google Drive
-apiRouter.use('/google-drive', googleDriveRoutes);
-
-
-// Routes Google Meet
-apiRouter.use('/google-meet', googleMeetRoutes);
 
 
 // Routes Analytics

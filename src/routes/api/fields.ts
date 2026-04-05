@@ -13,7 +13,6 @@ router.use(authMiddleware as any);
 router.get('/debug/check-formulas', async (_req, res) => {
   try {
     const formulas = await prisma.fieldFormula.findMany();
-    console.log(`[DEBUG] Nombre total de formules: ${formulas.length}`);
     
     res.json({
       count: formulas.length,
@@ -35,7 +34,6 @@ router.get('/create-test-formula', async (_req, res) => {
     // Utiliser directement l'ID d'un champ connu
     const fieldId = "431fa081-7e9e-47df-8231-6e0d75b6da3d"; // ID du premier champ récupéré précédemment
     
-    console.log(`[DEBUG] Création de formule pour le champ avec ID:`, fieldId);
     
     const testFormula = await prisma.fieldFormula.create({
       data: {
@@ -47,7 +45,6 @@ router.get('/create-test-formula', async (_req, res) => {
       }
     });
     
-    console.log(`[DEBUG] Formule de test créée:`, testFormula);
     
     // Vérifier que la formule a bien été créée
     const allFormulas = await prisma.fieldFormula.findMany();

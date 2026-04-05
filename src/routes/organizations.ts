@@ -956,7 +956,6 @@ router.get('/:id', requireRole(['admin', 'super_admin']), async (req: Authentica
     const activeGoogleModules = getActiveGoogleModules(organization.OrganizationModuleStatus);
     const realActiveModulesCount = await countRealActiveModules(organization.id);
     
-    console.log(`[DEBUG] Organisation individuelle ${organization.name}: ${realActiveModulesCount} modules réellement actifs`);
     
     const enrichedOrganization = {
       ...organization,

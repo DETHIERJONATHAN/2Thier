@@ -67,15 +67,9 @@ const Devis1minuteAdminSite = lazy(() => import('./pages/devis1minute/admin/Devi
 // Pages Google Workspace (très lourdes)
 const GoogleGmailPageV2 = lazy(() => import('./pages/UnifiedMailPage'));  // ✅ Page mail unifiée Gmail + Yandex
 const MailSettingsPage = lazy(() => import('./pages/MailSettingsPage'));  // ⚙️ Paramètres comptes email
-const GoogleAgendaPage = lazy(() => import('./pages/GoogleAgendaPage'));
-// Google Drive & Meet supprimés — Google Workspace n'est plus utilisé
+// Google Workspace pages supprimées — plus utilisé (Agenda, Drive, Meet, Contacts, Forms, Groups, Maps, Sheets, Docs, Analytics)
 const TelnyxPage = lazy(() => import('./pages/TelnyxPage'));
-const GoogleGroupsPage = lazy(() => import('./pages/GoogleGroupsPage'));
-const GoogleFormsPage = lazy(() => import('./pages/GoogleFormsPage'));
-const GoogleMapsPage = lazy(() => import('./pages/GoogleMapsPage'));
-const GoogleAnalyticsPage = lazy(() => import('./pages/GoogleAnalyticsPage'));
 const GoogleGeminiPage = lazy(() => import('./pages/GoogleGeminiPage'));
-const GoogleContactsPage = lazy(() => import('./pages/GoogleContactsPage'));
 
 // Pages Admin (chargées uniquement si nécessaire)
 const ModulesAdminPage = lazy(() => import('./pages/admin/ModulesAdminPage'));
@@ -275,14 +269,8 @@ export default function AppLayout() {
             {(hasFeature('partner_portal') || isSuperAdmin) && <Route path="/devis1minute/leads" element={<CampaignAnalyticsPage />} />}
             {(hasFeature('partner_portal') || isSuperAdmin) && <Route path="/devis1minute/billing" element={<LandingPagesPage />} />}
 
-            {/* Routes Google Workspace - CORRESPONDANT EXACTEMENT AUX ROUTES DE LA DB */}
+            {/* Routes Google — seuls Gemini et Mail restent actifs */}
             {(hasFeature('google_gmail_access') || hasFeature('google_gmail')) && <Route path="/google-gmail" element={<GoogleGmailPageV2 />} />}
-            {hasFeature('google_agenda_access') && <Route path="/google-agenda" element={<GoogleAgendaPage />} />}
-            {(hasFeature('analytics_access') || isSuperAdmin) && <Route path="/analytics" element={<GoogleAnalyticsPage />} />}
-            {hasFeature('google_contacts_access') && <Route path="/google-contacts" element={<GoogleContactsPage />} />}
-            {hasFeature('google_forms_access') && <Route path="/google-forms" element={<GoogleFormsPage />} />}
-            {hasFeature('google_groups_access') && <Route path="/google-groups" element={<GoogleGroupsPage />} />}
-            {hasFeature('google_maps_access') && <Route path="/google-maps" element={<GoogleMapsPage />} />}
             {hasFeature('gemini_access') && <Route path="/gemini" element={<GoogleGeminiPage />} />}
             {hasFeature('telnyx_communications_access') && <Route path="/telnyx-communications" element={<TelnyxPage />} />}
 

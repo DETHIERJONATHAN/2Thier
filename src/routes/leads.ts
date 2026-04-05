@@ -11,7 +11,6 @@ router.use(authMiddleware, impersonationMiddleware);
 router.get('/debug-orgs', async (_req: Request, res: Response): Promise<void> => {
     try {
         const organizations = await prisma.organization.findMany();
-        console.log('[DEBUG] Organizations:', organizations.map(o => ({ id: o.id, name: o.name })));
         res.json({ success: true, message: 'Liste des organisations pour débogage',
             count: organizations.length,
             organizations: organizations.map(o => ({ id: o.id, name: o.name }))
