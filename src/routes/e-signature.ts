@@ -20,7 +20,7 @@ import nodemailer from 'nodemailer';
 import { decrypt } from '../utils/crypto.js';
 import { generateTblPdf, generateTblPdfWithHash, hashPdf } from '../services/tblPdfGenerator';
 import type { TblPdfData, TblPdfSection, TblPdfField, TblPdfSignatureInfo } from '../services/tblPdfGenerator';
-import { GoogleGmailService } from '../google-auth/services/GoogleGmailService';
+import { getPostalService } from '../services/PostalEmailService';
 import { generateClientPdfBuffer } from './documents';
 import { notify } from '../services/NotificationHelper';
 
@@ -1234,17 +1234,20 @@ router.post('/sign/:token/submit', async (req: Request, res: Response) => {
           // 📧 1) Email au CLIENT avec copie du devis signé
           if (signature.signerEmail) {
             try {
-              // Utiliser le createdBy pour envoyer via Gmail du commercial
+              const postal = getPostalService();
+              // Résoudre l'adresse email expéditeur
+              let fromEmail = 'noreply@zhiive.com';
               const senderId = signature.createdBy || undefined;
-              const gmailClient = senderId
-                ? await GoogleGmailService.create(signature.organizationId, senderId)
-                : null;
+              if (senderId) {
+                const senderAccount = await db.emailAccount.findUnique({ where: { userId: senderId }, select: { emailAddress: true } });
+                if (senderAccount?.emailAddress) fromEmail = senderAccount.emailAddress;
+              }
 
-              if (gmailClient) {
-                await gmailClient.sendEmail({
-                  to: signature.signerEmail,
-                  subject: `📄 Votre devis signé — Confirmation`,
-                  body: `
+              await postal.sendEmail({
+                from: fromEmail,
+                to: signature.signerEmail,
+                subject: `📄 Votre devis signé — Confirmation`,
+                body: `
                     <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto;">
                       <div style="background: #f6ffed; border: 1px solid #b7eb8f; border-radius: 8px; padding: 20px;">
                         <h2 style="color: #52c41a; margin: 0 0 12px;">✅ Signature confirmée</h2>
@@ -1258,13 +1261,10 @@ router.post('/sign/:token/submit', async (req: Request, res: Response) => {
                         <p style="margin-top: 16px;">Cordialement,<br/>L'équipe commerciale</p>
                       </div>
                     </div>`,
-                  isHtml: true,
-                  attachments,
-                });
-                console.log(`[E-Signature] 📧 Copie PDF envoyée au client: ${signature.signerEmail}`);
-              } else {
-                console.warn('[E-Signature] Gmail non dispo pour email client');
-              }
+                isHtml: true,
+                attachments: attachments.map(a => ({ name: a.filename, contentType: a.mimeType, data: a.content.toString('base64') })),
+              });
+              console.log(`[E-Signature] 📧 Copie PDF envoyée au client: ${signature.signerEmail}`);
             } catch (clientEmailErr) {
               console.warn('[E-Signature] ⚠️ Échec email client:', clientEmailErr);
             }
@@ -1275,12 +1275,16 @@ router.post('/sign/:token/submit', async (req: Request, res: Response) => {
             try {
               const creator = await db.user.findUnique({ where: { id: signature.createdBy }, select: { email: true, firstName: true } });
               if (creator?.email) {
-                const gmailCommercial = await GoogleGmailService.create(signature.organizationId, signature.createdBy);
-                if (gmailCommercial) {
-                  await gmailCommercial.sendEmail({
-                    to: creator.email,
-                    subject: `✅ Devis signé par ${signature.signerName}`,
-                    body: `
+                const postal2 = getPostalService();
+                let fromEmail2 = 'noreply@zhiive.com';
+                const commercialAccount = await db.emailAccount.findUnique({ where: { userId: signature.createdBy }, select: { emailAddress: true } });
+                if (commercialAccount?.emailAddress) fromEmail2 = commercialAccount.emailAddress;
+
+                await postal2.sendEmail({
+                  from: fromEmail2,
+                  to: creator.email,
+                  subject: `✅ Devis signé par ${signature.signerName}`,
+                  body: `
                       <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto;">
                         <div style="background: #f6ffed; border: 1px solid #b7eb8f; border-radius: 8px; padding: 20px;">
                           <h2 style="color: #52c41a; margin: 0 0 12px;">✅ Signature reçue !</h2>
@@ -1293,11 +1297,10 @@ router.post('/sign/:token/submit', async (req: Request, res: Response) => {
                           <p>Le PDF signé est en pièce jointe.</p>
                         </div>
                       </div>`,
-                    isHtml: true,
-                    attachments,
-                  });
-                  console.log(`[E-Signature] 📧 Copie PDF envoyée au commercial: ${creator.email}`);
-                }
+                  isHtml: true,
+                  attachments: attachments.map(a => ({ name: a.filename, contentType: a.mimeType, data: a.content.toString('base64') })),
+                });
+                console.log(`[E-Signature] 📧 Copie PDF envoyée au commercial: ${creator.email}`);
               }
             } catch (adminEmailErr) {
               console.warn('[E-Signature] ⚠️ Échec email commercial:', adminEmailErr);
