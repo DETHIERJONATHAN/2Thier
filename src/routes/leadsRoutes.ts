@@ -101,7 +101,6 @@ router.get('/', async (req, res) => {
       });
     }
     
-    console.log('[LEADS] 👤 Utilisateur normal - Récupération des leads pour l\'organisation:', organizationId);
     
     const leads = await prisma.lead.findMany({
       where: {
@@ -178,9 +177,6 @@ router.post('/', async (req, res) => {
       });
     }
     
-    console.log('[LEADS] POST - Création d\'un nouveau lead');
-    console.log('[LEADS] Données reçues:', req.body);
-    console.log('[LEADS] Organisation:', organizationId);
     
     const { 
       firstName, 
@@ -211,7 +207,6 @@ router.post('/', async (req, res) => {
         where: { id: statusId }
       });
       if (!statusExists) {
-        console.log('[LEADS] Statut non trouvé, utilisation du statut par défaut');
         finalStatusId = null;
       }
     }
@@ -226,7 +221,6 @@ router.post('/', async (req, res) => {
       });
       if (defaultStatus) {
         finalStatusId = defaultStatus.id;
-        console.log('[LEADS] Statut par défaut assigné:', defaultStatus.name);
       }
     }
     
@@ -274,7 +268,6 @@ router.post('/', async (req, res) => {
       }
     });
     
-    console.log('[LEADS] Lead créé avec succès:', newLead.id);
 
     // 🔔 Notification: nouveau lead
     notify.leadReceived(
@@ -367,7 +360,6 @@ router.get('/:id', async (req, res) => {
     });
     
     if (!lead) {
-      console.log('[LEADS] Lead non trouvé:', id);
       return res.status(404).json({ 
         error: 'Lead non trouvé ou non autorisé' 
       });
@@ -646,7 +638,6 @@ router.put('/:id', async (req, res) => {
       }
     });
     
-    console.log('[LEADS] Lead modifié avec succès:', updatedLead.id);
 
     // 🔔 Notifications: changement de statut ou réassignation
     if (existingLead.statusId !== updatedLead.statusId && updatedLead.LeadStatus) {
@@ -710,14 +701,6 @@ router.delete('/:id', async (req, res) => {
     const authReq = req as AuthenticatedRequest;
     const { id } = req.params;
 
-    console.log('[LEADS] 🗑️ Demande de suppression du lead:', id, 'par utilisateur:', {
-      id: authReq.user?.userId || authReq.user?.id,
-      email: authReq.user?.email,
-      role: authReq.user?.role,
-      isSuperAdmin: authReq.user?.isSuperAdmin,
-      organizationId: authReq.user?.organizationId
-    });
-
     // Détection SuperAdmin (même logique que GET/PUT)
     const isSuperAdmin = authReq.user?.role === 'super_admin' ||
                          authReq.user?.isSuperAdmin === true ||
@@ -736,13 +719,11 @@ router.delete('/:id', async (req, res) => {
     // Vérifier l'existence et l'autorisation
     const existing = await prisma.lead.findFirst({ where: whereCondition });
     if (!existing) {
-      console.log('[LEADS] ❌ Lead non trouvé ou non autorisé pour suppression:', id);
       return res.status(404).json({ error: 'Lead non trouvé ou non autorisé' });
     }
 
     // Supprimer le lead
     await prisma.lead.delete({ where: { id } });
-    console.log('[LEADS] ✅ Lead supprimé avec succès:', id);
     // 204 No Content pour simplifier la gestion côté client (converti en {success:true})
     return res.status(204).send();
   } catch (error) {

@@ -18,7 +18,6 @@ interface DirectLeadRequest {
 }
 
 router.post('/add-lead-direct', async (req, res) => {
-  console.log('[DIRECT] Requête de création directe de lead reçue:', req.body);
   
   try {
     const { status, data, organizationId } = req.body as DirectLeadRequest;
@@ -45,7 +44,6 @@ router.post('/add-lead-direct', async (req, res) => {
       return res.status(404).json({ error: 'Organisation non trouvée' });
     }
     
-    console.log(`[DIRECT] Organisation trouvée: ${organization.name} (${organizationId})`);
     
     // Trouver un utilisateur à assigner (facultatif)
     const anyUser = await prisma.user.findFirst({
@@ -60,9 +58,7 @@ router.post('/add-lead-direct', async (req, res) => {
     
     const assignedToId = anyUser ? anyUser.id : null;
     if (assignedToId) {
-      console.log(`[DIRECT] Lead sera assigné à l'utilisateur: ${anyUser?.email} (${assignedToId})`);
     } else {
-      console.log('[DIRECT] Lead ne sera pas assigné (aucun utilisateur trouvé)');
     }
     
     // Créer le lead directement avec Prisma
@@ -75,7 +71,6 @@ router.post('/add-lead-direct', async (req, res) => {
       }
     });
     
-    console.log('[DIRECT] Lead créé avec succès:', { id: lead.id, status: lead.status });
     res.status(201).json(lead);
   } catch (error: any) {
     console.error('[DIRECT] Erreur lors de la création directe du lead:', error);

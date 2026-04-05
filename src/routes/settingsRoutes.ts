@@ -19,7 +19,6 @@ router.get('/lead-statuses', async (req, res) => {
       });
     }
     
-    console.log('[LEAD-STATUSES] Récupération des statuts pour l\'organisation:', organizationId);
     
     const statuses = await prisma.leadStatus.findMany({
       where: {
@@ -30,7 +29,6 @@ router.get('/lead-statuses', async (req, res) => {
       }
     });
     
-    console.log(`[LEAD-STATUSES] ${statuses.length} statuts trouvés`);
     res.json(statuses);
     
   } catch (error) {
@@ -79,7 +77,6 @@ router.post('/lead-statuses', async (req, res) => {
       }
     });
     
-    console.log('[LEAD-STATUSES] Nouveau statut créé:', newStatus.name);
     res.status(201).json(newStatus);
     
   } catch (error) {
@@ -112,8 +109,6 @@ router.put('/lead-statuses/reorder', async (req, res) => {
       });
     }
 
-    console.log('[LEAD-STATUSES] 📥 DONNÉES REÇUES:', JSON.stringify(statuses, null, 2));
-    console.log('[LEAD-STATUSES] 📊 Réorganisation de', statuses.length, 'statuts pour org:', organizationId);
 
     // Vérifier que chaque statut a un id et un order
     for (const status of statuses) {
@@ -127,17 +122,14 @@ router.put('/lead-statuses/reorder', async (req, res) => {
 
     // Mettre à jour l'ordre de chaque statut avec logs détaillés
     const updatePromises = statuses.map(async (status: { id: string; order: number }) => {
-      console.log(`[LEAD-STATUSES] 🔄 Mise à jour ${status.id} -> order: ${status.order}`);
       const result = await prisma.leadStatus.updateMany({
         where: { id: status.id, organizationId },
         data: { order: status.order }
       });
-      console.log(`[LEAD-STATUSES] ✅ Résultat pour ${status.id}: ${result.count} ligne(s) modifiée(s)`);
       return result;
     });
 
     const results = await Promise.all(updatePromises);
-    console.log('[LEAD-STATUSES] 📋 Résultats globaux:', results.map(r => r.count));
 
     res.json({
       success: true,
@@ -153,14 +145,12 @@ router.put('/lead-statuses/reorder', async (req, res) => {
 
 // PUT /api/settings/lead-statuses/:id (DOIT ÊTRE APRÈS la route /reorder)
 router.put('/lead-statuses/:id', (req, res) => {
-  console.log('[ROUTE] PUT /api/settings/lead-statuses/:id atteint', req.params.id);
   // Logique de placeholder
   res.status(200).json({ id: req.params.id, ...req.body });
 });
 
 // DELETE /api/settings/lead-statuses/:id
 router.delete('/lead-statuses/:id', (req, res) => {
-  console.log('[ROUTE] DELETE /api/settings/lead-statuses/:id atteint', req.params.id);
   // Logique de placeholder
   res.status(204).send();
 });
@@ -179,7 +169,6 @@ router.get('/call-statuses', async (req, res) => {
       });
     }
     
-    console.log('[CALL-STATUSES] Récupération des statuts pour l\'organisation:', organizationId);
     
     const callStatuses = await prisma.callStatus.findMany({
       where: {
@@ -192,7 +181,6 @@ router.get('/call-statuses', async (req, res) => {
     
       // Si aucun statut d'appel, ne rien créer par défaut
       if (callStatuses.length === 0) {
-        console.log('[CALL-STATUSES] Aucun statut trouvé');
       }    console.log(`[CALL-STATUSES] ${callStatuses.length} statuts trouvés`);
     res.json(callStatuses);
     
@@ -225,7 +213,6 @@ router.post('/call-statuses', async (req, res) => {
       });
     }
     
-    console.log(`[CALL-STATUSES] Sauvegarde en lot de ${statuses.length} statuts`);
     
     // Supprimer tous les statuts existants pour cette organisation
     await prisma.callStatus.deleteMany({
@@ -249,7 +236,6 @@ router.post('/call-statuses', async (req, res) => {
       savedStatuses.push(savedStatus);
     }
     
-    console.log(`[CALL-STATUSES] ${savedStatuses.length} statuts sauvegardés`);
     res.json(savedStatuses);
     
   } catch (error) {
@@ -281,7 +267,6 @@ router.post('/call-statuses/reorder', async (req, res) => {
       });
     }
     
-    console.log(`[CALL-STATUSES] Réorganisation de ${statusIds.length} statuts`);
     
     // Mettre à jour l'ordre des statuts
     for (let i = 0; i < statusIds.length; i++) {
@@ -306,7 +291,6 @@ router.post('/call-statuses/reorder', async (req, res) => {
       }
     });
     
-    console.log(`[CALL-STATUSES] Réorganisation terminée`);
     res.json(updatedStatuses);
     
   } catch (error) {
@@ -338,7 +322,6 @@ router.put('/call-statuses/reorder', async (req, res) => {
       });
     }
 
-    console.log(`[CALL-STATUSES] PUT Réorganisation de ${statuses.length} statuts`);
 
     // Mettre à jour l'ordre de chaque statut
     const updatePromises = statuses.map((status: { id: string; order: number }) =>
@@ -350,7 +333,6 @@ router.put('/call-statuses/reorder', async (req, res) => {
 
     await Promise.all(updatePromises);
 
-    console.log(`[CALL-STATUSES] PUT Réorganisation terminée`);
     res.json({
       success: true,
       message: 'Ordre mis à jour avec succès'
@@ -405,7 +387,6 @@ router.post('/call-statuses/add', async (req, res) => {
       }
     });
     
-    console.log(`[CALL-STATUSES] Nouveau statut créé: ${newStatus.name}`);
     res.status(201).json(newStatus);
     
   } catch (error) {
@@ -432,7 +413,6 @@ router.put('/call-statuses/:id', async (req, res) => {
     const { id } = req.params;
     const { name, color } = req.body;
     
-    console.log(`[CALL-STATUSES] Mise à jour du statut ${id}`);
     
     const updatedStatus = await prisma.callStatus.update({
       where: {
@@ -445,7 +425,6 @@ router.put('/call-statuses/:id', async (req, res) => {
       }
     });
     
-    console.log(`[CALL-STATUSES] Statut mis à jour: ${updatedStatus.name}`);
     res.json(updatedStatus);
     
   } catch (error) {
@@ -471,7 +450,6 @@ router.delete('/call-statuses/:id', async (req, res) => {
     
     const { id } = req.params;
     
-    console.log(`[CALL-STATUSES] Suppression du statut ${id}`);
     
     await prisma.callStatus.delete({
       where: {
@@ -480,7 +458,6 @@ router.delete('/call-statuses/:id', async (req, res) => {
       }
     });
     
-    console.log(`[CALL-STATUSES] Statut supprimé`);
     res.status(204).send();
     
   } catch (error) {
@@ -506,7 +483,6 @@ router.get('/call-to-lead-mappings', async (req, res) => {
       });
     }
     
-    console.log('[MAPPINGS] Récupération des mappings pour l\'organisation:', organizationId);
     
     const mappings = await prisma.callToLeadMapping.findMany({
       where: {
@@ -522,7 +498,6 @@ router.get('/call-to-lead-mappings', async (req, res) => {
       }
     });
     
-    console.log(`[MAPPINGS] ${mappings.length} mappings trouvés`);
     res.json(mappings);
     
   } catch (error) {
@@ -554,7 +529,6 @@ router.post('/call-to-lead-mappings', async (req, res) => {
       });
     }
     
-    console.log(`[MAPPINGS] Création d'un mapping: ${callStatusId} -> ${leadStatusId}`);
     
     const mapping = await prisma.callToLeadMapping.create({
       data: {
@@ -570,7 +544,6 @@ router.post('/call-to-lead-mappings', async (req, res) => {
       }
     });
     
-    console.log(`[MAPPINGS] Mapping créé: ${mapping.id}`);
     res.status(201).json(mapping);
     
   } catch (error) {
@@ -597,7 +570,6 @@ router.put('/call-to-lead-mappings/:id', async (req, res) => {
     const { id } = req.params;
     const { callStatusId, leadStatusId, condition, priority, isActive } = req.body;
     
-    console.log(`[MAPPINGS] Mise à jour du mapping ${id}`);
     
     const mapping = await prisma.callToLeadMapping.update({
       where: {
@@ -617,7 +589,6 @@ router.put('/call-to-lead-mappings/:id', async (req, res) => {
       }
     });
     
-    console.log(`[MAPPINGS] Mapping mis à jour: ${mapping.id}`);
     res.json(mapping);
     
   } catch (error) {
@@ -643,7 +614,6 @@ router.delete('/call-to-lead-mappings/:id', async (req, res) => {
     
     const { id } = req.params;
     
-    console.log(`[MAPPINGS] Suppression du mapping ${id}`);
     
     await prisma.callToLeadMapping.delete({
       where: {
@@ -652,7 +622,6 @@ router.delete('/call-to-lead-mappings/:id', async (req, res) => {
       }
     });
     
-    console.log(`[MAPPINGS] Mapping supprimé`);
     res.status(204).send();
     
   } catch (error) {
@@ -684,7 +653,6 @@ router.post('/call-to-lead-mappings/bulk', async (req, res) => {
       });
     }
     
-    console.log(`[MAPPINGS] Sauvegarde en lot de ${mappings.length} mappings`);
     
     // Supprimer tous les mappings existants
     await prisma.callToLeadMapping.deleteMany({
@@ -714,7 +682,6 @@ router.post('/call-to-lead-mappings/bulk', async (req, res) => {
       savedMappings.push(savedMapping);
     }
     
-    console.log(`[MAPPINGS] ${savedMappings.length} mappings sauvegardés`);
     res.json(savedMappings);
     
   } catch (error) {
@@ -738,7 +705,6 @@ router.get('/call-lead-mappings', async (req, res) => {
       });
     }
     
-    console.log('[MAPPINGS] Récupération des mappings pour l\'organisation:', organizationId);
     
     const mappings = await prisma.callToLeadMapping.findMany({
       where: {
@@ -753,7 +719,6 @@ router.get('/call-lead-mappings', async (req, res) => {
       }
     });
     
-    console.log(`[MAPPINGS] ${mappings.length} mappings trouvés`);
     res.json(mappings);
     
   } catch (error) {
@@ -777,7 +742,6 @@ router.get('/call-lead-mappings', async (req, res) => {
       });
     }
     
-    console.log('[MAPPINGS] Récupération des mappings pour l\'organisation:', organizationId);
     
     const mappings = await prisma.callToLeadMapping.findMany({
       where: {
@@ -792,7 +756,6 @@ router.get('/call-lead-mappings', async (req, res) => {
       }
     });
     
-    console.log(`[MAPPINGS] ${mappings.length} mappings trouvés`);
     res.json(mappings);
     
   } catch (error) {
@@ -852,7 +815,6 @@ router.post('/email-templates', async (req, res) => {
       }
     });
 
-    console.log('[TEMPLATES] ✅ Template email créé:', template.id);
     res.status(201).json(template);
   } catch (error) {
     console.error('[TEMPLATES] Erreur création template:', error);
@@ -879,7 +841,6 @@ router.put('/email-templates/:id', async (req, res) => {
       }
     });
 
-    console.log('[TEMPLATES] ✅ Template email modifié:', template.id);
     res.json(template);
   } catch (error) {
     console.error('[TEMPLATES] Erreur modification template:', error);
@@ -895,7 +856,6 @@ router.delete('/email-templates/:id', async (req, res) => {
     if (!organizationId) return res.status(400).json({ error: 'Organisation non spécifiée' });
 
     await prisma.emailTemplate.delete({ where: { id: req.params.id } });
-    console.log('[TEMPLATES] ✅ Template email supprimé:', req.params.id);
     res.json({ success: true });
   } catch (error) {
     console.error('[TEMPLATES] Erreur suppression template:', error);
@@ -943,13 +903,6 @@ router.post('/call-lead-mappings', async (req, res) => {
     
     const { callStatusId, leadStatusId, priority, description } = req.body;
     
-    console.log('[MAPPINGS] Création d\'un nouveau mapping:', {
-      callStatusId,
-      leadStatusId,
-      organizationId,
-      priority
-    });
-    
     const newMapping = await prisma.callToLeadMapping.create({
       data: {
         callStatusId,
@@ -964,7 +917,6 @@ router.post('/call-lead-mappings', async (req, res) => {
       }
     });
     
-    console.log('[MAPPINGS] Nouveau mapping créé:', newMapping.id);
     res.status(201).json(newMapping);
     
   } catch (error) {
@@ -991,7 +943,6 @@ router.put('/call-lead-mappings/:id', async (req, res) => {
     
     const { callStatusId, leadStatusId, priority, description } = req.body;
     
-    console.log('[MAPPINGS] Mise à jour du mapping:', mappingId);
     
     const updatedMapping = await prisma.callToLeadMapping.update({
       where: {
@@ -1010,7 +961,6 @@ router.put('/call-lead-mappings/:id', async (req, res) => {
       }
     });
     
-    console.log('[MAPPINGS] Mapping mis à jour:', updatedMapping.id);
     res.json(updatedMapping);
     
   } catch (error) {
@@ -1035,7 +985,6 @@ router.delete('/call-lead-mappings/:id', async (req, res) => {
       });
     }
     
-    console.log('[MAPPINGS] Suppression du mapping:', mappingId);
     
     await prisma.callToLeadMapping.delete({
       where: {
@@ -1044,7 +993,6 @@ router.delete('/call-lead-mappings/:id', async (req, res) => {
       }
     });
     
-    console.log('[MAPPINGS] Mapping supprimé:', mappingId);
     res.status(204).send();
     
   } catch (error) {
@@ -1076,7 +1024,6 @@ router.post('/call-lead-mappings', async (req, res) => {
       });
     }
     
-    console.log('[MAPPING] Création d\'un nouveau mapping:', { callStatusId, leadStatusId, priority });
     
     // Vérifier si un mapping existe déjà pour ce statut d'appel
     const existingMapping = await prisma.callToLeadMapping.findFirst({
@@ -1100,7 +1047,6 @@ router.post('/call-lead-mappings', async (req, res) => {
         }
       });
       
-      console.log('[MAPPING] Mapping mis à jour:', updatedMapping.id);
       return res.json(updatedMapping);
     } else {
       // Créer un nouveau mapping
@@ -1117,7 +1063,6 @@ router.post('/call-lead-mappings', async (req, res) => {
         }
       });
       
-      console.log('[MAPPING] Nouveau mapping créé:', newMapping.id);
       return res.json(newMapping);
     }
     
@@ -1145,7 +1090,6 @@ router.put('/call-lead-mappings/:id', async (req, res) => {
     
     const { callStatusId, leadStatusId, priority } = req.body;
     
-    console.log('[MAPPING] Modification du mapping:', mappingId, { callStatusId, leadStatusId, priority });
     
     const updatedMapping = await prisma.callToLeadMapping.update({
       where: { 
@@ -1163,7 +1107,6 @@ router.put('/call-lead-mappings/:id', async (req, res) => {
       }
     });
     
-    console.log('[MAPPING] Mapping mis à jour:', updatedMapping.id);
     res.json(updatedMapping);
     
   } catch (error) {
@@ -1188,7 +1131,6 @@ router.delete('/call-lead-mappings/:id', async (req, res) => {
       });
     }
     
-    console.log('[MAPPING] Suppression du mapping:', mappingId);
     
     await prisma.callToLeadMapping.delete({
       where: { 
@@ -1197,7 +1139,6 @@ router.delete('/call-lead-mappings/:id', async (req, res) => {
       }
     });
     
-    console.log('[MAPPING] Mapping supprimé:', mappingId);
     res.json({ success: true, message: 'Mapping supprimé avec succès' });
     
   } catch (error) {
@@ -1221,7 +1162,6 @@ router.post('/initialize-default-statuses', async (req, res) => {
       });
     }
 
-    console.log('🚀 [INIT] Initialisation des statuts par défaut pour l\'organisation:', organizationId);
 
     // 1) Statuts d'appel par défaut (15 statuts selon cahier des charges)
     const defaultCallStatuses = [
@@ -1278,9 +1218,7 @@ router.post('/initialize-default-statuses', async (req, res) => {
             isDefault: false
           }
         });
-        console.log(`✅ [INIT] Statut d'appel créé: ${status.name}`);
       } catch {
-        console.log(`⚠️ [INIT] Statut d'appel existe déjà: ${status.name}`);
       }
     }
 
@@ -1301,9 +1239,7 @@ router.post('/initialize-default-statuses', async (req, res) => {
             isDefault: false
           }
         });
-        console.log(`✅ [INIT] Statut de lead créé: ${status.name}`);
       } catch {
-        console.log(`⚠️ [INIT] Statut de lead existe déjà: ${status.name}`);
       }
     }
 
@@ -1356,14 +1292,11 @@ router.post('/initialize-default-statuses', async (req, res) => {
               isActive: true
             }
           });
-          console.log(`✅ [INIT] Mapping créé: ${mapping.callStatusName} → ${mapping.leadStatusName}`);
         } catch {
-          console.log(`⚠️ [INIT] Mapping existe déjà: ${mapping.callStatusName} → ${mapping.leadStatusName}`);
         }
       }
     }
 
-    console.log('🎉 [INIT] Initialisation terminée avec succès !');
     
     res.json({ 
       success: true, 

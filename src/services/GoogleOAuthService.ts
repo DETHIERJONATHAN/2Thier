@@ -51,7 +51,6 @@ export class GoogleOAuthService {
 
   // Générer l'URL d'autorisation Google
   getAuthUrl(userId: string, organizationId: string, hostHeader?: string): string {
-    console.log('[GoogleOAuthService] Scopes:', SCOPES);
     
     // ⭐ IMPORTANT: Utiliser le Host header s'il est fourni pour cohérence avec le callback
     // Sinon, utiliser la détection d'environnement automatique via env vars
@@ -59,26 +58,21 @@ export class GoogleOAuthService {
     
     if (hostHeader) {
       // Utiliser la même logique que le callback endpoint
-      console.log('[GoogleOAuthService] Host header fourni:', hostHeader);
       if (hostHeader.includes('app.github.dev')) {
         // Codespaces
         const match = hostHeader.split(':')[0].match(/^(.+?)-\d+\.app\.github\.dev$/);
         const codespaceName = match ? match[1] : hostHeader.replace('.app.github.dev', '').split(':')[0];
         redirectUri = `https://${codespaceName}-4000.app.github.dev/api/google-auth/callback`;
-        console.log('[GoogleOAuthService] Codespaces détecté:', { codespaceName, redirectUri });
       } else if (hostHeader.includes('zhiive.com') || hostHeader.includes('2thier.be')) {
         // Production
         redirectUri = 'https://www.zhiive.com/api/google-auth/callback';
-        console.log('[GoogleOAuthService] Production détectée:', { redirectUri });
       } else {
         // Local
         redirectUri = 'http://localhost:4000/api/google-auth/callback';
-        console.log('[GoogleOAuthService] Local détecté:', { redirectUri });
       }
     } else {
       // Fallback: utiliser computeRedirectUri() pour la détection automatique
       redirectUri = computeRedirectUri();
-      console.log('[GoogleOAuthService] Redirect URI automatique (sans Host header):', redirectUri);
     }
     
     const oauth2Client = this.getOAuth2Client(redirectUri);
@@ -91,7 +85,6 @@ export class GoogleOAuthService {
       prompt: 'consent'
     });
     
-    console.log('[GoogleOAuthService] URL générée:', authUrl);
     return authUrl;
   }
 
@@ -101,7 +94,6 @@ export class GoogleOAuthService {
     const actualRedirectUri = redirectUri || computeRedirectUri();
     const oauth2Client = this.getOAuth2Client(actualRedirectUri);
     
-    console.log('[GoogleOAuthService] Échange de code avec redirectUri:', actualRedirectUri);
     const { tokens } = await oauth2Client.getToken(code);
     return tokens;
   }

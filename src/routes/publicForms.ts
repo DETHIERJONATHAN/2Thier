@@ -11,7 +11,6 @@ import { requireRole } from '../middlewares/requireRole.js';
 import { prisma } from '../lib/prisma.js';
 
 // 🔍 DEBUG: Vérifier que prisma est bien importé
-console.log('[PUBLIC-FORMS-DEBUG] prisma importé:', typeof prisma, prisma ? '✅ OK' : '❌ UNDEFINED');
 
 const router = Router();
 
@@ -70,7 +69,6 @@ const ensureUniqueSlug = async (
 
     if (allWithSlug.length === 0) {
       // Aucun formulaire avec ce slug, on peut l'utiliser
-      console.log('[ensureUniqueSlug] ✅ Slug disponible:', slug);
       return slug;
     }
 
@@ -80,19 +78,16 @@ const ensureUniqueSlug = async (
 
     if (activeOnes.length === 0 && deletedOnes.length > 0) {
       // Tous sont supprimés : les supprimer définitivement pour libérer le slug
-      console.log(`[ensureUniqueSlug] 🗑️ Suppression définitive de ${deletedOnes.length} formulaire(s) supprimé(s) avec le slug "${slug}"`);
       await prisma.publicForm.deleteMany({
         where: {
           id: { in: deletedOnes.map(f => f.id) }
         }
       });
-      console.log('[ensureUniqueSlug] ✅ Slug libéré:', slug);
       return slug;
     }
 
     if (activeOnes.length > 0) {
       // Il existe un formulaire actif avec ce slug, essayer avec un compteur
-      console.log('[ensureUniqueSlug] ⚠️ Slug déjà utilisé par un formulaire actif:', slug);
       slug = `${sanitized}-${counter++}`;
     }
   }
@@ -100,7 +95,6 @@ const ensureUniqueSlug = async (
   // Fallback avec timestamp après 100 tentatives
   const timestamp = Date.now();
   const timestampedSlug = `${sanitized}-${timestamp}`;
-  console.log('[ensureUniqueSlug] 🔄 Utilisation du slug avec timestamp:', timestampedSlug);
   return timestampedSlug;
 };
 
@@ -913,7 +907,6 @@ router.post('/submit', submissionRateLimit, async (req, res) => {
           if (referrer) {
             leadData.assignedUserId = referrer.id;
             leadData.notes = `Lead créé depuis le formulaire "${form.name}" via le lien de ${referrer.firstName} ${referrer.lastName}`;
-            console.log(`✅ [PUBLIC-FORMS] Lead attribué automatiquement à ${referrer.firstName} ${referrer.lastName}`);
           } else {
             console.warn(`⚠️ [PUBLIC-FORMS] Utilisateur référent introuvable pour le slug: ${referredBy}`);
           }
@@ -927,7 +920,6 @@ router.post('/submit', submissionRateLimit, async (req, res) => {
           data: { leadId: lead.id }
         });
 
-        console.log(`✅ [PUBLIC-FORMS] Lead créé automatiquement: ${lead.id}`);
       } catch (leadError) {
         console.error('[PUBLIC-FORMS] Erreur lors de la création du lead:', leadError);
         // Ne pas bloquer la soumission si la création du lead échoue

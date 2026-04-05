@@ -18,7 +18,6 @@ router.post('/voice/call', authMiddleware, async (req, res) => {
 
   try {
     // Logique d'appel à l'API Telnyx ici
-    console.log(`Initiating call from ${from} to ${to}`);
     
     // Simuler une réponse réussie de l'API
     res.status(200).json({ success: true, message: `Appel vers ${to} initié.` });
@@ -43,7 +42,6 @@ router.post('/email/send', authMiddleware, async (req, res) => {
 
   try {
     // Logique d'envoi d'e-mail via one.com (SMTP ou API)
-    console.log(`Sending email to ${to} with subject "${subject}"`);
 
     // Simuler une réponse réussie
     res.status(200).json({ success: true, message: "E-mail envoyé avec succès." });

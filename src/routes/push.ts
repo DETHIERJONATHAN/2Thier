@@ -12,7 +12,6 @@ const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:info@2thier.be';
 
 if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
   webPush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-  console.log('[PUSH] ✅ Web Push configuré avec VAPID');
 } else {
   console.warn('[PUSH] ⚠️ VAPID keys manquantes — notifications push désactivées');
 }

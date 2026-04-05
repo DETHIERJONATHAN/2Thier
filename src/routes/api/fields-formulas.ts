@@ -12,9 +12,6 @@ router.put('/fields/:fieldId/formulas/:formulaId', async (req: Request, res: Res
     const { fieldId, formulaId } = req.params;
     const { name, sequence, order } = req.body;
     
-    console.log(`[DIRECT_API] Mise à jour formule ${formulaId} pour champ ${fieldId}`);
-    console.log(`[DIRECT_API] Params:`, req.params);
-    console.log(`[DIRECT_API] Body:`, req.body);
     
     if (!fieldId || !formulaId) {
       return res.status(400).json({ error: "ID du champ ou de la formule manquant" });
@@ -40,7 +37,6 @@ router.put('/fields/:fieldId/formulas/:formulaId', async (req: Request, res: Res
       });
       
       if (!existingFormula) {
-        console.log(`[DIRECT_API] Formule non trouvée, simulation d'une réponse`);
         
         // Simuler une réponse en mode développement
         return res.json([{
@@ -59,7 +55,6 @@ router.put('/fields/:fieldId/formulas/:formulaId', async (req: Request, res: Res
         data: dataToUpdate
       });
       
-      console.log(`[DIRECT_API] Formule mise à jour:`, updatedFormula.id);
       
       // Récupérer toutes les formules pour ce champ
       const formulas = await prisma.fieldFormula.findMany({
@@ -73,7 +68,6 @@ router.put('/fields/:fieldId/formulas/:formulaId', async (req: Request, res: Res
         sequence: f.sequence ? JSON.parse(f.sequence as string) : []
       }));
       
-      console.log(`[DIRECT_API] Retour de ${processedFormulas.length} formules au client`);
       return res.json(processedFormulas);
       
     } catch (err: any) {

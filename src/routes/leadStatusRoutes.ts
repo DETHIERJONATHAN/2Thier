@@ -19,7 +19,6 @@ router.get('/lead-statuses', async (req, res) => {
       });
     }
     
-    console.log('[LEAD-STATUSES] Récupération des statuts pour l\'organisation:', organizationId);
     
     const statuses = await prisma.leadStatus.findMany({
       where: {
@@ -30,7 +29,6 @@ router.get('/lead-statuses', async (req, res) => {
       }
     });
     
-    console.log(`[LEAD-STATUSES] ${statuses.length} statuts trouvés`);
     res.json(statuses);
     
   } catch (error) {
@@ -79,7 +77,6 @@ router.post('/lead-statuses', async (req, res) => {
       }
     });
     
-    console.log('[LEAD-STATUSES] Nouveau statut créé:', newStatus.name);
     res.status(201).json(newStatus);
     
   } catch (error) {

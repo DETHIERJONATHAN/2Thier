@@ -179,7 +179,6 @@ router.get('/', async (req, res) => {
 					// - Un module sans permission explicite est MASQUÉ (deny by default)
 					if (rolePermissions.length > 0) {
 						filtered = filtered.filter(m => allowedModuleIds.has(m.id));
-						console.log(`[modules] 🔐 Filtrage rôle ${userOrg.roleId}: ${filtered.length} modules autorisés sur ${mapped.length}`);
 					} else {
 						// Aucune permission access pour ce rôle → vérifier si le système de permissions est actif
 						// (d'autres rôles ont des permissions access configurées)
@@ -189,7 +188,6 @@ router.get('/', async (req, res) => {
 						if (otherRolesWithPerms > 0) {
 							// Le système est actif → ce rôle n'a rien de configuré = aucun accès
 							filtered = [];
-							console.log(`[modules] 🔐 Rôle ${userOrg.roleId}: 0 permissions access (système actif) → aucun module`);
 						}
 						// Sinon, aucun rôle n'a de permissions → backward compatible, tout visible
 					}
@@ -349,8 +347,6 @@ router.put('/:id', async (req, res) => {
 			normalizedRoute = deriveRoute(key, route);
 		}
 		
-		console.log(`[modules] PUT /${id} - Mise à jour module avec categoryId:`, categoryId);
-		console.log(`[modules] PUT /${id} - Body complet:`, req.body);
 		
 		const updated = await prisma.module.update({
 			where: { id },

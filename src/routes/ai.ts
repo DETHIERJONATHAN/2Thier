@@ -142,8 +142,6 @@ router.post('/analyze-section', async (req, res) => {
   try {
     const { sectionType, content, prompt } = req.body;
     
-    console.log('🎨 [AI] Analyse section:', sectionType);
-    console.log('📝 [AI] Contenu longueur:', JSON.stringify(content).length, 'caractères');
     
     // Construire le prompt pour Gemini
     const analysisPrompt = prompt || buildSectionAnalysisPrompt(sectionType, content);
@@ -1086,10 +1084,8 @@ async function handleChatLike(req: express.Request, res: express.Response, endpo
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ success: false, error: 'Paramètre "message" requis' });
     }
-    console.log(`🤖 [AI] ${endpoint} message=`, message.slice(0,160));
     interface HistMsg { type?: string; role?: string; message?: string; content?: string }
     const historyPreview = (conversationHistory as HistMsg[]).slice(-6).map((m) => `${m.type || m.role}: ${(m.message || m.content || '').slice(0,100)}`);
-    console.log('📚 [AI] History(last<=6)=', historyPreview);
 
     // Récupération mémoire système récente (SuperAdmin uniquement) – non bloquant
     let memoryString = '';
@@ -1361,10 +1357,6 @@ router.post('/schedule-recommendations', async (req, res) => {
   try {
     const { leadId, targetDate, preferences, constraints } = req.body;
     
-    console.log('📅 [AI] Génération recommandations planning pour lead:', leadId);
-    console.log('📆 [AI] Date cible:', targetDate);
-    console.log('⚙️ [AI] Préférences:', preferences);
-    console.log('🚫 [AI] Contraintes:', constraints);
     
     // Simulation de recommandations intelligentes (à remplacer par l'API Gemini)
     const mockRecommendations = [
@@ -1500,10 +1492,6 @@ router.post('/analyze-conversation', async (req, res) => {
   try {
     const { transcription, context, speakers } = req.body;
     
-    console.log('🎯 [AI] Analyse conversation vocale');
-    console.log('📝 [AI] Transcription longueur:', transcription?.length || 0, 'caractères');
-    console.log('🎯 [AI] Contexte:', context);
-    console.log('👥 [AI] Interlocuteurs:', speakers?.length || 0);
     
     // Simulation d'analyse de conversation
     const mockAnalysis = {
@@ -1561,7 +1549,6 @@ router.post('/analyze-conversation', async (req, res) => {
  */
 router.get('/test', async (req, res) => {
   try {
-    console.log('🧪 [AI] Test de connexion IA');
     
     res.json({
       success: true,
@@ -1844,10 +1831,6 @@ router.post('/ultimate-recommendation', async (req, res) => {
   try {
     const { lead, context } = req.body;
     
-    console.log('🧠 [AI Ultimate] Analyse pour:', lead.name);
-    console.log('📊 [AI Ultimate] RDV existants:', context.existingAppointments?.length || 0);
-    console.log('📞 [AI Ultimate] Transcriptions:', context.callTranscriptions?.length || 0);
-    console.log('📝 [AI Ultimate] Notes:', context.notes?.length || 0);
     
     // Simulation d'analyse intelligente basée sur l'expérience commerciale mondiale
     const mockAnalysis = {

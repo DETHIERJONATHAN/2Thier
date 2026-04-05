@@ -40,7 +40,6 @@ const googleWorkspaceConfigSchema = z.object({
 
 // GET /api/organizations/:id/google-workspace/config - Récupérer la configuration
 router.get('/:id/google-workspace/config', requireRole(['admin', 'super_admin']), async (req: AuthenticatedRequest, res) => {
-  console.log('[GOOGLE-WORKSPACE] GET /organizations/:id/google-workspace/config');
   
   try {
     const { id } = req.params;
@@ -126,7 +125,6 @@ router.get('/:id/google-workspace/config', requireRole(['admin', 'super_admin'])
 
 // POST /api/organizations/:id/google-workspace/config - Sauvegarder la configuration
 router.post('/:id/google-workspace/config', requireRole(['super_admin']), async (req: AuthenticatedRequest, res) => {
-  console.log('[GOOGLE-WORKSPACE] POST /organizations/:id/google-workspace/config');
   
   try {
     const { id } = req.params;
@@ -208,7 +206,6 @@ router.post('/:id/google-workspace/config', requireRole(['super_admin']), async 
       }
     });
     
-    console.log(`[GOOGLE-WORKSPACE] Configuration sauvegardée pour l'organisation ${id}`);
     
     res.json({
       success: true,
@@ -233,7 +230,6 @@ router.post('/:id/google-workspace/config', requireRole(['super_admin']), async 
 
 // GET /api/organizations/:id/google-workspace/auth-url - Générer l'URL d'authentification
 router.get('/:id/google-workspace/auth-url', requireRole(['admin', 'super_admin']), async (req: AuthenticatedRequest, res) => {
-  console.log('[GOOGLE-WORKSPACE] GET /organizations/:id/google-workspace/auth-url');
   
   try {
     const { id } = req.params;
@@ -347,7 +343,6 @@ router.get('/:id/google-workspace/auth-url', requireRole(['admin', 'super_admin'
 
 // GET /api/google-workspace/users/:userId/status - Récupérer le statut Google Workspace d'un utilisateur
 router.get('/users/:userId/status', requireRole(['admin', 'super_admin']), async (req: AuthenticatedRequest, res) => {
-  console.log('[GOOGLE-WORKSPACE] GET /users/:userId/status');
   
   try {
     const { userId } = req.params;
@@ -444,7 +439,6 @@ router.get('/users/:userId/status', requireRole(['admin', 'super_admin']), async
 
 // POST /api/google-workspace/users/create - Créer un compte Google Workspace pour un utilisateur
 router.post('/users/create', requireRole(['admin', 'super_admin']), async (req: AuthenticatedRequest, res) => {
-  console.log('[GOOGLE-WORKSPACE] POST /users/create');
   
   try {
     const { userId, email, activateServices = true } = req.body;
@@ -557,7 +551,6 @@ router.post('/users/create', requireRole(['admin', 'super_admin']), async (req: 
 
 // POST /api/google-workspace/users/:userId/sync - Synchroniser un utilisateur avec Google Workspace
 router.post('/users/:userId/sync', requireRole(['admin', 'super_admin']), async (req: AuthenticatedRequest, res) => {
-  console.log('[GOOGLE-WORKSPACE] POST /users/:userId/sync');
   
   try {
     const { userId } = req.params;
@@ -616,7 +609,6 @@ router.post('/users/:userId/sync', requireRole(['admin', 'super_admin']), async 
 
 // POST /api/google-workspace/users/:userId/deactivate - Désactiver un utilisateur Google Workspace
 router.post('/users/:userId/deactivate', requireRole(['admin', 'super_admin']), async (req: AuthenticatedRequest, res) => {
-  console.log('[GOOGLE-WORKSPACE] POST /users/:userId/deactivate');
   
   try {
     const { userId } = req.params;

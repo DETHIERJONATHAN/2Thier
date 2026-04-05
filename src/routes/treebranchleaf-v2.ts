@@ -27,9 +27,7 @@ router.use(authMiddleware);
 // Récupérer tous les arbres de l'organisation (admin/superadmin seulement)
 router.get('/trees', requireSuperAdmin, async (req, res) => {
   try {
-    console.log('[TreeAPI V2] Requête GET /trees reçue');
     const { organizationId } = req.user!;
-    console.log('[TreeAPI V2] OrganizationId:', organizationId);
 
     const trees = await prisma.treeBranchLeafTree.findMany({
       where: { organizationId },
@@ -44,8 +42,6 @@ router.get('/trees', requireSuperAdmin, async (req, res) => {
       orderBy: { createdAt: 'desc' },
     });
 
-    console.log('[TreeAPI V2] Arbres trouvés:', trees.length);
-    console.log('[TreeAPI V2] Premier arbre (si existe):', trees[0] ? { id: trees[0].id, name: trees[0].name, organizationId: trees[0].organizationId } : 'Aucun arbre');
     res.json(trees);
   } catch (error) {
     console.error('[TREEBRANCHLEAF_API_V2] Error fetching trees:', error);
@@ -56,7 +52,6 @@ router.get('/trees', requireSuperAdmin, async (req, res) => {
 // Créer un nouvel arbre (superadmin seulement)
 router.post('/trees', requireSuperAdmin, async (req, res) => {
   try {
-    console.log('[TreeAPI V2] Requête POST /trees reçue:', req.body);
     const { organizationId } = req.user!;
     const { name, description, icon, color } = req.body;
 
@@ -84,7 +79,6 @@ router.post('/trees', requireSuperAdmin, async (req, res) => {
       },
     });
 
-    console.log('[TreeAPI V2] Arbre créé:', tree.id);
     res.status(201).json(tree);
   } catch (error) {
     console.error('[TREEBRANCHLEAF_API_V2] Error creating tree:', error);
@@ -95,7 +89,6 @@ router.post('/trees', requireSuperAdmin, async (req, res) => {
 // Récupérer un arbre spécifique avec tous ses nœuds
 router.get('/trees/:treeId', async (req, res) => {
   try {
-    console.log('[TreeAPI V2] Requête GET /trees/:treeId reçue:', req.params.treeId);
     const { organizationId, role } = req.user!;
     const { treeId } = req.params;
 
@@ -141,7 +134,6 @@ router.get('/trees/:treeId', async (req, res) => {
     });
 
     if (!tree) {
-      console.log('[TreeAPI V2] Arbre non trouvé:', treeId);
       return res.status(404).json({ error: 'Arbre non trouvé' });
     }
 
@@ -150,7 +142,6 @@ router.get('/trees/:treeId', async (req, res) => {
       return res.status(403).json({ error: 'Accès non autorisé à cet arbre' });
     }
 
-    console.log('[TreeAPI V2] Arbre trouvé avec', tree.Nodes?.length || 0, 'nœuds racines');
     res.json(tree);
   } catch (error) {
     console.error('[TREEBRANCHLEAF_API_V2] Error fetching tree:', error);
@@ -161,7 +152,6 @@ router.get('/trees/:treeId', async (req, res) => {
 // Mettre à jour un arbre (superadmin seulement)
 router.put('/trees/:treeId', requireSuperAdmin, async (req, res) => {
   try {
-    console.log('[TreeAPI V2] Requête PUT /trees/:treeId reçue:', req.params.treeId, req.body);
     const { organizationId } = req.user!;
     const { treeId } = req.params;
     const { name, description, icon, color, status } = req.body;
@@ -185,7 +175,6 @@ router.put('/trees/:treeId', requireSuperAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Arbre non trouvé' });
     }
 
-    console.log('[TreeAPI V2] Arbre mis à jour');
     res.json({ message: 'Arbre mis à jour avec succès' });
   } catch (error) {
     console.error('[TREEBRANCHLEAF_API_V2] Error updating tree:', error);
@@ -196,7 +185,6 @@ router.put('/trees/:treeId', requireSuperAdmin, async (req, res) => {
 // Supprimer un arbre (superadmin seulement)
 router.delete('/trees/:treeId', requireSuperAdmin, async (req, res) => {
   try {
-    console.log('[TreeAPI V2] Requête DELETE /trees/:treeId reçue:', req.params.treeId);
     const { organizationId } = req.user!;
     const { treeId } = req.params;
 
@@ -207,7 +195,6 @@ router.delete('/trees/:treeId', requireSuperAdmin, async (req, res) => {
       },
     });
 
-    console.log('[TreeAPI V2] Arbre supprimé');
     res.json({ message: 'Arbre supprimé avec succès' });
   } catch (error) {
     console.error('[TREEBRANCHLEAF_API_V2] Error deleting tree:', error);
@@ -222,7 +209,6 @@ router.delete('/trees/:treeId', requireSuperAdmin, async (req, res) => {
 // Créer un nouveau nœud
 router.post('/trees/:treeId/nodes', requireSuperAdmin, async (req, res) => {
   try {
-    console.log('[TreeAPI V2] Requête POST /trees/:treeId/nodes reçue:', req.params.treeId, req.body);
     const { organizationId } = req.user!;
     const { treeId } = req.params;
     const { 
@@ -276,7 +262,6 @@ router.post('/trees/:treeId/nodes', requireSuperAdmin, async (req, res) => {
       },
     });
 
-    console.log('[TreeAPI V2] Nœud créé:', node.id);
     res.status(201).json(node);
   } catch (error) {
     console.error('[TREEBRANCHLEAF_API_V2] Error creating node:', error);
@@ -287,7 +272,6 @@ router.post('/trees/:treeId/nodes', requireSuperAdmin, async (req, res) => {
 // Mettre à jour un nœud
 router.put('/nodes/:nodeId', requireSuperAdmin, async (req, res) => {
   try {
-    console.log('[TreeAPI V2] Requête PUT /nodes/:nodeId reçue:', req.params.nodeId, req.body);
     const { organizationId } = req.user!;
     const { nodeId } = req.params;
     const updateData = req.body;
@@ -321,7 +305,6 @@ router.put('/nodes/:nodeId', requireSuperAdmin, async (req, res) => {
       },
     });
 
-    console.log('[TreeAPI V2] Nœud mis à jour:', nodeId);
     res.json(updatedNode);
   } catch (error) {
     console.error('[TREEBRANCHLEAF_API_V2] Error updating node:', error);
@@ -332,7 +315,6 @@ router.put('/nodes/:nodeId', requireSuperAdmin, async (req, res) => {
 // Supprimer un nœud
 router.delete('/nodes/:nodeId', requireSuperAdmin, async (req, res) => {
   try {
-    console.log('[TreeAPI V2] Requête DELETE /nodes/:nodeId reçue:', req.params.nodeId);
     const { organizationId } = req.user!;
     const { nodeId } = req.params;
 
@@ -354,7 +336,6 @@ router.delete('/nodes/:nodeId', requireSuperAdmin, async (req, res) => {
       where: { id: nodeId },
     });
 
-    console.log('[TreeAPI V2] Nœud supprimé:', nodeId);
     res.json({ message: 'Nœud supprimé avec succès' });
   } catch (error) {
     console.error('[TREEBRANCHLEAF_API_V2] Error deleting node:', error);

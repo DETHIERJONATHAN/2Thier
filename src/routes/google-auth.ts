@@ -97,12 +97,6 @@ function getOAuthRedirectUri(hostHeader?: string): string {
     const codespaceName = match ? match[1] : hostWithoutPort.replace('.app.github.dev', '');
     
     const redirectUri = `https://${codespaceName}-4000.app.github.dev/api/google-auth/callback`;
-    
-      originalHost: host,
-      hostWithoutPort,
-      codespaceName,
-      redirectUri
-    });
     return redirectUri;
   }
   
@@ -519,11 +513,6 @@ router.get('/callback', async (req, res) => {
     const actualRedirectUri = (redirectUriFromState && typeof redirectUriFromState === 'string')
       ? redirectUriFromState
       : getOAuthRedirectUri(hostHeader2);
-      hostHeader: hostHeader2,
-      redirectUri: actualRedirectUri,
-      environment: hostHeader2.includes('app.github.dev') ? 'Codespaces' : 
-                   hostHeader2.includes('2thier.be') ? 'Production' : 'Local'
-    });
 
     // Créer le client OAuth2 Google
     const oauth2Client = new google.auth.OAuth2(
@@ -534,17 +523,7 @@ router.get('/callback', async (req, res) => {
 
     try {
       // Échanger le code d'autorisation contre les tokens
-        clientId: config.clientId.substring(0, 20) + '...',
-        redirectUri: actualRedirectUri,
-        code: (code as string).substring(0, 20) + '...'
-      });
-      
       const { tokens } = await oauth2Client.getToken(code as string);
-        accessToken: !!tokens.access_token,
-        refreshToken: !!tokens.refresh_token,
-        expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
-        scope: tokens.scope
-      });
 
       // Configurer le client avec les tokens pour récupérer les infos utilisateur
       oauth2Client.setCredentials(tokens);
@@ -552,14 +531,9 @@ router.get('/callback', async (req, res) => {
       // Récupérer les informations de l'utilisateur Google
       const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
       const userInfo = await oauth2.userinfo.get();
-      
-        email: userInfo.data.email,
-        name: userInfo.data.name,
-      });
 
       // VÉRIFICATION CRUCIALE : L'email du compte Google connecté doit correspondre à l'adminEmail de la config
       if (userInfo.data.email?.toLowerCase() !== config.adminEmail.toLowerCase()) {
-        console.log(`[GOOGLE-AUTH] ❌ ERREUR DE COMPTE : L'utilisateur s'est connecté avec ${userInfo.data.email}, mais la configuration attendait ${config.adminEmail}.`);
         return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_error=account_mismatch&expected=${encodeURIComponent(config.adminEmail)}&connected_as=${encodeURIComponent(userInfo.data.email || '')}`);
       }
 

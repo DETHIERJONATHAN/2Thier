@@ -4,10 +4,6 @@
 
 import { Router } from 'express';
 import { authMiddleware, type AuthenticatedRequest, requireRole } from '../middlewares/auth.js';
-import { 
-  getNotificationSystemStatus, 
-  getNotificationSystemInstance 
-} from '../services/notificationSystemInit.js';
 import UniversalNotificationService from '../services/UniversalNotificationService.js';
 
 const router = Router();
@@ -21,7 +17,8 @@ router.use(authMiddleware);
  */
 router.get('/status', async (req: AuthenticatedRequest, res) => {
   try {
-    const status = getNotificationSystemStatus();
+    const universalService = UniversalNotificationService.getInstance();
+    const status = { universal: !!universalService, started: true };
     
     res.json({
       success: true,
@@ -166,12 +163,11 @@ router.get('/stats/:organizationId', requireRole(['admin', 'super_admin']), asyn
  */
 router.post('/restart', requireRole(['super_admin']), async (req: AuthenticatedRequest, res) => {
   try {
-    console.log(`🔄 [NotificationSystemAPI] Redémarrage demandé par ${req.user?.email}`);
     
-    const system = getNotificationSystemInstance();
-    if (system) {
-      await system.stop();
-      await system.start();
+    const universalService = UniversalNotificationService.getInstance();
+    if (universalService) {
+      universalService.stop();
+      universalService.start();
     }
     
     res.json({

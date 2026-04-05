@@ -24,7 +24,6 @@ export class TreeBranchLeafBackgroundJobService {
       return;
     }
 
-    console.log(`🚀 Starting TreeBranchLeaf background jobs (every ${intervalMinutes} minutes)`);
     
     // Exécution immédiate
     this.runBackgroundTasks();
@@ -48,7 +47,6 @@ export class TreeBranchLeafBackgroundJobService {
     }
     
     this.isRunning = false;
-    console.log('🛑 TreeBranchLeaf background jobs stopped');
   }
 
   /**
@@ -63,7 +61,6 @@ export class TreeBranchLeafBackgroundJobService {
    */
   private async runBackgroundTasks(): Promise<void> {
     const startTime = Date.now();
-    console.log('🔄 Running TreeBranchLeaf background tasks...');
 
     try {
       // Tâche 1: Résolution des opérations non résolues
@@ -79,7 +76,6 @@ export class TreeBranchLeafBackgroundJobService {
       await this.generateStatistics();
 
       const duration = Date.now() - startTime;
-      console.log(`✅ Background tasks completed in ${duration}ms`);
 
     } catch (error) {
       console.error('❌ Background tasks failed:', error);
@@ -111,7 +107,6 @@ export class TreeBranchLeafBackgroundJobService {
       });
 
       if (result.count > 0) {
-        console.log(`🧹 Cleaned up ${result.count} stale cache entries older than ${staleDays} days`);
       }
 
     } catch (error) {
@@ -145,7 +140,6 @@ export class TreeBranchLeafBackgroundJobService {
       }
 
       if (calculated > 0) {
-        console.log(`🧮 Calculated results for ${calculated} entries`);
       }
 
     } catch (error) {
@@ -181,12 +175,8 @@ export class TreeBranchLeafBackgroundJobService {
         }
       });
 
-      console.log('📊 TreeBranchLeaf Statistics:');
-      console.log(`   Total entries with operations: ${totalWithOperations}`);
-      console.log(`   Unresolved operations: ${unresolvedCount}`);
       
       stats.forEach(stat => {
-        console.log(`   ${stat.operationSource}: ${stat._count.id} entries`);
       });
 
       // Alertes si trop d'entrées non résolues
@@ -203,7 +193,6 @@ export class TreeBranchLeafBackgroundJobService {
    * Force une synchronisation complète (à utiliser avec précaution)
    */
   async forceFullSync(): Promise<void> {
-    console.log('🔄 Starting forced full synchronization...');
     
     try {
       // Invalider tous les caches
@@ -221,7 +210,6 @@ export class TreeBranchLeafBackgroundJobService {
       // Relancer les tâches en arrière-plan
       await this.runBackgroundTasks();
       
-      console.log('✅ Forced full synchronization completed');
       
     } catch (error) {
       console.error('❌ Forced full synchronization failed:', error);
@@ -277,7 +265,6 @@ export function getBackgroundJobService(prisma: PrismaClient): TreeBranchLeafBac
 export function setupGracefulShutdown(): void {
   const shutdownHandler = () => {
     if (backgroundJobInstance) {
-      console.log('🛑 Graceful shutdown: stopping background jobs...');
       backgroundJobInstance.stop();
     }
     process.exit(0);

@@ -284,12 +284,10 @@ router.get('/trees/:treeId/select-configs', async (req, res) => {
  */
 router.get('/trees/:treeId/all', async (req: Request, res: Response) => {
   const { treeId } = req.params;
-  console.log(`[TBL Batch API] /all called for treeId: ${treeId}`);
   
   try {
     const { leadId, submissionId: qsSubmissionId } = req.query;
     const { organizationId, isSuperAdmin } = getAuthCtx(req);
-    console.log(`[TBL Batch API] Auth context: org=${organizationId}, superAdmin=${isSuperAdmin}`);
 
     // Vérifier l'accès au tree
     const treeWhereFilter = isSuperAdmin || !organizationId 
@@ -410,10 +408,7 @@ router.get('/trees/:treeId/all', async (req: Request, res: Response) => {
         
         // 🔍 DEBUG LOG: Vérifier si les SelectConfigs des champs suffixés sont chargés
         if (node.id.match(/-\d{1,3}$/)) {
-          console.log(`[TBL Batch] 🔍 Champ suffixé détecté: ${node.id}`);
-          console.log(`[TBL Batch]    - TreeBranchLeafSelectConfig présente: ${!!selectConfig}`);
           if (selectConfig) {
-            console.log(`[TBL Batch]    - displayColumn: ${selectConfig.displayColumn}`);
           }
         }
         
@@ -619,7 +614,6 @@ router.get('/trees/:treeId/conditions', async (req: Request, res: Response) => {
       const orphanCount = node.linkedConditionIds.filter((id: string) => !allConditionIdsSet.has(id)).length;
       
       if (orphanCount > 0) {
-        console.log(`ℹ️ [DIAGNOSTIC] Node ${node.id}: ${orphanCount}/${node.linkedConditionIds.length} linkedConditionIds non résolus (non supprimés)`);
       }
     }
 

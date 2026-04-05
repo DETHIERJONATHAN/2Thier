@@ -30,13 +30,9 @@ router.get('/trees', requireSuperAdmin, async (req, res) => {
   try {
     const { organizationId } = req.user!;
     
-    console.log('🔍 [TREEBRANCHLEAF_API] GET /trees');
-    console.log('👤 [TREEBRANCHLEAF_API] User info:', req.user);
-    console.log('🏢 [TREEBRANCHLEAF_API] organizationId from user:', organizationId);
 
     // Si pas d'organizationId dans le user, essayons de chercher tous les arbres pour debug
     const whereClause = organizationId ? { organizationId } : {};
-    console.log('🔍 [TREEBRANCHLEAF_API] Where clause:', whereClause);
 
     const trees = await prisma.treeBranchLeafTree.findMany({
       where: whereClause,
@@ -51,21 +47,16 @@ router.get('/trees', requireSuperAdmin, async (req, res) => {
       orderBy: { createdAt: 'desc' },
     });
 
-    console.log('🌲 [TREEBRANCHLEAF_API] Arbres trouvés:', trees.length);
     
     if (trees.length > 0) {
-      console.log('📋 [TREEBRANCHLEAF_API] Tous les arbres:');
       trees.forEach((tree, index) => {
-        console.log(`  ${index + 1}. ${tree.name} (ID: ${tree.id}, Org: ${tree.organizationId})`);
       });
     } else {
-      console.log('❌ [TREEBRANCHLEAF_API] Aucun arbre trouvé avec la clause WHERE:', whereClause);
       
       // Debug: essayons de récupérer TOUS les arbres sans filtre
       const allTrees = await prisma.treeBranchLeafTree.findMany({
         select: { id: true, name: true, organizationId: true }
       });
-      console.log('🔍 [TREEBRANCHLEAF_API] TOUS les arbres dans la base:', allTrees);
     }
 
     res.json(trees);
@@ -289,9 +280,6 @@ router.put('/nodes/:nodeId', requireSuperAdmin, async (req, res) => {
     const { nodeId } = req.params;
     const updateData = req.body;
 
-    console.log('🔄 [TreeBranchLeaf API] PUT /nodes/:nodeId');
-    console.log('   NodeId:', nodeId);
-    console.log('   updateData:', JSON.stringify(updateData, null, 2));
 
     // Vérifier que le nœud appartient à un arbre de l'organisation
     const node = await prisma.treeBranchLeafNode.findFirst({
@@ -336,9 +324,6 @@ router.put('/trees/:treeId/nodes/:nodeId', requireSuperAdmin, async (req, res) =
     const { nodeId } = req.params;
     const updateData = req.body;
 
-    console.log('🔄 [TreeBranchLeaf API] PUT /trees/:treeId/nodes/:nodeId (alias)');
-    console.log('   NodeId:', nodeId);
-    console.log('   updateData:', JSON.stringify(updateData, null, 2));
 
     // Vérifier que le nœud appartient à un arbre de l'organisation
     const node = await prisma.treeBranchLeafNode.findFirst({

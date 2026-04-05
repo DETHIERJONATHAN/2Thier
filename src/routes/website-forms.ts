@@ -54,7 +54,6 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
     const organizationId = getOrgId(req);
     const { websiteId } = req.query;
     
-    console.log('📋 [WebsiteForms] GET all forms for org:', organizationId);
     
     const forms = await db.website_forms.findMany({
       where: {
@@ -88,7 +87,6 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
       orderBy: { createdAt: 'desc' }
     });
     
-    console.log(`✅ [WebsiteForms] Found ${forms.length} forms`);
     res.json(forms);
   } catch (error) {
     console.error('❌ [WebsiteForms] Error fetching forms:', error);
@@ -108,7 +106,6 @@ router.get('/by-website/:websiteId', async (req: AuthenticatedRequest, res: Resp
     const organizationId = getOrgId(req);
     const { websiteId } = req.params;
     
-    console.log('📋 [WebsiteForms] GET forms for website:', websiteId);
     
     const forms = await db.website_forms.findMany({
       where: {
@@ -140,7 +137,6 @@ router.get('/by-website/:websiteId', async (req: AuthenticatedRequest, res: Resp
       orderBy: { createdAt: 'desc' }
     });
     
-    console.log(`✅ [WebsiteForms] Found ${forms.length} forms for website ${websiteId}`);
     res.json(forms);
   } catch (error) {
     console.error('❌ [WebsiteForms] Error fetching forms by website:', error);
@@ -161,7 +157,6 @@ router.get('/my-commercial-links', authMiddleware, async (req: AuthenticatedRequ
     const organizationId = getOrgId(req);
     const userId = req.user!.userId; // Avec authMiddleware, req.user est garanti
 
-    console.log('🎯 [WebsiteForms] GET my-commercial-links for user:', userId);
 
     const user = await db.user.findUnique({
       where: { id: userId },
@@ -230,7 +225,6 @@ router.get('/my-commercial-links', authMiddleware, async (req: AuthenticatedRequ
       };
     });
 
-    console.log('✅ [WebsiteForms] Found', formattedForms.length, 'nominative forms');
 
     res.json({
       success: true,
@@ -255,7 +249,6 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response) => {
     const organizationId = getOrgId(req);
     const { id } = req.params;
     
-    console.log('📋 [WebsiteForms] GET form:', id);
     
     const form = await db.website_forms.findFirst({
       where: {
@@ -288,7 +281,6 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response) => {
       return res.status(404).json({ error: 'Formulaire non trouvé' });
     }
     
-    console.log('✅ [WebsiteForms] Form found:', form.name);
     res.json(form);
   } catch (error) {
     console.error('❌ [WebsiteForms] Error fetching form:', error);
@@ -308,7 +300,6 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
     const organizationId = getOrgId(req);
     const { name, slug, description, treeId, settings, successTitle, successMessage, requiresCommercialTracking } = req.body;
     
-    console.log('📋 [WebsiteForms] CREATE form:', name);
     
     // Vérifier que le slug n'existe pas déjà
     const existing = await db.website_forms.findFirst({
@@ -338,7 +329,6 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
       }
     });
     
-    console.log('✅ [WebsiteForms] Form created:', form.id);
     res.status(201).json(form);
   } catch (error) {
     console.error('❌ [WebsiteForms] Error creating form:', error);
@@ -359,7 +349,6 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
     const { id } = req.params;
     const { name, slug, description, treeId, settings, successTitle, successMessage, isActive, requiresCommercialTracking } = req.body;
     
-    console.log('📋 [WebsiteForms] UPDATE form:', id);
     
     // Vérifier que le formulaire existe
     const existing = await db.website_forms.findFirst({
@@ -404,7 +393,6 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
       }
     });
     
-    console.log('✅ [WebsiteForms] Form updated:', form.id);
     res.json(form);
   } catch (error) {
     console.error('❌ [WebsiteForms] Error updating form:', error);
@@ -424,7 +412,6 @@ router.delete('/:id', async (req: AuthenticatedRequest, res: Response) => {
     const organizationId = getOrgId(req);
     const { id } = req.params;
     
-    console.log('📋 [WebsiteForms] DELETE form:', id);
     
     // Vérifier que le formulaire existe
     const existing = await db.website_forms.findFirst({
@@ -439,7 +426,6 @@ router.delete('/:id', async (req: AuthenticatedRequest, res: Response) => {
       where: { id: Number(id) }
     });
     
-    console.log('✅ [WebsiteForms] Form deleted:', id);
     res.json({ success: true, message: 'Formulaire supprimé' });
   } catch (error) {
     console.error('❌ [WebsiteForms] Error deleting form:', error);
@@ -464,7 +450,6 @@ router.post('/:id/steps', async (req: AuthenticatedRequest, res: Response) => {
     const { id } = req.params;
     const { title, subtitle, helpText, stepType, isRequired, condition, settings } = req.body;
     
-    console.log('📋 [WebsiteForms] ADD step to form:', id);
     
     // Vérifier que le formulaire existe
     const form = await db.website_forms.findFirst({
@@ -494,7 +479,6 @@ router.post('/:id/steps', async (req: AuthenticatedRequest, res: Response) => {
       include: { fields: true }
     });
     
-    console.log('✅ [WebsiteForms] Step created:', step.id);
     res.status(201).json(step);
   } catch (error) {
     console.error('❌ [WebsiteForms] Error creating step:', error);
@@ -514,7 +498,6 @@ router.put('/steps/:stepId', async (req: AuthenticatedRequest, res: Response) =>
     const { stepId } = req.params;
     const { title, subtitle, helpText, stepType, order, isRequired, condition, settings } = req.body;
     
-    console.log('📋 [WebsiteForms] UPDATE step:', stepId);
     
     const step = await db.website_form_steps.update({
       where: { id: Number(stepId) },
@@ -531,7 +514,6 @@ router.put('/steps/:stepId', async (req: AuthenticatedRequest, res: Response) =>
       include: { fields: { orderBy: { order: 'asc' } } }
     });
     
-    console.log('✅ [WebsiteForms] Step updated:', step.id);
     res.json(step);
   } catch (error) {
     console.error('❌ [WebsiteForms] Error updating step:', error);
@@ -550,13 +532,11 @@ router.delete('/steps/:stepId', async (req: AuthenticatedRequest, res: Response)
   try {
     const { stepId } = req.params;
     
-    console.log('📋 [WebsiteForms] DELETE step:', stepId);
     
     await db.website_form_steps.delete({
       where: { id: Number(stepId) }
     });
     
-    console.log('✅ [WebsiteForms] Step deleted:', stepId);
     res.json({ success: true, message: 'Étape supprimée' });
   } catch (error) {
     console.error('❌ [WebsiteForms] Error deleting step:', error);
@@ -576,7 +556,6 @@ router.put('/:id/steps/reorder', async (req: AuthenticatedRequest, res: Response
     const { id } = req.params;
     const { stepIds } = req.body; // Array d'IDs dans le nouvel ordre
     
-    console.log('📋 [WebsiteForms] REORDER steps for form:', id);
     
     // Mettre à jour l'ordre de chaque étape
     const updates = stepIds.map((stepId: number, index: number) => 
@@ -588,7 +567,6 @@ router.put('/:id/steps/reorder', async (req: AuthenticatedRequest, res: Response
     
     await Promise.all(updates);
     
-    console.log('✅ [WebsiteForms] Steps reordered');
     res.json({ success: true });
   } catch (error) {
     console.error('❌ [WebsiteForms] Error reordering steps:', error);
@@ -616,7 +594,6 @@ router.post('/steps/:stepId/fields', async (req: AuthenticatedRequest, res: Resp
       isDefault, condition, metadata 
     } = req.body;
     
-    console.log('📋 [WebsiteForms] ADD field to step:', stepId);
     
     // Récupérer l'étape pour calculer l'ordre
     const step = await db.website_form_steps.findUnique({
@@ -651,7 +628,6 @@ router.post('/steps/:stepId/fields', async (req: AuthenticatedRequest, res: Resp
       }
     });
     
-    console.log('✅ [WebsiteForms] Field created:', field.id);
     res.status(201).json(field);
   } catch (error) {
     console.error('❌ [WebsiteForms] Error creating field:', error);
@@ -675,7 +651,6 @@ router.put('/fields/:fieldId', async (req: AuthenticatedRequest, res: Response) 
       order, isDefault, condition, metadata 
     } = req.body;
     
-    console.log('📋 [WebsiteForms] UPDATE field:', fieldId);
     
     const field = await db.website_form_fields.update({
       where: { id: Number(fieldId) },
@@ -698,7 +673,6 @@ router.put('/fields/:fieldId', async (req: AuthenticatedRequest, res: Response) 
       }
     });
     
-    console.log('✅ [WebsiteForms] Field updated:', field.id);
     res.json(field);
   } catch (error) {
     console.error('❌ [WebsiteForms] Error updating field:', error);
@@ -717,13 +691,11 @@ router.delete('/fields/:fieldId', async (req: AuthenticatedRequest, res: Respons
   try {
     const { fieldId } = req.params;
     
-    console.log('📋 [WebsiteForms] DELETE field:', fieldId);
     
     await db.website_form_fields.delete({
       where: { id: Number(fieldId) }
     });
     
-    console.log('✅ [WebsiteForms] Field deleted:', fieldId);
     res.json({ success: true, message: 'Champ supprimé' });
   } catch (error) {
     console.error('❌ [WebsiteForms] Error deleting field:', error);
@@ -743,7 +715,6 @@ router.put('/steps/:stepId/fields/reorder', async (req: AuthenticatedRequest, re
     const { stepId } = req.params;
     const { fieldIds } = req.body;
     
-    console.log('📋 [WebsiteForms] REORDER fields for step:', stepId);
     
     const updates = fieldIds.map((fieldId: number, index: number) => 
       db.website_form_fields.update({
@@ -754,7 +725,6 @@ router.put('/steps/:stepId/fields/reorder', async (req: AuthenticatedRequest, re
     
     await Promise.all(updates);
     
-    console.log('✅ [WebsiteForms] Fields reordered');
     res.json({ success: true });
   } catch (error) {
     console.error('❌ [WebsiteForms] Error reordering fields:', error);
@@ -778,7 +748,6 @@ router.post('/:id/link-website', async (req: AuthenticatedRequest, res: Response
     const { id } = req.params;
     const { websiteId, isDefault, urlPath } = req.body;
     
-    console.log('📋 [WebsiteForms] LINK form', id, 'to website', websiteId);
     
     // Vérifier si la liaison existe déjà
     const existing = await db.website_form_website.findFirst({
@@ -802,7 +771,6 @@ router.post('/:id/link-website', async (req: AuthenticatedRequest, res: Response
       }
     });
     
-    console.log('✅ [WebsiteForms] Link created:', link.id);
     res.status(201).json(link);
   } catch (error) {
     console.error('❌ [WebsiteForms] Error linking:', error);
@@ -821,7 +789,6 @@ router.delete('/:id/unlink-website/:websiteId', async (req: AuthenticatedRequest
   try {
     const { id, websiteId } = req.params;
     
-    console.log('📋 [WebsiteForms] UNLINK form', id, 'from website', websiteId);
     
     await db.website_form_website.deleteMany({
       where: { 
@@ -830,7 +797,6 @@ router.delete('/:id/unlink-website/:websiteId', async (req: AuthenticatedRequest
       }
     });
     
-    console.log('✅ [WebsiteForms] Link deleted');
     res.json({ success: true, message: 'Liaison supprimée' });
   } catch (error) {
     console.error('❌ [WebsiteForms] Error unlinking:', error);
@@ -854,7 +820,6 @@ router.get('/:id/stats', async (req: AuthenticatedRequest, res: Response) => {
     const _organizationId = getOrgId(req); // Garde pour validation future
     const { id } = req.params;
     
-    console.log('📋 [WebsiteForms] GET stats for form:', id);
     
     const [total, completed, partial, recent] = await Promise.all([
       db.website_form_submissions.count({ where: { formId: Number(id) } }),
@@ -954,7 +919,6 @@ router.get('/:id/questions', async (req: AuthenticatedRequest, res: Response) =>
     const organizationId = getOrgId(req);
     const { id } = req.params;
     
-    console.log('📋 [WebsiteForms] GET questions for form:', id);
     
     // Vérifier que le formulaire appartient à l'organisation
     const form = await db.website_forms.findFirst({
@@ -970,7 +934,6 @@ router.get('/:id/questions', async (req: AuthenticatedRequest, res: Response) =>
       orderBy: { order: 'asc' }
     });
     
-    console.log(`✅ [WebsiteForms] Found ${questions.length} questions`);
     res.json(questions);
   } catch (error) {
     console.error('❌ [WebsiteForms] Error fetching questions:', error);
@@ -1004,7 +967,6 @@ router.post('/:id/questions', async (req: AuthenticatedRequest, res: Response) =
       validationRules 
     } = req.body;
     
-    console.log('📋 [WebsiteForms] CREATE question for form:', id, questionKey);
     
     // Vérifier que le formulaire appartient à l'organisation
     const form = await db.website_forms.findFirst({
@@ -1042,7 +1004,6 @@ router.post('/:id/questions', async (req: AuthenticatedRequest, res: Response) =
       }
     });
     
-    console.log('✅ [WebsiteForms] Question created:', question.id);
     res.status(201).json(question);
   } catch (error) {
     console.error('❌ [WebsiteForms] Error creating question:', error);
@@ -1075,7 +1036,6 @@ router.put('/questions/:questionId', async (req: AuthenticatedRequest, res: Resp
       validationRules 
     } = req.body;
     
-    console.log('📋 [WebsiteForms] UPDATE question:', questionId);
     
     // Vérifier que la question existe et appartient à l'organisation
     const existing = await db.website_form_questions.findUnique({
@@ -1104,7 +1064,6 @@ router.put('/questions/:questionId', async (req: AuthenticatedRequest, res: Resp
       }
     });
     
-    console.log('✅ [WebsiteForms] Question updated:', question.id);
     res.json(question);
   } catch (error) {
     console.error('❌ [WebsiteForms] Error updating question:', error);
@@ -1124,7 +1083,6 @@ router.delete('/questions/:questionId', async (req: AuthenticatedRequest, res: R
     const organizationId = getOrgId(req);
     const { questionId } = req.params;
     
-    console.log('📋 [WebsiteForms] DELETE question:', questionId);
     
     // Vérifier que la question existe et appartient à l'organisation
     const existing = await db.website_form_questions.findUnique({
@@ -1140,7 +1098,6 @@ router.delete('/questions/:questionId', async (req: AuthenticatedRequest, res: R
       where: { id: Number(questionId) }
     });
     
-    console.log('✅ [WebsiteForms] Question deleted');
     res.json({ success: true, message: 'Question supprimée' });
   } catch (error) {
     console.error('❌ [WebsiteForms] Error deleting question:', error);

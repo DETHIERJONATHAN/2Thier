@@ -16,8 +16,6 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     const user = req.user as { id?: string; email?: string; role?: string; organizationId?: string } | undefined;
     const isSuperAdmin = user?.role === 'super_admin';
     
-    console.log('[ADMIN-MODULES-V1] GET - Récupération modules par sections (système hybride)');
-    console.log('[ADMIN-MODULES-V1] 👤 User:', user?.email, 'Role:', user?.role, 'IsSuperAdmin:', isSuperAdmin);
     
     // Icône par défaut
     const fallbackIcon = 'AppstoreOutlined';
@@ -141,8 +139,6 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       (a, b) => a.order - b.order
     );
 
-    console.log(`[ADMIN-MODULES-V1] Sections créées: ${sections.length} (système par catégories)`);
-    console.log(`[ADMIN-MODULES-V1] Total modules: ${modules.length}`);
     
     res.json({
       success: true,
@@ -172,7 +168,6 @@ router.get('/categories', async (req: Request, res: Response): Promise<void> => 
   try {
     const organizationId = req.query.organizationId as string;
     
-    console.log('[ADMIN-MODULES] GET /categories - Récupération des categories');
     
     const categories = await prisma.category.findMany({
       where: organizationId ? { 
@@ -191,7 +186,6 @@ router.get('/categories', async (req: Request, res: Response): Promise<void> => 
       }
     });
 
-    console.log(`[ADMIN-MODULES] ${categories.length} categories trouvées`);
     
     res.json({
       success: true,
@@ -227,7 +221,6 @@ router.post('/categories', requireRole(['admin', 'super_admin']) as unknown as R
       return;
     }
 
-    console.log('[ADMIN-MODULES] POST /categories - Création category:', { name, icon, organizationId });
 
     // Générer un UUID pour la nouvelle catégorie
     const { randomUUID } = await import('crypto');
@@ -249,7 +242,6 @@ router.post('/categories', requireRole(['admin', 'super_admin']) as unknown as R
       }
     });
 
-    console.log(`[ADMIN-MODULES] Category créée: ${category.id}`);
 
     res.json({
       success: true,
@@ -278,7 +270,6 @@ router.put('/categories/reorder', requireRole(['admin', 'super_admin']) as unkno
   try {
     const { updates } = req.body; // [{ id, order }, ...]
     
-    console.log('[ADMIN-MODULES] PUT /categories/reorder - Réorganisation categories:', updates.length);
     
     // Mettre à jour l'ordre de chaque category
     for (const update of updates) {
@@ -291,7 +282,6 @@ router.put('/categories/reorder', requireRole(['admin', 'super_admin']) as unkno
       });
     }
 
-    console.log(`[ADMIN-MODULES] ${updates.length} categories réorganisées`);
     
     res.json({
       success: true,
@@ -314,13 +304,11 @@ router.put('/categories/:id', requireRole(['admin', 'super_admin']) as unknown a
     const { id } = req.params;
     const { name, description, icon, iconColor, order, active, superAdminOnly } = req.body;
     
-    console.log('[ADMIN-MODULES] PUT /categories/:id - Modification category:', { id, name, active, superAdminOnly });
     
     // Logique d'interdépendance: Si superAdminOnly est activé, automatiquement désactiver active
     const finalActive = superAdminOnly ? false : active;
     
     if (superAdminOnly && active) {
-      console.log('[ADMIN-MODULES] SuperAdminOnly activé - Désactivation automatique du module pour les organisations');
     }
     
     const category = await prisma.category.update({
@@ -337,7 +325,6 @@ router.put('/categories/:id', requireRole(['admin', 'super_admin']) as unknown a
       }
     });
 
-    console.log(`[ADMIN-MODULES] Category modifiée: ${category.id}`);
     
     res.json({
       success: true,
@@ -359,7 +346,6 @@ router.delete('/categories/:id', requireRole(['admin', 'super_admin']) as unknow
   try {
     const { id } = req.params;
     
-    console.log('[ADMIN-MODULES] DELETE /categories/:id - Suppression category:', { id });
     
     // Vérifier qu'aucun module n'utilise cette category
     const moduleCount = await prisma.module.count({
@@ -378,7 +364,6 @@ router.delete('/categories/:id', requireRole(['admin', 'super_admin']) as unknow
       where: { id }
     });
 
-    console.log(`[ADMIN-MODULES] Category supprimée: ${id}`);
     
     res.json({
       success: true,
@@ -401,13 +386,11 @@ router.put('/modules/:id', requireRole(['admin', 'super_admin']) as unknown as R
     const { id } = req.params;
     const { active, superAdminOnly } = req.body;
     
-    console.log('[ADMIN-MODULES] PUT /modules/:id - Modification module:', { id, active, superAdminOnly });
     
     // Logique d'interdépendance: Si superAdminOnly est activé, automatiquement désactiver active
     const finalActive = superAdminOnly ? false : active;
     
     if (superAdminOnly && active) {
-      console.log('[ADMIN-MODULES] SuperAdminOnly activé - Désactivation automatique du module pour les organisations');
     }
     
     const module = await prisma.module.update({
@@ -419,7 +402,6 @@ router.put('/modules/:id', requireRole(['admin', 'super_admin']) as unknown as R
       }
     });
 
-    console.log(`[ADMIN-MODULES] Module modifié: ${module.id}`);
     
     res.json({
       success: true,
@@ -440,7 +422,6 @@ router.put('/modules/:id', requireRole(['admin', 'super_admin']) as unknown as R
 router.delete('/modules/:id', requireRole(['admin', 'super_admin']) as unknown as RequestHandler, async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    console.log('[ADMIN-MODULES] DELETE /modules/:id (alias) - Suppression module:', { id });
 
     // Supprimer d'abord les statuts et permissions liés (meilleur effort)
     await prisma.organizationModuleStatus.deleteMany({ where: { moduleId: id } });

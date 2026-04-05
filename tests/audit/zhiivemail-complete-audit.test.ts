@@ -85,7 +85,6 @@ function shell(cmd: string, timeoutMs = 10000): string {
 describe('📁 Fichiers critiques', () => {
   const criticalFiles = [
     'src/services/PostalEmailService.ts',
-    'src/services/EmailAccountService.ts',
     'src/routes/postal-mail.ts',
     'src/routes/mail-provider.ts',
     'src/hooks/usePostalMailService.ts',
@@ -245,7 +244,6 @@ describe('🖥️ Frontend — UnifiedMailPage', () => {
 // ══════════════════════════════════════════════════════════════
 describe('🔧 Provisionnement — Inscription utilisateur', () => {
   const miscContent = readSrcFile('src/routes/misc.ts');
-  const accountServiceContent = readSrcFile('src/services/EmailAccountService.ts');
 
   it('POST /api/register crée un EmailAccount @zhiive.com', () => {
     expect(miscContent).toContain('emailAccount.create');
@@ -274,14 +272,6 @@ describe('🔧 Provisionnement — Inscription utilisateur', () => {
     expect(miscContent).toMatch(/\\u0300-\\u036f/);
   });
 
-  it('EmailAccountService utilise DEFAULT_EMAIL_DOMAIN', () => {
-    expect(accountServiceContent).toContain('DEFAULT_EMAIL_DOMAIN');
-  });
-
-  it('EmailAccountService provisionne la boîte sur Postal (createMailbox)', () => {
-    expect(accountServiceContent).toContain('createMailbox');
-  });
-
   it('gère les doublons d\'email gracieusement (pas de crash)', () => {
     expect(miscContent).toMatch(/catch\s*\(\s*emailAccErr/);
   });
@@ -297,7 +287,6 @@ describe('🔒 Sécurité', () => {
       'src/routes/postal-mail.ts',
       'src/routes/mail-provider.ts',
       'src/hooks/usePostalMailService.ts',
-      'src/services/EmailAccountService.ts',
     ];
     for (const f of files) {
       const content = readSrcFile(f);
@@ -631,10 +620,7 @@ describe('📏 Conventions Code Zhiive', () => {
     expect(content).not.toContain('oauth2');
   });
 
-  it('EmailAccountService normalise les accents (NFD)', () => {
-    const content = readSrcFile('src/services/EmailAccountService.ts');
-    expect(content).toContain('.normalize(');
-  });
+
 });
 
 // ══════════════════════════════════════════════════════════════

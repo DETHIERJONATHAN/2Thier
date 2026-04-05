@@ -108,7 +108,6 @@ export class DynamicFormulaEngine {
     // const cacheKey = `configs_${organizationId}`;
     
     try {
-      console.log('🔄 [DynamicFormulaEngine] Chargement des configurations pour org:', organizationId);
       
       const fields = await this.prisma.field.findMany({
         include: {
@@ -162,7 +161,6 @@ export class DynamicFormulaEngine {
         this.configCache.set(field.id, config);
       }
 
-      console.log('✅ [DynamicFormulaEngine] Configurations chargées:', Object.keys(configurations).length);
       return configurations;
 
     } catch (error) {
@@ -308,7 +306,6 @@ export class DynamicFormulaEngine {
    * 🧮 Exécute les calculs dynamiques selon les configurations
    */
   async executeCalculations(context: CalculationContext): Promise<Record<string, string | number | boolean>> {
-    console.log('🧮 [DynamicFormulaEngine] Exécution des calculs dynamiques...');
     
     const results: Record<string, string | number | boolean> = {};
     
@@ -319,7 +316,6 @@ export class DynamicFormulaEngine {
                          (config.formulas && config.formulas.length > 0) ||
                          (config.dependencies && config.dependencies.length > 0));
 
-      console.log('🎯 Champs conditionnels trouvés:', conditionalFields.length);
 
       // 2. Exécuter les logiques pour chaque champ
       for (const fieldConfig of conditionalFields) {
@@ -341,7 +337,6 @@ export class DynamicFormulaEngine {
         }
       }
 
-      console.log('✅ [DynamicFormulaEngine] Calculs terminés:', Object.keys(results).length);
       return results;
 
     } catch (error) {
@@ -358,9 +353,6 @@ export class DynamicFormulaEngine {
     const prixDefini = context.fieldValues[this.fieldMapping.prix_mois];
     const consommation = context.fieldValues[this.fieldMapping.consommation_kwh];
 
-    console.log('⚡ [Prix Kw/h Logic] Option sélectionnée:', selectedOption);
-    console.log('⚡ [Prix Kw/h Logic] Prix défini actuel:', prixDefini);
-    console.log('⚡ [Prix Kw/h Logic] Consommation:', consommation);
 
     // Logique selon votre formule : 
     // "Si Prix Kw/h - Défini = Prix Kw/h (number) alors copier, sinon diviser Calcul du prix par Consommation annuelle"
@@ -368,7 +360,6 @@ export class DynamicFormulaEngine {
     if (selectedOption === 'prix-kwh') {
       // Option "Prix Kw/h" sélectionnée -> utiliser la valeur directe saisie
       const directValue = context.fieldValues['direct_prix_kwh_input'];
-      console.log('💡 Utilisation valeur directe:', directValue);
       return directValue || prixDefini || 0;
       
     } else if (selectedOption === 'calcul-du-prix-kwh') {
@@ -377,7 +368,6 @@ export class DynamicFormulaEngine {
       const consommationValue = parseFloat(consommation) || 1;
       
       const result = calculBase / consommationValue;
-      console.log('🧮 Calcul division:', calculBase, '/', consommationValue, '=', result);
       return result;
     }
 
@@ -391,10 +381,6 @@ export class DynamicFormulaEngine {
     const value1 = context.fieldValues[logic.field1] || '';
     const value2 = context.fieldValues[logic.field2] || '';
 
-    console.log('🎯 Exécution logique:', logic.condition);
-    console.log('   Field1:', logic.field1, '=', value1);
-    console.log('   Operator:', logic.operator);
-    console.log('   Field2:', logic.field2, '=', value2);
 
     let conditionMet = false;
 
@@ -417,12 +403,10 @@ export class DynamicFormulaEngine {
         conditionMet = parseFloat(String(value1)) < parseFloat(String(value2));
         break;
       default:
-        console.log('⚠️ Opérateur non reconnu:', logic.operator);
     }
 
     // Exécution de l'action
     const action = conditionMet ? logic.thenAction : logic.elseAction;
-    console.log('✨ Action à exécuter:', action, '(condition met:', conditionMet, ')');
 
     switch (action) {
       case 'COPY_VALUE':
@@ -434,7 +418,6 @@ export class DynamicFormulaEngine {
       case 'NO_ACTION':
         return null;
       default:
-        console.log('⚠️ Action non reconnue:', action);
         return null;
     }
   }
@@ -444,7 +427,6 @@ export class DynamicFormulaEngine {
    */
   async updateFieldConfiguration(fieldId: string, newConfig: Partial<FieldConfiguration>): Promise<void> {
     try {
-      console.log('🔄 [DynamicFormulaEngine] Mise à jour configuration:', fieldId);
 
       // Mise à jour dans la base
       const updateData: Record<string, unknown> = {};
@@ -461,7 +443,6 @@ export class DynamicFormulaEngine {
 
         // Invalidation du cache
         this.configCache.delete(fieldId);
-        console.log('✅ Configuration mise à jour et cache invalidé');
       }
 
     } catch (error) {
@@ -550,7 +531,6 @@ export class DynamicFormulaEngine {
             appliedFormulas.push({ id: formula.id, name: formula.name || formula.id });
             
             if (debug) {
-              console.log(`✅ Formule appliquée: ${formula.name} → ${formula.fieldId} = ${result.value}`);
             }
           } else if (result.error) {
             errors.push(`Erreur formule ${formula.name}: ${result.error}`);
@@ -643,8 +623,6 @@ export class DynamicFormulaEngine {
     }
 
     if (debug) {
-      console.log(`🔍 Condition: ${fieldId}.${part} ${operator} ${expectedValue}`);
-      console.log(`🔍 Valeur actuelle: ${actualValue}`);
     }
 
     // Évaluer la condition
@@ -654,7 +632,6 @@ export class DynamicFormulaEngine {
     }
 
     if (debug) {
-      console.log(`🔍 Condition remplie: ${conditionMet}`);
     }
 
     // Choisir la branche THEN ou ELSE
@@ -679,8 +656,6 @@ export class DynamicFormulaEngine {
     const debug = options.debug || false;
     
     if (debug) {
-      console.log(`🌿 evaluateBranch: longueur = ${branch.length}`);
-      console.log(`🌿 Structure branche:`, JSON.stringify(branch, null, 2));
     }
     
     if (branch.length === 1) {
@@ -695,18 +670,12 @@ export class DynamicFormulaEngine {
       const value2Action = branch[2] as Record<string, unknown>;
       
       if (debug) {
-        console.log(`🧮 Évaluation branche 3 éléments:`);
-        console.log(`🧮 Élément 1:`, JSON.stringify(value1Action, null, 2));
-        console.log(`🧮 Élément 2:`, JSON.stringify(operatorAction, null, 2));
-        console.log(`🧮 Élément 3:`, JSON.stringify(value2Action, null, 2));
       }
       
       const val1Result = await this.evaluateAction(value1Action, fieldValues, { debug });
       const val2Result = await this.evaluateAction(value2Action, fieldValues, { debug });
       
       if (debug) {
-        console.log(`🧮 Résultat val1:`, val1Result);
-        console.log(`🧮 Résultat val2:`, val2Result);
       }
       
       if (!val1Result.success || !val2Result.success) {
@@ -718,7 +687,6 @@ export class DynamicFormulaEngine {
       const num2 = parseFloat(String(val2Result.value)) || 0;
       
       if (debug) {
-        console.log(`🧮 Calcul: ${num1} ${operator} ${num2}`);
       }
       
       if (operator === '/') {
@@ -731,8 +699,6 @@ export class DynamicFormulaEngine {
       }
     } else {
       if (debug) {
-        console.log(`🌿 Branche non traitée - longueur: ${branch.length}`);
-        console.log(`🌿 Contenu:`, JSON.stringify(branch, null, 2));
       }
     }
     
@@ -753,7 +719,6 @@ export class DynamicFormulaEngine {
     const value = action.value as string;
     
     if (debug) {
-      console.log(`⚡ Action: ${type} = ${value}`);
     }
     
     if (type === 'value' && typeof value === 'string' && value.startsWith('nextField:')) {

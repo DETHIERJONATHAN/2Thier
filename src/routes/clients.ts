@@ -11,7 +11,6 @@ router.use(authenticateToken);
 // GET /api/clients - Récupérer tous les clients (basé sur les leads)
 router.get('/', async (req, res) => {
   try {
-    console.log('[CLIENTS] Récupération des clients pour l\'organisation:', req.organizationId);
     
     // Récupérer les leads qui peuvent être considérés comme des clients
     // (par exemple, leads avec statut "converti" ou "client")
@@ -57,7 +56,6 @@ router.get('/', async (req, res) => {
       };
     });
 
-    console.log(`[CLIENTS] ${clients.length} clients trouvés`);
     res.json(clients);
 
   } catch (error) {
@@ -73,7 +71,6 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    console.log('[CLIENTS] Récupération du client:', id);
 
     const lead = await prisma.lead.findFirst({
       where: {
@@ -126,7 +123,6 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const { name, email, phone, company } = req.body;
-    console.log('[CLIENTS] Création d\'un nouveau client:', { name, email, company });
 
     // Créer un lead avec le statut "client"
     const lead = await prisma.lead.create({

@@ -104,9 +104,6 @@ router.put('/:id', requireRole(['admin', 'super_admin']), async (req, res) => {
   const { id } = req.params;
   const { label, type, required, width, advancedConfig, isProtected } = req.body;
   
-  console.log('[fields.ts] PUT /:id - fieldId:', id);
-  console.log('[fields.ts] PUT /:id - body reçu:', req.body);
-  console.log('[fields.ts] PUT /:id - advancedConfig:', advancedConfig);
   
   // Construire l'objet data dynamiquement pour ne pas écraser avec undefined
   const data: Record<string, unknown> = {};
@@ -123,7 +120,6 @@ router.put('/:id', requireRole(['admin', 'super_admin']), async (req, res) => {
       data
     });
     
-    console.log('[fields.ts] PUT /:id - Champ mis à jour:', field);
     res.json(field);
     } catch (err: unknown) {
     console.error('[fields.ts] PUT /:id - Erreur:', err);
@@ -141,7 +137,6 @@ router.post('/:fieldId/options', requireRole(['admin', 'super_admin']), async (r
     res.status(400).json({ error: "Le label et la value de l'option sont obligatoires." });
     return;
   }
-  console.log('[API] [POST /fields/:fieldId/options] Reçu pour fieldId:', fieldId, 'body:', req.body);
   try {
     // Vérifier si une option avec la même valeur existe déjà pour ce champ
     const existingOption = await prisma.fieldOption.findFirst({
@@ -160,9 +155,7 @@ router.post('/:fieldId/options', requireRole(['admin', 'super_admin']), async (r
                     fieldId
                 }
             });
-            console.log('[API] [POST /fields/:fieldId/options] Option créée en base');
         } else {
-            console.log('[API] [POST /fields/:fieldId/options] Option déjà existante, retour du champ à jour');
         }
         // Toujours renvoyer le champ complet mis à jour avec ses options
         const updatedField = await prisma.field.findUnique({

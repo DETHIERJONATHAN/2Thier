@@ -90,13 +90,11 @@ router.use(rolesRateLimit);
 
 // 🏷️ GET /api/roles - SÉCURISÉ AVEC ZOD + SANITISATION
 router.get('/', async (req: AuthenticatedRequest, res) => {
-  console.log('[ROLES] GET /roles - Récupération des rôles SÉCURISÉE');
   
   try {
     // 🔍 VALIDATION ZOD QUERY PARAMS
     const queryValidation = roleQuerySchema.safeParse(req.query);
     if (!queryValidation.success) {
-      console.log('[ROLES] Validation échouée:', queryValidation.error);
       res.status(400).json(handleZodError(queryValidation.error));
       return;
     }
@@ -104,8 +102,6 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     const { organizationId } = queryValidation.data;
     const requestingUser = req.user;
     
-    console.log(`[ROLES] User role: ${requestingUser?.role}`);
-    console.log(`[ROLES] Organization ID: ${organizationId || requestingUser?.organizationId}`);
     
     // ✅ LOGIQUE UNIFIÉE ET CORRIGÉE
     let finalOrganizationId: string | undefined | null = organizationId;
@@ -132,17 +128,14 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
         { organizationId: requestingUser?.organizationId },
         { organizationId: null } // Rôles globaux toujours disponibles
       ];
-      console.log(`[ROLES] Non-SuperAdmin: Filtering for org ${requestingUser?.organizationId} + global roles`);
     }
 
     // Si aucun filtre d'organisation n'est spécifié et que c'est un super_admin,
     // retourner tous les rôles (globaux et spécifiques)
     if (!finalOrganizationId && requestingUser?.role === 'super_admin') {
       // Pas de filtre - retourner tous les rôles
-      console.log('[ROLES] SuperAdmin: Returning all roles (global and organization-specific)');
     }
 
-    console.log('[ROLES] Final where clause:', whereClause);
 
     const roles = await prisma.role.findMany({
       where: whereClause,
@@ -153,7 +146,6 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
       orderBy: { name: 'asc' }
     });
       
-    console.log(`[ROLES] Found ${roles.length} total roles based on filter.`);
     res.status(200).json({ success: true, data: roles });
     return;
     
@@ -169,7 +161,6 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
 // 🏷️ GET /api/roles/:id - RÉCUPÉRER UN RÔLE SÉCURISÉ
 router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const { id } = req.params;
-  console.log(`[ROLES] GET /roles/${id} - Récupération du rôle SÉCURISÉE`);
   
   try {
     // 🔒 VALIDATION ZOD PARAMS
@@ -228,7 +219,6 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
       }
     }
 
-    console.log(`[ROLES] Rôle "${role.name}" récupéré avec succès`);
     res.json({ 
       success: true, 
       data: role 
@@ -246,13 +236,11 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
 // POST /api/roles - Créer un nouveau rôle
 // 🏷️ POST /api/roles - CRÉER UN RÔLE SÉCURISÉ
 router.post('/', rolesCreateRateLimit, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  console.log('[ROLES] POST /roles - Création d\'un rôle SÉCURISÉE');
   
   try {
     // 🔒 VALIDATION ZOD ULTRA-STRICTE
     const bodyValidation = roleCreateSchema.safeParse(req.body);
     if (!bodyValidation.success) {
-      console.log('[ROLES] Validation création échouée:', bodyValidation.error);
       res.status(400).json(handleZodError(bodyValidation.error));
       return;
     }
@@ -273,7 +261,6 @@ router.post('/', rolesCreateRateLimit, async (req: AuthenticatedRequest, res: Re
     const sanitizedLabel = label ? sanitizeString(label) : sanitizedName;
     const sanitizedDescription = description ? sanitizeString(description) : '';
 
-    console.log(`[ROLES] Création rôle: ${sanitizedName} pour org: ${organizationId || requestingUser.organizationId}`);
 
     // 🔐 VÉRIFICATION PERMISSIONS RENFORCÉE
     if (requestingUser.role !== 'super_admin') {
@@ -335,7 +322,6 @@ router.post('/', rolesCreateRateLimit, async (req: AuthenticatedRequest, res: Re
       }
     });
 
-    console.log(`[ROLES] Rôle créé avec succès: ${newRole.id}`);
     res.status(201).json({ 
       success: true, 
       data: newRole,
@@ -352,7 +338,6 @@ router.post('/', rolesCreateRateLimit, async (req: AuthenticatedRequest, res: Re
 // 🏷️ PUT|PATCH /api/roles/:id - MODIFIER UN RÔLE SÉCURISÉ  
 const handleUpdateRole = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const { id } = req.params;
-  console.log(`[ROLES] PUT /roles/${id} - Mise à jour du rôle SÉCURISÉE`);
   
   try {
     // 🔒 VALIDATION ZOD PARAMS + BODY
@@ -366,7 +351,6 @@ const handleUpdateRole = async (req: AuthenticatedRequest, res: Response): Promi
 
     const bodyValidation = roleUpdateSchema.safeParse(req.body);
     if (!bodyValidation.success) {
-      console.log('[ROLES] Validation modification échouée:', bodyValidation.error);
       res.status(400).json(handleZodError(bodyValidation.error));
       return;
     }
@@ -476,7 +460,6 @@ const handleUpdateRole = async (req: AuthenticatedRequest, res: Response): Promi
         return;
       }
       updateData.organizationId = organizationId;
-      console.log(`[ROLES] Changement de portée → ${organizationId === null ? 'GLOBAL' : `org: ${organizationId}`}`);
     }
 
     const updatedRole = await prisma.role.update({
@@ -493,7 +476,6 @@ const handleUpdateRole = async (req: AuthenticatedRequest, res: Response): Promi
       }
     });
 
-    console.log(`[ROLES] Rôle modifié avec succès: ${updatedRole.id}`);
     res.status(200).json({ 
       success: true, 
       data: updatedRole,
@@ -515,7 +497,6 @@ router.patch('/:id', handleUpdateRole);
 // 🏷️ DELETE /api/roles/:id - SUPPRIMER UN RÔLE SÉCURISÉ
 router.delete('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const { id } = req.params;
-  console.log(`[ROLES] DELETE /roles/${id} - Suppression du rôle SÉCURISÉE`);
   
   try {
     // 🔒 VALIDATION PARAMS
@@ -588,7 +569,6 @@ router.delete('/:id', async (req: AuthenticatedRequest, res: Response): Promise<
       where: { id: roleId }
     });
 
-    console.log(`[ROLES] Rôle supprimé avec succès: ${roleId} (${existingRole.name})`);
     res.status(200).json({ 
       success: true, 
       message: `Rôle "${existingRole.name}" supprimé avec succès` 

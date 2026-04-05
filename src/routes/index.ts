@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import authRoutes from './authRoutes';
-import gmailRoutes from './gmailRoutes'; // Réactivé
+// Gmail routes supprimées — Postal (@zhiive.com) est le système mail unique
 import miscRoutes from './misc';
 import profileRoutes from './profile';
 import modulesRoutes from './modules';
@@ -34,7 +34,6 @@ import impersonateRoutes from './impersonate'; // ✅ Routes usurpation
 // Calendar routes supprimées — Google Calendar n'est plus utilisé
 import clientsRoutes from './clients'; // ✅ Routes clients
 import projectsRoutes from './projects'; // ✅ Routes projects
-import emailsRoutes from './emails'; // ✅ Routes emails
 import geminiRoutes from './gemini'; // 🤖 Routes Gemini AI
 import telnyxRoutes from './telnyx'; // 📞 Routes Telnyx Communications
 import quotesRoutes from './quotes'; // 📄 Routes Devis (Quotes)
@@ -70,7 +69,7 @@ import marketplaceRoutes from './marketplace-fixed'; // 🏪 Routes marketplace 
 import partnerRoutes from './partner'; // 🤝 Routes portal partenaires
 import publicFormsRoutes from './publicForms'; // 📝 Routes formulaires publics
 import landingPagesRoutes from './landingPages'; // 🌐 Routes landing pages
-import yandexMailRoutes from './yandex-mail'; // 📧 Routes Yandex Mail (IMAP/SMTP)
+// Yandex Mail routes supprimées — Postal est le système mail unique
 import postalMailRoutes from './postal-mail'; // 📬 Routes Postal Mail (self-hosted)
 import zhiivemailAdminRoutes from './zhiivemail-admin'; // 📧 Admin ZhiiveMail (Postal/Hetzner)
 import mailProviderRoutes from './mail-provider'; // 🔍 Détection fournisseur mail (Gmail/Yandex/Postal)
@@ -102,7 +101,6 @@ const apiRouter = Router();
 
 // Routes d'authentification
 apiRouter.use('/auth', authRoutes);
-console.log('[ROUTER] Routes d\'authentification montées sur /auth');
 
 // Routes pour l'authentification Google automatique
 apiRouter.use('/auto-google-auth', autoGoogleAuthRoutes);
@@ -222,10 +220,6 @@ apiRouter.use('/company', companyRoutes);
 apiRouter.use('/projects', projectsRoutes);
 
 
-// Routes des emails (Gmail intégration)
-apiRouter.use('/emails', emailsRoutes);
-
-
 // Routes Gemini AI 🤖
 apiRouter.use('/gemini', geminiRoutes);
 
@@ -255,14 +249,6 @@ apiRouter.use('/impersonate', impersonateRoutes);
 
 // Routes d'administration des mots de passe
 apiRouter.use('/admin-password', adminPasswordRoutes);
-
-
-// Routes Gmail
-apiRouter.use('/gmail', gmailRoutes);
-
-
-// Routes Yandex Mail (📧 IMAP/SMTP — alternative à Gmail)
-apiRouter.use('/yandex', yandexMailRoutes);
 
 
 // Routes Postal Mail (📬 self-hosted — @zhiive.com natif)
@@ -405,7 +391,6 @@ apiRouter.use('/documents', documentsRoutes);
 
 // � Routes Fiches Techniques Produits (panneaux, onduleurs)
 apiRouter.use('/product-documents', productDocumentsRoutes);
-console.log('[ROUTER] Routes fiches techniques produits montées sur /product-documents');
 
 // �🔄 TEMPORAIRE: Sync documents vers Cloud SQL
 apiRouter.use('/sync', syncTempRoutes);

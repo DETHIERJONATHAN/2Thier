@@ -65,7 +65,6 @@ async function sendSmsInternal(organizationId: string, to: string, text: string)
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
     });
 
-    console.log('✅ [SMS] Envoyé à', toNorm, ':', text.substring(0, 50) + '...');
     return true;
   } catch (error) {
     console.error('❌ [SMS] Échec envoi:', error instanceof Error ? error.message : error);
@@ -88,7 +87,6 @@ router.get('/:slug', async (req: Request, res: Response) => {
     const { slug } = req.params;
     const { websiteSlug: _websiteSlug } = req.query; // Pour future validation website-specific
     
-    console.log('📋 [PublicForms] GET form by slug:', slug);
     
     const form = await db.website_forms.findFirst({
       where: {
@@ -117,7 +115,6 @@ router.get('/:slug', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Formulaire non trouvé ou inactif' });
     }
     
-    console.log('✅ [PublicForms] Form found:', form.name, '- Steps:', form.steps.length);
     
     // Retourner uniquement les données nécessaires pour le rendu public
     // Organiser les champs en hiérarchie (parents avec childFields)
@@ -221,7 +218,6 @@ router.get('/:slug/questions', async (req: Request, res: Response) => {
   try {
     const { slug } = req.params;
     
-    console.log('🎯 [PublicForms] GET form questions (Effy mode) by slug:', slug);
     
     const form = await db.website_forms.findFirst({
       where: {
@@ -245,7 +241,6 @@ router.get('/:slug/questions', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Formulaire non trouvé ou inactif' });
     }
     
-    console.log('✅ [PublicForms] Form found (Effy mode):', form.name, '- Questions:', form.questions.length);
     
     res.json({
       id: form.id,
@@ -294,7 +289,6 @@ router.get('/by-website/:websiteSlug', async (req: Request, res: Response) => {
   try {
     const { websiteSlug } = req.params;
     
-    console.log('📋 [PublicForms] GET form for website:', websiteSlug);
     
     // Trouver le site par slug
     const website = await db.websites.findFirst({
@@ -331,7 +325,6 @@ router.get('/by-website/:websiteSlug', async (req: Request, res: Response) => {
     
     const form = formLink.form;
     
-    console.log('✅ [PublicForms] Form found for website:', form.name);
     
     res.json({
       id: form.id,
@@ -429,8 +422,6 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
       civility: normalizeString(contact?.civility) || extractFromFormData(['civilite', 'civility'])
     };
     
-    console.log('📋 [PublicForms] SUBMIT form:', slug);
-    console.log('📋 [PublicForms] Contact:', normalizedContact.email);
     
     // 1. Récupérer le formulaire avec tous ses champs pour le mapping TBL
     const form = await db.website_forms.findFirst({
@@ -449,7 +440,6 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Formulaire non trouvé ou inactif' });
     }
     
-    console.log('📋 [PublicForms] Form found:', form.name);
     
     // Déterminer si ce formulaire crée des Leads ou des candidatures (recrutement)
     const formSettings = (form.settings && typeof form.settings === 'object') ? form.settings as Record<string, unknown> : {};
@@ -476,7 +466,6 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
       });
       
       if (existingLead) {
-        console.log('📋 [PublicForms] Existing lead found:', existingLead.id);
         leadId = existingLead.id;
         
         // Mettre à jour les infos du lead si nécessaire
@@ -527,7 +516,6 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
           
           if (referringUser) {
             assignedToId = referringUser.id;
-            console.log(`🎯 [PublicForms] Lead auto-assigné à ${referredBy} (${referringUser.email})`);
           } else {
             console.warn(`⚠️ [PublicForms] Commercial non trouvé pour le slug: ${referredBy}`);
           }
@@ -565,10 +553,8 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
           }
         });
         
-        console.log('✅ [PublicForms] Lead created:', leadId);
       }
     } else {
-      console.log('📋 [PublicForms] Formulaire de recrutement — pas de création de Lead');
       
       // 🎯 Auto-créer une Invitation si le formulaire est configuré pour (go, partenaire)
       if (formSettings.autoInvite !== false && normalizedContact.email) {
@@ -651,9 +637,7 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
                   }
                 });
                 
-                console.log(`✅ [PublicForms] Invitation PENDING auto-créée pour ${normalizedContact.email} (rôle: ${roleName}, source: form:${slug})`);
               } else {
-                console.log(`📋 [PublicForms] Invitation existante pour ${normalizedContact.email} — pas de doublon`);
               }
             } else {
               console.warn(`⚠️ [PublicForms] Impossible de créer l'invitation: rôle "${roleName}" ou admin non trouvé`);
@@ -689,7 +673,6 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
         }
       });
       
-      console.log('✅ [PublicForms] TBL Submission created:', tblSubmissionId);
       
       // 6. Créer les données de soumission TBL pour chaque champ mappé
       const submissionDataEntries: Array<{
@@ -772,7 +755,6 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
         await db.treeBranchLeafSubmissionData.createMany({
           data: submissionDataEntries
         });
-        console.log(`✅ [PublicForms] Created ${submissionDataEntries.length} TBL data entries`);
       }
     }
     
@@ -794,7 +776,6 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
       }
     });
     
-    console.log('✅ [PublicForms] Form submission recorded:', formSubmission.id);
     
     // 🔥 8. Générer le PDF récapitulatif et l'attacher au Lead
     let pdfUrl: string | null = null;
@@ -845,7 +826,6 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
         });
       }
       
-      console.log('✅ [PublicForms] PDF generated:', pdfUrl);
     } catch (pdfError) {
       console.error('⚠️ [PublicForms] PDF generation failed (non-blocking):', pdfError);
       // Ne pas bloquer la soumission si le PDF échoue
@@ -940,7 +920,6 @@ router.post('/:slug/partial', async (req: Request, res: Response) => {
     const { slug } = req.params;
     const { formData, currentStep, metadata } = req.body;
     
-    console.log('📋 [PublicForms] PARTIAL submit for form:', slug, '- Step:', currentStep);
     
     const form = await db.website_forms.findFirst({
       where: { slug }

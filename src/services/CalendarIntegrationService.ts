@@ -138,7 +138,6 @@ export class CalendarIntegrationService {
       // Récupérer les événements depuis Google Calendar
       // Comparer avec la base CRM
       // Mettre à jour les différences
-      console.log('Synchronisation avec Google Calendar...');
     } catch (error) {
       console.error('Erreur de synchronisation:', error);
     }

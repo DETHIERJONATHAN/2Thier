@@ -11,7 +11,6 @@ const router = express.Router();
 // GET /api/organizations - Récupérer toutes les organisations
 router.get('/', async (req, res) => {
   try {
-    console.log('📡 [GET /api/organizations] Récupération des organisations...');
     
     const organizations = await prisma.organization.findMany({
       include: {
@@ -25,7 +24,6 @@ router.get('/', async (req, res) => {
       }
     });
 
-    console.log(`✅ [GET /api/organizations] ${organizations.length} organisations trouvées`);
     res.json({ success: true, data: organizations });
   } catch (error) {
     console.error('❌ [GET /api/organizations] Erreur:', error);
@@ -38,7 +36,6 @@ router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
-    console.log(`📡 [GET /api/organizations/${id}] Récupération organisation...`);
     
     const organization = await prisma.organization.findUnique({
       where: { id },
@@ -54,11 +51,9 @@ router.get('/:id', async (req, res) => {
     });
 
     if (!organization) {
-      console.log(`❌ [GET /api/organizations/${id}] Organisation non trouvée`);
       return res.status(404).json({ success: false, error: 'Organisation non trouvée' });
     }
 
-    console.log(`✅ [GET /api/organizations/${id}] Organisation trouvée: ${organization.name}`);
     res.json({ success: true, data: organization });
   } catch (error) {
     console.error(`❌ [GET /api/organizations/${req.params.id}] Erreur:`, error);
@@ -69,7 +64,6 @@ router.get('/:id', async (req, res) => {
 // POST /api/organizations - Créer une nouvelle organisation
 router.post('/', async (req, res) => {
   try {
-    console.log('📡 [POST /api/organizations] Création organisation...');
     const organizationData = req.body;
     
     const newOrganization = await prisma.organization.create({
@@ -88,7 +82,6 @@ router.post('/', async (req, res) => {
       }
     });
 
-    console.log(`✅ [POST /api/organizations] Organisation créée: ${newOrganization.name}`);
     res.json({ success: true, data: newOrganization });
   } catch (error) {
     console.error('❌ [POST /api/organizations] Erreur:', error);
@@ -100,12 +93,9 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    console.log(`📡 [PUT /api/organizations/${id}] Mise à jour organisation...`);
     const organizationData = req.body;
 
     // 🔍 DEBUG - Afficher les données reçues
-    console.log('📝 [PUT Organizations] Données reçues:', JSON.stringify(organizationData, null, 2));
-    console.log('🔑 [PUT Organizations] Clés reçues:', Object.keys(organizationData));
 
     const updatedOrganization = await prisma.organization.update({
       where: { id },
@@ -125,7 +115,6 @@ router.put('/:id', async (req, res) => {
       }
     });
 
-    console.log(`✅ [PUT /api/organizations/${id}] Organisation mise à jour: ${updatedOrganization.name}`);
     res.json({ success: true, data: updatedOrganization });
   } catch (error) {
     console.error(`❌ [PUT /api/organizations/${req.params.id}] Erreur:`, error);
@@ -148,11 +137,9 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    console.log(`📡 [DELETE /api/organizations/${id}] Suppression organisation...`);
     
     await prisma.organization.delete({ where: { id } });
     
-    console.log(`✅ [DELETE /api/organizations/${id}] Organisation supprimée`);
     res.json({ success: true, message: 'Organisation supprimée avec succès' });
   } catch (error) {
     console.error(`❌ [DELETE /api/organizations/${req.params.id}] Erreur:`, error);

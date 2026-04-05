@@ -53,19 +53,7 @@ router.post('/upload', upload.single('file'), async (req: any, res) => {
       });
     }
 
-    console.log('📸 [IMAGE-UPLOAD] Fichier reçu:', {
-      originalName: req.file.originalname,
-      size: req.file.size,
-      mimetype: req.file.mimetype,
-    });
-
     const { fileUrl } = await getUploadedFileUrl(req.file);
-
-    console.log('📸 ✅ Upload réussi:', {
-      fileName: req.file.originalname,
-      url: fileUrl,
-      size: `${(req.file.size / 1024).toFixed(2)} KB`
-    });
 
     res.json({
       success: true,
@@ -122,14 +110,6 @@ router.post('/upload-image', upload.single('image'), async (req: any, res) => {
         category, // 'logo', 'project', 'service', 'general'
         uploadedById: (req as any).user?.id || null
       }
-    });
-
-    console.log('📸 ✅ Image uploadée:', {
-      id: mediaFile.id,
-      fileName: mediaFile.fileName,
-      url: fileUrl,
-      size: `${(req.file.size / 1024).toFixed(2)} KB`,
-      category
     });
 
     res.json({

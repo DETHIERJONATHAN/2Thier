@@ -1,4 +1,3 @@
-import { GoogleGmailService } from '../google-auth/services/GoogleGmailService';
 import nodemailer from 'nodemailer';
 import { randomUUID } from 'crypto';
 
@@ -123,30 +122,9 @@ ${content}
     /**
      * Tente d'envoyer via Gmail API (si l'utilisateur a un token Google valide)
      */
-    private async sendViaGmail(organizationId: string, userId: string, to: string, subject: string, htmlBody: string): Promise<boolean> {
-        try {
-            const gmailService = await GoogleGmailService.create(organizationId, userId);
-            if (!gmailService) {
-                console.log('[EmailService] ⚠️ Pas de service Gmail disponible pour cet utilisateur');
-                return false;
-            }
-
-            const result = await gmailService.sendEmail({
-                to,
-                subject,
-                body: htmlBody,
-                isHtml: true,
-            });
-
-            if (result) {
-                console.log(`[EmailService] ✅ Email envoyé via Gmail API (messageId: ${result.messageId})`);
-                return true;
-            }
-            return false;
-        } catch (error) {
-            console.error('[EmailService] ❌ Erreur Gmail API:', error);
-            return false;
-        }
+    private async sendViaGmail(_organizationId: string, _userId: string, _to: string, _subject: string, _htmlBody: string): Promise<boolean> {
+        // GoogleGmailService has been removed — Gmail API sending is no longer available
+        return false;
     }
 
     /**
@@ -194,7 +172,6 @@ ${content}
                 },
             });
 
-            console.log(`[EmailService] ✅ Email envoyé via SMTP (${smtpHost})`);
             return true;
         } catch (error) {
             console.error('[EmailService] ❌ Erreur SMTP:', error);
@@ -210,7 +187,6 @@ ${content}
         const { subject, body } = this.buildInvitationContent(payload);
         const { to, inviterId, organizationId } = payload;
 
-        console.log(`[EmailService] 📧 Envoi invitation à ${to} (inviterId: ${inviterId || 'N/A'}, orgId: ${organizationId || 'N/A'})`);
 
         // 1. Tenter Gmail API (si l'utilisateur qui invite a un token Google)
         if (inviterId && organizationId) {
@@ -226,11 +202,6 @@ ${content}
         console.warn('[EmailService] ⚠️ Aucun transport email disponible — affichage console uniquement');
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
         const acceptUrl = `${frontendUrl}/accept-invitation?token=${payload.token}`;
-        console.log('--- EMAIL NON ENVOYÉ (aucun transport) ---');
-        console.log(`À: ${to}`);
-        console.log(`Sujet: ${subject}`);
-        console.log(`URL d'acceptation: ${acceptUrl}`);
-        console.log('-------------------------------------------');
     }
 
     /**

@@ -313,7 +313,6 @@ router.post('/clients/save', authenticateToken, async (req: Request, res: Respon
       }
     }
 
-    console.log(`[INVOICES] Client saved: ${client.name} (${client.vatNumber || 'no VAT'})`);
     return res.json({ success: true, data: client });
   } catch (error: unknown) {
     console.error('[INVOICES] Client save error:', error);

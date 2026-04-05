@@ -370,7 +370,6 @@ router.post('/initiate', authenticateToken, async (req: any, res: Response) => {
       },
     });
 
-    console.log(`[E-Signature] ✍️ Demande initiée: ${signature.id} pour ${data.signerEmail} (${data.signerRole})`);
 
     return res.json({
       success: true,
@@ -443,10 +442,6 @@ router.post('/:id/send-otp', authenticateToken, async (req: any, res: Response) 
       console.error('[E-Signature] Erreur envoi email OTP:', emailErr);
       // En mode développement : fallback — on log le code OTP et on continue
       if (process.env.NODE_ENV !== 'production') {
-        console.log(`\n╔══════════════════════════════════════════╗`);
-        console.log(`║  🔐 [DEV] CODE OTP: ${otp}                  ║`);
-        console.log(`║  📧 Pour: ${signature.signerEmail}`);
-        console.log(`╚══════════════════════════════════════════╝\n`);
       } else {
         return res.status(500).json({ success: false, message: 'Erreur envoi email OTP. Vérifiez la configuration SMTP.' });
       }
@@ -467,7 +462,6 @@ router.post('/:id/send-otp', authenticateToken, async (req: any, res: Response) 
       },
     });
 
-    console.log(`[E-Signature] 📧 OTP ${emailSent ? 'envoyé par email' : '(DEV: affiché dans les logs)'} pour ${signature.signerEmail}`);
     return res.json({ success: true, message: emailSent ? 'Code de vérification envoyé par email' : `[DEV] Code OTP affiché dans les logs serveur` });
   } catch (error) {
     console.error('[E-Signature] Erreur envoi OTP:', error);
@@ -548,7 +542,6 @@ router.post('/:id/verify-otp', async (req: Request, res: Response) => {
       },
     });
 
-    console.log(`[E-Signature] ✅ OTP vérifié pour ${signature.signerEmail}`);
     return res.json({ success: true, message: 'Identité vérifiée' });
   } catch (error) {
     console.error('[E-Signature] Erreur vérification OTP:', error);
@@ -681,7 +674,6 @@ router.post('/:id/sign', async (req: Request, res: Response) => {
       },
     });
 
-    console.log(`[E-Signature] ✅ Document signé par ${signature.signerName} (${signature.signerRole})`);
 
     // 🔔 Notification: document signé
     if (signature.organizationId) {
@@ -907,7 +899,6 @@ router.post('/:id/revoke', authenticateToken, async (req: any, res: Response) =>
       },
     });
 
-    console.log(`[E-Signature] 🚫 Signature ${id} révoquée par ${userId}: ${validation.data.reason}`);
     return res.json({ success: true, message: 'Signature révoquée' });
   } catch (error) {
     console.error('[E-Signature] Erreur révocation:', error);
@@ -1192,7 +1183,6 @@ router.post('/sign/:token/submit', async (req: Request, res: Response) => {
       },
     });
 
-    console.log(`[E-Signature] ✅ Signé via token par ${signature.signerName}`);
 
     // 📧 Envoi PDF signé par email au client ET au commercial (asynchrone, non bloquant)
     if (signature.organizationId) {
@@ -1225,7 +1215,6 @@ router.post('/sign/:token/submit', async (req: Request, res: Response) => {
 
           // PDF généré pour l'email
           if (pdfBuffer) {
-            console.log(`[E-Signature] PDF généré pour ${signature.id}`);
           }
 
           const attachments = pdfBuffer ? [{ filename: pdfFilename, content: pdfBuffer, mimeType: 'application/pdf' }] : [];
@@ -1264,7 +1253,6 @@ router.post('/sign/:token/submit', async (req: Request, res: Response) => {
                 isHtml: true,
                 attachments: attachments.map(a => ({ name: a.filename, contentType: a.mimeType, data: a.content.toString('base64') })),
               });
-              console.log(`[E-Signature] 📧 Copie PDF envoyée au client: ${signature.signerEmail}`);
             } catch (clientEmailErr) {
               console.warn('[E-Signature] ⚠️ Échec email client:', clientEmailErr);
             }
@@ -1300,7 +1288,6 @@ router.post('/sign/:token/submit', async (req: Request, res: Response) => {
                   isHtml: true,
                   attachments: attachments.map(a => ({ name: a.filename, contentType: a.mimeType, data: a.content.toString('base64') })),
                 });
-                console.log(`[E-Signature] 📧 Copie PDF envoyée au commercial: ${creator.email}`);
               }
             } catch (adminEmailErr) {
               console.warn('[E-Signature] ⚠️ Échec email commercial:', adminEmailErr);
@@ -1335,7 +1322,6 @@ router.post('/sign/:token/submit', async (req: Request, res: Response) => {
           const selectedProducts = snapshot.selectedProducts as Array<{value: string, label: string, icon?: string, color?: string}> | undefined;
 
           if (!selectedProducts || selectedProducts.length === 0) {
-            console.log('[E-Signature] 🏗️ Pas de produits sélectionnés → pas de chantier auto-créé');
             return;
           }
 
@@ -1419,12 +1405,10 @@ router.post('/sign/:token/submit', async (req: Request, res: Response) => {
                   updatedAt: new Date(),
                 }
               });
-              console.log(`[E-Signature] 🏗️ Chantier "${product.label}" créé automatiquement`);
             } catch (chantierErr) {
               console.warn(`[E-Signature] ⚠️ Erreur création chantier "${product.label}":`, chantierErr);
             }
           }
-          console.log(`[E-Signature] 🏗️ ${selectedProducts.length} chantier(s) créé(s) pour la signature ${signature.id}`);
         } catch (err) {
           console.warn('[E-Signature] ⚠️ Erreur auto-création chantiers (non bloquant):', err);
         }

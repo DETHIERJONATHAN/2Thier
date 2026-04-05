@@ -15,7 +15,6 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const organizationId = req.query.organizationId as string;
     
-    console.log('[SECTIONS→CATEGORIES] GET - Récupération des Categories existantes depuis admin-modules');
     
     // ✅ Utiliser les Categories existantes via les routes admin-modules
     const categories = await prisma.category.findMany({
@@ -42,8 +41,6 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       updatedAt: category.updatedAt.toISOString()
     }));
 
-    console.log(`[SECTIONS→CATEGORIES] ${sectionsFormat.length} Categories existantes converties en sections`);
-    console.log(`[SECTIONS→CATEGORIES] Categories trouvées: ${sectionsFormat.map(s => s.title).join(', ')}`);
     
     res.json(sectionsFormat);
   } catch (error) {
@@ -60,7 +57,6 @@ router.post('/bulk', async (req: Request, res: Response): Promise<void> => {
   try {
     const { sections } = req.body;
     
-    console.log(`[SECTIONS→CATEGORIES] POST/bulk - Création de ${sections.length} Categories`);
     
     // Convertir sections → Categories pour Prisma
     const categoriesToCreate = sections.map((section: any) => ({
@@ -95,7 +91,6 @@ router.post('/bulk', async (req: Request, res: Response): Promise<void> => {
       updatedAt: category.updatedAt.toISOString()
     }));
 
-    console.log(`[SECTIONS→CATEGORIES] ${createdCategories.length} Categories créées avec succès`);
     
     res.json(sectionsFormat);
   } catch (error) {
@@ -112,7 +107,6 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const { name, description, iconName, iconColor, order, active, organizationId } = req.body;
     
-    console.log(`[SECTIONS→CATEGORIES] POST - Création Category "${name}"`);
     
     const category = await prisma.category.create({
       data: {
@@ -141,7 +135,6 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       updatedAt: category.updatedAt.toISOString()
     };
 
-    console.log(`[SECTIONS→CATEGORIES] Category "${name}" créée avec succès`);
     
     res.json({ success: true, data: sectionFormat });
   } catch (error) {
@@ -159,7 +152,6 @@ router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
     const updateData = req.body;
     
-    console.log(`[SECTIONS→CATEGORIES] PATCH - Mise à jour Category ${id}`);
     
     // Convertir les champs sections → Categories si nécessaire
     const categoryUpdateData: any = {};
@@ -189,7 +181,6 @@ router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
       updatedAt: category.updatedAt.toISOString()
     };
 
-    console.log(`[SECTIONS→CATEGORIES] Category ${id} mise à jour avec succès`);
     
     res.json(sectionFormat);
   } catch (error) {
@@ -206,13 +197,11 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     
-    console.log(`[SECTIONS→CATEGORIES] DELETE - Suppression Category ${id}`);
     
     await prisma.category.delete({
       where: { id }
     });
 
-    console.log(`[SECTIONS→CATEGORIES] Category ${id} supprimée avec succès`);
     
     res.json({ success: true });
   } catch (error) {

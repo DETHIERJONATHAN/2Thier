@@ -161,7 +161,6 @@ settingsRouter.get('/call-statuses', async (req: AuthenticatedRequest, res) => {
 
     // Ne pas créer de statuts par défaut
     if (callStatuses.length === 0) {
-      console.log('[INFO] Aucun statut d\'appel trouvé pour l\'organisation');
     }
 
     res.json(callStatuses);
@@ -323,7 +322,6 @@ settingsRouter.post('/initialize-default-statuses', async (req: AuthenticatedReq
   }
 
   try {
-    console.log('🚀 Initialisation des statuts par défaut pour l\'organisation:', organizationId);
 
     // 1) Statuts d'appel par défaut (13 statuts selon cahier des charges)
     const defaultCallStatuses = [
@@ -377,9 +375,7 @@ settingsRouter.post('/initialize-default-statuses', async (req: AuthenticatedReq
             isDefault: false
           }
         });
-        console.log(`✅ Statut d'appel créé: ${status.name}`);
       } catch {
-        console.log(`⚠️ Statut d'appel existe déjà: ${status.name}`);
       }
     }
 
@@ -400,9 +396,7 @@ settingsRouter.post('/initialize-default-statuses', async (req: AuthenticatedReq
             isDefault: false
           }
         });
-        console.log(`✅ Statut de lead créé: ${status.name}`);
       } catch {
-        console.log(`⚠️ Statut de lead existe déjà: ${status.name}`);
       }
     }
 
@@ -453,9 +447,7 @@ settingsRouter.post('/initialize-default-statuses', async (req: AuthenticatedReq
               isActive: true
             }
           });
-          console.log(`✅ Mapping créé: ${mapping.callStatusName} → ${mapping.leadStatusName}`);
         } catch {
-          console.log(`⚠️ Mapping existe déjà: ${mapping.callStatusName} → ${mapping.leadStatusName}`);
         }
       }
     }

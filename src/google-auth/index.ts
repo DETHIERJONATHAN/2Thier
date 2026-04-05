@@ -19,17 +19,11 @@ export { googleAuthManager, GoogleAuthManager } from './core/GoogleAuthManager';
 
 // Export des services Google Workspace
 export { googleCalendarService } from './services/GoogleCalendarService';
-export { GoogleGmailService } from './services/GoogleGmailService';
 export { googleDriveService } from './services/GoogleDriveService';
 
 // Export des types utiles
 export { GOOGLE_SCOPES_LIST } from './core/GoogleOAuthCore';
 export type { CalendarEvent } from './types/CalendarEvent';
-export type { 
-  EmailAttachment, 
-  FormattedGmailMessage, 
-  GmailLabel 
-} from './services/GoogleGmailService';
 export type { DriveFile, DriveFolder } from './services/GoogleDriveService';
 
 // Export de la classe de service pour les cas avancés (utilisation déconseillée)

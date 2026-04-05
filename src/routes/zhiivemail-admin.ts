@@ -144,7 +144,6 @@ router.post('/test-smtp', authMiddleware, requireSuperAdmin, async (req: Authent
       `,
     });
 
-    console.log(`✅ [ZHIIVEMAIL] Test SMTP réussi → ${recipient} (messageId: ${info.messageId})`);
 
     res.json({
       success: true,
@@ -227,14 +226,12 @@ router.post('/provision', authMiddleware, requireSuperAdmin, async (req: Authent
       }
     });
 
-    console.log(`📬 [ZHIIVEMAIL] Compte provisionné: ${zhiiveEmail} pour ${user.firstName} ${user.lastName}`);
 
     // Provisionner la boîte sur le serveur Postal
     try {
       const { getPostalService } = await import('../services/PostalEmailService.js');
       const postal = getPostalService();
       await postal.createMailbox(zhiiveEmail, `${user.firstName || ''} ${user.lastName || ''}`.trim());
-      console.log(`✅ [ZHIIVEMAIL] Boîte Postal provisionnée: ${zhiiveEmail}`);
     } catch (postalErr) {
       console.error(`⚠️ [ZHIIVEMAIL] Erreur provisionnement Postal (non bloquant):`, postalErr);
     }
@@ -293,7 +290,6 @@ router.post('/provision-all', authMiddleware, requireSuperAdmin, async (req: Aut
       }
     }
 
-    console.log(`📬 [ZHIIVEMAIL] Provisionnement en masse: ${created}/${usersWithoutEmail.length} créés`);
 
     res.json({
       success: true,
@@ -316,7 +312,6 @@ router.delete('/accounts/:id', authMiddleware, requireSuperAdmin, async (req: Au
 
   try {
     await db.emailAccount.delete({ where: { id } });
-    console.log(`🗑️ [ZHIIVEMAIL] Compte supprimé: ${id}`);
     res.json({ success: true });
   } catch (error) {
     console.error('❌ [ZHIIVEMAIL] Erreur suppression:', error);
@@ -345,7 +340,6 @@ router.patch('/accounts/:id', authMiddleware, requireSuperAdmin, async (req: Aut
       }
     });
 
-    console.log(`✏️ [ZHIIVEMAIL] Compte mis à jour: ${updated.emailAddress}`);
     res.json({ success: true, account: { ...updated, user: (updated as any).User, User: undefined } });
   } catch (error) {
     console.error('❌ [ZHIIVEMAIL] Erreur mise à jour:', error);
@@ -641,7 +635,6 @@ router.post('/clear-suppressions', authMiddleware, requireSuperAdmin, async (_re
     const result = parseMysqlResult(raw);
     const remaining = result[0]?.total ? parseInt(result[0].total) : 0;
 
-    console.log(`🧹 [ZHIIVEMAIL] Suppressions vidées. Restantes: ${remaining}`);
     res.json({ success: true, remaining });
   } catch (error) {
     console.error('❌ [ZHIIVEMAIL] clear-suppressions error:', error);
@@ -664,7 +657,6 @@ router.post('/postal-restart', authMiddleware, requireSuperAdmin, async (_req: A
       return { name, status: sp.join('\t') };
     }) : [];
 
-    console.log(`🔄 [ZHIIVEMAIL] Postal redémarré. Containers: ${containers.map(c => c.name).join(', ')}`);
     res.json({ success: true, containers });
   } catch (error) {
     console.error('❌ [ZHIIVEMAIL] restart error:', error);

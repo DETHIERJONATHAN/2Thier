@@ -610,7 +610,6 @@ router.get('/browse-proxy', async (req: Request, res: Response): Promise<void> =
   // Check in-memory cache for non-HTML resources
   const cached = getCached(targetUrl);
   if (cached) {
-    console.log(`[PROXY] ⚡ CACHE HIT | ${shortUrl} | type=${cached.contentType}`);
     res.setHeader('Content-Type', cached.contentType);
     res.removeHeader('X-Frame-Options');
     res.removeHeader('Content-Security-Policy');
@@ -630,9 +629,7 @@ router.get('/browse-proxy', async (req: Request, res: Response): Promise<void> =
     const storedCookies = getStoredCookies(user.id, targetUrl);
     const targetOrigin = new URL(targetUrl).origin;
 
-    console.log(`[PROXY] 🌐 FETCH | ${shortUrl}`);
     if (storedCookies) {
-      console.log(`[PROXY]   🍪 Sending ${storedCookies.split(';').length} cookies for ${targetOrigin}`);
     }
 
     const fetchHeaders: Record<string, string> = {
@@ -678,7 +675,6 @@ router.get('/browse-proxy', async (req: Request, res: Response): Promise<void> =
     const cspFrameAncestors = csp.includes('frame-ancestors') ? csp.match(/frame-ancestors[^;]*/)?.[0] : 'none';
     const redirected = finalUrl !== targetUrl;
 
-    console.log(`[PROXY] ✅ RESPONSE | status=${response.status} | type=${contentType.split(';')[0]} | size=${contentLength} | ${fetchDuration}ms`);
     if (redirected) console.log(`[PROXY]   ↪ Redirected to: ${finalUrl.length > 80 ? finalUrl.slice(0, 80) + '...' : finalUrl}`);
     if (xfo !== 'none') console.log(`[PROXY]   🚫 X-Frame-Options: ${xfo}`);
     if (cspFrameAncestors && cspFrameAncestors !== 'none') console.log(`[PROXY]   🚫 CSP: ${cspFrameAncestors}`);
@@ -701,14 +697,12 @@ router.get('/browse-proxy', async (req: Request, res: Response): Promise<void> =
       const isCaptcha = /captcha|robot|automated|bot.*detect|verify.*human/i.test(html.slice(0, 5000));
       const titleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
       const pageTitle = titleMatch ? titleMatch[1].trim() : '(no title)';
-      console.log(`[PROXY]   📄 HTML: ${originalSize} chars | title="${pageTitle}"`);
       if (isCaptcha) console.log(`[PROXY]   ⚠️ CAPTCHA/BOT DETECTION detected in HTML!`);
 
       // Log first 200 chars of <body> to see what's there
       const bodyMatch = html.match(/<body[^>]*>([\s\S]{0,300})/i);
       if (bodyMatch) {
         const bodyPreview = bodyMatch[1].replace(/\s+/g, ' ').trim().slice(0, 150);
-        console.log(`[PROXY]   📝 Body preview: "${bodyPreview}"`);
       }
 
       // Strip anti-iframe meta tags
@@ -741,11 +735,9 @@ router.get('/browse-proxy', async (req: Request, res: Response): Promise<void> =
       html = html.replace(/<script\s[^>]*\bsrc\s*=\s*["'][^"']*(?:google-analytics\.com|googletagmanager\.com|connect\.facebook\.net|doubleclick\.net|amazon-adsystem\.com|fls-eu\.amazon\.|fls-na\.amazon\.)[^"']*["'][^>]*>[\s\S]*?<\/script>/gi, '');
 
       const finalSize = html.length;
-      console.log(`[PROXY]   📦 Final HTML: ${finalSize} chars (${originalSize} → ${finalSize}, +${finalSize - originalSize} from rewriting)`);
 
       // Count proxied URLs
       const proxyUrlCount = (html.match(/\/api\/search\/browse-proxy\?url=/g) || []).length;
-      console.log(`[PROXY]   🔗 ${proxyUrlCount} URLs rewritten through proxy`);
 
       // Serve
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -755,7 +747,6 @@ router.get('/browse-proxy', async (req: Request, res: Response): Promise<void> =
     // ═══ CSS: rewrite url() references ═══
     else if (contentType.includes('text/css')) {
       let css = await response.text();
-      console.log(`[PROXY]   🎨 CSS: ${css.length} chars`);
       css = rewriteCssUrls(css, finalUrl);
       setCache(targetUrl, css, contentType);
       res.setHeader('Content-Type', contentType);
@@ -766,7 +757,6 @@ router.get('/browse-proxy', async (req: Request, res: Response): Promise<void> =
     // ═══ JavaScript: serve as-is with CORS ═══
     else if (contentType.includes('javascript') || contentType.includes('ecmascript')) {
       const js = await response.text();
-      console.log(`[PROXY]   📜 JS: ${js.length} chars`);
       setCache(targetUrl, js, contentType);
       res.setHeader('Content-Type', contentType);
       setProxyHeaders();
@@ -776,7 +766,6 @@ router.get('/browse-proxy', async (req: Request, res: Response): Promise<void> =
     // ═══ Everything else (images, fonts, PDFs, etc): pipe through ═══
     else {
       const buffer = Buffer.from(await response.arrayBuffer());
-      console.log(`[PROXY]   📎 Binary: ${buffer.length} bytes | ${contentType.split(';')[0]}`);
       setCache(targetUrl, buffer, contentType);
       res.setHeader('Content-Type', contentType);
       if (response.headers.get('content-length')) {

@@ -138,11 +138,9 @@ router.post("/register", async (req: Request, res: Response) => {
           }
         });
 
-        console.log(`[Register] Utilisateur ${email} a créé l'organisation "${organizationName}" (${orgId})`);
 
       } else {
         // === TYPE: UTILISATEUR RÉSEAU (freelance) ===
-        console.log(`[Register] Nouvel utilisateur réseau: ${email}`);
       }
 
       // ─── Auto-créer le compte email @zhiive.com ───
@@ -164,7 +162,6 @@ router.post("/register", async (req: Request, res: Response) => {
               updatedAt: new Date(),
             },
           });
-          console.log(`📬 [Register] Boîte @zhiive.com créée: ${zhiiveEmail}`);
         } catch (emailAccErr) {
           console.error(`⚠️ [Register] Erreur création EmailAccount:`, emailAccErr);
         }
@@ -178,7 +175,6 @@ router.post("/register", async (req: Request, res: Response) => {
       try {
         const postal = getPostalService();
         await postal.createMailbox(result.zhiiveEmail, `${firstName} ${lastName || ''}`.trim());
-        console.log(`✅ [Register] Boîte Postal provisionnée: ${result.zhiiveEmail}`);
       } catch (postalErr) {
         console.error(`⚠️ [Register] Erreur provisionnement Postal (non bloquant):`, postalErr);
       }
@@ -195,7 +191,6 @@ router.post("/register", async (req: Request, res: Response) => {
           where: { id: result.organization.id },
           data: { email: orgEmail },
         });
-        console.log(`🏢 [Register] Email organisation: ${orgEmail}`);
       } catch (orgEmailErr) {
         console.error(`⚠️ [Register] Erreur email organisation (non bloquant):`, orgEmailErr);
       }
@@ -230,7 +225,6 @@ router.post("/register", async (req: Request, res: Response) => {
           </div>
         `,
       });
-      console.log(`[Register] ✅ Email d'activation envoyé à ${normalizedEmail}`);
       emailSent = true;
     } catch (emailError) {
       console.error(`[Register] ⚠️ Échec envoi email d'activation à ${normalizedEmail}:`, emailError);
@@ -308,7 +302,6 @@ router.get("/verify-email", async (req: Request, res: Response) => {
       },
     });
 
-    console.log(`[API][verify-email] ✅ Email vérifié pour ${user.email}`);
     res.json({ success: true, message: "Votre compte est activé ! Vous pouvez maintenant vous connecter." });
   } catch (error) {
     console.error("[API][verify-email] Erreur:", error);
@@ -381,7 +374,6 @@ router.post("/resend-verification", async (req: Request, res: Response) => {
       `,
     });
 
-    console.log(`[API][resend-verification] ✅ Email d'activation renvoyé à ${user.email}`);
     res.json({ success: true, message: "Si cette adresse est enregistrée, un email d'activation a été envoyé." });
   } catch (error) {
     console.error("[API][resend-verification] Erreur:", error);
@@ -443,7 +435,6 @@ router.post("/login", async (req: Request, res: Response) => {
     // Un utilisateur standard DOIT POUVOIR se connecter même sans organisation pour en créer une ou accepter une invitation.
     // La logique de ce qu'il peut faire une fois connecté est gérée par le frontend et les autres routes API.
     if (!isSuperAdmin && !mainOrg) {
-        console.log(`[API][login] Utilisateur ${user.id} se connecte sans organisation principale. C'est un utilisateur "flottant".`);
     }
 
     // Déterminer le rôle pour le token
@@ -482,7 +473,6 @@ router.post("/login", async (req: Request, res: Response) => {
         }));
 
     // ✅ DÉFINIR LE COOKIE HTTPONLY SÉCURISÉ
-    console.log('🍪 [LOGIN] Définition du cookie d\'authentification...');
     // Codespaces: le frontend est servi en HTTPS, le navigateur a besoin de Secure
     const isProduction = process.env.NODE_ENV === 'production';
     const isCodespaces = process.env.CODESPACES === 'true';
@@ -496,7 +486,6 @@ router.post("/login", async (req: Request, res: Response) => {
         path: '/'
     });
     
-    console.log('✅ [LOGIN] Cookie défini avec succès (secure:', needsSecureCookie, ')');
 
     res.json({
         token,
@@ -517,15 +506,10 @@ router.get(
   authMiddleware,
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-        console.log('[/me] === DEBUG /me ROUTE ===');
-        console.log('[/me] req.user:', req.user);
-        console.log('[/me] req.cookies:', req.cookies);
-        console.log('[/me] req.headers.authorization:', req.headers.authorization);
         
         // CORRECTION : Vérifier si req.user existe avant de l'utiliser.
         // S'il n'existe pas, cela signifie que le client n'est pas authentifié.
         if (!req.user || !req.user.userId) {
-          console.log('[/me] Échec: req.user ou req.user.userId manquant');
           return res.status(401).json({ error: "Utilisateur non authentifié" });
         }
 
@@ -618,7 +602,6 @@ router.patch("/me/feed-mode", authMiddleware, async (req: AuthenticatedRequest, 
 
 // POST /api/logout - Déconnexion avec nettoyage des cookies
 router.post("/logout", (_req: Request, res: Response) => {
-    console.log('🚪 [LOGOUT] Demande de déconnexion reçue');
     
     // Détecter si on est sur Codespaces (HTTPS même en dev) ou en production
     const isProduction = process.env.NODE_ENV === 'production';
@@ -650,7 +633,6 @@ router.post("/logout", (_req: Request, res: Response) => {
     // res.header('Clear-Site-Data', '"cookies"');
     res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
     
-    console.log('✅ [LOGOUT] Cookie nettoyé avec succès');
     res.json({ 
         success: true, 
         message: 'Déconnexion réussie',
@@ -729,7 +711,6 @@ router.get(
     // Si on usurpe, on utilise l'ID de l'utilisateur usurpé, sinon l'ID de l'utilisateur authentifié
     const userId = req.impersonatedUser?.id || req.user?.userId;
 
-    console.log('[API][me/role] userId:', userId, 'organizationId:', organizationId, 'impersonatedUser:', req.impersonatedUser, 'headers:', req.headers);
 
     if (!userId) {
       res.status(401).json({ error: "Utilisateur non authentifié" });

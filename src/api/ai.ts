@@ -35,7 +35,6 @@ router.post('/generate', async (req, res) => {
       });
     }
 
-    console.log(`[AI] Génération pour context="${context}", section="${sectionType}"`);
 
     // Obtenir le modèle
     const model = genAI.getGenerativeModel({ model: MODEL_NAME });
@@ -57,7 +56,6 @@ router.post('/generate', async (req, res) => {
     const response = await result.response;
     const text = response.text();
 
-    console.log(`[AI] Réponse reçue (${text.length} caractères)`);
 
     // Parser la réponse JSON
     let suggestions;
@@ -237,7 +235,6 @@ router.post('/analyze-section', async (req, res) => {
       });
     }
 
-    console.log(`[AI Analyze] Section="${sectionType}"`);
 
     const model = genAI.getGenerativeModel({ model: MODEL_NAME });
 
@@ -257,7 +254,6 @@ router.post('/analyze-section', async (req, res) => {
     const response = await result.response;
     const text = response.text();
 
-    console.log(`[AI Analyze] Réponse reçue (${text.length} caractères)`);
 
     // Parser la réponse JSON
     let analysis;
@@ -786,7 +782,6 @@ router.post('/measure-image', async (req, res) => {
       });
     }
 
-    console.log(`📐 [AI Measure] Analyse pour node=${nodeId}, tree=${treeId}, ${measureKeys.length} clés`);
 
     // Appel au service Gemini Vision
     const result = await geminiMeasureService.analyzeImageForMeasures(
@@ -807,7 +802,6 @@ router.post('/measure-image', async (req, res) => {
       });
     }
 
-    console.log(`✅ [AI Measure] Succès en ${duration}ms, ${Object.keys(result.measurements || {}).length} mesures extraites`);
 
     return res.json({
       success: true,
@@ -861,7 +855,6 @@ router.post('/measure-image/apply', async (req, res) => {
       });
     }
 
-    console.log(`🎯 [AI Measure Apply] Application de ${Object.keys(measurements).length} mesures vers ${mappings.length} champs`);
 
     // Construire les mises à jour à appliquer
     const updates: Array<{ targetRef: string; value: string | number; key: string }> = [];
@@ -888,7 +881,6 @@ router.post('/measure-image/apply', async (req, res) => {
       }
     }
 
-    console.log(`✅ [AI Measure Apply] ${updates.length} mises à jour préparées`);
 
     // Retourner les mises à jour à appliquer côté client
     // (Le client utilisera l'API de mise à jour des nœuds pour chaque champ)

@@ -28,7 +28,6 @@ router.post('/generate-email', async (req, res) => {
       });
     }
     
-    console.log(`🤖 [Gemini] Génération email ${emailType} pour ${leadData.name || 'prospect'}`);
     
     const result = await geminiService.generatePersonalizedEmail(leadData, emailType);
     
@@ -73,7 +72,6 @@ router.post('/analyze-lead', async (req, res) => {
       });
     }
     
-    console.log(`🤖 [Gemini] Analyse lead ${leadData.name || 'Anonyme'}`);
     
     const result = await geminiService.analyzeLeadData(leadData);
     
@@ -117,7 +115,6 @@ router.post('/generate-proposal', async (req, res) => {
       });
     }
     
-    console.log(`🤖 [Gemini] Génération proposition pour ${leadData.name}`);
     
     const result = await geminiService.generateCommercialProposal(leadData, productData);
     
@@ -162,7 +159,6 @@ router.post('/analyze-sentiment', async (req, res) => {
       });
     }
     
-    console.log('🤖 [Gemini] Analyse sentiment email');
     
     const result = await geminiService.analyzeSentiment(emailContent);
     
@@ -206,7 +202,6 @@ router.post('/suggest-response', async (req, res) => {
       });
     }
     
-    console.log('🤖 [Gemini] Suggestion réponse email');
     
     const result = await geminiService.suggestEmailResponse(emailContent, context);
     
@@ -241,7 +236,6 @@ router.post('/suggest-response', async (req, res) => {
  */
 router.get('/test', async (req, res) => {
   try {
-    console.log('🧪 [Gemini] Test de connexion');
     
     // Test simple avec données factices
     const testLead = {

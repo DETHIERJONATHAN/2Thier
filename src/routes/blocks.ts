@@ -373,7 +373,6 @@ router.put('/:blockId/sections/reorder', requireRole(['admin', 'super_admin']) a
   const { blockId } = req.params;
   const { sections } = req.body as { sections: { id: string; order: number }[] };
 
-  console.log(`[API] Réordonnancement des sections pour le block ${blockId}`, sections);
 
   if (!sections || !Array.isArray(sections)) {
     res.status(400).json({ success: false, message: "La liste des sections est requise." });

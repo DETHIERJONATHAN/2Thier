@@ -85,14 +85,12 @@ router.get('/provider', authMiddleware, async (req: AuthenticatedRequest, res) =
           },
           select: { id: true, mailProvider: true, emailAddress: true }
         });
-        console.log(`📬 [MAIL-PROVIDER] Auto-provisionnement Zhiive: ${zhiiveEmail}`);
 
         // Provisionner la boîte sur le serveur Postal
         try {
           const { getPostalService } = await import('../services/PostalEmailService.js');
           const postal = getPostalService();
           await postal.createMailbox(zhiiveEmail, `${user?.firstName || ''} ${user?.lastName || ''}`.trim());
-          console.log(`✅ [MAIL-PROVIDER] Boîte Postal provisionnée: ${zhiiveEmail}`);
         } catch (postalErr) {
           console.error(`⚠️ [MAIL-PROVIDER] Erreur provisionnement Postal (non bloquant):`, postalErr);
         }
@@ -108,7 +106,6 @@ router.get('/provider', authMiddleware, async (req: AuthenticatedRequest, res) =
         }
       });
       emailAccount = { ...emailAccount, mailProvider: 'postal', emailAddress: emailAccount.emailAddress || zhiiveEmail };
-      console.log(`🔄 [MAIL-PROVIDER] Migration vers Postal: ${emailAccount.emailAddress}`);
     }
 
     // ─── 3. Réponse : toujours Postal comme provider principal ───

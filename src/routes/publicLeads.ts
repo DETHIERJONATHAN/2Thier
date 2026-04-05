@@ -24,7 +24,6 @@ const publicRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res) => {
-    console.log(`[RATE-LIMIT] IP bloquée: ${req.ip}`);
     res.status(429).json({
       error: 'Trop de requêtes. Veuillez patienter avant de réessayer.',
       retryAfter: '15 minutes'
@@ -292,8 +291,6 @@ router.post('/leads', leadCreationLimit, validateLead, async (req, res) => {
     const leadData = req.body;
     const clientIp = req.ip || req.connection.remoteAddress;
 
-    console.log(`[PUBLIC-LEAD] Nouvelle demande depuis ${clientIp}`);
-    console.log(`[PUBLIC-LEAD] Projet: ${leadData.projectType} - Budget: ${leadData.budget}€`);
 
     // Vérifier les doublons récents (même email dans les 24h)
     const existingLead = await prisma.lead.findFirst({
@@ -353,7 +350,6 @@ router.post('/leads', leadCreationLimit, validateLead, async (req, res) => {
       }
     });
 
-    console.log(`[PUBLIC-LEAD] Lead créé: ${lead.id} - Score: ${qualityScore}/100`);
 
     // Préparer la réponse
     const response = {

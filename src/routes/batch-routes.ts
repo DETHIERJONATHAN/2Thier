@@ -76,7 +76,6 @@ router.post('/gmail/modify', async (req: Request, res: Response) => {
       }
     });
 
-    console.log(`[BATCH] ✅ Gmail: ${messageIds.length} messages modifiés`);
     res.json({ 
       success: true, 
       count: messageIds.length,
@@ -130,7 +129,6 @@ router.post('/gmail/trash', async (req: Request, res: Response) => {
       }
     });
 
-    console.log(`[BATCH] ✅ Gmail: ${messageIds.length} messages mis à la corbeille`);
     res.json({ 
       success: true, 
       count: messageIds.length,
@@ -182,7 +180,6 @@ router.delete('/gmail/delete', async (req: Request, res: Response) => {
       }
     });
 
-    console.log(`[BATCH] ✅ Gmail: ${messageIds.length} messages supprimés définitivement`);
     res.json({ 
       success: true, 
       count: messageIds.length,
@@ -239,7 +236,6 @@ router.patch('/leads/status', async (req: Request, res: Response) => {
       }
     });
 
-    console.log(`[BATCH] ✅ Leads: ${result.count} leads mis à jour vers statut "${status.name}"`);
     res.json({ 
       success: true, 
       count: result.count,
@@ -279,7 +275,6 @@ router.patch('/leads/assign', async (req: Request, res: Response) => {
       }
     });
 
-    console.log(`[BATCH] ✅ Leads: ${result.count} leads assignés`);
     res.json({ 
       success: true, 
       count: result.count,
@@ -315,7 +310,6 @@ router.delete('/leads', async (req: Request, res: Response) => {
       }
     });
 
-    console.log(`[BATCH] ✅ Leads: ${result.count} leads supprimés`);
     res.json({ 
       success: true, 
       count: result.count,
@@ -362,7 +356,6 @@ router.post('/fields/configs', async (req: Request, res: Response) => {
       configsByFieldId[config.fieldId] = config;
     }
 
-    console.log(`[BATCH] ✅ Fields: ${configs.length} configs chargées pour ${fieldIds.length} fields`);
     res.json({ 
       success: true, 
       count: configs.length,
@@ -410,7 +403,6 @@ router.patch('/modules/toggle', async (req: Request, res: Response) => {
       }
     });
 
-    console.log(`[BATCH] ✅ Modules: ${result.count} modules ${enabled ? 'activés' : 'désactivés'}`);
     res.json({ 
       success: true, 
       count: result.count,
@@ -462,7 +454,6 @@ router.get('/analytics/leads-by-status', async (req: Request, res: Response) => 
       count: c._count.id
     }));
 
-    console.log(`[BATCH] ✅ Analytics: Leads par statut (${counts.length} groupes)`);
     res.json({ success: true, data: result });
 
   } catch (error: any) {
@@ -494,7 +485,6 @@ router.get('/analytics/leads-by-source', async (req: Request, res: Response) => 
       count: c._count.id
     }));
 
-    console.log(`[BATCH] ✅ Analytics: Leads par source (${counts.length} sources)`);
     res.json({ success: true, data: result });
 
   } catch (error: any) {
@@ -538,7 +528,6 @@ router.get('/analytics/leads-by-assignee', async (req: Request, res: Response) =
       count: c._count.id
     }));
 
-    console.log(`[BATCH] ✅ Analytics: Leads par assigné (${counts.length} groupes)`);
     res.json({ success: true, data: result });
 
   } catch (error: any) {

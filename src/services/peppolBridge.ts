@@ -123,7 +123,6 @@ export class PeppolBridge {
       throw new Error('Odoo authentication failed: invalid credentials');
     }
     this.uid = result.uid;
-    console.log(`[PeppolBridge] Authenticated with Odoo (uid: ${this.uid})`);
     return this.uid;
   }
 
@@ -192,7 +191,6 @@ export class PeppolBridge {
       currency_id: 1, // EUR
     }]) as number;
 
-    console.log(`[PeppolBridge] Created Odoo company ${companyId} for org "${org.name}"`);
 
     // Installer le plan comptable belge pour cette nouvelle company
     await this.installChartOfAccounts(companyId);
@@ -216,18 +214,15 @@ export class PeppolBridge {
       ], { fields: ['id'], limit: 1 }) as Array<{ id: number }>;
 
       if (existingAccounts.length > 0) {
-        console.log(`[PeppolBridge] Company ${odooCompanyId} a déjà ${existingAccounts.length}+ comptes, skip chart install`);
         return;
       }
 
-      console.log(`[PeppolBridge] Installation plan comptable belge pour company ${odooCompanyId}...`);
 
       // Méthode 1: Odoo 17+ — account.chart.template.try_loading('be')
       try {
         await this.call('account.chart.template', 'try_loading', ['be'], {
           context: companyContext,
         });
-        console.log(`[PeppolBridge] ✅ Plan comptable 'be' installé via try_loading pour company ${odooCompanyId}`);
         return;
       } catch (e1) {
         console.warn(`[PeppolBridge] try_loading('be') échoué:`, (e1 as Error).message);
@@ -242,7 +237,6 @@ export class PeppolBridge {
 
         if (templates.length > 0) {
           const templateId = templates[0].id;
-          console.log(`[PeppolBridge] Template trouvé: ${templates[0].name} (id=${templateId})`);
 
           // Créer un wizard res.config.settings avec le chart_template
           const settingsId = await this.call('res.config.settings', 'create', [{
@@ -255,7 +249,6 @@ export class PeppolBridge {
             context: companyContext,
           });
 
-          console.log(`[PeppolBridge] ✅ Plan comptable installé via res.config.settings pour company ${odooCompanyId}`);
           return;
         }
       } catch (e2) {
@@ -263,7 +256,6 @@ export class PeppolBridge {
       }
 
       // Méthode 3: Fallback — copier les comptes essentiels depuis la company principale
-      console.log(`[PeppolBridge] Fallback: copie des comptes essentiels pour company ${odooCompanyId}`);
       await this.copyEssentialAccounts(odooCompanyId);
 
     } catch (e) {
@@ -294,7 +286,6 @@ export class PeppolBridge {
     }
 
     const sourceCompanyId = sourceAccounts[0].company_id[0];
-    console.log(`[PeppolBridge] Source company pour comptes: ${sourceCompanyId} (${sourceAccounts[0].company_id[1]})`);
 
     // Comptes essentiels à copier: revenus + taxes
     const accountsToCopy = await this.call('account.account', 'search_read', [
@@ -321,7 +312,6 @@ export class PeppolBridge {
     }
 
     // Les taxes sont gérées par ensureBelgianTaxes() — appelé automatiquement après
-    console.log(`[PeppolBridge] ✅ Comptes copiés: ${created}/${accountsToCopy.length} (taxes via ensureBelgianTaxes)`);
   }
 
   // ── Enregistrement Peppol ──
@@ -396,7 +386,6 @@ export class PeppolBridge {
     ], { fields: ['account_peppol_proxy_state'] }) as OdooCompany[];
 
     const state = company[0]?.account_peppol_proxy_state || 'not_registered';
-    console.log(`[PeppolBridge] registerPeppol company ${odooCompanyId} → state: ${state}`);
     return { status: state };
   }
 
@@ -425,7 +414,6 @@ export class PeppolBridge {
         [settingsId],
       ], { context: companyContext });
 
-      console.log(`[PeppolBridge] SMS de vérification envoyé pour company ${odooCompanyId}`);
       return { success: true };
     } finally {
       await this.call('res.users', 'write', [[adminUid], { company_id: 1 }]).catch(e =>
@@ -471,7 +459,6 @@ export class PeppolBridge {
       ], { fields: ['account_peppol_proxy_state'] }) as OdooCompany[];
 
       const state = company[0]?.account_peppol_proxy_state || 'not_verified';
-      console.log(`[PeppolBridge] Vérification SMS company ${odooCompanyId} → state: ${state}`);
       return { status: state };
     } finally {
       await this.call('res.users', 'write', [[adminUid], { company_id: 1 }]).catch(e =>
@@ -513,7 +500,6 @@ export class PeppolBridge {
       const accounts = await this.call('account.account', 'search_read', [
         [['company_id', '=', odooCompanyId], ['account_type', 'in', ['income', 'income_other']]],
       ], { fields: ['id', 'code', 'name'], limit: 5 }) as Array<{ id: number; code: string; name: string }>;
-      console.log(`[PeppolBridge] Comptes revenus (company=${odooCompanyId}):`, accounts.map(a => `${a.id}:${a.code}:${a.name}`));
       if (accounts.length > 0) {
         // Préférer le 700000 (ventes marchandises Belgique)
         const preferred = accounts.find(a => a.code?.startsWith('7000')) || accounts[0];
@@ -572,11 +558,9 @@ export class PeppolBridge {
 
     if (existingTaxes.length >= 4) {
       // Déjà provisionné (au moins 21%, 12%, 6%, 0%)
-      console.log(`[PeppolBridge] Company ${odooCompanyId}: ${existingTaxes.length} taxes de vente existantes, skip provisioning`);
       return;
     }
 
-    console.log(`[PeppolBridge] 🏗️ Auto-provisioning taxes belges pour company ${odooCompanyId} (actuellement: ${existingTaxes.length} taxes)...`);
 
     // 2. Garantir les tax groups pour cette company
     const existingGroups = await this.call('account.tax.group', 'search_read', [
@@ -593,7 +577,6 @@ export class PeppolBridge {
             company_id: odooCompanyId,
           }]) as number;
           groupMap.set(tg.name, newId);
-          console.log(`[PeppolBridge]   ✅ Tax group '${tg.name}' créé (id=${newId})`);
         } catch (e) {
           console.warn(`[PeppolBridge]   ⚠️ Tax group '${tg.name}' création échouée:`, (e as Error).message?.substring(0, 100));
         }
@@ -622,13 +605,11 @@ export class PeppolBridge {
           company_id: odooCompanyId,
           tax_group_id: taxGroupId,
         }]) as number;
-        console.log(`[PeppolBridge]   ✅ Taxe '${tax.name}' (${tax.amount}%) créée (id=${taxId})`);
       } catch (e) {
         console.warn(`[PeppolBridge]   ⚠️ Taxe '${tax.name}' création échouée:`, (e as Error).message?.substring(0, 100));
       }
     }
 
-    console.log(`[PeppolBridge] ✅ Auto-provisioning taxes terminé pour company ${odooCompanyId}`);
   }
 
   // ── Envoi Peppol via Wizard Odoo 17 ──
@@ -663,7 +644,6 @@ export class PeppolBridge {
         context: companyContext,
       });
 
-      console.log(`[PeppolBridge] ✅ Wizard Peppol exécuté pour facture Odoo ${odooInvoiceId}`);
       return true;
     } catch (e) {
       console.error(`[PeppolBridge] ❌ Wizard Peppol échoué pour facture ${odooInvoiceId}:`, (e as Error).message);
@@ -720,7 +700,6 @@ export class PeppolBridge {
 
     // 2. Trouver le compte de vente par défaut pour les lignes de facture
     let accountId: number | undefined;
-    console.log('[PeppolBridge] Recherche compte pour odooCompanyId:', odooCompanyId);
 
     // Première passe : chercher les comptes de cette company
     accountId = await this.findIncomeAccount(odooCompanyId);
@@ -728,12 +707,10 @@ export class PeppolBridge {
     // Si aucun compte trouvé, c'est que le plan comptable n'est pas installé pour cette company
     // → On l'installe à la volée et on réessaie
     if (!accountId) {
-      console.log(`[PeppolBridge] Aucun compte trouvé pour company ${odooCompanyId}, installation du plan comptable...`);
       await this.installChartOfAccounts(odooCompanyId);
       accountId = await this.findIncomeAccount(odooCompanyId);
     }
 
-    console.log('[PeppolBridge] account_id résolu:', accountId);
     if (!accountId) {
       throw new Error(
         `Aucun compte comptable trouvé dans Odoo pour company_id=${odooCompanyId}. ` +
@@ -841,7 +818,6 @@ export class PeppolBridge {
       await this.call('account_edi_proxy_client.user', '_peppol_get_new_documents', [], {
         context: { allowed_company_ids: [odooCompanyId] },
       });
-      console.log(`[PeppolBridge] ✅ Fetched incoming Peppol documents for company ${odooCompanyId}`);
       return true;
     } catch (error) {
       const msg = (error as Error).message;
@@ -1018,6 +994,7 @@ export class PeppolBridge {
     ], { fields: ['account_peppol_proxy_state'] }) as OdooCompany[];
 
     const newState = updated[0]?.account_peppol_proxy_state;
+
     console.log(`[PeppolBridge] Deregistered company ${odooCompanyId}: ${previousState} → ${newState}`);
 
     return { success: !newState || newState === 'not_registered', previousState };

@@ -64,10 +64,8 @@ const Devis1minuteAdminDispatch = lazy(() => import('./pages/devis1minute/admin/
 const Devis1minuteAdminIntegrations = lazy(() => import('./pages/devis1minute/admin/Devis1minuteAdminIntegrations'));
 const Devis1minuteAdminSite = lazy(() => import('./pages/devis1minute/admin/Devis1minuteAdminSite'));
 
-// Pages Google Workspace (très lourdes)
-const GoogleGmailPageV2 = lazy(() => import('./pages/UnifiedMailPage'));  // ✅ Page mail unifiée Gmail + Yandex
-const MailSettingsPage = lazy(() => import('./pages/MailSettingsPage'));  // ⚙️ Paramètres comptes email
-// Google Workspace pages supprimées — plus utilisé (Agenda, Drive, Meet, Contacts, Forms, Groups, Maps, Sheets, Docs, Analytics)
+// Pages Google Workspace
+const GoogleGmailPageV2 = lazy(() => import('./pages/UnifiedMailPage'));  // ✅ Page mail unifiée Postal @zhiive.com
 const TelnyxPage = lazy(() => import('./pages/TelnyxPage'));
 const GoogleGeminiPage = lazy(() => import('./pages/GoogleGeminiPage'));
 

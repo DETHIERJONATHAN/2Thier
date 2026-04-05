@@ -76,7 +76,6 @@ export class GoogleMailNotificationService extends EventEmitter {
    */
   async startGmailWatching(userId: string): Promise<void> {
     try {
-      console.log(`🚀 [GoogleMail] Démarrage surveillance temps réel pour: ${userId}`);
 
       // Récupérer les tokens Google de l'utilisateur
       const googleTokens = await this.getGoogleTokens(userId);
@@ -111,7 +110,6 @@ export class GoogleMailNotificationService extends EventEmitter {
 
       this.isWatching.set(userId, true);
       
-      console.log(`✅ [GoogleMail] Surveillance activée: ${watchResponse.data.historyId}`);
 
       // Stocker la configuration de surveillance
       await prisma.googleMailWatch.upsert({
@@ -142,7 +140,6 @@ export class GoogleMailNotificationService extends EventEmitter {
    */
   async processNewGmailWithAI(emailData: any, userId: string): Promise<void> {
     try {
-      console.log(`🧠 [GoogleMail] Traitement IA email: ${emailData.id}`);
 
       // 1. Récupérer le contenu complet de l'email
       const fullEmail = await this.getFullEmailContent(emailData.id, userId);
@@ -171,7 +168,6 @@ export class GoogleMailNotificationService extends EventEmitter {
       // 5. Émettre l'événement temps réel
       this.emit('gmail-notification', enrichedNotification);
 
-      console.log(`✅ [GoogleMail] Email traité avec IA: ${aiAnalysis.category} (priorité: ${aiAnalysis.priority})`);
 
     } catch (error) {
       console.error('❌ [GoogleMail] Erreur traitement IA:', error);
@@ -197,7 +193,6 @@ Body: ${email.textContent || email.snippet}
           rawContent: content
         };
       
-      console.log(`🧠 [GoogleMail] Analyse IA: ${analysis.category} - urgence: ${analysis.urgency}`);
       
       return analysis;
 
@@ -330,7 +325,6 @@ Body: ${email.textContent || email.snippet}
    * 🚨 NOTIFICATION PUSH URGENTE
    */
   private async createUrgentPushNotification(notification: EnrichedGmailNotification): Promise<void> {
-    console.log(`🚨 [GoogleMail] NOTIFICATION URGENTE: ${notification.subject}`);
     
     // TODO: Implémenter push notifications (Firebase, WebPush, etc.)
     this.emit('urgent-email', {

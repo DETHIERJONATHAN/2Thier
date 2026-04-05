@@ -64,7 +64,6 @@ router.get('/leads', requireRole(['admin', 'super_admin']), async (req: Authenti
       where.targetRegions = { hasSome: [targetRegions as string] };
     }
 
-    console.log('🔍 [MARKETPLACE] Requête leads avec filtres:', where);
 
     const leads = await prisma.leadMarketplace.findMany({
       where,
@@ -133,7 +132,6 @@ router.get('/leads', requireRole(['admin', 'super_admin']), async (req: Authenti
       purchases: marketplace.LeadPurchase || []
     }));
 
-    console.log(`✅ [MARKETPLACE] ${transformedLeads.length} leads trouvés`);
 
     res.json({
       success: true,

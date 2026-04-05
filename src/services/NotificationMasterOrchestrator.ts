@@ -74,39 +74,28 @@ export class NotificationMasterOrchestrator extends EventEmitter {
    */
   async startComplete(): Promise<void> {
     if (this.isRunning) {
-      console.log('⚠️ [MasterOrchestrator] Système déjà en cours...');
       return;
     }
 
-    console.log('🌟 [MasterOrchestrator] 🚀 DÉMARRAGE SYSTÈME NOTIFICATIONS ULTRA-INTELLIGENT 🚀');
-    console.log('🎯 [MasterOrchestrator] Initialisation de TOUS les services...');
 
     try {
       this.isRunning = true;
 
       // 1. Démarrer le service universel
-      console.log('🔥 [MasterOrchestrator] 1/4 - Démarrage service universel...');
       this.services.universal.start();
 
       // 2. Démarrer Gmail avec IA
-      console.log('📧 [MasterOrchestrator] 2/4 - Démarrage Gmail intelligent...');
       await this.services.gmail.startGmailWatch();
 
       // 3. Démarrer Calendar avec IA
-      console.log('📅 [MasterOrchestrator] 3/4 - Démarrage Calendar intelligent...');
       await this.services.calendar.startCalendarWatch();
 
       // 4. Démarrer le monitoring en temps réel
-      console.log('📊 [MasterOrchestrator] 4/4 - Démarrage monitoring temps réel...');
       this.startRealTimeMonitoring();
 
       // 5. Programmer les tâches périodiques IA
       this.scheduleAITasks();
 
-      console.log('✅ [MasterOrchestrator] 🎉 SYSTÈME COMPLET DÉMARRÉ AVEC SUCCÈS ! 🎉');
-      console.log('⚡ [MasterOrchestrator] Notifications temps réel ACTIVES');
-      console.log('🧠 [MasterOrchestrator] Intelligence artificielle ACTIVE');
-      console.log('🔔 [MasterOrchestrator] Surveillance Gmail + Calendar ACTIVE');
 
       this.emit('system-started', this.getSystemStatus());
 
@@ -128,12 +117,10 @@ export class NotificationMasterOrchestrator extends EventEmitter {
         (this.stats.notifications.byPriority[notification.priority] || 0) + 1;
       
       this.emit('notification-sent', notification);
-      console.log(`🔔 [MasterOrchestrator] Notification envoyée: ${notification.type} - ${notification.title}`);
     });
 
     // Écouter les événements du service universel
     this.services.universal.on('service-started', () => {
-      console.log('✅ [MasterOrchestrator] Service universel prêt');
     });
 
     // Monitoring des erreurs globales
@@ -152,7 +139,6 @@ export class NotificationMasterOrchestrator extends EventEmitter {
    * 📊 DÉMARRER LE MONITORING TEMPS RÉEL
    */
   private startRealTimeMonitoring(): void {
-    console.log('📊 [MasterOrchestrator] Démarrage monitoring temps réel...');
 
     // Mise à jour des stats toutes les 30 secondes
     setInterval(async () => {
@@ -170,14 +156,12 @@ export class NotificationMasterOrchestrator extends EventEmitter {
       await this.performSystemCleanup();
     }, 60 * 60 * 1000);
 
-    console.log('✅ [MasterOrchestrator] Monitoring temps réel actif');
   }
 
   /**
    * 🧠 PROGRAMMER LES TÂCHES IA PÉRIODIQUES
    */
   private scheduleAITasks(): void {
-    console.log('🧠 [MasterOrchestrator] Programmation tâches IA...');
 
     // Analyse IA approfondie toutes les 15 minutes
     setInterval(async () => {
@@ -194,7 +178,6 @@ export class NotificationMasterOrchestrator extends EventEmitter {
       await this.generateDailyAIReport();
     }, 24 * 60 * 60 * 1000);
 
-    console.log('✅ [MasterOrchestrator] Tâches IA programmées');
   }
 
   /**
@@ -239,7 +222,6 @@ export class NotificationMasterOrchestrator extends EventEmitter {
    */
   private async performHealthCheck(): Promise<void> {
     try {
-      console.log('🏥 [MasterOrchestrator] Vérification santé système...');
 
       const health = {
         database: false,
@@ -274,7 +256,6 @@ export class NotificationMasterOrchestrator extends EventEmitter {
         console.warn(`⚠️ [MasterOrchestrator] Santé système dégradée: ${Math.round(healthScore * 100)}%`);
         this.emit('health-warning', { score: healthScore, details: health });
       } else {
-        console.log(`✅ [MasterOrchestrator] Système en bonne santé: ${Math.round(healthScore * 100)}%`);
       }
 
     } catch (error) {
@@ -287,7 +268,6 @@ export class NotificationMasterOrchestrator extends EventEmitter {
    */
   private async performDeepAIAnalysis(): Promise<void> {
     try {
-      console.log('🧠 [MasterOrchestrator] Analyse IA approfondie en cours...');
 
       // Analyser les patterns d'emails des dernières heures
       const recentEmails = await prisma.email.findMany({
@@ -318,7 +298,6 @@ export class NotificationMasterOrchestrator extends EventEmitter {
       };
 
       this.emit('ai-analysis-complete', insights);
-      console.log(`🧠 [MasterOrchestrator] Analyse IA terminée: ${insights.recommendations.length} recommandations`);
 
     } catch (error) {
       console.error('❌ [MasterOrchestrator] Erreur analyse IA:', error);
@@ -395,18 +374,15 @@ export class NotificationMasterOrchestrator extends EventEmitter {
    */
   private async optimizeAISettings(): Promise<void> {
     try {
-      console.log('⚙️ [MasterOrchestrator] Optimisation paramètres IA...');
 
       // Analyser les performances récentes
       const performanceData = await this.collectPerformanceData();
 
       // Ajuster les seuils IA selon les performances
       if (performanceData.falsePositives > 0.1) {
-        console.log('🎯 [MasterOrchestrator] Ajustement seuils IA pour réduire faux positifs');
       }
 
       if (performanceData.missedImportant > 0.05) {
-        console.log('🎯 [MasterOrchestrator] Ajustement sensibilité IA pour capturer plus d\'importants');
       }
 
       this.emit('ai-optimization-complete', performanceData);
@@ -421,7 +397,6 @@ export class NotificationMasterOrchestrator extends EventEmitter {
    */
   private async generateDailyAIReport(): Promise<void> {
     try {
-      console.log('📋 [MasterOrchestrator] Génération rapport IA quotidien...');
 
       const report = {
         date: new Date().toISOString().split('T')[0],
@@ -436,7 +411,6 @@ export class NotificationMasterOrchestrator extends EventEmitter {
       };
 
       this.emit('daily-ai-report', report);
-      console.log(`📋 [MasterOrchestrator] Rapport quotidien généré - Score IA: ${Math.round(report.summary.accuracyScore * 100)}%`);
 
     } catch (error) {
       console.error('❌ [MasterOrchestrator] Erreur génération rapport:', error);
@@ -448,7 +422,6 @@ export class NotificationMasterOrchestrator extends EventEmitter {
    */
   private async performSystemCleanup(): Promise<void> {
     try {
-      console.log('🧹 [MasterOrchestrator] Nettoyage système automatique...');
 
       // Nettoyer les notifications expirées
       const expiredNotifications = await prisma.notification.deleteMany({
@@ -468,7 +441,6 @@ export class NotificationMasterOrchestrator extends EventEmitter {
         }
       });
 
-      console.log(`🧹 [MasterOrchestrator] Nettoyage: ${expiredNotifications.count} notifications + ${oldLogs.count} logs supprimés`);
 
     } catch (error) {
       console.error('❌ [MasterOrchestrator] Erreur nettoyage système:', error);
@@ -575,7 +547,6 @@ export class NotificationMasterOrchestrator extends EventEmitter {
    * 🛑 ARRÊTER LE SYSTÈME COMPLET
    */
   async stopComplete(): Promise<void> {
-    console.log('🛑 [MasterOrchestrator] Arrêt système complet...');
 
     this.isRunning = false;
 
@@ -585,7 +556,6 @@ export class NotificationMasterOrchestrator extends EventEmitter {
     await this.services.calendar.stopCalendarWatch();
 
     this.emit('system-stopped');
-    console.log('✅ [MasterOrchestrator] Système complètement arrêté');
   }
 }
 

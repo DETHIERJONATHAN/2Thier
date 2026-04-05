@@ -35,7 +35,6 @@ router.use(analyticsRateLimit);
 
 // 📊 GET /api/analytics/dashboard - Métriques tableau de bord
 router.get('/dashboard', requireRole(['admin', 'super_admin']), async (req: AuthenticatedRequest, res) => {
-  console.log('[ANALYTICS] 📊 Génération métriques dashboard');
   
   try {
     const requestingUser = req.user;
@@ -99,7 +98,6 @@ router.get('/dashboard', requireRole(['admin', 'super_admin']), async (req: Auth
 
 // 📈 GET /api/analytics/export - Export données CSV/Excel
 router.get('/export', requireRole(['admin', 'super_admin']), async (req: AuthenticatedRequest, res) => {
-  console.log('[ANALYTICS] 📈 Export données');
   
   try {
     const { format = 'csv', type = 'users' } = req.query;
@@ -139,7 +137,6 @@ router.get('/export', requireRole(['admin', 'super_admin']), async (req: Authent
 
 // 📋 GET /api/analytics/audit-trail - Journal d'audit
 router.get('/audit-trail', requireRole(['admin', 'super_admin']), async (req: AuthenticatedRequest, res) => {
-  console.log('[ANALYTICS] 📋 Récupération audit trail');
   
   try {
     const { page = 1, limit = 50, userId, action } = req.query;

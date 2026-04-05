@@ -33,7 +33,6 @@ router.post('/:id/leave-beacon', async (req: Request, res: Response): Promise<vo
       }).catch(() => {});
     }
 
-    console.log(`[CALLS] 🚨 Beacon leave: user ${userId.slice(0,8)} left call ${req.params.id.slice(0,8)}`);
     res.json({ success: true });
   } catch (err) {
     console.error('[CALLS] Beacon leave error:', err);
@@ -409,7 +408,6 @@ router.post('/:id/signal', async (req: Request, res: Response): Promise<void> =>
 
   const { to, type, data } = req.body; // type: 'offer' | 'answer' | 'ice-candidate'
   const callId = req.params.id;
-  console.log(`[SIGNAL] POST ${type} from ${user.id.slice(0,8)} to ${to?.slice(0,8)} (call ${callId.slice(0,8)})`);
 
   const key = callId;
   if (!signalingBuffer.has(key)) signalingBuffer.set(key, []);
@@ -437,7 +435,6 @@ router.get('/:id/signal', async (req: Request, res: Response): Promise<void> => 
 
   // Remove consumed signals
   if (mySignals.length > 0) {
-    console.log(`[SIGNAL] GET ${mySignals.length} signal(s) for ${user.id.slice(0,8)} (call ${callId.slice(0,8)}): ${mySignals.map(s => `${s.type} from ${s.from.slice(0,8)}`).join(', ')}`);
     const remaining = signals.filter(s => s.to !== user.id);
     signalingBuffer.set(callId, remaining);
   }
@@ -556,7 +553,6 @@ setInterval(async () => {
         data: { status: 'left', leftAt: now },
       });
       signalingBuffer.delete(call.id);
-      console.log(`[CALLS] 🧹 Cleaned ghost ringing call ${call.id.slice(0,8)}`);
     }
 
     // 2. End 'active' calls where all participants left > 2 minutes ago
@@ -578,7 +574,6 @@ setInterval(async () => {
           data: { status: 'ended', endedAt: now },
         });
         signalingBuffer.delete(call.id);
-        console.log(`[CALLS] 🧹 Cleaned ghost active call ${call.id.slice(0,8)}`);
       }
     }
   } catch (err) {

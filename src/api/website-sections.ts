@@ -69,10 +69,6 @@ router.put('/website-sections/:id', async (req, res) => {
     const { id } = req.params;
     const { name, content, backgroundColor, textColor, customCss, isActive } = req.body;
 
-    console.log('🔧 PUT /api/website-sections/:id');
-    console.log('  ID:', id);
-    console.log('  Body keys:', Object.keys(req.body));
-    console.log('  Content keys:', content ? Object.keys(content) : 'undefined');
 
     // 🔥 FIX: Charger le content existant pour fusionner
     const existing = await db.website_sections.findUnique({
@@ -114,8 +110,6 @@ router.put('/website-sections/:id', async (req, res) => {
       ? deepMerge(existing.content as object, content)
       : existing.content;
 
-    console.log('  🔍 Existing content keys:', existing.content ? Object.keys(existing.content as object) : 'none');
-    console.log('  🔍 Merged content keys:', mergedContent ? Object.keys(mergedContent as object) : 'none');
 
     const section = await db.website_sections.update({
       where: { id: parseInt(id) },
@@ -129,7 +123,6 @@ router.put('/website-sections/:id', async (req, res) => {
       }
     });
 
-    console.log('✅ Section mise à jour ID:', section.id);
     res.json(section);
   } catch (error) {
     console.error('❌ Erreur modification section:', error);
@@ -143,9 +136,6 @@ router.patch('/website-sections/:id', async (req, res) => {
     const { id } = req.params;
     const { name, content, backgroundColor, textColor, customCss, isActive } = req.body;
 
-    console.log('🔧 PATCH /api/website-sections/:id');
-    console.log('  ID:', id);
-    console.log('  Body keys:', Object.keys(req.body));
 
     // 🔥 FIX: Charger le content existant pour fusionner
     const existing = await db.website_sections.findUnique({
@@ -199,7 +189,6 @@ router.patch('/website-sections/:id', async (req, res) => {
       }
     });
 
-    console.log('✅ Section mise à jour:', section);
     res.json(section);
   } catch (error) {
     console.error('❌ Erreur modification section:', error);

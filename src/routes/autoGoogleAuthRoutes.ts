@@ -124,7 +124,6 @@ router.post('/connect', authMiddleware, async (req: AuthenticatedRequest, res) =
 
     // 2. Aucun token local valide → on ne lance PLUS l'OAuth ici.
     // Désormais, tout passe par la page Admin Organisation Google Workspace + le scheduler.
-    console.log('[AutoGoogleAuth] ⚠️ Connexion Google non active: OAuth désactivé via auto-connect.');
 
     return res.json({
       success: true,
@@ -144,7 +143,6 @@ router.post('/connect', authMiddleware, async (req: AuthenticatedRequest, res) =
 router.post('/trigger-logout', authMiddleware, async (req: AuthenticatedRequest, res) => {
   
   const { userId } = req.body;
-  console.log('[GOOGLE-LOGOUT] Reçu logout CRM pour utilisateur:', userId);
 
   if (!userId) {
     return res.status(400).json({ success: false, error: 'userId requis.' });
@@ -154,7 +152,6 @@ router.post('/trigger-logout', authMiddleware, async (req: AuthenticatedRequest,
   // On ne révoque pas les tokens, on ne supprime rien. On retourne juste un succès "no-op".
   try {
     // Ancien comportement (désactivé): await googleOAuthService.disconnectUser(userId);
-    console.log('[GOOGLE-LOGOUT] Politique NO-OP: aucune action sur les tokens Google');
     return res.status(200).json({ success: true, message: 'Aucune déconnexion Google effectuée (politique persistante).' });
   } catch (error) {
     console.error('[AutoGoogleAuth] Erreur inattendue trigger-logout (no-op):', error);

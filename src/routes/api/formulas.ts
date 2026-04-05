@@ -141,8 +141,6 @@ router.put('/:formulaId', async (req: MergedParamsRequest, res: Response) => {
     const fieldId = req.params.id;
     const { name, sequence, order, id } = req.body;
 
-    console.log(`[API] Mise à jour formule ${formulaId} pour champ ${fieldId}`);
-    console.log(`[API] Données reçues:`, { id, name, sequence, order });
 
     if (!fieldId) {
       return res.status(400).json({ error: "ID du champ manquant" });
@@ -155,7 +153,6 @@ router.put('/:formulaId', async (req: MergedParamsRequest, res: Response) => {
       });
       
       if (!existingFormula) {
-        console.log(`[API] Formule ${formulaId} n'existe pas encore, création...`);
         await prisma.fieldFormula.create({
           data: {
             id: formulaId,
@@ -165,7 +162,6 @@ router.put('/:formulaId', async (req: MergedParamsRequest, res: Response) => {
             order: order || 0
           }
         });
-        console.log(`[API] Formule ${formulaId} créée avec succès`);
       }
     } catch (createError) {
       console.error(`[API] Erreur lors de la création de la formule:`, createError);
@@ -190,11 +186,6 @@ router.put('/:formulaId', async (req: MergedParamsRequest, res: Response) => {
         where: { id: formulaId },
         data: dataToUpdate
       });
-      
-      console.log(`[API] Formule mise à jour avec succès:`, { 
-        id: updatedFormula.id, 
-        name: updatedFormula.name
-      });
     } catch (updateError) {
       console.error(`[API] Erreur lors de la mise à jour de la formule:`, updateError);
       
@@ -207,11 +198,6 @@ router.put('/:formulaId', async (req: MergedParamsRequest, res: Response) => {
           sequence: sequence ? (typeof sequence === 'string' ? sequence : JSON.stringify(sequence)) : '[]',
           order: order || 0
         }
-      });
-      
-      console.log(`[API] Formule créée avec succès comme alternative:`, { 
-        id: updatedFormula.id, 
-        name: updatedFormula.name
       });
     }
 
@@ -227,7 +213,6 @@ router.put('/:formulaId', async (req: MergedParamsRequest, res: Response) => {
       sequence: f.sequence ? JSON.parse(f.sequence as string) : []
     }));
     
-    console.log(`[API] Retour de ${processedFormulas.length} formules au client`);
     res.json(processedFormulas);
 
   } catch (err: unknown) {
@@ -237,7 +222,6 @@ router.put('/:formulaId', async (req: MergedParamsRequest, res: Response) => {
     
     // En mode développement, utiliser le système de mock pour simuler la persistance
     if (process.env.NODE_ENV === 'development') {
-      console.log('[API] Mode développement, utilisation du système de mock pour la persistance');
       
       // Récupérer les données de la formule depuis le body de la requête
       const { sequence, name, order } = req.body;
@@ -251,7 +235,6 @@ router.put('/:formulaId', async (req: MergedParamsRequest, res: Response) => {
       
       // Récupérer toutes les formules mockées pour ce champ
       const allFormulas = mockFormulas.getFormulasForField(fieldId);
-      console.log(`[API] Formules mockées retournées: ${allFormulas.length}`);
       
       return res.json(allFormulas);
     }

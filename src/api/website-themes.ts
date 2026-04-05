@@ -10,7 +10,6 @@ const router = Router();
 router.get('/:websiteId', async (req, res) => {
   try {
     const { websiteId } = req.params;
-    console.log('📡 [API] GET theme websiteId:', websiteId);
 
     const theme = await prisma.webSiteTheme.findUnique({
       where: { websiteId: parseInt(websiteId) }
@@ -34,7 +33,6 @@ router.get('/:websiteId', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const themeData = req.body;
-    console.log('📡 [API] POST theme:', themeData);
 
     const theme = await prisma.webSiteTheme.create({
       data: themeData
@@ -55,7 +53,6 @@ router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const themeData = req.body;
-    console.log('📡 [API] PUT theme:', id, themeData);
 
     const theme = await prisma.webSiteTheme.update({
       where: { id: parseInt(id) },
@@ -76,7 +73,6 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    console.log('📡 [API] DELETE theme:', id);
 
     await prisma.webSiteTheme.delete({
       where: { id: parseInt(id) }

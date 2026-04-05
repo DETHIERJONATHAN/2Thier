@@ -18,12 +18,10 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { userId, organizationId } = req.body;
     
-    console.log('[Impersonate Route] Nouvelle demande d\'usurpation:', { userId, organizationId });
     
     // Vérifier que l'utilisateur actuel est un super admin
     const currentUser = req.user;
     if (!currentUser || currentUser.role !== 'super_admin') {
-      console.log('[Impersonate Route] Accès refusé - utilisateur non super admin');
       return res.status(403).json({ 
         success: false, 
         message: 'Seuls les super administrateurs peuvent usurper l\'identité' 
@@ -34,7 +32,6 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     // L'usurpation réelle se fait via les headers dans les requêtes suivantes
     // grâce au middleware impersonation.ts
     
-    console.log('[Impersonate Route] Usurpation autorisée pour:', { userId, organizationId });
     
     return res.json({
       success: true,
@@ -66,7 +63,6 @@ router.delete('/', authMiddleware, async (req: AuthRequest, res: Response) => {
       });
     }
     
-    console.log('[Impersonate Route] Arrêt de l\'usurpation demandé');
     
     return res.json({
       success: true,

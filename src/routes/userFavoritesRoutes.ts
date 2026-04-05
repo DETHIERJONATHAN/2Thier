@@ -17,7 +17,6 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Non authentifié' });
     }
 
-    console.log(`[UserFavorites] GET /favorites - userId: ${userId}, orgId: ${organizationId}`);
 
     const favorites = await db.userFavoriteModule.findMany({
       where: {
@@ -34,7 +33,6 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
     });
 
     const moduleKeys = favorites.map(f => f.moduleKey);
-    console.log(`[UserFavorites] ✅ ${moduleKeys.length} favoris trouvés`, moduleKeys);
 
     res.json({ favorites: moduleKeys });
   } catch (error) {
@@ -64,7 +62,6 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'moduleKey requis et doit être une chaîne' });
     }
 
-    console.log(`[UserFavorites] POST /favorites - moduleKey: ${moduleKey}`);
 
     // Vérifier si le favori existe déjà
     const existing = await db.userFavoriteModule.findUnique({
@@ -78,7 +75,6 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
     });
 
     if (existing) {
-      console.log(`[UserFavorites] ⚠️ Favori déjà existant: ${moduleKey}`);
       return res.status(409).json({ error: 'Ce module est déjà dans les favoris' });
     }
 
@@ -91,7 +87,6 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
       },
     });
 
-    console.log(`[UserFavorites] ✅ Favori créé: ${moduleKey}`);
 
     res.status(201).json({ favorite: favorite.moduleKey });
   } catch (error) {
@@ -121,7 +116,6 @@ router.delete('/:moduleKey', authMiddleware, async (req: Request, res: Response)
       return res.status(400).json({ error: 'moduleKey requis' });
     }
 
-    console.log(`[UserFavorites] DELETE /favorites/:${moduleKey}`);
 
     // Supprimer le favori
     const deleted = await db.userFavoriteModule.deleteMany({
@@ -133,11 +127,9 @@ router.delete('/:moduleKey', authMiddleware, async (req: Request, res: Response)
     });
 
     if (deleted.count === 0) {
-      console.log(`[UserFavorites] ⚠️ Favori non trouvé: ${moduleKey}`);
       return res.status(404).json({ error: 'Ce favori n\'existe pas' });
     }
 
-    console.log(`[UserFavorites] ✅ Favori supprimé: ${moduleKey}`);
 
     res.json({ message: 'Favori supprimé avec succès' });
   } catch (error) {

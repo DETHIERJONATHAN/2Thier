@@ -57,7 +57,6 @@ export class GoogleWorkspaceService {
    */
   async testConnection(): Promise<{ success: boolean; message: string }> {
     try {
-      console.log('🧪 [GoogleWorkspace] Test de connexion...');
       
       // Test simple : récupérer les informations du domaine
       await this.adminClient.users.list({
@@ -65,7 +64,6 @@ export class GoogleWorkspaceService {
         maxResults: 1
       });
 
-      console.log('✅ [GoogleWorkspace] Test de connexion réussi');
       return {
         success: true,
         message: `Connexion réussie au domaine ${this.config.domain}`
@@ -90,7 +88,6 @@ export class GoogleWorkspaceService {
     password: string;
   }): Promise<{ success: boolean; user?: admin_directory_v1.Schema$User; error?: string }> {
     try {
-      console.log(`👤 [GoogleWorkspace] Création utilisateur ${userData.email}...`);
 
       const googleUser: GoogleWorkspaceUser = {
         name: {
@@ -107,7 +104,6 @@ export class GoogleWorkspaceService {
         requestBody: googleUser
       });
 
-      console.log('✅ [GoogleWorkspace] Utilisateur créé avec succès:', userData.email);
       return {
         success: true,
   user: response.data
@@ -127,7 +123,6 @@ export class GoogleWorkspaceService {
    */
   async updateUserPassword(email: string, newPassword: string): Promise<{ success: boolean; error?: string }> {
     try {
-      console.log(`🔑 [GoogleWorkspace] Mise à jour mot de passe ${email}...`);
 
       await this.adminClient.users.update({
         userKey: email,
@@ -136,7 +131,6 @@ export class GoogleWorkspaceService {
         }
       });
 
-      console.log('✅ [GoogleWorkspace] Mot de passe mis à jour:', email);
       return { success: true };
     } catch (error: unknown) {
       console.error('❌ [GoogleWorkspace] Erreur mise à jour mot de passe:', error);
@@ -181,11 +175,9 @@ export class GoogleWorkspaceService {
    */
   async deleteUser(email: string): Promise<{ success: boolean; error?: string }> {
     try {
-      console.log(`🗑️ [GoogleWorkspace] Suppression utilisateur ${email}...`);
 
       await this.adminClient.users.delete({ userKey: email });
 
-      console.log('✅ [GoogleWorkspace] Utilisateur supprimé:', email);
       return { success: true };
     } catch (error: unknown) {
       console.error('❌ [GoogleWorkspace] Erreur suppression utilisateur:', error);

@@ -484,7 +484,6 @@ router.get('/:id', authenticateToken, async (req, res) => {
                     where: { id: chantier.id },
                     data: { amount: val, updatedAt: new Date() }
                   });
-                  console.log(`[Chantiers] ✅ Montant lazy-résolu pour ${chantier.id}: ${val}€`);
                   break;
                 }
               }
@@ -773,7 +772,6 @@ router.post('/from-lead-document', authenticateToken, async (req, res) => {
                     const val = parseFloat(cleaned);
                     if (!isNaN(val) && val > 0) {
                       autoAmount = val;
-                      console.log(`[Chantiers] ✅ Montant résolu via formule TBL: ${val}€ (source: ${totalSource})`);
                       break;
                     }
                   }
@@ -1506,7 +1504,6 @@ router.post('/resubmit-to-chantier/:leadId', authenticateToken, async (req, res)
       });
     }
 
-    console.log(`[Chantiers] Lead ${leadId} re-soumis au chantier ${chantier.id} après rectification`);
 
     res.json({
       success: true,

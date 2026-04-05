@@ -28,12 +28,10 @@ export class GoogleTokenRefreshScheduler {
   private lastRefreshTime: Date | null = null;
 
   constructor() {
-    console.log('🔄 [GoogleTokenScheduler] Scheduler initialisé');
   }
 
   start(): void {
     if (this.isRunning) {
-      console.log('⚠️ [GoogleTokenScheduler] Scheduler déjà en cours d\'exécution');
       return;
     }
 
@@ -47,7 +45,6 @@ export class GoogleTokenRefreshScheduler {
       this.refreshAllTokens();
     }, this.REFRESH_INTERVAL);
 
-    console.log('🚀 [GoogleTokenScheduler] Scheduler démarré - refresh toutes les 50 minutes');
   }
 
   stop(): void {
@@ -56,7 +53,6 @@ export class GoogleTokenRefreshScheduler {
       this.intervalId = null;
     }
     this.isRunning = false;
-    console.log('⏹️ [GoogleTokenScheduler] Scheduler arrêté');
   }
 
   getStatus() {
@@ -69,13 +65,11 @@ export class GoogleTokenRefreshScheduler {
   }
 
   async forceRefreshAll(): Promise<void> {
-    console.log('🔥 [GoogleTokenScheduler] Refresh forcé de tous les tokens');
     await this.refreshAllTokens({ ignoreExpiry: true });
   }
 
   private async refreshAllTokens(options: { ignoreExpiry?: boolean } = {}): Promise<void> {
     try {
-      console.log('🔄 [GoogleTokenScheduler] Début du refresh de tous les tokens...');
       this.lastRefreshTime = new Date();
 
       const ignoreExpiry = options.ignoreExpiry === true;
@@ -109,7 +103,6 @@ export class GoogleTokenRefreshScheduler {
         }
       });
 
-      console.log(`🔍 [GoogleTokenScheduler] ${tokensToRefresh.length} tokens trouvés à refresher${ignoreExpiry ? ' (mode forcé)' : ''}`);
 
       let successCount = 0;
       let errorCount = 0;
@@ -124,7 +117,6 @@ export class GoogleTokenRefreshScheduler {
       }
 
       this.refreshCount++;
-      console.log(`✅ [GoogleTokenScheduler] Refresh terminé: ${successCount} succès, ${errorCount} erreurs`);
     } catch (error) {
       console.error('❌ [GoogleTokenScheduler] Erreur lors du refresh général:', error);
     }
@@ -141,7 +133,6 @@ export class GoogleTokenRefreshScheduler {
     const oldExpiresAt = token.expiresAt;
     
     try {
-      console.log(`🔄 [GoogleTokenScheduler] Refresh token pour org ${token.organizationId}`);
       
       if (!token.refreshToken) {
         const errorMsg = 'Aucun refresh token disponible';
@@ -168,7 +159,6 @@ export class GoogleTokenRefreshScheduler {
       const adminEmail = googleConfig?.adminEmail?.trim().toLowerCase();
       const tokenEmail = token.googleEmail?.trim().toLowerCase();
       if (adminEmail && tokenEmail !== adminEmail) {
-        console.log(`⏭️ [GoogleTokenScheduler] Token ignoré (non-admin) pour org ${token.organizationId}: ${token.googleEmail ?? '(sans googleEmail)'}`);
         return true;
       }
 
@@ -273,7 +263,6 @@ export class GoogleTokenRefreshScheduler {
       });
 
       const successMsg = 'Token refreshed successfully';
-      console.log(`✅ [GoogleTokenScheduler] ${successMsg} pour org ${token.organizationId}, expire à ${newExpiresAt.toISOString()}`);
       
       await this.logRefreshHistory({
         organizationId: token.organizationId,

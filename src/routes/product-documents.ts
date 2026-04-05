@@ -429,7 +429,6 @@ router.post('/upload', async (req: Request, res: Response) => {
           );
           folderId = folderResult.id;
         } catch {
-          console.log('[ProductDocuments] ℹ️ Utilisation du dossier racine Drive');
         }
 
         const driveFile = await driveService.uploadFile(
@@ -448,7 +447,6 @@ router.post('/upload', async (req: Request, res: Response) => {
           const shareResult = await driveService.makePublic(organizationId, driveFile.id, user.id);
           driveUrl = shareResult.webViewLink || driveUrl;
         } catch {
-          console.log('[ProductDocuments] ℹ️ Fichier Drive non public, lien Drive utilisé');
         }
       } catch (error: any) {
         console.error('[ProductDocuments] ❌ Erreur upload Google Drive:', error);
@@ -537,7 +535,6 @@ router.post('/upload', async (req: Request, res: Response) => {
       }
     }
 
-    console.log(`[ProductDocuments] ✅ Document "${name || file.name}" uploadé pour ${documents.length} cible(s) (${resolvedStorageType})`);
 
     res.status(201).json({ document: documents[0], documents, count: documents.length });
   } catch (error: any) {
@@ -758,7 +755,6 @@ router.delete('/:id', async (req: Request, res: Response) => {
         const { GoogleDriveService } = await import('../google-auth/services/GoogleDriveService');
         const driveService = GoogleDriveService.getInstance();
         await driveService.deleteFile(organizationId, document.driveFileId, user.id);
-        console.log(`[ProductDocuments] 🗑️ Fichier supprimé de Drive: ${document.driveFileId}`);
       } catch (error) {
         console.warn('[ProductDocuments] ⚠️ Impossible de supprimer le fichier Drive:', error);
       }
@@ -766,14 +762,12 @@ router.delete('/:id', async (req: Request, res: Response) => {
       const fullPath = path.join(process.cwd(), 'public', document.localPath);
       if (fs.existsSync(fullPath)) {
         fs.unlinkSync(fullPath);
-        console.log(`[ProductDocuments] 🗑️ Fichier local supprimé: ${document.localPath}`);
       }
     }
 
     // Supprimer de la base
     await db.productDocument.delete({ where: { id } });
 
-    console.log(`[ProductDocuments] ✅ Document "${document.name}" supprimé`);
     res.json({ success: true });
   } catch (error: any) {
     console.error('[ProductDocuments] ❌ Erreur suppression:', error);

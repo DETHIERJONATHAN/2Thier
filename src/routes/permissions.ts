@@ -89,7 +89,6 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
             },
         });
         const accessCount = permissions.filter(p => p.action === 'access' && p.allowed).length;
-        console.log(`[API][permissions] GET roleId=${roleId} → ${permissions.length} permissions totales, ${accessCount} access actifs`);
         res.json({ success: true, data: permissions });
     } catch (error) {
         console.error('[API][permissions] Erreur lors de la récupération des permissions :', error);
@@ -148,7 +147,6 @@ router.post('/bulk', async (req: AuthenticatedRequest, res: Response): Promise<v
     if (actionsBeingUpdated.length === 0) {
       actionsBeingUpdated.push('access');
     }
-    console.log(`[API][permissions/bulk] Updating ${permissions.length} permissions for role ${roleId}, actions: ${actionsBeingUpdated.join(', ')}`);
 
     await prisma.$transaction([
       prisma.permission.deleteMany({
@@ -228,7 +226,6 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
 
     // Determine which actions are being updated to only delete those, preserve others
     const actionsToUpdate = [...new Set((permissions as MinimalPermissionInput[]).map(p => p.action))];
-    console.log(`[API][permissions] Updating ${permissions.length} permissions for role ${roleId}, actions: ${actionsToUpdate.join(', ')}`);
 
     await prisma.$transaction([
       prisma.permission.deleteMany({

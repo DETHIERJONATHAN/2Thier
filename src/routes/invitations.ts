@@ -539,7 +539,6 @@ router.post('/accept', async (req: Request, res: Response): Promise<void> => {
                 try {
                   const postal = getPostalService();
                   await postal.createMailbox(zhiiveEmail, `${user.firstName} ${user.lastName}`);
-                  console.log(`✅ [Invitation] Boîte Postal provisionnée (existant): ${zhiiveEmail}`);
                 } catch (postalErr) {
                   console.error(`⚠️ [Invitation] Erreur provisionnement Postal (non bloquant):`, postalErr);
                 }
@@ -561,7 +560,6 @@ router.post('/accept', async (req: Request, res: Response): Promise<void> => {
                     );
                     
                     if (workspaceResult.success) {
-                        console.log(`✅ [Invitation] Compte workspace créé pour ${user.email}: ${workspaceResult.email}`);
                     } else {
                         console.error(`⚠️ [Invitation] Échec création workspace pour ${user.email}:`, workspaceResult.error);
                     }
@@ -670,7 +668,6 @@ router.post('/accept', async (req: Request, res: Response): Promise<void> => {
                   updatedAt: new Date(),
                 },
               });
-              console.log(`📬 [Invitation] Boîte @zhiive.com créée: ${zhiiveEmail}`);
             } catch (emailAccErr) {
               console.error(`⚠️ [Invitation] Erreur création EmailAccount:`, emailAccErr);
             }
@@ -683,7 +680,6 @@ router.post('/accept', async (req: Request, res: Response): Promise<void> => {
           try {
             const postal = getPostalService();
             await postal.createMailbox(newUser.zhiiveEmail, `${firstName} ${lastName}`);
-            console.log(`✅ [Invitation] Boîte Postal provisionnée: ${newUser.zhiiveEmail}`);
           } catch (postalErr) {
             console.error(`⚠️ [Invitation] Erreur provisionnement Postal (non bloquant):`, postalErr);
           }
@@ -704,7 +700,6 @@ router.post('/accept', async (req: Request, res: Response): Promise<void> => {
                 
                 if (workspaceResult.success) {
                     workspaceEmail = workspaceResult.email || null;
-                    console.log(`✅ [Invitation] Compte workspace créé pour nouvel utilisateur: ${workspaceEmail}`);
                 } else {
                     console.error(`⚠️ [Invitation] Échec création workspace:`, workspaceResult.error);
                 }

@@ -16,11 +16,9 @@ router.use(authMiddleware, impersonationMiddleware);
  */
 router.get('/users-emails', async (req, res) => {
   try {
-    console.log("=== API /users-emails appelée avec l'utilisateur:", req.user?.email || "Aucun utilisateur");
     
     // Vérifier que l'utilisateur est admin ou super_admin
     if (req.user && !['admin', 'super_admin'].includes(req.user.role)) {
-      console.log("ERREUR: Utilisateur non autorisé:", req.user.role);
       return res.status(403).json({
         success: false,
         message: "Vous n'avez pas les droits nécessaires pour accéder à cette ressource"
@@ -144,8 +142,6 @@ router.post('/update-email-config', async (req, res) => {
   try {
     const { userId, emailDomain, emailExtension, firstName, lastName } = req.body;
     
-    console.log('=== DEBUG update-email-config ===');
-    console.log('Données reçues:', { userId, emailDomain, emailExtension, firstName, lastName });
 
     // Vérifier que l'utilisateur est admin ou super_admin
     if (!['admin', 'super_admin'].includes(req.user.role)) {
@@ -172,7 +168,6 @@ router.post('/update-email-config', async (req, res) => {
       `${cleanFirstName}.${cleanLastName}@${domain}${extension}` : 
       '';
 
-    console.log('Email généré:', generatedEmail);
 
     if (!generatedEmail) {
       return res.status(400).json({
@@ -211,16 +206,13 @@ router.post('/update-email-config', async (req, res) => {
 
     // Mettre à jour ou créer le compte email
     if (user.emailAccount) {
-      console.log('Mise à jour du compte email existant:', user.emailAccount.id);
       await prisma.emailAccount.update({
         where: { userId },
         data: {
           emailAddress: generatedEmail
         }
       });
-      console.log('Compte email mis à jour avec succès');
     } else {
-      console.log('Création d\'un nouveau compte email');
       // Créer un nouveau compte email sans mot de passe (sera configuré plus tard)
       await prisma.emailAccount.create({
         data: {
@@ -230,10 +222,8 @@ router.post('/update-email-config', async (req, res) => {
           organizationId: organization.id
         }
       });
-      console.log('Nouveau compte email créé avec succès');
     }
 
-    console.log('=== Configuration email mise à jour avec succès ===');
     return res.json({
       success: true,
       message: "Configuration email mise à jour avec succès"
@@ -248,11 +238,9 @@ router.post('/update-email-config', async (req, res) => {
 });
 router.get('/users-services', async (req, res) => {
   try {
-    console.log("=== API /users-services appelée avec l'utilisateur:", req.user?.email || "Aucun utilisateur");
     
     // Vérifier que l'utilisateur est admin ou super_admin
     if (req.user && !['admin', 'super_admin'].includes(req.user.role)) {
-      console.log("ERREUR: Utilisateur non autorisé:", req.user.role);
       return res.status(403).json({
         success: false,
         message: "Vous n'avez pas les droits nécessaires pour accéder à cette ressource"
@@ -279,7 +267,6 @@ router.get('/users-services', async (req, res) => {
       }
     });
     
-    console.log(`=== ${users.length} utilisateurs trouvés`);
 
     // Transformer les données avec la VRAIE logique d'unification
     const usersWithServices = users.map(user => {
@@ -290,7 +277,6 @@ router.get('/users-services', async (req, res) => {
       // Un utilisateur est "unifié" s'il a TOUS ses mots de passe configurés
       const isUnified = hasCrmPassword && hasEmailPassword;
       
-      console.log(`${user.firstName} ${user.lastName}: CRM=${hasCrmPassword ? '✓' : '✗'} Email=${hasEmailPassword ? '✓' : '✗'} Unifié=${isUnified ? '✓' : '✗'}`);
       
       return {
         id: user.id,
@@ -310,7 +296,6 @@ router.get('/users-services', async (req, res) => {
       };
     });
     
-    console.log("=== Données transformées avec logique d'unification corrigée");
     return res.status(200).json(usersWithServices);
     
   } catch (error) {
@@ -330,9 +315,6 @@ router.post('/unified-password', async (req, res) => {
   try {
     const { userId, password } = req.body;
 
-    console.log('=== DÉFINITION MOT DE PASSE UNIFIÉ ===');
-    console.log('User ID:', userId);
-    console.log('Password fourni:', password ? 'Oui' : 'Non');
 
     // Vérifier que l'utilisateur est admin ou super_admin
     if (!['admin', 'super_admin'].includes(req.user.role)) {
@@ -369,7 +351,6 @@ router.post('/unified-password', async (req, res) => {
       });
     }
 
-    console.log(`Utilisateur trouvé: ${user.firstName} ${user.lastName}`);
 
     // Importer bcrypt pour le hachage du mot de passe CRM
     const bcrypt = await import('bcrypt');
@@ -382,7 +363,6 @@ router.post('/unified-password', async (req, res) => {
         passwordHash: hashedCrmPassword
       }
     });
-    console.log('✓ Mot de passe CRM mis à jour');
 
     // 2. METTRE À JOUR LE MOT DE PASSE EMAIL
     const encryptedEmailPassword = encrypt(password);
@@ -394,7 +374,6 @@ router.post('/unified-password', async (req, res) => {
           encryptedPassword: encryptedEmailPassword
         }
       });
-      console.log('✓ Mot de passe email mis à jour');
     } else {
       // Créer le compte email s'il n'existe pas
       const organization = user.UserOrganization?.[0]?.Organization;
@@ -409,10 +388,8 @@ router.post('/unified-password', async (req, res) => {
           organizationId: organization?.id || user.UserOrganization?.[0]?.organizationId || ''
         }
       });
-      console.log('✓ Compte email créé avec mot de passe');
     }
 
-    console.log('=== UNIFICATION RÉUSSIE : CRM + EMAIL ===');
     return res.json({
       success: true,
       message: "Mot de passe unifié défini avec succès pour CRM et Email"

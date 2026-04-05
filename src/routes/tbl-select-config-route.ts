@@ -57,11 +57,6 @@ router.get('/nodes/:nodeId/select-config', async (req, res) => {
 
     // 4. Logique de gestion des champs (dupliqués et non dupliqués)
     if (nodeId.includes('76a40eb1-a3c5-499f-addb-0ce7fdb4b4c9')) {
-      console.log(`[INCLINAISON DEBUG] Node ID: ${nodeId}`);
-      console.log(`[INCLINAISON DEBUG] Is Duplicated: ${isDuplicated}`);
-      console.log(`[INCLINAISON DEBUG] Base Node ID: ${baseNodeId}`);
-      console.log(`[INCLINAISON DEBUG] Effective Node:`, effectiveNode ? { id: effectiveNode.id, subType: effectiveNode.subType, table_activeId: effectiveNode.table_activeId } : null);
-      console.log(`[INCLINAISON DEBUG] Base Node:`, baseNode ? { id: baseNode.id, subType: baseNode.subType, table_activeId: baseNode.table_activeId, selectConfig: !!baseNode.TreeBranchLeafSelectConfig } : null);
     }
 
     // 4.1 Logique spécifique pour les champs dupliqués
@@ -75,16 +70,12 @@ router.get('/nodes/:nodeId/select-config', async (req, res) => {
       const policyCheck = shouldAutoCreateSelectConfig({ node: effectiveNode, tableMeta: tableMeta?.meta as any });
 
       if (nodeId.includes('76a40eb1-a3c5-499f-addb-0ce7fdb4b4c9')) {
-        console.log(`[INCLINAISON DEBUG] Table ID for policy check: ${tableId}`);
-        console.log(`[INCLINAISON DEBUG] Table Meta found:`, tableMeta);
-        console.log(`[INCLINAISON DEBUG] Policy Result (shouldAutoCreateSelectConfig): ${policyCheck}`);
       }
 
       // Si la politique indique que ce champ dupliqué ne doit PAS avoir de SelectConfig,
       // on force le rendu en champ normal en ne renvoyant rien.
       if (!policyCheck) {
         if (nodeId.includes('76a40eb1-a3c5-499f-addb-0ce7fdb4b4c9')) {
-          console.log(`[INCLINAISON DEBUG] POLITIQUE REFUSÉE. Renvoi d'une erreur 404 pour forcer un champ normal.`);
         }
         return res.status(404).json({
           error: 'Ce champ dupliqué est configuré comme un champ calculé et non un select.',

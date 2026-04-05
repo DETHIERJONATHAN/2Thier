@@ -84,7 +84,6 @@ const validatePublicLead = (req: express.Request, res: express.Response, next: e
 // 🌐 POST /api/public/leads - Création d'un lead depuis le formulaire public
 router.post('/leads', publicLeadLimiter, validatePublicLead, async (req, res) => {
   try {
-    console.log('📥 [PUBLIC-API] Nouvelle demande lead publique');
     
     const {
       // Projet
@@ -201,7 +200,6 @@ router.post('/leads', publicLeadLimiter, validatePublicLead, async (req, res) =>
       }
     });
 
-    console.log(`✅ [PUBLIC-API] Lead créé: ${newLead.id} (Score: ${aiQualityScore})`);
 
     // TODO: Déclencher processus de qualification IA et notification
     // await triggerAIQualification(newLead.id);

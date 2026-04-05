@@ -39,7 +39,6 @@ export class CalendarNotificationService {
         }
       });
       
-      console.log(`📅 [Calendar] Notification d'invitation créée pour l'utilisateur ${userId}`);
     } catch (error) {
       console.error('❌ [Calendar] Erreur lors de la création de la notification:', error);
     }
@@ -72,7 +71,6 @@ export class CalendarNotificationService {
         }
       });
       
-      console.log(`⏰ [Calendar] Rappel créé pour l'événement ${eventData.eventId} (${reminderMinutes}min avant)`);
     } catch (error) {
       console.error('❌ [Calendar] Erreur lors de la création du rappel:', error);
     }
@@ -106,7 +104,6 @@ export class CalendarNotificationService {
         data: notifications
       });
       
-      console.log(`📝 [Calendar] Notifications de mise à jour créées pour ${userIds.length} utilisateurs`);
     } catch (error) {
       console.error('❌ [Calendar] Erreur lors de la création des notifications de mise à jour:', error);
     }
@@ -140,7 +137,6 @@ export class CalendarNotificationService {
         data: notifications
       });
       
-      console.log(`❌ [Calendar] Notifications d'annulation créées pour ${userIds.length} utilisateurs`);
     } catch (error) {
   console.error("❌ [Calendar] Erreur lors de la création des notifications d'annulation:", error);
     }
@@ -166,7 +162,6 @@ export class CalendarNotificationService {
         for (const userId of participantUserIds) {
           // Ici on pourrait utiliser un job scheduler comme Bull/BullMQ
           // Pour l'instant, créons juste la logique de base
-          console.log(`⏰ [Calendar] Rappel programmé pour l'utilisateur ${userId} le ${reminderDate.toISOString()}`);
           
           // Dans une vraie implémentation, on programmerait un job:
           // await reminderQueue.add('calendar-reminder', {
@@ -218,7 +213,6 @@ export class CalendarNotificationService {
         subject,
         html
       });
-      console.log(`📧 [Calendar] Email d'invitation envoyé à ${recipientEmail}`);
       
     } catch (error) {
       console.error('❌ [Calendar] Erreur lors de l\'envoi de l\'email d\'invitation:', error);

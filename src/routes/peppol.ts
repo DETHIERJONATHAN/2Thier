@@ -174,7 +174,6 @@ async function notifyIncomingInvoices(
       }).catch(err => console.error(`[Peppol-Notify] Erreur email colony ${org.email}:`, err.message));
     }
 
-    console.log(`[Peppol-Notify] ✅ Notifications envoyées: ${count} facture(s), ${orgAdmins.length} admin(s), org=${orgName}`);
   } catch (err) {
     console.error('[Peppol-Notify] ❌ Erreur envoi notifications:', (err as Error).message);
   }
@@ -185,7 +184,6 @@ async function notifyIncomingInvoices(
 router.get('/config', authenticateToken, async (req: Request, res: Response) => {
   try {
     const organizationId = getOrganizationId(req);
-    console.log('[Peppol GET /config] orgId:', organizationId, '| header:', req.headers['x-organization-id']);
     if (!organizationId) {
       return res.status(400).json({ success: false, message: 'ID d\'organisation requis. Sélectionnez une Colony.' });
     }
@@ -238,14 +236,12 @@ const configSchema = z.object({
 router.put('/config', authenticateToken, isAdmin, async (req: Request, res: Response) => {
   try {
     const organizationId = getOrganizationId(req);
-    console.log('[Peppol PUT /config] orgId:', organizationId, '| header:', req.headers['x-organization-id'], '| user.orgId:', (req as any).user?.organizationId, '| body keys:', Object.keys(req.body || {}));
     if (!organizationId) {
       return res.status(400).json({ success: false, message: 'ID d\'organisation requis. Sélectionnez une Colony.', debug: { header: req.headers['x-organization-id'], userOrgId: (req as any).user?.organizationId } });
     }
 
     const validation = configSchema.safeParse(req.body);
     if (!validation.success) {
-      console.log('[Peppol PUT /config] Validation failed:', JSON.stringify(validation.error.errors));
       return res.status(400).json({ success: false, message: 'Données invalides', errors: validation.error.errors });
     }
 
@@ -809,7 +805,6 @@ router.post('/send/:invoiceId', authenticateToken, isAdmin, async (req: Request,
             replyTo: org?.email || undefined,
             organizationId,
           });
-          console.log(`[Peppol] Copie email envoyée à ${recipient} pour ${invoiceNum}`);
         } catch (err) {
           console.warn(`[Peppol] Erreur copie email vers ${recipient}:`, (err as Error).message);
         }
@@ -851,7 +846,6 @@ router.post('/send/:invoiceId', authenticateToken, isAdmin, async (req: Request,
               organizationId,
               attachments: [{ filename: pdfFilename, content: pdfBuffer, contentType: 'application/pdf' }],
             });
-            console.log(`[Peppol] Facture PDF envoyée au client ${clientEmail} pour ${invoiceNum}`);
           }
         } catch (clientErr) {
           console.warn(`[Peppol] Erreur envoi facture au client ${clientEmail}:`, (clientErr as Error).message);
@@ -1034,7 +1028,6 @@ router.post('/retry/:invoiceId', authenticateToken, isAdmin, async (req: Request
       await db.standaloneInvoice.update({ where: { id: invoiceId }, data: retryData });
     }
 
-    console.log(`[Peppol] 🔄 Retry manuel lancé pour facture ${invoice.invoiceNumber} (${invoiceId})`);
 
     res.json({
       success: true,
@@ -1123,7 +1116,6 @@ router.post('/fetch-incoming', authenticateToken, isAdmin, async (req: Request, 
     const userId = getUserId(req);
     await notifyIncomingInvoices(organizationId, newlyImported, userId);
 
-    console.log(`[Peppol] 📥 Fetch incoming: ${imported} importée(s) / ${incomingBills.length} trouvée(s) pour org ${organizationId}`);
 
     res.json({
       success: true,
@@ -1263,7 +1255,6 @@ router.post('/incoming/:id/accept', authenticateToken, isAdmin, async (req: Requ
           notes: `Auto-importé depuis facture Peppol. Fournisseur: ${invoice.senderName || '?'}`,
         },
       });
-      console.log(`[Peppol] ✅ Incoming ${invoice.id} accepted + expense ${expense.id} créée`);
     }
 
     res.json({ success: true, data: { incoming: updated, expense } });

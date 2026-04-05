@@ -6,7 +6,6 @@ import { prisma } from '../lib/prisma';
  * @returns Une promesse qui se résout avec un tableau de validations.
  */
 export const getValidationsByFieldId = async (fieldId: string) => {
-  console.log(`[ValidationService] Tentative de récupération des validations pour le champ ${fieldId}`);
   
   try {
     // Vérifier si le modèle fieldValidation existe dans Prisma
@@ -16,7 +15,6 @@ export const getValidationsByFieldId = async (fieldId: string) => {
       return [];
     }
     
-    console.log(`[ValidationService] Recherche des validations avec fieldId=${fieldId}`);
     
     const validations = await prisma.fieldValidation.findMany({
       where: {
@@ -25,7 +23,6 @@ export const getValidationsByFieldId = async (fieldId: string) => {
       // Le champ 'order' n'existe pas dans le modèle FieldValidation
     });
     
-    console.log(`[ValidationService] ${validations.length} validations trouvées pour le champ ${fieldId}`);
     return validations;
   } catch (error) {
     console.error(`[ValidationService] Erreur détaillée lors de la récupération des validations pour le champ ${fieldId}:`, error);
@@ -46,7 +43,6 @@ export const getValidationsByFieldId = async (fieldId: string) => {
  * @returns Une promesse qui se résout avec la validation créée.
  */
 export const createValidation = async (fieldId: string, validationData: any) => {
-  console.log(`[ValidationService] Création d'une validation pour le champ ${fieldId}:`, validationData);
   
   try {
     // Vérifier que le champ existe
@@ -73,7 +69,6 @@ export const createValidation = async (fieldId: string, validationData: any) => 
       },
     });
     
-    console.log(`[ValidationService] Validation créée avec succès:`, validation);
     return validation;
   } catch (error) {
     console.error(`[ValidationService] Erreur lors de la création de la validation pour le champ ${fieldId}:`, error);
@@ -88,7 +83,6 @@ export const createValidation = async (fieldId: string, validationData: any) => 
  * @returns Une promesse qui se résout avec la validation mise à jour.
  */
 export const updateValidation = async (validationId: string, updateData: any) => {
-  console.log(`[ValidationService] Mise à jour de la validation ${validationId}:`, updateData);
   
   try {
     // Vérifier si le modèle fieldValidation existe dans Prisma
@@ -135,7 +129,6 @@ export const updateValidation = async (validationId: string, updateData: any) =>
     
     // Si l'objet est vide, ne rien mettre à jour
     if (Object.keys(updateObject).length === 0) {
-      console.log(`[ValidationService] Aucune donnée à mettre à jour pour la validation ${validationId}`);
       return existingValidation;
     }
     
@@ -147,14 +140,12 @@ export const updateValidation = async (validationId: string, updateData: any) =>
       data: updateObject,
     });
     
-    console.log(`[ValidationService] Validation ${validationId} mise à jour avec succès:`, updatedValidation);
     return updatedValidation;
   } catch (error) {
     console.error(`[ValidationService] Erreur lors de la mise à jour de la validation ${validationId}:`, error);
     
     // En développement, simuler une réponse réussie même en cas d'erreur
     if (process.env.NODE_ENV === 'development') {
-      console.log(`[ValidationService] Mode développement, simulation de mise à jour réussie malgré l'erreur`);
       return {
         id: validationId,
         ...updateData,
@@ -169,7 +160,6 @@ export const updateValidation = async (validationId: string, updateData: any) =>
 
 export const deleteValidationById = async (validationId: string) => {
   try {
-    console.log(`[ValidationService] Tentative de suppression de la validation ${validationId}`);
     
     // Vérifier si le modèle fieldValidation existe dans Prisma
     if (!prisma.fieldValidation) {
@@ -189,7 +179,6 @@ export const deleteValidationById = async (validationId: string) => {
     });
     
     if (!existingValidation) {
-      console.log(`[ValidationService] Validation ${validationId} non trouvée`);
       return { id: validationId, message: "Validation non trouvée" };
     }
 
@@ -199,7 +188,6 @@ export const deleteValidationById = async (validationId: string) => {
         id: validationId,
       },
     });
-    console.log(`[ValidationService] Validation ${validationId} supprimée avec succès`);
     return deletedValidation;
   } catch (error) {
     console.error(`[ValidationService] Erreur lors de la suppression de la validation ${validationId}:`, error);

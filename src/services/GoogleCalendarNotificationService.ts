@@ -77,7 +77,6 @@ export class GoogleCalendarNotificationService extends EventEmitter {
    */
   async startCalendarWatching(userId: string): Promise<void> {
     try {
-      console.log(`📅 [GoogleCalendar] Démarrage surveillance: ${userId}`);
 
       const googleTokens = await this.getGoogleTokens(userId);
       if (!googleTokens) {
@@ -106,7 +105,6 @@ export class GoogleCalendarNotificationService extends EventEmitter {
 
       this.calendarWatchers.set(userId, true);
       
-      console.log(`✅ [GoogleCalendar] Surveillance activée: ${watchResponse.data.resourceId}`);
 
       // Vérification immédiate des événements proches
       await this.checkUpcomingEvents(userId);
@@ -140,7 +138,6 @@ export class GoogleCalendarNotificationService extends EventEmitter {
    */
   private async processEventWithAI(event: any, userId: string): Promise<void> {
     try {
-      console.log(`🧠 [GoogleCalendar] Analyse IA événement: ${event.summary}`);
 
       // Analyser l'événement avec IA
       const aiAnalysis = await this.analyzeEventWithAI(event);
@@ -168,7 +165,6 @@ export class GoogleCalendarNotificationService extends EventEmitter {
       // Créer les notifications selon l'analyse IA
       await this.createSmartCalendarNotifications(enrichedNotification);
 
-      console.log(`✅ [GoogleCalendar] Événement traité: ${aiAnalysis.meetingType} (importance: ${aiAnalysis.importance})`);
 
     } catch (error) {
       console.error('❌ [GoogleCalendar] Erreur traitement événement:', error);
@@ -411,7 +407,6 @@ export class GoogleCalendarNotificationService extends EventEmitter {
   }
 
   private async getUpcomingEvents(userId: string, start: Date, end: Date): Promise<any[]> {
-    console.log(`🔍 [GoogleCalendar] getUpcomingEvents (stub) pour ${userId} du ${start.toISOString()} au ${end.toISOString()}`);
     // TODO: Implémenter récupération événements via Google Calendar API
     return [];
   }

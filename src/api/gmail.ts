@@ -78,7 +78,6 @@ router.post('/send-meeting-confirmation', authenticateToken, async (req, res) =>
       }
     });
 
-    console.log('[Gmail] ✅ Email de confirmation envoyé:', response.data.id);
 
     // Log dans le CRM
     await logEmailActivity({
@@ -223,7 +222,6 @@ async function logEmailActivity(data: {
   try {
     // TODO: Implémenter avec Prisma
     // Sauvegarder dans une table email_logs ou lead_activities
-    console.log('[Gmail] 📝 Log activité email:', data);
   } catch (error) {
     console.error('[Gmail] ❌ Erreur log activité:', error);
   }

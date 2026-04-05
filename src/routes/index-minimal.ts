@@ -2,7 +2,6 @@ import { Router } from 'express';
 
 const apiRouter = Router();
 
-console.log('[ROUTER-MINIMAL] Configuration du routeur minimal pour test');
 
 // Route simple pour vérifier que l'API fonctionne
 apiRouter.get('/health', (_req, res) => {

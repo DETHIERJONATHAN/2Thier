@@ -238,7 +238,6 @@ router.post('/check-emails', async (req: Request, res: Response): Promise<void> 
             return;
         }
 
-        console.log(`🔔 [API] Vérification manuelle des emails pour l'utilisateur ${user.userId}`);
         
         // 🚀 SOLUTION IMMÉDIATE : Déclencher une synchronisation MANUELLE instantanée
         try {
@@ -246,10 +245,8 @@ router.post('/check-emails', async (req: Request, res: Response): Promise<void> 
             const { autoMailSync } = await import('../services/AutoMailSyncService.js');
             
             // Déclencher la synchronisation pour l'utilisateur actuel
-            console.log('🔥 [API] Déclenchement sync manuelle immédiate...');
             await autoMailSync.syncForUser(user.userId);
             
-            console.log('✅ [API] Synchronisation manuelle terminée avec succès');
         } catch (syncError) {
             console.error('❌ [API] Erreur sync manuelle:', syncError);
             // Continuer malgré l'erreur de sync pour la notification backup
@@ -259,7 +256,6 @@ router.post('/check-emails', async (req: Request, res: Response): Promise<void> 
         const notificationService = UniversalNotificationService.getInstance();
         
         // Déclencher une vérification manuelle de tous les types d'événements
-        console.log('🌟 [API] Vérification manuelle de TOUS les types d\'événements...');
         
         // Émettre un événement pour déclencher les vérifications
         notificationService.emit('manual-check-requested', { userId: user.userId });
@@ -293,7 +289,6 @@ router.post('/check-emails-all', async (req: Request, res: Response): Promise<vo
             return;
         }
 
-        console.log(`🔔 [API] Vérification manuelle globale des emails par ${user.role} ${user.userId}`);
         
         // Utiliser le nouveau service temps réel pour vérification globale
         const notificationService = RealTimeEmailNotificationService.getInstance();

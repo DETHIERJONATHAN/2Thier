@@ -23,7 +23,6 @@ interface ProjectData {
 // GET /api/projects - Récupérer tous les projets
 router.get('/', async (req, res) => {
   try {
-    console.log('[PROJECTS] Récupération des projets pour l\'organisation:', req.organizationId);
     
     // Pour l'instant, on utilise les leads avec un statut de projet
     // Plus tard, on pourra créer un modèle Project dédié
@@ -100,11 +99,9 @@ router.get('/', async (req, res) => {
           updatedAt: new Date()
         }
       ];
-      console.log('[PROJECTS] Aucun projet trouvé, retour d\'exemples');
       return res.json(sampleProjects);
     }
 
-    console.log(`[PROJECTS] ${projects.length} projets trouvés`);
     res.json(projects);
 
   } catch (error) {
@@ -120,7 +117,6 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    console.log('[PROJECTS] Récupération du projet:', id);
 
     // Vérifier s'il s'agit d'un exemple
     if (id.startsWith('sample-')) {
@@ -192,7 +188,6 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const { name, description, clientName, budget, deadline, priority } = req.body;
-    console.log('[PROJECTS] Création d\'un nouveau projet:', { name, clientName });
 
     const lead = await prisma.lead.create({
       data: {

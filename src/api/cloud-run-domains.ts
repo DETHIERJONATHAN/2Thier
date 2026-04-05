@@ -46,7 +46,6 @@ router.get('/cloud-run-domains', authenticateToken, async (req: Request, res: Re
       // Ajoutez ici vos autres domaines mappés dans Cloud Run
     ];
 
-    console.log('✅ [CloudRunDomains] Récupération des domaines mappés:', mappedDomains.length);
     
     res.json({
       success: true,

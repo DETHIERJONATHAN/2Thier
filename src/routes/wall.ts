@@ -345,7 +345,6 @@ router.post('/posts', authenticateToken, async (req: Request, res: Response) => 
       },
     });
 
-    console.log(`[WALL] ✅ Post créé par ${user.id} | visibility=${data.visibility} | org=${orgId}`);
 
     // Incrémenter le compteur de partages du post parent
     if (data.parentPostId) {
@@ -650,7 +649,6 @@ router.post('/upload', authenticateToken, async (req: Request, res: Response) =>
       return res.status(400).json({ error: 'Aucun fichier valide' });
     }
 
-    console.log(`[WALL] ✅ Upload ${urls.length} fichier(s):`, urls);
     res.json({ urls });
   } catch (error) {
     console.error('[WALL] Erreur upload:', error);

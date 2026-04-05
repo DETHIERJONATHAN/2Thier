@@ -79,7 +79,6 @@ router.use('/invitations', invitationRoutes);
 
 // 🏷️ GET /api/users/free - SÉCURISÉ AVEC ZOD + SANITISATION
 router.get('/free', requireRole(['admin', 'super_admin']), async (req: Request, res: Response) => {
-  console.log('[USERS] GET /users/free - Récupération utilisateurs libres SÉCURISÉE');
   
   try {
     const freeUsers = await prisma.user.findMany({
@@ -101,7 +100,6 @@ router.get('/free', requireRole(['admin', 'super_admin']), async (req: Request, 
       orderBy: { createdAt: 'desc' }
     });
     
-    console.log(`[USERS] Found ${freeUsers.length} free users`);
     res.json({ success: true, data: freeUsers });
   } catch (error) {
     console.error('[USERS] Erreur récupération utilisateurs libres:', error);
@@ -114,14 +112,12 @@ router.get('/free', requireRole(['admin', 'super_admin']), async (req: Request, 
 
 // 🏷️ GET /api/users - SÉCURISÉ AVEC LOGIQUE SUPER ADMIN
 router.get('/', requireRole(['admin', 'super_admin']), async (req: AuthenticatedRequest, res: Response) => {
-  console.log('[USERS] GET /users - Récupération utilisateurs SÉCURISÉE');
   
   try {
     const sessionUser = req.user;
 
     // LOGIQUE SUPERADMIN - Montrer TOUS les utilisateurs
     if (sessionUser?.isSuperAdmin) {
-      console.log('[USERS] SuperAdmin request - showing ALL users');
       
       const allUsers = await prisma.user.findMany({
         include: {
@@ -139,7 +135,6 @@ router.get('/', requireRole(['admin', 'super_admin']), async (req: Authenticated
         orderBy: { createdAt: 'desc' }
       });
       
-      console.log(`[USERS] Found ${allUsers.length} total users for SuperAdmin`);
       return res.json({ success: true, data: allUsers });
     }
 
@@ -152,7 +147,6 @@ router.get('/', requireRole(['admin', 'super_admin']), async (req: Authenticated
       });
     }
 
-    console.log(`[USERS] Standard user request - org: ${organizationId}`);
     
     const usersInOrg = await prisma.user.findMany({
       where: {
@@ -176,7 +170,6 @@ router.get('/', requireRole(['admin', 'super_admin']), async (req: Authenticated
       orderBy: { createdAt: 'desc' }
     });
 
-    console.log(`[USERS] Found ${usersInOrg.length} users for org ${organizationId}`);
     res.json({ success: true, data: usersInOrg });
 
   } catch (error) {
@@ -191,7 +184,6 @@ router.get('/', requireRole(['admin', 'super_admin']), async (req: Authenticated
 // 🏷️ GET /api/users/:userId/organizations - SÉCURISÉ
 router.get('/:userId/organizations', requireRole(['admin', 'super_admin']), async (req: Request, res: Response) => {
   const { userId } = req.params;
-  console.log(`[USERS] GET /users/${userId}/organizations - SÉCURISÉ`);
   
   try {
     // Validation souple: accepter toute chaîne non vide (IDs non-UUID)
@@ -213,7 +205,6 @@ router.get('/:userId/organizations', requireRole(['admin', 'super_admin']), asyn
       }
     });
     
-    console.log(`[USERS] Found ${userOrganizations.length} organizations for user ${userId}`);
     res.json({ success: true, data: userOrganizations });
   } catch (error) {
     console.error(`[USERS] Erreur organisations utilisateur ${userId}:`, error);
@@ -226,13 +217,11 @@ router.get('/:userId/organizations', requireRole(['admin', 'super_admin']), asyn
 
 // 🏷️ POST /api/users/user-organizations - SÉCURISÉ AVEC ZOD
 router.post('/user-organizations', usersModifyRateLimit, requireRole(['admin', 'super_admin']), async (req: Request, res: Response) => {
-  console.log('[USERS] POST /users/user-organizations - Assignation SÉCURISÉE');
   
   try {
     // Validation Zod
     const validation = userOrganizationSchema.safeParse(req.body);
     if (!validation.success) {
-      console.log('[USERS] Validation échouée:', validation.error);
       return res.status(400).json(handleZodError(validation.error));
     }
 
@@ -269,7 +258,6 @@ router.post('/user-organizations', usersModifyRateLimit, requireRole(['admin', '
       }
     });
 
-    console.log(`[USERS] Assignation réussie: user ${userId} → org ${organizationId}`);
     res.status(201).json({ success: true, data: newUserOrganization });
   } catch (error) {
     console.error('[USERS] Erreur assignation utilisateur:', error);
@@ -283,7 +271,6 @@ router.post('/user-organizations', usersModifyRateLimit, requireRole(['admin', '
 // 🏷️ PATCH /api/users/user-organizations/:userOrganizationId - SÉCURISÉ AVEC ZOD
 router.patch('/user-organizations/:userOrganizationId', usersModifyRateLimit, requireRole(['admin', 'super_admin']), async (req: Request, res: Response) => {
   const { userOrganizationId } = req.params;
-  console.log(`[USERS] PATCH /users/user-organizations/${userOrganizationId} - SÉCURISÉ`);
   
   try {
     // Validation souple: accepter toute chaîne non vide (IDs non-UUID)
@@ -297,7 +284,6 @@ router.patch('/user-organizations/:userOrganizationId', usersModifyRateLimit, re
     // Validation Zod body
     const validation = userUpdateSchema.safeParse(req.body);
     if (!validation.success) {
-      console.log('[USERS] Validation échouée:', validation.error);
       return res.status(400).json(handleZodError(validation.error));
     }
 
@@ -324,7 +310,6 @@ router.patch('/user-organizations/:userOrganizationId', usersModifyRateLimit, re
       }
     });
 
-    console.log(`[USERS] Mise à jour réussie: relation ${userOrganizationId}`);
     res.json({ success: true, data: updatedUserOrganization });
   } catch (error: unknown) {
     // Prisma P2025: Record to update not found
@@ -346,7 +331,6 @@ router.patch('/user-organizations/:userOrganizationId', usersModifyRateLimit, re
 // 🏷️ DELETE /api/users/user-organizations/:userOrganizationId - SÉCURISÉ
 router.delete('/user-organizations/:userOrganizationId', usersModifyRateLimit, requireRole(['admin', 'super_admin']), async (req: Request, res: Response) => {
   const { userOrganizationId } = req.params;
-  console.log(`[USERS] DELETE /users/user-organizations/${userOrganizationId} - SÉCURISÉ`);
   
   try {
     // Validation souple: accepter toute chaîne non vide (IDs non-UUID)
@@ -388,7 +372,6 @@ router.delete('/user-organizations/:userOrganizationId', usersModifyRateLimit, r
       where: { id: sanitizeString(userOrganizationId) }
     });
 
-    console.log(`[USERS] Suppression relation réussie: ${userOrganizationId}`);
     res.json({ success: true, message: "Utilisateur retiré de l'organisation avec succès" });
   } catch (error) {
     console.error('[USERS] Erreur suppression relation:', error);
@@ -403,7 +386,6 @@ router.delete('/user-organizations/:userOrganizationId', usersModifyRateLimit, r
 router.patch('/:userId', usersModifyRateLimit, requireRole(['admin', 'super_admin']), async (req: AuthenticatedRequest, res: Response) => {
   const { userId } = req.params;
   
-  console.log(`[USERS] PATCH /users/${userId} - Modification informations utilisateur`);
   
   try {
     // Schéma de validation pour les informations utilisateur
@@ -479,7 +461,6 @@ router.patch('/:userId', usersModifyRateLimit, requireRole(['admin', 'super_admi
       }
     });
 
-    console.log(`[USERS] User ${sessionUser?.email} updated user ${updatedUser.email}`);
     res.json({
       success: true,
       message: 'Informations utilisateur mises à jour avec succès',
@@ -499,7 +480,6 @@ router.patch('/:userId', usersModifyRateLimit, requireRole(['admin', 'super_admi
 router.delete('/:userId', usersModifyRateLimit, requireRole(['admin', 'super_admin']), async (req: AuthenticatedRequest, res: Response) => {
   const { userId } = req.params;
   const sessionUser = req.user;
-  console.log(`[USERS] DELETE /users/${userId} - ADMIN/SUPER ADMIN SÉCURISÉ`);
   
   try {
     // Validation souple: accepter toute chaîne non vide (IDs non-UUID)
@@ -604,7 +584,6 @@ router.delete('/:userId', usersModifyRateLimit, requireRole(['admin', 'super_adm
       await tx.user.delete({ where: { id: uid } });
     });
 
-    console.log(`[USERS] User ${sessionUser?.email} deleted user ${userToDelete.email}`);
     res.json({ 
       success: true, 
       message: `Utilisateur ${userToDelete.email} supprimé avec succès` 
@@ -632,7 +611,6 @@ router.get('/:userId/rights-summary', requireRole(['admin', 'super_admin']), asy
     const { userId } = req.params;
     const { organizationId } = req.query;
 
-    console.log(`[USERS] Récupération du résumé des droits pour utilisateur ${userId} dans organisation ${organizationId}`);
 
     if (!userId || !organizationId) {
       return res.status(400).json({
@@ -738,7 +716,6 @@ router.get('/:userId/rights-summary', requireRole(['admin', 'super_admin']), asy
     // 🚀 Fallback Super Admin : si aucun enregistrement de permission explicite pour ce rôle
     const isSuperAdminRole = role.label?.toLowerCase().includes('super') && role.label?.toLowerCase().includes('admin');
     if (isSuperAdminRole && Object.keys(permissionsByModule).length === 0) {
-      console.log('[USERS][rights-summary] Aucun permission explicite trouvée pour un rôle SuperAdmin – génération synthétique de toutes les permissions actives.');
       // Récupérer toutes les actions disponibles par module (même non "allowed")
       const moduleIds = organization.Module.map(m => m.id);
       if (moduleIds.length > 0) {
@@ -760,12 +737,9 @@ router.get('/:userId/rights-summary', requireRole(['admin', 'super_admin']), asy
         rightsSummary.permissions = synthetic;
         rightsSummary.organizationInfo.moduleCount = Object.keys(synthetic).length;
         rightsSummary.synthetic = true;
-        console.log(`[USERS][rights-summary] Permissions synthétiques générées: ${Object.keys(synthetic).length} modules.`);
       }
     }
 
-    console.log(`[USERS] Résumé des droits généré pour ${userWithOrgInfo.email} dans ${organization.name}`);
-    console.log(`[USERS] Rôle: ${role.label}, Permissions: ${Object.keys(rightsSummary.permissions).length} modules (synthetic=${rightsSummary.synthetic ? 'yes' : 'no'})`);
 
     res.json({
       success: true,
@@ -803,7 +777,6 @@ router.post('/me/current-organization', async (req: Request, res: Response) => {
       });
     }
 
-    console.log(`[USERS] Changement d'organisation pour ${userId} vers ${organizationId}`);
 
     // Vérifier que l'utilisateur appartient bien à cette organisation
     const userOrg = await prisma.userOrganization.findFirst({
@@ -836,7 +809,6 @@ router.post('/me/current-organization', async (req: Request, res: Response) => {
         });
       });
 
-      console.log(`[USERS] ✅ Organisation changée avec succès vers ${userOrg.Organization.name}`);
       
       return res.json({
         success: true,
@@ -921,7 +893,6 @@ router.post('/:userId/resend-verification', requireRole(['admin', 'super_admin']
       `,
     });
 
-    console.log(`[USERS] ✅ Email de vérification renvoyé à ${user.email} par admin ${req.user?.email}`);
     res.json({ success: true, message: `Email de confirmation renvoyé à ${user.email}` });
 
   } catch (error) {
@@ -958,7 +929,6 @@ router.patch('/:userId/global-status', requireRole(['admin', 'super_admin']), as
       data: { status: parsed.data.status, updatedAt: new Date() },
     });
 
-    console.log(`[USERS] Statut global Zhiive de ${user.email} → ${parsed.data.status} (par ${req.user?.email})`);
     res.json({ success: true, message: `Statut Zhiive mis à jour: ${parsed.data.status}` });
 
   } catch (error) {

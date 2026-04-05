@@ -352,7 +352,6 @@ const organizationsRateLimit = rateLimit({
   skipSuccessfulRequests: false,
   skipFailedRequests: false,
   handler: (_req, res) => {
-    console.log('🚨 [ORGANIZATIONS] Rate limit dépassé');
     res.status(429).json({
       success: false,
       message: 'Trop de requêtes. Veuillez attendre.'
@@ -434,7 +433,6 @@ router.get('/public', async (_req, res) => {
       memberCount: org._count?.UserOrganization || 0
     }));
 
-    console.log(`[Organizations] /public - ${publicOrgs.length} organisations retournées`);
 
     res.json({
       success: true,
@@ -582,7 +580,6 @@ router.get('/active', async (req: AuthenticatedRequest, res) => {
       where.id = requestingUser.organizationId;
       
     } else {
-      console.log('[ORGANIZATIONS] Accès refusé - pas d\'organisation assignée');
       return res.status(403).json({
         success: false,
         message: 'Accès refusé'
@@ -782,7 +779,6 @@ router.post('/', organizationsCreateRateLimit, requireRole(['super_admin']), asy
     // 🔍 VALIDATION ZOD ULTRA-STRICTE
     const validation = organizationCreateSchema.safeParse(req.body);
     if (!validation.success) {
-      console.log('[ORGANIZATIONS] Validation échouée:', validation.error);
       return res.status(400).json(handleZodError(validation.error));
     }
     
@@ -801,7 +797,6 @@ router.post('/', organizationsCreateRateLimit, requireRole(['super_admin']), asy
       email: data.email ? sanitizeString(data.email) : null,
     };
 
-    console.log('[ORGANIZATIONS] Données sanitisées:', sanitizedData);
     
     // ✅ VÉRIFICATION UNICITÉ
     const existingOrg = await prisma.organization.findFirst({
@@ -851,7 +846,6 @@ router.post('/', organizationsCreateRateLimit, requireRole(['super_admin']), asy
       return org;
     });
     
-    console.log('[ORGANIZATIONS] Organisation créée avec succès:', newOrganization.id);
     
     res.status(201).json({
       success: true,
@@ -991,8 +985,6 @@ router.put('/:id', requireRole(['super_admin']), async (req: AuthenticatedReques
   
   try {
     const { id } = req.params;
-    console.log('🔍 [ORGANIZATIONS] ID reçu:', id);
-    console.log('🔍 [ORGANIZATIONS] Body reçu:', JSON.stringify(req.body, null, 2));
     
     const sanitizedId = validateAndSanitizeId(id, 'ID organisation');
     
@@ -1003,7 +995,6 @@ router.put('/:id', requireRole(['super_admin']), async (req: AuthenticatedReques
       return res.status(400).json(handleZodError(validation.error));
     }
     
-    console.log('✅ [ORGANIZATIONS] Validation Zod réussie');
     const data = validation.data;
     
     // 🧹 SANITISATION
@@ -1054,7 +1045,6 @@ router.put('/:id', requireRole(['super_admin']), async (req: AuthenticatedReques
       updateData.email = data.email ? sanitizeString(data.email) : null;
     }
     
-    console.log('[ORGANIZATIONS] Données de mise à jour sanitisées:', updateData);
     
     // ✅ VÉRIFICATION EXISTENCE
     const existingOrg = await prisma.organization.findUnique({
@@ -1097,7 +1087,6 @@ router.put('/:id', requireRole(['super_admin']), async (req: AuthenticatedReques
       
       // 🌟 MISE À JOUR GOOGLE WORKSPACE SI NÉCESSAIRE
       if (data.googleWorkspace) {
-        console.log('[ORGANIZATIONS] Mise à jour Google Workspace:', data.googleWorkspace);
         
         // Récupérer ou créer la configuration Google Workspace
         const existingConfig = await tx.googleWorkspaceConfig.findUnique({
@@ -1625,7 +1614,6 @@ router.post('/create-my-org', createMyOrgRateLimit, async (req: AuthenticatedReq
       return org;
     });
 
-    console.log(`[ORGANIZATIONS] Free user ${userId} a créé l'organisation "${result.name}" (${result.id})`);
 
     res.status(201).json({
       success: true,
@@ -1697,7 +1685,6 @@ router.post('/:id/logo', async (req: AuthenticatedRequest, res) => {
       select: { id: true, name: true, logoUrl: true },
     });
 
-    console.log(`✅ [POST /api/organizations/${id}/logo] Logo mis à jour: ${logoUrl}`);
     res.json({ success: true, data: updatedOrg });
   } catch (error) {
     console.error('❌ [POST /api/organizations/:id/logo] Erreur:', error);

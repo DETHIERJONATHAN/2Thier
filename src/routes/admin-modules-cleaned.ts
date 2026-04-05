@@ -13,7 +13,6 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const organizationId = req.query.organizationId as string;
     
-    console.log('[ADMIN-MODULES-V1] GET - Récupération modules par sections (système hybride)');
     
     // Récupérer l'icône par défaut depuis la BDD
     const defaultIcon = await prisma.icon.findFirst({
@@ -72,8 +71,6 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       (a, b) => a.sectionOrder - b.sectionOrder
     );
 
-    console.log(`[ADMIN-MODULES-V1] Sections créées: ${sections.length} (système hybride)`);
-    console.log(`[ADMIN-MODULES-V1] Total modules: ${modules.length}`);
     
     res.json({
       success: true,

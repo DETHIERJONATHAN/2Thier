@@ -56,7 +56,6 @@ async function isPostalApiConfigured(): Promise<boolean> {
     if (!postalApiVerified) {
       console.warn(`⚠️ [POSTAL] API REST non fonctionnelle (${resp.status}, content-type: ${contentType}) — utilisation SMTP direct`);
     } else {
-      console.log('✅ [POSTAL] API REST vérifiée et fonctionnelle');
     }
   } catch {
     console.warn('⚠️ [POSTAL] API REST inaccessible — utilisation SMTP direct');
@@ -136,7 +135,6 @@ router.post('/send', authMiddleware, async (req: AuthenticatedRequest, res) => {
 
     if (usePostalApi) {
       // ─── API Postal REST (quand le Server Postal est finalisé) ───
-      console.log(`📤 [POSTAL] Envoi email de ${fromEmail} vers ${to} (via API Postal)`);
       const postal = getPostalService();
       const result = await postal.sendEmail({
         from: fromEmail,
@@ -151,7 +149,6 @@ router.post('/send', authMiddleware, async (req: AuthenticatedRequest, res) => {
       messageId = result.message_id;
     } else {
       // ─── SMTP direct vers postal.zhiive.com:25 ───
-      console.log(`📤 [POSTAL] Envoi email de ${fromEmail} vers ${to} (via SMTP port ${process.env.POSTAL_SMTP_PORT || 25})`);
       const transporter = getSmtpTransporter();
 
       // Extraire le nom d'affichage depuis l'adresse email (prénom.nom → Prénom Nom)
@@ -198,7 +195,6 @@ router.post('/send', authMiddleware, async (req: AuthenticatedRequest, res) => {
       },
     });
 
-    console.log(`✅ [POSTAL] Email envoyé (messageId: ${messageId})`);
 
     res.json({
       success: true,
@@ -278,7 +274,6 @@ router.post('/test', authMiddleware, async (req: AuthenticatedRequest, res) => {
       console.warn(`⚠️ [POSTAL] Test connexion failed:`, e);
     }
 
-    console.log(`${isConnected ? '✅' : '❌'} [POSTAL] Test connexion ${method}: ${isConnected ? 'SUCCESS' : 'FAILED'}`);
 
     res.json({
       success: isConnected,
@@ -612,12 +607,10 @@ router.post('/inbound', async (req, res) => {
       if (token !== webhookSecret) {
         // Si pas de token, on accepte quand même car Postal signe avec RSA (pas HMAC)
         // et la sécurité est assurée par le fait que seul Postal connaît l'URL du webhook
-        console.log('📥 [POSTAL] Webhook reçu sans token — accepté (sécurisé par URL)');
       }
     }
 
     const payload = req.body;
-    console.log(`📥 [POSTAL] Webhook reçu: ${payload.subject || 'no subject'} de ${payload.mail_from}`);
 
     const postal = getPostalService();
     const emailId = await postal.processInboundEmail(payload);

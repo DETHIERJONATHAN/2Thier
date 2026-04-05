@@ -375,7 +375,6 @@ RÈGLES:
       });
     }
 
-    console.log(`[EXPENSES] ✅ Ticket scanné: ${extracted.supplierName || '?'} — €${extracted.totalAmount || '?'} (confiance: ${extracted.confidence || '?'})`);
 
     return res.json({
       success: true,
@@ -471,7 +470,6 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
       },
     });
 
-    console.log(`[EXPENSES] ✅ Dépense créée: ${expense.id} — ${data.supplierName} €${data.totalAmount}`);
     return res.json({ success: true, data: expense });
   } catch (error: unknown) {
     console.error('[EXPENSES] Create error:', error);

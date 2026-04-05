@@ -122,7 +122,6 @@ export class PostalEmailService {
       }));
     }
 
-    console.log(`📤 [POSTAL] Envoi email de ${from} vers ${toArray.join(', ')}`);
 
     const result = await this.apiCall<{ messages: Record<string, PostalMessageResult> }>('send/message', payload);
 
@@ -134,7 +133,6 @@ export class PostalEmailService {
     const firstRecipient = Object.keys(result.data.messages)[0];
     const messageResult = result.data.messages[firstRecipient] as PostalMessageResult;
 
-    console.log(`✅ [POSTAL] Email envoyé: ${messageResult.message_id}`);
 
     return messageResult;
   }
@@ -162,7 +160,6 @@ export class PostalEmailService {
       throw new Error(`Adresse email invalide: ${emailAddress}`);
     }
 
-    console.log(`📬 [POSTAL] Boîte mail enregistrée: ${emailAddress} (${name || 'sans nom'})`);
 
     // Vérifier que l'API Postal est joignable (test d'envoi à vide)
     try {
@@ -176,7 +173,6 @@ export class PostalEmailService {
     // - Réception : un catch-all route dans Postal web admin redirige vers /api/postal/inbound
     // - L'EmailAccount en DB suffit pour que processInboundEmail() associe l'email au bon user
 
-    console.log(`✅ [POSTAL] Boîte mail prête: ${emailAddress}`);
     return { key: '' };
   }
 
@@ -219,7 +215,6 @@ export class PostalEmailService {
       const recipientEmail = payload.rcpt_to;
       const senderEmail = payload.mail_from;
 
-      console.log(`📥 [POSTAL] Email entrant de ${senderEmail} vers ${recipientEmail}`);
 
       // Trouver l'utilisateur propriétaire de cette adresse
       const emailAccount = await db.emailAccount.findFirst({
@@ -244,7 +239,6 @@ export class PostalEmailService {
       });
 
       if (existing) {
-        console.log(`📧 [POSTAL] Email déjà existant: ${payload.message_id}`);
         return existing.id;
       }
 
@@ -266,7 +260,6 @@ export class PostalEmailService {
         },
       });
 
-      console.log(`✅ [POSTAL] Email sauvegardé: ${email.id} (${payload.subject})`);
 
       return email.id;
     } catch (error) {
@@ -282,9 +275,7 @@ export class PostalEmailService {
    */
   async testConnection(): Promise<boolean> {
     try {
-      console.log(`🧪 [POSTAL] Test connexion vers ${this.apiUrl}`);
       const result = await this.apiCall('deliverability/domain_check', { domain: 'test.com' });
-      console.log(`✅ [POSTAL] Connexion OK`);
       return result.status === 'success';
     } catch (error) {
       console.error('❌ [POSTAL] Erreur connexion:', error);

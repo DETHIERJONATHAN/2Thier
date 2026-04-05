@@ -30,7 +30,6 @@ export class GoogleWorkspaceIntegrationService {
       });
 
       if (!config) {
-        console.log('⚠️ [GoogleWorkspaceIntegration] Aucune configuration Google Workspace trouvée');
         this.isInitialized = false;
         return false;
       }
@@ -49,7 +48,6 @@ export class GoogleWorkspaceIntegrationService {
       this.googleWorkspaceService = new GoogleWorkspaceService(decryptedConfig);
       this.isInitialized = true;
       
-      console.log('✅ [GoogleWorkspaceIntegration] Service initialisé avec succès');
       return true;
     } catch (error) {
       console.error('❌ [GoogleWorkspaceIntegration] Erreur initialisation:', error);
@@ -69,7 +67,6 @@ export class GoogleWorkspaceIntegrationService {
     organizationId?: string;
   }): Promise<{ success: boolean; workspaceUser?: any; error?: string }> {
     try {
-      console.log(`🚀 [GoogleWorkspaceIntegration] Création compte Workspace pour ${crmUser.email}...`);
 
       // Vérifier si le service est initialisé
       if (!this.isInitialized || !this.googleWorkspaceService) {
@@ -102,7 +99,6 @@ export class GoogleWorkspaceIntegrationService {
           createdAt: new Date()
         });
 
-        console.log(`✅ [GoogleWorkspaceIntegration] Compte Workspace créé pour ${crmUser.email}`);
         
         // TODO: Envoyer un email de bienvenue avec les informations de connexion
         await this.sendWelcomeEmail(crmUser, tempPassword);
@@ -201,7 +197,6 @@ export class GoogleWorkspaceIntegrationService {
   }): Promise<void> {
     try {
       // TODO: Créer une table WorkspaceAccount ou étendre EmailAccount
-      console.log(`💾 [GoogleWorkspaceIntegration] Sauvegarde infos Workspace pour user ${crmUserId}`, workspaceInfo);
       
       // Pour l'instant, on peut utiliser la table EmailAccount existante
       // ou créer une nouvelle table spécifique Google Workspace
@@ -219,7 +214,6 @@ export class GoogleWorkspaceIntegrationService {
     email: string;
   }, _tempPassword: string): Promise<void> {
     try {
-      console.log(`📧 [GoogleWorkspaceIntegration] Envoi email de bienvenue à ${user.email}`);
       
       // TODO: Implémenter l'envoi d'email avec les informations de connexion
       // const emailContent = `

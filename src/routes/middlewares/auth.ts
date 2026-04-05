@@ -111,17 +111,6 @@ export const authMiddleware = async (req: AuthenticatedRequest, res: Response, n
         
         
         
-        
-        console.log('✅ [AUTH] Données décodées:', {
-            userId: decoded.userId,
-            role: decoded.role,
-            roles: decoded.roles,
-            organizationId: decoded.organizationId
-        });
-        
-        
-        
-        
         // Récupérer l'utilisateur depuis la base de données
         const user = await prisma.user.findUnique({
             where: { id: decoded.userId }
@@ -203,15 +192,6 @@ export const authMiddleware = async (req: AuthenticatedRequest, res: Response, n
             isSuperAdmin: user.role === 'super_admin'
         };
         
-        console.log('[AUTH] Utilisateur authentifié avec:', { 
-            userId: req.user.userId, 
-            role: req.user.role, 
-            firstname: req.user.firstname,
-            lastname: req.user.lastname,
-            email: req.user.email,
-            organizationId: req.user.organizationId 
-        });
-        
         return next();
         
     } catch (error) {
@@ -250,7 +230,6 @@ export const login = async (req: AuthenticatedRequest, res: Response) => {
     }
 
     // Log pour vérifier l'utilisateur trouvé
-    console.log('[Login] Utilisateur trouvé:', { id: user.id, email: user.email, role: user.role });
 
     const passwordMatch = await bcrypt.compare(password, user.passwordHash);
     if (!passwordMatch) {

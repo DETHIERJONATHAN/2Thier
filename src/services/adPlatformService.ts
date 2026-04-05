@@ -371,7 +371,6 @@ export class AdPlatformService {
    */
   private static async syncGoogleAds(integration: { id: string; name: string; platform: string; organizationId: string }) {
     // TODO: Implémenter l'API Google Ads
-    console.log('Synchronisation Google Ads pour:', integration.name);
   }
 
   /**
@@ -379,7 +378,6 @@ export class AdPlatformService {
    */
   private static async syncMetaAds(integration: { id: string; name: string; platform: string; organizationId: string }) {
     // TODO: Implémenter l'API Facebook Marketing
-    console.log('Synchronisation Meta Ads pour:', integration.name);
   }
 
   /**
@@ -387,7 +385,6 @@ export class AdPlatformService {
    */
   private static async syncLinkedInAds(integration: { id: string; name: string; platform: string; organizationId: string }) {
     // TODO: Implémenter l'API LinkedIn Marketing
-    console.log('Synchronisation LinkedIn Ads pour:', integration.name);
   }
 
   /**
@@ -395,6 +392,5 @@ export class AdPlatformService {
    */
   private static async syncTikTokAds(integration: { id: string; name: string; platform: string; organizationId: string }) {
     // TODO: Implémenter l'API TikTok for Business
-    console.log('Synchronisation TikTok Ads pour:', integration.name);
   }
 }

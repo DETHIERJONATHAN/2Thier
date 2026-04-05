@@ -14,7 +14,6 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const { category, search } = req.query;
     
-    console.log('[ICONS-API] GET - Récupération des icônes', { category, search });
 
     let whereClause: any = {
       active: true // Seulement les icônes actives
@@ -75,7 +74,6 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
 // GET - Récupérer les catégories d'icônes
 router.get('/categories', async (req: Request, res: Response): Promise<void> => {
   try {
-    console.log('[ICONS-API] GET - Récupération des catégories d\'icônes');
 
     const categories = await prisma.icon.groupBy({
       by: ['category'],
@@ -107,7 +105,6 @@ router.post('/', requireRole(['super_admin']) as unknown as RequestHandler, asyn
   try {
     const { name, category, description, tags, active = true } = req.body;
     
-    console.log('[ICONS-API] POST - Création d\'une nouvelle icône:', { name, category });
 
     if (!name || !category) {
       res.status(400).json({
@@ -149,7 +146,6 @@ router.put('/:id', requireRole(['super_admin']) as unknown as RequestHandler, as
     const { id } = req.params;
     const updateData = req.body;
     
-    console.log('[ICONS-API] PUT - Modification de l\'icône:', { id, updateData });
 
     // Supprimer les champs non modifiables
     delete updateData.id;
@@ -182,7 +178,6 @@ router.delete('/:id', requireRole(['super_admin']) as unknown as RequestHandler,
   try {
     const { id } = req.params;
     
-    console.log('[ICONS-API] DELETE - Désactivation de l\'icône:', id);
 
     // On désactive plutôt que de supprimer pour préserver l'intégrité
     const disabledIcon = await prisma.icon.update({

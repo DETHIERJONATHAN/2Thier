@@ -99,9 +99,6 @@ export function computeObjectDimensions(
   objectCorners: ObjectCorners
 ): MeasurementResult {
   
-  console.log('\n' + '═'.repeat(90));
-  console.log('📊 [MEASUREMENT-CALCULATOR] DÉTAIL COMPLET DU CALCUL');
-  console.log('═'.repeat(90));
   
   const warnings: string[] = [];
   
@@ -111,9 +108,6 @@ export function computeObjectDimensions(
   const markerWidthMm = markerWidthCm * 10;
   const markerHeightMm = markerHeightCm * 10;
   
-  console.log(`\n🔹 MARQUEUR DE RÉFÉRENCE:`);
-  console.log(`   Type: Métré A4 V10`);
-  console.log(`   Dimensions: ${markerWidthCm}cm × ${markerHeightCm}cm = ${markerWidthMm}mm × ${markerHeightMm}mm`);
   
   // 2️⃣ Convertir les corners en format Point2D pour homographyUtils
   const srcCorners: HomographyCorners = {
@@ -133,7 +127,6 @@ export function computeObjectDimensions(
     [0, markerHeightMm]              // bottomLeft
   ];
   
-  console.log(`   📐 Points destination V10 ${markerWidthMm}×${markerHeightMm}mm:`, dstPoints.map(p => `(${p[0]}, ${p[1]})`).join(', '));
   
   // Calculer dimensions du marqueur en pixels (pour debug et fallback)
   const markerWidthPx = Math.hypot(
@@ -148,22 +141,9 @@ export function computeObjectDimensions(
   // 2️⃣ HOMOGRAPHIE 4 POINTS (V10)
   let homography: HomographyResult;
 
-  console.log(`\n📐 ÉTAPE 2: Construction homographie basique (4 points)`);
-  console.log(`   Coins marqueur (px):`);
-  console.log(`      TL: (${srcPoints[0][0].toFixed(0)}, ${srcPoints[0][1].toFixed(0)})`);
-  console.log(`      TR: (${srcPoints[1][0].toFixed(0)}, ${srcPoints[1][1].toFixed(0)})`);
-  console.log(`      BR: (${srcPoints[2][0].toFixed(0)}, ${srcPoints[2][1].toFixed(0)})`);
-  console.log(`      BL: (${srcPoints[3][0].toFixed(0)}, ${srcPoints[3][1].toFixed(0)})`);
-  console.log(`   Coins destination (mm):`);
-  console.log(`      TL: (0, 0), TR: (${markerWidthMm}, 0)`);
-  console.log(`      BR: (${markerWidthMm}, ${markerHeightMm}), BL: (0, ${markerHeightMm})`);
-  console.log(`   Taille marqueur en pixels: ${markerWidthPx.toFixed(0)} × ${markerHeightPx.toFixed(0)}`);
 
   try {
     homography = computeHomography(srcPoints, dstPoints);
-    console.log(`   ✅ Homographie calculée`);
-    console.log(`      Qualité: ${homography.quality.toFixed(1)}%`);
-    console.log(`      Incertitude: ±${homography.uncertainty.toFixed(1)}%`);
   } catch (error) {
     console.error('❌ Erreur calcul homographie:', error);
     return {
@@ -183,18 +163,12 @@ export function computeObjectDimensions(
   }
   
   // 4️⃣ Transformer les 4 coins de l'objet vers l'espace réel (mm)
-  console.log(`\n📏 ÉTAPE 3: Transformation des coins de l'objet`);
   
   const objTL: Point2D = [objectCorners.topLeft.x, objectCorners.topLeft.y];
   const objTR: Point2D = [objectCorners.topRight.x, objectCorners.topRight.y];
   const objBR: Point2D = [objectCorners.bottomRight.x, objectCorners.bottomRight.y];
   const objBL: Point2D = [objectCorners.bottomLeft.x, objectCorners.bottomLeft.y];
   
-  console.log(`   Coins objet (px):`);
-  console.log(`      TL: (${objTL[0].toFixed(0)}, ${objTL[1].toFixed(0)})`);
-  console.log(`      TR: (${objTR[0].toFixed(0)}, ${objTR[1].toFixed(0)})`);
-  console.log(`      BR: (${objBR[0].toFixed(0)}, ${objBR[1].toFixed(0)})`);
-  console.log(`      BL: (${objBL[0].toFixed(0)}, ${objBL[1].toFixed(0)})`);
   
   // Transformer vers mm
   const realTL = applyHomography(homography.matrix, objTL);
@@ -202,14 +176,8 @@ export function computeObjectDimensions(
   const realBR = applyHomography(homography.matrix, objBR);
   const realBL = applyHomography(homography.matrix, objBL);
   
-  console.log(`   Coins objet transformés (mm):`);
-  console.log(`      TL: (${realTL[0].toFixed(1)}, ${realTL[1].toFixed(1)})`);
-  console.log(`      TR: (${realTR[0].toFixed(1)}, ${realTR[1].toFixed(1)})`);
-  console.log(`      BR: (${realBR[0].toFixed(1)}, ${realBR[1].toFixed(1)})`);
-  console.log(`      BL: (${realBL[0].toFixed(1)}, ${realBL[1].toFixed(1)})`);
   
   // 5️⃣ Calculer les dimensions avec incertitude
-  console.log(`\n📏 ÉTAPE 4: Calcul des dimensions finales`);
   
   // Largeur: moyenne du côté haut et bas
   const widthTopPx = Math.hypot(objTR[0] - objTL[0], objTR[1] - objTL[1]);
@@ -221,8 +189,6 @@ export function computeObjectDimensions(
     homography.matrix, objBL, objBR, homography.uncertainty
   );
   
-  console.log(`   Largeur haut: ${widthTop.distance.toFixed(1)}mm (±${widthTop.uncertainty.toFixed(1)}mm)`);
-  console.log(`   Largeur bas: ${widthBottom.distance.toFixed(1)}mm (±${widthBottom.uncertainty.toFixed(1)}mm)`);
   
   // Hauteur: moyenne du côté gauche et droit
   const heightLeft = computeRealDistanceWithUncertainty(
@@ -234,8 +200,6 @@ export function computeObjectDimensions(
   const heightLeftPx = Math.hypot(objBL[0] - objTL[0], objBL[1] - objTL[1]);
   const heightRightPx = Math.hypot(objBR[0] - objTR[0], objBR[1] - objTR[1]);
   
-  console.log(`   Hauteur gauche: ${heightLeft.distance.toFixed(1)}mm (±${heightLeft.uncertainty.toFixed(1)}mm)`);
-  console.log(`   Hauteur droite: ${heightRight.distance.toFixed(1)}mm (±${heightRight.uncertainty.toFixed(1)}mm)`);
   
   // Moyennes
   const avgWidthMm = (widthTop.distance + widthBottom.distance) / 2;
@@ -264,16 +228,12 @@ export function computeObjectDimensions(
   if (pxPerMmObjSamples.length > 0) {
     const avgPxPerMmObj = pxPerMmObjSamples.reduce((a, b) => a + b, 0) / pxPerMmObjSamples.length;
     const ratio = avgPxPerMmObj / pxPerMmMarker;
-    console.log(`   📊 Ratio pixels/mm (objet/marqueur): ${ratio.toFixed(2)} (info seulement, NON appliqué)`);
   }
   
   // Variation entre côtés opposés (indicateur de qualité)
   const widthVariation = Math.abs(widthTop.distance - widthBottom.distance) / avgWidthMm * 100;
   const heightVariation = Math.abs(heightLeft.distance - heightRight.distance) / avgHeightMm * 100;
   
-  console.log(`\n   📊 Variation entre côtés opposés:`);
-  console.log(`      Largeur: ${widthVariation.toFixed(1)}%`);
-  console.log(`      Hauteur: ${heightVariation.toFixed(1)}%`);
   
   if (widthVariation > 10) {
     warnings.push(`Variation largeur ${widthVariation.toFixed(0)}% - perspective forte`);
@@ -296,18 +256,8 @@ export function computeObjectDimensions(
   const objectWidthPx = Math.hypot(objTR[0] - objTL[0], objTR[1] - objTL[1]);
   const objectHeightPx = Math.hypot(objBL[0] - objTL[0], objBL[1] - objTL[1]);
   
-  console.log('\n' + '='.repeat(70));
-  console.log('✅ [MEASUREMENT-CALCULATOR] RÉSULTAT FORMULE 1');
-  console.log('='.repeat(70));
-  console.log(`   📏 LARGEUR: ${largeur_cm.toFixed(2)} cm (±${incertitude_largeur_cm.toFixed(2)} cm)`);
-  console.log(`   📏 HAUTEUR: ${hauteur_cm.toFixed(2)} cm (±${incertitude_hauteur_cm.toFixed(2)} cm)`);
-  console.log(`   🎯 Méthode: homography (4 pts) (FORMULE 1)`);
-  console.log(`   📊 Confiance: ${(confidence * 100).toFixed(0)}%`);
-  console.log(`   📊 Qualité homographie: ${homography.quality.toFixed(1)}%`);
   if (warnings.length > 0) {
-    console.log(`   ⚠️ Avertissements: ${warnings.join(', ')}`);
   }
-  console.log('='.repeat(70) + '\n');
   
   return {
     success: true,

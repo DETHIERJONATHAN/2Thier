@@ -170,7 +170,6 @@ router.get('/:treeId', async (req: Request, res: Response): Promise<void> => {
         },
       });
       tree.TreeOrganizationAccess.push(newAccess);
-      console.log(`[ADMIN-TREES] ✅ Accès propriétaire auto-créé pour org ${tree.organizationId}`);
     }
 
     // Récupérer tous les rôles disponibles
@@ -287,7 +286,6 @@ router.post('/:treeId/access', async (req: Request, res: Response): Promise<void
       },
     });
 
-    console.log(`[ADMIN-TREES] ✅ Accès créé/mis à jour: arbre ${treeId} → org ${org.name}`);
     res.json(access);
   } catch (error) {
     console.error('[ADMIN-TREES] Erreur POST /:treeId/access:', error);
@@ -322,7 +320,6 @@ router.put('/:treeId/access/:organizationId', async (req: Request, res: Response
       },
     });
 
-    console.log(`[ADMIN-TREES] ✅ Config mise à jour: arbre ${treeId} → org ${organizationId}`);
     res.json(access);
   } catch (error) {
     console.error('[ADMIN-TREES] Erreur PUT access:', error);
@@ -346,7 +343,6 @@ router.delete('/:treeId/access/:organizationId', async (req: Request, res: Respo
       },
     });
 
-    console.log(`[ADMIN-TREES] ✅ Accès supprimé: arbre ${treeId} → org ${organizationId}`);
     res.json({ success: true });
   } catch (error) {
     console.error('[ADMIN-TREES] Erreur DELETE access:', error);
@@ -440,7 +436,6 @@ router.post('/:treeId/duplicate', async (req: Request, res: Response): Promise<v
       },
     });
 
-    console.log(`[ADMIN-TREES] ✅ Arbre dupliqué: ${sourceTree.name} → ${newTree.name} (org: ${targetOrganizationId}, ${sourceTree.TreeBranchLeafNode.length} nœuds)`);
     res.json({
       tree: newTree,
       nodesCount: sourceTree.TreeBranchLeafNode.length,

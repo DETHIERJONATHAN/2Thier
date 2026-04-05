@@ -43,12 +43,8 @@ router.post('/ultra-fusion-detect', authenticateToken, async (req: Authenticated
     }
 
     if (photos.length > 1) {
-      console.log(`⚠️ [V10] ${photos.length} photos reçues → seule la première est analysée`);
     }
 
-    console.log(`\n${'='.repeat(80)}`);
-    console.log(`🎯 [MÉTRÉ A4 V10] POST /ultra-fusion-detect - 1 photo`);
-    console.log(`${'='.repeat(80)}\n`);
 
     const photo = photos[0];
     const base64Clean = photo.base64.includes(',') ? photo.base64.split(',')[1] : photo.base64;
@@ -81,7 +77,6 @@ router.post('/ultra-fusion-detect', authenticateToken, async (req: Authenticated
     let detection = await detectMetreA4V10(rgbaUsed, width, height);
 
     if (!detection) {
-      console.log(`      🎨 Preprocessing léger (normalize + sharpen) ...`);
       const { data: enhancedPixels } = await sharp(resizedBuffer)
         .normalize()
         .sharpen(1.2)
@@ -127,7 +122,6 @@ router.post('/ultra-fusion-detect', authenticateToken, async (req: Authenticated
     const homographyOriginal = multiply3x3(detection.homography.matrix, scaleMatrix);
 
     const totalTime = Date.now() - startTime;
-    console.log(`\n✅ SUCCÈS - ${totalTime}ms (Métré A4 V10)\n`);
 
     return res.json({
       success: true,

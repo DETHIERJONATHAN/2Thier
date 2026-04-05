@@ -9,7 +9,6 @@ router.use(authenticateToken);
 
 // GET /api/admin-password/users-emails - Récupérer les emails des utilisateurs
 router.get('/users-emails', async (req, res) => {
-  console.log('[ADMIN-PASSWORD] GET /admin-password/users-emails - Récupération des emails');
   
   try {
     const organizationId = req.query.organizationId as string;
@@ -59,7 +58,6 @@ router.get('/users-emails', async (req, res) => {
 
 // GET /api/admin-password/users-services - Récupérer les utilisateurs avec leurs services
 router.get('/users-services', (_req, res) => {
-  console.log('[ADMIN-PASSWORD] GET /admin-password/users-services - Récupération des utilisateurs et services');
   
   // Données par défaut pour éviter les erreurs frontend
   const defaultUsersServices = [
@@ -96,7 +94,6 @@ router.get('/users-services', (_req, res) => {
 
 // POST /api/admin-password/configure-email - Configurer l'email pour un utilisateur
 router.post('/configure-email', (_req, res) => {
-  console.log('[ADMIN-PASSWORD] POST /admin-password/configure-email - Configuration email');
   
   res.status(201).json({
     success: true,
@@ -107,7 +104,6 @@ router.post('/configure-email', (_req, res) => {
 
 // POST /api/admin-password/update-email-config - Alias pour configure-email (utilisé par Settings)
 router.post('/update-email-config', async (req, res) => {
-  console.log('[ADMIN-PASSWORD] POST /admin-password/update-email-config');
   try {
     const { userId, generatedEmail } = req.body;
     if (!userId) {
@@ -123,7 +119,6 @@ router.post('/update-email-config', async (req, res) => {
 
 // PUT /api/admin-password/update-password - Mettre à jour le mot de passe
 router.put('/update-password', (_req, res) => {
-  console.log('[ADMIN-PASSWORD] PUT /admin-password/update-password - Mise à jour mot de passe');
   
   res.json({
     success: true,
@@ -135,7 +130,6 @@ router.put('/update-password', (_req, res) => {
 // GET /api/admin-password/email-status/:userId - Statut email d'un utilisateur
 router.get('/email-status/:userId', (req, res) => {
   const { userId } = req.params;
-  console.log(`[ADMIN-PASSWORD] GET /admin-password/email-status/${userId} - Statut email`);
   
   res.json({
     userId,

@@ -457,31 +457,26 @@ export class EcommerceService {
   // Tests de connexion (à implémenter)
   private static async testShopifyConnection(integration: { url: string; credentials: any }): Promise<boolean> {
     // TODO: Implémenter test Shopify
-    console.log('Test connexion Shopify:', integration.url);
     return true;
   }
 
   private static async testWooCommerceConnection(integration: { url: string; credentials: any }): Promise<boolean> {
     // TODO: Implémenter test WooCommerce
-    console.log('Test connexion WooCommerce:', integration.url);
     return true;
   }
 
   private static async testPrestaShopConnection(integration: { url: string; credentials: any }): Promise<boolean> {
     // TODO: Implémenter test PrestaShop
-    console.log('Test connexion PrestaShop:', integration.url);
     return true;
   }
 
   private static async testMagentoConnection(integration: { url: string; credentials: any }): Promise<boolean> {
     // TODO: Implémenter test Magento
-    console.log('Test connexion Magento:', integration.url);
     return true;
   }
 
   private static async testCustomConnection(integration: { url: string; credentials: any }): Promise<boolean> {
     // TODO: Implémenter test API personnalisée
-    console.log('Test connexion API personnalisée:', integration.url);
     return true;
   }
 

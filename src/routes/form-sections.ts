@@ -11,7 +11,6 @@ const prisma = db;
 router.get('/:blockId', async (req: Request, res: Response): Promise<void> => {
   const { blockId } = req.params;
   try {
-    console.log(`[API] GET /api/form-sections/${blockId} - Récupération sections de formulaire`);
     
     const sections = await prisma.section.findMany({
       where: { blockId },
@@ -33,7 +32,6 @@ router.get('/:blockId', async (req: Request, res: Response): Promise<void> => {
       fields: section.Field || [] // 'Field' est maintenant inclus et disponible
     }));
 
-    console.log(`[API] ${adaptedSections.length} sections de formulaire trouvées pour bloc ${blockId}`);
     res.json(adaptedSections);
     
   } catch (e) {
@@ -47,7 +45,6 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const { name, blockId, order, sectionType } = req.body;
     
-    console.log(`[API] POST /api/form-sections - Création section: ${name} pour bloc ${blockId}`);
 
     if (!name || !blockId) {
       res.status(400).json({ error: 'Name et blockId requis' });
@@ -68,7 +65,6 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       }
     });
 
-    console.log(`[API] ✅ Section de formulaire créée: ${section.id}`);
     res.json({ success: true, data: section });
     
   } catch (error) {
@@ -83,7 +79,6 @@ router.put('/:sectionId', async (req: Request, res: Response): Promise<void> => 
     const { sectionId } = req.params;
     const { name, order, sectionType, active } = req.body;
     
-    console.log(`[API] PUT /api/form-sections/${sectionId} - Modification section`);
 
     const section = await prisma.section.update({
       where: { id: sectionId },
@@ -98,7 +93,6 @@ router.put('/:sectionId', async (req: Request, res: Response): Promise<void> => 
       }
     });
 
-    console.log(`[API] ✅ Section de formulaire modifiée: ${section.id}`);
     res.json({ success: true, data: section });
     
   } catch (error) {
@@ -112,13 +106,11 @@ router.delete('/:sectionId', async (req: Request, res: Response): Promise<void> 
   try {
     const { sectionId } = req.params;
     
-    console.log(`[API] DELETE /api/form-sections/${sectionId} - Suppression section`);
 
     await prisma.section.delete({
       where: { id: sectionId }
     });
 
-    console.log(`[API] ✅ Section de formulaire supprimée: ${sectionId}`);
     res.json({ success: true, message: 'Section de formulaire supprimée' });
     
   } catch (error) {

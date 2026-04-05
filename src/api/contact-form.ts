@@ -119,20 +119,8 @@ router.post('/contact-form', async (req: Request, res) => {
       }
     });
 
-    console.log('📧 ✅ Nouveau formulaire de contact reçu:', {
-      id: submission.id,
-      name: data.name,
-      email: data.email,
-      service: data.service,
-      websiteId: data.websiteId,
-      organizationId: website.organizationId,
-      spam,
-      date: new Date().toISOString()
-    });
-
     // Si spam, on confirme quand même pour ne pas révéler la détection
     if (spam) {
-      console.log('⚠️ SPAM DÉTECTÉ - Marqué comme spam dans la BDD');
     }
 
     // 6. TODO: Envoyer emails de notification

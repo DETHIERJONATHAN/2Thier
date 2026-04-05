@@ -17,7 +17,6 @@ router.use((req, res, next) => {
 	if (isWebhook) {
 		if (process.env.TELNYX_DEBUG_WEBHOOKS === '1') {
 			// eslint-disable-next-line no-console
-			console.log('🧷 [Telnyx Webhook Debug] bypass auth', { path, originalUrl });
 		}
 		return next();
 	}

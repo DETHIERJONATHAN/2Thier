@@ -76,7 +76,6 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
       }
     });
 
-    console.log(`[JoinRequest] Nouvelle demande créée: user=${userId} -> org=${organizationId}`);
 
     // 🔔 Notification: demande d'adhésion reçue
     const requestUser = await db.user.findUnique({ where: { id: userId }, select: { firstName: true, lastName: true } });
@@ -240,7 +239,6 @@ router.post('/:id/approve', authMiddleware, requireRole(['admin', 'super_admin']
       return { request: updatedRequest, userOrganization: userOrg };
     });
 
-    console.log(`[JoinRequest] Demande ${id} approuvée par ${adminId}`);
 
     // 🔔 Notification: demande approuvée
     notify.joinRequestApproved(
@@ -304,7 +302,6 @@ router.post('/:id/reject', authMiddleware, requireRole(['admin', 'super_admin'])
       }
     });
 
-    console.log(`[JoinRequest] Demande ${id} rejetée par ${adminId}. Raison: ${reason || 'Non spécifiée'}`);
 
     // 🔔 Notification: demande rejetée
     notify.joinRequestRejected(

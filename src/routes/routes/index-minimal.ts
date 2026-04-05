@@ -49,4 +49,3 @@ mainApiRouter.get('/auto-google-auth/connect', (req, res) => {
   });
 });
 
-console.log('✅ Routes principales configurées');

@@ -51,7 +51,6 @@ router.put('/', requireRole(['admin', 'super_admin']), async (req: Authenticated
     const updateData = req.body;
     
     // TODO: Mettre à jour les informations dans la base de données
-    console.log('🔄 [CompanyAPI] Mise à jour entreprise:', { organizationId, updateData });
     
     res.json({
       success: true,

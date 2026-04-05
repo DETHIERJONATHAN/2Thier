@@ -99,7 +99,6 @@ async function buildSelectOptionsMap(
       }
     }
 
-    console.log(`📋 [buildSelectOptionsMap] ${Object.keys(map).length} options mappées depuis ${selectConfigs.length} configs + ${selectNodes.length} select_options + ${optionNodes.length} option nodes`);
   } catch (error: any) {
     console.error('⚠️ [buildSelectOptionsMap] Erreur (non bloquante):', error?.message);
   }
@@ -497,7 +496,6 @@ router.put('/templates/:id', async (req: Request, res: Response) => {
       sections
     } = req.body;
 
-    console.log('📝 [TEMPLATE UPDATE] Mise à jour template:', { id, name, treeId, type, productValue, isDefault });
 
     // Vérifier que le template existe et appartient à l'organisation
     const whereClause: any = { id };
@@ -758,7 +756,6 @@ router.get('/templates/:templateId/sections', async (req: Request, res: Response
     });
 
     if (!template) {
-      console.log(`[DOCUMENTS] Template ${templateId} non trouvé (orgId: ${organizationId}, isSuperAdmin: ${isSuperAdmin})`);
       return res.status(404).json({ error: 'Template non trouvé' });
     }
 
@@ -1030,9 +1027,7 @@ router.post('/generated/generate', async (req: AuthenticatedRequest, res: Respon
       selectedProducts
     } = req.body;
 
-    console.log('📄 [GENERATE DOC] Demande de génération:', { templateId, leadId, submissionId, organizationId, userId });
     try {
-      console.log('📄 [GENERATE DOC] Body complet:', JSON.stringify(toJsonSafe(req.body), null, 2));
     } catch (e) {
       console.warn('📄 [GENERATE DOC] Body non serialisable (log simplifié):', {
         templateId,
@@ -1060,7 +1055,6 @@ router.post('/generated/generate', async (req: AuthenticatedRequest, res: Respon
     }
 
     // Récupérer le template avec ses sections
-    console.log('📄 [GENERATE DOC] Recherche du template...', { templateId, organizationId });
     const template = await prisma.documentTemplate.findFirst({
       where: { 
         id: templateId,
@@ -1074,7 +1068,6 @@ router.post('/generated/generate', async (req: AuthenticatedRequest, res: Respon
       }
     });
 
-    console.log('📄 [GENERATE DOC] Template trouvé:', template ? template.id : 'NULL ❌');
 
     if (!template) {
       console.error('❌ [GENERATE DOC] Template non trouvé avec templateId=' + templateId + ' et organizationId=' + organizationId);
@@ -1091,7 +1084,6 @@ router.post('/generated/generate', async (req: AuthenticatedRequest, res: Respon
     const randomSuffix = nanoid(6);
     const documentNumber = `${template.type}-${timestamp}-${randomSuffix}`;
 
-    console.log('📄 [GENERATE DOC] Document number généré:', documentNumber);
 
     // Créer l'entrée du document généré
     // Utiliser les champs conformes au schéma Prisma (synchronisé avec la base de données)
@@ -1128,11 +1120,9 @@ router.post('/generated/generate', async (req: AuthenticatedRequest, res: Respon
       }
     });
 
-    console.log('📄 [GENERATE DOC] Document créé:', generatedDocument.id);
 
     // TODO: Implémenter la vraie génération PDF ici
     // Pour l'instant, on simule avec un statut SENT (ready)
-    console.log('📄 [GENERATE DOC] Mise à jour du document avec statut SENT...');
     const updatedDocument = await prisma.generatedDocument.update({
       where: { id: generatedDocument.id },
       data: {
@@ -1166,7 +1156,6 @@ router.post('/generated/generate', async (req: AuthenticatedRequest, res: Respon
       }
     });
 
-    console.log('📄 [GENERATE DOC] Document mis à jour avec succès:', updatedDocument.id);
     res.status(201).json(updatedDocument);
   } catch (error: any) {
     console.error('❌ [GENERATE DOC] Erreur génération document:', error);
@@ -1354,7 +1343,6 @@ router.get('/generated/:id/download', async (req: AuthenticatedRequest, res: Res
   try {
     const { id } = req.params;
 
-    console.log('📥 [DOWNLOAD] Demande de téléchargement:', { id });
 
     // Charger le document avec template, sections, theme et lead
     // On ne filtre PAS par organizationId ici car l'ID du document est unique
@@ -1377,11 +1365,9 @@ router.get('/generated/:id/download', async (req: AuthenticatedRequest, res: Res
     });
 
     if (!document) {
-      console.log('📥 [DOWNLOAD] Document non trouvé');
       return res.status(404).json({ error: 'Document non trouvé' });
     }
 
-    console.log('📥 [DOWNLOAD] Document trouvé:', document.documentNumber);
 
     // Utiliser l'organizationId du document pour charger les ressources
     const organizationId = document.organizationId;
@@ -1403,7 +1389,6 @@ router.get('/generated/:id/download', async (req: AuthenticatedRequest, res: Res
     // Cela permet au PDF renderer de traduire les UUID d'options en labels lisibles
     const tblRawData = ((document.dataSnapshot || {}) as Record<string, any>).tblData || (document.dataSnapshot || {});
     const selectOptionsMap = await buildSelectOptionsMap(organizationId, tblRawData);
-    console.log('📥 [DOWNLOAD] SelectOptionsMap:', { count: Object.keys(selectOptionsMap).length, keys: Object.keys(selectOptionsMap).slice(0, 10) });
 
     // 🔥 SYSTÈME DYNAMIQUE: Résoudre TOUTES les refs de capacités TBL (formule, condition, table, value, etc.)
     // Le système est 100% dynamique — interpretReference gère tous les types automatiquement
@@ -1453,7 +1438,6 @@ router.get('/generated/:id/download', async (req: AuthenticatedRequest, res: Res
         collectRefsDeep(config, allRefs);
       }
       
-      console.log('📥 [DOWNLOAD] Refs dynamiques à résoudre:', { refs: allRefs, submissionId: docSubmissionId });
 
       if (allRefs.length > 0 && docSubmissionId) {
         const { interpretReference } = await import('../components/TreeBranchLeaf/treebranchleaf-new/api/operation-interpreter.js');
@@ -1476,13 +1460,11 @@ router.get('/generated/:id/download', async (req: AuthenticatedRequest, res: Res
               evalRef = ref.replace('@select.', '');
             }
 
-            console.log(`📥 [DOWNLOAD] 🔍 Évaluation dynamique: "${ref}" → interpretReference("${evalRef}")`);
             const evalResult = await interpretReference(evalRef, docSubmissionId, prisma);
             const resultValue = evalResult?.result;
             const errors = evalResult?.details?.evaluationErrors || [];
             const formulaTokens = evalResult?.details?.tokens;
             
-            console.log(`📥 [DOWNLOAD]   → result=${resultValue}, errors=${JSON.stringify(errors)}, hasTokens=${!!formulaTokens && Array.isArray(formulaTokens) && formulaTokens.length > 0}`);
             
             // Ne pas stocker si :
             // - result est null/undefined/∅
@@ -1493,14 +1475,12 @@ router.get('/generated/:id/download', async (req: AuthenticatedRequest, res: Res
               String(resultValue) === '0';
             
             if (isEmptyFormula) {
-              console.log(`📥 [DOWNLOAD]   ⚠️ Formule vide (tokens=[]), ignoré`);
               continue;
             }
             
             if (resultValue !== null && resultValue !== undefined && resultValue !== '∅' && 
                 !String(resultValue).includes('Variable manquante')) {
               formulaResultsMap[ref] = String(resultValue);
-              console.log(`📥 [DOWNLOAD]   ✅ Résolu: ${ref} → ${resultValue}`);
             }
           } catch (refErr) {
             console.warn(`📥 [DOWNLOAD] ⚠️ Résolution "${ref}" échouée:`, refErr);
@@ -1508,7 +1488,6 @@ router.get('/generated/:id/download', async (req: AuthenticatedRequest, res: Res
         }
       }
 
-      console.log('📥 [DOWNLOAD] FormulaResultsMap final:', formulaResultsMap);
     } catch (err) {
       console.warn('📥 [DOWNLOAD] Erreur résolution dynamique:', err);
     }
@@ -1539,12 +1518,6 @@ router.get('/generated/:id/download', async (req: AuthenticatedRequest, res: Res
       logoUrl: ''
     };
     
-    console.log('📥 [DOWNLOAD] Theme utilisé:', {
-      source: templateTheme ? 'template' : (defaultTheme ? 'default' : 'fallback'),
-      primaryColor: theme.primaryColor,
-      fontFamily: theme.fontFamily
-    });
-    
     // Mapper les sections
     const sections = document.DocumentTemplate?.DocumentSection?.map(s => ({
       id: s.id,
@@ -1558,16 +1531,8 @@ router.get('/generated/:id/download', async (req: AuthenticatedRequest, res: Res
     })) || [];
     
     // Debug: log des sections
-    console.log('📥 [DOWNLOAD] Sections mappées:', sections.length);
     for (const sec of sections) {
-      console.log(`📥 [DOWNLOAD] Section ${sec.type}:`, {
-        id: sec.id,
-        configKeys: Object.keys(sec.config || {}),
-        hasModules: !!(sec.config as any)?.modules,
-        modulesCount: (sec.config as any)?.modules?.length || 0
-      });
       if ((sec.config as any)?.modules?.length > 0) {
-        console.log('📥 [DOWNLOAD] Premier module:', JSON.stringify((sec.config as any).modules[0], null, 2).substring(0, 500));
       }
     }
     
@@ -1648,34 +1613,12 @@ router.get('/generated/:id/download', async (req: AuthenticatedRequest, res: Res
       language: document.language || 'fr'
     };
 
-    console.log('📥 [DOWNLOAD] Contexte de rendu:', {
-      templateId: renderContext.template.id,
-      sectionsCount: renderContext.template.sections.length,
-      leadName: renderContext.lead.firstName + ' ' + renderContext.lead.lastName,
-      language: renderContext.language,
-      tblDataKeys: Object.keys(renderContext.tblData || {}),
-      tblDataKeysCount: Object.keys(renderContext.tblData || {}).length,
-      dataSnapshotKeys: Object.keys(dataSnapshot || {}),
-      quote: renderContext.quote // 🔥 Afficher les données du devis
-    });
-    console.log('📥 [DOWNLOAD] Lead data (avec adresse parsée):', {
-      address: renderContext.lead.address,
-      street: renderContext.lead.street,
-      number: renderContext.lead.number,
-      box: renderContext.lead.box,
-      postalCode: renderContext.lead.postalCode,
-      city: renderContext.lead.city,
-      country: renderContext.lead.country
-    });
-    console.log('📥 [DOWNLOAD] tblData complet:', JSON.stringify(renderContext.tblData, null, 2).substring(0, 2000));
-
     // Générer le PDF avec le nouveau renderer basé sur les templates
     const pdfBuffer = await renderDocumentPdf(renderContext);
 
     // Générer un nom de fichier
     const filename = `${document.documentNumber || document.id}.pdf`;
     
-    console.log('📥 [DOWNLOAD] PDF généré, taille:', pdfBuffer.length, 'bytes');
 
     // Envoyer le PDF
     res.setHeader('Content-Type', 'application/pdf');
@@ -1714,7 +1657,6 @@ async function getProductDocumentsForDevis(
   }
 
   if (formValues.length === 0) return [];
-  console.log('📎 [FICHES-TECH] Valeurs du formulaire:', formValues);
 
   // 2. Récupérer TOUS les ProductDocuments de cette organisation avec leurs rows
   const allDocs = await prisma.productDocument.findMany({
@@ -1726,11 +1668,9 @@ async function getProductDocumentsForDevis(
   });
 
   if (allDocs.length === 0) {
-    console.log('📎 [FICHES-TECH] Aucun ProductDocument dans cette organisation');
     return [];
   }
 
-  console.log('📎 [FICHES-TECH]', allDocs.length, 'ProductDocument(s) en base');
 
   // 3. Matcher : pour chaque doc, vérifier si UNE des valeurs du formulaire
   //    se retrouve dans les cellules de la row associée
@@ -1766,14 +1706,12 @@ async function getProductDocumentsForDevis(
         const fileKey = doc.driveFileId || doc.id; // dédupliquer par fichier
         if (!matchedDocs.has(fileKey)) {
           matchedDocs.set(fileKey, doc);
-          console.log('📎 [FICHES-TECH] ✅ Match:', formVal, '→', doc.name, '(', doc.node?.label, ')');
         }
         break;
       }
     }
   }
 
-  console.log('📎 [FICHES-TECH]', matchedDocs.size, 'fiche(s) technique(s) trouvée(s)');
 
   return Array.from(matchedDocs.values()).map(doc => ({
     id: doc.id,
@@ -1832,7 +1770,6 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
       return res.status(400).json({ error: 'Organisation non spécifiée' });
     }
 
-    console.log('📧 [SEND-EMAIL] Envoi du document', id, 'à', to);
 
     // 1. Charger le document (même logique que download)
     const document = await prisma.generatedDocument.findFirst({
@@ -1928,7 +1865,6 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
 
     const pdfBuffer = await renderDocumentPdf(renderContext);
     const filename = `${document.documentNumber || document.id}.pdf`;
-    console.log('📧 [SEND-EMAIL] PDF généré:', filename, pdfBuffer.length, 'bytes');
 
     // 3. Envoyer via Zhiive Mail (Postal)
     const postal = getPostalService();
@@ -1959,7 +1895,6 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
         // Utiliser les données ACTUELLES du formulaire envoyées par le frontend (priorité)
         // Fallback sur le snapshot du document si pas de données fraîches
         const tblData = clientTblData || dataSnapshot.tblData || dataSnapshot;
-        console.log('📎 [SEND-EMAIL] Recherche des fiches techniques pour le devis...', clientTblData ? '(données actuelles du formulaire)' : '(snapshot du document)');
         const productDocs = await getProductDocumentsForDevis(organizationId!, tblData);
 
         for (const doc of productDocs) {
@@ -1986,7 +1921,6 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
               });
               attachedProductDocsCount++;
               attachedProductDocNames.push(doc.name || doc.fileName);
-              console.log('📎 [SEND-EMAIL] ✅ Fiche technique ajoutée:', doc.fileName, `(${(fileBuffer.length / 1024).toFixed(0)} KB)`);
             } else {
               console.warn('📎 [SEND-EMAIL] ⚠️ Impossible de télécharger:', doc.fileName);
             }
@@ -1996,7 +1930,6 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
         }
 
         if (attachedProductDocsCount > 0) {
-          console.log(`📎 [SEND-EMAIL] ${attachedProductDocsCount} fiche(s) technique(s) jointe(s) au total`);
         }
       } catch (prodDocErr) {
         console.warn('📎 [SEND-EMAIL] ⚠️ Erreur récupération fiches techniques (envoi sans):', prodDocErr);
@@ -2073,7 +2006,6 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
           <p style="font-size: 11px; color: #aaa; margin-top: 10px;">Ce lien est valable 72 heures.</p>
         </div>`;
 
-        console.log(`✍️ [SEND-EMAIL] Lien signature créé: ${signUrl}`);
       } catch (sigErr) {
         console.warn('⚠️ [SEND-EMAIL] Impossible de créer le lien de signature:', sigErr);
       }
@@ -2169,7 +2101,6 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
             },
           },
         });
-        console.log('📧 [SEND-EMAIL] ✅ TimelineEvent créé pour le lead', document.leadId);
       } catch (tlErr) {
         console.warn('⚠️ [SEND-EMAIL] Impossible de créer TimelineEvent:', tlErr);
       }
@@ -2177,7 +2108,6 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
 
     const fichesMsg = attachedProductDocsCount > 0 ? ` + ${attachedProductDocsCount} fiche(s) technique(s)` : '';
     const sigMsg = signatureAccessToken ? ' + lien signature' : '';
-    console.log(`📧 [SEND-EMAIL] ✅ Email envoyé à ${to} avec PDF ${filename}${fichesMsg}${sigMsg}`);
     res.json({ 
       success: true, 
       messageId: result.message_id,
@@ -2196,7 +2126,6 @@ router.post('/templates/:templateId/preview-pdf', async (req: Request, res: Resp
     const { templateId } = req.params;
     const organizationId = req.headers['x-organization-id'] as string;
 
-    console.log('🖨️ [PREVIEW-PDF] Demande de génération PDF preview:', { templateId, organizationId });
 
     const { pages, globalTheme } = req.body;
 
@@ -2319,13 +2248,10 @@ router.post('/templates/:templateId/preview-pdf', async (req: Request, res: Resp
       language: 'fr'
     };
 
-    console.log('🖨️ [PREVIEW-PDF] Sections:', sections.length);
-    console.log('🖨️ [PREVIEW-PDF] Theme:', theme);
 
     // Générer le PDF
     const pdfBuffer = await renderDocumentPdf(renderContext);
 
-    console.log('🖨️ [PREVIEW-PDF] PDF généré, taille:', pdfBuffer.length, 'bytes');
 
     // Envoyer le PDF
     res.setHeader('Content-Type', 'application/pdf');
@@ -2345,7 +2271,6 @@ router.get('/generated/:id/preview', async (req: Request, res: Response) => {
     const { id } = req.params;
     const organizationId = req.headers['x-organization-id'] as string;
 
-    console.log('👁️ [PREVIEW] Demande d\'aperçu:', { id, organizationId });
 
     const document = await prisma.generatedDocument.findFirst({
       where: { 
@@ -2367,11 +2292,9 @@ router.get('/generated/:id/preview', async (req: Request, res: Response) => {
     });
 
     if (!document) {
-      console.log('👁️ [PREVIEW] Document non trouvé');
       return res.status(404).json({ error: 'Document non trouvé' });
     }
 
-    console.log('👁️ [PREVIEW] Document trouvé:', document.documentNumber);
 
     // Retourner toutes les données nécessaires pour l'aperçu
     res.json({

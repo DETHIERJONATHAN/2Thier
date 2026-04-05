@@ -12,23 +12,18 @@ router.use(authMiddleware, impersonationMiddleware);
 
 // GET all technical data
 router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
-  console.log(`[TechnicalData] GET / request received. Query:`, req.query);
   try {
     const user = req.user;
     const { organizationId } = req.query;
-    console.log(`[TechnicalData] User:`, user);
     if (!user) {
       console.error('[TechnicalData] Unauthorized access: no user.');
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
     if (isSuperAdmin(user.role)) {
-      console.log(`[TechnicalData] User is Super Admin.`);
       if (!organizationId) {
-        console.log(`[TechnicalData] Super Admin, but no organizationId provided. Returning empty array.`);
         return res.json([]);
       }
-      console.log(`[TechnicalData] Super Admin fetching data for org:`, organizationId);
       const technicalData = await prisma.technicalData.findMany({
         where: {
           OR: [
@@ -39,16 +34,13 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
         include: { Organization: true },
         orderBy: { createdAt: 'desc' },
       });
-      console.log(`[TechnicalData] Data found for Super Admin:`, technicalData);
       res.json(technicalData);
     } else {
-      console.log(`[TechnicalData] User is not Super Admin.`);
       if (!user.organizationId) {
           console.error('[TechnicalData] User is not associated with an organization.');
           return res.status(400).json({ error: 'User is not associated with an organization' });
       }
       
-      console.log(`[TechnicalData] Fetching data for user's org:`, user.organizationId);
       const technicalData = await prisma.technicalData.findMany({
         where: {
           OR: [
@@ -59,7 +51,6 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
         orderBy: { createdAt: 'desc' },
         include: { Organization: true },
       });
-      console.log(`[TechnicalData] Data found for standard user:`, technicalData);
       res.json(technicalData);
     }
   } catch (error: any) {

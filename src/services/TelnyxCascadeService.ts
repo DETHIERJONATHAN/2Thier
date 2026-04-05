@@ -94,7 +94,6 @@ async function planCascade(organizationId: string): Promise<CascadeLeg[]> {
       });
     }
 
-    console.log(`📋 [TelnyxCascade] Cascade planifiée: ${legs.length} étapes`, legs);
     return legs;
 
   } catch (error) {
@@ -117,7 +116,6 @@ export async function initiateCallWithCascade(options: CascadeOptions, req?: Req
   const { organizationId, fromNumber, toNumber, leadId } = options;
 
   try {
-    console.log('📞 [TelnyxCascade] Initiation appel avec cascade:', { fromNumber, toNumber, organizationId });
 
     const config = await prisma.telnyxConfig.findUnique({ where: { organizationId } }).catch(() => null);
     const connectionId = (config?.defaultConnectionId || process.env.TELNYX_CONNECTION_ID || '').trim();
@@ -146,7 +144,6 @@ export async function initiateCallWithCascade(options: CascadeOptions, req?: Req
     const callData = callResponse.data.data;
     const callControlId = callData.call_control_id;
 
-    console.log('✅ [TelnyxCascade] Appel initié sur Telnyx:', callControlId);
 
     // 3. CRÉER LE CALL RECORD EN BASE (IMMÉDIATEMENT)
     const call = await prisma.telnyxCall.create({
@@ -165,7 +162,6 @@ export async function initiateCallWithCascade(options: CascadeOptions, req?: Req
       }
     });
 
-    console.log('💾 [TelnyxCascade] Call record créé:', call.id);
 
     // 4. PLANIFIER LA CASCADE
     const cascadeLegs = await planCascade(organizationId);
@@ -230,7 +226,6 @@ async function executeCascade(
       });
     }
 
-    console.log(`✅ [TelnyxCascade] ${cascadeLegs.length} legs créés pour cascade`);
 
     // TODO: Implémenter la logique de dial/transfer via Telnyx Call Control
     // Pour l'instant, les webhooks vont gérer les transitions d'état
@@ -276,7 +271,6 @@ export async function updateCallLegStatus(
       }
     });
 
-    console.log(`✅ [TelnyxCascade] Leg mis à jour: ${destination} -> ${status}`);
 
     // Si answered, mettre à jour le call principal avec answeredBy
     if (status === 'answered') {
@@ -289,7 +283,6 @@ export async function updateCallLegStatus(
         }
       });
 
-      console.log(`✅ [TelnyxCascade] Call answered_by: ${destination}`);
     }
 
   } catch (error) {

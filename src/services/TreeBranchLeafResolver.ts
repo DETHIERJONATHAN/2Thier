@@ -95,7 +95,6 @@ export class TreeBranchLeafResolver {
    * Job en arrière-plan pour résoudre toutes les opérations non résolues
    */
   async resolveOperationsInBackground(): Promise<void> {
-    console.log('🔄 Starting background operation resolution...');
     
     try {
       // Trouver toutes les entrées avec sourceRef mais sans operationDetail
@@ -112,7 +111,6 @@ export class TreeBranchLeafResolver {
         }
       });
 
-      console.log(`📊 Found ${unresolvedEntries.length} unresolved operations`);
 
       let resolved = 0;
       let failed = 0;
@@ -133,7 +131,6 @@ export class TreeBranchLeafResolver {
         }
       }
 
-      console.log(`✅ Background resolution completed: ${resolved} resolved, ${failed} failed`);
     } catch (error) {
       console.error('❌ Background resolution failed:', error);
     }
@@ -161,7 +158,6 @@ export class TreeBranchLeafResolver {
         }
       }
 
-      console.log(`🔄 Cache invalidated for ${entries.length} entries referencing ${sourceRef}`);
     } catch (error) {
       console.error(`Failed to invalidate cache for ${sourceRef}:`, error);
     }

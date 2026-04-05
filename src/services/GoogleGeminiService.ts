@@ -111,16 +111,11 @@ export class GoogleGeminiService {
     this.perAttemptExtraTimeoutMs = Math.max(0, parseInt(process.env.AI_RETRY_TIMEOUT_INCREMENT_MS || '2000', 10) || 2000);
 
     if (this.isDemoMode) {
-      console.log('🤖 GoogleGeminiService initialisé (mode développement - démo)');
-      console.log('ℹ️  Pour activer l\'API réelle, configurez GOOGLE_AI_API_KEY dans .env');
     } else {
-      console.log('🤖 GoogleGeminiService initialisé (mode production - API réelle)');
       this.genAI = new GoogleGenerativeAI(this.apiKey!);
       this.model = this.getModelInstance(this.primaryModelName);
       this.modelCache.set(this.primaryModelName, this.model);
-      console.log(`✅ Clé API Gemini détectée, modèle rapide: ${this.primaryModelName} (API v1beta)`);
       if (this.fallbackModelNames.length > 0) {
-        console.log(`↪️  Modèles de secours configurés: ${this.fallbackModelNames.join(', ')}`);
       }
     }
   }
@@ -181,7 +176,6 @@ export class GoogleGeminiService {
    */
   async generatePersonalizedEmail(leadData: LeadLike, emailType = 'initial') {
     try {
-      console.log(`🤖 [Gemini] Génération email ${emailType} pour ${leadData.name}`);
       
       if (this.isDemoMode) {
         return this.generateDemoEmail(leadData, emailType);
@@ -216,7 +210,6 @@ export class GoogleGeminiService {
    */
   async analyzeLeadData(leadData: LeadLike) {
     try {
-      console.log(`🤖 [Gemini] Analyse lead ${leadData.name || 'Anonyme'}`);
       
       if (this.isDemoMode) {
         return this.generateDemoAnalysis(leadData);
@@ -237,7 +230,6 @@ export class GoogleGeminiService {
    */
   async generateCommercialProposal(leadData: LeadLike, productData: ProductLike) {
     try {
-      console.log(`🤖 [Gemini] Génération proposition pour ${leadData.name}`);
       
       if (this.isDemoMode) {
         return this.generateDemoProposal(leadData, productData);
@@ -258,7 +250,6 @@ export class GoogleGeminiService {
    */
   async analyzeSentiment(emailContent: string) {
     try {
-      console.log('🤖 [Gemini] Analyse sentiment email');
       
       if (this.isDemoMode) {
         return this.generateDemoSentiment(emailContent);
@@ -279,7 +270,6 @@ export class GoogleGeminiService {
    */
   async suggestEmailResponse(emailContent: string, context: EmailCtx = {}) {
     try {
-      console.log('🤖 [Gemini] Suggestion réponse email');
       
       if (this.isDemoMode) {
         return this.generateDemoResponse(emailContent, context);
@@ -588,7 +578,6 @@ Bien à vous`;
     measureKeys: string[]
   ): Promise<ImageMeasureResult> {
     try {
-      console.log(`📐 [Gemini Vision] Analyse d'image avec ${measureKeys.length} clés à extraire`);
 
       if (this.isDemoMode) {
         return this.generateDemoImageMeasures(measureKeys);
@@ -657,7 +646,6 @@ Bien à vous`;
       }
 
       const visionModelName = this.primaryModelName;
-      console.log(`📷 [Gemini Vision] Envoi image (${mimeType}, ~${Math.round(imageBase64.length / 1024)}KB b64) → ${visionModelName}`);
 
       // Créer un modèle dédié avec safety settings permissifs pour documents financiers
       const visionModel = this.genAI.getGenerativeModel({
@@ -702,7 +690,6 @@ Bien à vous`;
         return { success: false, error: 'Réponse vide de Gemini', modelUsed: visionModelName };
       }
 
-      console.log(`✅ [Gemini Vision] Réponse reçue (${text.length} chars)`);
       return { success: true, content: text, modelUsed: visionModelName };
 
     } catch (error: any) {
@@ -711,7 +698,6 @@ Bien à vous`;
       // Retry avec modèle fallback si disponible
       if (this.fallbackModelNames.length > 0 && !errMsg.includes('API key')) {
         const fallback = this.fallbackModelNames[0];
-        console.log(`🔄 [Gemini Vision] Retry avec fallback: ${fallback}`);
         try {
           const fallbackModel = this.genAI!.getGenerativeModel({
             model: fallback,
@@ -728,7 +714,6 @@ Bien à vous`;
           ]);
           const t2 = r2.response.text();
           if (t2?.trim()) {
-            console.log(`✅ [Gemini Vision] Fallback ${fallback} OK (${t2.length} chars)`);
             return { success: true, content: t2, modelUsed: fallback };
           }
         } catch (e2: any) {
@@ -901,7 +886,6 @@ Analyse maintenant cette image et ESTIME toutes les dimensions:`;
       const response = await result.response;
       const text = response.text();
 
-      console.log(`✅ [Gemini API] Réponse reçue (${modelName})`);
       return { success: true, content: text, modelUsed: modelName };
       
     } catch (error) {

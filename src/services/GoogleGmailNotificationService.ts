@@ -59,7 +59,6 @@ export class GoogleGmailNotificationService {
    * 🚀 DÉMARRER LA SURVEILLANCE GMAIL TEMPS RÉEL
    */
   async startGmailWatch(): Promise<void> {
-    console.log('📧 [GmailNotification] Démarrage surveillance Gmail temps réel...');
 
     try {
       // Récupérer tous les utilisateurs avec Gmail configuré
@@ -74,14 +73,12 @@ export class GoogleGmailNotificationService {
         }
       });
 
-      console.log(`👥 [GmailNotification] ${usersWithGmail.length} utilisateurs Gmail trouvés`);
 
       for (const userToken of usersWithGmail) {
         await this.setupUserGmailWatch(userToken);
       }
 
       this.isWatching = true;
-      console.log('✅ [GmailNotification] Surveillance Gmail démarrée avec succès');
 
     } catch (error) {
       console.error('❌ [GmailNotification] Erreur démarrage surveillance:', error);
@@ -144,7 +141,6 @@ export class GoogleGmailNotificationService {
           }
         });
 
-        console.log(`✅ [GmailNotification] Watch configuré pour ${userToken.user.email}`);
       }
 
     } catch (error) {
@@ -161,7 +157,6 @@ export class GoogleGmailNotificationService {
       const emailAddress = message.emailAddress;
       const historyId = message.historyId;
 
-      console.log(`📨 [GmailNotification] Nouveau message reçu pour ${emailAddress}`);
 
       // Trouver l'utilisateur correspondant
       const userToken = await prisma.googleToken.findFirst({
@@ -218,7 +213,6 @@ export class GoogleGmailNotificationService {
       });
 
       if (!historyResponse.data.history) {
-        console.log(`📭 [GmailNotification] Aucun nouvel email pour ${userToken.user.email}`);
         return;
       }
 
@@ -279,7 +273,6 @@ export class GoogleGmailNotificationService {
         }
       }
 
-      console.log(`📧 [GmailNotification] Analyse email: ${subject.substring(0, 50)}...`);
 
       // 🧠 ANALYSE IA DE L'EMAIL
       const analysis = await this.analyzeEmailWithAI(from, subject, emailBody);
@@ -308,7 +301,6 @@ export class GoogleGmailNotificationService {
       // 🔔 CRÉER LA NOTIFICATION INTELLIGENTE
       await this.createIntelligentNotification(savedEmail, analysis, userToken);
 
-      console.log(`✅ [GmailNotification] Email traité et notification créée: ${savedEmail.id}`);
 
     } catch (error) {
       console.error(`❌ [GmailNotification] Erreur traitement email ${messageId}:`, error);
@@ -487,7 +479,6 @@ export class GoogleGmailNotificationService {
       });
 
       if (existingContact) {
-        console.log(`👥 [GmailNotification] Contact existant trouvé, pas de lead créé`);
         return;
       }
 
@@ -522,7 +513,6 @@ export class GoogleGmailNotificationService {
         organizationId: userToken.organizationId
       });
 
-      console.log(`👥 [GmailNotification] Lead automatique créé: ${lead.id}`);
 
     } catch (error) {
       console.error('❌ [GmailNotification] Erreur création lead automatique:', error);
@@ -562,7 +552,6 @@ export class GoogleGmailNotificationService {
    * 🛑 ARRÊTER LA SURVEILLANCE
    */
   async stopGmailWatch(): Promise<void> {
-    console.log('🛑 [GmailNotification] Arrêt surveillance Gmail...');
     
     this.isWatching = false;
     this.activeWatches.clear();
@@ -571,7 +560,6 @@ export class GoogleGmailNotificationService {
       data: { isActive: false }
     });
     
-    console.log('✅ [GmailNotification] Surveillance Gmail arrêtée');
   }
 }
 

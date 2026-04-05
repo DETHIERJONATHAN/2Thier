@@ -24,13 +24,6 @@ const LazyProductDocumentsPage = React.lazy(() => import('./ProductDocumentsPage
 const LazyTreeBranchLeafWrapper = React.lazy(() => import('./Formulaire/TreeBranchLeafWrapper-Fixed'));
 const LazyTBLPage = React.lazy(() => import('../components/TreeBranchLeaf/treebranchleaf-new/TBL/TBL'));
 const LazyGoogleGmailPageV2 = React.lazy(() => import('./UnifiedMailPage'));
-const LazyGoogleAgendaPage = React.lazy(() => import('./GoogleAgendaPage'));
-const LazyGoogleContactsPage = React.lazy(() => import('./GoogleContactsPage'));
-const LazyGoogleDrivePage = React.lazy(() => import('./GoogleDrivePage'));
-const LazyGoogleFormsPage = React.lazy(() => import('./GoogleFormsPage'));
-const LazyGoogleGroupsPage = React.lazy(() => import('./GoogleGroupsPage'));
-const LazyGoogleMeetPage = React.lazy(() => import('./GoogleMeetPage'));
-const LazyGoogleMapsPage = React.lazy(() => import('./GoogleMapsPage'));
 const LazyGoogleGeminiPage = React.lazy(() => import('./GoogleGeminiPage'));
 const LazyTelnyxPage = React.lazy(() => import('./TelnyxPage'));
 const LazyChantiersPage = React.lazy(() => import('./Chantiers/ChantiersPage'));
@@ -84,14 +77,7 @@ const MODULE_COMPONENTS: Record<string, React.LazyExoticComponent<any>> = {
   '/chantiers': LazyChantiersPage,
   '/google-gmail': LazyGoogleGmailPageV2,
   '/mail': LazyGoogleGmailPageV2,
-  '/google-agenda': LazyGoogleAgendaPage,
-  '/google-contacts': LazyGoogleContactsPage,
-  '/google-drive': LazyGoogleDrivePage,
-  '/google-forms': LazyGoogleFormsPage,
   '/forms': LazyPublicFormsPage,
-  '/google-groups': LazyGoogleGroupsPage,
-  '/google-meet': LazyGoogleMeetPage,
-  '/google-maps': LazyGoogleMapsPage,
   '/gemini': LazyGoogleGeminiPage,
   '/telnyx': LazyTelnyxPage,
   '/telnyx-communications': LazyTelnyxPage,
