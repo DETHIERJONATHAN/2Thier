@@ -102,6 +102,143 @@ router.get('/stats', authenticateToken, async (req: Request, res: Response) => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// GET /monthly — Stats mensuelles (6 derniers mois)
+// ═══════════════════════════════════════════════════════════
+
+router.get('/monthly', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const organizationId = getOrganizationId(req);
+    if (!organizationId) return res.status(400).json({ success: false, message: 'Organisation requise' });
+
+    const months = parseInt(req.query.months as string) || 6;
+    const now = new Date();
+    const startDate = new Date(now.getFullYear(), now.getMonth() - months + 1, 1);
+
+    const expenses = await db.expense.findMany({
+      where: { organizationId, expenseDate: { gte: startDate } },
+      select: { totalAmount: true, category: true, expenseDate: true, status: true },
+      orderBy: { expenseDate: 'asc' },
+    });
+
+    // Agrégation par mois
+    const monthlyMap: Record<string, { month: string; total: number; paid: number; pending: number; byCategory: Record<string, number> }> = {};
+    for (let i = 0; i < months; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - months + 1 + i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+      monthlyMap[key] = { month: `${monthNames[d.getMonth()]} ${d.getFullYear()}`, total: 0, paid: 0, pending: 0, byCategory: {} };
+    }
+
+    for (const e of expenses) {
+      const d = new Date(e.expenseDate);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (!monthlyMap[key]) continue;
+      monthlyMap[key].total += e.totalAmount || 0;
+      if (e.status === 'PAID') monthlyMap[key].paid += e.totalAmount || 0;
+      else monthlyMap[key].pending += e.totalAmount || 0;
+      monthlyMap[key].byCategory[e.category] = (monthlyMap[key].byCategory[e.category] || 0) + (e.totalAmount || 0);
+    }
+
+    return res.json({ success: true, data: Object.values(monthlyMap) });
+  } catch (error: unknown) {
+    console.error('[EXPENSES] Monthly stats error:', error);
+    return res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Erreur interne' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// GET /export/csv — Export CSV des dépenses
+// ═══════════════════════════════════════════════════════════
+
+router.get('/export/csv', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const organizationId = getOrganizationId(req);
+    if (!organizationId) return res.status(400).json({ success: false, message: 'Organisation requise' });
+
+    const { category, status, from, to } = req.query;
+
+    const where: any = { organizationId };
+    if (category && category !== 'all') where.category = category;
+    if (status && status !== 'all') where.status = status;
+    if (from || to) {
+      where.expenseDate = {};
+      if (from) where.expenseDate.gte = new Date(from as string);
+      if (to) where.expenseDate.lte = new Date(to as string);
+    }
+
+    const expenses = await db.expense.findMany({
+      where,
+      orderBy: { expenseDate: 'desc' },
+    });
+
+    // Build CSV
+    const headers = ['Date', 'Fournisseur', 'TVA Fournisseur', 'Catégorie', 'Description', 'Référence', 'HT', 'TVA %', 'TVA €', 'TTC', 'Devise', 'Statut', 'Méthode paiement', 'Payé le', 'Notes'];
+    const catLabels: Record<string, string> = {};
+    EXPENSE_CATEGORIES.forEach(c => { catLabels[c.key] = c.label; });
+
+    const rows = expenses.map(e => [
+      new Date(e.expenseDate).toLocaleDateString('fr-BE'),
+      `"${(e.supplierName || '').replace(/"/g, '""')}"`,
+      e.supplierVat || '',
+      catLabels[e.category] || e.category,
+      `"${(e.description || '').replace(/"/g, '""')}"`,
+      e.reference || '',
+      (e.subtotal || 0).toFixed(2),
+      (e.taxRate || 0).toString(),
+      (e.taxAmount || 0).toFixed(2),
+      (e.totalAmount || 0).toFixed(2),
+      e.currency || 'EUR',
+      e.status,
+      e.paymentMethod || '',
+      e.paidAt ? new Date(e.paidAt).toLocaleDateString('fr-BE') : '',
+      `"${(e.notes || '').replace(/"/g, '""')}"`,
+    ].join(';'));
+
+    const csv = '\uFEFF' + headers.join(';') + '\n' + rows.join('\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="depenses-${new Date().toISOString().split('T')[0]}.csv"`);
+    return res.send(csv);
+  } catch (error: unknown) {
+    console.error('[EXPENSES] CSV export error:', error);
+    return res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Erreur interne' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// GET /overdue — Dépenses en retard (PENDING depuis > 30 jours)
+// ═══════════════════════════════════════════════════════════
+
+router.get('/overdue', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const organizationId = getOrganizationId(req);
+    if (!organizationId) return res.status(400).json({ success: false, message: 'Organisation requise' });
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const overdue = await db.expense.findMany({
+      where: {
+        organizationId,
+        status: 'PENDING',
+        expenseDate: { lt: thirtyDaysAgo },
+      },
+      orderBy: { expenseDate: 'asc' },
+    });
+
+    return res.json({
+      success: true,
+      data: overdue,
+      count: overdue.length,
+      totalOverdue: overdue.reduce((s, e) => s + (e.totalAmount || 0), 0),
+    });
+  } catch (error: unknown) {
+    console.error('[EXPENSES] Overdue error:', error);
+    return res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Erreur interne' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
 // GET / — Liste des dépenses
 // ═══════════════════════════════════════════════════════════
 
@@ -387,9 +524,11 @@ router.post('/:id/mark-paid', authenticateToken, async (req: Request, res: Respo
     });
     if (!existing) return res.status(404).json({ success: false, message: 'Dépense introuvable' });
 
+    const paymentMethod = req.body.paymentMethod || existing.paymentMethod || null;
+
     const updated = await db.expense.update({
       where: { id: req.params.id },
-      data: { status: 'PAID', paidAt: new Date() },
+      data: { status: 'PAID', paidAt: new Date(), paymentMethod },
     });
 
     return res.json({ success: true, data: updated });

@@ -1050,9 +1050,105 @@ router.put('/incoming/:id', authenticateToken, isAdmin, async (req: Request, res
       },
     });
 
+    // Si ACCEPTED → auto-comptabilise en Expense
+    if (data.status === 'ACCEPTED' && existing.status !== 'ACCEPTED') {
+      try {
+        // Vérifier qu'aucune expense n'existe déjà pour cette facture
+        const existingExpense = await db.expense.findFirst({
+          where: {
+            organizationId,
+            reference: `PEPPOL-${existing.peppolMessageId}`,
+          },
+        });
+
+        if (!existingExpense) {
+          await db.expense.create({
+            data: {
+              organizationId,
+              createdById: userId,
+              supplierName: existing.senderName || existing.senderEndpoint || 'Fournisseur Peppol',
+              supplierVat: existing.senderVat || null,
+              subtotal: existing.totalAmount ? (existing.totalAmount - (existing.taxAmount || 0)) : 0,
+              taxRate: existing.totalAmount && existing.taxAmount ? Math.round((existing.taxAmount / (existing.totalAmount - existing.taxAmount)) * 100) : 21,
+              taxAmount: existing.taxAmount || 0,
+              totalAmount: existing.totalAmount || 0,
+              currency: existing.currency || 'EUR',
+              category: 'other',
+              description: `Facture Peppol ${existing.invoiceNumber || existing.peppolMessageId}`,
+              reference: `PEPPOL-${existing.peppolMessageId}`,
+              expenseDate: existing.invoiceDate || new Date(),
+              status: 'PENDING',
+              notes: `Auto-importé depuis facture Peppol entrante. Fournisseur: ${existing.senderName || '?'}`,
+            },
+          });
+          console.log(`[Peppol] ✅ Facture entrante ${existing.invoiceNumber || existing.id} auto-comptabilisée en dépense`);
+        }
+      } catch (expErr) {
+        console.error('[Peppol] ⚠️ Erreur auto-comptabilisation expense:', expErr);
+        // On ne bloque pas la réponse pour ça
+      }
+    }
+
     res.json({ success: true, data: updated });
   } catch (error) {
     console.error('[Peppol] Erreur PUT /incoming/:id:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+  }
+});
+
+// ── POST /incoming/:id/accept — Accepter et auto-comptabiliser ──
+
+router.post('/incoming/:id/accept', authenticateToken, isAdmin, async (req: Request, res: Response) => {
+  try {
+    const organizationId = getOrganizationId(req);
+    if (!organizationId) return res.status(400).json({ success: false, message: 'Organisation requise' });
+
+    const invoice = await db.peppolIncomingInvoice.findFirst({
+      where: { id: req.params.id, organizationId },
+    });
+    if (!invoice) return res.status(404).json({ success: false, message: 'Facture entrante non trouvée' });
+
+    const userId = getUserId(req);
+    const category = req.body.category || 'other';
+
+    // 1. Mettre à jour le statut
+    const updated = await db.peppolIncomingInvoice.update({
+      where: { id: req.params.id },
+      data: { status: 'ACCEPTED', reviewedBy: userId, reviewedAt: new Date(), notes: req.body.notes },
+    });
+
+    // 2. Créer l'expense associée
+    const existingExpense = await db.expense.findFirst({
+      where: { organizationId, reference: `PEPPOL-${invoice.peppolMessageId}` },
+    });
+
+    let expense = existingExpense;
+    if (!existingExpense) {
+      expense = await db.expense.create({
+        data: {
+          organizationId,
+          createdById: userId,
+          supplierName: invoice.senderName || invoice.senderEndpoint || 'Fournisseur Peppol',
+          supplierVat: invoice.senderVat || null,
+          subtotal: invoice.totalAmount ? (invoice.totalAmount - (invoice.taxAmount || 0)) : 0,
+          taxRate: invoice.totalAmount && invoice.taxAmount ? Math.round((invoice.taxAmount / (invoice.totalAmount - invoice.taxAmount)) * 100) : 21,
+          taxAmount: invoice.taxAmount || 0,
+          totalAmount: invoice.totalAmount || 0,
+          currency: invoice.currency || 'EUR',
+          category,
+          description: `Facture Peppol ${invoice.invoiceNumber || invoice.peppolMessageId}`,
+          reference: `PEPPOL-${invoice.peppolMessageId}`,
+          expenseDate: invoice.invoiceDate || new Date(),
+          status: 'PENDING',
+          notes: `Auto-importé depuis facture Peppol. Fournisseur: ${invoice.senderName || '?'}`,
+        },
+      });
+      console.log(`[Peppol] ✅ Incoming ${invoice.id} accepted + expense ${expense.id} créée`);
+    }
+
+    res.json({ success: true, data: { incoming: updated, expense } });
+  } catch (error) {
+    console.error('[Peppol] Erreur POST /incoming/:id/accept:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });

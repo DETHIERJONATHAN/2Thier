@@ -9,6 +9,7 @@ import {
   EuroCircleOutlined, ThunderboltOutlined, CopyOutlined,
   CameraOutlined, WalletOutlined, BarChartOutlined,
   ShoppingCartOutlined, LoadingOutlined,
+  LikeOutlined, DislikeOutlined, CloudDownloadOutlined, WarningOutlined,
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { useAuth } from '../auth/useAuth';
@@ -127,6 +128,14 @@ interface ScanResult {
   description: string;
   items: { name: string; quantity: number; price: number }[];
   confidence: number;
+}
+
+interface MonthlyData {
+  month: string;
+  total: number;
+  paid: number;
+  pending: number;
+  byCategory: Record<string, number>;
 }
 
 interface InvoiceLine {
@@ -300,6 +309,15 @@ const FacturePage: React.FC = () => {
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
+  // ── Monthly chart + export state ──
+  const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]);
+  const [monthlyLoading, setMonthlyLoading] = useState(false);
+  const [exportingCsv, setExportingCsv] = useState(false);
+
+  // ── Incoming invoice actions state ──
+  const [acceptingInvoiceId, setAcceptingInvoiceId] = useState<string | null>(null);
+  const [rejectingInvoiceId, setRejectingInvoiceId] = useState<string | null>(null);
+
   // ── Data fetching ──
   const loadData = useCallback(async () => {
     try {
@@ -348,6 +366,96 @@ const FacturePage: React.FC = () => {
       loadExpenses();
     }
   }, [activeTab, loadExpenses]);
+
+  // ── Load monthly data for accounting tab ──
+  const loadMonthlyData = useCallback(async () => {
+    try {
+      setMonthlyLoading(true);
+      const res = await api.get<{ success: boolean; data: MonthlyData[] }>('/api/expenses/monthly?months=6');
+      if (res.success) setMonthlyData(res.data);
+    } catch (err) {
+      console.error('Erreur chargement données mensuelles:', err);
+    } finally {
+      setMonthlyLoading(false);
+    }
+  }, [api]);
+
+  useEffect(() => {
+    if (activeTab === 'accounting') {
+      loadMonthlyData();
+    }
+  }, [activeTab, loadMonthlyData]);
+
+  // ── Export CSV ──
+  const handleExportCsv = useCallback(async () => {
+    try {
+      setExportingCsv(true);
+      const res = await api.get('/api/expenses/export/csv', { responseType: 'blob' });
+      const blob = new Blob([res as any], { type: 'text/csv;charset=utf-8' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `depenses-${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      message.success('Export CSV téléchargé');
+    } catch (err) {
+      console.error('Erreur export CSV:', err);
+      message.error('Erreur lors de l\'export CSV');
+    } finally {
+      setExportingCsv(false);
+    }
+  }, [api, message]);
+
+  // ── Accept incoming invoice (auto-comptabilise) ──
+  const handleAcceptIncoming = useCallback(async (invoiceId: string) => {
+    try {
+      setAcceptingInvoiceId(invoiceId);
+      const res = await api.post<{ success: boolean }>(`/api/peppol/incoming/${invoiceId}/accept`, { category: 'other' });
+      if (res.success) {
+        message.success('Facture acceptée et comptabilisée en dépense');
+        loadData();
+        if (activeTab === 'expenses' || activeTab === 'accounting') loadExpenses();
+      }
+    } catch (err) {
+      console.error('Erreur accept incoming:', err);
+      message.error('Erreur lors de l\'acceptation');
+    } finally {
+      setAcceptingInvoiceId(null);
+    }
+  }, [api, message, loadData, loadExpenses, activeTab]);
+
+  // ── Reject incoming invoice ──
+  const handleRejectIncoming = useCallback(async (invoiceId: string) => {
+    try {
+      setRejectingInvoiceId(invoiceId);
+      const res = await api.put<{ success: boolean }>(`/api/peppol/incoming/${invoiceId}`, { status: 'REJECTED' });
+      if (res.success) {
+        message.success('Facture rejetée');
+        loadData();
+      }
+    } catch (err) {
+      console.error('Erreur reject incoming:', err);
+      message.error('Erreur lors du rejet');
+    } finally {
+      setRejectingInvoiceId(null);
+    }
+  }, [api, message, loadData]);
+
+  // ── Mark expense as paid ──
+  const handleMarkExpensePaid = useCallback(async (expenseId: string) => {
+    try {
+      const res = await api.post<{ success: boolean }>(`/api/expenses/${expenseId}/mark-paid`, {});
+      if (res.success) {
+        message.success('Dépense marquée comme payée');
+        loadExpenses();
+        setSelectedExpense(null);
+      }
+    } catch (err) {
+      console.error('Erreur mark paid:', err);
+      message.error('Erreur lors du marquage');
+    }
+  }, [api, message, loadExpenses]);
 
   // ── Scan ticket via Gemini ──
   const handleScanTicket = useCallback(async (file: File) => {
@@ -1169,8 +1277,9 @@ const FacturePage: React.FC = () => {
             ) : (
               expenses.map(exp => {
                 const cat = getCategoryInfo(exp.category);
+                const isOverdue = exp.status === 'PENDING' && dayjs().diff(dayjs(exp.expenseDate), 'day') > 30;
                 return (
-                  <FBCard key={exp.id} onClick={() => setSelectedExpense(exp)} style={{ cursor: 'pointer' }}>
+                  <FBCard key={exp.id} onClick={() => setSelectedExpense(exp)} style={{ cursor: 'pointer', borderLeft: isOverdue ? '4px solid #e74c3c' : undefined }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
                         <div style={{
@@ -1189,6 +1298,14 @@ const FacturePage: React.FC = () => {
                                 fontSize: 10, padding: '1px 5px', borderRadius: 4,
                                 background: '#9b59b620', color: '#9b59b6', fontWeight: 600,
                               }}>IA</span>
+                            )}
+                            {isOverdue && (
+                              <span style={{
+                                fontSize: 10, padding: '1px 5px', borderRadius: 4,
+                                background: '#e74c3c20', color: '#e74c3c', fontWeight: 600,
+                              }}>
+                                <WarningOutlined /> EN RETARD
+                              </span>
                             )}
                           </div>
                           <div style={{ fontSize: 12, color: FB.textSecondary }}>
@@ -1219,6 +1336,70 @@ const FacturePage: React.FC = () => {
         {/* ═══ ACCOUNTING TAB ═══ */}
         {activeTab === 'accounting' && (
           <>
+            {/* Export buttons */}
+            <FBCard style={{ padding: 16, marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                <div style={{ fontSize: 16, fontWeight: 600, color: FB.text }}>Tableau de bord comptable</div>
+                <button
+                  onClick={handleExportCsv}
+                  disabled={exportingCsv}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px',
+                    background: '#27ae60', color: '#fff', border: 'none', borderRadius: FB.radius,
+                    fontSize: 14, fontWeight: 600, cursor: 'pointer', opacity: exportingCsv ? 0.6 : 1,
+                  }}
+                >
+                  {exportingCsv ? <LoadingOutlined /> : <CloudDownloadOutlined />} Export CSV
+                </button>
+              </div>
+            </FBCard>
+
+            {/* Monthly chart (pure CSS bars) */}
+            <FBCard style={{ padding: 20, marginBottom: 12 }}>
+              <div style={{ fontSize: 15, fontWeight: 600, color: FB.text, marginBottom: 16 }}>Évolution mensuelle des dépenses</div>
+              {monthlyLoading ? (
+                <div style={{ textAlign: 'center', padding: 30 }}><Spin /></div>
+              ) : monthlyData.length > 0 ? (() => {
+                const maxVal = Math.max(...monthlyData.map(m => m.total), 1);
+                return (
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: isMobile ? 4 : 12, height: 180 }}>
+                    {monthlyData.map((m, i) => {
+                      const barHeight = Math.max((m.total / maxVal) * 160, 4);
+                      const paidHeight = m.total > 0 ? (m.paid / m.total) * barHeight : 0;
+                      return (
+                        <Tooltip key={i} title={`${m.month}: €${m.total.toFixed(2)} (Payé: €${m.paid.toFixed(2)}, En attente: €${m.pending.toFixed(2)})`}>
+                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                            <div style={{ fontSize: isMobile ? 9 : 11, fontWeight: 600, color: FB.text }}>
+                              €{m.total >= 1000 ? `${(m.total / 1000).toFixed(1)}k` : m.total.toFixed(0)}
+                            </div>
+                            <div style={{ width: '100%', maxWidth: 40, position: 'relative', height: barHeight, borderRadius: '4px 4px 0 0', overflow: 'hidden' }}>
+                              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: barHeight, background: '#e74c3c20', borderRadius: '4px 4px 0 0' }} />
+                              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: paidHeight, background: '#27ae60', borderRadius: paidHeight === barHeight ? '4px 4px 0 0' : '0' }} />
+                            </div>
+                            <div style={{ fontSize: isMobile ? 8 : 10, color: FB.textSecondary, textAlign: 'center', whiteSpace: 'nowrap' }}>
+                              {m.month.split(' ')[0]}
+                            </div>
+                          </div>
+                        </Tooltip>
+                      );
+                    })}
+                  </div>
+                );
+              })() : (
+                <div style={{ textAlign: 'center', padding: 20, color: FB.textSecondary }}>Aucune donnée pour cette période</div>
+              )}
+              {monthlyData.length > 0 && (
+                <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: FB.textSecondary }}>
+                    <div style={{ width: 10, height: 10, borderRadius: 2, background: '#27ae60' }} /> Payé
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: FB.textSecondary }}>
+                    <div style={{ width: 10, height: 10, borderRadius: 2, background: '#e74c3c20' }} /> En attente
+                  </div>
+                </div>
+              )}
+            </FBCard>
+
             {/* Breakdown — les chiffres clés sont dans la barre du haut */}
             <FBCard style={{ padding: 20 }}>
               <div style={{ fontSize: 16, fontWeight: 600, color: FB.text, marginBottom: 16 }}>Détail des flux</div>
@@ -1536,6 +1717,55 @@ const FacturePage: React.FC = () => {
                     >
                       <CopyOutlined /> {isMobile ? '' : 'Dupliquer'}
                     </button>
+                  )}
+                  {/* ── Incoming invoice actions: Accept / Reject ── */}
+                  {inv.source === 'incoming' && inv.status === 'RECEIVED' && (
+                    <>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleAcceptIncoming(inv.id); }}
+                        disabled={acceptingInvoiceId === inv.id}
+                        style={{
+                          flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                          padding: isMobile ? '8px 10px' : '8px 0', background: '#27ae6015', border: 'none', borderRadius: 6,
+                          color: '#27ae60', fontWeight: 600, fontSize: isMobile ? 12 : 14, cursor: 'pointer',
+                          transition: 'background 0.15s', opacity: acceptingInvoiceId === inv.id ? 0.6 : 1,
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.background = '#27ae6025')}
+                        onMouseLeave={e => (e.currentTarget.style.background = '#27ae6015')}
+                      >
+                        {acceptingInvoiceId === inv.id ? <LoadingOutlined /> : <LikeOutlined />}
+                        {isMobile ? 'Accepter' : 'Accepter & comptabiliser'}
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleRejectIncoming(inv.id); }}
+                        disabled={rejectingInvoiceId === inv.id}
+                        style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                          padding: isMobile ? '8px 10px' : '8px 16px', background: FB.lightRed, border: 'none', borderRadius: 6,
+                          color: FB.red, fontWeight: 600, fontSize: isMobile ? 12 : 14, cursor: 'pointer',
+                          transition: 'background 0.15s', opacity: rejectingInvoiceId === inv.id ? 0.6 : 1,
+                        }}
+                      >
+                        {rejectingInvoiceId === inv.id ? <LoadingOutlined /> : <DislikeOutlined />}
+                        {isMobile ? '' : 'Rejeter'}
+                      </button>
+                    </>
+                  )}
+                  {inv.source === 'incoming' && inv.status === 'ACCEPTED' && (
+                    <div style={{
+                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                      padding: '8px 0', color: '#27ae60', fontWeight: 600, fontSize: 13,
+                    }}>
+                      <CheckCircleOutlined /> Acceptée — comptabilisée
+                    </div>
+                  )}
+                  {inv.source === 'incoming' && inv.status === 'REJECTED' && (
+                    <div style={{
+                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                      padding: '8px 0', color: FB.red, fontWeight: 600, fontSize: 13,
+                    }}>
+                      <ExclamationCircleOutlined /> Rejetée
+                    </div>
                   )}
                   {canMarkPeppolManual && (
                     <button
@@ -3127,6 +3357,17 @@ const FacturePage: React.FC = () => {
               </div>
 
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                {selectedExpense.status === 'PENDING' && (
+                  <button
+                    onClick={() => handleMarkExpensePaid(selectedExpense.id)}
+                    style={{
+                      padding: '8px 16px', background: '#27ae6015', border: 'none',
+                      borderRadius: 6, fontSize: 13, fontWeight: 600, color: '#27ae60', cursor: 'pointer',
+                    }}
+                  >
+                    <CheckCircleOutlined /> Marquer payé
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     modal.confirm({
