@@ -212,15 +212,11 @@ router.get('/swipe-tabs', async (req, res) => {
 	try {
 		const { organizationId } = req.query as { organizationId?: string };
 		
-		// Récupérer les modules globaux + ceux de l'org courante
+		// Récupérer TOUS les modules swipe/both actifs (globaux + org-spécifiques)
 		const modules = await prisma.module.findMany({
 			where: {
 				placement: { in: ['swipe', 'both'] },
 				active: true,
-				OR: [
-					{ organizationId: null },
-					...(organizationId ? [{ organizationId }] : []),
-				],
 			},
 			orderBy: { order: 'asc' },
 			include: {
@@ -234,7 +230,6 @@ router.get('/swipe-tabs', async (req, res) => {
 		const filtered = modules.filter(m => {
 			if (!organizationId) return true;
 			const orgStatus = (m as any).OrganizationModuleStatus?.[0];
-			// If no org-specific status, module is active by default
 			if (!orgStatus) return true;
 			return orgStatus.isActive;
 		});

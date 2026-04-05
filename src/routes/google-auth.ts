@@ -7,7 +7,7 @@ import { google } from 'googleapis';
 // import axios from 'axios';
 import { refreshGoogleTokenIfNeeded } from '../utils/googleTokenRefresh.js';
 import { googleOAuthService, GOOGLE_SCOPES_LIST } from '../google-auth/core/GoogleOAuthCore.js';
-import gmailRoutes from '../google-auth/routes/gmail'; // Routes Gmail centralisées
+// Gmail routes supprimées — Postal (@zhiive.com) est maintenant le système mail principal
 import { logSecurityEvent } from '../security/securityLogger.js';
 // import { googleOAuthConfig } from '../auth/googleConfig.js';
 
@@ -1125,8 +1125,6 @@ router.post('/toggle-module', authMiddleware, async (req: AuthenticatedRequest, 
   }
 });
 
-// Routes Gmail centralisées (avec authentification middleware)
-router.use('/gmail', authMiddleware, gmailRoutes);
-console.log('[GOOGLE-AUTH] Routes Gmail centralisées montées sur /gmail');
+// Gmail routes supprimées — Postal (@zhiive.com) est maintenant le système mail principal
 
 export default router;
