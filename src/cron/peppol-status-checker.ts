@@ -208,10 +208,10 @@ export const fetchIncomingInvoices = cron.schedule('0 */1 * * *', async () => {
         const orgName = config.Organization?.name || config.organizationId;
         const bridge = getPeppolBridge();
 
-        // 1. Déclencher le fetch dans Odoo
+        // 1. Tenter de déclencher le fetch dans Odoo (non-bloquant — Odoo 17 bloque les méthodes privées via RPC)
         await bridge.fetchIncomingDocuments(config.odooCompanyId!);
 
-        // 2. Récupérer les nouvelles factures depuis Odoo
+        // 2. Récupérer les nouvelles factures depuis Odoo (toujours exécuté, même si étape 1 échoue)
         const lastFetch = await db.peppolIncomingInvoice.findFirst({
           where: { organizationId: config.organizationId },
           orderBy: { createdAt: 'desc' },

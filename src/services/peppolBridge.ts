@@ -836,15 +836,21 @@ export class PeppolBridge {
   /**
    * Déclenche la récupération des documents Peppol entrants
    */
-  async fetchIncomingDocuments(odooCompanyId: number): Promise<void> {
+  async fetchIncomingDocuments(odooCompanyId: number): Promise<boolean> {
     try {
       await this.call('account_edi_proxy_client.user', '_peppol_get_new_documents', [], {
         context: { allowed_company_ids: [odooCompanyId] },
       });
       console.log(`[PeppolBridge] ✅ Fetched incoming Peppol documents for company ${odooCompanyId}`);
+      return true;
     } catch (error) {
-      console.error(`[PeppolBridge] ❌ Erreur fetch incoming documents company ${odooCompanyId}:`, (error as Error).message);
-      throw error;
+      const msg = (error as Error).message;
+      if (msg.includes('Private methods')) {
+        console.warn(`[PeppolBridge] ⚠️ _peppol_get_new_documents est privé (Odoo 17) — les crons internes Odoo gèrent le download. On continue avec la lecture des factures existantes.`);
+      } else {
+        console.error(`[PeppolBridge] ❌ Erreur fetch incoming documents company ${odooCompanyId}:`, msg);
+      }
+      return false;
     }
   }
 

@@ -929,10 +929,10 @@ router.post('/fetch-incoming', authenticateToken, isAdmin, async (req: Request, 
 
     const bridge = getPeppolBridge();
 
-    // 1. Déclencher le fetch dans Odoo
+    // 1. Tenter de déclencher le fetch dans Odoo (non-bloquant — les crons Odoo 17 gèrent le download)
     await bridge.fetchIncomingDocuments(config.odooCompanyId);
 
-    // 2. Récupérer les nouvelles factures depuis Odoo
+    // 2. Récupérer les nouvelles factures depuis Odoo (toujours exécuté, même si étape 1 échoue)
     const lastFetch = await db.peppolIncomingInvoice.findFirst({
       where: { organizationId },
       orderBy: { createdAt: 'desc' },
