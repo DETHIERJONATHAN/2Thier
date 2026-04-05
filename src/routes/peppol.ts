@@ -24,6 +24,9 @@ import { getPeppolBridge } from '../services/peppolBridge';
 import { vatLookup, checkPeppolStatus, normalizeVatNumber, extractVatDigits } from '../services/vatLookupService';
 import { emailService } from '../services/EmailService';
 import { generateInvoicePdf, orgSelectForPdf } from './invoices';
+import { sendPushToUser } from './push';
+import UniversalNotificationService from '../services/UniversalNotificationService';
+import { getPostalService } from '../services/PostalEmailService.js';
 
 const router = Router();
 
@@ -42,6 +45,139 @@ function getOrganizationId(req: Request): string | null {
 function getUserId(req: Request): string | null {
   const user = (req as any).user as { userId?: string; id?: string } | undefined;
   return user?.userId || user?.id || null;
+}
+
+// ── Notification helper pour factures entrantes Peppol ──
+
+interface ImportedInvoiceInfo {
+  invoiceNumber: string | null;
+  senderName: string | null;
+  totalAmount: number | null;
+  currency: string;
+}
+
+async function notifyIncomingInvoices(
+  organizationId: string,
+  invoices: ImportedInvoiceInfo[],
+  _triggeredByUserId?: string | null,
+): Promise<void> {
+  if (invoices.length === 0) return;
+
+  try {
+    // Récupérer l'org et ses admins
+    const org = await db.organization.findUnique({
+      where: { id: organizationId },
+      select: { name: true, email: true },
+    });
+
+    const orgAdmins = await db.userOrganization.findMany({
+      where: { organizationId, Role: { name: { in: ['admin', 'owner', 'super_admin'] } } },
+      include: {
+        User: { select: { id: true, firstName: true, lastName: true, EmailAccount: { select: { emailAddress: true } } } },
+      },
+    });
+
+    const orgName = org?.name || 'Organisation';
+    const count = invoices.length;
+
+    const title = count === 1
+      ? `🧾 Nouvelle facture Peppol reçue`
+      : `🧾 ${count} nouvelles factures Peppol reçues`;
+
+    const shortBody = count === 1
+      ? `${invoices[0].invoiceNumber || 'Facture'} de ${invoices[0].senderName || 'Fournisseur'} (${invoices[0].totalAmount?.toFixed(2) || '0.00'}€)`
+      : `${count} factures reçues via Peppol`;
+
+    // 1. Notification in-app (UniversalNotificationService) — pour chaque admin
+    const notifService = UniversalNotificationService.getInstance();
+    for (const admin of orgAdmins) {
+      await notifService.createNotification({
+        type: 'NEW_INVOICE',
+        title,
+        message: shortBody,
+        userId: admin.userId,
+        organizationId,
+        priority: 'high',
+        actionUrl: '/facture?tab=incoming',
+        tags: ['peppol', 'incoming'],
+        metadata: { count, invoices: invoices.map(i => i.invoiceNumber) },
+      }).catch(err => console.error('[Peppol-Notify] Erreur notification in-app:', err.message));
+    }
+
+    // 2. Push notification — pour chaque admin
+    for (const admin of orgAdmins) {
+      await sendPushToUser(admin.userId, {
+        title,
+        body: shortBody,
+        icon: '/icons/peppol-incoming.png',
+        tag: `peppol-incoming-${Date.now()}`,
+        url: '/facture?tab=incoming',
+        type: 'peppol_incoming',
+      }).catch(err => console.error('[Peppol-Notify] Erreur push:', err.message));
+    }
+
+    // 3. Email @zhiive.com — pour chaque admin qui a un EmailAccount
+    const postal = getPostalService();
+    const htmlBody = `
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #6C5CE7, #a855f7); padding: 20px; border-radius: 12px 12px 0 0; color: white;">
+          <h2 style="margin: 0;">🧾 ${title}</h2>
+          <p style="margin: 5px 0 0; opacity: 0.9;">${orgName} — Peppol e-Invoicing</p>
+        </div>
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 0 0 12px 12px;">
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="background: #e9ecef;">
+                <th style="padding: 8px 12px; text-align: left; border-radius: 6px 0 0 0;">Facture</th>
+                <th style="padding: 8px 12px; text-align: left;">Fournisseur</th>
+                <th style="padding: 8px 12px; text-align: right; border-radius: 0 6px 0 0;">Montant</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${invoices.map(i => `
+                <tr>
+                  <td style="padding: 8px 12px; border-bottom: 1px solid #dee2e6;">${i.invoiceNumber || 'N/A'}</td>
+                  <td style="padding: 8px 12px; border-bottom: 1px solid #dee2e6;">${i.senderName || 'Fournisseur'}</td>
+                  <td style="padding: 8px 12px; border-bottom: 1px solid #dee2e6; text-align: right; font-weight: 600;">${i.totalAmount != null ? i.totalAmount.toFixed(2) : '0.00'} ${i.currency}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          <p style="margin-top: 16px; color: #666; font-size: 13px;">
+            Connectez-vous à <a href="https://app.2thier.be/facture?tab=incoming" style="color: #6C5CE7; text-decoration: none;">Zhiive</a> pour examiner et accepter ces factures.
+          </p>
+        </div>
+      </div>
+    `;
+
+    for (const admin of orgAdmins) {
+      const zhiiveEmail = admin.User?.EmailAccount?.emailAddress;
+      if (zhiiveEmail) {
+        postal.sendEmail({
+          from: `comptabilite@zhiive.com`,
+          to: zhiiveEmail,
+          subject: `${title} — ${orgName}`,
+          body: htmlBody,
+          isHtml: true,
+        }).catch(err => console.error(`[Peppol-Notify] Erreur email zhiive ${zhiiveEmail}:`, err.message));
+      }
+    }
+
+    // 4. Email à la boîte Colony (email de l'organisation)
+    if (org?.email) {
+      postal.sendEmail({
+        from: `comptabilite@zhiive.com`,
+        to: org.email,
+        subject: `${title} — ${orgName}`,
+        body: htmlBody,
+        isHtml: true,
+      }).catch(err => console.error(`[Peppol-Notify] Erreur email colony ${org.email}:`, err.message));
+    }
+
+    console.log(`[Peppol-Notify] ✅ Notifications envoyées: ${count} facture(s), ${orgAdmins.length} admin(s), org=${orgName}`);
+  } catch (err) {
+    console.error('[Peppol-Notify] ❌ Erreur envoi notifications:', (err as Error).message);
+  }
 }
 
 // ── GET /config — Récupérer la config Peppol ──
@@ -943,10 +1079,13 @@ router.post('/fetch-incoming', authenticateToken, isAdmin, async (req: Request, 
       since: lastFetch?.createdAt.toISOString(),
     });
 
-    // 3. Importer dans Zhiive DB
+    // 3. Importer dans Zhiive DB (filtrer les factures démo d'Odoo)
     let imported = 0;
+    const newlyImported: ImportedInvoiceInfo[] = [];
     for (const bill of incomingBills) {
       if (!bill.peppolMessageId) continue;
+      // Skip Odoo demo/test bills (e.g. "2_demo_vendor_bill")
+      if (bill.peppolMessageId.toLowerCase().includes('demo')) continue;
 
       const exists = await db.peppolIncomingInvoice.findUnique({
         where: { peppolMessageId: bill.peppolMessageId },
@@ -971,8 +1110,18 @@ router.post('/fetch-incoming', authenticateToken, isAdmin, async (req: Request, 
           },
         });
         imported++;
+        newlyImported.push({
+          invoiceNumber: bill.name || null,
+          senderName: bill.partnerName || null,
+          totalAmount: bill.amountTotal ?? null,
+          currency: bill.currency || 'EUR',
+        });
       }
     }
+
+    // 4. Envoyer notifications pour les nouvelles factures
+    const userId = getUserId(req);
+    await notifyIncomingInvoices(organizationId, newlyImported, userId);
 
     console.log(`[Peppol] 📥 Fetch incoming: ${imported} importée(s) / ${incomingBills.length} trouvée(s) pour org ${organizationId}`);
 

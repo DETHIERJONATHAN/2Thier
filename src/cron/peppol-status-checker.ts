@@ -17,6 +17,8 @@ import { checkPeppolStatus } from '../services/vatLookupService';
 import { getPeppolBridge } from '../services/peppolBridge';
 import { notify } from '../services/NotificationHelper';
 import { sendPushToUser } from '../routes/push';
+import UniversalNotificationService from '../services/UniversalNotificationService';
+import { getPostalService } from '../services/PostalEmailService.js';
 
 const LOG_PREFIX = '🔄 [PEPPOL-CRON]';
 
@@ -224,8 +226,12 @@ export const fetchIncomingInvoices = cron.schedule('0 */1 * * *', async () => {
 
         // 3. Importer dans Zhiive DB
         let imported = 0;
+        interface CronImportedInvoice { invoiceNumber: string | null; senderName: string | null; totalAmount: number | null; currency: string; }
+        const newlyImported: CronImportedInvoice[] = [];
         for (const bill of incomingBills) {
           if (!bill.peppolMessageId) continue;
+          // Skip Odoo demo/test bills (e.g. "2_demo_vendor_bill")
+          if (bill.peppolMessageId.toLowerCase().includes('demo')) continue;
 
           const exists = await db.peppolIncomingInvoice.findUnique({
             where: { peppolMessageId: bill.peppolMessageId },
@@ -250,11 +256,98 @@ export const fetchIncomingInvoices = cron.schedule('0 */1 * * *', async () => {
               },
             });
             imported++;
+            newlyImported.push({
+              invoiceNumber: bill.name || null,
+              senderName: bill.partnerName || null,
+              totalAmount: bill.amountTotal ?? null,
+              currency: bill.currency || 'EUR',
+            });
           }
         }
 
         if (imported > 0) {
           console.log(`${LOG_PREFIX} 📥 ${orgName}: ${imported} nouvelle(s) facture(s) importée(s)`);
+
+          // 4. Notifications (push + in-app + email)
+          try {
+            const org = await db.organization.findUnique({
+              where: { id: config.organizationId },
+              select: { name: true, email: true },
+            });
+
+            const orgAdmins = await db.userOrganization.findMany({
+              where: { organizationId: config.organizationId, Role: { name: { in: ['admin', 'owner', 'super_admin'] } } },
+              include: {
+                User: { select: { id: true, firstName: true, lastName: true, EmailAccount: { select: { emailAddress: true } } } },
+              },
+            });
+
+            const title = imported === 1
+              ? `🧾 Nouvelle facture Peppol reçue`
+              : `🧾 ${imported} nouvelles factures Peppol reçues`;
+
+            const shortBody = imported === 1
+              ? `${newlyImported[0].invoiceNumber || 'Facture'} de ${newlyImported[0].senderName || 'Fournisseur'} (${newlyImported[0].totalAmount?.toFixed(2) || '0.00'}€)`
+              : `${imported} factures reçues via Peppol`;
+
+            const notifService = UniversalNotificationService.getInstance();
+
+            for (const admin of orgAdmins) {
+              // In-app notification
+              notifService.createNotification({
+                type: 'NEW_INVOICE',
+                title,
+                message: shortBody,
+                userId: admin.userId,
+                organizationId: config.organizationId,
+                priority: 'high',
+                actionUrl: '/facture?tab=incoming',
+                tags: ['peppol', 'incoming', 'cron'],
+                metadata: { count: imported, invoices: newlyImported.map(i => i.invoiceNumber) },
+              }).catch(err => console.error(`${LOG_PREFIX} Erreur notification in-app:`, err.message));
+
+              // Push notification
+              sendPushToUser(admin.userId, {
+                title,
+                body: shortBody,
+                icon: '/icons/peppol-incoming.png',
+                tag: `peppol-incoming-${Date.now()}`,
+                url: '/facture?tab=incoming',
+                type: 'peppol_incoming',
+              }).catch(err => console.error(`${LOG_PREFIX} Erreur push:`, err.message));
+
+              // Email @zhiive.com
+              const zhiiveEmail = admin.User?.EmailAccount?.emailAddress;
+              if (zhiiveEmail) {
+                const postal = getPostalService();
+                const htmlEmail = `<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;"><div style="background:linear-gradient(135deg,#6C5CE7,#a855f7);padding:20px;border-radius:12px 12px 0 0;color:white;"><h2 style="margin:0;">${title}</h2><p style="margin:5px 0 0;opacity:0.9;">${orgName} — Peppol e-Invoicing</p></div><div style="background:#f8f9fa;padding:20px;border-radius:0 0 12px 12px;"><p>${shortBody}</p><p style="margin-top:16px;"><a href="https://app.2thier.be/facture?tab=incoming" style="background:#6C5CE7;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block;">Voir les factures</a></p></div></div>`;
+                postal.sendEmail({
+                  from: 'comptabilite@zhiive.com',
+                  to: zhiiveEmail,
+                  subject: `${title} — ${orgName}`,
+                  body: htmlEmail,
+                  isHtml: true,
+                }).catch(err => console.error(`${LOG_PREFIX} Erreur email zhiive ${zhiiveEmail}:`, err.message));
+              }
+            }
+
+            // Email Colony
+            if (org?.email) {
+              const postal = getPostalService();
+              const htmlEmail = `<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;"><div style="background:linear-gradient(135deg,#6C5CE7,#a855f7);padding:20px;border-radius:12px 12px 0 0;color:white;"><h2 style="margin:0;">${title}</h2><p style="margin:5px 0 0;opacity:0.9;">${orgName} — Peppol e-Invoicing</p></div><div style="background:#f8f9fa;padding:20px;border-radius:0 0 12px 12px;"><p>${shortBody}</p><p style="margin-top:16px;"><a href="https://app.2thier.be/facture?tab=incoming" style="background:#6C5CE7;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block;">Voir les factures</a></p></div></div>`;
+              postal.sendEmail({
+                from: 'comptabilite@zhiive.com',
+                to: org.email,
+                subject: `${title} — ${orgName}`,
+                body: htmlEmail,
+                isHtml: true,
+              }).catch(err => console.error(`${LOG_PREFIX} Erreur email colony ${org.email}:`, err.message));
+            }
+
+            console.log(`${LOG_PREFIX} 🔔 Notifications envoyées: ${imported} facture(s), ${orgAdmins.length} admin(s)`);
+          } catch (notifyErr) {
+            console.error(`${LOG_PREFIX} ❌ Erreur notifications:`, (notifyErr as Error).message);
+          }
         }
       } catch (err) {
         console.error(`${LOG_PREFIX} ❌ Erreur fetch incoming org ${config.organizationId}:`, (err as Error).message);
