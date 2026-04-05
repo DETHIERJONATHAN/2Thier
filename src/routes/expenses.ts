@@ -279,7 +279,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
 
 const scanSchema = z.object({
   imageBase64: z.string().min(100),
-  mimeType: z.string().refine(v => ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(v)),
+  mimeType: z.string().refine(v => ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'].includes(v)),
 });
 
 router.post('/scan', authenticateToken, async (req: Request, res: Response) => {

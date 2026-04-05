@@ -7,7 +7,7 @@ import {
   ClockCircleOutlined, ExclamationCircleOutlined, SendOutlined, DeleteOutlined,
   EditOutlined, EyeOutlined, DollarOutlined, DownloadOutlined,
   EuroCircleOutlined, ThunderboltOutlined, CopyOutlined,
-  CameraOutlined, WalletOutlined, BarChartOutlined,
+  CameraOutlined, WalletOutlined, BarChartOutlined, UploadOutlined,
   ShoppingCartOutlined, LoadingOutlined,
   LikeOutlined, DislikeOutlined, CloudDownloadOutlined, WarningOutlined,
 } from '@ant-design/icons';
@@ -308,6 +308,7 @@ const FacturePage: React.FC = () => {
   const [savingExpense, setSavingExpense] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const fileUploadRef = React.useRef<HTMLInputElement>(null);
 
   // ── Monthly chart + export state ──
   const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]);
@@ -481,10 +482,14 @@ const FacturePage: React.FC = () => {
       setScanning(true);
       setScanResult(null);
 
-      // Preview the image
-      const reader = new FileReader();
-      reader.onload = (e) => setScanPreview(e.target?.result as string);
-      reader.readAsDataURL(file);
+      // Preview: image → DataURL, PDF → placeholder
+      if (file.type === 'application/pdf') {
+        setScanPreview('PDF');
+      } else {
+        const reader = new FileReader();
+        reader.onload = (e) => setScanPreview(e.target?.result as string);
+        reader.readAsDataURL(file);
+      }
 
       // Convert to base64
       const buffer = await file.arrayBuffer();
@@ -3044,6 +3049,7 @@ const FacturePage: React.FC = () => {
           {/* Step 1: Upload / Camera */}
           {!showExpenseForm && (
             <>
+              {/* Input caméra (mobile) */}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -3056,14 +3062,29 @@ const FacturePage: React.FC = () => {
                   e.target.value = '';
                 }}
               />
+              {/* Input upload fichier (galerie, fichiers, PDF) */}
+              <input
+                ref={fileUploadRef}
+                type="file"
+                accept="image/*,application/pdf"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleScanTicket(file);
+                  e.target.value = '';
+                }}
+              />
 
               {scanning ? (
                 <div style={{ textAlign: 'center', padding: 40 }}>
                   <div style={{ marginBottom: 16 }}>
-                    {scanPreview && (
+                    {scanPreview && scanPreview !== 'PDF' && (
                       <img src={scanPreview} alt="ticket" style={{
                         maxWidth: '100%', maxHeight: 200, borderRadius: 8, opacity: 0.6,
                       }} />
+                    )}
+                    {scanPreview === 'PDF' && (
+                      <div style={{ fontSize: 48, opacity: 0.6 }}>📄</div>
                     )}
                   </div>
                   <Spin indicator={<LoadingOutlined style={{ fontSize: 32, color: '#27ae60' }} spin />} />
@@ -3072,26 +3093,50 @@ const FacturePage: React.FC = () => {
                 </div>
               ) : (
                 <div style={{
-                  border: `2px dashed ${FB.border}`, borderRadius: 12, padding: 40,
-                  textAlign: 'center', cursor: 'pointer', transition: 'border-color 0.2s',
+                  border: `2px dashed ${FB.border}`, borderRadius: 12, padding: 30,
+                  textAlign: 'center', transition: 'border-color 0.2s',
                 }}
-                  onClick={() => fileInputRef.current?.click()}
                   onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = '#27ae60'; }}
                   onDragLeave={(e) => { e.currentTarget.style.borderColor = FB.border; }}
                   onDrop={(e) => {
                     e.preventDefault();
                     e.currentTarget.style.borderColor = FB.border;
                     const file = e.dataTransfer.files[0];
-                    if (file && file.type.startsWith('image/')) handleScanTicket(file);
+                    if (file && (file.type.startsWith('image/') || file.type === 'application/pdf')) handleScanTicket(file);
                   }}
                 >
-                  <CameraOutlined style={{ fontSize: 48, color: FB.border, marginBottom: 12 }} />
-                  <div style={{ fontWeight: 600, fontSize: 16, color: FB.text, marginBottom: 4 }}>
-                    {isMobile ? 'Touchez pour prendre une photo' : 'Glissez une image ou cliquez'}
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      style={{
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+                        padding: '20px 28px', background: '#27ae6010', border: `2px solid #27ae60`,
+                        borderRadius: 12, cursor: 'pointer', minWidth: 130,
+                      }}
+                    >
+                      <CameraOutlined style={{ fontSize: 32, color: '#27ae60' }} />
+                      <span style={{ fontWeight: 600, fontSize: 14, color: '#27ae60' }}>Prendre une photo</span>
+                    </button>
+                    <button
+                      onClick={() => fileUploadRef.current?.click()}
+                      style={{
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+                        padding: '20px 28px', background: `${FB.blue}10`, border: `2px solid ${FB.blue}`,
+                        borderRadius: 12, cursor: 'pointer', minWidth: 130,
+                      }}
+                    >
+                      <UploadOutlined style={{ fontSize: 32, color: FB.blue }} />
+                      <span style={{ fontWeight: 600, fontSize: 14, color: FB.blue }}>Télécharger</span>
+                    </button>
                   </div>
                   <div style={{ fontSize: 13, color: FB.textSecondary }}>
-                    Photo de ticket, facture, reçu, note de frais
+                    Photo, image, PDF — ticket, facture, reçu, note de frais
                   </div>
+                  {!isMobile && (
+                    <div style={{ fontSize: 12, color: FB.border, marginTop: 8 }}>
+                      ou glissez-déposez un fichier ici
+                    </div>
+                  )}
                 </div>
               )}
             </>
@@ -3116,9 +3161,14 @@ const FacturePage: React.FC = () => {
               )}
 
               {/* Scan preview on the side */}
-              {scanPreview && (
+              {scanPreview && scanPreview !== 'PDF' && (
                 <div style={{ marginBottom: 14, textAlign: 'center' }}>
                   <img src={scanPreview} alt="ticket" style={{ maxWidth: '100%', maxHeight: 120, borderRadius: 8, border: `1px solid ${FB.border}` }} />
+                </div>
+              )}
+              {scanPreview === 'PDF' && (
+                <div style={{ marginBottom: 14, textAlign: 'center', padding: 12, background: '#f0f0f0', borderRadius: 8 }}>
+                  📄 Document PDF analysé
                 </div>
               )}
 

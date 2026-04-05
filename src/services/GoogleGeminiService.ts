@@ -678,7 +678,7 @@ Bien à vous`;
         { text: prompt },
         {
           inlineData: {
-            mimeType: mimeType as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
+            mimeType: mimeType as any,
             data: imageBase64
           }
         }
