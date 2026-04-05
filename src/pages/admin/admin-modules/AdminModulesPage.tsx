@@ -3,9 +3,10 @@ import { Modal, Select, Form, Input, ConfigProvider, theme as antdTheme } from '
 import {
   DndContext,
   DragStartEvent,
-  closestCenter,
+  rectIntersection,
   KeyboardSensor,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   DragEndEvent,
@@ -17,7 +18,6 @@ import {
   verticalListSortingStrategy,
   arrayMove,
 } from '@dnd-kit/sortable';
-import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { useModulesAdmin } from '.';
 import { ModuleWithStatus, SectionWithModules } from './types';
 import { InfoBanner } from './components/InfoBanner';
@@ -54,6 +54,7 @@ export default function AdminModulesPage() {
     handleDeleteModule,
     toggleModuleActive,
     toggleModuleSuperAdminOnly,
+    updateModulePlacement,
   } = useModulesAdmin();
   const { api } = useAuthenticatedApi();
   const { refreshModules, user, currentOrganization } = useAuth();
@@ -92,8 +93,8 @@ export default function AdminModulesPage() {
   }, []);
 
   const sensors = useSensors(
-    // Démarrage très réactif: drag dès que le pointeur se déplace un peu
-    useSensor(PointerSensor, { activationConstraint: { distance: 2 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
@@ -438,10 +439,9 @@ export default function AdminModulesPage() {
       ) : (
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCenter}
+          collisionDetection={rectIntersection}
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
-          modifiers={[restrictToVerticalAxis]}
         >
           <SortableContext items={filteredSections.map((s, idx) => `cat:${String(s.id ?? `idx-${idx}`)}`)} strategy={verticalListSortingStrategy}>
             {filteredSections.map((section, idx) => {
@@ -462,12 +462,12 @@ export default function AdminModulesPage() {
                   onPurgeFallbackSection={purgeFallbackSection}
                   onEditModule={onEditModule}
                   onDeleteModule={handleDeleteModule}
-                  onToggleOrg={onToggleOrg}
                   onAddModuleToCategory={onAddModuleToCategory}
                   onToggleSectionActive={onToggleSectionActive}
                   onToggleSectionAdminOnly={onToggleSectionAdminOnly}
                   onToggleModuleActive={toggleModuleActive}
                   onToggleModuleSuperAdminOnly={toggleModuleSuperAdminOnly}
+                  onUpdateModulePlacement={updateModulePlacement}
                   isOpen={isPanelOpen}
                   onPanelChange={handlePanelChange}
                 />

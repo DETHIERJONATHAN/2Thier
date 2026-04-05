@@ -65,6 +65,7 @@ interface DraggableModuleCardProps {
   onDeleteModule: (module: ModuleWithStatus) => void;
   onToggleModuleActive: (moduleId: string, currentActive: boolean) => void;
   onToggleModuleSuperAdminOnly: (moduleId: string, value: boolean) => void;
+  onUpdateModulePlacement?: (moduleId: string, placement: string) => void;
 }
 
 const DraggableModuleCard: React.FC<DraggableModuleCardProps> = ({
@@ -74,6 +75,7 @@ const DraggableModuleCard: React.FC<DraggableModuleCardProps> = ({
   onDeleteModule,
   onToggleModuleActive,
   onToggleModuleSuperAdminOnly,
+  onUpdateModulePlacement,
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: module.__sortableId });
   const style: React.CSSProperties = {
@@ -186,6 +188,48 @@ const DraggableModuleCard: React.FC<DraggableModuleCardProps> = ({
                   </Dropdown>
                 </div>
               </div>
+              {/* Placement toggles: Swipe header / Sidebar */}
+              {onUpdateModulePlacement && (
+                <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10, paddingTop: 8, borderTop: `1px solid ${FB.border}` }}>
+                  <Tooltip title="Afficher dans le header swipe (onglets en haut)">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ fontSize: 11, color: FB.textSecondary }}>📱</span>
+                      <FBToggle
+                        checked={module.placement === 'swipe' || module.placement === 'both'}
+                        onChange={(checked) => {
+                          const inSidebar = module.placement === 'sidebar' || module.placement === 'both';
+                          let newPlacement: string;
+                          if (checked && inSidebar) newPlacement = 'both';
+                          else if (checked) newPlacement = 'swipe';
+                          else if (inSidebar) newPlacement = 'sidebar';
+                          else newPlacement = 'sidebar';
+                          onUpdateModulePlacement(module.id, newPlacement);
+                        }}
+                      />
+                    </div>
+                  </Tooltip>
+                  <Tooltip title="Afficher dans le menu latéral (sidebar)">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ fontSize: 11, color: FB.textSecondary }}>📋</span>
+                      <FBToggle
+                        checked={module.placement === 'sidebar' || module.placement === 'both'}
+                        onChange={(checked) => {
+                          const inSwipe = module.placement === 'swipe' || module.placement === 'both';
+                          let newPlacement: string;
+                          if (checked && inSwipe) newPlacement = 'both';
+                          else if (checked) newPlacement = 'sidebar';
+                          else if (inSwipe) newPlacement = 'swipe';
+                          else newPlacement = 'sidebar';
+                          onUpdateModulePlacement(module.id, newPlacement);
+                        }}
+                      />
+                    </div>
+                  </Tooltip>
+                  <span style={{ fontSize: 10, color: FB.textSecondary, opacity: 0.7 }}>
+                    {module.placement === 'both' ? '📱+📋' : module.placement === 'swipe' ? '📱 swipe' : '📋 sidebar'}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -208,6 +252,7 @@ export interface SortableSectionProps {
   onToggleSectionAdminOnly: (sectionId: string, value: boolean) => void;
   onToggleModuleActive: (moduleId: string, currentActive: boolean) => void;
   onToggleModuleSuperAdminOnly: (moduleId: string, value: boolean) => void;
+  onUpdateModulePlacement?: (moduleId: string, placement: string) => void;
   viewMode?: 'list' | 'grid';
   isOpen?: boolean;
   onPanelChange?: (panelId: string, isOpen: boolean) => void;
@@ -227,6 +272,7 @@ export const SortableSection: React.FC<SortableSectionProps> = ({
   onToggleSectionAdminOnly,
   onToggleModuleActive,
   onToggleModuleSuperAdminOnly,
+  onUpdateModulePlacement,
   viewMode = 'list',
   isOpen,
   onPanelChange,
@@ -496,6 +542,7 @@ export const SortableSection: React.FC<SortableSectionProps> = ({
                         onDeleteModule={onDeleteModule}
                         onToggleModuleActive={onToggleModuleActive}
                         onToggleModuleSuperAdminOnly={onToggleModuleSuperAdminOnly}
+                        onUpdateModulePlacement={onUpdateModulePlacement}
                       />
                     </div>
                   ))}

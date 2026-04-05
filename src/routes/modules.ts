@@ -212,10 +212,15 @@ router.get('/swipe-tabs', async (req, res) => {
 	try {
 		const { organizationId } = req.query as { organizationId?: string };
 		
+		// Récupérer les modules globaux + ceux de l'org courante
 		const modules = await prisma.module.findMany({
 			where: {
 				placement: { in: ['swipe', 'both'] },
 				active: true,
+				OR: [
+					{ organizationId: null },
+					...(organizationId ? [{ organizationId }] : []),
+				],
 			},
 			orderBy: { order: 'asc' },
 			include: {
@@ -234,15 +239,26 @@ router.get('/swipe-tabs', async (req, res) => {
 			return orgStatus.isActive;
 		});
 
-		const tabs = filtered.map(m => ({
-			id: m.key,
-			label: m.label,
-			color: m.tabColor || '#999',
-			icon: m.tabIcon || 'app',
-			order: m.order ?? 99,
-			moduleId: m.id,
-			placement: m.placement,
-		}));
+		// Dédupliquer par key (préfère org-spécifique si les deux existent)
+		const byKey = new Map<string, typeof filtered[0]>();
+		for (const m of filtered) {
+			const existing = byKey.get(m.key);
+			if (!existing || (m.organizationId && !existing.organizationId)) {
+				byKey.set(m.key, m);
+			}
+		}
+
+		const tabs = Array.from(byKey.values())
+			.sort((a, b) => (a.order ?? 99) - (b.order ?? 99))
+			.map(m => ({
+				id: m.key,
+				label: m.label,
+				color: m.tabColor || '#999',
+				icon: m.tabIcon || 'app',
+				order: m.order ?? 99,
+				moduleId: m.id,
+				placement: m.placement,
+			}));
 
 		res.json({ success: true, data: tabs });
 	} catch (e) {

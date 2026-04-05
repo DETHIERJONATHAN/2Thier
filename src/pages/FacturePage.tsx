@@ -16,6 +16,7 @@ import { useAuth } from '../auth/useAuth';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/fr';
+import DOMPurify from 'dompurify';
 
 dayjs.extend(relativeTime);
 dayjs.locale('fr');
@@ -2929,7 +2930,7 @@ const FacturePage: React.FC = () => {
                 border: `1px solid ${FB.border}`, borderRadius: 8, padding: 16,
                 background: '#fff', maxHeight: 200, overflow: 'auto', fontSize: 14, lineHeight: 1.6,
               }}
-              dangerouslySetInnerHTML={{ __html: emailBody }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(emailBody) }}
             />
           </div>
 

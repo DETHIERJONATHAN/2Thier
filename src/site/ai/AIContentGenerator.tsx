@@ -49,12 +49,13 @@ const AIContentGenerator: React.FC<AIContentGeneratorProps> = ({
   const handleSubmit = async (values: any) => {
     setLoading(true);
     setProgress(0);
+    let progressInterval: ReturnType<typeof setInterval> | undefined;
     
     try {
       console.log('🤖 [AI] Génération section complète:', sectionType, values);
       
       // Animation du progress
-      const progressInterval = setInterval(() => {
+      progressInterval = setInterval(() => {
         setProgress(prev => Math.min(prev + 10, 90));
       }, 300);
 
@@ -71,7 +72,6 @@ const AIContentGenerator: React.FC<AIContentGeneratorProps> = ({
         includeImages: values.includeImages || false
       });
 
-      clearInterval(progressInterval);
       setProgress(100);
 
       console.log('✅ [AI] Section générée:', response);
@@ -110,6 +110,7 @@ const AIContentGenerator: React.FC<AIContentGeneratorProps> = ({
         message.error('❌ Erreur lors de la génération de la section');
       }
     } finally {
+      if (progressInterval) clearInterval(progressInterval);
       setLoading(false);
     }
   };

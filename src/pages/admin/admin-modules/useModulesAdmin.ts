@@ -273,7 +273,7 @@ export const useModulesAdmin = () => {
   }, [service, loadSections, sections]);
 
   // ===== MODULE TOGGLE FUNCTIONS =====
-  const updateModuleProperties = useCallback(async (moduleId: string, updates: { active?: boolean; superAdminOnly?: boolean }) => {
+  const updateModuleProperties = useCallback(async (moduleId: string, updates: { active?: boolean; superAdminOnly?: boolean; placement?: string }) => {
     try {
       const updated = await service.updateModule(moduleId, updates);
       if (updated) {
@@ -307,6 +307,15 @@ export const useModulesAdmin = () => {
     } catch (error) {
       console.error('[useModulesAdmin] Erreur toggleModuleSuperAdminOnly:', error);
       NotificationManager.error('Erreur lors du toggle SuperAdmin Only');
+    }
+  }, [updateModuleProperties]);
+
+  const updateModulePlacement = useCallback(async (moduleId: string, placement: string) => {
+    try {
+      await updateModuleProperties(moduleId, { placement });
+    } catch (error) {
+      console.error('[useModulesAdmin] Erreur updateModulePlacement:', error);
+      NotificationManager.error('Erreur lors du changement de placement');
     }
   }, [updateModuleProperties]);
 
@@ -724,7 +733,8 @@ export const useModulesAdmin = () => {
     // Module Toggle Functions
     updateModuleProperties,
     toggleModuleActive,
-    toggleModuleSuperAdminOnly
+    toggleModuleSuperAdminOnly,
+    updateModulePlacement
     ,purgeFallbackSection
   };
 };
