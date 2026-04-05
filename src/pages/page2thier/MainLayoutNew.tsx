@@ -141,8 +141,6 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
     return () => { cancelled = true; };
   }, [currentOrganization?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const [hoveredTab, setHoveredTab] = useState<string | null>(null);
-
   // Touch drag state for mobile reorder
   const touchState = useRef<{ id: string; startX: number; startY: number; timer: ReturnType<typeof setTimeout> | null; active: boolean }>({ id: '', startX: 0, startY: 0, timer: null, active: false });
   const tabRefs = useRef<Map<string, HTMLDivElement>>(new Map());
