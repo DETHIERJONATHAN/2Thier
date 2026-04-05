@@ -317,6 +317,7 @@ const FacturePage: React.FC = () => {
   // ── Incoming invoice actions state ──
   const [acceptingInvoiceId, setAcceptingInvoiceId] = useState<string | null>(null);
   const [rejectingInvoiceId, setRejectingInvoiceId] = useState<string | null>(null);
+  const [fetchingIncoming, setFetchingIncoming] = useState(false);
 
   // ── Data fetching ──
   const loadData = useCallback(async () => {
@@ -439,6 +440,23 @@ const FacturePage: React.FC = () => {
       message.error('Erreur lors du rejet');
     } finally {
       setRejectingInvoiceId(null);
+    }
+  }, [api, message, loadData]);
+
+  // ── Fetch incoming invoices from Peppol ──
+  const handleFetchIncoming = useCallback(async () => {
+    try {
+      setFetchingIncoming(true);
+      const res = await api.post<{ success: boolean; message?: string }>('/api/peppol/fetch-incoming', {});
+      if (res.success) {
+        message.success(res.message || 'Factures récupérées');
+        loadData();
+      }
+    } catch (err) {
+      console.error('Erreur fetch incoming:', err);
+      message.error('Erreur lors de la récupération des factures');
+    } finally {
+      setFetchingIncoming(false);
     }
   }, [api, message, loadData]);
 
@@ -1482,6 +1500,20 @@ const FacturePage: React.FC = () => {
                 ? 'Les factures reçues via Peppol apparaîtront ici'
                 : 'Créez votre première facture pour commencer'}
             </div>
+            {activeTab === 'incoming' && peppolActive && (
+              <button
+                onClick={handleFetchIncoming}
+                disabled={fetchingIncoming}
+                style={{
+                  padding: '10px 24px', background: FB.purple, color: '#fff', border: 'none',
+                  borderRadius: FB.radius, fontSize: 15, fontWeight: 600, cursor: fetchingIncoming ? 'not-allowed' : 'pointer',
+                  opacity: fetchingIncoming ? 0.7 : 1,
+                }}
+              >
+                {fetchingIncoming ? <Spin size="small" style={{ marginRight: 8 }} /> : <CloudDownloadOutlined style={{ marginRight: 8 }} />}
+                {fetchingIncoming ? 'Récupération...' : 'Récupérer les factures'}
+              </button>
+            )}
             {activeTab !== 'incoming' && (
               <button
                 onClick={() => openCreateModal()}
@@ -1496,7 +1528,24 @@ const FacturePage: React.FC = () => {
           </FBCard>
         ) : (
           /* ── Invoice Feed ── */
-          invoices.map(inv => {
+          <>
+          {activeTab === 'incoming' && peppolActive && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+              <button
+                onClick={handleFetchIncoming}
+                disabled={fetchingIncoming}
+                style={{
+                  padding: '8px 18px', background: FB.purple, color: '#fff', border: 'none',
+                  borderRadius: FB.radius, fontSize: 14, fontWeight: 600, cursor: fetchingIncoming ? 'not-allowed' : 'pointer',
+                  opacity: fetchingIncoming ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: 6,
+                }}
+              >
+                {fetchingIncoming ? <Spin size="small" /> : <CloudDownloadOutlined />}
+                {fetchingIncoming ? 'Récupération...' : 'Récupérer les factures'}
+              </button>
+            </div>
+          )}
+          {invoices.map(inv => {
             const sc = getStatusConfig(inv.status);
             const source = SOURCE_BADGE[inv.source] || SOURCE_BADGE.standalone;
             const isDraft = inv.status === 'DRAFT';
@@ -1800,7 +1849,8 @@ const FacturePage: React.FC = () => {
                 </div>
               </FBCard>
             );
-          })
+          })}
+          </>
         )}
         </>
         )}

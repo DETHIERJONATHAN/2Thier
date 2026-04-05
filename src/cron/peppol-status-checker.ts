@@ -183,9 +183,9 @@ export const checkActiveStatuses = cron.schedule('0 */6 * * *', async () => {
 
 /**
  * Récupère automatiquement les factures entrantes Peppol
- * Toutes les 4 heures, pour toutes les orgs avec autoReceiveEnabled + ACTIVE
+ * Toutes les heures, pour toutes les orgs avec autoReceiveEnabled + ACTIVE
  */
-export const fetchIncomingInvoices = cron.schedule('0 */4 * * *', async () => {
+export const fetchIncomingInvoices = cron.schedule('0 */1 * * *', async () => {
   try {
     const configs = await db.peppolConfig.findMany({
       where: {
@@ -236,10 +236,10 @@ export const fetchIncomingInvoices = cron.schedule('0 */4 * * *', async () => {
               data: {
                 organizationId: config.organizationId,
                 peppolMessageId: bill.peppolMessageId,
-                senderEas: '0208',
-                senderEndpoint: bill.partnerVat || '',
+                senderEas: bill.partnerVat?.startsWith('BE') ? '0208' : '0208',
+                senderEndpoint: bill.partnerVat?.replace(/^BE/, '').replace(/[\s.\-]/g, '') || bill.partnerName || '',
                 senderName: bill.partnerName,
-                senderVat: bill.partnerVat,
+                senderVat: bill.partnerVat || null,
                 invoiceNumber: bill.name,
                 invoiceDate: bill.invoiceDate ? new Date(bill.invoiceDate) : null,
                 dueDate: bill.dueDate ? new Date(bill.dueDate) : null,

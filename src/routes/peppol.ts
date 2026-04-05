@@ -957,10 +957,10 @@ router.post('/fetch-incoming', authenticateToken, isAdmin, async (req: Request, 
           data: {
             organizationId,
             peppolMessageId: bill.peppolMessageId,
-            senderEas: '0208', // Default for now
-            senderEndpoint: bill.partnerVat || '',
+            senderEas: bill.partnerVat?.startsWith('BE') ? '0208' : '0208',
+            senderEndpoint: bill.partnerVat?.replace(/^BE/, '').replace(/[\s.\-]/g, '') || bill.partnerName || '',
             senderName: bill.partnerName,
-            senderVat: bill.partnerVat,
+            senderVat: bill.partnerVat || null,
             invoiceNumber: bill.name,
             invoiceDate: bill.invoiceDate ? new Date(bill.invoiceDate) : null,
             dueDate: bill.dueDate ? new Date(bill.dueDate) : null,
@@ -974,9 +974,16 @@ router.post('/fetch-incoming', authenticateToken, isAdmin, async (req: Request, 
       }
     }
 
+    console.log(`[Peppol] 📥 Fetch incoming: ${imported} importée(s) / ${incomingBills.length} trouvée(s) pour org ${organizationId}`);
+
     res.json({
       success: true,
       data: { imported, total: incomingBills.length },
+      message: imported > 0
+        ? `${imported} nouvelle(s) facture(s) importée(s)`
+        : incomingBills.length > 0
+          ? 'Aucune nouvelle facture (déjà importées)'
+          : 'Aucune facture entrante trouvée',
     });
   } catch (error) {
     console.error('[Peppol] Erreur POST /fetch-incoming:', error);
@@ -1050,44 +1057,8 @@ router.put('/incoming/:id', authenticateToken, isAdmin, async (req: Request, res
       },
     });
 
-    // Si ACCEPTED → auto-comptabilise en Expense
-    if (data.status === 'ACCEPTED' && existing.status !== 'ACCEPTED') {
-      try {
-        // Vérifier qu'aucune expense n'existe déjà pour cette facture
-        const existingExpense = await db.expense.findFirst({
-          where: {
-            organizationId,
-            reference: `PEPPOL-${existing.peppolMessageId}`,
-          },
-        });
-
-        if (!existingExpense) {
-          await db.expense.create({
-            data: {
-              organizationId,
-              createdById: userId,
-              supplierName: existing.senderName || existing.senderEndpoint || 'Fournisseur Peppol',
-              supplierVat: existing.senderVat || null,
-              subtotal: existing.totalAmount ? (existing.totalAmount - (existing.taxAmount || 0)) : 0,
-              taxRate: existing.totalAmount && existing.taxAmount ? Math.round((existing.taxAmount / (existing.totalAmount - existing.taxAmount)) * 100) : 21,
-              taxAmount: existing.taxAmount || 0,
-              totalAmount: existing.totalAmount || 0,
-              currency: existing.currency || 'EUR',
-              category: 'other',
-              description: `Facture Peppol ${existing.invoiceNumber || existing.peppolMessageId}`,
-              reference: `PEPPOL-${existing.peppolMessageId}`,
-              expenseDate: existing.invoiceDate || new Date(),
-              status: 'PENDING',
-              notes: `Auto-importé depuis facture Peppol entrante. Fournisseur: ${existing.senderName || '?'}`,
-            },
-          });
-          console.log(`[Peppol] ✅ Facture entrante ${existing.invoiceNumber || existing.id} auto-comptabilisée en dépense`);
-        }
-      } catch (expErr) {
-        console.error('[Peppol] ⚠️ Erreur auto-comptabilisation expense:', expErr);
-        // On ne bloque pas la réponse pour ça
-      }
-    }
+    // Note: L'auto-comptabilisation en Expense se fait exclusivement via POST /incoming/:id/accept
+    // Le PUT ne sert qu'à mettre à jour le statut/notes sans créer de dépense
 
     res.json({ success: true, data: updated });
   } catch (error) {

@@ -837,10 +837,15 @@ export class PeppolBridge {
    * Déclenche la récupération des documents Peppol entrants
    */
   async fetchIncomingDocuments(odooCompanyId: number): Promise<void> {
-    await this.call('account_edi_proxy_client.user', '_peppol_get_new_documents', [], {
-      context: { allowed_company_ids: [odooCompanyId] },
-    });
-    console.log(`[PeppolBridge] Fetched incoming Peppol documents for company ${odooCompanyId}`);
+    try {
+      await this.call('account_edi_proxy_client.user', '_peppol_get_new_documents', [], {
+        context: { allowed_company_ids: [odooCompanyId] },
+      });
+      console.log(`[PeppolBridge] ✅ Fetched incoming Peppol documents for company ${odooCompanyId}`);
+    } catch (error) {
+      console.error(`[PeppolBridge] ❌ Erreur fetch incoming documents company ${odooCompanyId}:`, (error as Error).message);
+      throw error;
+    }
   }
 
   /**
@@ -854,6 +859,7 @@ export class PeppolBridge {
     name: string;
     partnerName: string;
     partnerVat?: string;
+    partnerId?: number;
     amountTotal: number;
     amountTax: number;
     currency: string;
@@ -879,23 +885,47 @@ export class PeppolBridge {
         'currency_id', 'invoice_date', 'invoice_date_due',
         'state', 'peppol_message_uuid',
       ],
-      limit: options?.limit || 50,
+      limit: options?.limit || 200,
       order: 'create_date desc',
     }) as Array<Record<string, unknown>>;
 
-    return bills.map((bill) => ({
-      id: bill.id as number,
-      name: bill.name as string,
-      partnerName: (bill.partner_id as [number, string])?.[1] || '',
-      partnerVat: undefined,
-      amountTotal: bill.amount_total as number,
-      amountTax: bill.amount_tax as number,
-      currency: (bill.currency_id as [number, string])?.[1] || 'EUR',
-      invoiceDate: bill.invoice_date as string,
-      dueDate: (bill.invoice_date_due as string) || undefined,
-      state: bill.state as string,
-      peppolMessageId: (bill.peppol_message_uuid as string) || undefined,
-    }));
+    // Collect unique partner IDs to fetch their VAT numbers
+    const partnerIds = [...new Set(
+      bills.map(b => (b.partner_id as [number, string])?.[0]).filter(Boolean)
+    )] as number[];
+
+    // Batch-fetch partner VAT numbers
+    const partnerVatMap: Record<number, string> = {};
+    if (partnerIds.length > 0) {
+      try {
+        const partners = await this.call('res.partner', 'read', [partnerIds], {
+          fields: ['vat'],
+        }) as Array<{ id: number; vat: string | false }>;
+        for (const p of partners) {
+          if (p.vat) partnerVatMap[p.id] = p.vat;
+        }
+      } catch (err) {
+        console.warn(`[PeppolBridge] ⚠️ Could not fetch partner VATs:`, (err as Error).message);
+      }
+    }
+
+    return bills.map((bill) => {
+      const partnerId = (bill.partner_id as [number, string])?.[0];
+      return {
+        id: bill.id as number,
+        name: bill.name as string,
+        partnerName: (bill.partner_id as [number, string])?.[1] || '',
+        partnerVat: partnerId ? partnerVatMap[partnerId] : undefined,
+        partnerId,
+        amountTotal: bill.amount_total as number,
+        amountTax: bill.amount_tax as number,
+        currency: (bill.currency_id as [number, string])?.[1] || 'EUR',
+        invoiceDate: bill.invoice_date as string,
+        dueDate: (bill.invoice_date_due as string) || undefined,
+        state: bill.state as string,
+        peppolMessageId: (bill.peppol_message_uuid as string) || undefined,
+      };
+    });
   }
 
   // ── Utilitaires ──
