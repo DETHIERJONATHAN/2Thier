@@ -59,29 +59,40 @@ router.get('/stats', authenticateToken, async (req: Request, res: Response) => {
     const organizationId = getOrganizationId(req);
     if (!organizationId) return res.status(400).json({ success: false, message: 'Organisation requise' });
 
-    const expenses = await db.expense.findMany({
-      where: { organizationId },
-      select: { totalAmount: true, category: true, status: true, expenseDate: true },
-    });
-
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const totalExpenses = expenses.reduce((s, e) => s + (e.totalAmount || 0), 0);
-    const totalThisMonth = expenses
-      .filter(e => new Date(e.expenseDate) >= startOfMonth)
-      .reduce((s, e) => s + (e.totalAmount || 0), 0);
-    const totalPending = expenses
-      .filter(e => e.status === 'PENDING')
-      .reduce((s, e) => s + (e.totalAmount || 0), 0);
-    const totalPaid = expenses
-      .filter(e => e.status === 'PAID')
-      .reduce((s, e) => s + (e.totalAmount || 0), 0);
+    // Agrégations côté DB au lieu de tout charger en mémoire
+    const [totals, thisMonth, byCategory, count] = await Promise.all([
+      // Total global + par statut
+      db.expense.groupBy({
+        by: ['status'],
+        where: { organizationId },
+        _sum: { totalAmount: true },
+      }),
+      // Total du mois en cours
+      db.expense.aggregate({
+        where: { organizationId, expenseDate: { gte: startOfMonth } },
+        _sum: { totalAmount: true },
+      }),
+      // Par catégorie
+      db.expense.groupBy({
+        by: ['category'],
+        where: { organizationId },
+        _sum: { totalAmount: true },
+      }),
+      // Nombre total
+      db.expense.count({ where: { organizationId } }),
+    ]);
 
-    // Par catégorie
-    const byCategory: Record<string, number> = {};
-    for (const e of expenses) {
-      byCategory[e.category] = (byCategory[e.category] || 0) + (e.totalAmount || 0);
+    const totalExpenses = totals.reduce((s, g) => s + (g._sum.totalAmount || 0), 0);
+    const totalPending = totals.find(g => g.status === 'PENDING')?._sum.totalAmount || 0;
+    const totalPaid = totals.find(g => g.status === 'PAID')?._sum.totalAmount || 0;
+    const totalThisMonth = thisMonth._sum.totalAmount || 0;
+
+    const byCategoryMap: Record<string, number> = {};
+    for (const g of byCategory) {
+      byCategoryMap[g.category] = g._sum.totalAmount || 0;
     }
 
     return res.json({
@@ -91,8 +102,8 @@ router.get('/stats', authenticateToken, async (req: Request, res: Response) => {
         totalThisMonth,
         totalPending,
         totalPaid,
-        count: expenses.length,
-        byCategory,
+        count,
+        byCategory: byCategoryMap,
       },
     });
   } catch (error: unknown) {

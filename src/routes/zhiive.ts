@@ -48,6 +48,7 @@ router.get('/followers/:userId', authenticateToken, async (req: Request, res: Re
       where: { followingId: req.params.userId },
       include: { follower: { select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true } } },
       orderBy: { createdAt: 'desc' },
+      take: 500,
     });
     res.json({ followers: followers.map(f => f.follower), count: followers.length });
   } catch (e: any) {
@@ -61,6 +62,7 @@ router.get('/following/:userId', authenticateToken, async (req: Request, res: Re
       where: { followerId: req.params.userId },
       include: { following: { select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true } } },
       orderBy: { createdAt: 'desc' },
+      take: 500,
     });
     res.json({ following: following.map(f => f.following), count: following.length });
   } catch (e: any) {
@@ -96,6 +98,7 @@ router.get('/stories/feed', authenticateToken, async (req: Request, res: Respons
         views: { where: { viewerId: userId }, select: { id: true } },
       },
       orderBy: { createdAt: 'desc' },
+      take: 50,
     });
 
     res.json({
@@ -282,6 +285,7 @@ router.get('/explore/gallery', authenticateToken, async (req: Request, res: Resp
       const friendships = await db.friendship.findMany({
         where: { status: 'accepted', OR: [{ requesterId: userId }, { addresseeId: userId }] },
         select: { requesterId: true, addresseeId: true },
+        take: 1000,
       });
       const friendIds = friendships.map(f => f.requesterId === userId ? f.addresseeId : f.requesterId);
       friendIds.push(userId); // Include own posts
@@ -389,6 +393,7 @@ router.get('/explore/gallery', authenticateToken, async (req: Request, res: Resp
         const friendships = await db.friendship.findMany({
           where: { status: 'accepted', OR: [{ requesterId: userId }, { addresseeId: userId }] },
           select: { requesterId: true, addresseeId: true },
+          take: 1000,
         });
         const friendIds = friendships.map(f => f.requesterId === userId ? f.addresseeId : f.requesterId);
         friendIds.push(userId);
@@ -561,10 +566,11 @@ router.get('/explore/suggested-users', authenticateToken, async (req: Request, r
 
     // Get follow/friendship data for current user
     const [alreadyFollowing, userFriendships] = await Promise.all([
-      db.follow.findMany({ where: { followerId: userId }, select: { followingId: true } }),
+      db.follow.findMany({ where: { followerId: userId }, select: { followingId: true }, take: 1000 }),
       db.friendship.findMany({
         where: { OR: [{ requesterId: userId }, { addresseeId: userId }] },
         select: { id: true, requesterId: true, addresseeId: true, status: true },
+        take: 1000,
       }),
     ]);
     const followingIds = new Set(alreadyFollowing.map(f => f.followingId));

@@ -6,6 +6,7 @@ import path from 'path';
 import fs from 'fs';
 import cors from 'cors';
 import session from 'express-session';
+import connectPgSimple from 'connect-pg-simple';
 import cookieParser from 'cookie-parser';
 import fileUpload from 'express-fileupload';
 import passport from 'passport';
@@ -279,8 +280,10 @@ app.use(fileUpload({
 console.log('✅ [FileUpload] Middleware configuré (100MB max)');
 
 // 🔐 Configuration Session avec sécurité Enterprise
+const sessionSecret = process.env.SESSION_SECRET || (process.env.NODE_ENV === 'production' ? (() => { throw new Error('SESSION_SECRET requis en production'); })() : 'crm-dev-secret-2024');
+const PgSession = connectPgSimple(session);
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'crm-dev-secret-2024',
+  secret: sessionSecret,
   resave: false,
   saveUninitialized: false,
   name: 'CRM_SESSION_ID',
@@ -291,7 +294,18 @@ app.use(session({
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     path: '/',
   },
-  store: undefined // TODO: Ajouter un store persistant en production
+  store: new PgSession({
+    conObject: {
+      host: process.env.PGHOST || '127.0.0.1',
+      port: parseInt(process.env.PGPORT || '5432'),
+      database: process.env.PGDATABASE || '2thier',
+      user: process.env.PGUSER || 'postgres',
+      password: process.env.PGPASSWORD,
+    },
+    tableName: 'session',
+    createTableIfMissing: true,
+    pruneSessionInterval: 60 * 15, // Nettoyage des sessions expirées toutes les 15min
+  }),
 }));
 
 console.log('✅ [ENTERPRISE-SECURITY] Configuration sécurité niveau Enterprise activée');

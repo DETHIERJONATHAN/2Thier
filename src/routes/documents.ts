@@ -4,7 +4,7 @@ import { nanoid } from 'nanoid';
 import crypto from 'crypto';
 import { renderDocumentPdf } from '../services/documentPdfRenderer';
 import type { AuthenticatedRequest } from '../middlewares/auth';
-import { GoogleGmailService } from '../google-auth/services/GoogleGmailService';
+import { getPostalService } from '../services/PostalEmailService';
 
 const router = Router();
 const prisma = db;
@@ -1930,10 +1930,19 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
     const filename = `${document.documentNumber || document.id}.pdf`;
     console.log('📧 [SEND-EMAIL] PDF généré:', filename, pdfBuffer.length, 'bytes');
 
-    // 3. Envoyer via Gmail
-    const gmailService = await GoogleGmailService.create(organizationId, userId);
-    if (!gmailService) {
-      return res.status(401).json({ error: 'Google non connecté pour cette organisation' });
+    // 3. Envoyer via Zhiive Mail (Postal)
+    const postal = getPostalService();
+
+    // Résoudre l'adresse email expéditeur depuis le compte email de l'utilisateur
+    let fromEmail = 'noreply@zhiive.com';
+    if (userId) {
+      const emailAccount = await prisma.emailAccount.findUnique({
+        where: { userId },
+        select: { emailAddress: true },
+      });
+      if (emailAccount?.emailAddress) {
+        fromEmail = emailAccount.emailAddress;
+      }
     }
 
     // 3b. Si demandé, résoudre et télécharger les fiches techniques des produits du devis
@@ -2103,15 +2112,19 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
 </body>
 </html>`;
 
-    const result = await gmailService.sendEmail({
+    const result = await postal.sendEmail({
+      from: fromEmail,
       to,
       subject,
       body: htmlBody,
       isHtml: true,
-      cc: cc || undefined,
-      bcc: bcc || undefined,
-      fromName: orgName,
-      attachments: allAttachments
+      cc: cc ? (Array.isArray(cc) ? cc : [cc]) : undefined,
+      bcc: bcc ? (Array.isArray(bcc) ? bcc : [bcc]) : undefined,
+      attachments: allAttachments.map(a => ({
+        name: a.filename,
+        contentType: a.mimeType,
+        data: a.content.toString('base64'),
+      })),
     });
 
     if (!result) {
@@ -2150,7 +2163,7 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
               filename,
               templateName: document.DocumentTemplate?.name || null,
               sentBy: userId || null,
-              messageId: result.messageId,
+              messageId: result.message_id,
               productDocsAttached: attachedProductDocsCount,
               totalAttachments: allAttachments.length,
             },
@@ -2167,7 +2180,7 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
     console.log(`📧 [SEND-EMAIL] ✅ Email envoyé à ${to} avec PDF ${filename}${fichesMsg}${sigMsg}`);
     res.json({ 
       success: true, 
-      messageId: result.messageId,
+      messageId: result.message_id,
       productDocsAttached: attachedProductDocsCount,
       signatureLinkIncluded: !!signatureAccessToken,
     });

@@ -68,8 +68,7 @@ const Devis1minuteAdminSite = lazy(() => import('./pages/devis1minute/admin/Devi
 const GoogleGmailPageV2 = lazy(() => import('./pages/UnifiedMailPage'));  // ✅ Page mail unifiée Gmail + Yandex
 const MailSettingsPage = lazy(() => import('./pages/MailSettingsPage'));  // ⚙️ Paramètres comptes email
 const GoogleAgendaPage = lazy(() => import('./pages/GoogleAgendaPage'));
-const GoogleDrivePage = lazy(() => import('./google-workspace/pages/GoogleDrivePageV2'));
-const GoogleMeetPage = lazy(() => import('./pages/GoogleMeetPage'));
+// Google Drive & Meet supprimés — Google Workspace n'est plus utilisé
 const TelnyxPage = lazy(() => import('./pages/TelnyxPage'));
 const GoogleGroupsPage = lazy(() => import('./pages/GoogleGroupsPage'));
 const GoogleFormsPage = lazy(() => import('./pages/GoogleFormsPage'));
@@ -281,10 +280,8 @@ export default function AppLayout() {
             {hasFeature('google_agenda_access') && <Route path="/google-agenda" element={<GoogleAgendaPage />} />}
             {(hasFeature('analytics_access') || isSuperAdmin) && <Route path="/analytics" element={<GoogleAnalyticsPage />} />}
             {hasFeature('google_contacts_access') && <Route path="/google-contacts" element={<GoogleContactsPage />} />}
-            {hasFeature('google_drive_access') && <Route path="/google-drive" element={<GoogleDrivePage />} />}
             {hasFeature('google_forms_access') && <Route path="/google-forms" element={<GoogleFormsPage />} />}
             {hasFeature('google_groups_access') && <Route path="/google-groups" element={<GoogleGroupsPage />} />}
-            {hasFeature('google_meet_access') && <Route path="/google-meet" element={<GoogleMeetPage />} />}
             {hasFeature('google_maps_access') && <Route path="/google-maps" element={<GoogleMapsPage />} />}
             {hasFeature('gemini_access') && <Route path="/gemini" element={<GoogleGeminiPage />} />}
             {hasFeature('telnyx_communications_access') && <Route path="/telnyx-communications" element={<TelnyxPage />} />}

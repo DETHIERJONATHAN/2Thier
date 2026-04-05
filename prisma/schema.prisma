@@ -2370,6 +2370,8 @@ model UserOrganization {
   User           User                   @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@index([userId])
 }
 
 model UserService {
