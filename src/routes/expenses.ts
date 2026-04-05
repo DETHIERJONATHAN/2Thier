@@ -192,9 +192,10 @@ RÈGLES:
     const result = await gemini.callVisionAPIPublic(imageBase64, mimeType, prompt);
 
     if (!result.success || !result.content) {
+      console.error('[EXPENSES] ❌ Scan Vision échoué:', result.error, '| Modèle:', result.modelUsed);
       return res.json({
         success: false,
-        message: 'Impossible d\'analyser l\'image. Veuillez saisir les données manuellement.',
+        message: `Impossible d'analyser l'image (${result.error || 'erreur inconnue'}). Veuillez saisir les données manuellement.`,
         aiError: result.error,
       });
     }

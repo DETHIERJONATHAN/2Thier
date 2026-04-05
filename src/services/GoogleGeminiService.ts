@@ -652,17 +652,29 @@ Bien à vous`;
   ): Promise<{ success: boolean; content?: string; error?: string; modelUsed: string }> {
     try {
       if (!this.genAI) {
-        return { success: false, error: 'API Gemini non initialisée', modelUsed: this.primaryModelName };
+        console.error('❌ [Gemini Vision] genAI non initialisé — clé API manquante ?');
+        return { success: false, error: 'API Gemini non initialisée (clé API manquante)', modelUsed: this.primaryModelName };
       }
 
-      // Utiliser le modèle Flash qui supporte la vision
-      const visionModelName = this.primaryModelName; // gemini-2.5-flash supporte vision nativement
-      const model = this.getModelInstance(visionModelName);
+      const visionModelName = this.primaryModelName;
+      console.log(`📷 [Gemini Vision] Envoi image (${mimeType}, ~${Math.round(imageBase64.length / 1024)}KB b64) → ${visionModelName}`);
 
-      console.log(`📷 [Gemini Vision] Envoi de l'image (${mimeType}) au modèle ${visionModelName}`);
+      // Créer un modèle dédié avec safety settings permissifs pour documents financiers
+      const visionModel = this.genAI.getGenerativeModel({
+        model: visionModelName,
+        safetySettings: [
+          { category: 'HARM_CATEGORY_HARASSMENT' as any, threshold: 'BLOCK_NONE' as any },
+          { category: 'HARM_CATEGORY_HATE_SPEECH' as any, threshold: 'BLOCK_NONE' as any },
+          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT' as any, threshold: 'BLOCK_NONE' as any },
+          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT' as any, threshold: 'BLOCK_NONE' as any },
+        ],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 4096,
+        },
+      }, { apiVersion: 'v1beta' });
 
-      // Construire le contenu multimodal
-      const result = await model.generateContent([
+      const result = await visionModel.generateContent([
         { text: prompt },
         {
           inlineData: {
@@ -673,14 +685,53 @@ Bien à vous`;
       ]);
 
       const response = await result.response;
-      const text = response.text();
 
-      console.log(`✅ [Gemini Vision] Réponse reçue (${text.length} caractères)`);
+      // Vérifier les safety ratings
+      if (response.candidates?.[0]?.finishReason === 'SAFETY') {
+        console.warn('⚠️ [Gemini Vision] Bloqué par safety filter:', JSON.stringify(response.candidates[0].safetyRatings));
+        return { success: false, error: 'Image bloquée par les filtres de sécurité', modelUsed: visionModelName };
+      }
+
+      const text = response.text();
+      if (!text || text.trim().length === 0) {
+        console.warn('⚠️ [Gemini Vision] Réponse vide');
+        return { success: false, error: 'Réponse vide de Gemini', modelUsed: visionModelName };
+      }
+
+      console.log(`✅ [Gemini Vision] Réponse reçue (${text.length} chars)`);
       return { success: true, content: text, modelUsed: visionModelName };
 
-    } catch (error) {
-      console.error('❌ [Gemini Vision API] Erreur:', error);
-      return { success: false, error: (error as Error).message, modelUsed: this.primaryModelName };
+    } catch (error: any) {
+      const errMsg = error?.message || String(error);
+      console.error('❌ [Gemini Vision API] Erreur:', errMsg);
+      // Retry avec modèle fallback si disponible
+      if (this.fallbackModelNames.length > 0 && !errMsg.includes('API key')) {
+        const fallback = this.fallbackModelNames[0];
+        console.log(`🔄 [Gemini Vision] Retry avec fallback: ${fallback}`);
+        try {
+          const fallbackModel = this.genAI!.getGenerativeModel({
+            model: fallback,
+            safetySettings: [
+              { category: 'HARM_CATEGORY_HARASSMENT' as any, threshold: 'BLOCK_NONE' as any },
+              { category: 'HARM_CATEGORY_HATE_SPEECH' as any, threshold: 'BLOCK_NONE' as any },
+              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT' as any, threshold: 'BLOCK_NONE' as any },
+              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT' as any, threshold: 'BLOCK_NONE' as any },
+            ],
+          }, { apiVersion: 'v1beta' });
+          const r2 = await fallbackModel.generateContent([
+            { text: prompt },
+            { inlineData: { mimeType: mimeType as any, data: imageBase64 } }
+          ]);
+          const t2 = r2.response.text();
+          if (t2?.trim()) {
+            console.log(`✅ [Gemini Vision] Fallback ${fallback} OK (${t2.length} chars)`);
+            return { success: true, content: t2, modelUsed: fallback };
+          }
+        } catch (e2: any) {
+          console.error(`❌ [Gemini Vision] Fallback ${fallback} échoué:`, e2?.message);
+        }
+      }
+      return { success: false, error: errMsg, modelUsed: this.primaryModelName };
     }
   }
 
