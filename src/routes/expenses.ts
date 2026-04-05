@@ -340,14 +340,23 @@ RÈGLES:
     // Parser la réponse JSON de Gemini
     let extracted: any;
     try {
-      // Nettoyer la réponse (parfois Gemini enveloppe dans ```json ... ```)
       let jsonStr = result.content.trim();
-      if (jsonStr.startsWith('```')) {
-        jsonStr = jsonStr.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+      // Méthode 1: Extraire depuis un bloc markdown ```json ... ```
+      const codeBlockMatch = jsonStr.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
+      if (codeBlockMatch) {
+        jsonStr = codeBlockMatch[1].trim();
+      }
+      // Méthode 2: Trouver le JSON brut entre { et }
+      if (!jsonStr.startsWith('{')) {
+        const firstBrace = jsonStr.indexOf('{');
+        const lastBrace = jsonStr.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace > firstBrace) {
+          jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
+        }
       }
       extracted = JSON.parse(jsonStr);
     } catch {
-      console.warn('[EXPENSES] Gemini returned non-JSON:', result.content?.substring(0, 200));
+      console.warn('[EXPENSES] Gemini returned non-JSON:', result.content?.substring(0, 500));
       return res.json({
         success: false,
         message: 'L\'IA n\'a pas pu structurer les données. Veuillez saisir manuellement.',

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Spin, App, Modal, InputNumber, DatePicker, Tooltip, Switch,
+  Spin, App, Modal, InputNumber, DatePicker, Tooltip, Switch, Image,
 } from 'antd';
 import {
   PlusOutlined, SearchOutlined, FileTextOutlined, CheckCircleOutlined,
@@ -3160,10 +3160,30 @@ const FacturePage: React.FC = () => {
                 </div>
               )}
 
-              {/* Scan preview on the side */}
+              {/* Scan preview — cliquer pour zoomer (toujours vertical) */}
               {scanPreview && scanPreview !== 'PDF' && (
-                <div style={{ marginBottom: 14, textAlign: 'center' }}>
-                  <img src={scanPreview} alt="ticket" style={{ maxWidth: '100%', maxHeight: 120, borderRadius: 8, border: `1px solid ${FB.border}` }} />
+                <div style={{ marginBottom: 14, textAlign: 'center', cursor: 'pointer' }}>
+                  <style>{`
+                    .receipt-zoom-preview .ant-image-preview-img {
+                      max-height: 90vh !important;
+                      width: auto !important;
+                      image-orientation: from-image;
+                    }
+                    .receipt-zoom-preview .ant-image-preview-operations {
+                      background: rgba(0,0,0,0.6);
+                      border-radius: 8px;
+                      padding: 4px 8px;
+                    }
+                  `}</style>
+                  <Image
+                    src={scanPreview}
+                    alt="ticket"
+                    style={{ maxWidth: '100%', maxHeight: 120, borderRadius: 8, border: `1px solid ${FB.border}`, objectFit: 'contain', imageOrientation: 'from-image' } as React.CSSProperties}
+                    preview={{
+                      mask: <span style={{ fontSize: 12, color: '#fff' }}>🔍 Zoomer</span>,
+                      rootClassName: 'receipt-zoom-preview',
+                    }}
+                  />
                 </div>
               )}
               {scanPreview === 'PDF' && (

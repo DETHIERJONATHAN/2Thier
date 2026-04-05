@@ -670,7 +670,7 @@ Bien à vous`;
         ],
         generationConfig: {
           temperature: 0.1,
-          maxOutputTokens: 4096,
+          maxOutputTokens: 16384,
         },
       }, { apiVersion: 'v1beta' });
 
@@ -686,10 +686,14 @@ Bien à vous`;
 
       const response = await result.response;
 
-      // Vérifier les safety ratings
-      if (response.candidates?.[0]?.finishReason === 'SAFETY') {
+      // Vérifier les safety ratings / finish reason
+      const finishReason = response.candidates?.[0]?.finishReason;
+      if (finishReason === 'SAFETY') {
         console.warn('⚠️ [Gemini Vision] Bloqué par safety filter:', JSON.stringify(response.candidates[0].safetyRatings));
         return { success: false, error: 'Image bloquée par les filtres de sécurité', modelUsed: visionModelName };
+      }
+      if (finishReason === 'MAX_TOKENS') {
+        console.warn('⚠️ [Gemini Vision] Réponse tronquée (MAX_TOKENS) — augmenter maxOutputTokens');
       }
 
       const text = response.text();
