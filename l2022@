@@ -1,6 +1,0 @@
-                  id                  |             requesterId              |       addresseeId       |  status  |    source    |        createdAt        | req_name | addr_name 
---------------------------------------+--------------------------------------+-------------------------+----------+--------------+-------------------------+----------+-----------
- b23bfba5-f83e-411d-9271-fe40d3a46d46 | 455979d5-2dc1-495b-9e05-ff202a381ab1 | 1757366075163-2vdibc2ve | pending  | manual       | 2026-03-22 20:45:25.526 | Fraxinus | Dethier
- 97936fb6-be34-4453-9e7a-3931b1a2ae74 | b0b0213a-4320-48b5-b230-f1ef65a315ed | 1757366075163-2vdibc2ve | accepted | organization | 2026-03-17 20:06:30.038 | Jean     | Dethier
-(2 rows)
-

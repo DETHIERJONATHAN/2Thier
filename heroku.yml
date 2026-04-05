@@ -1,5 +1,0 @@
-build:
-  buildpacks:
-    - url: heroku/nodejs
-run:
-  web: sh ./entrypoint.sh
