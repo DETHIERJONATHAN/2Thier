@@ -201,6 +201,9 @@ export default function AdminModulesPage() {
         order: m.order ?? 0,
         active: m.active,
         categoryId: m.categoryId,
+        placement: m.placement || 'sidebar',
+        tabColor: m.tabColor || '',
+        tabIcon: m.tabIcon || '',
       });
       setIsFormOpen(true);
     },

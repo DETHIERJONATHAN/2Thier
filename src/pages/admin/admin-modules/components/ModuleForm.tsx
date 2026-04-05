@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Form, Input, InputNumber, Button, ColorPicker } from 'antd';
+import { Card, Form, Input, InputNumber, Button, ColorPicker, Select } from 'antd';
 import IconPicker from '../components/shared/IconPicker';
 import IconRenderer from '../components/shared/IconRenderer';
 import { useAuth } from '../../../../auth/useAuth';
@@ -27,7 +27,7 @@ const FBToggle = ({ checked, onChange }: { checked: boolean; onChange: (v: boole
 
 export type ModuleFormData = Partial<Pick<ModuleWithStatus,
   'id' | 'key' | 'label' | 'feature' | 'icon' | 'iconColor' | 'route' | 'description' | 'page' | 'order' | 'active' | 'categoryId'
->> & { isGlobal?: boolean };
+>> & { isGlobal?: boolean; placement?: string; tabColor?: string; tabIcon?: string };
 
 export function ModuleForm({ initial, onSave, onCancel }:{
   initial: ModuleFormData | null;
@@ -36,7 +36,7 @@ export function ModuleForm({ initial, onSave, onCancel }:{
 }) {
   const { isSuperAdmin, currentOrganization } = useAuth();
   const [form, setForm] = useState<ModuleFormData>({
-  key: '', label: '', feature: '', icon: '', iconColor: '#1890ff', route: '', description: '', page: '', order: 0, active: true,
+  key: '', label: '', feature: '', icon: '', iconColor: '#1890ff', route: '', description: '', page: '', order: 0, active: true, placement: 'sidebar', tabColor: '', tabIcon: '',
     isGlobal: isSuperAdmin && !currentOrganization?.id,
   });
 
@@ -104,6 +104,34 @@ export function ModuleForm({ initial, onSave, onCancel }:{
       <Form.Item label="Description" className="m-0">
         <Input.TextArea value={form.description} onChange={e=>setForm(f=>({...f, description:e.target.value}))} rows={3} />
       </Form.Item>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+        <Form.Item label="Placement" className="m-0">
+          <Select value={form.placement || 'sidebar'} onChange={v=>setForm(f=>({...f, placement:v}))}>
+            <Select.Option value="sidebar">📋 Sidebar uniquement</Select.Option>
+            <Select.Option value="swipe">📱 Swipe uniquement</Select.Option>
+            <Select.Option value="both">🔄 Les deux</Select.Option>
+          </Select>
+        </Form.Item>
+        {(form.placement === 'swipe' || form.placement === 'both') && (
+          <>
+            <Form.Item label="Tab Color" className="m-0">
+              <ColorPicker value={form.tabColor || '#999'} onChange={(_, hex)=> setForm(f=>({ ...f, tabColor: hex }))} showText />
+            </Form.Item>
+            <Form.Item label="Tab Icon ID" className="m-0">
+              <Select value={form.tabIcon || ''} onChange={v=>setForm(f=>({...f, tabIcon:v}))}>
+                <Select.Option value="wall">🧱 Wall</Select.Option>
+                <Select.Option value="compass">🧭 Compass</Select.Option>
+                <Select.Option value="clapperboard">🎬 Clapperboard</Select.Option>
+                <Select.Option value="flow-wave">🌊 Flow Wave</Select.Option>
+                <Select.Option value="universe">🌐 Universe</Select.Option>
+                <Select.Option value="mail">✉️ Mail</Select.Option>
+                <Select.Option value="calendar">📅 Calendar</Select.Option>
+                <Select.Option value="bar-chart">📊 Bar Chart</Select.Option>
+              </Select>
+            </Form.Item>
+          </>
+        )}
+      </div>
       <div className="flex gap-2 mt-3">
         <Button 
           type="primary" 

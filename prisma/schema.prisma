@@ -972,6 +972,9 @@ model Module {
   categoryId               String?
   superAdminOnly           Boolean                    @default(false)
   parameters               Json?
+  placement                String                     @default("sidebar")
+  tabColor                 String?
+  tabIcon                  String?
   Category                 Category?                  @relation(fields: [categoryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   Organization             Organization?              @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   OrganizationModuleStatus OrganizationModuleStatus[]

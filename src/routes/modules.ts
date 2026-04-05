@@ -207,6 +207,50 @@ router.get('/', async (req, res) => {
 	}
 });
 
+// GET /api/modules/swipe-tabs → retourne les modules configurés pour le swipe (placement = 'swipe' ou 'both')
+router.get('/swipe-tabs', async (req, res) => {
+	try {
+		const { organizationId } = req.query as { organizationId?: string };
+		
+		const modules = await prisma.module.findMany({
+			where: {
+				placement: { in: ['swipe', 'both'] },
+				active: true,
+			},
+			orderBy: { order: 'asc' },
+			include: {
+				OrganizationModuleStatus: organizationId ? {
+					where: { organizationId },
+				} : false,
+			},
+		});
+
+		// Filter out modules disabled for this org
+		const filtered = modules.filter(m => {
+			if (!organizationId) return true;
+			const orgStatus = (m as any).OrganizationModuleStatus?.[0];
+			// If no org-specific status, module is active by default
+			if (!orgStatus) return true;
+			return orgStatus.isActive;
+		});
+
+		const tabs = filtered.map(m => ({
+			id: m.key,
+			label: m.label,
+			color: m.tabColor || '#999',
+			icon: m.tabIcon || 'app',
+			order: m.order ?? 99,
+			moduleId: m.id,
+			placement: m.placement,
+		}));
+
+		res.json({ success: true, data: tabs });
+	} catch (e) {
+		console.error('[modules] GET /swipe-tabs erreur', e);
+		res.status(500).json({ success: false, message: 'Erreur récupération swipe tabs' });
+	}
+});
+
 // GET /api/modules/all → tous les modules (mode super-admin vue globale)
 router.get('/all', async (_req, res) => {
 	try {
@@ -286,8 +330,8 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
 	const { id } = req.params;
 	try {
-		const { label, feature, icon, route, description, page, order, active, key, organizationId, parameters, categoryId } = req.body as {
-			label?: string; feature?: string; icon?: string; route?: string; description?: string; page?: string; order?: number; active?: boolean; key?: string; organizationId?: string | null; parameters?: unknown; categoryId?: string;
+		const { label, feature, icon, route, description, page, order, active, key, organizationId, parameters, categoryId, placement, tabColor, tabIcon } = req.body as {
+			label?: string; feature?: string; icon?: string; route?: string; description?: string; page?: string; order?: number; active?: boolean; key?: string; organizationId?: string | null; parameters?: unknown; categoryId?: string; placement?: string; tabColor?: string; tabIcon?: string;
 		};
 		let normalizedRoute: string | undefined;
 		if (route !== undefined || key !== undefined) {
@@ -312,6 +356,9 @@ router.put('/:id', async (req, res) => {
 				key: key !== undefined ? key : undefined,
 				organizationId: organizationId !== undefined ? organizationId : undefined,
 				categoryId: categoryId !== undefined ? categoryId : undefined,
+				placement: placement !== undefined ? placement : undefined,
+				tabColor: tabColor !== undefined ? tabColor : undefined,
+				tabIcon: tabIcon !== undefined ? tabIcon : undefined,
 			},
 		});
 		res.json({ success: true, data: mapModule(updated, null) });

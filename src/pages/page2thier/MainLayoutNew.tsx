@@ -76,8 +76,20 @@ const WallIcon = (props: any) => <Icon component={WallSvg} {...props} />;
 const FlowWaveIcon = (props: any) => <Icon component={FlowWaveSvg} {...props} />;
 const UniverseIcon = (props: any) => <Icon component={UniverseSvg} {...props} />;
 
-// ── Zhiive Header Tabs Component ──
-const SF_TAB_CONFIG: { id: string; label: string; icon: React.ComponentType<{ style?: React.CSSProperties }>; color: string }[] = [
+// ── Icon mapping: tabIcon string (from DB) → React component ──
+const TAB_ICON_MAP: Record<string, React.ComponentType<{ style?: React.CSSProperties }>> = {
+  'wall': WallIcon,
+  'compass': CompassOutlined,
+  'clapperboard': ClapperboardIcon,
+  'flow-wave': FlowWaveIcon,
+  'universe': UniverseIcon,
+  'mail': MailOutlined,
+  'calendar': CalendarOutlined,
+  'bar-chart': BarChartOutlined,
+};
+
+// ── Static fallback (used until API loads) ──
+const SF_TAB_CONFIG_FALLBACK: { id: string; label: string; icon: React.ComponentType<{ style?: React.CSSProperties }>; color: string }[] = [
   { id: 'mur', label: 'Hive', icon: WallIcon, color: '#F5A623' },
   { id: 'explore', label: 'Scout', icon: CompassOutlined, color: '#00CEC9' },
   { id: 'reels', label: 'Reels', icon: ClapperboardIcon, color: '#e84393' },
@@ -88,16 +100,46 @@ const SF_TAB_CONFIG: { id: string; label: string; icon: React.ComponentType<{ st
   { id: 'stats', label: 'Stats', icon: BarChartOutlined, color: '#FDCB6E' },
 ];
 
+// ── Zhiive Header Tabs Component ──
+type TabConfig = { id: string; label: string; icon: React.ComponentType<{ style?: React.CSSProperties }>; color: string };
+
 const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { centerApp, setCenterApp, tabOrder, reorderTabs, mobilePanel, scrollMobileToPanel } = useZhiiveNav();
   const { currentOrganization, isSuperAdmin } = useAuth();
+  const { api } = useAuthenticatedApi();
   const isFreeUser = !currentOrganization && !isSuperAdmin;
   const [dragId, setDragId] = useState<string | null>(null);
   const isDashboard = location.pathname === '/dashboard' || location.pathname === '/';
   const activeModule = searchParams.get('module');
   const navigate = useNavigate();
+
+  const [hoveredTab, setHoveredTab] = useState<string | null>(null);
+  const [dynamicTabs, setDynamicTabs] = useState<TabConfig[]>(SF_TAB_CONFIG_FALLBACK);
+
+  // Fetch swipe tabs from API (modules with placement = swipe/both)
+  useEffect(() => {
+    let cancelled = false;
+    const fetchSwipeTabs = async () => {
+      try {
+        const orgId = currentOrganization?.id || '';
+        const res = await api.get(`/api/modules/swipe-tabs?organizationId=${orgId}`);
+        if (cancelled || !res?.success || !res.data) return;
+        const tabs: TabConfig[] = res.data.map((t: any) => ({
+          id: t.id,
+          label: t.label,
+          icon: TAB_ICON_MAP[t.icon] || BarChartOutlined,
+          color: t.color || '#999',
+        }));
+        if (tabs.length > 0) setDynamicTabs(tabs);
+      } catch {
+        // Keep fallback
+      }
+    };
+    fetchSwipeTabs();
+    return () => { cancelled = true; };
+  }, [currentOrganization?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [hoveredTab, setHoveredTab] = useState<string | null>(null);
 
@@ -108,10 +150,10 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
 
   const orderedTabs = useMemo(() => {
     return tabOrder
-      .map(id => SF_TAB_CONFIG.find(t => t.id === id))
-      .filter((t): t is typeof SF_TAB_CONFIG[0] => !!t)
+      .map(id => dynamicTabs.find(t => t.id === id))
+      .filter((t): t is TabConfig => !!t)
       .filter(t => !(isFreeUser && t.id === 'stats'));
-  }, [tabOrder, isFreeUser]);
+  }, [tabOrder, isFreeUser, dynamicTabs]);
 
   const handleTabClick = useCallback((tabId: string) => {
     if (!isDashboard) {

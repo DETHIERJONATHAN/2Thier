@@ -39,7 +39,9 @@ export interface ModuleWithStatus {
   iconColor?: string;
   route?: string;
   description?: string;
+  page?: string;
   order?: number;
+  active: boolean;
   section?: string;
   sectionIcon?: string;
   sectionColor?: string;
@@ -49,6 +51,9 @@ export interface ModuleWithStatus {
   hasOrgSpecificConfig?: boolean;
   organizationId?: string;
   superAdminOnly: boolean;
+  placement?: string;
+  tabColor?: string;
+  tabIcon?: string;
 }
 
 // Section avec ses modules organisés
