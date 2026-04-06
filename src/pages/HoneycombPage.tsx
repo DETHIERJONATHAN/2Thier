@@ -6,7 +6,6 @@ import {
   SearchOutlined,
   ClockCircleOutlined,
   RightOutlined,
-  ExportOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
@@ -173,7 +172,7 @@ const FeedCard: React.FC<{
                 icon={<GlobalOutlined />}
                 style={{ background: SF.primary, borderColor: SF.primary }}
               >
-                {ext ? t('honeycomb.openExternal') : t('honeycomb.openInHive')}
+                {t('honeycomb.openInHive')}
               </Button>
             </div>
           </div>
@@ -331,10 +330,7 @@ const FeedCard: React.FC<{
                   </div>
                 )}
               </div>
-              {ext
-                ? <ExportOutlined style={{ fontSize: 10, color: SF.textSecondary, alignSelf: 'center', flexShrink: 0 }} />
-                : <RightOutlined style={{ fontSize: 10, color: SF.textSecondary, alignSelf: 'center', flexShrink: 0 }} />
-              }
+              <RightOutlined style={{ fontSize: 10, color: SF.textSecondary, alignSelf: 'center', flexShrink: 0 }} />
             </div>
             );
           })}
@@ -364,9 +360,8 @@ const FeedCard: React.FC<{
         }}
         className="hover:bg-purple-50"
       >
-        {ext ? <ExportOutlined style={{ fontSize: 12 }} /> : <GlobalOutlined style={{ fontSize: 12 }} />}
+        <GlobalOutlined style={{ fontSize: 12 }} />
         {feed.domain || feed.url}
-        {ext && <span style={{ fontSize: 10, opacity: 0.6 }}>↗</span>}
       </div>
     </div>
   );

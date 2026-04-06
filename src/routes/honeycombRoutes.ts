@@ -762,9 +762,10 @@ async function fetchFeedForBookmark(bookmark: {
         }
         if (mainResp.ok) {
           siteHtml = await mainResp.text();
+          console.log(`[Honeycomb] 📥 ${bookmark.url} HTML size: ${siteHtml.length} bytes`);
         }
       }
-    } catch { /* continue with empty HTML */ }
+    } catch (e) { console.log(`[Honeycomb] ⚠️ Fetch error for ${bookmark.url}:`, e); }
 
     // Discover feed URL dynamically (reuse the HTML we already fetched)
     const discovered = await discoverFeedUrl(bookmark.url, siteHtml || undefined);
@@ -798,8 +799,9 @@ async function fetchFeedForBookmark(bookmark: {
     } else {
       // ── No structured feed — fallback to visual HTML scraping ──
       // Reuse the HTML we already fetched — no extra request!
-      console.log(`[Honeycomb] 🔄 No feed for ${bookmark.url}, trying visual HTML scraping...`);
+      console.log(`[Honeycomb] 🔄 No feed for ${bookmark.url}, trying visual HTML scraping (HTML: ${(siteHtml || '').length} bytes)...`);
       const scrapedItems = await scrapeArticlesFromHtml(bookmark.url, siteHtml || undefined);
+      console.log(`[Honeycomb] 📊 Scraping result for ${bookmark.url}: ${scrapedItems.length} items${scrapedItems.length > 0 ? ' — ' + scrapedItems.map(i => i.title).join(', ') : ''}`);
       
       if (scrapedItems.length > 0) {
         result.items = scrapedItems;
