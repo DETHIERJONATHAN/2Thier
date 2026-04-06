@@ -63,6 +63,8 @@ const FeedCard: React.FC<{
   const hasError = !!feed.error;
   const hasItems = feed.items.length > 0;
   const ext = !!feed.openExternal;
+  // For openExternal sites (Amazon etc.), deep links are blocked — always open main site
+  const resolveLink = (itemLink?: string) => ext ? feed.url : (itemLink || feed.url);
 
   return (
     <div
@@ -187,7 +189,7 @@ const FeedCard: React.FC<{
               return (
                 <div
                   key={idx}
-                  onClick={() => item.link && onOpenUrl(item.link, ext)}
+                  onClick={() => onOpenUrl(resolveLink(item.link), ext)}
                   style={{
                     cursor: 'pointer',
                     transition: 'background 0.15s',
@@ -258,7 +260,7 @@ const FeedCard: React.FC<{
             return (
             <div
               key={idx}
-              onClick={() => item.link && onOpenUrl(item.link, ext)}
+              onClick={() => onOpenUrl(resolveLink(item.link), ext)}
               style={{
                 display: 'flex',
                 padding: '8px 16px',

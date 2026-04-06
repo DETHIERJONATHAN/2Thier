@@ -8,8 +8,10 @@ const router = Router();
 // ── Constantes nommées (zéro magic numbers) ──
 const RSS_PARSER_TIMEOUT_MS = 15_000;
 const FETCH_TIMEOUT_MS = 12_000;
-const CACHE_SUCCESS_TTL_MS = 15 * 60 * 1000; // 15 minutes
-const CACHE_ERROR_TTL_MS = 2 * 60 * 1000;    // 2 minutes
+const CACHE_SUCCESS_TTL_MS = 15 * 60 * 1000;       // 15 minutes (feeds with real content)
+const CACHE_SUCCESS_LONG_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours (scraped sites — expensive & rate-limited)
+const CACHE_ERROR_TTL_MS = 2 * 60 * 1000;             // 2 minutes
+const FAVICON_FALLBACK_SIZE = 128;
 const MAX_ITEMS_PER_FEED = 5;
 const MAX_SNIPPET_LENGTH = 200;
 const CONCURRENCY_LIMIT = 5;
@@ -747,6 +749,7 @@ async function fetchFeedForBookmark(bookmark: {
     // This avoids hitting the site 20+ times (which triggers rate-limiting/anti-bot)
     let siteHtml = '';
     let iframeBlocked = false;
+    let antiBotDetected = false;
     try {
       const mainResp = await safeFetch(bookmark.url);
       if (mainResp) {
@@ -763,6 +766,12 @@ async function fetchFeedForBookmark(bookmark: {
         if (mainResp.ok) {
           siteHtml = await mainResp.text();
           console.log(`[Honeycomb] 📥 ${bookmark.url} HTML size: ${siteHtml.length} bytes`);
+          // Anti-bot detection: if a major site (large domain) returns tiny HTML,
+          // it's rate-limiting us → it will also block iframes
+          if (siteHtml.length < MIN_HTML_SIZE_FOR_SCRAPING) {
+            antiBotDetected = true;
+            console.log(`[Honeycomb] 🤖 ${bookmark.url} anti-bot detected (${siteHtml.length} bytes) → will open externally`);
+          }
         }
       }
     } catch (e) { console.log(`[Honeycomb] ⚠️ Fetch error for ${bookmark.url}:`, e); }
@@ -819,21 +828,48 @@ async function fetchFeedForBookmark(bookmark: {
     }
 
     // ── SMART openExternal decision ──
-    // Only open externally if the site blocks iframes AND has no real feed.
-    // If a site has RSS/JSON feed, the article URLs are individual pages that
-    // typically DON'T block iframes (e.g., Standard has X-Frame-Options on
-    // homepage, but article pages work fine in iframes).
-    // If a site blocks iframes and has NO feed (e.g., Amazon), everything
-    // points to the same blocked domain → must open externally.
-    if (iframeBlocked && !hasRealFeed) {
+    // A site opens externally if:
+    // 1. It blocks iframes (X-Frame-Options/CSP) AND has no real feed, OR
+    // 2. It triggered anti-bot protection (tiny HTML) — if it blocks our server,
+    //    it will certainly block our iframe too.
+    // Sites with feeds (RSS/JSON) stay in Hive because individual article pages
+    // typically don't block iframes (e.g., Standard blocks homepage but not articles).
+    const shouldOpenExternal = (!hasRealFeed && (iframeBlocked || antiBotDetected));
+    if (shouldOpenExternal) {
       result.openExternal = true;
-      console.log(`[Honeycomb] 🚫 ${bookmark.url} → openExternal (iframe blocked + no feed)`);
+      const reason = iframeBlocked ? 'iframe blocked' : 'anti-bot';
+      console.log(`[Honeycomb] 🚫 ${bookmark.url} → openExternal (${reason} + no feed)`);
     } else if (iframeBlocked && hasRealFeed) {
       console.log(`[Honeycomb] ✅ ${bookmark.url} → stays in Hive (has feed, article pages likely OK)`);
     }
 
-    // Cache result
-    feedCache.set(bookmark.url, { data: result, expiry: Date.now() + CACHE_SUCCESS_TTL_MS });
+    // ── Anti-bot: preserve cached good data instead of overwriting with empty ──
+    if (antiBotDetected && result.items.length === 0 && cached?.data?.items && cached.data.items.length > 0) {
+      console.log(`[Honeycomb] 🛡️ ${bookmark.url} anti-bot returned empty — keeping cached data (${cached.data.items.length} items)`);
+      // Extend the existing good cache, but update openExternal flag
+      cached.data.openExternal = true;
+      cached.expiry = Date.now() + CACHE_SUCCESS_LONG_TTL_MS;
+      return cached.data;
+    }
+
+    // ── Fallback: generate a visual item for anti-bot sites with zero content ──
+    if (antiBotDetected && result.items.length === 0) {
+      const domain = bookmark.domain || new URL(bookmark.url).hostname;
+      const largeFavicon = `https://www.google.com/s2/favicons?domain=${domain}&sz=${FAVICON_FALLBACK_SIZE}`;
+      result.items = [{
+        title: bookmark.title || domain,
+        link: bookmark.url,
+        imageUrl: largeFavicon,
+      }];
+      result.feedUrl = 'anti-bot-fallback';
+      // Don't set error — we have an item to display
+      delete result.error;
+      console.log(`[Honeycomb] 🎨 ${bookmark.url} anti-bot fallback: generated visual item with favicon`);
+    }
+
+    // Cache result — use longer TTL for scraped sites (harder to get, rate-limited)
+    const ttl = hasRealFeed ? CACHE_SUCCESS_TTL_MS : CACHE_SUCCESS_LONG_TTL_MS;
+    feedCache.set(bookmark.url, { data: result, expiry: Date.now() + ttl });
   } catch {
     result.error = 'fetch_failed';
     feedCache.set(bookmark.url, { data: result, expiry: Date.now() + CACHE_ERROR_TTL_MS });
@@ -871,10 +907,11 @@ router.get('/feeds', authMiddleware, async (req: Request, res: Response) => {
       return res.json({ feeds: [] });
     }
 
-    // Purge cache if forced
+    // Expire cache (don't delete — keep as fallback for anti-bot protection)
     if (forceRefresh) {
       for (const bm of bookmarks) {
-        feedCache.delete(bm.url);
+        const entry = feedCache.get(bm.url);
+        if (entry) entry.expiry = 0; // Mark stale but keep data as fallback
       }
     }
 
@@ -916,8 +953,9 @@ router.get('/feeds/:bookmarkId', authMiddleware, async (req: Request, res: Respo
       return res.status(404).json({ error: 'Bookmark non trouvé' });
     }
 
-    // Clear cache for this bookmark
-    feedCache.delete(bookmark.url);
+    // Expire cache (don't delete — keep as fallback for anti-bot protection)
+    const entry = feedCache.get(bookmark.url);
+    if (entry) entry.expiry = 0;
 
     const feed = await fetchFeedForBookmark(bookmark);
     res.json({ feed });
