@@ -216,6 +216,24 @@ export default function CallModule({ leadId: propLeadId, onClose }: CallModulePr
 
       const response = await api.post('/api/google/calendar/events', eventData);
       
+      // 🔗 Créer aussi dans le calendrier interne Zhiive (lié au lead)
+      try {
+        await api.post('/api/calendar/events', {
+          title: meetingDetails.title || `RDV Commercial - ${lead.data?.name}`,
+          description: `RDV fixé suite à appel téléphonique\nLead: ${lead.data?.name}\nSociété: ${lead.data?.company || 'Particulier'}\nTéléphone: ${lead.data?.phone}`,
+          startDate: startDateTime.toISOString(),
+          endDate: endDateTime.toISOString(),
+          allDay: false,
+          type: 'rendez-vous',
+          status: 'confirmé',
+          location: meetingDetails.type === 'visio' ? 'Visioconférence' : (lead.data?.address || ''),
+          linkedLeadId: leadId,
+          externalCalendarId: response.data?.id || response?.id || null
+        });
+      } catch (internalErr) {
+        console.warn('[CallModule] Événement Google OK, erreur calendrier interne:', internalErr);
+      }
+      
       // Envoyer un email de confirmation automatique
       await api.post('/api/gmail/send-meeting-confirmation', {
         to: lead.data?.email,

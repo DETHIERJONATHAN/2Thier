@@ -123,15 +123,13 @@ const CalendarWidget: React.FC<CalendarWidgetProps> = ({
 
       const response = await api.api.post('/api/calendar/events', {
         title: values.title,
-        start: startDateTime.toISOString(),
-        end: endDateTime.toISOString(),
+        startDate: startDateTime.toISOString(),
+        endDate: endDateTime.toISOString(),
         description: values.description,
-        attendees: [leadEmail],
-        createMeetLink: values.createMeetLink,
-        context: {
-          leadId,
-          source: 'crm_lead'
-        }
+        type: 'rendez-vous',
+        status: 'confirmé',
+        linkedLeadId: leadId,
+        participants: leadEmail ? [{ role: 'client', clientId: leadId }] : [],
       });
 
       message.success(`Événement créé et invitation envoyée à ${leadName}`);

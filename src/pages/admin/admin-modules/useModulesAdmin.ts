@@ -109,12 +109,6 @@ export const useModulesAdmin = () => {
               ? ['true', '1', 'yes', 'on'].includes(saoRaw.toLowerCase())
               : false);
           // Ids: on sépare l'id DB réel (backendCategoryId) et un id d'affichage/tri (id)
-          console.log('🔍 [loadSections] Structure section complète:', s);
-          console.log('🔍 [loadSections] s.id:', s?.id);
-          console.log('🔍 [loadSections] s.categoryId:', (s as Record<string, unknown>)?.categoryId);
-          console.log('🔍 [loadSections] Premier module:', modules[0]);
-          console.log('🔍 [loadSections] Premier module.categoryId:', modules[0]?.categoryId);
-          
           // L'ID de section vient directement du backend (c'est l'ID de la catégorie quand BDD)
           // Le backend fournit explicitement backendCategoryId pour distinguer BDD vs fallback
           const maybeId = s?.id ? String(s.id) : undefined;
@@ -298,12 +292,7 @@ export const useModulesAdmin = () => {
 
   const toggleModuleSuperAdminOnly = useCallback(async (moduleId: string, value: boolean) => {
     try {
-      // Si superAdminOnly est activé, automatiquement désactiver active
-      if (value) {
-        await updateModuleProperties(moduleId, { superAdminOnly: value, active: false });
-      } else {
-        await updateModuleProperties(moduleId, { superAdminOnly: value });
-      }
+      await updateModuleProperties(moduleId, { superAdminOnly: value });
     } catch (error) {
       console.error('[useModulesAdmin] Erreur toggleModuleSuperAdminOnly:', error);
       NotificationManager.error('Erreur lors du toggle SuperAdmin Only');

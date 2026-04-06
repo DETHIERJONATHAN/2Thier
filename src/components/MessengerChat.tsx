@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Avatar, Input } from 'antd';
+import { Avatar, Input, Modal, Form, DatePicker, TimePicker, message as antMessage } from 'antd';
 import {
   MessageOutlined,
   CloseOutlined,
@@ -12,8 +12,10 @@ import {
   PhoneOutlined,
   VideoCameraOutlined,
   ArrowLeftOutlined,
+  CalendarOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import dayjs from 'dayjs';
 import VideoCallModal from './VideoCallModal';
 import TelnyxDialer from './TelnyxDialer';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
@@ -1111,6 +1113,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [minimized, setMinimized] = useState(false);
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -1158,6 +1161,37 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
+    }
+  };
+
+  // 📅 Planifier un événement depuis la conversation
+  const handleScheduleEvent = async (values: { title: string; date: dayjs.Dayjs; startTime: dayjs.Dayjs; endTime: dayjs.Dayjs }) => {
+    try {
+      const startDateTime = values.date.hour(values.startTime.hour()).minute(values.startTime.minute());
+      const endDateTime = values.date.hour(values.endTime.hour()).minute(values.endTime.minute());
+
+      await api.post('/api/calendar/events', {
+        title: values.title || `RDV - ${convName}`,
+        description: `Planifié depuis la conversation avec ${convName}`,
+        startDate: startDateTime.toISOString(),
+        endDate: endDateTime.toISOString(),
+        allDay: false,
+        type: 'rendez-vous',
+        status: 'confirmé',
+      });
+
+      // Envoyer un message dans la conversation pour informer
+      await api.post(`/api/messenger/conversations/${conversationId}/messages`, {
+        content: `📅 J'ai planifié : ${values.title || 'RDV'} le ${startDateTime.format('DD/MM/YYYY')} de ${startDateTime.format('HH:mm')} à ${endDateTime.format('HH:mm')}`,
+      });
+      await fetchMessages();
+      onRefresh();
+
+      antMessage.success('Événement planifié !');
+      setScheduleModalOpen(false);
+    } catch (err) {
+      console.error('[Messenger] Schedule error:', err);
+      antMessage.error('Erreur lors de la planification');
     }
   };
 
@@ -1305,6 +1339,18 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
         padding: '8px 12px', borderTop: `1px solid ${FB.border}`, display: 'flex',
         alignItems: 'center', gap: 6, flexShrink: 0,
       }}>
+        <div
+          onClick={() => setScheduleModalOpen(true)}
+          title="Planifier un RDV"
+          style={{
+            width: 32, height: 32, borderRadius: '50%', display: 'flex',
+            alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+          }}
+          onMouseEnter={e => e.currentTarget.style.background = FB.hover}
+          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+        >
+          <CalendarOutlined style={{ fontSize: 16, color: FB.blue }} />
+        </div>
         <input
           ref={inputRef}
           value={newMessage}
@@ -1327,6 +1373,46 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
           <SendOutlined style={{ fontSize: 18, color: FB.blue }} />
         </div>
       </div>
+
+      {/* Schedule Modal */}
+      <Modal
+        title="📅 Planifier un événement"
+        open={scheduleModalOpen}
+        onCancel={() => setScheduleModalOpen(false)}
+        footer={null}
+        width={360}
+        zIndex={1200}
+      >
+        <Form layout="vertical" onFinish={handleScheduleEvent} initialValues={{
+          date: dayjs(),
+          startTime: dayjs().add(1, 'hour').startOf('hour'),
+          endTime: dayjs().add(2, 'hour').startOf('hour'),
+          title: `RDV - ${convName}`,
+        }}>
+          <Form.Item name="title" label="Titre" rules={[{ required: true }]}>
+            <Input placeholder="Titre de l'événement" />
+          </Form.Item>
+          <Form.Item name="date" label="Date" rules={[{ required: true }]}>
+            <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+          </Form.Item>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Form.Item name="startTime" label="Début" style={{ flex: 1 }} rules={[{ required: true }]}>
+              <TimePicker format="HH:mm" minuteStep={15} style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item name="endTime" label="Fin" style={{ flex: 1 }} rules={[{ required: true }]}>
+              <TimePicker format="HH:mm" minuteStep={15} style={{ width: '100%' }} />
+            </Form.Item>
+          </div>
+          <Form.Item style={{ marginBottom: 0 }}>
+            <button type="submit" style={{
+              width: '100%', padding: '8px 16px', borderRadius: 6, border: 'none',
+              background: FB.blue, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+            }}>
+              Planifier
+            </button>
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 };

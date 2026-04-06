@@ -6,10 +6,12 @@ import {
   CalendarOutlined, FileProtectOutlined, TeamOutlined, DollarOutlined,
   RobotOutlined, MessageOutlined, AlertOutlined, RocketOutlined,
   CheckCircleOutlined, CloseCircleOutlined, EyeOutlined,
-  EllipsisOutlined, ArrowLeftOutlined
+  EllipsisOutlined, ArrowLeftOutlined,
+  StarFilled, GlobalOutlined,
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { setNotificationBadgeCount } from '../lib/pwaBadge';
+import { useBookmarks, Bookmark } from '../hooks/useBookmarks';
 
 interface NotificationItem {
   id: string;
@@ -89,6 +91,9 @@ const NotificationsBell = () => {
   const lastCountRef = useRef(0);
   const isOpenRef = useRef(false);
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 480 : false);
+  const [mobilePanel, setMobilePanel] = useState<'notifs' | 'bookmarks'>('notifs');
+
+  const { bookmarks, removeBookmark } = useBookmarks();
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 480);
@@ -347,15 +352,104 @@ const NotificationsBell = () => {
     );
   };
 
-  const panelContent = (
+  // ── Bookmarks panel (right side) ──
+  const bookmarksPanel = (
     <div style={{
-      width: isMobile ? '100vw' : 360,
-      maxHeight: isMobile ? '100vh' : '85vh',
-      height: isMobile ? '100vh' : undefined,
       display: 'flex', flexDirection: 'column',
-      backgroundColor: '#fff', borderRadius: isMobile ? 0 : 8,
-      boxShadow: isMobile ? 'none' : '0 2px 12px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05)',
+      height: '100%',
     }}>
+      <div style={{ padding: '12px 16px 8px' }}>
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#050505', margin: 0 }}>
+          <StarFilled style={{ color: '#faad14', marginRight: 8, fontSize: 16 }} />
+          Favoris
+        </h2>
+      </div>
+      <div style={{
+        flex: 1, overflowY: 'auto', padding: '4px 8px 8px',
+      }}>
+        {bookmarks.length > 0 ? (
+          bookmarks.map((bm: Bookmark) => (
+            <div
+              key={bm.id}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '8px 10px', cursor: 'pointer', borderRadius: 8,
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#f2f2f2'; }}
+              onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+              onClick={() => { window.open(bm.url, '_blank'); }}
+            >
+              {/* Favicon / thumbnail */}
+              <div style={{
+                width: 40, height: 40, borderRadius: 8,
+                overflow: 'hidden', background: '#f0f0f0',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
+              }}>
+                {bm.imageUrl ? (
+                  <img src={bm.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                ) : bm.favicon ? (
+                  <img src={bm.favicon} alt="" style={{ width: 20, height: 20 }}
+                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                ) : (
+                  <GlobalOutlined style={{ fontSize: 18, color: '#aab2bd' }} />
+                )}
+              </div>
+              {/* Text */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontSize: 13, fontWeight: 600, color: '#050505',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {bm.title}
+                </div>
+                <div style={{
+                  fontSize: 11, color: '#65676B',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {bm.domain || bm.url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
+                </div>
+              </div>
+              {/* Remove */}
+              <Tooltip title="Retirer des favoris">
+                <div
+                  onClick={e => { e.stopPropagation(); removeBookmark(bm.id); }}
+                  style={{
+                    width: 28, height: 28, borderRadius: '50%', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                    flexShrink: 0, transition: 'background 0.15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#ffe9e9'; }}
+                  onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                >
+                  <DeleteOutlined style={{ fontSize: 12, color: '#ff4d4f' }} />
+                </div>
+              </Tooltip>
+            </div>
+          ))
+        ) : (
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            justifyContent: 'center', padding: '40px 20px', color: '#65676B',
+          }}>
+            <StarFilled style={{ fontSize: 40, color: '#E4E6EB', marginBottom: 12 }} />
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#050505', marginBottom: 4 }}>
+              Aucun favori
+            </div>
+            <div style={{ fontSize: 13, textAlign: 'center', lineHeight: 1.4 }}>
+              Recherchez un site web et cliquez sur l'étoile ⭐ pour l'ajouter ici.
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // ── Notifications panel (left side) ──
+  const notifsPanel = (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Header Facebook-style */}
       <div style={{ padding: '12px 16px 4px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -371,8 +465,8 @@ const NotificationsBell = () => {
               <ArrowLeftOutlined style={{ fontSize: 18, color: '#050505' }} />
             </div>
           )}
-          <h2 style={{ fontSize: 24, fontWeight: 700, color: '#050505', margin: 0, flex: 1 }}>Notifications</h2>
-          <Tooltip title="Options">
+          <h2 style={{ fontSize: 20, fontWeight: 700, color: '#050505', margin: 0, flex: 1 }}>Notifications</h2>
+          <Tooltip title="Tout marquer comme lu">
             <div
               onClick={e => { e.stopPropagation(); if (unreadCount > 0) markAllAsRead(); }}
               style={{
@@ -437,7 +531,6 @@ const NotificationsBell = () => {
       {/* Liste */}
       <div style={{
         flex: 1, overflowY: 'auto', padding: '4px 8px 8px',
-        maxHeight: isMobile ? undefined : 'calc(85vh - 140px)',
       }}>
         {filtered.length > 0 ? (
           filtered.map(renderItem)
@@ -458,6 +551,71 @@ const NotificationsBell = () => {
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+
+  const panelContent = isMobile ? (
+    // Mobile: tabbed view
+    <div style={{
+      width: '100vw',
+      height: '100vh',
+      display: 'flex', flexDirection: 'column',
+      backgroundColor: '#fff',
+    }}>
+      {/* Mobile tabs: Notifications / Favoris */}
+      <div style={{
+        display: 'flex', borderBottom: '1px solid #e4e6eb',
+      }}>
+        {([
+          { key: 'notifs' as const, label: 'Notifications', icon: <BellOutlined /> },
+          { key: 'bookmarks' as const, label: 'Favoris', icon: <StarFilled style={{ color: '#faad14' }} /> },
+        ]).map(p => (
+          <div
+            key={p.key}
+            onClick={() => setMobilePanel(p.key)}
+            style={{
+              flex: 1, padding: '12px 0', textAlign: 'center',
+              fontSize: 14, fontWeight: 600, cursor: 'pointer',
+              color: mobilePanel === p.key ? '#0866FF' : '#65676B',
+              borderBottom: mobilePanel === p.key ? '2px solid #0866FF' : '2px solid transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            }}
+          >
+            {p.icon}
+            {p.label}
+          </div>
+        ))}
+      </div>
+      <div style={{ flex: 1, overflow: 'hidden' }}>
+        {mobilePanel === 'notifs' ? notifsPanel : bookmarksPanel}
+      </div>
+    </div>
+  ) : (
+    // Desktop: side-by-side
+    <div style={{
+      width: 680,
+      maxHeight: '85vh',
+      display: 'flex', flexDirection: 'row',
+      backgroundColor: '#fff', borderRadius: 8,
+      boxShadow: '0 2px 12px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05)',
+      overflow: 'hidden',
+    }}>
+      {/* Left: Notifications */}
+      <div style={{
+        width: 380, borderRight: '1px solid #e4e6eb',
+        display: 'flex', flexDirection: 'column',
+        maxHeight: '85vh', overflow: 'hidden',
+      }}>
+        {notifsPanel}
+      </div>
+      {/* Right: Bookmarks */}
+      <div style={{
+        width: 300,
+        display: 'flex', flexDirection: 'column',
+        maxHeight: '85vh', overflow: 'hidden',
+      }}>
+        {bookmarksPanel}
       </div>
     </div>
   );

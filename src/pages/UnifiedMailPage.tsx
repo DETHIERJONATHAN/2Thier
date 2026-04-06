@@ -703,24 +703,26 @@ const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
 
   const sidebarContent = (
     <div className="flex flex-col h-full">
-      {/* Bouton Nouveau message */}
-      <div className="p-4 pb-2">
-        <Button
-          type="primary"
-          icon={<EditOutlined />}
-          onClick={() => handleCompose('new')}
-          size="large"
-          block
-          style={{
-            borderRadius: 16,
-            height: 48,
-            fontWeight: 500,
-            boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
-          }}
-        >
-          Nouveau message
-        </Button>
-      </div>
+      {/* Bouton Nouveau message (desktop uniquement, sur mobile il est dans la toolbar) */}
+      {!isMobile && (
+        <div className="p-4 pb-2">
+          <Button
+            type="primary"
+            icon={<EditOutlined />}
+            onClick={() => handleCompose('new')}
+            size="large"
+            block
+            style={{
+              borderRadius: 16,
+              height: 48,
+              fontWeight: 500,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+            }}
+          >
+            Nouveau message
+          </Button>
+        </div>
+      )}
 
       {/* Liste des dossiers */}
       <div className="flex-1 overflow-y-auto pt-2">
@@ -779,105 +781,102 @@ const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
 
   const renderToolbar = () => (
     <div
-      className="flex items-center px-2 border-b"
       style={{
+        display: 'grid',
+        gridTemplateColumns: isMobile ? 'auto 1fr 32px' : '1fr auto',
+        alignItems: 'center',
         height: 48,
-        borderColor: '#e0e0e0',
+        borderBottom: '1px solid #e0e0e0',
         backgroundColor: '#fff',
         flexShrink: 0,
+        paddingLeft: 4,
+        paddingRight: 4,
       }}
     >
-      {/* Hamburger mobile */}
+      {/* ─── Colonne gauche : Hamburger + titre (mobile uniquement) ─── */}
       {isMobile && (
-        <Button
-          type="text"
-          icon={<MenuOutlined />}
-          onClick={() => setMobileSidebarOpen(true)}
-          style={{ flexShrink: 0 }}
-        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <Button
+            type="text"
+            icon={<MenuOutlined />}
+            onClick={() => setMobileSidebarOpen(true)}
+          />
+          <span style={{ fontWeight: 600, fontSize: 16, color: '#1a1a2e', whiteSpace: 'nowrap' }}>Mail</span>
+        </div>
       )}
 
-      {/* Recherche (icône compacte, s'étend au clic) */}
-      {searchExpanded ? (
-        <Input.Search
-          ref={searchInputRef}
-          placeholder="Rechercher..."
-          onSearch={(v) => { handleSearch(v); if (!v) { setSearchExpanded(false); } }}
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          allowClear
-          onBlur={() => { if (!searchQuery) setSearchExpanded(false); }}
-          style={{ width: isMobile ? 140 : 200, flexShrink: 1, transition: 'width 0.2s' }}
-          size="small"
-          autoFocus
-        />
-      ) : (
+      {/* ─── Colonne centrale : actions ─── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, overflow: 'hidden' }}>
         <Tooltip title="Rechercher">
           <Button
             type="text"
             size="small"
             icon={<SearchOutlined />}
-            onClick={() => { setSearchExpanded(true); }}
-            style={{ flexShrink: 0 }}
+            onClick={() => setSearchExpanded(!searchExpanded)}
+            style={{ color: searchExpanded ? '#1677ff' : undefined }}
           />
         </Tooltip>
-      )}
 
-      <Divider type="vertical" style={{ margin: '0 4px' }} />
+        <Divider type="vertical" style={{ margin: '0 2px' }} />
 
-      {/* Checkbox "tout sélectionner" */}
-      <Tooltip title={isAllSelected ? 'Tout désélectionner' : 'Tout sélectionner'}>
-        <Checkbox
-          checked={isAllSelected}
-          indeterminate={isSomeSelected}
-          onChange={handleSelectAll}
-        />
-      </Tooltip>
-      <Tooltip title="Sélectionner">
-        <Button type="text" size="small" icon={<CaretDownOutlined />} style={{ minWidth: 20, padding: '0 2px' }} />
-      </Tooltip>
+        <Tooltip title={isAllSelected ? 'Tout désélectionner' : 'Tout sélectionner'}>
+          <Checkbox
+            checked={isAllSelected}
+            indeterminate={isSomeSelected}
+            onChange={handleSelectAll}
+          />
+        </Tooltip>
+        <Tooltip title="Sélectionner">
+          <Button type="text" size="small" icon={<CaretDownOutlined />} style={{ minWidth: 20, padding: '0 2px' }} />
+        </Tooltip>
 
-      {/* Actions en masse (visibles si sélection active) */}
-      {selectedIds.size > 0 ? (
-        <Space size={2}>
-          <Tooltip title="Supprimer la sélection">
-            <Button type="text" size="small" icon={<DeleteOutlined />} onClick={handleBulkDelete} danger />
-          </Tooltip>
-          <Tooltip title="Marquer comme lu">
-            <Button type="text" size="small" icon={<EyeOutlined />} onClick={() => handleBulkToggleRead(true)} />
-          </Tooltip>
-          <Tooltip title="Marquer comme non lu">
-            <Button type="text" size="small" icon={<EyeInvisibleOutlined />} onClick={() => handleBulkToggleRead(false)} />
-          </Tooltip>
-          <Text type="secondary" style={{ fontSize: 11 }}>{selectedIds.size}</Text>
-        </Space>
-      ) : (
-        <Space size={2}>
-          <Tooltip title="Actualiser">
-            <Button type="text" size="small" icon={<ReloadOutlined />} onClick={() => loadMessages(currentLabelId, searchQuery)} loading={isLoading} />
-          </Tooltip>
-          {(
+        {selectedIds.size > 0 ? (
+          <Space size={2}>
+            <Tooltip title="Supprimer la sélection">
+              <Button type="text" size="small" icon={<DeleteOutlined />} onClick={handleBulkDelete} danger />
+            </Tooltip>
+            <Tooltip title="Marquer comme lu">
+              <Button type="text" size="small" icon={<EyeOutlined />} onClick={() => handleBulkToggleRead(true)} />
+            </Tooltip>
+            <Tooltip title="Marquer comme non lu">
+              <Button type="text" size="small" icon={<EyeInvisibleOutlined />} onClick={() => handleBulkToggleRead(false)} />
+            </Tooltip>
+            <Text type="secondary" style={{ fontSize: 11 }}>{selectedIds.size}</Text>
+          </Space>
+        ) : (
+          <Space size={2}>
+            <Tooltip title="Actualiser">
+              <Button type="text" size="small" icon={<ReloadOutlined />} onClick={() => loadMessages(currentLabelId, searchQuery)} loading={isLoading} />
+            </Tooltip>
             <Tooltip title="Synchroniser">
               <Button type="text" size="small" icon={<CloudSyncOutlined />} onClick={handleMailSync} loading={isSyncing} style={{ color: '#d48806' }} />
             </Tooltip>
-          )}
-          <Tooltip title="Plus">
-            <Button type="text" size="small" icon={<MoreOutlined />} />
-          </Tooltip>
-        </Space>
-      )}
+            <Tooltip title="Plus">
+              <Button type="text" size="small" icon={<MoreOutlined />} />
+            </Tooltip>
+          </Space>
+        )}
 
-      {/* Spacer + X fermer (visible quand split vue ouverte sur desktop) */}
-      <div style={{ flex: 1 }} />
-      {splitOpen && isDesktop && (
-        <Tooltip title="Fermer le message">
-          <Button
-            type="text"
-            size="small"
-            icon={<CloseOutlined />}
-            onClick={() => { setSplitOpen(false); setSelectedMessage(null); setSelectedMessageMeta(null); }}
+        {splitOpen && isDesktop && (
+          <Tooltip title="Fermer le message">
+            <Button
+              type="text"
+              size="small"
+              icon={<CloseOutlined />}
+              onClick={() => { setSplitOpen(false); setSelectedMessage(null); setSelectedMessageMeta(null); }}
+            />
+          </Tooltip>
+        )}
+      </div>
+
+      {/* ─── Colonne droite : Bouton Nouveau message (mobile) ─── */}
+      {isMobile && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <EditOutlined
+            onClick={() => handleCompose('new')}
+            style={{ fontSize: 20, color: '#1677ff', cursor: 'pointer', padding: 4 }}
           />
-        </Tooltip>
+        </div>
       )}
     </div>
   );
@@ -1858,7 +1857,7 @@ document.querySelectorAll('img').forEach(function(img) {
   // ═══════════════════════════════════════════════════════════
 
   return (
-    <Layout style={{ flex: 1, height: '100%', overflow: 'hidden', backgroundColor: '#fff' }}>
+    <Layout style={{ flex: 1, height: '100%', overflow: 'hidden', backgroundColor: '#fff', position: 'relative' }}>
       {msgCtx}
 
       {/* ─── Sidebar desktop (≥768px) ─── */}
@@ -1876,23 +1875,80 @@ document.querySelectorAll('img').forEach(function(img) {
         </Sider>
       )}
 
-      {/* ─── Sidebar mobile (drawer) ─── */}
+      {/* ─── Sidebar mobile (colonne glissante) ─── */}
       {isMobile && (
-        <Drawer
-          placement="left"
-          open={mobileSidebarOpen}
-          onClose={() => setMobileSidebarOpen(false)}
-          width={280}
-          styles={{ body: { padding: 0 } }}
-          closable={false}
-        >
-          {sidebarContent}
-        </Drawer>
+        <>
+          {/* Overlay sombre */}
+          {mobileSidebarOpen && (
+            <div
+              onClick={() => setMobileSidebarOpen(false)}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                backgroundColor: 'rgba(0,0,0,0.3)',
+                zIndex: 10,
+                transition: 'opacity 0.2s',
+              }}
+            />
+          )}
+          {/* Colonne sidebar */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              bottom: 0,
+              width: 260,
+              zIndex: 11,
+              backgroundColor: '#fff',
+              borderRight: '1px solid #e0e0e0',
+              transform: mobileSidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+              transition: 'transform 0.25s ease',
+              overflow: 'hidden',
+            }}
+          >
+            {sidebarContent}
+          </div>
+        </>
       )}
 
       {/* ─── Zone centrale : toolbar + messages + détail ─── */}
       <Layout style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', backgroundColor: '#fff' }}>
         {renderToolbar()}
+
+        {/* ─── Panneau de recherche (slide-down sous la toolbar) ─── */}
+        {searchExpanded && (
+          <div
+            style={{
+              backgroundColor: '#f8f9fa',
+              borderBottom: '1px solid #e0e0e0',
+              padding: '8px 12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              flexShrink: 0,
+              animation: 'none',
+            }}
+          >
+            <Input
+              ref={searchInputRef}
+              placeholder="Rechercher dans les mails..."
+              prefix={<SearchOutlined style={{ color: '#999' }} />}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onPressEnter={() => handleSearch(searchQuery)}
+              allowClear
+              onClear={() => { handleSearch(''); setSearchExpanded(false); }}
+              style={{ flex: 1, borderRadius: 8 }}
+              autoFocus
+            />
+            <CloseOutlined
+              onClick={() => { setSearchExpanded(false); if (searchQuery) { setSearchQuery(''); handleSearch(''); } }}
+              style={{ color: '#666', fontSize: 14, cursor: 'pointer', padding: 4 }}
+            />
+          </div>
+        )}
+
         <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
           {/* Liste des messages */}
           <div

@@ -304,25 +304,27 @@ router.put('/categories/:id', requireRole(['admin', 'super_admin']) as unknown a
     const { id } = req.params;
     const { name, description, icon, iconColor, order, active, superAdminOnly } = req.body;
     
+    // Sécurité: seul un super_admin peut modifier superAdminOnly
+    const user = req.user as { role?: string } | undefined;
+    const isSuperAdmin = user?.role === 'super_admin';
     
-    // Logique d'interdépendance: Si superAdminOnly est activé, automatiquement désactiver active
-    const finalActive = superAdminOnly ? false : active;
-    
-    if (superAdminOnly && active) {
+    const dataToUpdate: Record<string, unknown> = {
+      updatedAt: new Date(),
+    };
+    if (name !== undefined) dataToUpdate.name = name;
+    if (description !== undefined) dataToUpdate.description = description;
+    if (icon !== undefined) dataToUpdate.icon = icon;
+    if (iconColor !== undefined) dataToUpdate.iconColor = iconColor;
+    if (order !== undefined) dataToUpdate.order = order;
+    if (active !== undefined) dataToUpdate.active = active;
+    // superAdminOnly ne peut être modifié que par un super_admin
+    if (superAdminOnly !== undefined && isSuperAdmin) {
+      dataToUpdate.superAdminOnly = superAdminOnly;
     }
     
     const category = await prisma.category.update({
       where: { id },
-      data: {
-        name,
-        description,
-        icon,
-        iconColor,
-        order,
-        active: finalActive,
-        superAdminOnly: superAdminOnly ?? false,
-        updatedAt: new Date()
-      }
+      data: dataToUpdate,
     });
 
     
@@ -386,20 +388,22 @@ router.put('/modules/:id', requireRole(['admin', 'super_admin']) as unknown as R
     const { id } = req.params;
     const { active, superAdminOnly } = req.body;
     
+    // Sécurité: seul un super_admin peut modifier superAdminOnly
+    const user = req.user as { role?: string } | undefined;
+    const isSuperAdmin = user?.role === 'super_admin';
     
-    // Logique d'interdépendance: Si superAdminOnly est activé, automatiquement désactiver active
-    const finalActive = superAdminOnly ? false : active;
-    
-    if (superAdminOnly && active) {
+    const dataToUpdate: Record<string, unknown> = {
+      updatedAt: new Date(),
+    };
+    if (active !== undefined) dataToUpdate.active = active;
+    // superAdminOnly ne peut être modifié que par un super_admin
+    if (superAdminOnly !== undefined && isSuperAdmin) {
+      dataToUpdate.superAdminOnly = superAdminOnly;
     }
     
     const module = await prisma.module.update({
       where: { id },
-      data: {
-        active: finalActive,
-        superAdminOnly: superAdminOnly ?? false,
-        updatedAt: new Date()
-      }
+      data: dataToUpdate,
     });
 
     

@@ -176,12 +176,7 @@ export default function AdminModulesPage() {
   // Toggle visibilité SuperAdmin uniquement
   const onToggleSectionAdminOnly = useCallback(async (sectionId: string, value: boolean) => {
     try {
-      // Si superAdminOnly est activé, automatiquement désactiver active
-      if (value) {
-        await updateSectionProperties(sectionId, { superAdminOnly: value, active: false });
-      } else {
-        await updateSectionProperties(sectionId, { superAdminOnly: value });
-      }
+      await updateSectionProperties(sectionId, { superAdminOnly: value });
     } catch {
       NotificationManager.error('Erreur mise à jour visibilité admin');
     }

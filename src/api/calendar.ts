@@ -23,6 +23,9 @@ router.get('/events', authMiddleware, async (req: AuthenticatedRequest, res: Res
       type, 
       status,
       participantId,
+      leadId,
+      chantierId,
+      clientId,
       view = 'all' // 'own', 'organization', 'all'
     } = req.query;
 
@@ -73,22 +76,44 @@ router.get('/events', authMiddleware, async (req: AuthenticatedRequest, res: Res
       };
     }
 
+    // Filtrage par lead lié
+    if (leadId) {
+      whereClause.linkedLeadId = leadId;
+    }
+
+    // Filtrage par chantier lié
+    if (chantierId) {
+      whereClause.linkedChantierId = chantierId;
+    }
+
+    // Filtrage par client lié
+    if (clientId) {
+      whereClause.linkedClientId = clientId;
+    }
+
     const events = await prisma.calendarEvent.findMany({
       where: whereClause,
       include: {
-        owner: {
+        User: {
           select: { id: true, firstName: true, lastName: true, email: true }
         },
-        organization: {
+        Organization: {
           select: { id: true, name: true }
         },
-        participants: {
+        CalendarParticipant: {
           include: {
-            user: {
+            User: {
               select: { id: true, firstName: true, lastName: true, email: true }
             },
-            client: {
-              select: { id: true, data: true } // Les infos client sont dans data (JSON)
+            Lead: {
+              select: { id: true, data: true }
+            }
+          }
+        },
+        ChantierEvent: {
+          include: {
+            Chantier: {
+              select: { id: true, clientName: true, siteAddress: true, productLabel: true, amount: true, statusId: true, ChantierStatus: { select: { name: true, color: true } } }
             }
           }
         }
@@ -117,7 +142,13 @@ router.post('/events', authMiddleware, async (req: AuthenticatedRequest, res: Re
       status = 'confirmé',
       notes,
       location,
-      participants = []
+      participants = [],
+      linkedLeadId,
+      linkedChantierId,
+      linkedClientId,
+      linkedProjectId,
+      linkedEmailId,
+      externalCalendarId
     } = req.body;
 
     // Validation des données requises
@@ -126,8 +157,10 @@ router.post('/events', authMiddleware, async (req: AuthenticatedRequest, res: Re
     }
 
     // Créer l'événement
+    const eventId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     const event = await prisma.calendarEvent.create({
       data: {
+        id: eventId,
         title,
         description,
         startDate: new Date(startDate),
@@ -138,13 +171,20 @@ router.post('/events', authMiddleware, async (req: AuthenticatedRequest, res: Re
         notes,
         location,
         organizationId,
-        ownerId: userId
+        ownerId: userId,
+        updatedAt: new Date(),
+        linkedLeadId: linkedLeadId || null,
+        linkedChantierId: linkedChantierId || null,
+        linkedClientId: linkedClientId || null,
+        linkedProjectId: linkedProjectId || null,
+        linkedEmailId: linkedEmailId || null,
+        externalCalendarId: externalCalendarId || null
       },
       include: {
-        owner: {
+        User: {
           select: { id: true, firstName: true, lastName: true, email: true }
         },
-        organization: {
+        Organization: {
           select: { id: true, name: true }
         }
       }
@@ -153,6 +193,7 @@ router.post('/events', authMiddleware, async (req: AuthenticatedRequest, res: Re
     // Ajouter les participants si fournis
     if (participants.length > 0) {
       const participantData = participants.map((p: ParticipantInput) => ({
+        id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         eventId: event.id,
         role: p.role,
         userId: p.userId || null,
@@ -168,18 +209,18 @@ router.post('/events', authMiddleware, async (req: AuthenticatedRequest, res: Re
     const fullEvent = await prisma.calendarEvent.findUnique({
       where: { id: event.id },
       include: {
-        owner: {
+        User: {
           select: { id: true, firstName: true, lastName: true, email: true }
         },
-        organization: {
+        Organization: {
           select: { id: true, name: true }
         },
-        participants: {
+        CalendarParticipant: {
           include: {
-            user: {
+            User: {
               select: { id: true, firstName: true, lastName: true, email: true }
             },
-            client: {
+            Lead: {
               select: { id: true, data: true }
             }
           }
@@ -209,7 +250,13 @@ router.put('/events/:id', authMiddleware, async (req: AuthenticatedRequest, res:
       status,
       notes,
       location,
-      participants = []
+      participants = [],
+      linkedLeadId,
+      linkedChantierId,
+      linkedClientId,
+      linkedProjectId,
+      linkedEmailId,
+      externalCalendarId
     } = req.body;
 
     // Vérifier que l'événement existe et appartient à l'organisation
@@ -230,33 +277,43 @@ router.put('/events/:id', authMiddleware, async (req: AuthenticatedRequest, res:
       return res.status(403).json({ error: 'Accès refusé' });
     }
 
+    // Construire les données de mise à jour
+    const updateData: Record<string, unknown> = {
+      updatedAt: new Date()
+    };
+    if (title !== undefined) updateData.title = title;
+    if (description !== undefined) updateData.description = description;
+    if (startDate !== undefined) updateData.startDate = new Date(startDate);
+    if (endDate !== undefined) updateData.endDate = endDate ? new Date(endDate) : null;
+    if (allDay !== undefined) updateData.allDay = allDay;
+    if (type !== undefined) updateData.type = type;
+    if (status !== undefined) updateData.status = status;
+    if (notes !== undefined) updateData.notes = notes;
+    if (location !== undefined) updateData.location = location;
+    if (linkedLeadId !== undefined) updateData.linkedLeadId = linkedLeadId || null;
+    if (linkedChantierId !== undefined) updateData.linkedChantierId = linkedChantierId || null;
+    if (linkedClientId !== undefined) updateData.linkedClientId = linkedClientId || null;
+    if (linkedProjectId !== undefined) updateData.linkedProjectId = linkedProjectId || null;
+    if (linkedEmailId !== undefined) updateData.linkedEmailId = linkedEmailId || null;
+    if (externalCalendarId !== undefined) updateData.externalCalendarId = externalCalendarId || null;
+
     // Mettre à jour l'événement
     const updatedEvent = await prisma.calendarEvent.update({
       where: { id },
-      data: {
-        title,
-        description,
-        startDate: startDate ? new Date(startDate) : undefined,
-        endDate: endDate ? new Date(endDate) : null,
-        allDay,
-        type,
-        status,
-        notes,
-        location
-      },
+      data: updateData,
       include: {
-        owner: {
+        User: {
           select: { id: true, firstName: true, lastName: true, email: true }
         },
-        organization: {
+        Organization: {
           select: { id: true, name: true }
         },
-        participants: {
+        CalendarParticipant: {
           include: {
-            user: {
+            User: {
               select: { id: true, firstName: true, lastName: true, email: true }
             },
-            client: {
+            Lead: {
               select: { id: true, data: true }
             }
           }
@@ -273,6 +330,7 @@ router.put('/events/:id', authMiddleware, async (req: AuthenticatedRequest, res:
 
       // Ajouter les nouveaux participants
       const participantData = participants.map((p: ParticipantInput) => ({
+        id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         eventId: id,
         role: p.role,
         userId: p.userId || null,
@@ -338,6 +396,7 @@ router.get('/types', authMiddleware, async (_req: AuthenticatedRequest, res: Res
     // Pour l'instant, on retourne des types statiques
     // Plus tard, on pourra les rendre configurables par organisation
     const types = [
+      { value: 'tache', label: 'Tâche' },
       { value: 'rendez-vous', label: 'Rendez-vous' },
       { value: 'relance', label: 'Relance' },
       { value: 'facture', label: 'Échéance facture' },
@@ -351,6 +410,171 @@ router.get('/types', authMiddleware, async (_req: AuthenticatedRequest, res: Res
     res.json(types);
   } catch (error) {
     console.error('[Calendar API] Erreur lors de la récupération des types:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// GET /api/calendar/chantier-events - Récupérer les événements chantier comme des événements calendrier
+router.get('/chantier-events', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { organizationId } = req.user!;
+    const { startDate, endDate } = req.query;
+
+    if (!organizationId) {
+      return res.json([]);
+    }
+
+    const whereClause: Record<string, unknown> = {
+      Chantier: { organizationId }
+    };
+
+    // Filtrer par dates si des CalendarEvents liés existent
+    if (startDate || endDate) {
+      whereClause.CalendarEvent = {
+        startDate: {}
+      };
+      if (startDate) {
+        (((whereClause.CalendarEvent as Record<string, unknown>).startDate) as Record<string, unknown>).gte = new Date(startDate as string);
+      }
+      if (endDate) {
+        (((whereClause.CalendarEvent as Record<string, unknown>).startDate) as Record<string, unknown>).lte = new Date(endDate as string);
+      }
+    }
+
+    const chantierEvents = await prisma.chantierEvent.findMany({
+      where: whereClause,
+      include: {
+        Chantier: {
+          select: {
+            id: true,
+            clientName: true,
+            siteAddress: true,
+            productLabel: true,
+            productColor: true,
+            amount: true,
+            statusId: true,
+            leadId: true,
+            ChantierStatus: { select: { name: true, color: true } },
+            Responsable: { select: { id: true, firstName: true, lastName: true } }
+          }
+        },
+        CalendarEvent: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            startDate: true,
+            endDate: true,
+            location: true,
+            allDay: true,
+            status: true
+          }
+        },
+        ValidatedBy: {
+          select: { id: true, firstName: true, lastName: true }
+        }
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    // Transformer en format calendrier unifié
+    const calendarFormatEvents = chantierEvents.map(ce => ({
+      id: `chantier-event-${ce.id}`,
+      title: ce.CalendarEvent?.title || `${ce.type} - ${ce.Chantier?.clientName || 'Chantier'}`,
+      startDate: ce.CalendarEvent?.startDate || ce.createdAt,
+      endDate: ce.CalendarEvent?.endDate || null,
+      allDay: ce.CalendarEvent?.allDay || false,
+      location: ce.CalendarEvent?.location || ce.Chantier?.siteAddress || null,
+      type: 'chantier',
+      status: ce.status,
+      description: ce.CalendarEvent?.description || ce.notes || null,
+      // Données enrichies chantier
+      chantierEventType: ce.type,
+      chantierId: ce.chantierId,
+      chantierClientName: ce.Chantier?.clientName,
+      chantierSiteAddress: ce.Chantier?.siteAddress,
+      chantierProduct: ce.Chantier?.productLabel,
+      chantierProductColor: ce.Chantier?.productColor,
+      chantierAmount: ce.Chantier?.amount,
+      chantierStatus: ce.Chantier?.ChantierStatus,
+      chantierResponsable: ce.Chantier?.Responsable,
+      problemNote: ce.problemNote,
+      validatedBy: ce.ValidatedBy,
+      validatedAt: ce.validatedAt
+    }));
+
+    res.json(calendarFormatEvents);
+  } catch (error) {
+    console.error('[Calendar API] Erreur lors de la récupération des événements chantier:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// GET /api/calendar/telnyx-calls - Récupérer l'historique des appels Telnyx comme des événements calendrier
+router.get('/telnyx-calls', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { organizationId } = req.user!;
+    const { startDate, endDate } = req.query;
+
+    if (!organizationId) {
+      return res.json([]);
+    }
+
+    const whereClause: Record<string, unknown> = { organizationId };
+
+    if (startDate || endDate) {
+      whereClause.startedAt = {};
+      if (startDate) {
+        (whereClause.startedAt as Record<string, unknown>).gte = new Date(startDate as string);
+      }
+      if (endDate) {
+        (whereClause.startedAt as Record<string, unknown>).lte = new Date(endDate as string);
+      }
+    }
+
+    const calls = await prisma.telnyxCall.findMany({
+      where: whereClause,
+      include: {
+        Lead: {
+          select: { id: true, firstName: true, lastName: true, email: true, data: true }
+        }
+      },
+      orderBy: { startedAt: 'desc' },
+      take: 200
+    });
+
+    const calendarFormatCalls = calls.map(call => {
+      const leadName = call.Lead
+        ? `${call.Lead.firstName || ''} ${call.Lead.lastName || ''}`.trim() || (call.Lead.data as Record<string, string>)?.name || call.toNumber
+        : call.toNumber;
+      
+      const durationMinutes = call.duration ? Math.ceil(call.duration / 60) : 0;
+      
+      return {
+        id: `telnyx-call-${call.id}`,
+        title: `📞 ${call.direction === 'outbound' ? '→' : '←'} ${leadName}${durationMinutes > 0 ? ` (${durationMinutes}min)` : ''}`,
+        startDate: call.startedAt,
+        endDate: call.endedAt || (call.duration ? new Date(call.startedAt.getTime() + call.duration * 1000) : call.startedAt),
+        allDay: false,
+        type: 'appel',
+        status: call.status,
+        description: null,
+        // Données enrichies appel
+        callDirection: call.direction,
+        callDuration: call.duration,
+        callStatus: call.status,
+        callFrom: call.fromNumber,
+        callTo: call.toNumber,
+        callRecordingUrl: call.recordingUrl,
+        linkedLeadId: call.leadId,
+        leadName,
+        leadData: call.Lead
+      };
+    });
+
+    res.json(calendarFormatCalls);
+  } catch (error) {
+    console.error('[Calendar API] Erreur lors de la récupération des appels Telnyx:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

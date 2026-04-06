@@ -71,9 +71,11 @@ const FALLBACK_ICE_SERVERS: RTCConfiguration = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun3.l.google.com:19302' },
-    { urls: 'stun:stun4.l.google.com:19302' },
+    { urls: 'stun:stun.relay.metered.ca:80' },
+    { urls: 'turn:global.relay.metered.ca:80', username: 'e8dd65b92f6ebc3c0de0ee43', credential: 'kMdMsKPjSGXBPkb+' },
+    { urls: 'turn:global.relay.metered.ca:80?transport=tcp', username: 'e8dd65b92f6ebc3c0de0ee43', credential: 'kMdMsKPjSGXBPkb+' },
+    { urls: 'turn:global.relay.metered.ca:443', username: 'e8dd65b92f6ebc3c0de0ee43', credential: 'kMdMsKPjSGXBPkb+' },
+    { urls: 'turns:global.relay.metered.ca:443?transport=tcp', username: 'e8dd65b92f6ebc3c0de0ee43', credential: 'kMdMsKPjSGXBPkb+' },
   ],
   iceCandidatePoolSize: 10,
 };
@@ -273,7 +275,18 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
     // Handle remote stream
     pc.ontrack = (event) => {
       console.log(`[CALL] 🔊 Track from ${remoteUserId.slice(0,8)}:`, event.track.kind, 'enabled:', event.track.enabled);
-      const [remoteStream] = event.streams;
+      // event.streams can be empty in some browsers — create a fallback MediaStream from the track
+      let remoteStream = event.streams[0];
+      if (!remoteStream) {
+        console.warn(`[CALL] ⚠️ event.streams empty for ${remoteUserId.slice(0,8)}, creating fallback MediaStream`);
+        const existing = remoteStreamsRef.current.get(remoteUserId);
+        if (existing) {
+          existing.addTrack(event.track);
+          remoteStream = existing;
+        } else {
+          remoteStream = new MediaStream([event.track]);
+        }
+      }
       remoteStreamsRef.current.set(remoteUserId, remoteStream);
 
       // Attach stream to video element if already in DOM
@@ -817,7 +830,11 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
       const audioEl = remoteAudiosRef.current.get(peerId);
       if (audioEl && audioEl.srcObject !== stream) {
         audioEl.srcObject = stream;
-        audioEl.play().catch(() => {});
+        audioEl.play().then(() => {
+          setAudioBlocked(false);
+        }).catch(() => {
+          setAudioBlocked(true);
+        });
       }
     });
   });

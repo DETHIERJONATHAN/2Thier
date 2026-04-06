@@ -5,12 +5,14 @@ import {
   ToolOutlined, AppstoreOutlined, FilePdfOutlined, MessageOutlined,
   MailOutlined, FileTextOutlined, CalendarOutlined, FormOutlined,
   ArrowRightOutlined, GlobalOutlined, PictureOutlined,
-  PlayCircleOutlined, FileSearchOutlined,
+  PlayCircleOutlined, FileSearchOutlined, AudioOutlined,
+  StarOutlined, StarFilled,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { useZhiiveNav } from '../contexts/ZhiiveNavContext';
+import { useBookmarks } from '../hooks/useBookmarks';
 import { SF } from './zhiive/ZhiiveTheme';
 
 interface SearchResult {
@@ -102,6 +104,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
   const navigate = useNavigate();
   const { api } = useAuthenticatedApi();
   const { setBrowseUrl, setWallSearchQuery, setCenterApp, setWallViewUrl } = useZhiiveNav();
+  const { isBookmarked, toggleBookmark } = useBookmarks();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const apiStable = useMemo(() => api, []);
 
@@ -116,6 +119,110 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
   const inputRef = useRef<any>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // ── 🎤 Voice Search (Web Speech API) ──
+  const recognitionRef = useRef<any>(null);
+  const [isListening, setIsListening] = useState(false);
+
+  const stopListening = useCallback(() => {
+    if (recognitionRef.current) {
+      recognitionRef.current.abort();
+      recognitionRef.current = null;
+    }
+    setIsListening(false);
+  }, []);
+
+  const doSearch = useCallback(async (q: string) => {
+    if (q.length < MIN_QUERY_LENGTH) {
+      setResults(null);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const data = await apiStable.get(`/api/search/global?q=${encodeURIComponent(q)}&limit=8`);
+      setResults(data as SearchResponse);
+      setSelectedIndex(-1);
+    } catch (err) {
+      console.error('[GlobalSearch] Error:', err);
+      setResults(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [apiStable]);
+
+  // ── Zhiive Search — recherche web intégrée ──
+  const doWebSearch = useCallback(async (q: string) => {
+    if (q.length < MIN_WEB_QUERY_LENGTH) { setWebResults([]); return; }
+    setWebLoading(true);
+    try {
+      const data = await apiStable.get(`/api/search/web?q=${encodeURIComponent(q)}&limit=10`) as { results: any[] };
+      const mapped: SearchResult[] = (data.results || []).map((r: any, i: number) => ({
+        id: `web-${i}`,
+        _type: 'web',
+        _label: r.title || r.url,
+        _desc: r.content || r.snippet || '',
+        _route: r.url,
+        _icon: 'search',
+        imageUrl: r.img_src || r.thumbnail || undefined,
+        favicon: r.favicon || undefined,
+      }));
+      setWebResults(mapped);
+      setSelectedIndex(-1);
+    } catch {
+      setWebResults([{
+        id: 'web-error',
+        _type: 'web',
+        _label: `Recherche temporairement indisponible`,
+        _desc: 'Réessayez dans quelques instants',
+        _route: '',
+        _icon: 'search',
+      }]);
+    } finally {
+      setWebLoading(false);
+    }
+  }, [apiStable]);
+
+  const webDebounceRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const startListening = useCallback(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    if (isListening) { stopListening(); return; }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'fr-FR';
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (event: any) => {
+      const transcript = Array.from(event.results)
+        .map((r: any) => r[0].transcript)
+        .join('');
+      setQuery(transcript);
+      if (event.results[0]?.isFinal) {
+        // Trigger search with final transcript
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        doSearch(transcript.trim());
+        if (webDebounceRef.current) clearTimeout(webDebounceRef.current);
+        doWebSearch(transcript.trim());
+      }
+    };
+
+    recognition.onerror = () => { setIsListening(false); recognitionRef.current = null; };
+    recognition.onend = () => { setIsListening(false); recognitionRef.current = null; };
+
+    recognitionRef.current = recognition;
+    setIsListening(true);
+    recognition.start();
+  }, [isListening, stopListening, doSearch, doWebSearch]);
+
+  // Cleanup on unmount / close
+  useEffect(() => {
+    if (!visible) stopListening();
+  }, [visible, stopListening]);
 
   // Filter results based on active tab
   const filteredResults = useMemo(() => {
@@ -173,59 +280,6 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
     setTimeout(() => document.addEventListener('mousedown', handleClick), 0);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [visible, onClose]);
-
-  const doSearch = useCallback(async (q: string) => {
-    if (q.length < MIN_QUERY_LENGTH) {
-      setResults(null);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    try {
-      const data = await apiStable.get(`/api/search/global?q=${encodeURIComponent(q)}&limit=8`);
-      setResults(data as SearchResponse);
-      setSelectedIndex(-1);
-    } catch (err) {
-      console.error('[GlobalSearch] Error:', err);
-      setResults(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [apiStable]);
-
-  // ── Zhiive Search — recherche web intégrée ──
-  const doWebSearch = useCallback(async (q: string) => {
-    if (q.length < MIN_WEB_QUERY_LENGTH) { setWebResults([]); return; }
-    setWebLoading(true);
-    try {
-      const data = await apiStable.get(`/api/search/web?q=${encodeURIComponent(q)}&limit=10`) as { results: any[] };
-      const mapped: SearchResult[] = (data.results || []).map((r: any, i: number) => ({
-        id: `web-${i}`,
-        _type: 'web',
-        _label: r.title || r.url,
-        _desc: r.content || r.snippet || '',
-        _route: r.url,
-        _icon: 'search',
-        imageUrl: r.img_src || r.thumbnail || undefined,
-        favicon: r.favicon || undefined,
-      }));
-      setWebResults(mapped);
-      setSelectedIndex(-1);
-    } catch {
-      setWebResults([{
-        id: 'web-error',
-        _type: 'web',
-        _label: `Recherche temporairement indisponible`,
-        _desc: 'Réessayez dans quelques instants',
-        _route: '',
-        _icon: 'search',
-      }]);
-    } finally {
-      setWebLoading(false);
-    }
-  }, [apiStable]);
-
-  const webDebounceRef = useRef<ReturnType<typeof setTimeout>>();
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -318,9 +372,25 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Input
             ref={inputRef}
-            placeholder={t('common.search') + '...'}
+            placeholder={isListening ? t('common.listening', 'Parlez maintenant...') : t('common.search') + '...'}
             prefix={<SearchOutlined style={{ color: SF.textMuted }} />}
-            suffix={isActiveLoading ? <Spin size="small" /> : null}
+            suffix={
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {isActiveLoading && <Spin size="small" />}
+                {((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) && (
+                  <AudioOutlined
+                    onClick={startListening}
+                    style={{
+                      fontSize: 16,
+                      cursor: 'pointer',
+                      color: isListening ? '#ff4d4f' : SF.textMuted,
+                      animation: isListening ? 'zhiive-pulse 1.2s infinite' : 'none',
+                      transition: 'color 0.2s',
+                    }}
+                  />
+                )}
+              </div>
+            }
             value={query}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
@@ -474,6 +544,32 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
                         }}>
                           {item._desc}
                         </div>
+                      )}
+                    </div>
+                    {/* Bookmark star */}
+                    <div
+                      onClick={e => {
+                        e.stopPropagation();
+                        toggleBookmark({
+                          url: item._route,
+                          title: item._label || '',
+                          description: item._desc,
+                          favicon: item.favicon,
+                          imageUrl: item.imageUrl,
+                        });
+                      }}
+                      style={{
+                        padding: 4, cursor: 'pointer', flexShrink: 0,
+                        transition: 'transform 0.15s',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.2)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}
+                      title={isBookmarked(item._route) ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+                    >
+                      {isBookmarked(item._route) ? (
+                        <StarFilled style={{ fontSize: 14, color: '#faad14' }} />
+                      ) : (
+                        <StarOutlined style={{ fontSize: 14, color: SF.textMuted }} />
                       )}
                     </div>
                     <ArrowRightOutlined style={{ fontSize: 10, color: SF.textMuted, flexShrink: 0 }} />
@@ -647,6 +743,32 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
                       }}>
                         {item._desc}
                       </div>
+                    )}
+                  </div>
+                  {/* Bookmark star */}
+                  <div
+                    onClick={e => {
+                      e.stopPropagation();
+                      toggleBookmark({
+                        url: item._route,
+                        title: item._label || '',
+                        description: item._desc,
+                        favicon: item.favicon,
+                        imageUrl: item.imageUrl,
+                      });
+                    }}
+                    style={{
+                      padding: 4, cursor: 'pointer', flexShrink: 0,
+                      transition: 'transform 0.15s',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.2)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}
+                    title={isBookmarked(item._route) ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+                  >
+                    {isBookmarked(item._route) ? (
+                      <StarFilled style={{ fontSize: 14, color: '#faad14' }} />
+                    ) : (
+                      <StarOutlined style={{ fontSize: 14, color: SF.textMuted }} />
                     )}
                   </div>
                   <ArrowRightOutlined style={{ fontSize: 10, color: SF.textMuted, flexShrink: 0 }} />

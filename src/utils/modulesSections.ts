@@ -22,6 +22,7 @@ export interface ModuleWithStatus {
   parameters?: Record<string, unknown>; // 🔧 Paramètres JSON du module
   organizationId?: string | null;
   isActiveForOrg?: boolean; // status for the current org
+  placement?: string; // 'swipe' (header), 'sidebar' (pills), 'both'
 }
 
 // Interface pour une section complète avec ses modules

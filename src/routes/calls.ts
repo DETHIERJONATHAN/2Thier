@@ -67,6 +67,16 @@ router.get('/ice-servers', async (_req: Request, res: Response): Promise<void> =
       if (turnUrl.startsWith('turn:')) {
         iceServers.push({ urls: `${turnUrl}?transport=tcp`, username: turnUser, credential: turnCred });
       }
+    } else {
+      // Fallback: free Metered.ca open-relay TURN servers
+      // Required for WebRTC connectivity when peers are behind symmetric NAT
+      iceServers.push(
+        { urls: 'stun:stun.relay.metered.ca:80' },
+        { urls: 'turn:global.relay.metered.ca:80', username: 'e8dd65b92f6ebc3c0de0ee43', credential: 'kMdMsKPjSGXBPkb+' },
+        { urls: 'turn:global.relay.metered.ca:80?transport=tcp', username: 'e8dd65b92f6ebc3c0de0ee43', credential: 'kMdMsKPjSGXBPkb+' },
+        { urls: 'turn:global.relay.metered.ca:443', username: 'e8dd65b92f6ebc3c0de0ee43', credential: 'kMdMsKPjSGXBPkb+' },
+        { urls: 'turns:global.relay.metered.ca:443?transport=tcp', username: 'e8dd65b92f6ebc3c0de0ee43', credential: 'kMdMsKPjSGXBPkb+' },
+      );
     }
 
     res.json({ iceServers });

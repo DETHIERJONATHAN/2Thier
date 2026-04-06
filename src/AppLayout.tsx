@@ -9,6 +9,7 @@ import { NotificationsContainer } from './components/Notifications';
 // 🚀 LAZY IMPORTS POUR RÉDUIRE LE BUNDLE INITIAL
 // Pages principales (chargement à la demande)
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const HoneycombPage = lazy(() => import('./pages/HoneycombPage'));
 const CRMPage = lazy(() => import('./pages/CRMPage'));
 const GestionSAVPage = lazy(() => import('./pages/GestionSAVPage'));
 const LeadsPage = lazy(() => import('./pages/Leads/LeadsPage'));
@@ -192,6 +193,7 @@ export default function AppLayout() {
 
             {/* Routes principales */}
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/honeycomb" element={<HoneycombPage />} />
             <Route path="/premium-test" element={<PremiumTestPage />} />
             <Route path="/tailwind-test" element={<TailwindTestPage />} />
             <Route path="/diagnostic-complet" element={<DiagnosticCompletPage />} />

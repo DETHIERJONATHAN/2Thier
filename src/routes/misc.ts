@@ -13,6 +13,10 @@ import { getPostalService } from '../services/PostalEmailService.js';
 
 const router = Router();
 
+// ─── Organisation Zhiive par défaut (ruche globale) ───
+const ZHIIVE_ORG_ID = 'zhiive-global-org';
+const ZHIIVE_USER_ROLE_ID = 'zhiive-global-user-role';
+
 const userWithOrgsArgs = {
     include: {
         UserOrganization: {
@@ -141,6 +145,20 @@ router.post("/register", async (req: Request, res: Response) => {
 
       } else {
         // === TYPE: UTILISATEUR RÉSEAU (freelance) ===
+        // Assigner automatiquement à l'organisation Zhiive (la ruche globale)
+        const zhiiveRole = await tx.role.findUnique({ where: { id: ZHIIVE_USER_ROLE_ID } });
+        if (zhiiveRole) {
+          await tx.userOrganization.create({
+            data: {
+              id: randomUUID(),
+              userId: user.id,
+              organizationId: ZHIIVE_ORG_ID,
+              roleId: ZHIIVE_USER_ROLE_ID,
+              status: UserOrganizationStatus.ACTIVE,
+              updatedAt: new Date(),
+            }
+          });
+        }
       }
 
       // ─── Auto-créer le compte email @zhiive.com ───
@@ -428,13 +446,36 @@ router.post("/login", async (req: Request, res: Response) => {
     }
 
     const isSuperAdmin = freshUser.role === 'super_admin';
-    const mainOrg = freshUser.UserOrganization && freshUser.UserOrganization.length > 0 
+    let mainOrg = freshUser.UserOrganization && freshUser.UserOrganization.length > 0 
         ? freshUser.UserOrganization.find(uo => uo.Organization && uo.Role && uo.status === UserOrganizationStatus.ACTIVE) || freshUser.UserOrganization.find(uo => uo.Organization && uo.Role)
         : null;
 
-    // Un utilisateur standard DOIT POUVOIR se connecter même sans organisation pour en créer une ou accepter une invitation.
-    // La logique de ce qu'il peut faire une fois connecté est gérée par le frontend et les autres routes API.
+    // Auto-rattacher à l'organisation Zhiive si l'utilisateur n'a aucune org
     if (!isSuperAdmin && !mainOrg) {
+      const zhiiveRole = await prisma.role.findUnique({ where: { id: ZHIIVE_USER_ROLE_ID } });
+      if (zhiiveRole) {
+        const existing = await prisma.userOrganization.findFirst({
+          where: { userId: freshUser.id, organizationId: ZHIIVE_ORG_ID }
+        });
+        if (!existing) {
+          await prisma.userOrganization.create({
+            data: {
+              id: randomUUID(),
+              userId: freshUser.id,
+              organizationId: ZHIIVE_ORG_ID,
+              roleId: ZHIIVE_USER_ROLE_ID,
+              status: UserOrganizationStatus.ACTIVE,
+              updatedAt: new Date(),
+            }
+          });
+        }
+        // Re-fetch to get the new org relationship
+        const reloaded = await prisma.user.findUnique({ where: { id: freshUser.id }, ...userWithOrgsArgs });
+        if (reloaded) {
+          Object.assign(freshUser, reloaded);
+          mainOrg = freshUser.UserOrganization.find(uo => uo.Organization && uo.Role && uo.status === UserOrganizationStatus.ACTIVE) || freshUser.UserOrganization.find(uo => uo.Organization && uo.Role) || null;
+        }
+      }
     }
 
     // Déterminer le rôle pour le token
@@ -522,13 +563,44 @@ router.get(
         }
 
         const isSuperAdmin = user.role === 'super_admin';
-        const mainOrg = user.UserOrganization && user.UserOrganization.length > 0 
+        let mainOrg = user.UserOrganization && user.UserOrganization.length > 0 
             ? user.UserOrganization.find(uo => uo.Organization && uo.Role && uo.status === UserOrganizationStatus.ACTIVE) || user.UserOrganization.find(uo => uo.Organization && uo.Role)
             : null;
 
-        // Un utilisateur standard doit appartenir à au moins une organisation valide pour se connecter.
+        // Un utilisateur sans organisation est auto-rattaché à Zhiive (la ruche globale)
         if (!isSuperAdmin && !mainOrg) {
-            return res.status(403).json({ error: "Vous n'êtes associé à aucune organisation valide ou votre rôle n'est pas correctement configuré." });
+            // Tenter d'auto-rattacher à l'organisation Zhiive
+            const zhiiveRole = await prisma.role.findUnique({ where: { id: ZHIIVE_USER_ROLE_ID } });
+            const zhiiveOrg = await prisma.organization.findUnique({ where: { id: ZHIIVE_ORG_ID } });
+            if (zhiiveRole && zhiiveOrg) {
+              const existing = await prisma.userOrganization.findFirst({
+                where: { userId: user.id, organizationId: ZHIIVE_ORG_ID }
+              });
+              if (!existing) {
+                await prisma.userOrganization.create({
+                  data: {
+                    id: randomUUID(),
+                    userId: user.id,
+                    organizationId: ZHIIVE_ORG_ID,
+                    roleId: ZHIIVE_USER_ROLE_ID,
+                    status: UserOrganizationStatus.ACTIVE,
+                    updatedAt: new Date(),
+                  }
+                });
+              }
+              // Re-fetch user with the new org
+              const refreshedUser = await prisma.user.findUnique({
+                where: { id: user.id },
+                ...userWithOrgsArgs,
+              });
+              if (refreshedUser) {
+                Object.assign(user, refreshedUser);
+              }
+              // Recalculer mainOrg après le rattachement
+              mainOrg = user.UserOrganization.find(uo => uo.Organization && uo.Role && uo.status === UserOrganizationStatus.ACTIVE) || user.UserOrganization.find(uo => uo.Organization && uo.Role) || null;
+            } else {
+              return res.status(403).json({ error: "Vous n'êtes associé à aucune organisation valide." });
+            }
         }
 
         // Déterminer le rôle pour le token

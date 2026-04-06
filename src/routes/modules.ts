@@ -78,6 +78,7 @@ function mapModule(m: MinimalModule, orgStatuses: Record<string, boolean> | null
 		parameters: m.parameters, // 🔧 Inclure les paramètres
 		organizationId: m.organizationId,
 		isActiveForOrg,
+		placement: m.placement || 'sidebar',
 		// ✅ Ajouter les informations de catégorie
 		category: m.Category?.name || null,
 		categoryIcon: m.Category?.icon || null,
@@ -146,7 +147,14 @@ router.get('/', async (req, res) => {
 		// 🔐 FILTRAGE PAR PERMISSIONS DU RÔLE
 		// Super admins voient tout, les autres ne voient que les modules autorisés par leur rôle
 		const currentUser = extractUserFromRequest(req);
-		if (currentUser && organizationId && !currentUser.isSuperAdmin && currentUser.role !== 'super_admin') {
+		const isSuperAdmin = currentUser?.isSuperAdmin || currentUser?.role === 'super_admin';
+		
+		// Filtrer les modules superAdminOnly pour les non-SA
+		if (!isSuperAdmin) {
+			filtered = filtered.filter(m => !(m as any).superAdminOnly);
+		}
+		
+		if (currentUser && organizationId && !isSuperAdmin) {
 			try {
 				// Trouver le rôle de l'utilisateur dans cette organisation
 				const userOrg = await prisma.userOrganization.findUnique({
@@ -210,11 +218,24 @@ router.get('/swipe-tabs', async (req, res) => {
 	try {
 		const { organizationId } = req.query as { organizationId?: string };
 		
-		// Récupérer TOUS les modules swipe/both actifs (globaux + org-spécifiques)
+		// Vérifier si l'utilisateur est super admin pour afficher les modules SA-only
+		const currentUser = extractUserFromRequest(req);
+		const isSuperAdmin = currentUser?.isSuperAdmin || currentUser?.role === 'super_admin';
+		
+		// Récupérer les modules swipe/both actifs (globaux + ceux de l'org courante)
 		const modules = await prisma.module.findMany({
 			where: {
 				placement: { in: ['swipe', 'both'] },
 				active: true,
+				// Filtrer les modules superAdminOnly pour les non-SA
+				...(isSuperAdmin ? {} : { superAdminOnly: false }),
+				// Filtrer par organisation : modules globaux + modules de l'org courante
+				...(organizationId ? {
+					OR: [
+						{ organizationId: null },
+						{ organizationId: organizationId },
+					],
+				} : {}),
 			},
 			orderBy: { order: 'asc' },
 			include: {
@@ -229,7 +250,7 @@ router.get('/swipe-tabs', async (req, res) => {
 			if (!organizationId) return true;
 			const orgStatus = (m as any).OrganizationModuleStatus?.[0];
 			if (!orgStatus) return true;
-			return orgStatus.isActive;
+			return orgStatus.active;
 		});
 
 		// Dédupliquer par key (préfère org-spécifique si les deux existent)
@@ -339,8 +360,8 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
 	const { id } = req.params;
 	try {
-		const { label, feature, icon, route, description, page, order, active, key, organizationId, parameters, categoryId, placement, tabColor, tabIcon } = req.body as {
-			label?: string; feature?: string; icon?: string; route?: string; description?: string; page?: string; order?: number; active?: boolean; key?: string; organizationId?: string | null; parameters?: unknown; categoryId?: string; placement?: string; tabColor?: string; tabIcon?: string;
+		const { label, feature, icon, route, description, page, order, active, key, organizationId, parameters, categoryId, placement, tabColor, tabIcon, superAdminOnly } = req.body as {
+			label?: string; feature?: string; icon?: string; route?: string; description?: string; page?: string; order?: number; active?: boolean; key?: string; organizationId?: string | null; parameters?: unknown; categoryId?: string; placement?: string; tabColor?: string; tabIcon?: string; superAdminOnly?: boolean;
 		};
 		let normalizedRoute: string | undefined;
 		if (route !== undefined || key !== undefined) {
@@ -366,6 +387,7 @@ router.put('/:id', async (req, res) => {
 				placement: placement !== undefined ? placement : undefined,
 				tabColor: tabColor !== undefined ? tabColor : undefined,
 				tabIcon: tabIcon !== undefined ? tabIcon : undefined,
+				superAdminOnly: superAdminOnly !== undefined ? superAdminOnly : undefined,
 			},
 		});
 		res.json({ success: true, data: mapModule(updated, null) });

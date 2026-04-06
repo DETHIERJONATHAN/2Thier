@@ -489,5 +489,27 @@
     "prefsDesc": "Customize your experience.",
     "adminTitle": "Administration",
     "adminDesc": "Advanced configuration."
+  },
+
+  "honeycomb": {
+    "title": "Honeycomb",
+    "subtitle": "Your personalised news sources",
+    "loading": "Loading your feeds...",
+    "emptyTitle": "Your Honeycomb is empty",
+    "emptyDescription": "Bookmark sites from the web search to see their news here.",
+    "emptyAction": "Open search",
+    "noFeed": "No feed found",
+    "fetchFailed": "Feed temporarily unavailable",
+    "exploreSite": "Explore this site",
+    "exploreSiteDesc": "This site doesn't publish a public feed, but you can explore it directly.",
+    "retryLater": "Try again later or refresh the feed.",
+    "openInHive": "Open in the Hive",
+    "openExternal": "Open site",
+    "refresh": "Refresh",
+    "refreshAll": "Refresh all",
+    "readMore": "Read more",
+    "articles": "articles",
+    "justNow": "Just now",
+    "noArticles": "No recent articles"
   }
 }

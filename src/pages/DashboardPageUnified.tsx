@@ -2066,23 +2066,43 @@ export default function DashboardPageUnified() {
   // Drag-to-scroll for module pills bar (desktop mouse + mobile touch)
   const pillsRef = useRef<HTMLDivElement>(null);
   const pillsDrag = useRef({ active: false, startX: 0, scrollLeft: 0, moved: false });
+
+  // Use document-level listeners for reliable desktop drag-to-scroll
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      const d = pillsDrag.current; if (!d.active) return;
+      const el = pillsRef.current; if (!el) return;
+      e.preventDefault();
+      const x = e.pageX - el.offsetLeft;
+      const walk = x - d.startX;
+      if (Math.abs(walk) > 3) d.moved = true;
+      el.scrollLeft = d.scrollLeft - walk;
+    };
+    const handleMouseUp = () => {
+      if (!pillsDrag.current.active) return;
+      const el = pillsRef.current; if (el) el.style.cursor = 'grab';
+      pillsDrag.current.active = false;
+    };
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
+
   const onPillsMouseDown = useCallback((e: React.MouseEvent) => {
     const el = pillsRef.current; if (!el) return;
+    e.preventDefault();
     pillsDrag.current = { active: true, startX: e.pageX - el.offsetLeft, scrollLeft: el.scrollLeft, moved: false };
     el.style.cursor = 'grabbing';
   }, []);
-  const onPillsMouseMove = useCallback((e: React.MouseEvent) => {
-    const d = pillsDrag.current; if (!d.active) return;
+  const onPillsWheel = useCallback((e: React.WheelEvent) => {
     const el = pillsRef.current; if (!el) return;
-    e.preventDefault();
-    const x = e.pageX - el.offsetLeft;
-    const walk = x - d.startX;
-    if (Math.abs(walk) > 3) d.moved = true;
-    el.scrollLeft = d.scrollLeft - walk;
-  }, []);
-  const onPillsMouseUp = useCallback(() => {
-    const el = pillsRef.current; if (el) el.style.cursor = 'grab';
-    pillsDrag.current.active = false;
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      e.preventDefault();
+      el.scrollLeft += e.deltaY;
+    }
   }, []);
 
   const sectionsWithModules = useMemo(() => {
@@ -2678,7 +2698,7 @@ export default function DashboardPageUnified() {
      CENTER FEED
      ═══════════════════════════════════════════════════════════ */
   const renderFeed = () => (
-    <div style={{ flex: 1, minWidth: 0, margin: "0 auto", paddingTop: isMobile ? 0 : 8 }}>
+    <div style={{ flex: activeModule ? '0 0 auto' : 1, minWidth: 0, maxWidth: '100%', margin: "0 auto", paddingTop: isMobile ? 0 : 8, overflow: 'hidden' }}>
 
       {/* "What's buzzing" — Twitter-style single line */}
       <FBCard>
@@ -2842,14 +2862,34 @@ export default function DashboardPageUnified() {
 
       {/* Module shortcuts — compact pill style (CRM modules only, org users) */}
       {currentOrganization && <div ref={pillsRef}
-        onMouseDown={onPillsMouseDown} onMouseMove={onPillsMouseMove}
-        onMouseUp={onPillsMouseUp} onMouseLeave={onPillsMouseUp}
+        onMouseDown={onPillsMouseDown}
+        onWheel={onPillsWheel}
+        onTouchStart={(e) => {
+          const el = pillsRef.current; if (!el) return;
+          const touch = e.touches[0];
+          pillsDrag.current = { active: true, startX: touch.pageX - el.offsetLeft, scrollLeft: el.scrollLeft, moved: false };
+        }}
+        onTouchMove={(e) => {
+          const d = pillsDrag.current; if (!d.active) return;
+          const el = pillsRef.current; if (!el) return;
+          const touch = e.touches[0];
+          const x = touch.pageX - el.offsetLeft;
+          const walk = x - d.startX;
+          if (Math.abs(walk) > 3) d.moved = true;
+          el.scrollLeft = d.scrollLeft - walk;
+        }}
+        onTouchEnd={() => { pillsDrag.current.active = false; }}
         style={{
         display: "flex", gap: 4, overflowX: "auto", marginBottom: 4,
         WebkitOverflowScrolling: "touch", scrollbarWidth: "none",
-        cursor: "grab",
+        cursor: "grab", touchAction: "pan-x",
+        maxWidth: "100%", flexShrink: 0, flexWrap: "nowrap",
       }}>
           {sectionsWithModules.flatMap(s => s.modules)
+            .filter(mod => {
+              const p = (mod as any).placement || 'sidebar';
+              return p === 'sidebar' || p === 'both';
+            })
             .sort((a, b) => {
               const aFav = favModules.has(getModuleRoute(a)) ? 0 : 1;
               const bFav = favModules.has(getModuleRoute(b)) ? 0 : 1;
@@ -3223,10 +3263,15 @@ export default function DashboardPageUnified() {
         /* ── MODULE ACTIVE on MOBILE: Single view ── */
         isMobile ? (
           <div style={{
-            overflowY: "auto", padding: "4px 8px", height: "calc(100vh - 56px)",
+            display: 'flex', flexDirection: 'column',
+            padding: "4px 8px", height: "calc(100vh - 56px)",
           }}>
-            {renderFeed()}
-            {renderEmbeddedModule()}
+            <div style={{ flex: '0 0 auto' }}>
+              {renderFeed()}
+            </div>
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', scrollbarWidth: 'none' }}>
+              {renderEmbeddedModule()}
+            </div>
           </div>
         ) : null /* Desktop handles activeModule in 3-column layout below */
       ) : null}
@@ -3312,16 +3357,20 @@ export default function DashboardPageUnified() {
 
           {/* ── CENTER (flex: 1) — Wall by default, or selected app / CRM module ── */}
           <div className="sf-center-col" style={{
-            flex: 1, minWidth: 0, overflowY: "auto", padding: "8px 16px",
+            flex: 1, minWidth: 0, overflowY: activeModule ? "hidden" : "auto", padding: "8px 16px",
             display: 'flex', flexDirection: 'column',
             scrollbarWidth: 'none', msOverflowStyle: 'none' as any,
           }}>
             <div style={{ width: '100%', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
               {activeModule ? (
-                <>
-                  {renderFeed()}
-                  {renderEmbeddedModule()}
-                </>
+                <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+                  <div style={{ flex: '0 0 auto' }}>
+                    {renderFeed()}
+                  </div>
+                  <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', scrollbarWidth: 'none' }}>
+                    {renderEmbeddedModule()}
+                  </div>
+                </div>
               ) : centerApp ? (
                 <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
                   <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>

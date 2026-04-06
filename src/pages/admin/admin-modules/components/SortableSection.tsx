@@ -169,31 +169,36 @@ const DraggableModuleCard: React.FC<DraggableModuleCardProps> = ({
                   {badge}
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: 0.7 }}>{module.description || module.route || '—'}</span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <Tooltip title={module.superAdminOnly ? 'Réservé Super Admin' : module.active ? 'Désactiver' : 'Activer'}>
-                    <FBToggle
-                      checked={!!module.active}
-                      onChange={() => onToggleModuleActive(module.id, !!module.active)}
-                      disabled={!!module.superAdminOnly}
-                    />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Tooltip title={module.active ? '✅ Activé — Ce module est visible. Cliquez pour le désactiver.' : '❌ Désactivé — Ce module est masqué pour tous. Cliquez pour l\'activer.'}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, cursor: 'pointer' }}>
+                      <span style={{ fontSize: 11, color: module.active ? FB.blue : FB.textSecondary }}>Actif</span>
+                      <FBToggle
+                        checked={!!module.active}
+                        onChange={() => onToggleModuleActive(module.id, !!module.active)}
+                      />
+                    </span>
                   </Tooltip>
-                  <Tooltip title="Visible uniquement pour Super Admin">
-                    <FBToggle
-                      checked={!!module.superAdminOnly}
-                      onChange={(checked) => onToggleModuleSuperAdminOnly(module.id, checked)}
-                    />
+                  <Tooltip title={module.superAdminOnly ? '🔒 SA activé — Ce module est visible UNIQUEMENT pour les Super Admins. Cliquez pour le rendre visible à tous.' : '🔓 SA désactivé — Ce module est visible par tous les utilisateurs. Cliquez pour le restreindre aux Super Admins.'}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, cursor: 'pointer' }}>
+                      <span style={{ fontSize: 11, color: module.superAdminOnly ? '#f7931a' : FB.textSecondary }}>SA</span>
+                      <FBToggle
+                        checked={!!module.superAdminOnly}
+                        onChange={(checked) => onToggleModuleSuperAdminOnly(module.id, checked)}
+                      />
+                    </span>
                   </Tooltip>
                   <Dropdown menu={{ items: menuItems }} trigger={['click']} placement="bottomRight">
                     <Button type="text" size="small" icon={<MoreOutlined style={{ color: FB.textSecondary }} />} />
                   </Dropdown>
                 </div>
               </div>
-              {/* Placement toggles: Swipe header / Sidebar */}
+              {/* Placement toggles: Header / Menu pastilles */}
               {onUpdateModulePlacement && (
                 <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10, paddingTop: 8, borderTop: `1px solid ${FB.border}` }}>
-                  <Tooltip title="Afficher dans le header swipe (onglets en haut)">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span style={{ fontSize: 11, color: FB.textSecondary }}>📱</span>
+                  <Tooltip title={(module.placement === 'swipe' || module.placement === 'both') ? '✅ Header activé — Ce module apparaît dans la barre de navigation en haut de l\'écran (onglets principaux). Cliquez pour le retirer du header.' : '❌ Header désactivé — Ce module n\'apparaît PAS dans la barre en haut. Cliquez pour l\'ajouter au header.'}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                      <span style={{ fontSize: 11, color: (module.placement === 'swipe' || module.placement === 'both') ? FB.blue : FB.textSecondary, fontWeight: 600 }}>Header</span>
                       <FBToggle
                         checked={module.placement === 'swipe' || module.placement === 'both'}
                         onChange={(checked) => {
@@ -206,11 +211,11 @@ const DraggableModuleCard: React.FC<DraggableModuleCardProps> = ({
                           onUpdateModulePlacement(module.id, newPlacement);
                         }}
                       />
-                    </div>
+                    </span>
                   </Tooltip>
-                  <Tooltip title="Afficher dans le menu latéral (sidebar)">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span style={{ fontSize: 11, color: FB.textSecondary }}>📋</span>
+                  <Tooltip title={(module.placement === 'sidebar' || module.placement === 'both') ? '✅ Menu activé — Ce module apparaît dans les pastilles sous « Quoi de neuf ? ». Cliquez pour le retirer du menu.' : '❌ Menu désactivé — Ce module n\'apparaît PAS dans les pastilles sous « Quoi de neuf ? ». Cliquez pour l\'ajouter.'}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                      <span style={{ fontSize: 11, color: (module.placement === 'sidebar' || module.placement === 'both') ? FB.blue : FB.textSecondary, fontWeight: 600 }}>Menu</span>
                       <FBToggle
                         checked={module.placement === 'sidebar' || module.placement === 'both'}
                         onChange={(checked) => {
@@ -223,10 +228,10 @@ const DraggableModuleCard: React.FC<DraggableModuleCardProps> = ({
                           onUpdateModulePlacement(module.id, newPlacement);
                         }}
                       />
-                    </div>
+                    </span>
                   </Tooltip>
                   <span style={{ fontSize: 10, color: FB.textSecondary, opacity: 0.7 }}>
-                    {module.placement === 'both' ? '📱+📋' : module.placement === 'swipe' ? '📱 swipe' : '📋 sidebar'}
+                    {module.placement === 'both' ? 'header + menu' : module.placement === 'swipe' ? 'header' : 'menu'}
                   </span>
                 </div>
               )}
@@ -474,23 +479,27 @@ export const SortableSection: React.FC<SortableSectionProps> = ({
 
             <div style={{ width: 1, height: 20, background: FB.border, margin: '0 4px' }} />
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 12, color: FB.textSecondary }}>Actif</span>
-              <FBToggle
-                checked={!!section.active} 
-                onChange={() => onToggleSectionActive(section.id)} 
-                disabled={!isRealCategory || !!section.superAdminOnly}
-              />
-            </div>
+            <Tooltip title={section.active ? '✅ Section activée — Tous les modules de cette section sont visibles. Cliquez pour désactiver.' : '❌ Section désactivée — Tous les modules de cette section sont masqués. Cliquez pour activer.'}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: isRealCategory ? 'pointer' : 'not-allowed' }}>
+                <span style={{ fontSize: 12, color: section.active ? FB.blue : FB.textSecondary, fontWeight: 600 }}>Actif</span>
+                <FBToggle
+                  checked={!!section.active} 
+                  onChange={() => onToggleSectionActive(section.id)} 
+                  disabled={!isRealCategory}
+                />
+              </span>
+            </Tooltip>
             
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 12, color: FB.textSecondary }}>SA</span>
-              <FBToggle
-                checked={!!section.superAdminOnly} 
-                onChange={(checked) => onToggleSectionAdminOnly(section.id, checked)} 
-                disabled={!isRealCategory}
-              />
-            </div>
+            <Tooltip title={section.superAdminOnly ? '🔒 SA activé — Cette section entière est visible UNIQUEMENT pour les Super Admins. Cliquez pour la rendre visible à tous.' : '🔓 SA désactivé — Cette section est visible par tous les utilisateurs. Cliquez pour la restreindre aux Super Admins.'}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: isRealCategory ? 'pointer' : 'not-allowed' }}>
+                <span style={{ fontSize: 12, color: section.superAdminOnly ? '#f7931a' : FB.textSecondary, fontWeight: 600 }}>SA</span>
+                <FBToggle
+                  checked={!!section.superAdminOnly} 
+                  onChange={(checked) => onToggleSectionAdminOnly(section.id, checked)} 
+                  disabled={!isRealCategory}
+                />
+              </span>
+            </Tooltip>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

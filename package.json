@@ -184,6 +184,7 @@
     "react-toastify": "^11.0.5",
     "recharts": "^3.6.0",
     "remark-breaks": "^4.0.0",
+    "rss-parser": "^3.13.0",
     "sharp": "^0.34.5",
     "socket.io": "^4.8.1",
     "tailwindcss": "^3.4.3",

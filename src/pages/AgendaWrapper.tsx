@@ -4,7 +4,7 @@ import { Alert } from 'antd';
 import AgendaPage from '../plugins/ModuleAgenda/AgendaPage';
 
 const AgendaWrapper: React.FC = () => {
-  const { user, modules } = useAuth();
+  const { user, hasFeature } = useAuth();
 
   // Vérification que l'utilisateur est connecté
   if (!user) {
@@ -18,27 +18,13 @@ const AgendaWrapper: React.FC = () => {
     );
   }
 
-  // Vérification que le module Agenda CRM est activé pour l'organisation
-  const hasAgendaModule = modules?.some(module => {
-    if (!module) return false;
-    
-    // Vérifier si c'est le module Agenda CRM natif
-    const isAgendaModule = module.feature === 'agenda';
-    
-    if (!isAgendaModule) return false;
-    
-    // Vérifier que le module est actif ET activé pour l'organisation
-    const isActiveInOrganization = module.isActiveInOrg || false;
-    const isGloballyActive = module.active || false;
-    
-    return isGloballyActive && isActiveInOrganization;
-  });
-
-  if (!hasAgendaModule) {
+  // Vérification via hasFeature (case-insensitive, vérifie feature/key/name/label)
+  // Les modules dans useAuth().modules sont déjà filtrés (actifs globalement + actifs pour l'org)
+  if (!hasFeature('agenda')) {
     return (
       <Alert
         message="Module non activé"
-        description="Le module Agenda CRM n'est pas activé pour votre organisation."
+        description="Le module Agenda n'est pas activé pour votre organisation."
         type="warning"
         showIcon
       />

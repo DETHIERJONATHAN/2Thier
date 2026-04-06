@@ -48,9 +48,12 @@ import cloudRunDomainsRouter from './api/cloud-run-domains'; // ☁️ GESTION D
 // 📄 ROUTES GESTION DOCUMENTS PDF
 import documentsRouter from './routes/documents'; // 📄 TEMPLATES DE DOCUMENTS (ADMIN)
 import measurementReferenceRouter from './api/measurement-reference'; // 📐 CONFIGURATION OBJETS DE RÉFÉRENCE POUR MESURES IA
+import calendarRouter from './api/calendar'; // 📅 AGENDA / CALENDRIER / TÂCHES
 
 // 👤 ROUTES UTILISATEURS
 import userFavoritesRouter from './routes/userFavoritesRoutes'; // ⭐ FAVORIS MODULES UTILISATEUR
+import userBookmarksRouter from './routes/userBookmarksRoutes'; // 🔖 BOOKMARKS PAGES WEB FAVORITES
+import honeycombRouter from './routes/honeycombRoutes'; // 🍯 HONEYCOMB - FLUX RSS PERSONNALISÉS
 import userPreferencesRouter from './routes/userPreferencesRoutes'; // 🔧 PRÉFÉRENCES UTILISATEUR (remplace localStorage)
 
 // 📋 ROUTES FORMULAIRES SITES WEB (style Effy)
@@ -350,9 +353,12 @@ app.use('/api/tbl/batch', tblBatchRoutes); // 🚀 BATCH LOADING TBL (réduit ~1
 app.use('/api/batch', batchRoutes); // 🚀 BATCH GLOBAL (Gmail, Leads, Analytics)
 app.use('/api/tree-nodes', calculatedValueController); // 🎯 VALEURS CALCULÉES STOCKÉES DANS PRISMA
 app.use('/api/user/favorites', userFavoritesRouter); // ⭐ FAVORIS MODULES UTILISATEUR
+app.use('/api/user/bookmarks', userBookmarksRouter); // 🔖 BOOKMARKS PAGES WEB FAVORITES
+app.use('/api/user/bookmarks', honeycombRouter); // 🍯 HONEYCOMB - FLUX RSS PERSONNALISÉS (/feeds)
 app.use('/api/user-preferences', userPreferencesRouter); // 🔧 PRÉFÉRENCES UTILISATEUR (remplace localStorage)
 app.use('/api/website-forms', websiteFormsRouter); // 📋 FORMULAIRES SITES WEB (style Effy) - CRUD ADMIN
 app.use('/api/public/forms', publicFormsRouter); // 📋 SOUMISSION PUBLIQUE FORMULAIRES (sans auth)
+app.use('/api/calendar', calendarRouter); // 📅 AGENDA / CALENDRIER / TÂCHES
 app.use('/api/peppol', peppolRouter); // 📨 PEPPOL e-FACTURATION (Odoo Bridge)
 app.use('/api/invoices', invoicesRouter); // 🧾 FACTURES UNIFIÉES (standalone + chantier + incoming)
 app.use('/api/expenses', expensesRouter); // 💰 DÉPENSES (scan tickets IA + suivi)

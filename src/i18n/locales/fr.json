@@ -489,5 +489,27 @@
     "prefsDesc": "Personnalisez votre expérience.",
     "adminTitle": "Administration",
     "adminDesc": "Configuration avancée."
+  },
+
+  "honeycomb": {
+    "title": "Honeycomb",
+    "subtitle": "Vos sources d'actualités personnalisées",
+    "loading": "Chargement de vos flux...",
+    "emptyTitle": "Votre Honeycomb est vide",
+    "emptyDescription": "Ajoutez des sites en favoris depuis la recherche web pour voir leurs actualités ici.",
+    "emptyAction": "Ouvrir la recherche",
+    "noFeed": "Aucun flux trouvé",
+    "fetchFailed": "Flux temporairement indisponible",
+    "exploreSite": "Explorer ce site",
+    "exploreSiteDesc": "Ce site ne publie pas de flux public, mais vous pouvez l'explorer directement.",
+    "retryLater": "Réessayez plus tard ou rafraîchissez le flux.",
+    "openInHive": "Ouvrir dans la Ruche",
+    "openExternal": "Ouvrir le site",
+    "refresh": "Rafraîchir",
+    "refreshAll": "Tout rafraîchir",
+    "readMore": "Lire la suite",
+    "articles": "articles",
+    "justNow": "À l'instant",
+    "noArticles": "Aucun article récent"
   }
 }

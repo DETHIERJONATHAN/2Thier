@@ -2298,6 +2298,7 @@ model User {
   TelnyxSipEndpoint                                   TelnyxSipEndpoint[]
   TelnyxUserConfig                                    TelnyxUserConfig?
   UserFavoriteModule                                  UserFavoriteModule[]
+  UserBookmark                                        UserBookmark[]
   UserOrganization                                    UserOrganization[]
   UserService                                         UserService[]
   website_blog_posts                                  website_blog_posts[]
@@ -2756,6 +2757,22 @@ model UserFavoriteModule {
   @@unique([userId, organizationId, moduleKey])
   @@index([userId])
   @@index([organizationId])
+}
+
+model UserBookmark {
+  id          String   @id @default(cuid())
+  userId      String
+  url         String
+  title       String
+  description String?
+  favicon     String?
+  imageUrl    String?
+  domain      String?
+  createdAt   DateTime @default(now())
+  User        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, url])
+  @@index([userId])
 }
 
 model MeasurePhoto {

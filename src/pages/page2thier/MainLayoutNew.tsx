@@ -16,6 +16,7 @@ import {
   TeamOutlined,
   MailOutlined,
   CalendarOutlined,
+  AppstoreOutlined,
 } from '@ant-design/icons';
 import Icon from '@ant-design/icons';
 import { useAuth } from '../../auth/useAuth';
@@ -133,8 +134,8 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
           color: t.color || '#999',
         }));
         if (tabs.length > 0) setDynamicTabs(tabs);
-      } catch {
-        // Keep fallback
+      } catch (err) {
+        console.error('[ZhiiveHeader] swipe-tabs fetch error:', err);
       }
     };
     fetchSwipeTabs();
@@ -147,10 +148,24 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const orderedTabs = useMemo(() => {
-    return tabOrder
+    // Start with tabs in the saved order
+    const ordered = tabOrder
       .map(id => dynamicTabs.find(t => t.id === id))
-      .filter((t): t is TabConfig => !!t)
-      .filter(t => !(isFreeUser && t.id === 'stats'));
+      .filter((t): t is TabConfig => !!t);
+    // Append any dynamic tabs from API that are NOT yet in tabOrder (new modules)
+    for (const dt of dynamicTabs) {
+      if (!tabOrder.includes(dt.id)) {
+        // Insert before 'stats' if exists, otherwise append
+        const statsIdx = ordered.findIndex(t => t.id === 'stats');
+        if (statsIdx >= 0) {
+          ordered.splice(statsIdx, 0, dt);
+        } else {
+          ordered.push(dt);
+        }
+      }
+    }
+    const result = ordered.filter(t => !(isFreeUser && t.id === 'stats'));
+    return result;
   }, [tabOrder, isFreeUser, dynamicTabs]);
 
   const handleTabClick = useCallback((tabId: string) => {
@@ -287,6 +302,7 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
 
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [showSearch, setShowSearch] = useState(false);
@@ -462,6 +478,26 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
         {/* Icônes à droite */}
         <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '6px' : '8px', marginLeft: isMobile ? '8px' : 'auto', flexShrink: 0 }}>
+          {/* Honeycomb — flux RSS personnalisés */}
+          <div
+            onClick={() => navigate('/honeycomb')}
+            title="Honeycomb"
+            style={{
+              padding: '6px',
+              height: '36px',
+              minWidth: '36px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              borderRadius: '6px',
+              backgroundColor: location.pathname === '/honeycomb' ? 'rgba(255,255,255,0.16)' : 'transparent',
+            }}
+            className="header-2thier-item"
+          >
+            <AppstoreOutlined style={{ fontSize: '18px', color: 'white' }} />
+          </div>
+
           {/* Notifications */}
           <NotificationsBell />
 

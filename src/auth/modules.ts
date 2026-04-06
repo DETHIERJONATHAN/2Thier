@@ -13,6 +13,8 @@ export interface ModuleAccess {
   // Champ interne utilisé dans l'UI : on le rend optionnel pour pouvoir le normaliser ensuite
   isActiveInOrg?: boolean;
   feature?: string | null;
+  // Placement du module : 'swipe' (header), 'sidebar' (pills), 'both'
+  placement?: string;
   // Clés supplémentaires possibles depuis le backend, on les tolère via index signature si besoin plus tard
   // [extra: string]: any; // (décommenter si nécessaire)
 }

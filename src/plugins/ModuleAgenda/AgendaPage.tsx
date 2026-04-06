@@ -1,7 +1,7 @@
 // src/plugins/ModuleAgenda/AgendaPage.tsx
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { Card, Button, Modal, Form, Input, DatePicker, Select, Switch, message, Space, Typography, Row, Col } from 'antd';
-import { PlusOutlined, GoogleOutlined, SyncOutlined } from '@ant-design/icons';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { Card, Button, Modal, Form, Input, DatePicker, Select, Switch, message, Space, Typography, Row, Col, Checkbox, Tag, Badge, List, Tooltip, Dropdown, Segmented, Drawer, Grid } from 'antd';
+import { PlusOutlined, CalendarOutlined, CheckSquareOutlined, PhoneOutlined, ToolOutlined } from '@ant-design/icons';
 import FullCalendar from '@fullcalendar/react';
 import { CalendarApi } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -12,12 +12,29 @@ import frLocale from '@fullcalendar/core/locales/fr';
 import dayjs from 'dayjs';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 const { TextArea } = Input;
 const { Option } = Select;
 const { RangePicker } = DatePicker;
 
-// Interfaces... (gardées identiques)
+// Hook responsive removed — using Grid.useBreakpoint() like MailPage
+
+// Priorités des tâches
+const TASK_PRIORITIES = [
+  { value: 'urgent', label: '🔴 Urgent', color: '#f5222d' },
+  { value: 'haute', label: '🟠 Haute', color: '#fa8c16' },
+  { value: 'normale', label: '🟡 Normale', color: '#fadb14' },
+  { value: 'basse', label: '🟢 Basse', color: '#52c41a' },
+];
+
+// Statuts des tâches
+const TASK_STATUSES = [
+  { value: 'a-faire', label: 'À faire' },
+  { value: 'en-cours', label: 'En cours' },
+  { value: 'terminee', label: 'Terminée' },
+  { value: 'annulee', label: 'Annulée' },
+];
+
 interface CalendarEvent {
   id: string;
   title: string;
@@ -29,49 +46,81 @@ interface CalendarEvent {
   status?: string;
   notes?: string;
   location?: string;
-  googleEventId?: string;
-  meetingLink?: string;
-  // 🔗 Liaisons CRM
+  // 🔗 Liaisons
   linkedEmailId?: string;
   linkedLeadId?: string;
   linkedClientId?: string;
   linkedProjectId?: string;
   linkedChantierId?: string;
-}
-
-interface EventType {
-  value: string;
-  label: string;
+  // 🏗️ Données enrichies chantier
+  chantierEventType?: string;
+  chantierId?: string;
+  chantierClientName?: string;
+  chantierSiteAddress?: string;
+  chantierProduct?: string;
+  chantierProductColor?: string;
+  chantierStatus?: { name: string; color: string };
+  chantierResponsable?: { firstName: string; lastName: string };
+  // 📞 Données enrichies appel
+  callDirection?: string;
+  callDuration?: number;
+  callStatus?: string;
+  callFrom?: string;
+  callTo?: string;
+  callRecordingUrl?: string;
+  leadName?: string;
+  // Source  
+  _source?: 'calendar' | 'chantier' | 'telnyx';
 }
 
 interface EventFormValues {
   title: string;
   description?: string;
   notes?: string;
-  dateRange: [Date, Date];
+  dateRange: [dayjs.Dayjs, dayjs.Dayjs];
   allDay: boolean;
   type: string;
   status: string;
   location?: string;
-  createMeetLink: boolean;
-  // 🔗 Liaisons CRM
+  priority?: string;
+  // 🔗 Liaisons
   linkedClientId?: string;
   linkedLeadId?: string;
   linkedProjectId?: string;
   linkedEmailId?: string;
 }
 
+// Helper pour extraire la priorité depuis les notes (format: [priority:xxx])
+function extractPriority(notes?: string): string | null {
+  if (!notes) return null;
+  const match = notes.match(/\[priority:(\w+)\]/);
+  return match ? match[1] : null;
+}
+
+function encodePriority(notes: string | undefined, priority: string | undefined): string {
+  const cleaned = (notes || '').replace(/\[priority:\w+\]\s*/g, '').trim();
+  if (!priority) return cleaned;
+  return `[priority:${priority}] ${cleaned}`.trim();
+}
+
 export default function AgendaPage() {
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md; // <768px
   const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [eventTypes, setEventTypes] = useState<EventType[]>([]);
   const [loading, setLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
+  const [modalMode, setModalMode] = useState<'event' | 'task'>('event');
+  const [showTasks, setShowTasks] = useState(true);
+  const [showEvents, setShowEvents] = useState(true);
+  const [showChantier, setShowChantier] = useState(true);
+  const [showCalls, setShowCalls] = useState(true);
+  const [mobileView, setMobileView] = useState<'calendar' | 'tasks'>('calendar');
+  const [taskDrawerOpen, setTaskDrawerOpen] = useState(false);
   const [form] = Form.useForm();
   const calendarRef = useRef<FullCalendar>(null);
   
-  // 🔗 Données CRM pour les liaisons
+  // 🔗 Données pour les liaisons
   const [clients, setClients] = useState<any[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
@@ -93,8 +142,25 @@ export default function AgendaPage() {
       const startDate = view.activeStart.toISOString();
       const endDate = view.activeEnd.toISOString();
       
-      const response = await api.get(`/api/calendar/events?startDate=${startDate}&endDate=${endDate}`);
-      setEvents(response);
+      const safeGet = async (url: string): Promise<CalendarEvent[]> => {
+        try {
+          const response = await api.get(url);
+          const data = Array.isArray(response) ? response : (response?.data || response || []);
+          return Array.isArray(data) ? data : [];
+        } catch { return []; }
+      };
+
+      const [calEvents, chantierEvts, telnyxCalls] = await Promise.all([
+        safeGet(`/api/calendar/events?startDate=${startDate}&endDate=${endDate}`),
+        safeGet(`/api/calendar/chantier-events?startDate=${startDate}&endDate=${endDate}`),
+        safeGet(`/api/calendar/telnyx-calls?startDate=${startDate}&endDate=${endDate}`),
+      ]);
+
+      const taggedCalendar = calEvents.map(e => ({ ...e, _source: 'calendar' as const }));
+      const taggedChantier = chantierEvts.map(e => ({ ...e, _source: 'chantier' as const }));
+      const taggedTelnyx = telnyxCalls.map(e => ({ ...e, _source: 'telnyx' as const }));
+
+      setEvents([...taggedCalendar, ...taggedChantier, ...taggedTelnyx]);
     } catch (error) {
       console.error('[Agenda] Erreur lors de la récupération des événements:', error);
       message.error('Erreur lors du chargement des événements');
@@ -103,126 +169,129 @@ export default function AgendaPage() {
     }
   }, [api, getCalendarApi]);
 
-  const handleSyncWithGoogle = async () => {
-    const calendarApi = getCalendarApi();
-    if (!calendarApi) {
-      message.error("Le calendrier n'est pas prêt.");
-      return;
-    }
-    try {
-      setSyncing(true);
-      message.info('Synchronisation avec Google Calendar en cours...');
-      const view = calendarApi.view;
-      const startDate = view.activeStart.toISOString();
-      const endDate = view.activeEnd.toISOString();
-
-      await api.post('/api/calendar/sync', { startDate, endDate });
-      
-      message.success('Synchronisation avec Google Calendar terminée avec succès !');
-      fetchEvents(calendarApi);
-    } catch (error) {
-      console.error('[Agenda] Erreur lors de la synchronisation Google:', error);
-      message.error('Une erreur est survenue lors de la synchronisation.');
-    } finally {
-      setSyncing(false);
-    }
-  };
-
   useEffect(() => {
-    // Le premier chargement se fera via la prop `datesSet` de FullCalendar
+    // Premier chargement via datesSet de FullCalendar
   }, [fetchEvents]);
 
-  // 🔗 Chargement des données CRM pour les liaisons
+  // 🔗 Chargement des données pour les liaisons
   useEffect(() => {
     const loadCrmData = async () => {
-      try {
-        // Chargement des clients (API peut ne pas exister)
+      const safeGet = async (url: string) => {
         try {
-          const clientsResponse = await api.get('/api/clients');
-          const clientsData = clientsResponse.data || clientsResponse || [];
-          setClients(Array.isArray(clientsData) ? clientsData : []);
-        } catch {
-          console.warn('[Agenda] API clients non disponible, utilisation de données vides');
-          setClients([]);
-        }
-
-        // Chargement des leads/prospects (API peut ne pas exister)
-        try {
-          const leadsResponse = await api.get('/api/leads');
-          const leadsData = leadsResponse.data || leadsResponse || [];
-          setLeads(Array.isArray(leadsData) ? leadsData : []);
-        } catch {
-          console.warn('[Agenda] API leads non disponible, utilisation de données vides');
-          setLeads([]);
-        }
-
-        // Chargement des projets (API peut ne pas exister)
-        try {
-          const projectsResponse = await api.get('/api/projects');
-          const projectsData = projectsResponse.data || projectsResponse || [];
-          setProjects(Array.isArray(projectsData) ? projectsData : []);
-        } catch {
-          console.warn('[Agenda] API projects non disponible, utilisation de données vides');
-          setProjects([]);
-        }
-
-        // Chargement des emails récents (API peut ne pas exister)
-        try {
-          const emailsResponse = await api.get('/api/emails?limit=100');
-          const emailsData = emailsResponse.data || emailsResponse || [];
-          setEmails(Array.isArray(emailsData) ? emailsData : []);
-        } catch {
-          console.warn('[Agenda] API emails non disponible, utilisation de données vides');
-          setEmails([]);
-        }
-      } catch (error) {
-        console.error('[Agenda] Erreur générale lors du chargement des données CRM:', error);
-        // Initialiser avec des tableaux vides pour éviter les erreurs
-        setClients([]);
-        setLeads([]);
-        setProjects([]);
-        setEmails([]);
-      }
+          const res = await api.get(url);
+          const data = res?.data || res || [];
+          return Array.isArray(data) ? data : [];
+        } catch { return []; }
+      };
+      const [c, l, p, e] = await Promise.all([
+        safeGet('/api/clients'),
+        safeGet('/api/leads'),
+        safeGet('/api/projects'),
+        safeGet('/api/emails?limit=100'),
+      ]);
+      setClients(c); setLeads(l); setProjects(p); setEmails(e);
     };
-
     loadCrmData();
   }, [api]);
 
-  const fullCalendarEvents = events.map(event => {
-    const hasLink = !!(event.linkedChantierId || event.linkedLeadId || event.linkedClientId);
-    // 🔗 Couleurs différentes pour les événements liés (bleu) vs normaux (vert)
-    const bgColor = hasLink ? '#3b82f6' : '#10b981';
-    const borderColor = hasLink ? '#2563eb' : '#059669';
-    const title = hasLink ? `🔗 ${event.title}` : event.title;
-    return {
-      id: event.id,
-      title,
-      start: event.startDate,
-      end: event.endDate,
-      allDay: event.allDay,
-      backgroundColor: bgColor,
-      borderColor,
-      classNames: hasLink ? ['cursor-pointer', 'event-linked'] : [],
-      extendedProps: { ...event }
-    };
-  });
+  // Séparer tâches et événements
+  const tasks = events.filter(e => e.type === 'tache');
+  const calendarEvents = events.filter(e => e.type !== 'tache');
+
+  // Préparer les événements pour FullCalendar
+  const fullCalendarEvents = events
+    .filter(e => {
+      if (e.type === 'tache') return showTasks;
+      if (e._source === 'chantier') return showChantier;
+      if (e._source === 'telnyx') return showCalls;
+      return showEvents;
+    })
+    .map(event => {
+      const isTask = event.type === 'tache';
+      const isChantier = event._source === 'chantier';
+      const isTelnyx = event._source === 'telnyx';
+      const hasLink = !!(event.linkedChantierId || event.linkedLeadId || event.linkedClientId);
+      const priority = extractPriority(event.notes);
+      const isCompleted = event.status === 'terminee' || event.status === 'COMPLETED';
+      
+      let bgColor: string;
+      let borderColor: string;
+      
+      if (isTask) {
+        if (isCompleted) {
+          bgColor = '#d9d9d9'; borderColor = '#bfbfbf';
+        } else {
+          const p = TASK_PRIORITIES.find(tp => tp.value === priority);
+          bgColor = p?.color || '#722ed1'; borderColor = p?.color || '#531dab';
+        }
+      } else if (isChantier) {
+        const chantierColor = event.chantierProductColor || event.chantierStatus?.color || '#e67e22';
+        bgColor = chantierColor; borderColor = chantierColor;
+      } else if (isTelnyx) {
+        bgColor = event.callDirection === 'outbound' ? '#3498db' : '#27ae60';
+        borderColor = event.callDirection === 'outbound' ? '#2980b9' : '#219a52';
+      } else if (hasLink) {
+        bgColor = '#3b82f6'; borderColor = '#2563eb';
+      } else {
+        bgColor = '#10b981'; borderColor = '#059669';
+      }
+
+      let prefix = '';
+      if (isTask) prefix = isCompleted ? '✅ ' : '☐ ';
+      else if (isChantier) prefix = '🏗️ ';
+      else if (isTelnyx) prefix = '';
+      else if (hasLink) prefix = '🔗 ';
+      
+      return {
+        id: event.id,
+        title: `${prefix}${event.title}`,
+        start: event.startDate,
+        end: event.endDate,
+        allDay: event.allDay,
+        backgroundColor: bgColor,
+        borderColor,
+        textColor: isCompleted ? '#8c8c8c' : '#fff',
+        editable: !isChantier && !isTelnyx,
+        classNames: [
+          ...(hasLink ? ['cursor-pointer', 'event-linked'] : []),
+          ...(isTask ? ['event-task'] : []),
+          ...(isCompleted ? ['event-completed'] : []),
+          ...(isChantier ? ['event-chantier'] : []),
+          ...(isTelnyx ? ['event-telnyx'] : []),
+        ],
+        extendedProps: { ...event }
+      };
+    });
+
+  // Toggle complétion d'une tâche
+  const handleToggleTask = async (task: CalendarEvent) => {
+    try {
+      const newStatus = task.status === 'terminee' ? 'a-faire' : 'terminee';
+      await api.put(`/api/calendar/events/${task.id}`, { status: newStatus });
+      message.success(newStatus === 'terminee' ? 'Tâche terminée !' : 'Tâche rouverte');
+      fetchEvents();
+    } catch (error) {
+      console.error('[Agenda] Erreur toggle tâche:', error);
+      message.error('Erreur lors de la mise à jour');
+    }
+  };
 
   const handleEventSubmit = async (values: EventFormValues) => {
     try {
       const [start, end] = values.dateRange;
+      const isTask = values.type === 'tache';
       
-      const eventData = {
+      const eventData: Record<string, unknown> = {
         title: values.title,
         description: values.description,
-        notes: values.notes,
+        notes: isTask ? encodePriority(values.notes, values.priority) : values.notes,
         startDate: start.toISOString(),
         endDate: end.toISOString(),
         allDay: values.allDay || false,
-        type: values.type || 'event',
-        status: values.status || 'confirmé',
+        type: values.type || 'rendez-vous',
+        status: isTask ? (values.status || 'a-faire') : (values.status || 'confirmé'),
         location: values.location,
-        createMeetLink: values.createMeetLink || false,
-        // 🔗 Liaisons CRM
+        // 🔗 Liaisons
         linkedClientId: values.linkedClientId || null,
         linkedLeadId: values.linkedLeadId || null,
         linkedProjectId: values.linkedProjectId || null,
@@ -231,10 +300,10 @@ export default function AgendaPage() {
 
       if (editingEvent) {
         await api.put(`/api/calendar/events/${editingEvent.id}`, eventData);
-        message.success('Événement modifié avec succès');
+        message.success(isTask ? 'Tâche modifiée' : 'Événement modifié');
       } else {
         await api.post('/api/calendar/events', eventData);
-        message.success('Événement créé avec succès');
+        message.success(isTask ? 'Tâche créée' : 'Événement créé');
       }
 
       setModalVisible(false);
@@ -250,8 +319,9 @@ export default function AgendaPage() {
   const handleEventDelete = async (eventId: string) => {
     try {
       await api.delete(`/api/calendar/events/${eventId}`);
-      message.success('Événement supprimé avec succès');
+      message.success('Supprimé avec succès');
       setModalVisible(false);
+      setEditingEvent(null);
       fetchEvents();
     } catch (error) {
       console.error('[Agenda] Erreur lors de la suppression:', error);
@@ -261,103 +331,565 @@ export default function AgendaPage() {
 
   const handleEventClick = (clickInfo: { event: { id: string, extendedProps: CalendarEvent } }) => {
     const event = clickInfo.event.extendedProps;
-    if (event) {
-      setEditingEvent(event);
-      form.setFieldsValue({
-        title: event.title,
-        description: event.description,
-        notes: event.notes,
-        dateRange: [
-          event.startDate ? dayjs(event.startDate) : null,
-          event.endDate ? dayjs(event.endDate) : null
-        ],
-        allDay: event.allDay,
-        type: event.type || 'rendez-vous',
-        status: event.status || 'confirmé',
-        location: event.location,
-        createMeetLink: false,
-        // 🔗 Liaisons CRM
-        linkedClientId: event.linkedClientId,
-        linkedLeadId: event.linkedLeadId,
-        linkedProjectId: event.linkedProjectId,
-        linkedEmailId: event.linkedEmailId,
+    if (!event) return;
+    
+    // Pour les événements chantier et appels Telnyx : afficher une modale d'info (lecture seule)
+    if (event._source === 'chantier') {
+      Modal.info({
+        title: `🏗️ ${event.title}`,
+        width: 500,
+        content: (
+          <div style={{ marginTop: 12 }}>
+            {event.chantierClientName && <p><strong>Client :</strong> {event.chantierClientName}</p>}
+            {event.chantierSiteAddress && <p><strong>Adresse :</strong> {event.chantierSiteAddress}</p>}
+            {event.chantierProduct && <p><strong>Produit :</strong> {event.chantierProduct}</p>}
+            {event.chantierStatus && <p><strong>Statut :</strong> <Tag color={event.chantierStatus.color}>{event.chantierStatus.name}</Tag></p>}
+            {event.chantierResponsable && <p><strong>Responsable :</strong> {event.chantierResponsable.firstName} {event.chantierResponsable.lastName}</p>}
+            {event.chantierEventType && <p><strong>Type :</strong> {event.chantierEventType}</p>}
+            {event.problemNote && <p><strong>Problème :</strong> <Text type="danger">{event.problemNote}</Text></p>}
+            {event.location && <p><strong>Lieu :</strong> {event.location}</p>}
+            <p><strong>Date :</strong> {dayjs(event.startDate).format('DD/MM/YYYY HH:mm')}</p>
+          </div>
+        ),
       });
-      setModalVisible(true);
+      return;
     }
+    
+    if (event._source === 'telnyx') {
+      const durationMin = event.callDuration ? Math.ceil(event.callDuration / 60) : 0;
+      Modal.info({
+        title: `📞 Appel ${event.callDirection === 'outbound' ? 'sortant' : 'entrant'}`,
+        width: 450,
+        content: (
+          <div style={{ marginTop: 12 }}>
+            {event.leadName && <p><strong>Contact :</strong> {event.leadName}</p>}
+            <p><strong>De :</strong> {event.callFrom}</p>
+            <p><strong>Vers :</strong> {event.callTo}</p>
+            <p><strong>Statut :</strong> {event.callStatus}</p>
+            {durationMin > 0 && <p><strong>Durée :</strong> {durationMin} min</p>}
+            <p><strong>Date :</strong> {dayjs(event.startDate).format('DD/MM/YYYY HH:mm')}</p>
+            {event.callRecordingUrl && (
+              <p><a href={event.callRecordingUrl} target="_blank" rel="noopener noreferrer">🎙️ Écouter l'enregistrement</a></p>
+            )}
+          </div>
+        ),
+      });
+      return;
+    }
+
+    // Pour les événements normaux : ouvrir le formulaire d'édition
+    const isTask = event.type === 'tache';
+    setEditingEvent(event);
+    setModalMode(isTask ? 'task' : 'event');
+    const priority = extractPriority(event.notes);
+    const cleanNotes = (event.notes || '').replace(/\[priority:\w+\]\s*/g, '').trim();
+    form.setFieldsValue({
+      title: event.title,
+      description: event.description,
+      notes: cleanNotes,
+      dateRange: [
+        event.startDate ? dayjs(event.startDate) : null,
+        event.endDate ? dayjs(event.endDate) : null
+      ],
+      allDay: event.allDay,
+      type: event.type || 'rendez-vous',
+      status: event.status || (isTask ? 'a-faire' : 'confirmé'),
+      location: event.location,
+      priority: priority || 'normale',
+      linkedClientId: event.linkedClientId,
+      linkedLeadId: event.linkedLeadId,
+      linkedProjectId: event.linkedProjectId,
+      linkedEmailId: event.linkedEmailId,
+    });
+    setModalVisible(true);
   };
 
   const handleDateSelect = (selectInfo: { start: Date; end: Date; allDay: boolean }) => {
     setEditingEvent(null);
+    setModalMode('event');
+    form.resetFields();
     form.setFieldsValue({
       dateRange: [dayjs(selectInfo.start), dayjs(selectInfo.end)],
       allDay: selectInfo.allDay,
       type: 'rendez-vous',
       status: 'confirmé',
-      createMeetLink: true,
+      priority: 'normale',
     });
     setModalVisible(true);
   };
 
-  return (
-    <div className="agenda-page p-6">
-      <Card>
-        <div className="agenda-header flex justify-between items-center mb-4">
-          <Title level={2}>
-            <GoogleOutlined style={{ color: '#3b82f6' }} /> Agenda
-          </Title>
-          
-          <Space>
-            <Button 
-              icon={<SyncOutlined />} 
-              onClick={handleSyncWithGoogle} 
-              loading={syncing}
-            >
-              Synchroniser avec Google
-            </Button>
+  const openNewTask = () => {
+    setEditingEvent(null);
+    setModalMode('task');
+    form.resetFields();
+    form.setFieldsValue({
+      type: 'tache',
+      status: 'a-faire',
+      priority: 'normale',
+      allDay: true,
+      dateRange: [dayjs(), dayjs().add(1, 'day')],
+    });
+    setModalVisible(true);
+  };
 
-            <Button 
-              type="primary" 
-              icon={<PlusOutlined />}
-              onClick={() => handleDateSelect({ start: new Date(), end: new Date(Date.now() + 60 * 60 * 1000), allDay: false })}
-            >
-              Nouvel événement
-            </Button>
-          </Space>
-        </div>
+  const openNewEvent = () => {
+    setEditingEvent(null);
+    setModalMode('event');
+    form.resetFields();
+    form.setFieldsValue({
+      type: 'rendez-vous',
+      status: 'confirmé',
+      allDay: false,
+      dateRange: [dayjs(), dayjs().add(1, 'hour')],
+    });
+    setModalVisible(true);
+  };
 
-        <div className="agenda-calendar">
-          <FullCalendar
-            ref={calendarRef}
-            plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
-            headerToolbar={{
-              left: 'prev,next today',
-              center: 'title',
-              right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek'
-            }}
-            initialView="dayGridMonth"
-            locale={frLocale}
-            selectable={true}
-            selectMirror={true}
-            dayMaxEvents={true}
-            weekends={true}
-            height="auto"
-            events={fullCalendarEvents}
-            select={handleDateSelect}
-            eventClick={handleEventClick}
-            loading={setLoading}
-            datesSet={(dateInfo) => fetchEvents(dateInfo.view.calendar)}
-            eventDisplay="block"
-            eventTimeFormat={{
-              hour: '2-digit',
-              minute: '2-digit',
-              meridiem: false
-            }}
+  const watchedType = Form.useWatch('type', form);
+  const isTaskMode = watchedType === 'tache' || modalMode === 'task';
+
+  // Panneau latéral des tâches
+  const pendingTasks = tasks.filter(t => t.status !== 'terminee' && t.status !== 'annulee');
+  const completedTasks = tasks.filter(t => t.status === 'terminee');
+
+  const renderTaskItem = (task: CalendarEvent) => {
+    const priority = extractPriority(task.notes);
+    const pInfo = TASK_PRIORITIES.find(p => p.value === priority);
+    const isCompleted = task.status === 'terminee';
+    const isOverdue = !isCompleted && dayjs(task.endDate || task.startDate).isBefore(dayjs(), 'day');
+
+    return (
+      <List.Item
+        key={task.id}
+        style={{ padding: '8px 12px', cursor: 'pointer', opacity: isCompleted ? 0.6 : 1 }}
+        onClick={() => handleEventClick({ event: { id: task.id, extendedProps: task } })}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
+          <Checkbox
+            checked={isCompleted}
+            onClick={(e) => { e.stopPropagation(); handleToggleTask(task); }}
           />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Text
+              delete={isCompleted}
+              style={{ display: 'block', fontSize: 13 }}
+              ellipsis
+            >
+              {task.title}
+            </Text>
+            <Space size={4} style={{ marginTop: 2 }}>
+              {pInfo && <Tag color={pInfo.color} style={{ fontSize: 10, lineHeight: '16px', margin: 0 }}>{pInfo.label}</Tag>}
+              {isOverdue && <Tag color="red" style={{ fontSize: 10, lineHeight: '16px', margin: 0 }}>⏰ En retard</Tag>}
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                {dayjs(task.endDate || task.startDate).format('DD/MM')}
+              </Text>
+            </Space>
+          </div>
         </div>
+      </List.Item>
+    );
+  };
+
+  // Composant liste des tâches réutilisé desktop + mobile
+  const TaskListPanel = ({ maxHeight }: { maxHeight?: string }) => (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <Text strong style={{ fontSize: 14 }}>
+          <CheckSquareOutlined style={{ marginRight: 4, color: '#722ed1' }} />
+          Tâches
+          {pendingTasks.length > 0 && (
+            <Badge count={pendingTasks.length} style={{ marginLeft: 8, backgroundColor: '#722ed1' }} />
+          )}
+        </Text>
+        <Button type="link" size="small" icon={<PlusOutlined />} onClick={openNewTask}>
+          Ajouter
+        </Button>
+      </div>
+
+      {pendingTasks.length === 0 && completedTasks.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '40px 0', color: '#bfbfbf' }}>
+          <CheckSquareOutlined style={{ fontSize: 32, marginBottom: 8, display: 'block' }} />
+          <Text type="secondary">Aucune tâche</Text>
+        </div>
+      ) : (
+        <div style={{ maxHeight: maxHeight || 'calc(100vh - 300px)', overflowY: 'auto' }}>
+          {pendingTasks.length > 0 && (
+            <List
+              size="small"
+              dataSource={pendingTasks}
+              renderItem={renderTaskItem}
+              style={{ marginBottom: 8 }}
+            />
+          )}
+          {completedTasks.length > 0 && (
+            <>
+              <Text type="secondary" style={{ fontSize: 11, display: 'block', margin: '8px 0 4px 12px' }}>
+                Terminées ({completedTasks.length})
+              </Text>
+              <List
+                size="small"
+                dataSource={completedTasks.slice(0, 5)}
+                renderItem={renderTaskItem}
+              />
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="agenda-page" style={{ padding: isMobile ? 0 : 24 }}>
+      {/* === MOBILE CSS FullCalendar === */}
+      {isMobile && (
+        <style>{`
+          .agenda-page .fc { font-size: 12px; }
+          .agenda-page .fc .fc-toolbar { padding: 6px 8px; margin-bottom: 0 !important; gap: 4px; }
+          .agenda-page .fc .fc-toolbar-title { font-size: 14px !important; font-weight: 600; }
+          .agenda-page .fc .fc-button { padding: 4px 8px; font-size: 12px; height: 28px; }
+          .agenda-page .fc .fc-button-group .fc-button { padding: 4px 6px; }
+          .agenda-page .fc .fc-daygrid-day { min-height: 60px; }
+          .agenda-page .fc .fc-daygrid-day-number { font-size: 12px; padding: 2px 4px; }
+          .agenda-page .fc .fc-daygrid-event { font-size: 11px; padding: 1px 3px; margin: 0 1px 1px; border-radius: 3px; }
+          .agenda-page .fc .fc-list-event { font-size: 13px; }
+          .agenda-page .fc .fc-list-event-time { font-size: 12px; }
+          .agenda-page .fc .fc-list-day-cushion { padding: 4px 8px; font-size: 13px; }
+          .agenda-page .fc .fc-col-header-cell { font-size: 11px; padding: 4px 0; }
+          .agenda-page .fc .fc-scrollgrid { border: none; }
+          .agenda-page .fc .fc-more-link { font-size: 11px; }
+          .agenda-page .mf { display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; height: 26px; border-radius: 13px; border: 1.5px solid #e0e0e0; cursor: pointer; transition: all 0.15s; background: #fff; font-size: 11px; font-weight: 600; white-space: nowrap; color: #666; }
+          .agenda-page .mf.on { color: #fff; border-color: transparent; }
+          .agenda-page .mf.off { opacity: 0.35; }
+          .agenda-page .mobile-segment { padding: 8px 12px 0; }
+          .agenda-page .mobile-segment .ant-segmented { border-radius: 8px; }
+          .agenda-page .mobile-segment .ant-segmented-item { min-height: 36px; font-size: 13px; }
+        `}</style>
+      )}
+
+      <Card
+        bodyStyle={{ padding: isMobile ? 0 : 24 }}
+        style={{ borderRadius: isMobile ? 0 : undefined, border: isMobile ? 'none' : undefined }}
+      >
+        {/* === HEADER === */}
+        {isMobile ? (
+          // ------- MOBILE: single-line header with filters -------
+          <>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              height: 48,
+              padding: '0 10px',
+              borderBottom: '1px solid #f0f0f0',
+              background: '#fff',
+              position: 'sticky' as const,
+              top: 0,
+              zIndex: 10,
+              gap: 8,
+            }}>
+              {/* Left: title */}
+              <CalendarOutlined style={{ color: '#6C5CE7', fontSize: 16, flexShrink: 0 }} />
+              <span style={{ fontWeight: 700, fontSize: 15, flexShrink: 0 }}>Agenda</span>
+
+              {/* Center: filter pills */}
+              <div style={{ flex: 1, display: 'flex', justifyContent: 'center', gap: 4 }}>
+                <div
+                  className={`mf ${showEvents ? 'on' : 'off'}`}
+                  style={showEvents ? { background: '#10b981' } : {}}
+                  onClick={() => setShowEvents(!showEvents)}
+                >
+                  <CalendarOutlined style={{ fontSize: 11 }} />RDV
+                </div>
+                <div
+                  className={`mf ${showTasks ? 'on' : 'off'}`}
+                  style={showTasks ? { background: '#722ed1' } : {}}
+                  onClick={() => setShowTasks(!showTasks)}
+                >
+                  <CheckSquareOutlined style={{ fontSize: 11 }} />Tâches
+                </div>
+                <div
+                  className={`mf ${showChantier ? 'on' : 'off'}`}
+                  style={showChantier ? { background: '#e67e22' } : {}}
+                  onClick={() => setShowChantier(!showChantier)}
+                >
+                  <ToolOutlined style={{ fontSize: 11 }} />Sites
+                </div>
+                <div
+                  className={`mf ${showCalls ? 'on' : 'off'}`}
+                  style={showCalls ? { background: '#3498db' } : {}}
+                  onClick={() => setShowCalls(!showCalls)}
+                >
+                  <PhoneOutlined style={{ fontSize: 11 }} />Appels
+                </div>
+              </div>
+
+              {/* Right: tasks badge + solid add button */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                <div
+                  onClick={() => setTaskDrawerOpen(true)}
+                  style={{ position: 'relative', cursor: 'pointer', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <CheckSquareOutlined style={{ fontSize: 18, color: '#722ed1' }} />
+                  {pendingTasks.length > 0 && (
+                    <Badge
+                      count={pendingTasks.length}
+                      size="small"
+                      style={{ backgroundColor: '#722ed1', position: 'absolute', top: -4, right: -6, fontSize: 10 }}
+                    />
+                  )}
+                </div>
+                <Dropdown
+                  menu={{
+                    items: [
+                      { key: 'event', icon: <CalendarOutlined />, label: 'Événement', onClick: openNewEvent },
+                      { key: 'task', icon: <CheckSquareOutlined />, label: 'Tâche', onClick: openNewTask },
+                    ],
+                  }}
+                  trigger={['click']}
+                >
+                  <div style={{
+                    width: 32, height: 32, borderRadius: 8,
+                    background: '#1677ff', color: '#fff',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer', fontWeight: 700, fontSize: 18,
+                  }}>
+                    <PlusOutlined />
+                  </div>
+                </Dropdown>
+              </div>
+            </div>
+
+            {/* ------- MOBILE TABS ------- */}
+            <div className="mobile-segment">
+              <Segmented
+                block
+                value={mobileView}
+                onChange={(val) => setMobileView(val as 'calendar' | 'tasks')}
+                options={[
+                  { value: 'calendar', icon: <CalendarOutlined />, label: 'Calendrier' },
+                  { value: 'tasks', icon: <CheckSquareOutlined />, label: `Tâches (${pendingTasks.length})` },
+                ]}
+                style={{ marginBottom: 0 }}
+              />
+            </div>
+          </>
+        ) : (
+          // ------- DESKTOP HEADER -------
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 16,
+            flexWrap: 'wrap',
+            gap: 8,
+          }}>
+            <Title level={2} style={{ margin: 0 }}>
+              <CalendarOutlined style={{ color: '#6C5CE7', marginRight: 8 }} />
+              Agenda
+            </Title>
+            
+            <Space size={8} wrap>
+              <Tooltip title="Afficher/masquer les événements">
+                <Button
+                  icon={<CalendarOutlined />}
+                  type={showEvents ? 'primary' : 'default'}
+                  onClick={() => setShowEvents(!showEvents)}
+                  size="small"
+                />
+              </Tooltip>
+              <Tooltip title="Afficher/masquer les tâches">
+                <Button
+                  icon={<CheckSquareOutlined />}
+                  type={showTasks ? 'primary' : 'default'}
+                  style={showTasks ? { background: '#722ed1', borderColor: '#722ed1' } : {}}
+                  onClick={() => setShowTasks(!showTasks)}
+                  size="small"
+                />
+              </Tooltip>
+              <Tooltip title="Afficher/masquer les chantiers">
+                <Button
+                  type={showChantier ? 'primary' : 'default'}
+                  style={showChantier ? { background: '#e67e22', borderColor: '#e67e22' } : {}}
+                  onClick={() => setShowChantier(!showChantier)}
+                  size="small"
+                >
+                  🏗️
+                </Button>
+              </Tooltip>
+              <Tooltip title="Afficher/masquer les appels">
+                <Button
+                  type={showCalls ? 'primary' : 'default'}
+                  style={showCalls ? { background: '#3498db', borderColor: '#3498db' } : {}}
+                  onClick={() => setShowCalls(!showCalls)}
+                  size="small"
+                >
+                  📞
+                </Button>
+              </Tooltip>
+
+              <Dropdown
+                menu={{
+                  items: [
+                    { key: 'event', icon: <CalendarOutlined />, label: 'Événement', onClick: openNewEvent },
+                    { key: 'task', icon: <CheckSquareOutlined />, label: 'Tâche', onClick: openNewTask },
+                  ],
+                }}
+              >
+                <Button type="primary" icon={<PlusOutlined />} size="middle">
+                  Nouveau
+                </Button>
+              </Dropdown>
+            </Space>
+          </div>
+        )}
+
+        {/* === CONTENU PRINCIPAL === */}
+        {isMobile ? (
+          // Mobile layout
+          <>
+            {mobileView === 'calendar' && (
+              <div style={{ padding: '8px 0 0' }}>
+                <FullCalendar
+                  ref={calendarRef}
+                  plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
+                  headerToolbar={{
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'listWeek,dayGridMonth'
+                  }}
+                  initialView="listWeek"
+                  locale={frLocale}
+                  selectable={true}
+                  selectMirror={true}
+                  dayMaxEvents={3}
+                  weekends={true}
+                  height="calc(100vh - 240px)"
+                  events={fullCalendarEvents}
+                  select={handleDateSelect}
+                  eventClick={handleEventClick}
+                  loading={setLoading}
+                  datesSet={(dateInfo) => fetchEvents(dateInfo.view.calendar)}
+                  eventDisplay="block"
+                  editable={false}
+                  eventTimeFormat={{
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    meridiem: false
+                  }}
+                  titleFormat={{ year: 'numeric', month: 'short' }}
+                  dayHeaderFormat={{ weekday: 'narrow' }}
+                />
+              </div>
+            )}
+            {mobileView === 'tasks' && (
+              <div style={{ padding: '12px 12px 0' }}>
+                <TaskListPanel maxHeight="calc(100vh - 240px)" />
+              </div>
+            )}
+          </>
+        ) : (
+          // Desktop layout
+          <div style={{ display: 'flex', gap: 16 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <FullCalendar
+                ref={calendarRef}
+                plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
+                headerToolbar={{
+                  left: 'prev,next today',
+                  center: 'title',
+                  right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek'
+                }}
+                initialView="dayGridMonth"
+                locale={frLocale}
+                selectable={true}
+                selectMirror={true}
+                dayMaxEvents={true}
+                weekends={true}
+                height="auto"
+                events={fullCalendarEvents}
+                select={handleDateSelect}
+                eventClick={handleEventClick}
+                loading={setLoading}
+                datesSet={(dateInfo) => fetchEvents(dateInfo.view.calendar)}
+                eventDisplay="block"
+                editable={true}
+                eventDrop={async (info) => {
+                  try {
+                    await api.put(`/api/calendar/events/${info.event.id}`, {
+                      startDate: info.event.start?.toISOString(),
+                      endDate: info.event.end?.toISOString() || info.event.start?.toISOString(),
+                      allDay: info.event.allDay,
+                    });
+                    message.success('Déplacé');
+                    fetchEvents();
+                  } catch {
+                    info.revert();
+                    message.error('Erreur lors du déplacement');
+                  }
+                }}
+                eventResize={async (info) => {
+                  try {
+                    await api.put(`/api/calendar/events/${info.event.id}`, {
+                      startDate: info.event.start?.toISOString(),
+                      endDate: info.event.end?.toISOString(),
+                    });
+                    fetchEvents();
+                  } catch {
+                    info.revert();
+                    message.error('Erreur lors du redimensionnement');
+                  }
+                }}
+                eventTimeFormat={{
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  meridiem: false
+                }}
+              />
+            </div>
+
+            {/* Panneau latéral des tâches — desktop */}
+            <div style={{ width: 280, flexShrink: 0, borderLeft: '1px solid #f0f0f0', paddingLeft: 16 }}>
+              <TaskListPanel />
+            </div>
+          </div>
+        )}
       </Card>
 
+      {/* Drawer tâches mobile */}
+      {isMobile && (
+        <Drawer
+          title={
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Space>
+                <CheckSquareOutlined style={{ color: '#722ed1', fontSize: 16 }} />
+                <span style={{ fontWeight: 600, fontSize: 15 }}>Tâches</span>
+                {pendingTasks.length > 0 && <Badge count={pendingTasks.length} style={{ backgroundColor: '#722ed1' }} />}
+              </Space>
+              <Button type="primary" size="small" icon={<PlusOutlined />} onClick={openNewTask}
+                style={{ borderRadius: 8, background: '#722ed1', borderColor: '#722ed1' }}>
+                Ajouter
+              </Button>
+            </div>
+          }
+          placement="bottom"
+          open={taskDrawerOpen}
+          onClose={() => setTaskDrawerOpen(false)}
+          height="75vh"
+          styles={{ body: { padding: '8px 12px' }, header: { padding: '12px 16px' } }}
+          closable={false}
+        >
+          <TaskListPanel maxHeight="calc(75vh - 80px)" />
+        </Drawer>
+      )}
+
+      {/* Modal création/édition — responsive */}
       <Modal
-        title={editingEvent ? 'Modifier l\'événement' : 'Nouvel événement'}
+        title={
+          <span style={{ fontSize: isMobile ? 15 : 16 }}>
+            {editingEvent
+              ? (isTaskMode ? '✏️ Modifier la tâche' : '✏️ Modifier l\'événement')
+              : (isTaskMode ? '✅ Nouvelle tâche' : '📅 Nouvel événement')}
+          </span>
+        }
         open={modalVisible}
         onCancel={() => {
           setModalVisible(false);
@@ -365,159 +897,194 @@ export default function AgendaPage() {
           form.resetFields();
         }}
         footer={null}
-        width={600}
+        width={isMobile ? '100%' : 600}
+        style={isMobile ? { top: 0, margin: 0, maxWidth: '100vw', paddingBottom: 0 } : undefined}
+        styles={isMobile ? { body: { maxHeight: 'calc(100vh - 100px)', overflowY: 'auto', padding: '12px 16px' } } : undefined}
       >
         <Form
           form={form}
           layout="vertical"
           onFinish={handleEventSubmit}
-          initialValues={{ type: 'rendez-vous', status: 'confirmé', createMeetLink: true }}
+          initialValues={{ type: 'rendez-vous', status: 'confirmé', priority: 'normale' }}
+          size={isMobile ? 'middle' : undefined}
         >
           <Form.Item name="title" label="Titre" rules={[{ required: true, message: 'Le titre est obligatoire' }]}>
-            <Input placeholder="Titre de l'événement" />
+            <Input placeholder={isTaskMode ? 'Titre de la tâche' : "Titre de l'événement"} />
           </Form.Item>
 
-          <Form.Item name="description" label="Description publique">
-            <TextArea rows={2} placeholder="Description visible par tous les participants" />
+          <Form.Item name="description" label="Description">
+            <TextArea rows={2} placeholder="Description..." />
           </Form.Item>
 
-          <Form.Item name="notes" label="Notes privées">
-            <TextArea rows={2} placeholder="Notes personnelles (visibles uniquement par vous)" />
-          </Form.Item>
-
-          <Row gutter={16}>
-            <Col span={18}>
-              <Form.Item name="dateRange" label="Date et heure" rules={[{ required: true, message: 'La date est obligatoire' }]}>
-                <RangePicker showTime format="DD/MM/YYYY HH:mm" placeholder={['Début', 'Fin']} style={{ width: '100%' }} />
+          <Row gutter={[12, 0]}>
+            <Col xs={24} sm={18}>
+              <Form.Item name="dateRange" label={isTaskMode ? 'Échéance' : 'Date et heure'} rules={[{ required: true, message: 'La date est obligatoire' }]}>
+                <RangePicker
+                  showTime={!isTaskMode}
+                  format={isTaskMode ? 'DD/MM/YYYY' : 'DD/MM/YYYY HH:mm'}
+                  placeholder={['Début', 'Fin']}
+                  style={{ width: '100%' }}
+                  inputReadOnly={isMobile}
+                />
               </Form.Item>
             </Col>
-            <Col span={6}>
+            <Col xs={12} sm={6}>
               <Form.Item name="allDay" label="Journée" valuePropName="checked">
                 <Switch />
               </Form.Item>
             </Col>
           </Row>
 
-          {/* 🔗 LIAISONS CRM */}
-          <div style={{ background: '#f6f8fa', padding: '16px', borderRadius: '6px', marginBottom: '16px' }}>
-            <Typography.Text strong style={{ color: '#1890ff', marginBottom: '12px', display: 'block' }}>
-              🔗 Liaisons CRM
-            </Typography.Text>
-            
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item name="linkedClientId" label="Client">
-                  <Select placeholder="Sélectionner un client..." allowClear showSearch>
-                    {(clients && Array.isArray(clients) ? clients : []).map((client) => (
-                      <Option key={client.id} value={client.id}>
-                        {client.name || `${client.firstName} ${client.lastName}`}
-                      </Option>
+          <Row gutter={[12, 0]}>
+            <Col xs={isTaskMode ? 24 : 12} sm={isTaskMode ? 8 : 12}>
+              <Form.Item name="type" label="Type" rules={[{ required: true }]}>
+                <Select placeholder="Type">
+                  <Option value="tache">✅ Tâche</Option>
+                  <Option value="rendez-vous">🤝 Rendez-vous</Option>
+                  <Option value="reunion">👥 Réunion</Option>
+                  <Option value="demo">💻 Démo</Option>
+                  <Option value="formation">📚 Formation</Option>
+                  <Option value="prospection">📞 Prospection</Option>
+                  <Option value="suivi">📋 Suivi</Option>
+                  <Option value="livraison">🚚 Livraison</Option>
+                  <Option value="maintenance">🔧 Maintenance</Option>
+                  <Option value="personnel">👤 Personnel</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            {isTaskMode && (
+              <Col xs={12} sm={8}>
+                <Form.Item name="priority" label="Priorité">
+                  <Select placeholder="Priorité">
+                    {TASK_PRIORITIES.map(p => (
+                      <Option key={p.value} value={p.value}>{p.label}</Option>
                     ))}
                   </Select>
                 </Form.Item>
               </Col>
-              <Col span={12}>
+            )}
+            <Col xs={isTaskMode ? 12 : 12} sm={isTaskMode ? 8 : 12}>
+              <Form.Item name="status" label="Statut">
+                <Select placeholder="Statut">
+                  {isTaskMode ? (
+                    TASK_STATUSES.map(s => <Option key={s.value} value={s.value}>{s.label}</Option>)
+                  ) : (
+                    <>
+                      <Option value="confirmé">✅ Confirmé</Option>
+                      <Option value="en attente">⏳ En attente</Option>
+                      <Option value="tentative">❓ Tentative</Option>
+                      <Option value="annulé">❌ Annulé</Option>
+                      <Option value="reporte">📅 Reporté</Option>
+                    </>
+                  )}
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Form.Item name="notes" label="Notes">
+            <TextArea rows={2} placeholder="Notes personnelles..." />
+          </Form.Item>
+
+          {!isTaskMode && (
+            <Form.Item name="location" label="Lieu / Localisation">
+              <Input placeholder="Adresse, bureau, lien de visioconférence..." />
+            </Form.Item>
+          )}
+
+          {/* 🔗 Liaisons */}
+          <div style={{ background: '#f6f8fa', padding: isMobile ? 12 : 16, borderRadius: 6, marginBottom: 16 }}>
+            <Text strong style={{ color: '#1890ff', marginBottom: 12, display: 'block' }}>
+              🔗 Liaisons
+            </Text>
+            <Row gutter={[12, 0]}>
+              <Col xs={24} sm={12}>
+                <Form.Item name="linkedClientId" label="Client">
+                  <Select placeholder="Client..." allowClear showSearch filterOption={(input, option) =>
+                    (option?.children as unknown as string)?.toLowerCase().includes(input.toLowerCase()) ?? false
+                  }>
+                    {clients.map(c => (
+                      <Option key={c.id} value={c.id}>{c.name || `${c.firstName} ${c.lastName}`}</Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12}>
                 <Form.Item name="linkedLeadId" label="Lead/Prospect">
-                  <Select placeholder="Sélectionner un prospect..." allowClear showSearch>
-                    {(leads && Array.isArray(leads) ? leads : []).map((lead) => (
-                      <Option key={lead.id} value={lead.id}>
-                        {lead.firstName} {lead.lastName} - {lead.email}
-                      </Option>
+                  <Select placeholder="Prospect..." allowClear showSearch filterOption={(input, option) =>
+                    (option?.children as unknown as string)?.toLowerCase().includes(input.toLowerCase()) ?? false
+                  }>
+                    {leads.map(l => (
+                      <Option key={l.id} value={l.id}>{l.firstName} {l.lastName} - {l.email}</Option>
                     ))}
                   </Select>
                 </Form.Item>
               </Col>
             </Row>
-            
-            <Row gutter={16}>
-              <Col span={12}>
+            <Row gutter={[12, 0]}>
+              <Col xs={24} sm={12}>
                 <Form.Item name="linkedProjectId" label="Projet">
-                  <Select placeholder="Sélectionner un projet..." allowClear showSearch>
-                    {(projects && Array.isArray(projects) ? projects : []).map((project) => (
-                      <Option key={project.id} value={project.id}>
-                        {project.name} - {project.clientName}
-                      </Option>
+                  <Select placeholder="Projet..." allowClear showSearch filterOption={(input, option) =>
+                    (option?.children as unknown as string)?.toLowerCase().includes(input.toLowerCase()) ?? false
+                  }>
+                    {projects.map(p => (
+                      <Option key={p.id} value={p.id}>{p.name} - {p.clientName}</Option>
                     ))}
                   </Select>
                 </Form.Item>
               </Col>
-              <Col span={12}>
+              <Col xs={24} sm={12}>
                 <Form.Item name="linkedEmailId" label="Email lié">
-                  <Select placeholder="Lier à un email..." allowClear showSearch>
-                    {(emails && Array.isArray(emails) ? emails : []).map((email) => (
-                      <Option key={email.id} value={email.id}>
-                        {email.subject?.substring(0, 50)}... - {email.from}
-                      </Option>
+                  <Select placeholder="Email..." allowClear showSearch filterOption={(input, option) =>
+                    (option?.children as unknown as string)?.toLowerCase().includes(input.toLowerCase()) ?? false
+                  }>
+                    {emails.map(e => (
+                      <Option key={e.id} value={e.id}>{e.subject?.substring(0, 50)}... - {e.from}</Option>
                     ))}
                   </Select>
                 </Form.Item>
               </Col>
             </Row>
           </div>
-          
-          <Form.Item name="location" label="Lieu / Localisation">
-            <Input placeholder="Adresse, bureau, lien de visioconférence..." />
-          </Form.Item>
 
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name="type" label="Type d'événement" rules={[{ required: true, message: 'Le type est obligatoire' }]}>
-                <Select placeholder="Sélectionner un type">
-                  <Option value="rendez-vous">🤝 Rendez-vous client</Option>
-                  <Option value="reunion">👥 Réunion équipe</Option>
-                  <Option value="demo">💻 Démonstration produit</Option>
-                  <Option value="formation">📚 Formation</Option>
-                  <Option value="prospection">📞 Appel prospection</Option>
-                  <Option value="suivi">📋 Suivi projet</Option>
-                  <Option value="livraison">🚚 Livraison/installation</Option>
-                  <Option value="maintenance">🔧 Maintenance</Option>
-                  <Option value="personnel">👤 Événement personnel</Option>
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="status" label="Statut">
-                <Select placeholder="Statut de l'événement">
-                  <Option value="confirmé">✅ Confirmé</Option>
-                  <Option value="en attente">⏳ En attente confirmation</Option>
-                  <Option value="tentative">❓ Tentative</Option>
-                  <Option value="annulé">❌ Annulé</Option>
-                  <Option value="reporte">📅 Reporté</Option>
-                </Select>
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Form.Item name="createMeetLink" label="🎥 Ajouter un lien de visioconférence Google Meet" valuePropName="checked">
-            <Switch />
-          </Form.Item>
-          
-          {editingEvent?.meetingLink && (
-            <Form.Item label="Lien Google Meet">
-              <a href={editingEvent.meetingLink} target="_blank" rel="noopener noreferrer">{editingEvent.meetingLink}</a>
-            </Form.Item>
-          )}
-
-          <Form.Item>
-            <Space>
-              <Button type="primary" htmlType="submit">
-                {editingEvent ? 'Enregistrer les modifications' : 'Créer l\'événement'}
-              </Button>
-              {editingEvent && (
-                <Button danger onClick={() => Modal.confirm({
-                  title: 'Supprimer l\'événement',
-                  content: 'Êtes-vous sûr de vouloir supprimer cet événement ? Cette action est irréversible.',
-                  okText: 'Supprimer',
-                  cancelText: 'Annuler',
-                  onOk: () => handleEventDelete(editingEvent.id)
-                })}>
-                  Supprimer
+          <Form.Item style={{ marginBottom: 0 }}>
+            {isMobile ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <Button type="primary" htmlType="submit" block size="large" style={{ borderRadius: 8, height: 44 }}>
+                  {editingEvent ? 'Enregistrer' : (isTaskMode ? 'Créer la tâche' : 'Créer l\'événement')}
                 </Button>
-              )}
-              <Button onClick={() => setModalVisible(false)}>
-                Annuler
-              </Button>
-            </Space>
+                {editingEvent && (
+                  <Button danger block size="large" style={{ borderRadius: 8, height: 44 }} onClick={() => Modal.confirm({
+                    title: 'Supprimer',
+                    content: 'Êtes-vous sûr ? Cette action est irréversible.',
+                    okText: 'Supprimer',
+                    cancelText: 'Annuler',
+                    onOk: () => handleEventDelete(editingEvent.id)
+                  })}>
+                    Supprimer
+                  </Button>
+                )}
+                <Button block size="large" style={{ borderRadius: 8, height: 44 }} onClick={() => setModalVisible(false)}>Annuler</Button>
+              </div>
+            ) : (
+              <Space wrap>
+                <Button type="primary" htmlType="submit">
+                  {editingEvent ? 'Enregistrer' : (isTaskMode ? 'Créer la tâche' : 'Créer l\'événement')}
+                </Button>
+                {editingEvent && (
+                  <Button danger onClick={() => Modal.confirm({
+                    title: 'Supprimer',
+                    content: 'Êtes-vous sûr ? Cette action est irréversible.',
+                    okText: 'Supprimer',
+                    cancelText: 'Annuler',
+                    onOk: () => handleEventDelete(editingEvent.id)
+                  })}>
+                    Supprimer
+                  </Button>
+                )}
+                <Button onClick={() => setModalVisible(false)}>Annuler</Button>
+              </Space>
+            )}
           </Form.Item>
         </Form>
       </Modal>
