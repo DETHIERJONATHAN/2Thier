@@ -510,6 +510,8 @@
     "readMore": "Lire la suite",
     "articles": "articles",
     "justNow": "À l'instant",
-    "noArticles": "Aucun article récent"
+    "noArticles": "Aucun article récent",
+    "compactView": "Vue compacte",
+    "widgetView": "Vue widgets"
   }
 }

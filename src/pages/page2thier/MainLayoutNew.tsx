@@ -1,6 +1,5 @@
 import React, { useCallback, useMemo, useEffect, useState, useRef, lazy, Suspense } from 'react';
 import { Layout, Dropdown, Avatar, Spin } from 'antd';
-import GlobalSearch from '../../components/GlobalSearch';
 import NotificationsBell from '../../components/NotificationsBell';
 const MessengerChat = lazy(() => import('../../components/MessengerChat'));
 const WebBrowserPanel = lazy(() => import('../../components/WebBrowserPanel'));
@@ -16,7 +15,6 @@ import {
   TeamOutlined,
   MailOutlined,
   CalendarOutlined,
-  AppstoreOutlined,
 } from '@ant-design/icons';
 import Icon from '@ant-design/icons';
 import { useAuth } from '../../auth/useAuth';
@@ -87,6 +85,7 @@ const TAB_ICON_MAP: Record<string, React.ComponentType<{ style?: React.CSSProper
   'mail': MailOutlined,
   'calendar': CalendarOutlined,
   'bar-chart': BarChartOutlined,
+  'search': SearchOutlined,
 };
 
 // ── Static fallback (used until API loads) ──
@@ -98,6 +97,7 @@ const SF_TAB_CONFIG_FALLBACK: { id: string; label: string; icon: React.Component
   { id: 'universe', label: 'Universe', icon: UniverseIcon, color: '#FD79A8' },
   { id: 'mail', label: 'Mail', icon: MailOutlined, color: '#00B894' },
   { id: 'agenda', label: 'Agenda', icon: CalendarOutlined, color: '#0984E3' },
+  { id: 'search', label: 'Search', icon: SearchOutlined, color: '#A29BFE' },
   { id: 'stats', label: 'Stats', icon: BarChartOutlined, color: '#FDCB6E' },
 ];
 
@@ -133,6 +133,13 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
           icon: TAB_ICON_MAP[t.icon] || BarChartOutlined,
           color: t.color || '#999',
         }));
+        // Ensure 'search' tab is always present (it's a built-in app, not from API)
+        if (!tabs.find(t => t.id === 'search')) {
+          const statsIdx = tabs.findIndex(t => t.id === 'stats');
+          const searchTab = { id: 'search', label: 'Search', icon: SearchOutlined as React.ComponentType<{ style?: React.CSSProperties }>, color: '#A29BFE' };
+          if (statsIdx >= 0) tabs.splice(statsIdx, 0, searchTab);
+          else tabs.push(searchTab);
+        }
         if (tabs.length > 0) setDynamicTabs(tabs);
       } catch (err) {
         console.error('[ZhiiveHeader] swipe-tabs fetch error:', err);
@@ -177,8 +184,8 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
       const panelPosition = tabOrder.indexOf(tabId);
       if (panelPosition >= 0) scrollMobileToPanel(panelPosition);
     }
-    if (tabId === 'mur') {
-      // Mur = Wall in center — clear centerApp
+    if (tabId === 'mur' || centerApp === tabId) {
+      // Mur = Wall in center, or re-click on active tab → go back to wall
       setCenterApp(null);
       setSearchParams({}, { replace: true });
     } else {
@@ -186,7 +193,7 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
       setCenterApp(tabId as any);
       if (activeModule) setSearchParams({}, { replace: true });
     }
-  }, [isDashboard, navigate, setCenterApp, setSearchParams, activeModule, isMobile, scrollMobileToPanel, tabOrder]);
+  }, [isDashboard, navigate, setCenterApp, setSearchParams, activeModule, isMobile, scrollMobileToPanel, tabOrder, centerApp]);
 
   // Mobile: long press to start drag, then slide to reorder
   const onTouchStart = useCallback((tabId: string, e: React.TouchEvent) => {
@@ -305,7 +312,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
-  const [showSearch, setShowSearch] = useState(false);
   const isMobile = windowWidth < 768;
   const headerHeight = isMobile ? MOBILE_HEADER_HEIGHT : DESKTOP_HEADER_HEIGHT;
 
@@ -316,7 +322,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   }, []);
 
   const { logout, user, currentOrganization } = useAuth();
-  const { feedMode, setFeedMode, setCenterApp, browseUrl, setBrowseUrl, wallViewUrl, setWallViewUrl } = useZhiiveNav();
+  const { feedMode, setFeedMode, centerApp, setCenterApp, browseUrl, setBrowseUrl, wallViewUrl, setWallViewUrl } = useZhiiveNav();
 
   // 🐝 Identité centralisée — source unique de vérité pour l'avatar/nom du header
   const identity = useActiveIdentity();
@@ -343,17 +349,23 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     navigate('/login'); 
   }, [logout, navigate]);
 
-  // Ctrl+K shortcut to open global search
+  // Ctrl+K shortcut to open Search page
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
-        setShowSearch(prev => !prev);
+        const onDashboard = location.pathname === '/dashboard' || location.pathname === '/';
+        if (onDashboard) {
+          setCenterApp('search');
+        } else {
+          navigate('/dashboard');
+          setTimeout(() => setCenterApp('search'), 100);
+        }
       }
     };
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
-  }, []);
+  }, [location.pathname, navigate, setCenterApp]);
 
   // Menu profil utilisateur
   const userProfileMenu = useMemo<MenuProps>(() => ({
@@ -453,50 +465,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           {!isMobile && <img src="/zhiive-ecrit.png" alt="Zhiive" style={{ height: 20, objectFit: 'contain' }} />}
         </div>
 
-        {/* Loupe — ouvre la barre de recherche */}
-        <div
-          className="header-2thier-item"
-          onClick={() => setShowSearch(!showSearch)}
-          style={{ 
-            border: 'none',
-            padding: '6px',
-            height: '36px',
-            minWidth: '36px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            borderRadius: '6px',
-            backgroundColor: showSearch ? 'rgba(255,255,255,0.16)' : 'transparent',
-          }}
-        >
-          <SearchOutlined style={{ fontSize: '18px', color: 'white' }} />
-        </div>
-
         {/* ── Zhiive Navigation Tabs (centré dans header) ── */}
         <ZhiiveHeaderTabs isMobile={isMobile} />
 
         {/* Icônes à droite */}
         <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '6px' : '8px', marginLeft: isMobile ? '8px' : 'auto', flexShrink: 0 }}>
-          {/* Honeycomb — flux RSS personnalisés */}
-          <div
-            onClick={() => navigate('/honeycomb')}
-            title="Honeycomb"
-            style={{
-              padding: '6px',
-              height: '36px',
-              minWidth: '36px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              borderRadius: '6px',
-              backgroundColor: location.pathname === '/honeycomb' ? 'rgba(255,255,255,0.16)' : 'transparent',
-            }}
-            className="header-2thier-item"
-          >
-            <AppstoreOutlined style={{ fontSize: '18px', color: 'white' }} />
-          </div>
 
           {/* Notifications */}
           <NotificationsBell />
@@ -526,14 +499,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           </Dropdown>
         </div>
       </Header>
-
-      {/* 🔍 Recherche universelle Zhiive — GlobalSearch */}
-      <GlobalSearch
-        visible={showSearch}
-        onClose={() => setShowSearch(false)}
-        headerHeight={headerHeight}
-        isMobile={isMobile}
-      />
 
       <Content style={{ 
         backgroundColor: 'white',

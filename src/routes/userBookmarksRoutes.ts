@@ -15,7 +15,7 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
 
     const bookmarks = await db.userBookmark.findMany({
       where: { userId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
     });
 
     res.json({ bookmarks });
@@ -124,6 +124,38 @@ router.post('/remove-by-url', authMiddleware, async (req: Request, res: Response
   } catch (error) {
     console.error('[UserBookmarks] ❌ Erreur remove-by-url:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression du bookmark' });
+  }
+});
+
+/**
+ * PUT /api/user/bookmarks/reorder
+ * Réordonne les bookmarks (drag & drop)
+ * Body: { orderedIds: string[] }
+ */
+router.put('/reorder', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ error: 'Non authentifié' });
+
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds)) {
+      return res.status(400).json({ error: 'orderedIds requis (tableau)' });
+    }
+
+    // Update sortOrder for each bookmark
+    await Promise.all(
+      orderedIds.map((id: string, index: number) =>
+        db.userBookmark.updateMany({
+          where: { id, userId },
+          data: { sortOrder: index },
+        })
+      )
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[UserBookmarks] ❌ Erreur PUT /reorder:', error);
+    res.status(500).json({ error: 'Erreur lors du réordonnement' });
   }
 });
 

@@ -2768,6 +2768,7 @@ model UserBookmark {
   favicon     String?
   imageUrl    String?
   domain      String?
+  sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
   User        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 

@@ -19,6 +19,7 @@ const LazyTechniquePage = React.lazy(() => import('./TechniquePage'));
 const LazyGestionTableauxPage = React.lazy(() => import('./GestionTableauxPage'));
 const LazyFormulairePage = React.lazy(() => import('./FormulairePage'));
 const LazyAgendaWrapper = React.lazy(() => import('./AgendaWrapper'));
+const LazySearchPage = React.lazy(() => import('./SearchPage'));
 const LazyDevisPage = React.lazy(() => import('./DevisPage'));
 const LazyProductDocumentsPage = React.lazy(() => import('./ProductDocumentsPage'));
 const LazyTreeBranchLeafWrapper = React.lazy(() => import('./Formulaire/TreeBranchLeafWrapper-Fixed'));
@@ -3217,6 +3218,7 @@ export default function DashboardPageUnified() {
       case 'universe': return <LazyUniversePanel api={api} currentUser={user} />;
       case 'mail': return <LazyGoogleGmailPageV2 compact={sidebar} />;
       case 'agenda': return <LazyAgendaWrapper />;
+      case 'search': return <LazySearchPage />;
       case 'stats': return !isFreeUser ? renderMobileAnalytics() : null;
       default: return null;
     }

@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useRef, ReactNode, useCallback, useMemo, useEffect } from 'react';
 import { useUserPreference } from '../hooks/useUserPreference';
 
-export type ZhiiveApp = 'explore' | 'flow' | 'reels' | 'universe' | 'stats' | 'mail' | 'agenda';
+export type ZhiiveApp = 'explore' | 'flow' | 'reels' | 'universe' | 'stats' | 'mail' | 'agenda' | 'search';
 export type FeedMode = 'personal' | 'org';
 
 interface ZhiiveNavContextType {
@@ -38,7 +38,7 @@ interface ZhiiveNavContextType {
   setWallViewUrl: (url: string | null) => void;
 }
 
-const defaultTabOrder = ['explore', 'flow', 'reels', 'mur', 'universe', 'mail', 'agenda', 'stats'];
+const defaultTabOrder = ['explore', 'flow', 'reels', 'mur', 'universe', 'mail', 'agenda', 'search', 'stats'];
 
 const ZhiiveNavContext = createContext<ZhiiveNavContextType>({
   centerApp: null, setCenterApp: () => {},

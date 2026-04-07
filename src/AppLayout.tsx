@@ -193,7 +193,7 @@ export default function AppLayout() {
 
             {/* Routes principales */}
             <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/honeycomb" element={<HoneycombPage />} />
+            <Route path="/honeycomb" element={<Navigate to="/dashboard" replace />} />
             <Route path="/premium-test" element={<PremiumTestPage />} />
             <Route path="/tailwind-test" element={<TailwindTestPage />} />
             <Route path="/diagnostic-complet" element={<DiagnosticCompletPage />} />

@@ -9,6 +9,7 @@ export interface Bookmark {
   favicon?: string | null;
   imageUrl?: string | null;
   domain?: string | null;
+  sortOrder?: number;
   createdAt: string;
 }
 
@@ -96,6 +97,20 @@ export function useBookmarks() {
     }
   }, [isBookmarked, addBookmark, removeByUrl]);
 
+  const reorderBookmarks = useCallback(async (orderedIds: string[]) => {
+    // Optimistic update
+    const reordered = orderedIds
+      .map(id => bookmarks.find(b => b.id === id))
+      .filter(Boolean) as Bookmark[];
+    setBookmarks(reordered);
+    try {
+      await apiStable.put('/api/user/bookmarks/reorder', { orderedIds });
+    } catch (err) {
+      console.error('[useBookmarks] reorder error:', err);
+      fetchBookmarks(); // Rollback on error
+    }
+  }, [bookmarks, apiStable, fetchBookmarks]);
+
   return {
     bookmarks,
     loading,
@@ -104,6 +119,7 @@ export function useBookmarks() {
     removeByUrl,
     isBookmarked,
     toggleBookmark,
+    reorderBookmarks,
     refetch: fetchBookmarks,
   };
 }
