@@ -322,7 +322,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   }, []);
 
   const { logout, user, currentOrganization } = useAuth();
-  const { feedMode, setFeedMode, centerApp, setCenterApp, browseUrl, setBrowseUrl, wallViewUrl, setWallViewUrl } = useZhiiveNav();
+  const { feedMode, setFeedMode, centerApp, setCenterApp, browseUrl, setBrowseUrl, wallViewUrl, setWallViewUrl, wallSearchQuery, setWallSearchQuery } = useZhiiveNav();
 
   // 🐝 Identité centralisée — source unique de vérité pour l'avatar/nom du header
   const identity = useActiveIdentity();
@@ -459,7 +459,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             color: 'white',
             letterSpacing: '0.5px'
           }}
-          onClick={() => { navigate('/dashboard'); setCenterApp(null); setSearchParams({}, { replace: true }); }}
+          onClick={() => { navigate('/dashboard'); setCenterApp(null); setWallViewUrl(null); setWallSearchQuery(null); setSearchParams({}, { replace: true }); }}
         >
           <img src="/zhiive-logo.png" alt="Zhiive" style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'contain', flexShrink: 0 }} />
           {!isMobile && <img src="/zhiive-ecrit.png" alt="Zhiive" style={{ height: 20, objectFit: 'contain' }} />}
