@@ -850,11 +850,12 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
       {/* ── Routing search panel (slide up) ── */}
       {routingOpen && !routeData && (
         <div style={{
-          position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 30,
-          background: 'rgba(15, 15, 30, 0.97)', borderRadius: '20px 20px 0 0',
+          position: 'absolute', bottom: 70, left: 10, right: 10, zIndex: 30,
+          background: 'rgba(15, 15, 30, 0.97)', borderRadius: 16,
           padding: '16px 14px', backdropFilter: 'blur(16px)',
           border: '1px solid rgba(255,255,255,0.1)',
-          maxHeight: '60vh', overflowY: 'auto',
+          maxHeight: '55vh', overflowY: 'auto',
+          boxShadow: '0 -4px 24px rgba(0,0,0,0.5)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
