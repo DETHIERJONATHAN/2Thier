@@ -111,18 +111,18 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
       map.setPitch(50);
       map.setBearing(-12);
 
-      // ── Sky atmosphere (horizon gradient when pitched) ──
+      // ── Sky atmosphere (MapLibre v5 uses setSky(), NOT addLayer type:'sky') ──
       try {
-        map.addLayer({
-          id: 'sky',
-          type: 'sky' as any,
-          paint: {
-            'sky-type': 'atmosphere',
-            'sky-atmosphere-sun': [0.0, 90.0],
-            'sky-atmosphere-sun-intensity': 15,
-          } as any,
-        });
-      } catch { /* sky layer not supported in this version — harmless */ }
+        map.setSky({
+          'sky-color': '#88c6fc',
+          'sky-horizon-blend': 0.5,
+          'horizon-color': '#f0e8d8',
+          'horizon-fog-blend': 0.5,
+          'fog-color': '#c8d6e5',
+          'fog-ground-blend': 0.5,
+          'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 12, 0],
+        } as any);
+      } catch { /* sky not supported — harmless */ }
 
       // ── 3D Buildings extrusion ──
       try {
