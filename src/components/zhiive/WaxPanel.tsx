@@ -155,8 +155,8 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
       zoom: defaultZoom,
       pitch: 50,          // 3D perspective tilt
       bearing: -12,       // Slight rotation for depth
-      maxPitch: 72,
-      maxZoom: 18,
+      maxPitch: 85,       // Allow steep pitch for car-view
+      maxZoom: 20,
       minZoom: 3,
     });
 
@@ -585,7 +585,19 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
     window.speechSynthesis.speak(utterance);
   }, [voiceEnabled]);
 
-  // ── Start live navigation ──
+  // ── Compute bearing between two points ──
+  const computeBearing = useCallback((from: [number, number], to: [number, number]) => {
+    const [lng1, lat1] = from;
+    const [lng2, lat2] = to;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const lat1R = lat1 * Math.PI / 180;
+    const lat2R = lat2 * Math.PI / 180;
+    const y = Math.sin(dLng) * Math.cos(lat2R);
+    const x = Math.cos(lat1R) * Math.sin(lat2R) - Math.sin(lat1R) * Math.cos(lat2R) * Math.cos(dLng);
+    return ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
+  }, []);
+
+  // ── Start live navigation (3D car-view) ──
   const startNavigation = useCallback(() => {
     if (!routeData) return;
     setNavigating(true);
@@ -595,6 +607,17 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
     if (routeData.steps.length > 0) {
       speakInstruction(routeData.steps[0].instruction);
     }
+
+    // Switch to car-view: close zoom, steep pitch, bearing along route
+    const coords = routeData.geometry.coordinates as [number, number][];
+    const initialBearing = coords.length >= 2 ? computeBearing(coords[0], coords[Math.min(5, coords.length - 1)]) : 0;
+    mapRef.current?.easeTo({
+      center: coords[0],
+      zoom: 18,
+      pitch: 75,
+      bearing: initialBearing,
+      duration: 1200,
+    });
 
     // Watch position to advance steps
     if (navigator.geolocation) {
@@ -627,14 +650,25 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
             return prev;
           });
 
-          // Center map on user
-          mapRef.current?.easeTo({ center: [userLng, userLat], duration: 500 });
+          // Car-view: compute bearing toward next step, then easeTo in 3D
+          const nextStep = routeData.steps[currentStepIndex + 1] || routeData.steps[currentStepIndex];
+          const bearing = nextStep
+            ? computeBearing([userLng, userLat], nextStep.location)
+            : (mapRef.current?.getBearing() || 0);
+
+          mapRef.current?.easeTo({
+            center: [userLng, userLat],
+            bearing,
+            pitch: 75,
+            zoom: 18,
+            duration: 800,
+          });
         },
         () => { /* GPS error, keep navigating */ },
         { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 },
       );
     }
-  }, [routeData, speakInstruction]);
+  }, [routeData, speakInstruction, computeBearing, currentStepIndex]);
 
   // ── Stop navigation ──
   const stopNavigation = useCallback(() => {
@@ -654,6 +688,9 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
       routeSourceAdded.current = false;
     }
     setRouteData(null);
+
+    // Restore normal map view
+    mapRef.current?.easeTo({ pitch: 50, bearing: -12, zoom: 12, duration: 1000 });
   }, []);
 
   // Cleanup nav watch on unmount
@@ -807,53 +844,54 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
         </div>
       </div>
 
-      {/* ── TOP NAV HUD: Waze-style turn banner ── */}
+      {/* ── TOP NAV HUD: Waze-style turn banner (48px — same as top bar) ── */}
       {routeData && routeData.steps[currentStepIndex] && (
         <div style={{
-          position: 'absolute', top: 48, left: 0, right: 0, zIndex: 15,
+          position: 'absolute', top: 48, left: 0, right: 0, height: 48, zIndex: 15,
           background: 'rgba(10, 10, 25, 0.92)', backdropFilter: 'blur(12px)',
-          borderBottom: `2px solid ${SF.primary}40`,
-          padding: '8px 12px',
-          display: 'flex', alignItems: 'center', gap: 12,
+          borderBottom: `1px solid ${SF.primary}30`,
+          padding: '0 10px',
+          display: 'flex', alignItems: 'center', gap: 8,
         }}>
-          {/* Big arrow icon */}
+          {/* Arrow icon */}
           <div style={{
-            width: 56, height: 56, borderRadius: 16, background: SF.primary,
+            width: 34, height: 34, borderRadius: 10, background: SF.primary,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            boxShadow: `0 0 20px ${SF.primary}50`,
+            boxShadow: `0 0 12px ${SF.primary}40`,
           }}>
             {getManeuverIcon(
               routeData.steps[currentStepIndex]?.maneuver?.type,
               routeData.steps[currentStepIndex]?.maneuver?.modifier,
-              28,
+              18,
             )}
           </div>
           {/* Distance + instruction */}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ color: 'white', fontSize: 22, fontWeight: 900, lineHeight: 1.1 }}>
-              {formatDistance(routeData.steps[currentStepIndex]?.distance || 0)}
-            </div>
-            <div style={{
-              color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: 500,
-              marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
-              {routeData.steps[currentStepIndex]?.instruction}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+              <span style={{ color: 'white', fontSize: 16, fontWeight: 900 }}>
+                {formatDistance(routeData.steps[currentStepIndex]?.distance || 0)}
+              </span>
+              <span style={{
+                color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: 500,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {routeData.steps[currentStepIndex]?.instruction}
+              </span>
             </div>
           </div>
           {/* Next step preview */}
           {routeData.steps[currentStepIndex + 1] && (
             <div style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flexShrink: 0,
-              opacity: 0.5,
+              display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0, opacity: 0.45,
             }}>
               <div style={{
-                width: 28, height: 28, borderRadius: 8, background: 'rgba(255,255,255,0.1)',
+                width: 22, height: 22, borderRadius: 6, background: 'rgba(255,255,255,0.1)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
                 {getManeuverIcon(
                   routeData.steps[currentStepIndex + 1]?.maneuver?.type,
                   routeData.steps[currentStepIndex + 1]?.maneuver?.modifier,
-                  14,
+                  11,
                 )}
               </div>
               <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, fontWeight: 600 }}>
@@ -865,26 +903,26 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
           <div
             onClick={() => setReportingAlert(r => !r)}
             style={{
-              width: 36, height: 36, borderRadius: '50%', cursor: 'pointer', flexShrink: 0,
+              width: 28, height: 28, borderRadius: '50%', cursor: 'pointer', flexShrink: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               background: reportingAlert ? '#e1705530' : 'rgba(255,255,255,0.08)',
               color: reportingAlert ? '#e17055' : 'rgba(255,255,255,0.4)',
               border: `1px solid ${reportingAlert ? '#e1705540' : 'rgba(255,255,255,0.1)'}`,
             }}
           >
-            <WarningOutlined style={{ fontSize: 14 }} />
+            <WarningOutlined style={{ fontSize: 12 }} />
           </div>
         </div>
       )}
 
-      {/* ── Alert type picker (below HUD when reporting) ── */}
+      {/* ── Alert type picker (below HUD — compact 48px row) ── */}
       {reportingAlert && routeData && (
         <div style={{
-          position: 'absolute', top: 48 + 72 + 4, left: 8, right: 8, zIndex: 16,
-          display: 'flex', flexWrap: 'wrap', gap: 6,
-          padding: 10, borderRadius: 14, background: 'rgba(15,15,30,0.95)',
-          backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.1)',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          position: 'absolute', top: 48 + 48, left: 0, right: 0, height: 48, zIndex: 16,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+          padding: '0 8px',
+          background: 'rgba(15,15,30,0.95)', backdropFilter: 'blur(12px)',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
         }}>
           {ALERT_TYPES.map(at => (
             <div
@@ -905,12 +943,12 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
                 }
               }}
               style={{
-                display: 'flex', alignItems: 'center', gap: 5, padding: '8px 12px',
-                borderRadius: 12, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                display: 'flex', alignItems: 'center', gap: 3, padding: '5px 8px',
+                borderRadius: 10, cursor: 'pointer', fontSize: 11, fontWeight: 600,
                 background: `${at.color}15`, border: `1px solid ${at.color}30`, color: at.color,
               }}
             >
-              <span style={{ fontSize: 16 }}>{at.emoji}</span>
+              <span style={{ fontSize: 14 }}>{at.emoji}</span>
               {t(at.labelKey)}
             </div>
           ))}
