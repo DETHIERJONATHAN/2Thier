@@ -615,8 +615,8 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
     const initialBearing = coords.length >= 2 ? computeBearing(coords[0], coords[Math.min(5, coords.length - 1)]) : 0;
     mapRef.current?.easeTo({
       center: coords[0],
-      zoom: 18,
-      pitch: 75,
+      zoom: 19.5,
+      pitch: 85,
       bearing: initialBearing,
       duration: 1200,
     });
@@ -661,8 +661,8 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
           mapRef.current?.easeTo({
             center: [userLng, userLat],
             bearing,
-            pitch: 75,
-            zoom: 18,
+            pitch: 85,
+            zoom: 19.5,
             duration: 800,
           });
         },
@@ -918,12 +918,14 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
         </div>
       )}
 
-      {/* ── Alert type picker (below HUD — compact 48px row) ── */}
+      {/* ── Alert type picker (below HUD — horizontal scroll) ── */}
       {reportingAlert && routeData && (
         <div style={{
           position: 'absolute', top: 48 + 48, left: 0, right: 0, height: 48, zIndex: 16,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-          padding: '0 8px',
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '0 10px',
+          overflowX: 'auto', overflowY: 'hidden',
+          WebkitOverflowScrolling: 'touch',
           background: 'rgba(15,15,30,0.95)', backdropFilter: 'blur(12px)',
           borderBottom: '1px solid rgba(255,255,255,0.08)',
         }}>
@@ -946,9 +948,10 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
                 }
               }}
               style={{
-                display: 'flex', alignItems: 'center', gap: 3, padding: '5px 8px',
+                display: 'flex', alignItems: 'center', gap: 3, padding: '5px 10px',
                 borderRadius: 10, cursor: 'pointer', fontSize: 11, fontWeight: 600,
                 background: `${at.color}15`, border: `1px solid ${at.color}30`, color: at.color,
+                whiteSpace: 'nowrap', flexShrink: 0,
               }}
             >
               <span style={{ fontSize: 14 }}>{at.emoji}</span>
@@ -988,7 +991,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
               const next = !carView;
               setCarView(next);
               if (next) {
-                mapRef.current?.easeTo({ pitch: 75, zoom: 18, duration: 800 });
+                mapRef.current?.easeTo({ pitch: 85, zoom: 19.5, duration: 800 });
               } else {
                 mapRef.current?.easeTo({ pitch: 50, bearing: -12, zoom: mapRef.current.getZoom() > 14 ? 12 : mapRef.current.getZoom(), duration: 800 });
               }
