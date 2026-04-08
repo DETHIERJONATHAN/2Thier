@@ -67,46 +67,87 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
   const defaultCenter: [number, number] = [4.35, 50.85];
   const defaultZoom = 8;
 
-  // ── Initialize MapLibre ──
+  // ── Initialize MapLibre (3D terrain + vector tiles) ──
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
-      style: {
-        version: 8,
-        sources: {
-          osm: {
-            type: 'raster',
-            tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-            tileSize: 256,
-            attribution: '&copy; OpenStreetMap',
-          },
-        },
-        layers: [{
-          id: 'osm-tiles',
-          type: 'raster',
-          source: 'osm',
-          minzoom: 0,
-          maxzoom: 19,
-        }],
-        // Dark theme overlay via CSS filter applied to the container
-      },
+      // OpenFreeMap: free vector tiles, no API key, OpenMapTiles schema
+      style: 'https://tiles.openfreemap.org/styles/liberty',
       center: defaultCenter,
       zoom: defaultZoom,
+      pitch: 50,          // 3D perspective tilt
+      bearing: -12,       // Slight rotation for depth
+      maxPitch: 72,
       maxZoom: 18,
       minZoom: 3,
     });
 
-    map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
+    map.addControl(new maplibregl.NavigationControl({
+      visualizePitch: true,   // Show pitch control
+    }), 'bottom-right');
     map.addControl(new maplibregl.GeolocateControl({
       positionOptions: { enableHighAccuracy: true },
       trackUserLocation: true,
     }), 'bottom-right');
 
-    map.on('load', () => setMapReady(true));
-    mapRef.current = map;
+    map.on('load', () => {
+      // ── 3D Terrain (free DEM tiles from AWS/Mapzen) ──
+      map.addSource('terrain-dem', {
+        type: 'raster-dem',
+        tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+        tileSize: 256,
+        encoding: 'terrarium',
+        maxzoom: 15,
+      });
+      map.setTerrain({ source: 'terrain-dem', exaggeration: 1.5 });
 
+      // ── Sky atmosphere (horizon gradient when pitched) ──
+      try {
+        map.addLayer({
+          id: 'sky',
+          type: 'sky' as any,
+          paint: {
+            'sky-type': 'atmosphere',
+            'sky-atmosphere-sun': [0.0, 90.0],
+            'sky-atmosphere-sun-intensity': 15,
+          } as any,
+        });
+      } catch { /* sky layer not supported in this version — harmless */ }
+
+      // ── 3D Buildings extrusion ──
+      try {
+        const layers = map.getStyle().layers || [];
+        const buildingLayer = layers.find((l: any) =>
+          l.id.includes('building') && (l.type === 'fill' || l['source-layer']?.includes('building'))
+        );
+        if (buildingLayer) {
+          map.addLayer({
+            id: 'buildings-3d',
+            source: (buildingLayer as any).source,
+            'source-layer': (buildingLayer as any)['source-layer'] || 'building',
+            type: 'fill-extrusion',
+            minzoom: 14,
+            paint: {
+              'fill-extrusion-color': [
+                'interpolate', ['linear'], ['get', 'render_height'],
+                0, '#e0d6f0',
+                20, '#c4b5e0',
+                40, '#a594cc',
+              ],
+              'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 10],
+              'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
+              'fill-extrusion-opacity': 0.7,
+            },
+          });
+        }
+      } catch { /* buildings extrusion failed — harmless */ }
+
+      setMapReady(true);
+    });
+
+    mapRef.current = map;
     return () => { map.remove(); mapRef.current = null; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -295,7 +336,6 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
           to { box-shadow: 0 0 24px 8px #FDCB6EAA; }
         }
         .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right { z-index: 5 !important; }
-        .maplibregl-canvas { filter: saturate(0.85) brightness(0.95); }
       `}</style>
 
       {/* Map container */}
