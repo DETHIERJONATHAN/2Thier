@@ -545,7 +545,18 @@
       "voiceOn": "Voice guidance on — instructions will be spoken aloud",
       "voiceOff": "Voice guidance off",
       "go": "Let's go",
-      "stop": "Stop"
+      "stop": "Stop",
+      "goThere": "Go there"
+    },
+    "alerts": {
+      "report": "Report",
+      "reported": "Alert reported!",
+      "radar": "Speed camera",
+      "police": "Police",
+      "accident": "Accident",
+      "travaux": "Road works",
+      "danger": "Danger",
+      "traffic": "Traffic jam"
     }
   }
 }

@@ -545,7 +545,18 @@
       "voiceOn": "Guidage vocal activé — les instructions seront annoncées à voix haute",
       "voiceOff": "Guidage vocal désactivé",
       "go": "C'est parti",
-      "stop": "Arrêter"
+      "stop": "Arrêter",
+      "goThere": "Y aller"
+    },
+    "alerts": {
+      "report": "Signaler",
+      "reported": "Alerte signalée !",
+      "radar": "Radar",
+      "police": "Police",
+      "accident": "Accident",
+      "travaux": "Travaux",
+      "danger": "Danger",
+      "traffic": "Embouteillage"
     }
   }
 }

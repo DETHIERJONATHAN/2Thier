@@ -12,7 +12,8 @@ import {
   EnvironmentOutlined, CloseOutlined,
   UserOutlined, QuestionCircleOutlined,
   SwapOutlined as _SwapOutlined, SearchOutlined, SoundOutlined, AudioMutedOutlined,
-  CarOutlined, LoadingOutlined,
+  CarOutlined, LoadingOutlined, WarningOutlined,
+  ArrowUpOutlined, ArrowLeftOutlined, ArrowRightOutlined,
 } from '@ant-design/icons';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -101,9 +102,46 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
   const geocodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const routeSourceAdded = useRef(false);
 
+  const [reportingAlert, setReportingAlert] = useState(false);
+
   // Default: Belgium center
   const defaultCenter: [number, number] = [4.35, 50.85];
   const defaultZoom = 8;
+
+  // ── Alert pin types (Waze-like) ──
+  const ALERT_TYPES = [
+    { type: 'radar', emoji: '📷', labelKey: 'wax.alerts.radar', color: '#e17055' },
+    { type: 'police', emoji: '👮', labelKey: 'wax.alerts.police', color: '#0984e3' },
+    { type: 'accident', emoji: '💥', labelKey: 'wax.alerts.accident', color: '#d63031' },
+    { type: 'travaux', emoji: '🚧', labelKey: 'wax.alerts.travaux', color: '#fdcb6e' },
+    { type: 'danger', emoji: '⚠️', labelKey: 'wax.alerts.danger', color: '#e17055' },
+    { type: 'embouteillage', emoji: '🚗', labelKey: 'wax.alerts.traffic', color: '#636e72' },
+  ] as const;
+
+  // ── Pin type emoji mapping ──
+  const getPinEmoji = (pinType: string) => {
+    const map: Record<string, string> = {
+      event: '📅', comb: '🔨', whisper: '🕯️', announcement: '📢',
+      radar: '📷', police: '👮', accident: '💥', travaux: '🚧', danger: '⚠️', embouteillage: '🚗',
+    };
+    return map[pinType] || '🕯️';
+  };
+
+  // ── Turn arrow SVG helper ──
+  const getManeuverIcon = (type: string, modifier?: string) => {
+    const style = { fontSize: 16, color: 'white' };
+    if (type === 'depart') return <AimOutlined style={{ ...style, color: SF.success }} />;
+    if (type === 'arrive') return <EnvironmentOutlined style={{ ...style, color: '#e17055' }} />;
+    if (type === 'roundabout' || type === 'rotary') return <span style={{ fontSize: 15 }}>🔄</span>;
+    if (modifier?.includes('uturn')) return <span style={{ fontSize: 15 }}>↩️</span>;
+    if (modifier?.includes('left') && modifier?.includes('sharp')) return <ArrowLeftOutlined style={{ ...style, transform: 'rotate(45deg)' }} />;
+    if (modifier?.includes('left') && modifier?.includes('slight')) return <ArrowUpOutlined style={{ ...style, transform: 'rotate(-30deg)' }} />;
+    if (modifier?.includes('left')) return <ArrowLeftOutlined style={style} />;
+    if (modifier?.includes('right') && modifier?.includes('sharp')) return <ArrowRightOutlined style={{ ...style, transform: 'rotate(-45deg)' }} />;
+    if (modifier?.includes('right') && modifier?.includes('slight')) return <ArrowUpOutlined style={{ ...style, transform: 'rotate(30deg)' }} />;
+    if (modifier?.includes('right')) return <ArrowRightOutlined style={style} />;
+    return <ArrowUpOutlined style={style} />; // straight / continue
+  };
 
   // ── Initialize MapLibre (3D terrain + vector tiles) ──
   useEffect(() => {
@@ -399,7 +437,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
         const remaining = Math.max(0, Math.ceil((new Date(p.expiresAt).getTime() - Date.now()) / 3600000));
         const el = createEl(
           `<div style="width:36px;height:36px;border-radius:50%;background:radial-gradient(circle,#FDCB6E,#e17055);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 0 16px 4px #FDCB6E80;animation:waxGlow 2s ease-in-out infinite alternate;">
-            <span style="font-size:16px;">${p.pinType === 'event' ? '📅' : p.pinType === 'comb' ? '🔨' : '🕯️'}</span>
+            <span style="font-size:16px;">${getPinEmoji(p.pinType)}</span>
           </div>
           <div style="position:absolute;bottom:-14px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.7);color:#FDCB6E;font-size:9px;padding:1px 5px;border-radius:8px;white-space:nowrap;font-weight:600;">${remaining}h</div>`,
           'wax-pin-marker',
@@ -862,6 +900,26 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
               </div>
             </div>
           )}
+
+          {/* Navigate-to button — all entities with coordinates */}
+          {selectedEntity.latitude != null && selectedEntity.longitude != null && (
+            <div
+              onClick={() => {
+                const dest = { lat: selectedEntity.latitude, lng: selectedEntity.longitude };
+                setSelectedEntity(null);
+                computeRoute(dest);
+              }}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                marginTop: 10, padding: '8px 0', borderRadius: 12, cursor: 'pointer',
+                background: `${SF.primary}20`, border: `1px solid ${SF.primary}40`,
+                color: SF.primary, fontSize: 12, fontWeight: 700,
+                transition: 'all 0.2s',
+              }}
+            >
+              <CarOutlined /> {t('wax.nav.goThere')}
+            </div>
+          )}
         </div>
       )}
 
@@ -1037,55 +1095,115 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
             </div>
           </div>
 
-          {/* Current step highlight */}
+          {/* Current step highlight — big visual arrow */}
           {routeData.steps.length > 0 && (
             <div style={{
-              padding: '10px 12px', borderRadius: 12, marginBottom: 8,
-              background: `${SF.primary}15`, border: `1px solid ${SF.primary}30`,
+              padding: '10px 12px', borderRadius: 14, marginBottom: 8,
+              background: `${SF.primary}18`, border: `1px solid ${SF.primary}30`,
+              display: 'flex', alignItems: 'center', gap: 12,
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{
-                  width: 28, height: 28, borderRadius: '50%', background: SF.primary,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: 'white', fontSize: 12, fontWeight: 800, flexShrink: 0,
-                }}>
-                  {currentStepIndex + 1}
+              <div style={{
+                width: 46, height: 46, borderRadius: 14, background: SF.primary,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}>
+                {getManeuverIcon(
+                  routeData.steps[currentStepIndex]?.maneuver?.type,
+                  routeData.steps[currentStepIndex]?.maneuver?.modifier,
+                )}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ color: 'white', fontSize: 14, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {routeData.steps[currentStepIndex]?.instruction}
                 </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ color: 'white', fontSize: 13, fontWeight: 700 }}>
-                    {routeData.steps[currentStepIndex]?.instruction}
-                  </div>
-                  <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: 10, marginTop: 2 }}>
-                    {formatDistance(routeData.steps[currentStepIndex]?.distance || 0)}
-                    {' · '}
-                    {formatDuration(routeData.steps[currentStepIndex]?.duration || 0)}
-                  </div>
+                <div style={{ color: SF.primary, fontSize: 13, fontWeight: 700, marginTop: 1 }}>
+                  {formatDistance(routeData.steps[currentStepIndex]?.distance || 0)}
                 </div>
               </div>
             </div>
           )}
 
-          {/* All steps (collapsed list) */}
+          {/* Report alert button */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+            <div
+              onClick={() => setReportingAlert(r => !r)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px',
+                borderRadius: 12, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                background: reportingAlert ? '#e1705530' : 'rgba(255,255,255,0.06)',
+                color: reportingAlert ? '#e17055' : 'rgba(255,255,255,0.5)',
+                border: `1px solid ${reportingAlert ? '#e1705550' : 'rgba(255,255,255,0.08)'}`,
+              }}
+            >
+              <WarningOutlined /> {t('wax.alerts.report')}
+            </div>
+          </div>
+
+          {/* Alert type picker */}
+          {reportingAlert && userPosition && (
+            <div style={{
+              display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10,
+              padding: 8, borderRadius: 12, background: 'rgba(255,255,255,0.04)',
+            }}>
+              {ALERT_TYPES.map(at => (
+                <div
+                  key={at.type}
+                  onClick={async () => {
+                    try {
+                      await api.post('/api/wax/pins', {
+                        latitude: userPosition.lat,
+                        longitude: userPosition.lng,
+                        pinType: at.type,
+                        title: t(at.labelKey),
+                        ttlHours: 2,
+                        publishAsOrg: false,
+                      });
+                      message.success(t('wax.alerts.reported'));
+                      setReportingAlert(false);
+                    } catch {
+                      message.error(t('wax.nav.error'));
+                    }
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 4, padding: '6px 10px',
+                    borderRadius: 10, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                    background: `${at.color}15`, border: `1px solid ${at.color}30`,
+                    color: at.color,
+                  }}
+                >
+                  <span style={{ fontSize: 14 }}>{at.emoji}</span>
+                  {t(at.labelKey)}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* All steps — compact visual arrows */}
           <div style={{ maxHeight: 180, overflowY: 'auto' }}>
             {routeData.steps.map((step, i) => (
               <div
                 key={i}
                 style={{
-                  display: 'flex', alignItems: 'flex-start', gap: 8, padding: '6px 4px',
+                  display: 'flex', alignItems: 'center', gap: 8, padding: '5px 4px',
                   opacity: i < currentStepIndex ? 0.3 : 1,
                   borderLeft: i === currentStepIndex ? `2px solid ${SF.primary}` : '2px solid transparent',
                   paddingLeft: 8,
                 }}
               >
-                <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: 10, width: 16, textAlign: 'right', flexShrink: 0 }}>
-                  {i + 1}
-                </span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11 }}>{step.instruction}</div>
-                  <div style={{ color: 'rgba(255,255,255,0.25)', fontSize: 9 }}>
-                    {formatDistance(step.distance)} · {formatDuration(step.duration)}
+                <div style={{
+                  width: 26, height: 26, borderRadius: 8,
+                  background: i === currentStepIndex ? SF.primary : 'rgba(255,255,255,0.08)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }}>
+                  {getManeuverIcon(step.maneuver?.type, step.maneuver?.modifier)}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ color: i === currentStepIndex ? 'white' : 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: i === currentStepIndex ? 700 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {step.instruction}
                   </div>
                 </div>
+                <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10, flexShrink: 0 }}>
+                  {formatDistance(step.distance)}
+                </span>
               </div>
             ))}
           </div>
