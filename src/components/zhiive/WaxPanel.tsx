@@ -93,15 +93,23 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
     }), 'bottom-right');
 
     map.on('load', () => {
-      // ── 3D Terrain (free DEM tiles from AWS/Mapzen) ──
-      map.addSource('terrain-dem', {
-        type: 'raster-dem',
-        tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
-        tileSize: 256,
-        encoding: 'terrarium',
-        maxzoom: 15,
-      });
-      map.setTerrain({ source: 'terrain-dem', exaggeration: 1.5 });
+      // ── 3D Terrain (free DEM tiles from AWS/Mapzen Terrarium) ──
+      try {
+        map.addSource('terrain-dem', {
+          type: 'raster-dem',
+          tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+          tileSize: 256,
+          encoding: 'terrarium',
+          maxzoom: 15,
+        });
+        map.setTerrain({ source: 'terrain-dem', exaggeration: 1.8 });
+      } catch (e) {
+        console.warn('[Wax] Terrain DEM failed:', e);
+      }
+
+      // Ensure pitch is applied after style load
+      map.setPitch(50);
+      map.setBearing(-12);
 
       // ── Sky atmosphere (horizon gradient when pitched) ──
       try {
@@ -238,17 +246,17 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
       return el;
     };
 
-    // ── Collision offset: spread overlapping markers side-by-side ──
-    // Collect all visible marker positions, then offset any that share ~same coords
+    // ── Collision offset: pixel-based (markers stay at correct address) ──
+    // Group markers at ~same coords, then apply pixel offset so they sit side-by-side
     const allItems: { lat: number; lng: number; key: string }[] = [];
     if (showLayer.colonies) colonies.forEach(c => { if (c.latitude != null && c.longitude != null) allItems.push({ lat: c.latitude, lng: c.longitude, key: `colony-${c.id}` }); });
     if (showLayer.bees) bees.forEach(b => allItems.push({ lat: b.latitude, lng: b.longitude, key: `bee-${b.id}` }));
     if (showLayer.combs) combs.forEach(c => { if (c.latitude != null && c.longitude != null) allItems.push({ lat: c.latitude, lng: c.longitude, key: `comb-${c.id}` }); });
     if (showLayer.pins) waxPins.forEach(p => allItems.push({ lat: p.latitude, lng: p.longitude, key: `pin-${p.id}` }));
 
-    // Group items that are very close (within ~0.0003° ≈ 30m)
-    const PROXIMITY = 0.0003;
-    const offsets = new Map<string, [number, number]>();
+    // Group items that are very close (within ~0.00015° ≈ 15m)
+    const PROXIMITY = 0.00015;
+    const pixelOffsets = new Map<string, [number, number]>();
     const processed = new Set<number>();
     for (let i = 0; i < allItems.length; i++) {
       if (processed.has(i)) continue;
@@ -261,23 +269,22 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
         }
       }
       if (group.length > 1) {
-        // Fan out in a circle around center; offset ~0.00015° ≈ ~15m
-        const spread = 0.00018;
+        // Pixel offset: spread markers 22px apart horizontally
+        const PX_SPREAD = 22;
+        const totalWidth = (group.length - 1) * PX_SPREAD;
         group.forEach((idx, gi) => {
           processed.add(idx);
-          const angle = (2 * Math.PI * gi) / group.length - Math.PI / 2;
-          offsets.set(allItems[idx].key, [
-            Math.cos(angle) * spread,
-            Math.sin(angle) * spread,
+          pixelOffsets.set(allItems[idx].key, [
+            -totalWidth / 2 + gi * PX_SPREAD,
+            0,
           ]);
         });
       }
     }
 
-    // Helper: get offset coords for a marker
-    const getCoords = (key: string, lng: number, lat: number): [number, number] => {
-      const off = offsets.get(key);
-      return off ? [lng + off[0], lat + off[1]] : [lng, lat];
+    // Helper: get pixel offset for a marker key
+    const getPixelOffset = (key: string): [number, number] => {
+      return pixelOffsets.get(key) || [0, 0];
     };
 
     // ── Colony markers (hexagon) ──
@@ -294,9 +301,8 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
           'wax-colony-marker',
         );
         el.onclick = () => setSelectedEntity({ ...c, type: 'colony' });
-        const coords = getCoords(`colony-${c.id}`, c.longitude!, c.latitude!);
-        const marker = new maplibregl.Marker({ element: el })
-          .setLngLat(coords)
+        const marker = new maplibregl.Marker({ element: el, offset: getPixelOffset(`colony-${c.id}`) })
+          .setLngLat([c.longitude!, c.latitude!])
           .addTo(map);
         markersRef.current.push(marker);
       });
@@ -316,9 +322,8 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
           'wax-bee-marker',
         );
         el.onclick = () => setSelectedEntity({ ...b, type: 'bee' });
-        const coords = getCoords(`bee-${b.id}`, b.longitude, b.latitude);
-        const marker = new maplibregl.Marker({ element: el })
-          .setLngLat(coords)
+        const marker = new maplibregl.Marker({ element: el, offset: getPixelOffset(`bee-${b.id}`) })
+          .setLngLat([b.longitude, b.latitude])
           .addTo(map);
         markersRef.current.push(marker);
       });
@@ -335,9 +340,8 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
           'wax-comb-marker',
         );
         el.onclick = () => setSelectedEntity({ ...c, type: 'comb' });
-        const coords = getCoords(`comb-${c.id}`, c.longitude!, c.latitude!);
-        const marker = new maplibregl.Marker({ element: el })
-          .setLngLat(coords)
+        const marker = new maplibregl.Marker({ element: el, offset: getPixelOffset(`comb-${c.id}`) })
+          .setLngLat([c.longitude!, c.latitude!])
           .addTo(map);
         markersRef.current.push(marker);
       });
@@ -356,9 +360,8 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
         );
         el.style.position = 'relative';
         el.onclick = () => setSelectedEntity({ ...p, type: 'wax-pin' });
-        const coords = getCoords(`pin-${p.id}`, p.longitude, p.latitude);
-        const marker = new maplibregl.Marker({ element: el })
-          .setLngLat(coords)
+        const marker = new maplibregl.Marker({ element: el, offset: getPixelOffset(`pin-${p.id}`) })
+          .setLngLat([p.longitude, p.latitude])
           .addTo(map);
         markersRef.current.push(marker);
       });
@@ -390,7 +393,8 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
       {/* ── Top bar: title + ghost toggle ── */}
       <div style={{
         position: 'absolute', top: 0, left: 0, right: 0, height: 48,
-        background: 'linear-gradient(180deg, rgba(0,0,0,0.7) 0%, transparent 100%)',
+        background: 'rgba(10, 10, 25, 0.88)',
+        backdropFilter: 'blur(10px)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '0 14px', zIndex: 10,
       }}>
