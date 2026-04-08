@@ -68,7 +68,7 @@ router.get('/locations', async (req, res) => {
 			select: {
 				id: true, name: true, logoUrl: true, description: true,
 				latitude: true, longitude: true,
-				_count: { select: { users: true } },
+				_count: { select: { UserOrganization: true } },
 			},
 		});
 
@@ -114,7 +114,7 @@ router.get('/locations', async (req, res) => {
 					description: c.description,
 					latitude: c.latitude,
 					longitude: c.longitude,
-					memberCount: c._count.users,
+					memberCount: c._count.UserOrganization,
 				})),
 				combs: combs.map(c => ({
 					type: 'comb' as const,

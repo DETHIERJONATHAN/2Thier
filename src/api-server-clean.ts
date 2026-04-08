@@ -650,6 +650,36 @@ async function startServer() {
     await connectDatabase();
     console.log('✅ [STARTUP] Base de données connectée');
 
+    // 🐝 Auto-ensure swipe modules exist (wax, nectar, etc.)
+    try {
+      const { db } = await import('./lib/database');
+      const swipeModules = [
+        { key: 'wax', label: 'Wax', feature: 'wax-map', placement: 'swipe', tabIcon: 'wax-map', tabColor: '#E17055', order: 5 },
+      ];
+      for (const m of swipeModules) {
+        const existing = await db.module.findUnique({ where: { key: m.key } });
+        if (!existing) {
+          await db.module.create({
+            data: {
+              id: `mod-${m.key}-${Date.now()}`,
+              key: m.key,
+              label: m.label,
+              feature: m.feature,
+              placement: m.placement,
+              tabIcon: m.tabIcon,
+              tabColor: m.tabColor,
+              order: m.order,
+              active: true,
+              updatedAt: new Date(),
+            },
+          });
+          console.log(`🐝 [BOOTSTRAP] Module '${m.key}' créé (placement=${m.placement})`);
+        }
+      }
+    } catch (e) {
+      console.warn('⚠️ [BOOTSTRAP] Erreur auto-ensure modules:', e);
+    }
+
     // 🚀 ÉTAPE 2: Démarrage du serveur HTTP
     const server = app.listen(port, '0.0.0.0', () => {
       logSecurityEvent('SERVER_READY', {
