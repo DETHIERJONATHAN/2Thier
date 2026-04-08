@@ -528,6 +528,22 @@
     "noBees": "No visible Bees in this area",
     "pinExpires": "Expires in",
     "pinViews": "views",
-    "hours": "h"
+    "hours": "h",
+    "nav": {
+      "title": "Navigation",
+      "routeTooltip": "Calculate a route between two points",
+      "myPosition": "My current position",
+      "searchPlaceholder": "Where are you going?",
+      "tapHint": "Or search for an address above",
+      "computing": "Computing route...",
+      "noRoute": "No route found",
+      "noPosition": "GPS position not available",
+      "error": "Error computing route",
+      "steps": "steps",
+      "voiceOn": "Voice guidance on — instructions will be spoken aloud",
+      "voiceOff": "Voice guidance off",
+      "go": "Let's go",
+      "stop": "Stop"
+    }
   }
 }

@@ -351,4 +351,118 @@ router.post('/cleanup', async (req, res) => {
 	}
 });
 
+// ═══════════════════════════════════════════════════════
+// GET /api/wax/route — Get route between two points (proxy OSRM)
+// ═══════════════════════════════════════════════════════
+router.get('/route', async (req, res) => {
+	try {
+		const user = extractUser(req);
+		if (!user) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+		const { from_lng, from_lat, to_lng, to_lat } = req.query;
+		const fromLng = parseFloat(from_lng as string);
+		const fromLat = parseFloat(from_lat as string);
+		const toLng = parseFloat(to_lng as string);
+		const toLat = parseFloat(to_lat as string);
+
+		if ([fromLng, fromLat, toLng, toLat].some(v => isNaN(v))) {
+			return res.status(400).json({ success: false, message: 'from_lng, from_lat, to_lng, to_lat required' });
+		}
+
+		// OSRM public demo server — free, no API key
+		const url = `https://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson&steps=true&annotations=false`;
+
+		const response = await fetch(url);
+		if (!response.ok) {
+			return res.status(502).json({ success: false, message: 'OSRM service unavailable' });
+		}
+
+		const data = await response.json();
+		if (data.code !== 'Ok' || !data.routes?.length) {
+			return res.status(404).json({ success: false, message: 'No route found' });
+		}
+
+		const route = data.routes[0];
+		res.json({
+			success: true,
+			data: {
+				geometry: route.geometry,             // GeoJSON LineString
+				distance: route.distance,             // meters
+				duration: route.duration,             // seconds
+				steps: route.legs[0].steps.map((s: any) => ({
+					instruction: s.maneuver.type === 'depart' ? 'Départ'
+						: s.maneuver.type === 'arrive' ? 'Arrivée'
+						: `${getManeuverText(s.maneuver.type, s.maneuver.modifier)} ${s.name || ''}`.trim(),
+					distance: s.distance,
+					duration: s.duration,
+					maneuver: s.maneuver,
+					location: s.maneuver.location,    // [lng, lat]
+				})),
+			},
+		});
+	} catch (e) {
+		console.error('[wax] GET /route error:', e);
+		res.status(500).json({ success: false, message: 'Error computing route' });
+	}
+});
+
+// ═══════════════════════════════════════════════════════
+// GET /api/wax/geocode — Geocode address to coordinates (Nominatim)
+// ═══════════════════════════════════════════════════════
+router.get('/geocode', async (req, res) => {
+	try {
+		const user = extractUser(req);
+		if (!user) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+		const q = (req.query.q as string || '').trim();
+		if (!q || q.length < 2) {
+			return res.status(400).json({ success: false, message: 'Query too short' });
+		}
+
+		// Nominatim (OpenStreetMap) — free, no API key, 1 req/s
+		const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=5&addressdetails=1&countrycodes=be,fr,lu,nl,de`;
+
+		const response = await fetch(url, {
+			headers: { 'User-Agent': 'Zhiive/1.0 (contact@2thier.be)' },
+		});
+		if (!response.ok) {
+			return res.status(502).json({ success: false, message: 'Geocoding service unavailable' });
+		}
+
+		const results = await response.json();
+		res.json({
+			success: true,
+			data: results.map((r: any) => ({
+				displayName: r.display_name,
+				lat: parseFloat(r.lat),
+				lng: parseFloat(r.lon),
+				type: r.type,
+			})),
+		});
+	} catch (e) {
+		console.error('[wax] GET /geocode error:', e);
+		res.status(500).json({ success: false, message: 'Geocoding error' });
+	}
+});
+
+// ── Helper: OSRM maneuver type to human text ──
+function getManeuverText(type: string, modifier?: string): string {
+	const modMap: Record<string, string> = {
+		left: 'à gauche', right: 'à droite',
+		'slight left': 'légèrement à gauche', 'slight right': 'légèrement à droite',
+		'sharp left': 'fortement à gauche', 'sharp right': 'fortement à droite',
+		straight: 'tout droit', uturn: 'demi-tour',
+	};
+	const typeMap: Record<string, string> = {
+		turn: 'Tournez', 'new name': 'Continuez', merge: 'Rejoignez',
+		'on ramp': 'Prenez la bretelle', 'off ramp': 'Sortez',
+		fork: 'Prenez la fourche', 'end of road': 'En fin de route, tournez',
+		roundabout: 'Au rond-point, prenez', rotary: 'Au rond-point, prenez',
+		'continue': 'Continuez',
+	};
+	const verb = typeMap[type] || 'Continuez';
+	const dir = modMap[modifier || ''] || '';
+	return `${verb} ${dir}`.trim();
+}
+
 export default router;

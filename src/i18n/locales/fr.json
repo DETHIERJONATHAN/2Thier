@@ -528,6 +528,22 @@
     "noBees": "Aucune Bee visible dans cette zone",
     "pinExpires": "Expire dans",
     "pinViews": "vues",
-    "hours": "h"
+    "hours": "h",
+    "nav": {
+      "title": "Navigation",
+      "routeTooltip": "Calculer un itinéraire entre deux points",
+      "myPosition": "Ma position actuelle",
+      "searchPlaceholder": "Où allez-vous ?",
+      "tapHint": "Ou cherchez une adresse ci-dessus",
+      "computing": "Calcul de l'itinéraire...",
+      "noRoute": "Aucun itinéraire trouvé",
+      "noPosition": "Position GPS non disponible",
+      "error": "Erreur lors du calcul de l'itinéraire",
+      "steps": "étapes",
+      "voiceOn": "Guidage vocal activé — les instructions seront annoncées à voix haute",
+      "voiceOff": "Guidage vocal désactivé",
+      "go": "C'est parti",
+      "stop": "Arrêter"
+    }
   }
 }
