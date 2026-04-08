@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useRef, ReactNode, useCallback, useMemo, useEffect } from 'react';
 import { useUserPreference } from '../hooks/useUserPreference';
 
-export type ZhiiveApp = 'explore' | 'flow' | 'reels' | 'universe' | 'stats' | 'mail' | 'agenda' | 'search';
+export type ZhiiveApp = 'explore' | 'nectar' | 'reels' | 'wax' | 'stats' | 'mail' | 'agenda' | 'search';
 export type FeedMode = 'personal' | 'org';
 
 interface ZhiiveNavContextType {
@@ -38,7 +38,7 @@ interface ZhiiveNavContextType {
   setWallViewUrl: (url: string | null) => void;
 }
 
-const defaultTabOrder = ['explore', 'flow', 'reels', 'mur', 'universe', 'mail', 'agenda', 'search', 'stats'];
+const defaultTabOrder = ['explore', 'nectar', 'reels', 'mur', 'wax', 'mail', 'agenda', 'search', 'stats'];
 
 const ZhiiveNavContext = createContext<ZhiiveNavContextType>({
   centerApp: null, setCenterApp: () => {},
@@ -73,9 +73,21 @@ export const ZhiiveNavProvider = ({ children, initialFeedMode, onFeedModeChange 
   // Sync tabOrder from DB once loaded — merge new tabs that didn't exist before
   useEffect(() => {
     if (Array.isArray(savedTabOrder) && savedTabOrder.includes('mur')) {
+      let merged = [...savedTabOrder];
+
+      // ── Migration: replace deprecated 'flow' and 'universe' with 'nectar' ──
+      const hasFlow = merged.includes('flow');
+      const hasUniverse = merged.includes('universe');
+      if (hasFlow || hasUniverse) {
+        // Insert 'nectar' where 'flow' was (or where 'universe' was if no flow)
+        const insertIdx = hasFlow ? merged.indexOf('flow') : merged.indexOf('universe');
+        merged = merged.filter(t => t !== 'flow' && t !== 'universe');
+        if (!merged.includes('nectar')) {
+          merged.splice(insertIdx, 0, 'nectar');
+        }
+      }
+
       // Add any new tabs from defaultTabOrder that are missing from the saved order
-      const merged = [...savedTabOrder];
-      const murIdx = merged.indexOf('mur');
       for (const tab of defaultTabOrder) {
         if (!merged.includes(tab)) {
           // Insert new tabs after 'mur' but before 'stats' (or at end)
@@ -89,7 +101,7 @@ export const ZhiiveNavProvider = ({ children, initialFeedMode, onFeedModeChange 
       }
       setTabOrder(merged);
       // Persist the merged order if it changed
-      if (merged.length !== savedTabOrder.length) {
+      if (JSON.stringify(merged) !== JSON.stringify(savedTabOrder)) {
         setSavedTabOrder(merged);
       }
     }

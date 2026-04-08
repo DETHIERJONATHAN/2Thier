@@ -13,6 +13,7 @@ import {
   VideoCameraOutlined,
   ArrowLeftOutlined,
   CalendarOutlined,
+  HourglassOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
@@ -67,6 +68,10 @@ interface Message {
   mediaUrls: string[] | null;
   mediaType: string | null;
   isDeleted: boolean;
+  isEphemeral?: boolean;
+  ephemeralTtl?: number | null;
+  viewedAt?: string | null;
+  isExpired?: boolean;
   createdAt: string;
   replyTo: { id: string; content: string | null; sender: { firstName: string; lastName: string } } | null;
 }
@@ -127,6 +132,11 @@ const MessengerChat: React.FC = () => {
   const lastSeenWizzIdRef = useRef<string | null>(null);
   const lastGlobalWizzIdRef = useRef<string | null>(null);
   const wizzCooldownRef = useRef(false);
+
+  // 🕯️ Ephemeral (Snapchat-style) state
+  const [ephemeralMode, setEphemeralMode] = useState(false);
+  const [ephemeralTtl, setEphemeralTtl] = useState(86400); // 24h default
+  const ephemeralViewedRef = useRef<Set<string>>(new Set());
 
   // Video call state
   const [activeCall, setActiveCall] = useState<{ callId: string; callType: 'video' | 'audio'; isIncoming: boolean; conversationName: string } | null>(null);
@@ -429,9 +439,12 @@ const MessengerChat: React.FC = () => {
     if (!inlineNewMessage.trim() || inlineSending || !activeConversationId) return;
     setInlineSending(true);
     try {
-      await api.post(`/api/messenger/conversations/${activeConversationId}/messages`, {
-        content: inlineNewMessage.trim(),
-      });
+      const payload: Record<string, unknown> = { content: inlineNewMessage.trim() };
+      if (ephemeralMode) {
+        payload.isEphemeral = true;
+        payload.ephemeralTtl = ephemeralTtl;
+      }
+      await api.post(`/api/messenger/conversations/${activeConversationId}/messages`, payload);
       setInlineNewMessage('');
       await fetchInlineMessages();
       fetchConversations();
@@ -671,6 +684,30 @@ const MessengerChat: React.FC = () => {
 
               const showAvatar = !isMine && (i === 0 || inlineMessages[i - 1].senderId !== msg.senderId);
               const showName = !isMine && isGroup && showAvatar;
+              const isEph = msg.isEphemeral === true;
+
+              // Track ephemeral views — fire once per message for recipient
+              if (isEph && !isMine && !msg.viewedAt && !ephemeralViewedRef.current.has(msg.id)) {
+                ephemeralViewedRef.current.add(msg.id);
+                api.post(`/api/messenger/messages/${msg.id}/view-ephemeral`, {}).catch(() => {});
+              }
+
+              // Compute TTL remaining for ephemeral messages
+              let ephTtlLabel = '';
+              if (isEph && msg.viewedAt && msg.ephemeralTtl) {
+                const viewed = new Date(msg.viewedAt).getTime();
+                const expiresAt = viewed + msg.ephemeralTtl * 1000;
+                const remaining = Math.max(0, expiresAt - Date.now());
+                if (remaining <= 0) {
+                  ephTtlLabel = t('messenger.ephemeralExpired', 'Expiré');
+                } else if (remaining < 60000) {
+                  ephTtlLabel = `${Math.ceil(remaining / 1000)}s`;
+                } else if (remaining < 3600000) {
+                  ephTtlLabel = `${Math.ceil(remaining / 60000)}m`;
+                } else {
+                  ephTtlLabel = `${Math.ceil(remaining / 3600000)}h`;
+                }
+              }
 
               return (
                 <div key={msg.id} style={{
@@ -694,30 +731,74 @@ const MessengerChat: React.FC = () => {
                     )}
                     <div style={{
                       padding: '8px 12px', borderRadius: 18,
-                      background: isMine ? FB.msgBlueBg : FB.msgBg,
-                      color: isMine ? '#fff' : FB.text,
+                      background: isEph
+                        ? (isMine ? 'linear-gradient(135deg, #E17055, #FDCB6E)' : 'linear-gradient(135deg, #FDCB6E, #E17055)')
+                        : (isMine ? FB.msgBlueBg : FB.msgBg),
+                      color: isEph ? '#fff' : (isMine ? '#fff' : FB.text),
                       fontSize: 14, lineHeight: '1.35', wordBreak: 'break-word',
+                      border: isEph ? '1px solid rgba(225, 112, 85, 0.3)' : undefined,
+                      position: 'relative',
                     }}>
                       {msg.isDeleted ? (
                         <span style={{ fontStyle: 'italic', opacity: 0.6 }}>{t('messenger.messageDeleted')}</span>
                       ) : (
-                        msg.content
+                        <>
+                          {msg.content}
+                          {isEph && (
+                            <HourglassOutlined style={{ marginLeft: 6, fontSize: 11, opacity: 0.7, verticalAlign: 'middle' }} />
+                          )}
+                        </>
                       )}
                     </div>
-                    {(i === inlineMessages.length - 1 || inlineMessages[i + 1].senderId !== msg.senderId) && (
-                      <div style={{
-                        fontSize: 10, color: FB.textSecondary, marginTop: 2,
-                        textAlign: isMine ? 'right' : 'left', paddingLeft: isMine ? 0 : 12, paddingRight: isMine ? 12 : 0,
-                      }}>
-                        {formatTime(msg.createdAt)}
-                      </div>
-                    )}
+                    <div style={{
+                      fontSize: 10, color: FB.textSecondary, marginTop: 2, display: 'flex', gap: 4,
+                      justifyContent: isMine ? 'flex-end' : 'flex-start',
+                      paddingLeft: isMine ? 0 : 12, paddingRight: isMine ? 12 : 0,
+                    }}>
+                      {(i === inlineMessages.length - 1 || inlineMessages[i + 1].senderId !== msg.senderId) && (
+                        <span>{formatTime(msg.createdAt)}</span>
+                      )}
+                      {isEph && ephTtlLabel && (
+                        <span style={{ color: '#E17055', fontWeight: 600 }}>⏳ {ephTtlLabel}</span>
+                      )}
+                      {isEph && !msg.viewedAt && !isMine && (
+                        <span style={{ color: '#E17055' }}>🕯️</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
             })}
             <div ref={inlineMessagesEndRef} />
           </div>
+
+          {/* Ephemeral mode banner */}
+          {ephemeralMode && (
+            <div style={{
+              padding: '4px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: 'linear-gradient(90deg, rgba(225,112,85,0.12), rgba(253,203,110,0.12))',
+              borderTop: `1px solid rgba(225,112,85,0.2)`, fontSize: 12,
+            }}>
+              <span style={{ color: '#E17055', fontWeight: 600 }}>
+                <HourglassOutlined style={{ marginRight: 4 }} />
+                {t('messenger.ephemeralMode', 'Éphémère')}
+              </span>
+              <select
+                value={ephemeralTtl}
+                onChange={e => setEphemeralTtl(Number(e.target.value))}
+                style={{
+                  border: 'none', background: 'transparent', color: '#E17055',
+                  fontSize: 11, fontWeight: 600, cursor: 'pointer', outline: 'none',
+                }}
+              >
+                <option value={30}>30s</option>
+                <option value={60}>1m</option>
+                <option value={300}>5m</option>
+                <option value={3600}>1h</option>
+                <option value={86400}>24h</option>
+              </select>
+            </div>
+          )}
 
           {/* Input */}
           <div style={{
@@ -736,6 +817,21 @@ const MessengerChat: React.FC = () => {
                 padding: '8px 14px', background: FB.bg, fontSize: 14, color: FB.text,
               }}
             />
+            <div
+              onClick={() => setEphemeralMode(!ephemeralMode)}
+              title={ephemeralMode ? t('messenger.ephemeralOn', 'Mode éphémère activé') : t('messenger.ephemeralOff', 'Mode éphémère désactivé')}
+              style={{
+                width: 32, height: 32, borderRadius: '50%', display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer',
+                background: ephemeralMode ? 'linear-gradient(135deg, #E17055, #FDCB6E)' : 'transparent',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={e => { if (!ephemeralMode) e.currentTarget.style.background = FB.hover; }}
+              onMouseLeave={e => { if (!ephemeralMode) e.currentTarget.style.background = 'transparent'; }}
+            >
+              <HourglassOutlined style={{ fontSize: 16, color: ephemeralMode ? '#fff' : FB.textSecondary }} />
+            </div>
             <div
               onClick={sendWizz}
               title={t('messenger.wizz')}

@@ -70,10 +70,19 @@ const UniverseSvg = () => (
   </svg>
 );
 
+const WaxMapSvg = () => (
+  <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
+    <circle cx="12" cy="9" r="2.5" />
+    <path d="M3 20h18" />
+  </svg>
+);
+
 const ClapperboardIcon = (props: any) => <Icon component={ClapperboardSvg} {...props} />;
 const WallIcon = (props: any) => <Icon component={WallSvg} {...props} />;
 const FlowWaveIcon = (props: any) => <Icon component={FlowWaveSvg} {...props} />;
 const UniverseIcon = (props: any) => <Icon component={UniverseSvg} {...props} />;
+const WaxMapIcon = (props: any) => <Icon component={WaxMapSvg} {...props} />;
 
 // ── Icon mapping: tabIcon string (from DB) → React component ──
 const TAB_ICON_MAP: Record<string, React.ComponentType<{ style?: React.CSSProperties }>> = {
@@ -82,6 +91,9 @@ const TAB_ICON_MAP: Record<string, React.ComponentType<{ style?: React.CSSProper
   'clapperboard': ClapperboardIcon,
   'flow-wave': FlowWaveIcon,
   'universe': UniverseIcon,
+  'nectar': FlowWaveIcon,
+  'wax': WaxMapIcon,
+  'wax-map': WaxMapIcon,
   'mail': MailOutlined,
   'calendar': CalendarOutlined,
   'bar-chart': BarChartOutlined,
@@ -93,10 +105,10 @@ const SF_TAB_CONFIG_FALLBACK: { id: string; label: string; icon: React.Component
   { id: 'mur', label: 'Hive', icon: WallIcon, color: '#F5A623' },
   { id: 'explore', label: 'Scout', icon: CompassOutlined, color: '#00CEC9' },
   { id: 'reels', label: 'Reels', icon: ClapperboardIcon, color: '#e84393' },
-  { id: 'flow', label: 'Flow', icon: FlowWaveIcon, color: '#6C5CE7' },
-  { id: 'universe', label: 'Universe', icon: UniverseIcon, color: '#FD79A8' },
+  { id: 'nectar', label: 'Nectar', icon: FlowWaveIcon, color: '#FDCB6E' },
   { id: 'mail', label: 'Mail', icon: MailOutlined, color: '#00B894' },
   { id: 'agenda', label: 'Agenda', icon: CalendarOutlined, color: '#0984E3' },
+  { id: 'wax', label: 'Wax', icon: WaxMapIcon, color: '#E17055' },
   { id: 'search', label: 'Search', icon: SearchOutlined, color: '#A29BFE' },
   { id: 'stats', label: 'Stats', icon: BarChartOutlined, color: '#FDCB6E' },
 ];
@@ -128,19 +140,22 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
         const res = await api.get(`/api/modules/swipe-tabs?organizationId=${orgId}`);
         if (cancelled || !res?.success || !res.data) return;
         const tabs: TabConfig[] = res.data.map((t: any) => ({
-          id: t.id,
-          label: t.label,
-          icon: TAB_ICON_MAP[t.icon] || BarChartOutlined,
-          color: t.color || '#999',
+          id: t.id === 'flow' || t.id === 'universe' ? 'nectar' : t.id,
+          label: t.id === 'flow' || t.id === 'universe' ? 'Nectar' : t.label,
+          icon: TAB_ICON_MAP[t.id === 'flow' || t.id === 'universe' ? 'nectar' : t.icon] || BarChartOutlined,
+          color: t.id === 'flow' || t.id === 'universe' ? '#FDCB6E' : (t.color || '#999'),
         }));
+        // Deduplicate nectar (in case both flow and universe were returned)
+        const seen = new Set<string>();
+        const dedupedTabs = tabs.filter(t => { if (seen.has(t.id)) return false; seen.add(t.id); return true; });
         // Ensure 'search' tab is always present (it's a built-in app, not from API)
-        if (!tabs.find(t => t.id === 'search')) {
-          const statsIdx = tabs.findIndex(t => t.id === 'stats');
+        if (!dedupedTabs.find(t => t.id === 'search')) {
+          const statsIdx = dedupedTabs.findIndex(t => t.id === 'stats');
           const searchTab = { id: 'search', label: 'Search', icon: SearchOutlined as React.ComponentType<{ style?: React.CSSProperties }>, color: '#A29BFE' };
-          if (statsIdx >= 0) tabs.splice(statsIdx, 0, searchTab);
-          else tabs.push(searchTab);
+          if (statsIdx >= 0) dedupedTabs.splice(statsIdx, 0, searchTab);
+          else dedupedTabs.push(searchTab);
         }
-        if (tabs.length > 0) setDynamicTabs(tabs);
+        if (dedupedTabs.length > 0) setDynamicTabs(dedupedTabs);
       } catch (err) {
         console.error('[ZhiiveHeader] swipe-tabs fetch error:', err);
       }

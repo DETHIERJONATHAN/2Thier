@@ -265,16 +265,20 @@ router.get('/swipe-tabs', async (req, res) => {
 		const tabs = Array.from(byKey.values())
 			.sort((a, b) => (a.order ?? 99) - (b.order ?? 99))
 			.map(m => ({
-				id: m.key,
-				label: m.label,
-				color: m.tabColor || '#999',
-				icon: m.tabIcon || 'app',
+				id: m.key === 'flow' || m.key === 'universe' ? 'nectar' : m.key,
+				label: m.key === 'flow' || m.key === 'universe' ? 'Nectar' : m.label,
+				color: m.key === 'flow' || m.key === 'universe' ? '#FDCB6E' : (m.tabColor || '#999'),
+				icon: m.key === 'flow' || m.key === 'universe' ? 'nectar' : (m.tabIcon || 'app'),
 				order: m.order ?? 99,
 				moduleId: m.id,
 				placement: m.placement,
 			}));
 
-		res.json({ success: true, data: tabs });
+		// Deduplicate (flow + universe both become nectar)
+		const seen = new Set<string>();
+		const dedupedTabs = tabs.filter(t => { if (seen.has(t.id)) return false; seen.add(t.id); return true; });
+
+		res.json({ success: true, data: dedupedTabs });
 	} catch (e) {
 		console.error('[modules] GET /swipe-tabs erreur', e);
 		res.status(500).json({ success: false, message: 'Erreur récupération swipe tabs' });

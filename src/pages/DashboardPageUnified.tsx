@@ -52,10 +52,10 @@ const LazyWebBrowserPanel = React.lazy(() => import('../components/WebBrowserPan
    ZHIIVE — Lazy-loaded panel components
    ═══════════════════════════════════════════════════════════════ */
 const LazyExplorePanel = React.lazy(() => import('../components/zhiive/ExplorePanel'));
-const LazyFlowPanel = React.lazy(() => import('../components/zhiive/FlowPanel'));
-const LazyUniversePanel = React.lazy(() => import('../components/zhiive/UniversePanel'));
+const LazyNectarPanel = React.lazy(() => import('../components/zhiive/NectarPanel'));
 const LazyStoriesBar = React.lazy(() => import('../components/zhiive/StoriesBar'));
 const LazyReelsPanel = React.lazy(() => import('../components/zhiive/ReelsPanel'));
+const LazyWaxPanel = React.lazy(() => import('../components/zhiive/WaxPanel'));
 
 /** Maps route paths to their lazy-loaded component */
 const MODULE_COMPONENTS: Record<string, React.LazyExoticComponent<any>> = {
@@ -1575,7 +1575,7 @@ export default function DashboardPageUnified() {
   const [wallSearchHasMore, setWallSearchHasMore] = useState(true);
   const [iframeError, setIframeError] = useState(false);
 
-  const [mobilePanel, setMobilePanel] = useState(2); // Zhiive: 0=Explore, 1=Flow, 2=Mur(centre), 3=Universe, 4=Reels, 5=Stats
+  const [mobilePanel, setMobilePanel] = useState(2); // Zhiive: 0=Explore, 1=Nectar, 2=Mur(centre), 3=Reels, 4=Stats
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -3213,9 +3213,9 @@ export default function DashboardPageUnified() {
   const renderPanel = (appId: string, sidebar?: boolean) => {
     switch (appId) {
       case 'explore': return <LazyExplorePanel api={api} openModule={openModule} />;
-      case 'flow': return <LazyFlowPanel api={api} currentUser={user} />;
+      case 'nectar': return <LazyNectarPanel api={api} currentUser={user} />;
       case 'reels': return <LazyReelsPanel api={api} currentUser={user} />;
-      case 'universe': return <LazyUniversePanel api={api} currentUser={user} />;
+      case 'wax': return <LazyWaxPanel api={api} currentUser={user} />;
       case 'mail': return <LazyGoogleGmailPageV2 compact={sidebar} />;
       case 'agenda': return <LazyAgendaWrapper />;
       case 'search': return <LazySearchPage />;

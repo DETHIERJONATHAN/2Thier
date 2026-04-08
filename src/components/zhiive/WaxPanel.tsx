@@ -1,0 +1,479 @@
+/**
+ * 🕯️ WaxPanel — Carte interactive MapLibre
+ * Affiche les Colonies (hexagones), Bees (avatars), Combs (chantiers),
+ * et les WaxPins éphémères (glow orange, TTL 24h).
+ */
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Avatar, message, Badge } from 'antd';
+import {
+  AimOutlined, TeamOutlined,
+  EyeOutlined, EyeInvisibleOutlined,
+  EnvironmentOutlined, CloseOutlined,
+  UserOutlined,
+} from '@ant-design/icons';
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import { SF } from './ZhiiveTheme';
+import { useAuth } from '../../auth/useAuth';
+import { useActiveIdentity } from '../../contexts/ActiveIdentityContext';
+
+// ── Types ──
+interface BeeMarker {
+  type: 'bee'; id: string; name: string; avatarUrl?: string | null;
+  organizationId?: string | null; latitude: number; longitude: number;
+  approximate: boolean; online: boolean;
+}
+interface ColonyMarker {
+  type: 'colony'; id: string; name: string; logoUrl?: string | null;
+  description?: string | null; latitude: number; longitude: number; memberCount: number;
+}
+interface CombMarker {
+  type: 'comb'; id: string; name: string; address?: string | null;
+  latitude: number; longitude: number; status: string; organizationId?: string;
+}
+interface WaxPinMarker {
+  id: string; type: 'wax-pin'; pinType: string; title?: string | null;
+  previewUrl?: string | null; latitude: number; longitude: number;
+  createdAt: string; expiresAt: string; viewCount: number; messageId?: string | null;
+  user: { id: string; name: string; avatarUrl?: string | null };
+  organization?: { id: string; name: string; logoUrl?: string | null } | null;
+}
+
+type GhostMode = 'visible' | 'approximate' | 'ghost';
+
+interface WaxPanelProps { api: any; currentUser?: any; }
+
+const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
+  const { t } = useTranslation();
+  const { currentOrganization: _currentOrganization } = useAuth();
+  const _identity = useActiveIdentity();
+
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const markersRef = useRef<maplibregl.Marker[]>([]);
+
+  const [bees, setBees] = useState<BeeMarker[]>([]);
+  const [colonies, setColonies] = useState<ColonyMarker[]>([]);
+  const [combs, setCombs] = useState<CombMarker[]>([]);
+  const [waxPins, setWaxPins] = useState<WaxPinMarker[]>([]);
+  const [ghostMode, setGhostMode] = useState<GhostMode>('visible');
+  const [selectedEntity, setSelectedEntity] = useState<any | null>(null);
+  const [showLayer, setShowLayer] = useState({ bees: true, colonies: true, combs: true, pins: true });
+  const [mapReady, setMapReady] = useState(false);
+  const [sharing, setSharing] = useState(false);
+
+  // Default: Belgium center
+  const defaultCenter: [number, number] = [4.35, 50.85];
+  const defaultZoom = 8;
+
+  // ── Initialize MapLibre ──
+  useEffect(() => {
+    if (!mapContainerRef.current || mapRef.current) return;
+
+    const map = new maplibregl.Map({
+      container: mapContainerRef.current,
+      style: {
+        version: 8,
+        sources: {
+          osm: {
+            type: 'raster',
+            tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+            tileSize: 256,
+            attribution: '&copy; OpenStreetMap',
+          },
+        },
+        layers: [{
+          id: 'osm-tiles',
+          type: 'raster',
+          source: 'osm',
+          minzoom: 0,
+          maxzoom: 19,
+        }],
+        // Dark theme overlay via CSS filter applied to the container
+      },
+      center: defaultCenter,
+      zoom: defaultZoom,
+      maxZoom: 18,
+      minZoom: 3,
+    });
+
+    map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
+    map.addControl(new maplibregl.GeolocateControl({
+      positionOptions: { enableHighAccuracy: true },
+      trackUserLocation: true,
+    }), 'bottom-right');
+
+    map.on('load', () => setMapReady(true));
+    mapRef.current = map;
+
+    return () => { map.remove(); mapRef.current = null; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Fetch locations from API ──
+  const fetchLocations = useCallback(async () => {
+    try {
+      const map = mapRef.current;
+      if (!map) return;
+      const bounds = map.getBounds();
+      const sw = bounds.getSouthWest();
+      const ne = bounds.getNorthEast();
+      const q = `sw_lat=${sw.lat}&sw_lng=${sw.lng}&ne_lat=${ne.lat}&ne_lng=${ne.lng}`;
+
+      const [locsRes, pinsRes] = await Promise.all([
+        api.get(`/api/wax/locations?${q}`).catch(() => null),
+        api.get(`/api/wax/pins?${q}`).catch(() => null),
+      ]);
+
+      if (locsRes?.success && locsRes.data) {
+        setBees(locsRes.data.bees || []);
+        setColonies(locsRes.data.colonies || []);
+        setCombs(locsRes.data.combs || []);
+      }
+      if (pinsRes?.success) {
+        setWaxPins(pinsRes.data || []);
+      }
+    } catch { /* non-blocking */ }
+  }, [api]);
+
+  // Fetch on map ready + on move
+  useEffect(() => {
+    if (!mapReady) return;
+    fetchLocations();
+    const map = mapRef.current;
+    if (!map) return;
+    const onMoveEnd = () => fetchLocations();
+    map.on('moveend', onMoveEnd);
+    // Refresh every 30s
+    const interval = setInterval(fetchLocations, 30000);
+    return () => { map.off('moveend', onMoveEnd); clearInterval(interval); };
+  }, [mapReady, fetchLocations]);
+
+  // ── Share own location ──
+  const shareLocation = useCallback(() => {
+    if (!navigator.geolocation) return;
+    setSharing(true);
+    navigator.geolocation.watchPosition(
+      async (pos) => {
+        try {
+          await api.post('/api/wax/location', {
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+            heading: pos.coords.heading,
+          });
+        } catch { /* ignore */ }
+      },
+      () => { setSharing(false); },
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 },
+    );
+  }, [api]);
+
+  // ── Toggle ghost mode ──
+  const toggleGhostMode = useCallback(async (mode: GhostMode) => {
+    try {
+      await api.put('/api/wax/ghost-mode', { mode });
+      setGhostMode(mode);
+      if (mode === 'ghost') setSharing(false);
+      message.success(mode === 'ghost' ? t('wax.ghostEnabled') : t('wax.locationVisible'));
+    } catch { message.error(t('wax.ghostError')); }
+  }, [api, t]);
+
+  // ── Render markers on map ──
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+
+    // Clear old markers
+    markersRef.current.forEach(m => m.remove());
+    markersRef.current = [];
+
+    // Helper: create DOM marker element
+    const createEl = (html: string, className: string) => {
+      const el = document.createElement('div');
+      el.className = className;
+      el.innerHTML = html;
+      return el;
+    };
+
+    // ── Colony markers (hexagon) ──
+    if (showLayer.colonies) {
+      colonies.forEach(c => {
+        if (c.latitude == null || c.longitude == null) return;
+        const el = createEl(
+          `<div style="width:44px;height:44px;background:${SF.primary};clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 12px ${SF.primary}60;">
+            ${c.logoUrl
+              ? `<img src="${c.logoUrl}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;" />`
+              : `<span style="color:white;font-weight:800;font-size:14px;">${(c.name || '?')[0]}</span>`
+            }
+          </div>`,
+          'wax-colony-marker',
+        );
+        el.onclick = () => setSelectedEntity({ ...c, type: 'colony' });
+        const marker = new maplibregl.Marker({ element: el })
+          .setLngLat([c.longitude!, c.latitude!])
+          .addTo(map);
+        markersRef.current.push(marker);
+      });
+    }
+
+    // ── Bee markers (avatar circle) ──
+    if (showLayer.bees) {
+      bees.forEach(b => {
+        const borderColor = b.online ? SF.success : SF.textMuted;
+        const el = createEl(
+          `<div style="width:32px;height:32px;border-radius:50%;border:2.5px solid ${borderColor};overflow:hidden;cursor:pointer;background:${SF.primary};display:flex;align-items:center;justify-content:center;box-shadow:0 1px 6px rgba(0,0,0,0.3);">
+            ${b.avatarUrl
+              ? `<img src="${b.avatarUrl}" style="width:100%;height:100%;object-fit:cover;" />`
+              : `<span style="color:white;font-size:12px;font-weight:700;">${(b.name || '?')[0]}</span>`
+            }
+          </div>`,
+          'wax-bee-marker',
+        );
+        el.onclick = () => setSelectedEntity({ ...b, type: 'bee' });
+        const marker = new maplibregl.Marker({ element: el })
+          .setLngLat([b.longitude, b.latitude])
+          .addTo(map);
+        markersRef.current.push(marker);
+      });
+    }
+
+    // ── Comb markers (tool icon) ──
+    if (showLayer.combs) {
+      combs.forEach(c => {
+        if (c.latitude == null || c.longitude == null) return;
+        const el = createEl(
+          `<div style="width:28px;height:28px;border-radius:6px;background:${SF.gold};display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 1px 6px ${SF.gold}50;">
+            <span style="font-size:14px;">🔨</span>
+          </div>`,
+          'wax-comb-marker',
+        );
+        el.onclick = () => setSelectedEntity({ ...c, type: 'comb' });
+        const marker = new maplibregl.Marker({ element: el })
+          .setLngLat([c.longitude!, c.latitude!])
+          .addTo(map);
+        markersRef.current.push(marker);
+      });
+    }
+
+    // ── Wax Pin markers (glow orange) ──
+    if (showLayer.pins) {
+      waxPins.forEach(p => {
+        const remaining = Math.max(0, Math.ceil((new Date(p.expiresAt).getTime() - Date.now()) / 3600000));
+        const el = createEl(
+          `<div style="width:36px;height:36px;border-radius:50%;background:radial-gradient(circle,#FDCB6E,#e17055);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 0 16px 4px #FDCB6E80;animation:waxGlow 2s ease-in-out infinite alternate;">
+            <span style="font-size:16px;">${p.pinType === 'event' ? '📅' : p.pinType === 'comb' ? '🔨' : '🕯️'}</span>
+          </div>
+          <div style="position:absolute;bottom:-14px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.7);color:#FDCB6E;font-size:9px;padding:1px 5px;border-radius:8px;white-space:nowrap;font-weight:600;">${remaining}h</div>`,
+          'wax-pin-marker',
+        );
+        el.style.position = 'relative';
+        el.onclick = () => setSelectedEntity({ ...p, type: 'wax-pin' });
+        const marker = new maplibregl.Marker({ element: el })
+          .setLngLat([p.longitude, p.latitude])
+          .addTo(map);
+        markersRef.current.push(marker);
+      });
+    }
+  }, [bees, colonies, combs, waxPins, showLayer, mapReady]);
+
+  // Stats
+  const stats = useMemo(() => ({
+    bees: bees.length,
+    colonies: colonies.length,
+    combs: combs.length,
+    pins: waxPins.length,
+  }), [bees, colonies, combs, waxPins]);
+
+  return (
+    <div style={{ flex: 1, height: '100%', position: 'relative', overflow: 'hidden', background: SF.dark }}>
+      {/* CSS for glow animation */}
+      <style>{`
+        @keyframes waxGlow {
+          from { box-shadow: 0 0 12px 2px #FDCB6E60; }
+          to { box-shadow: 0 0 24px 8px #FDCB6EAA; }
+        }
+        .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right { z-index: 5 !important; }
+        .maplibregl-canvas { filter: saturate(0.85) brightness(0.95); }
+      `}</style>
+
+      {/* Map container */}
+      <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
+
+      {/* ── Top bar: title + ghost toggle ── */}
+      <div style={{
+        position: 'absolute', top: 0, left: 0, right: 0, height: 48,
+        background: 'linear-gradient(180deg, rgba(0,0,0,0.7) 0%, transparent 100%)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '0 14px', zIndex: 10,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 20 }}>🕯️</span>
+          <span style={{ fontSize: 16, fontWeight: 800, color: '#FDCB6E' }}>Wax</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* Ghost mode toggle */}
+          <div
+            onClick={() => toggleGhostMode(ghostMode === 'ghost' ? 'visible' : 'ghost')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px',
+              borderRadius: 16, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+              background: ghostMode === 'ghost' ? 'rgba(255,255,255,0.15)' : 'rgba(0,184,148,0.2)',
+              color: ghostMode === 'ghost' ? '#dfe6e9' : SF.success,
+              border: `1px solid ${ghostMode === 'ghost' ? 'rgba(255,255,255,0.2)' : SF.success + '40'}`,
+            }}
+          >
+            {ghostMode === 'ghost' ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+            {ghostMode === 'ghost' ? 'Ghost' : t('wax.visible')}
+          </div>
+          {/* Share location button */}
+          {!sharing && ghostMode !== 'ghost' && (
+            <div onClick={shareLocation} style={{
+              padding: '4px 10px', borderRadius: 16, cursor: 'pointer', fontSize: 11,
+              fontWeight: 600, background: '#FDCB6E20', color: '#FDCB6E', border: '1px solid #FDCB6E40',
+            }}>
+              <AimOutlined /> {t('wax.shareLocation')}
+            </div>
+          )}
+          {sharing && (
+            <div style={{ fontSize: 10, color: SF.success, fontWeight: 600 }}>
+              <AimOutlined /> Live
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Layer filters (bottom-left) ── */}
+      <div style={{
+        position: 'absolute', bottom: 16, left: 14, display: 'flex', flexDirection: 'column',
+        gap: 4, zIndex: 10,
+      }}>
+        {[
+          { key: 'colonies', icon: '⬡', label: 'Colonies', count: stats.colonies, color: SF.primary },
+          { key: 'bees', icon: '🐝', label: 'Bees', count: stats.bees, color: SF.success },
+          { key: 'combs', icon: '🔨', label: 'Combs', count: stats.combs, color: SF.gold },
+          { key: 'pins', icon: '🕯️', label: 'Wax', count: stats.pins, color: '#FDCB6E' },
+        ].map(layer => (
+          <div
+            key={layer.key}
+            onClick={() => setShowLayer(prev => ({ ...prev, [layer.key]: !prev[layer.key as keyof typeof prev] }))}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px',
+              borderRadius: 12, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+              background: showLayer[layer.key as keyof typeof showLayer]
+                ? 'rgba(0,0,0,0.75)' : 'rgba(0,0,0,0.4)',
+              color: showLayer[layer.key as keyof typeof showLayer]
+                ? layer.color : 'rgba(255,255,255,0.4)',
+              backdropFilter: 'blur(8px)',
+              transition: 'all 0.2s',
+            }}
+          >
+            <span>{layer.icon}</span>
+            <span>{layer.label}</span>
+            <Badge count={layer.count} style={{
+              background: layer.color + '30', color: layer.color,
+              fontSize: 9, fontWeight: 700, minWidth: 16, height: 16, lineHeight: '16px',
+              boxShadow: 'none',
+            }} />
+          </div>
+        ))}
+      </div>
+
+      {/* ── Selected entity popup ── */}
+      {selectedEntity && (
+        <div style={{
+          position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)',
+          width: 'calc(100% - 28px)', maxWidth: 360, background: 'rgba(15,15,30,0.95)',
+          borderRadius: 16, padding: 16, zIndex: 20, backdropFilter: 'blur(12px)',
+          border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+        }}>
+          <div onClick={() => setSelectedEntity(null)} style={{
+            position: 'absolute', top: 8, right: 10, cursor: 'pointer',
+            color: 'rgba(255,255,255,0.5)', fontSize: 14,
+          }}>
+            <CloseOutlined />
+          </div>
+
+          {selectedEntity.type === 'colony' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{
+                width: 48, height: 48, clipPath: 'polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%)',
+                background: SF.primary, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                {selectedEntity.logoUrl
+                  ? <img src={selectedEntity.logoUrl} style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} />
+                  : <span style={{ color: 'white', fontWeight: 800, fontSize: 18 }}>{selectedEntity.name?.[0]}</span>}
+              </div>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: 'white' }}>{selectedEntity.name}</div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
+                  <TeamOutlined /> {selectedEntity.memberCount} {t('wax.members')}
+                </div>
+                {selectedEntity.description && (
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>
+                    {selectedEntity.description.substring(0, 80)}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {selectedEntity.type === 'bee' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <Avatar size={44} src={selectedEntity.avatarUrl} icon={!selectedEntity.avatarUrl ? <UserOutlined /> : undefined}
+                style={{ background: !selectedEntity.avatarUrl ? SF.primary : undefined, border: `2px solid ${selectedEntity.online ? SF.success : SF.textMuted}` }} />
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: 'white' }}>{selectedEntity.name}</div>
+                <div style={{ fontSize: 11, color: selectedEntity.online ? SF.success : 'rgba(255,255,255,0.4)' }}>
+                  {selectedEntity.online ? 'Online' : 'Offline'}
+                  {selectedEntity.approximate && ' · ~'}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {selectedEntity.type === 'comb' && (
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: 'white' }}>🔨 {selectedEntity.name}</div>
+              {selectedEntity.address && (
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
+                  <EnvironmentOutlined /> {selectedEntity.address}
+                </div>
+              )}
+              <div style={{ fontSize: 11, color: SF.gold, marginTop: 2 }}>{selectedEntity.status}</div>
+            </div>
+          )}
+
+          {selectedEntity.type === 'wax-pin' && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <span style={{ fontSize: 24 }}>🕯️</span>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#FDCB6E' }}>
+                    {selectedEntity.title || 'Wax Pin'}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>
+                    {selectedEntity.user?.name}
+                    {selectedEntity.organization ? ` · ${selectedEntity.organization.name}` : ''}
+                  </div>
+                </div>
+              </div>
+              {selectedEntity.previewUrl && (
+                <img src={selectedEntity.previewUrl} alt="" style={{
+                  width: '100%', height: 120, objectFit: 'cover', borderRadius: 8, marginBottom: 6,
+                }} />
+              )}
+              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>
+                <EyeOutlined /> {selectedEntity.viewCount} ·
+                ⏳ {Math.max(0, Math.ceil((new Date(selectedEntity.expiresAt).getTime() - Date.now()) / 3600000))}h
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default WaxPanel;

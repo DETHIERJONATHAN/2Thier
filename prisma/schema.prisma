@@ -1053,6 +1053,9 @@ model Organization {
   legalName                  String?
   iban                       String?
   bankAccountHolder          String?
+  // Wax (carte) - position de la Colony
+  latitude                   Float?
+  longitude                  Float?
   AIRecommendation           AIRecommendation[]
   AdCampaign                 AdCampaign[]
   AdPlatformIntegration      AdPlatformIntegration[]
@@ -1158,6 +1161,9 @@ model Organization {
 
   // Dépenses / Expenses
   Expense                    Expense[]
+
+  // Wax pins
+  WaxPins                    WaxPin[]
 }
 
 model OrganizationModuleStatus {
@@ -2354,6 +2360,10 @@ model User {
 
   // User Preferences (replaces localStorage)
   UserPreferences                                     UserPreference[]
+
+  // Wax (carte + éphémère)
+  UserLocation                                        UserLocation?
+  WaxPins                                             WaxPin[]
 
   @@index([organizationId, commercialSlug])
 }
@@ -4061,6 +4071,13 @@ model Message {
   replyToId       String?
   isEdited        Boolean  @default(false)
   isDeleted       Boolean  @default(false)
+  // ── Wax (ephemeral) ──
+  isEphemeral     Boolean  @default(false)   // Snapchat-style: disappears after read or TTL
+  ephemeralTtl    Int?                        // TTL in seconds (null = 24h default)
+  viewedAt        DateTime?                   // When the recipient opened it (triggers melt timer)
+  isExpired       Boolean  @default(false)    // Set true after melt/expiry
+  // ── Wax Pin (geo) ──
+  waxPin          WaxPin?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -4071,6 +4088,50 @@ model Message {
 
   @@index([conversationId, createdAt])
   @@index([senderId])
+}
+
+// ═══════════════════════════════════════════════════════
+// WAX — Carte interactive & contenu éphémère
+// ═══════════════════════════════════════════════════════
+
+/// Position temps-réel d'un utilisateur sur la carte Wax
+model UserLocation {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  latitude    Float
+  longitude   Float
+  accuracy    Float?   // GPS accuracy in meters
+  heading     Float?   // Direction 0-360
+  ghostMode   String   @default("visible") // visible | approximate | ghost
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([updatedAt])
+}
+
+/// Pin éphémère sur la carte Wax (lié à un message géolocalisé)
+model WaxPin {
+  id              String    @id @default(uuid())
+  messageId       String?   @unique  // Linked messenger message (nullable for standalone pins)
+  userId          String               // Who posted it
+  organizationId  String?              // Colony context (null = Free Bee)
+  latitude        Float
+  longitude       Float
+  pinType         String    @default("whisper") // whisper | event | comb | announcement
+  title           String?
+  previewUrl      String?              // Thumbnail for media pins
+  expiresAt       DateTime             // Auto-delete after this time
+  viewCount       Int       @default(0)
+  createdAt       DateTime  @default(now())
+
+  message         Message?  @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization    Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@index([expiresAt])
+  @@index([latitude, longitude])
+  @@index([userId])
 }
 
 // ═══════════════════════════════════════════════════════

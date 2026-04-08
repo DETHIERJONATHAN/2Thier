@@ -55,6 +55,7 @@ import userFavoritesRouter from './routes/userFavoritesRoutes'; // ⭐ FAVORIS M
 import userBookmarksRouter from './routes/userBookmarksRoutes'; // 🔖 BOOKMARKS PAGES WEB FAVORITES
 import honeycombRouter from './routes/honeycombRoutes'; // 🍯 HONEYCOMB - FLUX RSS PERSONNALISÉS
 import userPreferencesRouter from './routes/userPreferencesRoutes'; // 🔧 PRÉFÉRENCES UTILISATEUR (remplace localStorage)
+import waxRouter from './routes/wax'; // 🕯️ WAX — Carte interactive & contenu éphémère
 
 // 📋 ROUTES FORMULAIRES SITES WEB (style Effy)
 import websiteFormsRouter from './routes/website-forms'; // 📋 CRUD FORMULAIRES ADMIN
@@ -356,6 +357,7 @@ app.use('/api/user/favorites', userFavoritesRouter); // ⭐ FAVORIS MODULES UTIL
 app.use('/api/user/bookmarks', userBookmarksRouter); // 🔖 BOOKMARKS PAGES WEB FAVORITES
 app.use('/api/user/bookmarks', honeycombRouter); // 🍯 HONEYCOMB - FLUX RSS PERSONNALISÉS (/feeds)
 app.use('/api/user-preferences', userPreferencesRouter); // 🔧 PRÉFÉRENCES UTILISATEUR (remplace localStorage)
+app.use('/api/wax', waxRouter); // 🕯️ WAX — Carte interactive & contenu éphémère
 app.use('/api/website-forms', websiteFormsRouter); // 📋 FORMULAIRES SITES WEB (style Effy) - CRUD ADMIN
 app.use('/api/public/forms', publicFormsRouter); // 📋 SOUMISSION PUBLIQUE FORMULAIRES (sans auth)
 app.use('/api/calendar', calendarRouter); // 📅 AGENDA / CALENDRIER / TÂCHES
@@ -690,6 +692,48 @@ async function startServer() {
 
       // 🔄 Démarrage des jobs cron Peppol (vérification statuts)
       startPeppolCronJobs();
+
+      // 🕯️ Cleanup cron: expire ephemeral messages + WaxPins (every 5 min)
+      setInterval(async () => {
+        try {
+          const { db } = await import('./lib/database');
+          const now = new Date();
+
+          // Expire ephemeral messages viewed + TTL elapsed
+          const expiredMsgs = await db.message.findMany({
+            where: {
+              isEphemeral: true,
+              isExpired: false,
+              viewedAt: { not: null },
+              ephemeralTtl: { not: null },
+            },
+          });
+          let expiredCount = 0;
+          for (const m of expiredMsgs) {
+            if (m.viewedAt && m.ephemeralTtl) {
+              const expiresAt = new Date(m.viewedAt.getTime() + m.ephemeralTtl * 1000);
+              if (now > expiresAt) {
+                await db.message.update({
+                  where: { id: m.id },
+                  data: { isExpired: true, content: null, mediaUrls: undefined },
+                });
+                expiredCount++;
+              }
+            }
+          }
+
+          // Delete expired WaxPins
+          const deletedPins = await db.waxPin.deleteMany({
+            where: { expiresAt: { lt: now } },
+          });
+
+          if (expiredCount > 0 || deletedPins.count > 0) {
+            console.log(`🕯️ [WAX-CLEANUP] ${expiredCount} messages expired, ${deletedPins.count} pins deleted`);
+          }
+        } catch (err) {
+          console.error('⚠️ [WAX-CLEANUP] Error:', err);
+        }
+      }, 5 * 60 * 1000); // every 5 minutes
     });
 
     return server;

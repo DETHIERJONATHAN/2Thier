@@ -167,7 +167,14 @@ router.get('/conversations/:id/messages', async (req: Request, res: Response): P
     }
 
     const messages = await db.message.findMany({
-      where: { conversationId },
+      where: {
+        conversationId,
+        // Hide expired ephemeral messages
+        OR: [
+          { isEphemeral: false },
+          { isEphemeral: true, isExpired: false },
+        ],
+      },
       orderBy: { createdAt: 'desc' },
       take: limit,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -204,7 +211,7 @@ router.post('/conversations/:id/messages', async (req: Request, res: Response): 
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   const conversationId = req.params.id;
-  const { content, mediaUrls, mediaType, replyToId } = req.body;
+  const { content, mediaUrls, mediaType, replyToId, isEphemeral, ephemeralTtl } = req.body;
 
   if (!content && (!mediaUrls || mediaUrls.length === 0)) {
     res.status(400).json({ error: 'Contenu ou média requis' }); return;
@@ -227,6 +234,8 @@ router.post('/conversations/:id/messages', async (req: Request, res: Response): 
         mediaUrls: mediaUrls || undefined,
         mediaType: mediaType || null,
         replyToId: replyToId || null,
+        isEphemeral: isEphemeral === true,
+        ephemeralTtl: isEphemeral === true ? (typeof ephemeralTtl === 'number' && ephemeralTtl > 0 ? ephemeralTtl : 86400) : null,
       },
       include: {
         sender: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
@@ -313,6 +322,35 @@ router.delete('/messages/:id', async (req: Request, res: Response): Promise<void
     res.json({ success: true });
   } catch (err) {
     console.error('[MESSENGER] Error deleting message:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// POST /messenger/messages/:id/view-ephemeral — Mark ephemeral as viewed
+// ═══════════════════════════════════════════════════════════════
+router.post('/messages/:id/view-ephemeral', async (req: Request, res: Response): Promise<void> => {
+  const user = (req as any).user;
+  if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
+
+  try {
+    const msg = await db.message.findUnique({ where: { id: req.params.id } });
+    if (!msg || !msg.isEphemeral) {
+      res.status(404).json({ error: 'Message introuvable' }); return;
+    }
+    // Only the recipient (not sender) triggers the view timer
+    if (msg.senderId === user.id) { res.json({ success: true }); return; }
+    // Already viewed
+    if (msg.viewedAt) { res.json({ success: true, viewedAt: msg.viewedAt }); return; }
+
+    const viewedAt = new Date();
+    await db.message.update({
+      where: { id: req.params.id },
+      data: { viewedAt },
+    });
+    res.json({ success: true, viewedAt });
+  } catch (err) {
+    console.error('[MESSENGER] Error marking ephemeral viewed:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
