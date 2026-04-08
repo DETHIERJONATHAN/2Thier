@@ -103,6 +103,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
   const routeSourceAdded = useRef(false);
 
   const [reportingAlert, setReportingAlert] = useState(false);
+  const [carView, setCarView] = useState(false);
 
   // Default: Belgium center
   const defaultCenter: [number, number] = [4.35, 50.85];
@@ -609,6 +610,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
     }
 
     // Switch to car-view: close zoom, steep pitch, bearing along route
+    setCarView(true);
     const coords = routeData.geometry.coordinates as [number, number][];
     const initialBearing = coords.length >= 2 ? computeBearing(coords[0], coords[Math.min(5, coords.length - 1)]) : 0;
     mapRef.current?.easeTo({
@@ -688,6 +690,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
       routeSourceAdded.current = false;
     }
     setRouteData(null);
+    setCarView(false);
 
     // Restore normal map view
     mapRef.current?.easeTo({ pitch: 50, bearing: -12, zoom: 12, duration: 1000 });
@@ -978,6 +981,32 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
             </div>
           </Tooltip>
         )}
+        {/* 3D car-view toggle */}
+        <Tooltip title={carView ? t('wax.nav.view2D') : t('wax.nav.view3D')} placement="right">
+          <div
+            onClick={() => {
+              const next = !carView;
+              setCarView(next);
+              if (next) {
+                mapRef.current?.easeTo({ pitch: 75, zoom: 18, duration: 800 });
+              } else {
+                mapRef.current?.easeTo({ pitch: 50, bearing: -12, zoom: mapRef.current.getZoom() > 14 ? 12 : mapRef.current.getZoom(), duration: 800 });
+              }
+            }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5, padding: '5px 8px',
+              borderRadius: 12, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+              background: carView ? 'rgba(108,92,231,0.3)' : 'rgba(0,0,0,0.6)',
+              color: carView ? SF.primary : 'rgba(255,255,255,0.6)',
+              border: `1px solid ${carView ? SF.primary + '50' : 'rgba(255,255,255,0.15)'}`,
+              backdropFilter: 'blur(8px)', transition: 'all 0.2s', whiteSpace: 'nowrap',
+              marginBottom: 2,
+            }}
+          >
+            <span style={{ fontSize: 13 }}>🏙️</span>
+            <span>{carView ? '2D' : '3D'}</span>
+          </div>
+        </Tooltip>
         {[
           { key: 'colonies', icon: '⬡', labelKey: 'wax.colonies', tooltipKey: 'wax.coloniesTooltip', count: stats.colonies, color: SF.primary },
           { key: 'bees', icon: '🐝', labelKey: 'wax.bees', tooltipKey: 'wax.beesTooltip', count: stats.bees, color: SF.success },
@@ -1126,17 +1155,44 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
         </div>
       )}
 
-      {/* ── Routing search bar (same height as top bar) ── */}
+      {/* ── Routing search bar (top:48, same position as HUD) ── */}
       {routingOpen && !routeData && (
-        <div style={{ position: 'absolute', bottom: 70, left: 0, right: 0, zIndex: 30 }}>
-          {/* Suggestions dropdown (above the bar) */}
+        <div style={{ position: 'absolute', top: 48, left: 0, right: 0, zIndex: 30 }}>
+          {/* Search bar — 48px, same as top bar */}
+          <div style={{
+            height: 48,
+            background: 'rgba(10, 10, 25, 0.92)',
+            backdropFilter: 'blur(12px)',
+            borderBottom: '1px solid rgba(255,255,255,0.08)',
+            display: 'flex', alignItems: 'center',
+            padding: '0 10px', gap: 8,
+          }}>
+            <CarOutlined style={{ color: SF.primary, fontSize: 15, flexShrink: 0 }} />
+            <input
+              type="text"
+              value={destQuery}
+              onChange={(e) => searchDestination(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') triggerSearch(); }}
+              placeholder={t('wax.nav.searchPlaceholder')}
+              autoFocus
+              style={{
+                flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                color: 'white', fontSize: 14, fontWeight: 500, fontFamily: 'inherit',
+              }}
+            />
+            {geocodeLoading
+              ? <LoadingOutlined spin style={{ color: SF.primary, fontSize: 14 }} />
+              : <SearchOutlined onClick={triggerSearch} style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14, cursor: 'pointer' }} />
+            }
+            <CloseOutlined onClick={() => setRoutingOpen(false)} style={{ color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 13 }} />
+          </div>
+
+          {/* Suggestions dropdown (below the bar) */}
           {(suggestions.length > 0 || (geocodeLoading) || (!geocodeLoading && geocodeSearched && suggestions.length === 0 && destQuery.trim().length >= 2)) && (
             <div style={{
-              margin: '0 10px 4px', borderRadius: 12,
               background: 'rgba(15, 15, 30, 0.97)', backdropFilter: 'blur(16px)',
-              border: '1px solid rgba(255,255,255,0.1)',
+              borderBottom: '1px solid rgba(255,255,255,0.1)',
               maxHeight: '40vh', overflowY: 'auto',
-              boxShadow: '0 -4px 24px rgba(0,0,0,0.5)',
             }}>
               {geocodeLoading && (
                 <div style={{ textAlign: 'center', padding: 10, color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>
@@ -1178,34 +1234,6 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
               ))}
             </div>
           )}
-
-          {/* Search bar — 48px, same as top bar */}
-          <div style={{
-            height: 48,
-            background: 'rgba(10, 10, 25, 0.88)',
-            backdropFilter: 'blur(10px)',
-            display: 'flex', alignItems: 'center',
-            padding: '0 10px', gap: 8,
-          }}>
-            <CarOutlined style={{ color: SF.primary, fontSize: 15, flexShrink: 0 }} />
-            <input
-              type="text"
-              value={destQuery}
-              onChange={(e) => searchDestination(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') triggerSearch(); }}
-              placeholder={t('wax.nav.searchPlaceholder')}
-              autoFocus
-              style={{
-                flex: 1, background: 'transparent', border: 'none', outline: 'none',
-                color: 'white', fontSize: 14, fontWeight: 500, fontFamily: 'inherit',
-              }}
-            />
-            {geocodeLoading
-              ? <LoadingOutlined spin style={{ color: SF.primary, fontSize: 14 }} />
-              : <SearchOutlined onClick={triggerSearch} style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14, cursor: 'pointer' }} />
-            }
-            <CloseOutlined onClick={() => setRoutingOpen(false)} style={{ color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 13 }} />
-          </div>
         </div>
       )}
 

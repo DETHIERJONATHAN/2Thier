@@ -546,7 +546,9 @@
       "voiceOff": "Guidage vocal désactivé",
       "go": "C'est parti",
       "stop": "Arrêter",
-      "goThere": "Y aller"
+      "goThere": "Y aller",
+      "view3D": "Vue 3D voiture",
+      "view2D": "Vue carte 2D"
     },
     "alerts": {
       "report": "Signaler",

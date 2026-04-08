@@ -546,7 +546,9 @@
       "voiceOff": "Voice guidance off",
       "go": "Let's go",
       "stop": "Stop",
-      "goThere": "Go there"
+      "goThere": "Go there",
+      "view3D": "3D car view",
+      "view2D": "2D map view"
     },
     "alerts": {
       "report": "Report",
