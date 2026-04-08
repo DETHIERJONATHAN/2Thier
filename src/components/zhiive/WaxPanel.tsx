@@ -433,40 +433,6 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
     }, 400);
   }, [api]);
 
-  // ── Compute route ──
-  const computeRoute = useCallback(async (dest: { lat: number; lng: number }) => {
-    // Get current position as origin
-    const pos = userPosition || (mapRef.current ? { lat: mapRef.current.getCenter().lat, lng: mapRef.current.getCenter().lng } : null);
-    if (!pos) { message.warning(t('wax.nav.noPosition')); return; }
-
-    try {
-      message.loading({ content: t('wax.nav.computing'), key: 'route', duration: 10 });
-      const res = await api.get(
-        `/api/wax/route?from_lng=${pos.lng}&from_lat=${pos.lat}&to_lng=${dest.lng}&to_lat=${dest.lat}`
-      );
-      if (!res?.success) { message.error({ content: t('wax.nav.noRoute'), key: 'route' }); return; }
-
-      setRouteData(res.data);
-      setCurrentStepIndex(0);
-      setSuggestions([]);
-      setRoutingOpen(false);
-      message.destroy('route');
-
-      // Draw route on map
-      drawRouteOnMap(res.data.geometry);
-
-      // Fit map to route
-      const coords = res.data.geometry.coordinates as [number, number][];
-      const bounds = coords.reduce(
-        (b, c) => b.extend(c as [number, number]),
-        new maplibregl.LngLatBounds(coords[0], coords[0])
-      );
-      mapRef.current?.fitBounds(bounds, { padding: 80, pitch: 50, bearing: -12, duration: 1500 });
-    } catch {
-      message.error({ content: t('wax.nav.error'), key: 'route' });
-    }
-  }, [api, t, userPosition, drawRouteOnMap]);
-
   // ── Draw route line on map ──
   const drawRouteOnMap = useCallback((geometry: GeoJSON.LineString) => {
     const map = mapRef.current;
@@ -512,6 +478,40 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
 
     routeSourceAdded.current = true;
   }, []);
+
+  // ── Compute route ──
+  const computeRoute = useCallback(async (dest: { lat: number; lng: number }) => {
+    // Get current position as origin
+    const pos = userPosition || (mapRef.current ? { lat: mapRef.current.getCenter().lat, lng: mapRef.current.getCenter().lng } : null);
+    if (!pos) { message.warning(t('wax.nav.noPosition')); return; }
+
+    try {
+      message.loading({ content: t('wax.nav.computing'), key: 'route', duration: 10 });
+      const res = await api.get(
+        `/api/wax/route?from_lng=${pos.lng}&from_lat=${pos.lat}&to_lng=${dest.lng}&to_lat=${dest.lat}`
+      );
+      if (!res?.success) { message.error({ content: t('wax.nav.noRoute'), key: 'route' }); return; }
+
+      setRouteData(res.data);
+      setCurrentStepIndex(0);
+      setSuggestions([]);
+      setRoutingOpen(false);
+      message.destroy('route');
+
+      // Draw route on map
+      drawRouteOnMap(res.data.geometry);
+
+      // Fit map to route
+      const coords = res.data.geometry.coordinates as [number, number][];
+      const bounds = coords.reduce(
+        (b, c) => b.extend(c as [number, number]),
+        new maplibregl.LngLatBounds(coords[0], coords[0])
+      );
+      mapRef.current?.fitBounds(bounds, { padding: 80, pitch: 50, bearing: -12, duration: 1500 });
+    } catch {
+      message.error({ content: t('wax.nav.error'), key: 'route' });
+    }
+  }, [api, t, userPosition, drawRouteOnMap]);
 
   // ── Voice announce ──
   const speakInstruction = useCallback((text: string) => {
