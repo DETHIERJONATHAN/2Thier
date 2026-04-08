@@ -38,7 +38,6 @@
     "linkCopied": "Lien copié !",
     "launch": "Lancer"
   },
-
   "hive": {
     "buzz": "Buzz",
     "buzzes": "Buzzes",
@@ -95,7 +94,6 @@
     "errorAddingToHiveLive": "Erreur lors de l'ajout au Hive Live",
     "hiveLiveExplanation": "Ce Buzz sera ajouté comme moment sur votre ligne de vie Hive Live."
   },
-
   "stories": {
     "myStory": "Ma Story",
     "addStory": "Ajouter une story",
@@ -116,7 +114,6 @@
     "nextStory": "Suivant →",
     "closeStory": "Fermer ✓"
   },
-
   "reels": {
     "noReelsSaved": "Aucun reel enregistré",
     "tapSaveHint": "Appuyez sur 📌 Enregistrer sur un reel pour le retrouver ici",
@@ -159,7 +156,6 @@
     "dropABuzz": "Lâchez un buzz...",
     "shareTitle": "Partager"
   },
-
   "universe": {
     "communityEnergy": "💫 Énergie de la Colony",
     "positive": "Positif",
@@ -214,7 +210,6 @@
     "capsules": "Capsules",
     "orbit": "Orbite"
   },
-
   "explore": {
     "title": "🐝 Scout",
     "gallery": "Galerie",
@@ -268,7 +263,6 @@
     "declineRequest": "Refuser",
     "unfriended": "Ami retiré",
     "requestAcceptedProfile": "Demande acceptée ! Vous êtes maintenant amis 🎉",
-    "requestCancelled": "Demande annulée",
     "requestDeclined": "Demande refusée",
     "requestSentSuccess": "Demande d'ami envoyée ! 🐝",
     "blocked": "Bloqué",
@@ -276,7 +270,6 @@
     "sendMessage": "Message",
     "friendActionError": "Erreur lors de l'action"
   },
-
   "flow": {
     "tagline": "Exister, Créer, Gagner !",
     "postAnonymously": "Postez anonymement, la Colony vote",
@@ -329,7 +322,6 @@
     "alreadyVoted": "Vous avez déjà voté pour ce Spark",
     "expires": "Expire le : {{date}}"
   },
-
   "messenger": {
     "discussions": "Discussions",
     "whispers": "Whispers",
@@ -359,7 +351,6 @@
     "wizzSent": "Vous avez envoyé un Wizz !",
     "wizzReceived": "vous a envoyé un Wizz !"
   },
-
   "videocall": {
     "incomingVideoCall": "📹 Appel vidéo entrant...",
     "incomingAudioCall": "📞 Appel audio entrant...",
@@ -393,7 +384,6 @@
     "enableRecHint": "Activez le bouton 🔴 REC pendant un appel pour obtenir un résumé Hive Mind automatique.",
     "testSpeakers": "Tester les haut-parleurs (joue un son court)"
   },
-
   "dashboard": {
     "activityCreation": "a ajouté un nouveau lead",
     "activityEmail": "a envoyé un email",
@@ -415,7 +405,6 @@
     "createOrganization": "Fonder une Colony",
     "profileSettings": "Paramètres du profil"
   },
-
   "profile": {
     "myProfile": "Mon Profil",
     "manageInfo": "Gérez vos informations personnelles",
@@ -445,7 +434,6 @@
     "dutch": "Nederlands",
     "languageUpdated": "Langue mise à jour !"
   },
-
   "roles": {
     "super_admin": "Super Keeper",
     "admin": "Keeper",
@@ -456,7 +444,6 @@
     "client": "Client",
     "prestataire": "Prestataire"
   },
-
   "visibility": {
     "private": "Privé",
     "colony": "Colony",
@@ -464,7 +451,6 @@
     "client": "Client",
     "organization": "Colony"
   },
-
   "nav": {
     "myProfile": "Mon Profil",
     "settings": "Paramètres",
@@ -472,7 +458,6 @@
     "personal": "👤 Mon Hive",
     "colony": "🏢 Colony"
   },
-
   "settings": {
     "title": "Paramètres et confidentialité",
     "profile": "Mon Profil",
@@ -490,7 +475,6 @@
     "adminTitle": "Administration",
     "adminDesc": "Configuration avancée."
   },
-
   "honeycomb": {
     "title": "Honeycomb",
     "subtitle": "Vos sources d'actualités personnalisées",
@@ -513,5 +497,37 @@
     "noArticles": "Aucun article récent",
     "compactView": "Vue compacte",
     "widgetView": "Vue widgets"
+  },
+  "wax": {
+    "title": "Wax",
+    "subtitle": "Carte interactive en temps réel",
+    "colonies": "Colonies",
+    "coloniesTooltip": "Les organisations (entreprises) avec une adresse. Appuyez pour voir les détails.",
+    "bees": "Bees",
+    "beesTooltip": "Les membres qui partagent leur position en temps réel. Vert = en ligne.",
+    "combs": "Combs",
+    "combsTooltip": "Les chantiers en cours avec une adresse. Appuyez pour voir les infos.",
+    "pins": "Wax Pins",
+    "pinsTooltip": "Marqueurs éphémères (24h) : événements, annonces, lieux temporaires.",
+    "visible": "Visible",
+    "visibleTooltip": "Votre position est partagée sur la carte. Les autres Bees peuvent vous voir.",
+    "ghost": "Invisible",
+    "ghostTooltip": "Mode fantôme activé. Personne ne voit votre position sur la carte.",
+    "ghostEnabled": "Mode fantôme activé — vous êtes invisible",
+    "locationVisible": "Position visible sur la carte",
+    "ghostError": "Erreur lors du changement de mode",
+    "shareLocation": "Partager",
+    "shareLocationTooltip": "Activez le GPS pour partager votre position en temps réel sur la carte.",
+    "sharingLive": "GPS actif",
+    "sharingLiveTooltip": "Votre position est envoyée en temps réel. Les Bees proches vous voient.",
+    "members": "membres",
+    "online": "En ligne",
+    "offline": "Hors ligne",
+    "approximate": "Position approximative",
+    "noColonies": "Aucune colonie dans cette zone",
+    "noBees": "Aucune Bee visible dans cette zone",
+    "pinExpires": "Expire dans",
+    "pinViews": "vues",
+    "hours": "h"
   }
 }

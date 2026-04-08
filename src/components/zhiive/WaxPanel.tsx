@@ -5,12 +5,12 @@
  */
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Avatar, message, Badge } from 'antd';
+import { Avatar, message, Badge, Tooltip } from 'antd';
 import {
   AimOutlined, TeamOutlined,
   EyeOutlined, EyeInvisibleOutlined,
   EnvironmentOutlined, CloseOutlined,
-  UserOutlined,
+  UserOutlined, QuestionCircleOutlined,
 } from '@ant-design/icons';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -199,6 +199,14 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
     return () => { map.off('moveend', onMoveEnd); clearInterval(interval); };
   }, [mapReady, fetchLocations]);
 
+  // Auto-start location sharing on mount (if not ghost)
+  useEffect(() => {
+    if (mapReady && ghostMode !== 'ghost' && !sharing) {
+      shareLocation();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapReady]);
+
   // ── Share own location ──
   const shareLocation = useCallback(() => {
     if (!navigator.geolocation) return;
@@ -378,17 +386,23 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
 
   return (
     <div style={{ flex: 1, height: '100%', position: 'relative', overflow: 'hidden', background: SF.dark }}>
-      {/* CSS for glow animation */}
+      {/* CSS for glow animation + mobile */}
       <style>{`
         @keyframes waxGlow {
           from { box-shadow: 0 0 12px 2px #FDCB6E60; }
           to { box-shadow: 0 0 24px 8px #FDCB6EAA; }
         }
         .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right { z-index: 5 !important; }
+        .maplibregl-ctrl-bottom-right { bottom: 56px !important; right: 6px !important; }
+        .maplibregl-ctrl-group button { width: 36px !important; height: 36px !important; }
+        .maplibregl-ctrl-attrib { font-size: 9px !important; opacity: 0.5; }
+        .wax-colony-marker, .wax-bee-marker, .wax-comb-marker, .wax-pin-marker {
+          touch-action: none;
+        }
       `}</style>
 
       {/* Map container */}
-      <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
+      <div ref={mapContainerRef} style={{ width: '100%', height: '100%', touchAction: 'none' }} />
 
       {/* ── Top bar: title + ghost toggle ── */}
       <div style={{
@@ -396,77 +410,90 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
         background: 'rgba(10, 10, 25, 0.88)',
         backdropFilter: 'blur(10px)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0 14px', zIndex: 10,
+        padding: '0 10px', zIndex: 10,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 20 }}>🕯️</span>
-          <span style={{ fontSize: 16, fontWeight: 800, color: '#FDCB6E' }}>Wax</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 18 }}>🕯️</span>
+          <span style={{ fontSize: 15, fontWeight: 800, color: '#FDCB6E' }}>{t('wax.title')}</span>
+          <Tooltip title={t('wax.subtitle')} placement="bottom">
+            <QuestionCircleOutlined style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', cursor: 'pointer' }} />
+          </Tooltip>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
           {/* Ghost mode toggle */}
-          <div
-            onClick={() => toggleGhostMode(ghostMode === 'ghost' ? 'visible' : 'ghost')}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px',
-              borderRadius: 16, cursor: 'pointer', fontSize: 11, fontWeight: 600,
-              background: ghostMode === 'ghost' ? 'rgba(255,255,255,0.15)' : 'rgba(0,184,148,0.2)',
-              color: ghostMode === 'ghost' ? '#dfe6e9' : SF.success,
-              border: `1px solid ${ghostMode === 'ghost' ? 'rgba(255,255,255,0.2)' : SF.success + '40'}`,
-            }}
-          >
-            {ghostMode === 'ghost' ? <EyeInvisibleOutlined /> : <EyeOutlined />}
-            {ghostMode === 'ghost' ? 'Ghost' : t('wax.visible')}
-          </div>
+          <Tooltip title={ghostMode === 'ghost' ? t('wax.ghostTooltip') : t('wax.visibleTooltip')} placement="bottom">
+            <div
+              onClick={() => toggleGhostMode(ghostMode === 'ghost' ? 'visible' : 'ghost')}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px',
+                borderRadius: 16, cursor: 'pointer', fontSize: 10, fontWeight: 600,
+                background: ghostMode === 'ghost' ? 'rgba(255,255,255,0.15)' : 'rgba(0,184,148,0.2)',
+                color: ghostMode === 'ghost' ? '#dfe6e9' : SF.success,
+                border: `1px solid ${ghostMode === 'ghost' ? 'rgba(255,255,255,0.2)' : SF.success + '40'}`,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {ghostMode === 'ghost' ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+              {ghostMode === 'ghost' ? t('wax.ghost') : t('wax.visible')}
+            </div>
+          </Tooltip>
           {/* Share location button */}
           {!sharing && ghostMode !== 'ghost' && (
-            <div onClick={shareLocation} style={{
-              padding: '4px 10px', borderRadius: 16, cursor: 'pointer', fontSize: 11,
-              fontWeight: 600, background: '#FDCB6E20', color: '#FDCB6E', border: '1px solid #FDCB6E40',
-            }}>
-              <AimOutlined /> {t('wax.shareLocation')}
-            </div>
+            <Tooltip title={t('wax.shareLocationTooltip')} placement="bottom">
+              <div onClick={shareLocation} style={{
+                padding: '4px 8px', borderRadius: 16, cursor: 'pointer', fontSize: 10,
+                fontWeight: 600, background: '#FDCB6E20', color: '#FDCB6E', border: '1px solid #FDCB6E40',
+                whiteSpace: 'nowrap',
+              }}>
+                <AimOutlined /> {t('wax.shareLocation')}
+              </div>
+            </Tooltip>
           )}
           {sharing && (
-            <div style={{ fontSize: 10, color: SF.success, fontWeight: 600 }}>
-              <AimOutlined /> Live
-            </div>
+            <Tooltip title={t('wax.sharingLiveTooltip')} placement="bottom">
+              <div style={{ fontSize: 10, color: SF.success, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3 }}>
+                <AimOutlined style={{ animation: 'waxGlow 1.5s ease-in-out infinite alternate' }} /> {t('wax.sharingLive')}
+              </div>
+            </Tooltip>
           )}
         </div>
       </div>
 
       {/* ── Layer filters (bottom-left) ── */}
       <div style={{
-        position: 'absolute', bottom: 16, left: 14, display: 'flex', flexDirection: 'column',
-        gap: 4, zIndex: 10,
+        position: 'absolute', bottom: 16, left: 10, display: 'flex', flexDirection: 'column',
+        gap: 4, zIndex: 10, maxWidth: 'calc(50vw - 20px)',
       }}>
         {[
-          { key: 'colonies', icon: '⬡', label: 'Colonies', count: stats.colonies, color: SF.primary },
-          { key: 'bees', icon: '🐝', label: 'Bees', count: stats.bees, color: SF.success },
-          { key: 'combs', icon: '🔨', label: 'Combs', count: stats.combs, color: SF.gold },
-          { key: 'pins', icon: '🕯️', label: 'Wax', count: stats.pins, color: '#FDCB6E' },
+          { key: 'colonies', icon: '⬡', labelKey: 'wax.colonies', tooltipKey: 'wax.coloniesTooltip', count: stats.colonies, color: SF.primary },
+          { key: 'bees', icon: '🐝', labelKey: 'wax.bees', tooltipKey: 'wax.beesTooltip', count: stats.bees, color: SF.success },
+          { key: 'combs', icon: '🔨', labelKey: 'wax.combs', tooltipKey: 'wax.combsTooltip', count: stats.combs, color: SF.gold },
+          { key: 'pins', icon: '🕯️', labelKey: 'wax.pins', tooltipKey: 'wax.pinsTooltip', count: stats.pins, color: '#FDCB6E' },
         ].map(layer => (
-          <div
-            key={layer.key}
-            onClick={() => setShowLayer(prev => ({ ...prev, [layer.key]: !prev[layer.key as keyof typeof prev] }))}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px',
-              borderRadius: 12, cursor: 'pointer', fontSize: 11, fontWeight: 600,
-              background: showLayer[layer.key as keyof typeof showLayer]
-                ? 'rgba(0,0,0,0.75)' : 'rgba(0,0,0,0.4)',
-              color: showLayer[layer.key as keyof typeof showLayer]
-                ? layer.color : 'rgba(255,255,255,0.4)',
-              backdropFilter: 'blur(8px)',
-              transition: 'all 0.2s',
-            }}
-          >
-            <span>{layer.icon}</span>
-            <span>{layer.label}</span>
-            <Badge count={layer.count} style={{
-              background: layer.color + '30', color: layer.color,
-              fontSize: 9, fontWeight: 700, minWidth: 16, height: 16, lineHeight: '16px',
-              boxShadow: 'none',
-            }} />
-          </div>
+          <Tooltip key={layer.key} title={t(layer.tooltipKey)} placement="right" mouseEnterDelay={0.4}>
+            <div
+              onClick={() => setShowLayer(prev => ({ ...prev, [layer.key]: !prev[layer.key as keyof typeof prev] }))}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5, padding: '5px 8px',
+                borderRadius: 12, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                background: showLayer[layer.key as keyof typeof showLayer]
+                  ? 'rgba(0,0,0,0.75)' : 'rgba(0,0,0,0.4)',
+                color: showLayer[layer.key as keyof typeof showLayer]
+                  ? layer.color : 'rgba(255,255,255,0.4)',
+                backdropFilter: 'blur(8px)',
+                transition: 'all 0.2s',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <span>{layer.icon}</span>
+              <span>{t(layer.labelKey)}</span>
+              <Badge count={layer.count} style={{
+                background: layer.color + '30', color: layer.color,
+                fontSize: 9, fontWeight: 700, minWidth: 16, height: 16, lineHeight: '16px',
+                boxShadow: 'none',
+              }} />
+            </div>
+          </Tooltip>
         ))}
       </div>
 
@@ -474,8 +501,8 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
       {selectedEntity && (
         <div style={{
           position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)',
-          width: 'calc(100% - 28px)', maxWidth: 360, background: 'rgba(15,15,30,0.95)',
-          borderRadius: 16, padding: 16, zIndex: 20, backdropFilter: 'blur(12px)',
+          width: 'calc(100% - 24px)', maxWidth: 360, background: 'rgba(15,15,30,0.95)',
+          borderRadius: 16, padding: 14, zIndex: 20, backdropFilter: 'blur(12px)',
           border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
         }}>
           <div onClick={() => setSelectedEntity(null)} style={{
@@ -497,9 +524,11 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
               </div>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 700, color: 'white' }}>{selectedEntity.name}</div>
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
-                  <TeamOutlined /> {selectedEntity.memberCount} {t('wax.members')}
-                </div>
+                <Tooltip title={t('wax.coloniesTooltip')} placement="top">
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
+                    <TeamOutlined /> {selectedEntity.memberCount} {t('wax.members')}
+                  </div>
+                </Tooltip>
                 {selectedEntity.description && (
                   <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>
                     {selectedEntity.description.substring(0, 80)}
@@ -516,8 +545,8 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
               <div>
                 <div style={{ fontSize: 15, fontWeight: 700, color: 'white' }}>{selectedEntity.name}</div>
                 <div style={{ fontSize: 11, color: selectedEntity.online ? SF.success : 'rgba(255,255,255,0.4)' }}>
-                  {selectedEntity.online ? 'Online' : 'Offline'}
-                  {selectedEntity.approximate && ' · ~'}
+                  {selectedEntity.online ? t('wax.online') : t('wax.offline')}
+                  {selectedEntity.approximate && ` · ${t('wax.approximate')}`}
                 </div>
               </div>
             </div>
@@ -555,8 +584,8 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
                 }} />
               )}
               <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>
-                <EyeOutlined /> {selectedEntity.viewCount} ·
-                ⏳ {Math.max(0, Math.ceil((new Date(selectedEntity.expiresAt).getTime() - Date.now()) / 3600000))}h
+                <EyeOutlined /> {selectedEntity.viewCount} {t('wax.pinViews')} ·
+                ⏳ {t('wax.pinExpires')} {Math.max(0, Math.ceil((new Date(selectedEntity.expiresAt).getTime() - Date.now()) / 3600000))}{t('wax.hours')}
               </div>
             </div>
           )}

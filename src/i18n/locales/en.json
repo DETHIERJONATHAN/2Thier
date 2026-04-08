@@ -38,7 +38,6 @@
     "linkCopied": "Link copied!",
     "launch": "Launch"
   },
-
   "hive": {
     "buzz": "Buzz",
     "buzzes": "Buzzes",
@@ -95,7 +94,6 @@
     "errorAddingToHiveLive": "Error adding to Hive Live",
     "hiveLiveExplanation": "This Buzz will be added as a moment on your Hive Live lifeline."
   },
-
   "stories": {
     "myStory": "My Story",
     "addStory": "Add a story",
@@ -116,7 +114,6 @@
     "nextStory": "Next →",
     "closeStory": "Close ✓"
   },
-
   "reels": {
     "noReelsSaved": "No reels saved",
     "tapSaveHint": "Tap 📌 Save on a reel to find it here",
@@ -159,7 +156,6 @@
     "dropABuzz": "Drop a buzz...",
     "shareTitle": "Share"
   },
-
   "universe": {
     "communityEnergy": "💫 Colony energy",
     "positive": "Positive",
@@ -214,7 +210,6 @@
     "capsules": "Capsules",
     "orbit": "Orbit"
   },
-
   "explore": {
     "title": "🐝 Scout",
     "gallery": "Gallery",
@@ -268,7 +263,6 @@
     "declineRequest": "Decline",
     "unfriended": "Friend removed",
     "requestAcceptedProfile": "Request accepted! You are now friends 🎉",
-    "requestCancelled": "Request cancelled",
     "requestDeclined": "Request declined",
     "requestSentSuccess": "Friend request sent! 🐝",
     "blocked": "Blocked",
@@ -276,7 +270,6 @@
     "sendMessage": "Message",
     "friendActionError": "Action error"
   },
-
   "flow": {
     "tagline": "Exist, Create, Win!",
     "postAnonymously": "Post anonymously, the Colony votes",
@@ -329,7 +322,6 @@
     "alreadyVoted": "You already voted for this Spark",
     "expires": "Expires: {{date}}"
   },
-
   "messenger": {
     "discussions": "Discussions",
     "whispers": "Whispers",
@@ -359,7 +351,6 @@
     "wizzSent": "You sent a Wizz!",
     "wizzReceived": "sent you a Wizz!"
   },
-
   "videocall": {
     "incomingVideoCall": "📹 Video call incoming...",
     "incomingAudioCall": "📞 Audio call incoming...",
@@ -393,7 +384,6 @@
     "enableRecHint": "Enable the 🔴 REC button during a call to get an automatic Hive Mind summary.",
     "testSpeakers": "Test speakers (plays a short sound)"
   },
-
   "dashboard": {
     "activityCreation": "added a new lead",
     "activityEmail": "sent an email",
@@ -415,7 +405,6 @@
     "createOrganization": "Found a Colony",
     "profileSettings": "Profile settings"
   },
-
   "profile": {
     "myProfile": "My Profile",
     "manageInfo": "Manage your personal information",
@@ -445,7 +434,6 @@
     "dutch": "Nederlands",
     "languageUpdated": "Language updated!"
   },
-
   "roles": {
     "super_admin": "Super Keeper",
     "admin": "Keeper",
@@ -456,7 +444,6 @@
     "client": "Client",
     "prestataire": "Provider"
   },
-
   "visibility": {
     "private": "Private",
     "colony": "Colony",
@@ -464,7 +451,6 @@
     "client": "Client",
     "organization": "Colony"
   },
-
   "nav": {
     "myProfile": "My Profile",
     "settings": "Settings",
@@ -472,7 +458,6 @@
     "personal": "👤 My Hive",
     "colony": "🏢 Colony"
   },
-
   "settings": {
     "title": "Settings & privacy",
     "profile": "My Profile",
@@ -490,7 +475,6 @@
     "adminTitle": "Administration",
     "adminDesc": "Advanced configuration."
   },
-
   "honeycomb": {
     "title": "Honeycomb",
     "subtitle": "Your personalised news sources",
@@ -513,5 +497,37 @@
     "noArticles": "No recent articles",
     "compactView": "Compact view",
     "widgetView": "Widget view"
+  },
+  "wax": {
+    "title": "Wax",
+    "subtitle": "Real-time interactive map",
+    "colonies": "Colonies",
+    "coloniesTooltip": "Organizations with a registered address. Tap to see details.",
+    "bees": "Bees",
+    "beesTooltip": "Members sharing their live location. Green = online.",
+    "combs": "Combs",
+    "combsTooltip": "Active job sites with an address. Tap for details.",
+    "pins": "Wax Pins",
+    "pinsTooltip": "Ephemeral markers (24h): events, announcements, temporary spots.",
+    "visible": "Visible",
+    "visibleTooltip": "Your location is shared on the map. Other Bees can see you.",
+    "ghost": "Invisible",
+    "ghostTooltip": "Ghost mode enabled. Nobody can see your location on the map.",
+    "ghostEnabled": "Ghost mode enabled — you are invisible",
+    "locationVisible": "Location visible on the map",
+    "ghostError": "Error changing mode",
+    "shareLocation": "Share",
+    "shareLocationTooltip": "Enable GPS to share your live location on the map.",
+    "sharingLive": "GPS active",
+    "sharingLiveTooltip": "Your location is being sent in real-time. Nearby Bees can see you.",
+    "members": "members",
+    "online": "Online",
+    "offline": "Offline",
+    "approximate": "Approximate location",
+    "noColonies": "No colonies in this area",
+    "noBees": "No visible Bees in this area",
+    "pinExpires": "Expires in",
+    "pinViews": "views",
+    "hours": "h"
   }
 }
