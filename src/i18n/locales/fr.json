@@ -535,6 +535,8 @@
       "myPosition": "Ma position actuelle",
       "searchPlaceholder": "Où allez-vous ?",
       "tapHint": "Ou cherchez une adresse ci-dessus",
+      "searching": "Recherche en cours...",
+      "noResults": "Aucun résultat trouvé — essayez une autre adresse",
       "computing": "Calcul de l'itinéraire...",
       "noRoute": "Aucun itinéraire trouvé",
       "noPosition": "Position GPS non disponible",

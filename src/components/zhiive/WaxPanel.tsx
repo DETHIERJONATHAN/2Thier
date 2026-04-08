@@ -12,7 +12,7 @@ import {
   EnvironmentOutlined, CloseOutlined,
   UserOutlined, QuestionCircleOutlined,
   SwapOutlined as _SwapOutlined, SearchOutlined, SoundOutlined, AudioMutedOutlined,
-  CarOutlined,
+  CarOutlined, LoadingOutlined,
 } from '@ant-design/icons';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -90,6 +90,8 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
   const [routingOpen, setRoutingOpen] = useState(false);
   const [destQuery, setDestQuery] = useState('');
   const [suggestions, setSuggestions] = useState<GeocodeSuggestion[]>([]);
+  const [geocodeLoading, setGeocodeLoading] = useState(false);
+  const [geocodeSearched, setGeocodeSearched] = useState(false);
   const [routeData, setRouteData] = useState<RouteData | null>(null);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
@@ -421,17 +423,33 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
   }), [bees, colonies, combs, waxPins]);
 
   // ── Geocode search (debounced) ──
+  const doGeocode = useCallback(async (q: string) => {
+    if (q.trim().length < 2) { setSuggestions([]); return; }
+    setGeocodeLoading(true);
+    setGeocodeSearched(true);
+    try {
+      const res = await api.get(`/api/wax/geocode?q=${encodeURIComponent(q)}`);
+      if (res?.success) setSuggestions(res.data || []);
+      else setSuggestions([]);
+    } catch {
+      setSuggestions([]);
+    } finally {
+      setGeocodeLoading(false);
+    }
+  }, [api]);
+
   const searchDestination = useCallback((query: string) => {
     setDestQuery(query);
+    setGeocodeSearched(false);
     if (geocodeTimerRef.current) clearTimeout(geocodeTimerRef.current);
     if (query.trim().length < 3) { setSuggestions([]); return; }
-    geocodeTimerRef.current = setTimeout(async () => {
-      try {
-        const res = await api.get(`/api/wax/geocode?q=${encodeURIComponent(query)}`);
-        if (res?.success) setSuggestions(res.data || []);
-      } catch { /* ignore */ }
-    }, 400);
-  }, [api]);
+    geocodeTimerRef.current = setTimeout(() => { doGeocode(query); }, 400);
+  }, [doGeocode]);
+
+  const triggerSearch = useCallback(() => {
+    if (geocodeTimerRef.current) clearTimeout(geocodeTimerRef.current);
+    if (destQuery.trim().length >= 2) doGeocode(destQuery);
+  }, [destQuery, doGeocode]);
 
   // ── Draw route line on map ──
   const drawRouteOnMap = useCallback((geometry: GeoJSON.LineString) => {
@@ -884,6 +902,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
               type="text"
               value={destQuery}
               onChange={(e) => searchDestination(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') triggerSearch(); }}
               placeholder={t('wax.nav.searchPlaceholder')}
               autoFocus
               style={{
@@ -891,8 +910,23 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
                 color: 'white', fontSize: 13, fontFamily: 'inherit',
               }}
             />
-            <SearchOutlined style={{ color: 'rgba(255,255,255,0.3)', fontSize: 14 }} />
+            {geocodeLoading
+              ? <LoadingOutlined spin style={{ color: SF.primary, fontSize: 14 }} />
+              : <SearchOutlined onClick={triggerSearch} style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14, cursor: 'pointer' }} />
+            }
           </div>
+
+          {/* Loading / No results */}
+          {geocodeLoading && (
+            <div style={{ textAlign: 'center', marginTop: 10, color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>
+              <LoadingOutlined spin style={{ marginRight: 6 }} />{t('wax.nav.searching')}
+            </div>
+          )}
+          {!geocodeLoading && geocodeSearched && suggestions.length === 0 && destQuery.trim().length >= 2 && (
+            <div style={{ textAlign: 'center', marginTop: 10, color: 'rgba(255,255,255,0.3)', fontSize: 11 }}>
+              {t('wax.nav.noResults')}
+            </div>
+          )}
 
           {/* Suggestions */}
           {suggestions.length > 0 && (
