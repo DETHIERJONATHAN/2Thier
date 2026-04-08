@@ -77,11 +77,10 @@ router.get('/locations', async (req, res) => {
 			where: {
 				latitude: { not: null, gte: swLat, lte: neLat },
 				longitude: { not: null, gte: swLng, lte: neLng },
-				status: { in: ['active', 'planning'] },
 			},
 			select: {
-				id: true, name: true, siteAddress: true,
-				latitude: true, longitude: true, status: true,
+				id: true, productLabel: true, customLabel: true, siteAddress: true,
+				latitude: true, longitude: true, statusId: true,
 				organizationId: true,
 			},
 		});
@@ -119,11 +118,11 @@ router.get('/locations', async (req, res) => {
 				combs: combs.map(c => ({
 					type: 'comb' as const,
 					id: c.id,
-					name: c.name,
+					name: c.customLabel || c.productLabel,
 					address: c.siteAddress,
 					latitude: c.latitude,
 					longitude: c.longitude,
-					status: c.status,
+					status: c.statusId,
 					organizationId: c.organizationId,
 				})),
 			},
