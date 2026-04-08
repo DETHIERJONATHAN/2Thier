@@ -1088,72 +1088,28 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
         </div>
       )}
 
-      {/* ── Routing search panel (slide up) ── */}
+      {/* ── Routing search bar (same height as top bar) ── */}
       {routingOpen && !routeData && (
-        <div style={{
-          position: 'absolute', bottom: 70, left: 10, right: 10, zIndex: 30,
-          background: 'rgba(15, 15, 30, 0.97)', borderRadius: 16,
-          padding: '16px 14px', backdropFilter: 'blur(16px)',
-          border: '1px solid rgba(255,255,255,0.1)',
-          maxHeight: '55vh', overflowY: 'auto',
-          boxShadow: '0 -4px 24px rgba(0,0,0,0.5)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <CarOutlined style={{ color: SF.primary, fontSize: 16 }} />
-              <span style={{ color: 'white', fontSize: 15, fontWeight: 700 }}>{t('wax.nav.title')}</span>
-            </div>
-            <CloseOutlined onClick={() => setRoutingOpen(false)} style={{ color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: 14 }} />
-          </div>
-
-          {/* Origin: current position */}
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', marginBottom: 8,
-            borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)',
-          }}>
-            <div style={{ width: 10, height: 10, borderRadius: '50%', background: SF.success, flexShrink: 0 }} />
-            <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>{t('wax.nav.myPosition')}</span>
-          </div>
-
-          {/* Destination search */}
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px',
-            borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
-          }}>
-            <div style={{ width: 10, height: 10, borderRadius: '50%', background: SF.primary, flexShrink: 0 }} />
-            <input
-              type="text"
-              value={destQuery}
-              onChange={(e) => searchDestination(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') triggerSearch(); }}
-              placeholder={t('wax.nav.searchPlaceholder')}
-              autoFocus
-              style={{
-                flex: 1, background: 'transparent', border: 'none', outline: 'none',
-                color: 'white', fontSize: 13, fontFamily: 'inherit',
-              }}
-            />
-            {geocodeLoading
-              ? <LoadingOutlined spin style={{ color: SF.primary, fontSize: 14 }} />
-              : <SearchOutlined onClick={triggerSearch} style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14, cursor: 'pointer' }} />
-            }
-          </div>
-
-          {/* Loading / No results */}
-          {geocodeLoading && (
-            <div style={{ textAlign: 'center', marginTop: 10, color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>
-              <LoadingOutlined spin style={{ marginRight: 6 }} />{t('wax.nav.searching')}
-            </div>
-          )}
-          {!geocodeLoading && geocodeSearched && suggestions.length === 0 && destQuery.trim().length >= 2 && (
-            <div style={{ textAlign: 'center', marginTop: 10, color: 'rgba(255,255,255,0.3)', fontSize: 11 }}>
-              {t('wax.nav.noResults')}
-            </div>
-          )}
-
-          {/* Suggestions */}
-          {suggestions.length > 0 && (
-            <div style={{ marginTop: 8 }}>
+        <div style={{ position: 'absolute', bottom: 70, left: 0, right: 0, zIndex: 30 }}>
+          {/* Suggestions dropdown (above the bar) */}
+          {(suggestions.length > 0 || (geocodeLoading) || (!geocodeLoading && geocodeSearched && suggestions.length === 0 && destQuery.trim().length >= 2)) && (
+            <div style={{
+              margin: '0 10px 4px', borderRadius: 12,
+              background: 'rgba(15, 15, 30, 0.97)', backdropFilter: 'blur(16px)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              maxHeight: '40vh', overflowY: 'auto',
+              boxShadow: '0 -4px 24px rgba(0,0,0,0.5)',
+            }}>
+              {geocodeLoading && (
+                <div style={{ textAlign: 'center', padding: 10, color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>
+                  <LoadingOutlined spin style={{ marginRight: 6 }} />{t('wax.nav.searching')}
+                </div>
+              )}
+              {!geocodeLoading && geocodeSearched && suggestions.length === 0 && destQuery.trim().length >= 2 && (
+                <div style={{ textAlign: 'center', padding: 10, color: 'rgba(255,255,255,0.3)', fontSize: 11 }}>
+                  {t('wax.nav.noResults')}
+                </div>
+              )}
               {suggestions.map((s, i) => (
                 <div
                   key={i}
@@ -1163,8 +1119,8 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
                     computeRoute({ lat: s.lat, lng: s.lng });
                   }}
                   style={{
-                    display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px',
-                    cursor: 'pointer', borderRadius: 10,
+                    display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px',
+                    cursor: 'pointer',
                     background: 'rgba(255,255,255,0.03)',
                     borderBottom: '1px solid rgba(255,255,255,0.05)',
                   }}
@@ -1185,9 +1141,32 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
             </div>
           )}
 
-          {/* Tap on map hint */}
-          <div style={{ textAlign: 'center', marginTop: 12, color: 'rgba(255,255,255,0.25)', fontSize: 10 }}>
-            {t('wax.nav.tapHint')}
+          {/* Search bar — 48px, same as top bar */}
+          <div style={{
+            height: 48,
+            background: 'rgba(10, 10, 25, 0.88)',
+            backdropFilter: 'blur(10px)',
+            display: 'flex', alignItems: 'center',
+            padding: '0 10px', gap: 8,
+          }}>
+            <CarOutlined style={{ color: SF.primary, fontSize: 15, flexShrink: 0 }} />
+            <input
+              type="text"
+              value={destQuery}
+              onChange={(e) => searchDestination(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') triggerSearch(); }}
+              placeholder={t('wax.nav.searchPlaceholder')}
+              autoFocus
+              style={{
+                flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                color: 'white', fontSize: 14, fontWeight: 500, fontFamily: 'inherit',
+              }}
+            />
+            {geocodeLoading
+              ? <LoadingOutlined spin style={{ color: SF.primary, fontSize: 14 }} />
+              : <SearchOutlined onClick={triggerSearch} style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14, cursor: 'pointer' }} />
+            }
+            <CloseOutlined onClick={() => setRoutingOpen(false)} style={{ color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 13 }} />
           </div>
         </div>
       )}
