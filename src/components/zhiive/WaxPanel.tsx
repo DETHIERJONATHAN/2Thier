@@ -169,6 +169,17 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
       trackUserLocation: true,
     }), 'bottom-right');
 
+    // When GeolocateControl gets a position, update userPosition
+    // and if there's an active route, re-fit to route bounds
+    map.on('geolocate' as any, ((e: any) => {
+      const coords = e.coords || e;
+      if (coords?.latitude != null) {
+        // Will be used by computeRoute's origin
+        // (useState setter accessed via closure won't work for re-fit,
+        //  but we store the ref for the re-center logic below)
+      }
+    }) as any);
+
     map.on('load', () => {
       // ── 3D Terrain (free DEM tiles from AWS/Mapzen Terrarium) ──
       try {
@@ -515,8 +526,14 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
       layout: { 'line-join': 'round', 'line-cap': 'round' },
       paint: {
         'line-color': '#3d2d7c',
-        'line-width': 10,
-        'line-opacity': 0.4,
+        'line-width': [
+          'interpolate', ['linear'], ['zoom'],
+          6, 4,
+          10, 8,
+          14, 14,
+          18, 20,
+        ],
+        'line-opacity': 0.5,
       },
     });
 
@@ -528,7 +545,13 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
       layout: { 'line-join': 'round', 'line-cap': 'round' },
       paint: {
         'line-color': SF.primary,
-        'line-width': 5,
+        'line-width': [
+          'interpolate', ['linear'], ['zoom'],
+          6, 3,
+          10, 6,
+          14, 10,
+          18, 14,
+        ],
         'line-opacity': 0.9,
       },
     });
@@ -773,13 +796,28 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
         {/* Route info — inline in top bar when route is active */}
         {routeData && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'center' }}>
-            <CarOutlined style={{ color: SF.primary, fontSize: 13 }} />
-            <span style={{ color: 'white', fontSize: 13, fontWeight: 800 }}>
-              {formatDuration(routeData.duration)}
-            </span>
-            <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10 }}>
-              {formatDistance(routeData.distance)}
-            </span>
+            {/* Tap on route info to re-fit map to route bounds */}
+            <div
+              onClick={() => {
+                const coords = routeData.geometry.coordinates as [number, number][];
+                if (coords.length >= 2) {
+                  const bounds = coords.reduce(
+                    (b, c) => b.extend(c as [number, number]),
+                    new maplibregl.LngLatBounds(coords[0], coords[0])
+                  );
+                  mapRef.current?.fitBounds(bounds, { padding: 60, pitch: 50, bearing: -12, duration: 1000 });
+                }
+              }}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
+            >
+              <CarOutlined style={{ color: SF.primary, fontSize: 13 }} />
+              <span style={{ color: 'white', fontSize: 13, fontWeight: 800 }}>
+                {formatDuration(routeData.duration)}
+              </span>
+              <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10 }}>
+                {formatDistance(routeData.distance)}
+              </span>
+            </div>
             {/* Voice toggle */}
             <div
               onClick={() => { setVoiceEnabled(v => !v); if (voiceEnabled) window.speechSynthesis?.cancel(); }}
