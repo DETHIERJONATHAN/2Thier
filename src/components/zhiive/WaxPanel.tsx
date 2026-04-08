@@ -11,7 +11,7 @@ import {
   EyeOutlined, EyeInvisibleOutlined,
   EnvironmentOutlined, CloseOutlined,
   UserOutlined, QuestionCircleOutlined,
-  SwapOutlined, SearchOutlined, SoundOutlined, AudioMutedOutlined,
+  SwapOutlined as _SwapOutlined, SearchOutlined, SoundOutlined, AudioMutedOutlined,
   CarOutlined,
 } from '@ant-design/icons';
 import maplibregl from 'maplibre-gl';
@@ -701,6 +701,24 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
         position: 'absolute', bottom: 16, left: 10, display: 'flex', flexDirection: 'column',
         gap: 4, zIndex: 10, maxWidth: 'calc(50vw - 20px)',
       }}>
+        {/* Route button — above filters */}
+        {!routeData && !routingOpen && (
+          <Tooltip title={t('wax.nav.routeTooltip')} placement="right">
+            <div
+              onClick={() => setRoutingOpen(true)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5, padding: '5px 8px',
+                borderRadius: 12, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                background: `${SF.primary}CC`, color: 'white',
+                backdropFilter: 'blur(8px)', transition: 'all 0.2s', whiteSpace: 'nowrap',
+                marginBottom: 2,
+              }}
+            >
+              <CarOutlined style={{ fontSize: 13 }} />
+              <span>{t('wax.nav.title')}</span>
+            </div>
+          </Tooltip>
+        )}
         {[
           { key: 'colonies', icon: '⬡', labelKey: 'wax.colonies', tooltipKey: 'wax.coloniesTooltip', count: stats.colonies, color: SF.primary },
           { key: 'bees', icon: '🐝', labelKey: 'wax.bees', tooltipKey: 'wax.beesTooltip', count: stats.bees, color: SF.success },
@@ -827,23 +845,6 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
             </div>
           )}
         </div>
-      )}
-
-      {/* ── Route button (bottom-right, above MapLibre controls) ── */}
-      {!routeData && !routingOpen && (
-        <Tooltip title={t('wax.nav.routeTooltip')} placement="left">
-          <div
-            onClick={() => setRoutingOpen(true)}
-            style={{
-              position: 'absolute', bottom: 110, right: 10, zIndex: 10,
-              width: 44, height: 44, borderRadius: '50%',
-              background: SF.primary, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', boxShadow: `0 4px 16px ${SF.primary}60`,
-            }}
-          >
-            <SwapOutlined style={{ color: 'white', fontSize: 18, transform: 'rotate(90deg)' }} />
-          </div>
-        </Tooltip>
       )}
 
       {/* ── Routing search panel (slide up) ── */}
