@@ -238,6 +238,48 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
       return el;
     };
 
+    // ── Collision offset: spread overlapping markers side-by-side ──
+    // Collect all visible marker positions, then offset any that share ~same coords
+    const allItems: { lat: number; lng: number; key: string }[] = [];
+    if (showLayer.colonies) colonies.forEach(c => { if (c.latitude != null && c.longitude != null) allItems.push({ lat: c.latitude, lng: c.longitude, key: `colony-${c.id}` }); });
+    if (showLayer.bees) bees.forEach(b => allItems.push({ lat: b.latitude, lng: b.longitude, key: `bee-${b.id}` }));
+    if (showLayer.combs) combs.forEach(c => { if (c.latitude != null && c.longitude != null) allItems.push({ lat: c.latitude, lng: c.longitude, key: `comb-${c.id}` }); });
+    if (showLayer.pins) waxPins.forEach(p => allItems.push({ lat: p.latitude, lng: p.longitude, key: `pin-${p.id}` }));
+
+    // Group items that are very close (within ~0.0003° ≈ 30m)
+    const PROXIMITY = 0.0003;
+    const offsets = new Map<string, [number, number]>();
+    const processed = new Set<number>();
+    for (let i = 0; i < allItems.length; i++) {
+      if (processed.has(i)) continue;
+      const group = [i];
+      for (let j = i + 1; j < allItems.length; j++) {
+        if (processed.has(j)) continue;
+        if (Math.abs(allItems[i].lat - allItems[j].lat) < PROXIMITY &&
+            Math.abs(allItems[i].lng - allItems[j].lng) < PROXIMITY) {
+          group.push(j);
+        }
+      }
+      if (group.length > 1) {
+        // Fan out in a circle around center; offset ~0.00015° ≈ ~15m
+        const spread = 0.00018;
+        group.forEach((idx, gi) => {
+          processed.add(idx);
+          const angle = (2 * Math.PI * gi) / group.length - Math.PI / 2;
+          offsets.set(allItems[idx].key, [
+            Math.cos(angle) * spread,
+            Math.sin(angle) * spread,
+          ]);
+        });
+      }
+    }
+
+    // Helper: get offset coords for a marker
+    const getCoords = (key: string, lng: number, lat: number): [number, number] => {
+      const off = offsets.get(key);
+      return off ? [lng + off[0], lat + off[1]] : [lng, lat];
+    };
+
     // ── Colony markers (hexagon) ──
     if (showLayer.colonies) {
       colonies.forEach(c => {
@@ -252,8 +294,9 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
           'wax-colony-marker',
         );
         el.onclick = () => setSelectedEntity({ ...c, type: 'colony' });
+        const coords = getCoords(`colony-${c.id}`, c.longitude!, c.latitude!);
         const marker = new maplibregl.Marker({ element: el })
-          .setLngLat([c.longitude!, c.latitude!])
+          .setLngLat(coords)
           .addTo(map);
         markersRef.current.push(marker);
       });
@@ -273,8 +316,9 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
           'wax-bee-marker',
         );
         el.onclick = () => setSelectedEntity({ ...b, type: 'bee' });
+        const coords = getCoords(`bee-${b.id}`, b.longitude, b.latitude);
         const marker = new maplibregl.Marker({ element: el })
-          .setLngLat([b.longitude, b.latitude])
+          .setLngLat(coords)
           .addTo(map);
         markersRef.current.push(marker);
       });
@@ -291,8 +335,9 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
           'wax-comb-marker',
         );
         el.onclick = () => setSelectedEntity({ ...c, type: 'comb' });
+        const coords = getCoords(`comb-${c.id}`, c.longitude!, c.latitude!);
         const marker = new maplibregl.Marker({ element: el })
-          .setLngLat([c.longitude!, c.latitude!])
+          .setLngLat(coords)
           .addTo(map);
         markersRef.current.push(marker);
       });
@@ -311,8 +356,9 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
         );
         el.style.position = 'relative';
         el.onclick = () => setSelectedEntity({ ...p, type: 'wax-pin' });
+        const coords = getCoords(`pin-${p.id}`, p.longitude, p.latitude);
         const marker = new maplibregl.Marker({ element: el })
-          .setLngLat([p.longitude, p.latitude])
+          .setLngLat(coords)
           .addTo(map);
         markersRef.current.push(marker);
       });
