@@ -128,12 +128,12 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
   };
 
   // ── Turn arrow SVG helper ──
-  const getManeuverIcon = (type: string, modifier?: string) => {
-    const style = { fontSize: 16, color: 'white' };
+  const getManeuverIcon = (type: string, modifier?: string, size = 16) => {
+    const style = { fontSize: size, color: 'white' };
     if (type === 'depart') return <AimOutlined style={{ ...style, color: SF.success }} />;
     if (type === 'arrive') return <EnvironmentOutlined style={{ ...style, color: '#e17055' }} />;
-    if (type === 'roundabout' || type === 'rotary') return <span style={{ fontSize: 15 }}>🔄</span>;
-    if (modifier?.includes('uturn')) return <span style={{ fontSize: 15 }}>↩️</span>;
+    if (type === 'roundabout' || type === 'rotary') return <span style={{ fontSize: size - 1 }}>🔄</span>;
+    if (modifier?.includes('uturn')) return <span style={{ fontSize: size - 1 }}>↩️</span>;
     if (modifier?.includes('left') && modifier?.includes('sharp')) return <ArrowLeftOutlined style={{ ...style, transform: 'rotate(45deg)' }} />;
     if (modifier?.includes('left') && modifier?.includes('slight')) return <ArrowUpOutlined style={{ ...style, transform: 'rotate(-30deg)' }} />;
     if (modifier?.includes('left')) return <ArrowLeftOutlined style={style} />;
@@ -752,6 +752,116 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
         </div>
       </div>
 
+      {/* ── TOP NAV HUD: Waze-style turn banner ── */}
+      {routeData && routeData.steps[currentStepIndex] && (
+        <div style={{
+          position: 'absolute', top: 48, left: 0, right: 0, zIndex: 15,
+          background: 'rgba(10, 10, 25, 0.92)', backdropFilter: 'blur(12px)',
+          borderBottom: `2px solid ${SF.primary}40`,
+          padding: '8px 12px',
+          display: 'flex', alignItems: 'center', gap: 12,
+        }}>
+          {/* Big arrow icon */}
+          <div style={{
+            width: 56, height: 56, borderRadius: 16, background: SF.primary,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            boxShadow: `0 0 20px ${SF.primary}50`,
+          }}>
+            {getManeuverIcon(
+              routeData.steps[currentStepIndex]?.maneuver?.type,
+              routeData.steps[currentStepIndex]?.maneuver?.modifier,
+              28,
+            )}
+          </div>
+          {/* Distance + instruction */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ color: 'white', fontSize: 22, fontWeight: 900, lineHeight: 1.1 }}>
+              {formatDistance(routeData.steps[currentStepIndex]?.distance || 0)}
+            </div>
+            <div style={{
+              color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: 500,
+              marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {routeData.steps[currentStepIndex]?.instruction}
+            </div>
+          </div>
+          {/* Next step preview */}
+          {routeData.steps[currentStepIndex + 1] && (
+            <div style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flexShrink: 0,
+              opacity: 0.5,
+            }}>
+              <div style={{
+                width: 28, height: 28, borderRadius: 8, background: 'rgba(255,255,255,0.1)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                {getManeuverIcon(
+                  routeData.steps[currentStepIndex + 1]?.maneuver?.type,
+                  routeData.steps[currentStepIndex + 1]?.maneuver?.modifier,
+                  14,
+                )}
+              </div>
+              <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, fontWeight: 600 }}>
+                {formatDistance(routeData.steps[currentStepIndex + 1]?.distance || 0)}
+              </span>
+            </div>
+          )}
+          {/* Alert report quick button */}
+          <div
+            onClick={() => setReportingAlert(r => !r)}
+            style={{
+              width: 36, height: 36, borderRadius: '50%', cursor: 'pointer', flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: reportingAlert ? '#e1705530' : 'rgba(255,255,255,0.08)',
+              color: reportingAlert ? '#e17055' : 'rgba(255,255,255,0.4)',
+              border: `1px solid ${reportingAlert ? '#e1705540' : 'rgba(255,255,255,0.1)'}`,
+            }}
+          >
+            <WarningOutlined style={{ fontSize: 14 }} />
+          </div>
+        </div>
+      )}
+
+      {/* ── Alert type picker (below HUD when reporting) ── */}
+      {reportingAlert && routeData && (
+        <div style={{
+          position: 'absolute', top: 48 + 72 + 4, left: 8, right: 8, zIndex: 16,
+          display: 'flex', flexWrap: 'wrap', gap: 6,
+          padding: 10, borderRadius: 14, background: 'rgba(15,15,30,0.95)',
+          backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.1)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+        }}>
+          {ALERT_TYPES.map(at => (
+            <div
+              key={at.type}
+              onClick={async () => {
+                const pos = userPosition || (mapRef.current ? { lat: mapRef.current.getCenter().lat, lng: mapRef.current.getCenter().lng } : null);
+                if (!pos) { message.warning(t('wax.nav.noPosition')); return; }
+                try {
+                  await api.post('/api/wax/pins', {
+                    latitude: pos.lat, longitude: pos.lng,
+                    pinType: at.type, title: t(at.labelKey),
+                    ttlHours: 2, publishAsOrg: false,
+                  });
+                  message.success(t('wax.alerts.reported'));
+                  setReportingAlert(false);
+                } catch {
+                  message.error(t('wax.nav.error'));
+                }
+              }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5, padding: '8px 12px',
+                borderRadius: 12, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                background: `${at.color}15`, border: `1px solid ${at.color}30`, color: at.color,
+              }}
+            >
+              <span style={{ fontSize: 16 }}>{at.emoji}</span>
+              {t(at.labelKey)}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* ── Layer filters (bottom-left) ── */}
       <div style={{
         position: 'absolute', bottom: 16, left: 10, display: 'flex', flexDirection: 'column',
@@ -1095,40 +1205,15 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
             </div>
           </div>
 
-          {/* Current step highlight — big visual arrow */}
-          {routeData.steps.length > 0 && (
-            <div style={{
-              padding: '10px 12px', borderRadius: 14, marginBottom: 8,
-              background: `${SF.primary}18`, border: `1px solid ${SF.primary}30`,
-              display: 'flex', alignItems: 'center', gap: 12,
-            }}>
-              <div style={{
-                width: 46, height: 46, borderRadius: 14, background: SF.primary,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-              }}>
-                {getManeuverIcon(
-                  routeData.steps[currentStepIndex]?.maneuver?.type,
-                  routeData.steps[currentStepIndex]?.maneuver?.modifier,
-                )}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ color: 'white', fontSize: 14, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {routeData.steps[currentStepIndex]?.instruction}
-                </div>
-                <div style={{ color: SF.primary, fontSize: 13, fontWeight: 700, marginTop: 1 }}>
-                  {formatDistance(routeData.steps[currentStepIndex]?.distance || 0)}
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Current step — removed from bottom panel since it's now in top HUD */}
 
-          {/* Report alert button */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+          {/* Report alert — signaler button (also available in top HUD) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
             <div
               onClick={() => setReportingAlert(r => !r)}
               style={{
-                display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px',
-                borderRadius: 12, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                display: 'flex', alignItems: 'center', gap: 5, padding: '5px 8px',
+                borderRadius: 10, cursor: 'pointer', fontSize: 10, fontWeight: 600,
                 background: reportingAlert ? '#e1705530' : 'rgba(255,255,255,0.06)',
                 color: reportingAlert ? '#e17055' : 'rgba(255,255,255,0.5)',
                 border: `1px solid ${reportingAlert ? '#e1705550' : 'rgba(255,255,255,0.08)'}`,
@@ -1138,8 +1223,8 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
             </div>
           </div>
 
-          {/* Alert type picker */}
-          {reportingAlert && userPosition && (
+          {/* Alert type picker — fallback to map center if no GPS */}
+          {reportingAlert && (
             <div style={{
               display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10,
               padding: 8, borderRadius: 12, background: 'rgba(255,255,255,0.04)',
@@ -1148,14 +1233,13 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
                 <div
                   key={at.type}
                   onClick={async () => {
+                    const pos = userPosition || (mapRef.current ? { lat: mapRef.current.getCenter().lat, lng: mapRef.current.getCenter().lng } : null);
+                    if (!pos) { message.warning(t('wax.nav.noPosition')); return; }
                     try {
                       await api.post('/api/wax/pins', {
-                        latitude: userPosition.lat,
-                        longitude: userPosition.lng,
-                        pinType: at.type,
-                        title: t(at.labelKey),
-                        ttlHours: 2,
-                        publishAsOrg: false,
+                        latitude: pos.lat, longitude: pos.lng,
+                        pinType: at.type, title: t(at.labelKey),
+                        ttlHours: 2, publishAsOrg: false,
                       });
                       message.success(t('wax.alerts.reported'));
                       setReportingAlert(false);
