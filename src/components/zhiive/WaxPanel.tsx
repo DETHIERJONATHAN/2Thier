@@ -101,9 +101,17 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
   const navWatchRef = useRef<number | null>(null);
   const geocodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const routeSourceAdded = useRef(false);
+  const routeDataRef = useRef<RouteData | null>(null);
+  const navigatingRef = useRef(false);
+  const carViewRef = useRef(false);
 
   const [reportingAlert, setReportingAlert] = useState(false);
   const [carView, setCarView] = useState(false);
+
+  // Keep refs in sync with state
+  useEffect(() => { routeDataRef.current = routeData; }, [routeData]);
+  useEffect(() => { navigatingRef.current = navigating; }, [navigating]);
+  useEffect(() => { carViewRef.current = carView; }, [carView]);
 
   // Default: Belgium center
   const defaultCenter: [number, number] = [4.35, 50.85];
@@ -170,13 +178,64 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
     }), 'bottom-right');
 
     // When GeolocateControl gets a position, update userPosition
-    // and if there's an active route, re-fit to route bounds
+    // and if there's an active route, re-center on route (car-view)
     map.on('geolocate' as any, ((e: any) => {
       const coords = e.coords || e;
-      if (coords?.latitude != null) {
-        // Will be used by computeRoute's origin
-        // (useState setter accessed via closure won't work for re-fit,
-        //  but we store the ref for the re-center logic below)
+      if (coords?.latitude == null) return;
+      const userLat = coords.latitude;
+      const userLng = coords.longitude;
+      setUserPosition({ lat: userLat, lng: userLng });
+
+      const rd = routeDataRef.current;
+      if (!rd) return; // No active route, let GeolocateControl do its thing
+
+      // Active route exists — override GeolocateControl's default flyTo
+      // Re-center on user position with route-aware view
+      if (navigatingRef.current || carViewRef.current) {
+        // Car-view: compute bearing toward next step
+        const steps = rd.steps;
+        let bearing = map.getBearing();
+        if (steps.length > 0) {
+          // Find closest upcoming step
+          let closestIdx = 0;
+          let minDist = Infinity;
+          for (let i = 0; i < steps.length; i++) {
+            const [sLng, sLat] = steps[i].location;
+            const dist = Math.sqrt(
+              Math.pow((userLat - sLat) * 111320, 2) +
+              Math.pow((userLng - sLng) * 111320 * Math.cos(userLat * Math.PI / 180), 2)
+            );
+            if (dist < minDist) { minDist = dist; closestIdx = i; }
+          }
+          const nextIdx = Math.min(closestIdx + 1, steps.length - 1);
+          const [nLng, nLat] = steps[nextIdx].location;
+          const dLng = (nLng - userLng) * Math.PI / 180;
+          const lat1R = userLat * Math.PI / 180;
+          const lat2R = nLat * Math.PI / 180;
+          const y = Math.sin(dLng) * Math.cos(lat2R);
+          const x = Math.cos(lat1R) * Math.sin(lat2R) - Math.sin(lat1R) * Math.cos(lat2R) * Math.cos(dLng);
+          bearing = ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
+        }
+        // Small delay to override GeolocateControl's own flyTo
+        setTimeout(() => {
+          map.easeTo({
+            center: [userLng, userLat],
+            zoom: 19.5,
+            pitch: 85,
+            bearing,
+            duration: 800,
+          });
+        }, 50);
+      } else {
+        // Route exists but not navigating — re-fit to route bounds
+        const routeCoords = rd.geometry.coordinates as [number, number][];
+        const bounds = routeCoords.reduce(
+          (b, c) => b.extend(c as [number, number]),
+          new maplibregl.LngLatBounds(routeCoords[0], routeCoords[0])
+        );
+        setTimeout(() => {
+          map.fitBounds(bounds, { padding: 80, pitch: 50, bearing: -12, duration: 1200 });
+        }, 50);
       }
     }) as any);
 
