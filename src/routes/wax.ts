@@ -14,8 +14,12 @@
 
 import { Router } from 'express';
 import { db } from '../lib/database';
+import { authenticateToken } from '../middleware/auth';
 
 const router = Router();
+
+// Apply auth middleware to all wax routes
+router.use(authenticateToken as any);
 
 // ── Middleware: extract user from request ──
 function extractUser(req: any) {

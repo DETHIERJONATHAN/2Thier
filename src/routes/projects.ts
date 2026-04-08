@@ -36,7 +36,7 @@ router.get('/', async (req, res) => {
         ]
       },
       include: {
-        assignedTo: {
+        User: {
           select: {
             id: true,
             firstName: true,
@@ -44,7 +44,7 @@ router.get('/', async (req, res) => {
             email: true
           }
         },
-        leadStatus: true
+        LeadStatus: true
       },
       orderBy: {
         updatedAt: 'desc'
@@ -60,7 +60,7 @@ router.get('/', async (req, res) => {
         description: data.description || '',
         status: lead.status,
         client: data.clientName || '',
-        assignedTo: lead.assignedTo,
+        assignedTo: lead.User,
         budget: data.budget || 0,
         deadline: data.deadline || null,
         priority: data.priority || 'medium',
