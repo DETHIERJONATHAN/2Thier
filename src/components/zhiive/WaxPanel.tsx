@@ -708,10 +708,65 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ fontSize: 18 }}>🕯️</span>
           <span style={{ fontSize: 15, fontWeight: 800, color: '#FDCB6E' }}>{t('wax.title')}</span>
-          <Tooltip title={t('wax.subtitle')} placement="bottom">
-            <QuestionCircleOutlined style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', cursor: 'pointer' }} />
-          </Tooltip>
+          {!routeData && (
+            <Tooltip title={t('wax.subtitle')} placement="bottom">
+              <QuestionCircleOutlined style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', cursor: 'pointer' }} />
+            </Tooltip>
+          )}
         </div>
+
+        {/* Route info — inline in top bar when route is active */}
+        {routeData && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'center' }}>
+            <CarOutlined style={{ color: SF.primary, fontSize: 13 }} />
+            <span style={{ color: 'white', fontSize: 13, fontWeight: 800 }}>
+              {formatDuration(routeData.duration)}
+            </span>
+            <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10 }}>
+              {formatDistance(routeData.distance)}
+            </span>
+            {/* Voice toggle */}
+            <div
+              onClick={() => { setVoiceEnabled(v => !v); if (voiceEnabled) window.speechSynthesis?.cancel(); }}
+              style={{
+                width: 28, height: 28, borderRadius: '50%', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: voiceEnabled ? `${SF.primary}30` : 'rgba(255,255,255,0.1)',
+                color: voiceEnabled ? SF.primary : 'rgba(255,255,255,0.4)', fontSize: 12,
+              }}
+            >
+              {voiceEnabled ? <SoundOutlined /> : <AudioMutedOutlined />}
+            </div>
+            {/* Stop / Go */}
+            {!navigating ? (
+              <div
+                onClick={startNavigation}
+                style={{
+                  padding: '3px 10px', borderRadius: 14, cursor: 'pointer',
+                  background: SF.success, color: 'white', fontSize: 10, fontWeight: 700,
+                }}
+              >
+                {t('wax.nav.go')}
+              </div>
+            ) : (
+              <div
+                onClick={stopNavigation}
+                style={{
+                  padding: '3px 10px', borderRadius: 14, cursor: 'pointer',
+                  background: '#e17055', color: 'white', fontSize: 10, fontWeight: 700,
+                }}
+              >
+                {t('wax.nav.stop')}
+              </div>
+            )}
+            {/* Close route */}
+            <CloseOutlined
+              onClick={stopNavigation}
+              style={{ color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 12 }}
+            />
+          </div>
+        )}
+
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
           {/* Ghost mode toggle */}
           <Tooltip title={ghostMode === 'ghost' ? t('wax.ghostTooltip') : t('wax.visibleTooltip')} placement="bottom">
@@ -1137,162 +1192,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
         </div>
       )}
 
-      {/* ── Active route bar ── */}
-      {routeData && (
-        <div style={{
-          position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 30,
-          background: 'rgba(15, 15, 30, 0.97)', borderRadius: '20px 20px 0 0',
-          padding: '12px 14px', backdropFilter: 'blur(16px)',
-          border: '1px solid rgba(255,255,255,0.1)',
-          maxHeight: '45vh', overflowY: 'auto',
-        }}>
-          {/* Header: distance + duration + controls */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <CarOutlined style={{ color: SF.primary, fontSize: 18 }} />
-              <div>
-                <div style={{ color: 'white', fontSize: 16, fontWeight: 800 }}>
-                  {formatDuration(routeData.duration)}
-                </div>
-                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>
-                  {formatDistance(routeData.distance)} · {routeData.steps.length} {t('wax.nav.steps')}
-                </div>
-              </div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              {/* Voice toggle */}
-              <Tooltip title={voiceEnabled ? t('wax.nav.voiceOn') : t('wax.nav.voiceOff')} placement="top">
-                <div
-                  onClick={() => { setVoiceEnabled(v => !v); if (voiceEnabled) window.speechSynthesis?.cancel(); }}
-                  style={{
-                    width: 36, height: 36, borderRadius: '50%', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: voiceEnabled ? `${SF.primary}30` : 'rgba(255,255,255,0.1)',
-                    color: voiceEnabled ? SF.primary : 'rgba(255,255,255,0.4)',
-                  }}
-                >
-                  {voiceEnabled ? <SoundOutlined /> : <AudioMutedOutlined />}
-                </div>
-              </Tooltip>
-              {/* Start/Stop nav */}
-              {!navigating ? (
-                <div
-                  onClick={startNavigation}
-                  style={{
-                    padding: '8px 16px', borderRadius: 20, cursor: 'pointer',
-                    background: SF.success, color: 'white', fontSize: 12, fontWeight: 700,
-                    display: 'flex', alignItems: 'center', gap: 5,
-                  }}
-                >
-                  <AimOutlined /> {t('wax.nav.go')}
-                </div>
-              ) : (
-                <div
-                  onClick={stopNavigation}
-                  style={{
-                    padding: '8px 16px', borderRadius: 20, cursor: 'pointer',
-                    background: '#e17055', color: 'white', fontSize: 12, fontWeight: 700,
-                  }}
-                >
-                  {t('wax.nav.stop')}
-                </div>
-              )}
-              {/* Close route */}
-              <CloseOutlined
-                onClick={stopNavigation}
-                style={{ color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 14, marginLeft: 4 }}
-              />
-            </div>
-          </div>
-
-          {/* Current step — removed from bottom panel since it's now in top HUD */}
-
-          {/* Report alert — signaler button (also available in top HUD) */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-            <div
-              onClick={() => setReportingAlert(r => !r)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 5, padding: '5px 8px',
-                borderRadius: 10, cursor: 'pointer', fontSize: 10, fontWeight: 600,
-                background: reportingAlert ? '#e1705530' : 'rgba(255,255,255,0.06)',
-                color: reportingAlert ? '#e17055' : 'rgba(255,255,255,0.5)',
-                border: `1px solid ${reportingAlert ? '#e1705550' : 'rgba(255,255,255,0.08)'}`,
-              }}
-            >
-              <WarningOutlined /> {t('wax.alerts.report')}
-            </div>
-          </div>
-
-          {/* Alert type picker — fallback to map center if no GPS */}
-          {reportingAlert && (
-            <div style={{
-              display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10,
-              padding: 8, borderRadius: 12, background: 'rgba(255,255,255,0.04)',
-            }}>
-              {ALERT_TYPES.map(at => (
-                <div
-                  key={at.type}
-                  onClick={async () => {
-                    const pos = userPosition || (mapRef.current ? { lat: mapRef.current.getCenter().lat, lng: mapRef.current.getCenter().lng } : null);
-                    if (!pos) { message.warning(t('wax.nav.noPosition')); return; }
-                    try {
-                      await api.post('/api/wax/pins', {
-                        latitude: pos.lat, longitude: pos.lng,
-                        pinType: at.type, title: t(at.labelKey),
-                        ttlHours: 2, publishAsOrg: false,
-                      });
-                      message.success(t('wax.alerts.reported'));
-                      setReportingAlert(false);
-                    } catch {
-                      message.error(t('wax.nav.error'));
-                    }
-                  }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 4, padding: '6px 10px',
-                    borderRadius: 10, cursor: 'pointer', fontSize: 11, fontWeight: 600,
-                    background: `${at.color}15`, border: `1px solid ${at.color}30`,
-                    color: at.color,
-                  }}
-                >
-                  <span style={{ fontSize: 14 }}>{at.emoji}</span>
-                  {t(at.labelKey)}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* All steps — compact visual arrows */}
-          <div style={{ maxHeight: 180, overflowY: 'auto' }}>
-            {routeData.steps.map((step, i) => (
-              <div
-                key={i}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8, padding: '5px 4px',
-                  opacity: i < currentStepIndex ? 0.3 : 1,
-                  borderLeft: i === currentStepIndex ? `2px solid ${SF.primary}` : '2px solid transparent',
-                  paddingLeft: 8,
-                }}
-              >
-                <div style={{
-                  width: 26, height: 26, borderRadius: 8,
-                  background: i === currentStepIndex ? SF.primary : 'rgba(255,255,255,0.08)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                }}>
-                  {getManeuverIcon(step.maneuver?.type, step.maneuver?.modifier)}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ color: i === currentStepIndex ? 'white' : 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: i === currentStepIndex ? 700 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {step.instruction}
-                  </div>
-                </div>
-                <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10, flexShrink: 0 }}>
-                  {formatDistance(step.distance)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Bottom panel removed — route controls are now in the top bar */}
     </div>
   );
 };
