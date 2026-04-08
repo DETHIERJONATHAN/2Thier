@@ -538,8 +538,23 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
 
   // ── Compute route ──
   const computeRoute = useCallback(async (dest: { lat: number; lng: number }) => {
-    // Get current position as origin
-    const pos = userPosition || (mapRef.current ? { lat: mapRef.current.getCenter().lat, lng: mapRef.current.getCenter().lng } : null);
+    // Get current GPS position (fresh) as origin
+    let pos = userPosition;
+    if (!pos && navigator.geolocation) {
+      try {
+        const gpsPos = await new Promise<GeolocationPosition>((resolve, reject) =>
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true, timeout: 5000, maximumAge: 10000,
+          })
+        );
+        pos = { lat: gpsPos.coords.latitude, lng: gpsPos.coords.longitude };
+        setUserPosition(pos);
+      } catch { /* fallback below */ }
+    }
+    // Fallback: map center
+    if (!pos) {
+      pos = mapRef.current ? { lat: mapRef.current.getCenter().lat, lng: mapRef.current.getCenter().lng } : null;
+    }
     if (!pos) { message.warning(t('wax.nav.noPosition')); return; }
 
     try {
@@ -970,7 +985,17 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
         {!routeData && !routingOpen && (
           <Tooltip title={t('wax.nav.routeTooltip')} placement="right">
             <div
-              onClick={() => setRoutingOpen(true)}
+              onClick={() => {
+                setRoutingOpen(true);
+                // Pre-fetch GPS position so route starts from real location
+                if (!userPosition && navigator.geolocation) {
+                  navigator.geolocation.getCurrentPosition(
+                    (p) => setUserPosition({ lat: p.coords.latitude, lng: p.coords.longitude }),
+                    () => { /* will fallback to map center */ },
+                    { enableHighAccuracy: true, timeout: 5000, maximumAge: 10000 },
+                  );
+                }
+              }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 5, padding: '5px 8px',
                 borderRadius: 12, cursor: 'pointer', fontSize: 11, fontWeight: 600,
