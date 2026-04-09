@@ -1536,6 +1536,7 @@ export default function DashboardPageUnified() {
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, [apiHook.api]);
   const { currentOrganization, isSuperAdmin, user, hasFeature, modules } = useAuth();
+  const isFreeUser = !currentOrganization && !isSuperAdmin;
   const { leadStatuses } = useLeadStatuses();
   const { isMobile } = useScreenSize();
 
@@ -1575,7 +1576,12 @@ export default function DashboardPageUnified() {
   const [wallSearchHasMore, setWallSearchHasMore] = useState(true);
   const [iframeError, setIframeError] = useState(false);
 
-  const [mobilePanel, setMobilePanel] = useState(2); // Zhiive: 0=Explore, 1=Nectar, 2=Mur(centre), 3=Reels, 4=Stats
+  const [mobilePanel, setMobilePanel] = useState(() => {
+    // Hive (mur) is always the initial panel — compute index from default order
+    const defaultOrder = ['nectar', 'wax', 'explore', 'reels', 'mur', 'mail', 'agenda', 'search', 'stats'];
+    const idx = defaultOrder.indexOf('mur');
+    return idx >= 0 ? idx : 0;
+  });
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -1620,9 +1626,13 @@ export default function DashboardPageUnified() {
     setContextMobilePanel(page);
   }, [setContextMobilePanel]);
 
+  // Track user interaction — once the user touches the carousel, stop auto-scrolling to mur
+  const userHasInteracted = useRef(false);
+
   // Detect swipe attempts beyond the first/last panel → navigate to Mur
   const boundarySwipeRef = useRef<{ startX: number; page: number } | null>(null);
   const handleBoundaryTouchStart = useCallback((e: React.TouchEvent) => {
+    userHasInteracted.current = true; // User is in control now
     const el = scrollContainerRef.current;
     if (!el) return;
     const page = Math.round(el.scrollLeft / el.offsetWidth);
@@ -1634,29 +1644,29 @@ export default function DashboardPageUnified() {
     const el = scrollContainerRef.current;
     if (!el) return;
     const totalPanels = el.children.length;
-    const murIndex = tabOrder.indexOf('mur');
-    const dx = ref.startX - e.changedTouches[0].clientX; // positive = swipe left (→ next)
+    const visibleTabs = tabOrder.filter(id => !(isFreeUser && id === 'stats'));
+    const murIndex = visibleTabs.indexOf('mur');
+    if (murIndex < 0) { boundarySwipeRef.current = null; return; }
+    const dx = ref.startX - e.changedTouches[0].clientX;
     const MIN_SWIPE = 50;
+    const scrollToMur = () => {
+      const w = el.offsetWidth;
+      if (w > 0) {
+        el.scrollTo({ left: murIndex * w, behavior: "smooth" });
+        setMobilePanel(murIndex);
+        setContextMobilePanel(murIndex);
+      }
+    };
     // At last panel and swiped left (trying to go beyond) → go to Mur
     if (ref.page === totalPanels - 1 && dx > MIN_SWIPE) {
-      setTimeout(() => {
-        const cur = Math.round(el.scrollLeft / el.offsetWidth);
-        if (cur === totalPanels - 1) {
-          el.scrollTo({ left: murIndex * el.offsetWidth, behavior: "smooth" });
-        }
-      }, 300);
+      requestAnimationFrame(scrollToMur);
     }
     // At first panel and swiped right (trying to go beyond) → go to Mur
     else if (ref.page === 0 && dx < -MIN_SWIPE) {
-      setTimeout(() => {
-        const cur = Math.round(el.scrollLeft / el.offsetWidth);
-        if (cur === 0) {
-          el.scrollTo({ left: murIndex * el.offsetWidth, behavior: "smooth" });
-        }
-      }, 300);
+      requestAnimationFrame(scrollToMur);
     }
     boundarySwipeRef.current = null;
-  }, [tabOrder]);
+  }, [tabOrder, isFreeUser, setContextMobilePanel]);
 
   const scrollToPanel = useCallback((panel: number) => {
     const el = scrollContainerRef.current;
@@ -1672,20 +1682,34 @@ export default function DashboardPageUnified() {
     }
   }, [isMobile, registerMobileScroll, scrollToPanel]);
 
-  // Zhiive: scroll to "mur" panel position on mount (follows tabOrder)
-  const hasScrolledToCenter = useRef(false);
-  useEffect(() => {
-    if (hasScrolledToCenter.current) return;
+  // Zhiive: scroll to "mur" panel on mount
+  const scrollToCenterNow = useCallback(() => {
+    if (userHasInteracted.current) return;
     const el = scrollContainerRef.current;
-    if (!el) return;
-    const murIndex = tabOrder.indexOf('mur');
-    const initialPanel = murIndex >= 0 ? murIndex : 0;
-    // Use instant scroll (no animation) for initial position
-    requestAnimationFrame(() => {
-      el.scrollTo({ left: initialPanel * el.offsetWidth, behavior: "instant" as ScrollBehavior });
-      hasScrolledToCenter.current = true;
-    });
-  });
+    if (!el || !isMobile) return;
+    const visibleTabs = tabOrder.filter(id => !(isFreeUser && id === 'stats'));
+    const murIndex = visibleTabs.indexOf('mur');
+    if (murIndex < 0) return;
+    const w = el.offsetWidth;
+    if (w > 0) {
+      el.scrollTo({ left: murIndex * w, behavior: "instant" as ScrollBehavior });
+      setMobilePanel(murIndex);
+      setContextMobilePanel(murIndex);
+    }
+  }, [tabOrder, isMobile, isFreeUser, setContextMobilePanel]);
+
+  // Callback ref for the scroll container — sets scrollLeft synchronously on mount
+  const scrollContainerCallbackRef = useCallback((node: HTMLDivElement | null) => {
+    (scrollContainerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+    if (node) {
+      const visibleTabs = tabOrder.filter(id => !(isFreeUser && id === 'stats'));
+      const murIndex = visibleTabs.indexOf('mur');
+      if (murIndex >= 0 && node.offsetWidth > 0) {
+        node.scrollLeft = murIndex * node.offsetWidth;
+      }
+      requestAnimationFrame(() => scrollToCenterNow());
+    }
+  }, [scrollToCenterNow, tabOrder, isFreeUser]);
 
   // Analytics state (colonne droite)
   const [analytics, setAnalytics] = useState<any>(null);
@@ -2134,7 +2158,6 @@ export default function DashboardPageUnified() {
   }, [feedMode, fetchWallFeed]);
 
   // Les utilisateurs réseau (libres) accèdent au réseau social — la bannière est dans AppLayout
-  const isFreeUser = !currentOrganization && !isSuperAdmin;
 
   if (loading && !isFreeUser) {
     return (
@@ -3286,7 +3309,7 @@ export default function DashboardPageUnified() {
            ═══════════════════════════════════════════════════════ */
         <>
           <div
-            ref={scrollContainerRef}
+            ref={scrollContainerCallbackRef}
             onScroll={handleMobileScroll}
             onTouchStart={handleBoundaryTouchStart}
             onTouchEnd={handleBoundaryTouchEnd}

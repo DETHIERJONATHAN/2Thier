@@ -38,14 +38,14 @@ interface ZhiiveNavContextType {
   setWallViewUrl: (url: string | null) => void;
 }
 
-const defaultTabOrder = ['explore', 'nectar', 'reels', 'mur', 'wax', 'mail', 'agenda', 'search', 'stats'];
+const defaultTabOrder = ['nectar', 'wax', 'explore', 'reels', 'mur', 'mail', 'agenda', 'search', 'stats'];
 
 const ZhiiveNavContext = createContext<ZhiiveNavContextType>({
   centerApp: null, setCenterApp: () => {},
-  leftApps: ['explore', 'flow', 'reels'], rightApps: ['universe', 'mail', 'agenda', 'stats'],
-  leftSidebarApp: 'reels', rightSidebarApp: 'universe',
+  leftApps: ['nectar', 'wax', 'explore', 'reels'], rightApps: ['mail', 'agenda', 'search', 'stats'],
+  leftSidebarApp: 'reels', rightSidebarApp: 'mail',
   tabOrder: defaultTabOrder, reorderTabs: () => {},
-  mobilePanel: 3, setMobilePanel: () => {},
+  mobilePanel: 4, setMobilePanel: () => {},
   registerMobileScroll: () => {}, scrollMobileToPanel: () => {},
   feedMode: 'org', setFeedMode: () => {},
   browseUrl: null, setBrowseUrl: () => {},
@@ -61,17 +61,27 @@ interface ZhiiveNavProviderProps {
 
 export const ZhiiveNavProvider = ({ children, initialFeedMode, onFeedModeChange }: ZhiiveNavProviderProps) => {
   const [centerApp, setCenterApp] = useState<ZhiiveApp | null>(null);
-  const [savedTabOrder, setSavedTabOrder] = useUserPreference<string[]>('sf_tab_order', defaultTabOrder);
+  const [savedTabOrder, setSavedTabOrder, { loading: tabOrderLoading }] = useUserPreference<string[]>('sf_tab_order', defaultTabOrder);
+  const [savedTabVersion, setSavedTabVersion, { loading: tabVersionLoading }] = useUserPreference<number>('sf_tab_order_v', 0);
   const [tabOrder, setTabOrder] = useState<string[]>(defaultTabOrder);
-  const [mobilePanel, setMobilePanel] = useState(0);
+  const [mobilePanel, setMobilePanel] = useState(() => {
+    const idx = defaultTabOrder.indexOf('mur');
+    return idx >= 0 ? idx : 0;
+  });
   const [feedMode, setFeedModeInternal] = useState<FeedMode>(initialFeedMode || 'org');
   const [browseUrl, setBrowseUrl] = useState<string | null>(null);
   const [wallSearchQuery, setWallSearchQuery] = useState<string | null>(null);
   const [wallViewUrl, setWallViewUrl] = useState<string | null>(null);
   const mobileScrollRef = useRef<((panel: number) => void) | null>(null);
 
+  // Current migration version — bump this when the default order changes
+  const TAB_ORDER_VERSION = 2;
+
   // Sync tabOrder from DB once loaded — merge new tabs that didn't exist before
+  // CRITICAL: Wait until BOTH preferences have loaded from DB to avoid race condition
+  // where the GET response for one pref overrides the optimistic SET from migration
   useEffect(() => {
+    if (tabOrderLoading || tabVersionLoading) return;
     if (Array.isArray(savedTabOrder) && savedTabOrder.includes('mur')) {
       let merged = [...savedTabOrder];
 
@@ -79,7 +89,6 @@ export const ZhiiveNavProvider = ({ children, initialFeedMode, onFeedModeChange 
       const hasFlow = merged.includes('flow');
       const hasUniverse = merged.includes('universe');
       if (hasFlow || hasUniverse) {
-        // Insert 'nectar' where 'flow' was (or where 'universe' was if no flow)
         const insertIdx = hasFlow ? merged.indexOf('flow') : merged.indexOf('universe');
         merged = merged.filter(t => t !== 'flow' && t !== 'universe');
         if (!merged.includes('nectar')) {
@@ -87,10 +96,16 @@ export const ZhiiveNavProvider = ({ children, initialFeedMode, onFeedModeChange 
         }
       }
 
+      // ── Migration v2: Force Hive-centered default order (one-time) ──
+      // Only reset if user hasn't been migrated to v2 yet
+      if (savedTabVersion < TAB_ORDER_VERSION) {
+        merged = [...defaultTabOrder];
+        setSavedTabVersion(TAB_ORDER_VERSION);
+      }
+
       // Add any new tabs from defaultTabOrder that are missing from the saved order
       for (const tab of defaultTabOrder) {
         if (!merged.includes(tab)) {
-          // Insert new tabs after 'mur' but before 'stats' (or at end)
           const statsIdx = merged.indexOf('stats');
           if (statsIdx >= 0) {
             merged.splice(statsIdx, 0, tab);
@@ -105,7 +120,7 @@ export const ZhiiveNavProvider = ({ children, initialFeedMode, onFeedModeChange 
         setSavedTabOrder(merged);
       }
     }
-  }, [savedTabOrder]);
+  }, [savedTabOrder, savedTabVersion, tabOrderLoading, tabVersionLoading]);
 
   // Sync if initialFeedMode changes (e.g. user data loads async)
   useEffect(() => {

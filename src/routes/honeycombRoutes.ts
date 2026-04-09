@@ -14,7 +14,8 @@ const CACHE_ERROR_TTL_MS = 2 * 60 * 1000;             // 2 minutes
 const FAVICON_FALLBACK_SIZE = 128;
 const MAX_ITEMS_PER_FEED = 5;
 const MAX_SNIPPET_LENGTH = 200;
-const CONCURRENCY_LIMIT = 5;
+const _CONCURRENCY_LIMIT = 5; // available for chunked fetching if needed
+const FEEDS_ENDPOINT_TIMEOUT_MS = 8_000;               // Max 8s for the entire /feeds endpoint
 const BROWSER_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 const rssParser = new Parser({
@@ -915,18 +916,54 @@ router.get('/feeds', authMiddleware, async (req: Request, res: Response) => {
       }
     }
 
-    // Fetch feeds in parallel (with concurrency limit)
-    const results: FeedResult[] = [];
-    const chunks: typeof bookmarks[] = [];
-    for (let i = 0; i < bookmarks.length; i += CONCURRENCY_LIMIT) {
-      chunks.push(bookmarks.slice(i, i + CONCURRENCY_LIMIT));
-    }
+    // Fetch ALL feeds concurrently with a global timeout
+    const allPromises = bookmarks.map(bm => fetchFeedForBookmark(bm));
 
-    for (const chunk of chunks) {
-      const chunkResults = await Promise.all(
-        chunk.map(bm => fetchFeedForBookmark(bm))
+    // Race: either all feeds resolve or we hit the timeout
+    const timeoutPromise = new Promise<'TIMEOUT'>(resolve =>
+      setTimeout(() => resolve('TIMEOUT'), FEEDS_ENDPOINT_TIMEOUT_MS)
+    );
+
+    // Track settled results individually
+    const settled = await Promise.race([
+      Promise.allSettled(allPromises).then(s => s),
+      timeoutPromise.then(() => 'TIMEOUT' as const),
+    ]);
+
+    let results: FeedResult[];
+    if (settled === 'TIMEOUT') {
+      // Timeout — collect whatever resolved so far + cached fallbacks
+      results = bookmarks.map((bm, i) => {
+        // Check if this specific promise has resolved (snapshot)
+        const cached = feedCache.get(bm.url);
+        if (cached?.data) return cached.data;
+        // Return a minimal placeholder for bookmarks that haven't loaded yet
+        return {
+          bookmarkId: bm.id,
+          url: bm.url,
+          title: bm.title,
+          domain: bm.domain,
+          favicon: bm.favicon,
+          imageUrl: bm.imageUrl,
+          feedUrl: null,
+          items: [],
+        } as FeedResult;
+      });
+      console.log(`[Honeycomb] ⏱️ /feeds timeout (${FEEDS_ENDPOINT_TIMEOUT_MS}ms), returning ${results.filter(r => r.items.length > 0).length}/${bookmarks.length} cached`);
+    } else {
+      // All resolved within timeout
+      results = (settled as PromiseSettledResult<FeedResult>[]).map((s, i) =>
+        s.status === 'fulfilled' ? s.value : {
+          bookmarkId: bookmarks[i].id,
+          url: bookmarks[i].url,
+          title: bookmarks[i].title,
+          domain: bookmarks[i].domain,
+          favicon: bookmarks[i].favicon,
+          imageUrl: bookmarks[i].imageUrl,
+          feedUrl: null,
+          items: [],
+        } as FeedResult
       );
-      results.push(...chunkResults);
     }
 
     res.json({ feeds: results });

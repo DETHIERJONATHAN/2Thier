@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import express from 'express';
+import http from 'http';
 import path from 'path';
 import fs from 'fs';
 import cors from 'cors';
@@ -15,6 +16,7 @@ import compression from 'compression';
 import expressWinston from 'express-winston';
 import apiRouter from './routes/index';
 import { prisma } from './lib/prisma';
+import { initializeSocketIO } from './lib/socket';
 
 // 🔥 ROUTES TBL SPÉCIALISÉES
 import tblSubmissionEvaluatorRouter from './components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator';
@@ -680,8 +682,14 @@ async function startServer() {
       console.warn('⚠️ [BOOTSTRAP] Erreur auto-ensure modules:', e);
     }
 
-    // 🚀 ÉTAPE 2: Démarrage du serveur HTTP
-    const server = app.listen(port, '0.0.0.0', () => {
+    // 🚀 ÉTAPE 2: Démarrage du serveur HTTP + Socket.io
+    const httpServer = http.createServer(app);
+    
+    // 🔌 Initialisation Socket.io
+    const io = initializeSocketIO(httpServer);
+    console.log('🔌 [SOCKET.IO] WebSocket server attached to HTTP server');
+    
+    const server = httpServer.listen(port, '0.0.0.0', () => {
       logSecurityEvent('SERVER_READY', {
         port,
         securityLevel: 'ENTERPRISE',

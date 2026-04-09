@@ -1,6 +1,7 @@
 // Service pour gérer les notifications et emails liés à l'agenda
 import { emailService } from './EmailService';
 import { prisma } from '../lib/prisma';
+import { sendPushToUser } from '../routes/push';
 
 export interface CalendarNotificationData {
   eventId: string;
@@ -36,8 +37,18 @@ export class CalendarNotificationService {
             message: `Vous êtes invité(e) à l'événement "${eventData.eventTitle}" le ${new Date(eventData.eventDate).toLocaleDateString('fr-FR')}`
           },
           status: 'PENDING'
-        }
+        } as any
       });
+
+      // Push notification
+      sendPushToUser(userId, {
+        title: 'Zhiive — Calendrier',
+        body: `Invitation : "${eventData.eventTitle}" le ${new Date(eventData.eventDate).toLocaleDateString('fr-FR')}`,
+        icon: '/pwa-192x192.png',
+        tag: `calendar-invite-${eventData.eventId}`,
+        url: '/calendrier',
+        type: 'notification',
+      }).catch(() => {});
       
     } catch (error) {
       console.error('❌ [Calendar] Erreur lors de la création de la notification:', error);
@@ -68,8 +79,19 @@ export class CalendarNotificationService {
             message: `Rappel: "${eventData.eventTitle}" dans ${reminderMinutes} minutes`
           },
           status: 'PENDING'
-        }
+        } as any
       });
+
+      // Push notification
+      sendPushToUser(userId, {
+        title: 'Zhiive — Rappel',
+        body: `"${eventData.eventTitle}" dans ${reminderMinutes} minutes`,
+        icon: '/pwa-192x192.png',
+        tag: `calendar-reminder-${eventData.eventId}`,
+        url: '/calendrier',
+        type: 'notification',
+        requireInteraction: true,
+      }).catch(() => {});
       
     } catch (error) {
       console.error('❌ [Calendar] Erreur lors de la création du rappel:', error);
@@ -101,8 +123,20 @@ export class CalendarNotificationService {
       }));
 
       await prisma.notification.createMany({
-        data: notifications
+        data: notifications as any
       });
+
+      // Push to all participants
+      for (const userId of userIds) {
+        sendPushToUser(userId, {
+          title: 'Zhiive — Calendrier',
+          body: `Événement modifié : "${eventData.eventTitle}" — ${changes.join(', ')}`,
+          icon: '/pwa-192x192.png',
+          tag: `calendar-update-${eventData.eventId}`,
+          url: '/calendrier',
+          type: 'notification',
+        }).catch(() => {});
+      }
       
     } catch (error) {
       console.error('❌ [Calendar] Erreur lors de la création des notifications de mise à jour:', error);
@@ -134,8 +168,20 @@ export class CalendarNotificationService {
       }));
 
       await prisma.notification.createMany({
-        data: notifications
+        data: notifications as any
       });
+
+      // Push to all participants
+      for (const userId of userIds) {
+        sendPushToUser(userId, {
+          title: 'Zhiive — Calendrier',
+          body: `Événement annulé : "${eventData.eventTitle}"${reason ? ` — ${reason}` : ''}`,
+          icon: '/pwa-192x192.png',
+          tag: `calendar-cancel-${eventData.eventId}`,
+          url: '/calendrier',
+          type: 'notification',
+        }).catch(() => {});
+      }
       
     } catch (error) {
   console.error("❌ [Calendar] Erreur lors de la création des notifications d'annulation:", error);
@@ -146,8 +192,8 @@ export class CalendarNotificationService {
    * Programmer des rappels automatiques pour un événement
    */
   static async scheduleEventReminders(
-    organizationId: string,
-    eventId: string,
+    _organizationId: string,
+    _eventId: string,
     eventData: CalendarNotificationData,
     participantUserIds: string[],
     reminderIntervals: number[] = [24 * 60, 60, 15] // 24h, 1h, 15min avant
@@ -159,7 +205,7 @@ export class CalendarNotificationService {
       
       // Si le rappel est dans le futur, on le programme
       if (reminderDate > new Date()) {
-        for (const userId of participantUserIds) {
+        for (const _userId of participantUserIds) {
           // Ici on pourrait utiliser un job scheduler comme Bull/BullMQ
           // Pour l'instant, créons juste la logique de base
           

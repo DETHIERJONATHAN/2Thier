@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Avatar, Input, Modal, Form, DatePicker, TimePicker, message as antMessage } from 'antd';
+import { Avatar, Input, Modal, Form, DatePicker, TimePicker, message as antMessage, Tooltip, Dropdown, Drawer } from 'antd';
 import {
   MessageOutlined,
   CloseOutlined,
@@ -14,12 +14,33 @@ import {
   ArrowLeftOutlined,
   CalendarOutlined,
   HourglassOutlined,
+  PushpinOutlined,
+  PushpinFilled,
+  SmileOutlined,
+  AudioOutlined,
+  MoreOutlined,
+  CheckOutlined,
+  FolderOpenOutlined,
+  PaperClipOutlined,
+  FileOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import VideoCallModal from './VideoCallModal';
 import TelnyxDialer from './TelnyxDialer';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
+import { useSocket } from '../hooks/useSocket';
+
+// ── Messenger sub-components (Phase 2) ──
+import { MessageStatusIndicator } from './messenger/MessageStatusIndicator';
+import { MessageReactions } from './messenger/MessageReactions';
+import { EmojiReactionPicker } from './messenger/EmojiReactionPicker';
+import { FilePreview } from './messenger/FilePreview';
+import { VoiceRecorder } from './messenger/VoiceRecorder';
+import { SharedFilesPanel } from './messenger/SharedFilesPanel';
+import { TaskFromMessage } from './messenger/TaskFromMessage';
+import { CustomStatusPicker } from './messenger/CustomStatusPicker';
 
 /** MSN Wizz icon — uses the actual wizz.png */
 const WizzIcon = ({ size = 20 }: { size?: number }) => (
@@ -60,6 +81,13 @@ interface Conversation {
   lastMessageAt: string;
 }
 
+interface MessageReactionData {
+  emoji: string;
+  count: number;
+  users: { id: string; name: string }[];
+  hasReacted: boolean;
+}
+
 interface Message {
   id: string;
   content: string | null;
@@ -74,6 +102,13 @@ interface Message {
   isExpired?: boolean;
   createdAt: string;
   replyTo: { id: string; content: string | null; sender: { firstName: string; lastName: string } } | null;
+  // Phase 2 fields
+  status?: 'sent' | 'delivered' | 'read';
+  isPinned?: boolean;
+  mentions?: string[];
+  voiceDuration?: number | null;
+  voiceTranscript?: string | null;
+  reactions?: MessageReactionData[];
 }
 
 interface Friend {
@@ -96,9 +131,9 @@ const FB = {
   hover: '#f2f3f5', msgBg: '#e4e6eb', msgBlueBg: '#0084ff',
 };
 
-const CHAT_WIDTH = 338;
-const CHAT_HEIGHT = 455;
-const LIST_HEIGHT = 500;
+const CHAT_WIDTH = 400;
+const CHAT_HEIGHT = 550;
+const LIST_HEIGHT = 530;
 
 // ═══════════════════════════════════════════════════════════════
 // MESSENGER CHAT COMPONENT
@@ -146,7 +181,7 @@ const MessengerChat: React.FC = () => {
   const [showNewChat, setShowNewChat] = useState(false);
 
   // 🔊 Notification sounds
-  const { play: playSound, stop: stopSound } = useNotificationSound();
+  const { play: playSound, stop: _stopSound } = useNotificationSound();
   const prevUnreadRef = useRef(0);
 
   // Telnyx phone state
@@ -155,6 +190,33 @@ const MessengerChat: React.FC = () => {
   const [dialerInitialNumber, setDialerInitialNumber] = useState('');
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ─── SOCKET.IO REAL-TIME ───────────────────────────────────
+  // Get JWT token from localStorage for Socket auth
+  const socketToken = useMemo(() => {
+    try { return localStorage.getItem('authToken') || null; } catch { return null; }
+  }, [user?.id]);
+
+  const socket = useSocket({ token: socketToken, enabled: !!user });
+
+  // Phase 2: new UI states
+  const [typingUsers, setTypingUsers] = useState<Map<string, { name: string; timeout: ReturnType<typeof setTimeout> }>>(new Map());
+  const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
+  const [taskModalMessage, setTaskModalMessage] = useState<Message | null>(null);
+  const [showSharedFiles, setShowSharedFiles] = useState(false);
+  const [showCustomStatus, setShowCustomStatus] = useState(false);
+  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 📎 File attachment state
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
+
+  // @ Mention state
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const mentionStartPos = useRef<number>(-1);
 
   // 🎭 Wizz trigger (defined early so fetchUnread can reference it)
   const triggerWizz = useCallback(() => {
@@ -178,7 +240,7 @@ const MessengerChat: React.FC = () => {
 
   const fetchUnread = useCallback(async () => {
     try {
-      const data = await api.get('/api/messenger/unread');
+      const data = await api.get('/api/messenger/unread') as any;
       if (data && typeof data.unread === 'number') setTotalUnread(data.unread);
       // Global Wizz detection — works even when conversation is closed
       if (data?.latestWizz && data.latestWizz.id !== lastGlobalWizzIdRef.current) {
@@ -192,7 +254,7 @@ const MessengerChat: React.FC = () => {
 
   const fetchFriends = useCallback(async () => {
     try {
-      const data = await api.get('/api/friends');
+      const data = await api.get('/api/friends') as any;
       if (data?.friends) {
         // Sort: online friends first, then alphabetical
         const sorted = [...data.friends].sort((a: Friend, b: Friend) => {
@@ -219,7 +281,7 @@ const MessengerChat: React.FC = () => {
   const telnyxCall = useTelnyxCall({
     _api: api,
     eligibility: stableEligibility,
-    onIncomingCall: (callerNumber, callerName) => {
+    onIncomingCall: (_callerNumber, _callerName) => {
       // Auto-open dialer on incoming Telnyx call
       setShowDialer(true);
       setIsListOpen(true);
@@ -237,6 +299,76 @@ const MessengerChat: React.FC = () => {
     fetchUnread();
     fetchTelnyxEligibility();
   }, [user, api, currentOrganization, fetchConversations, fetchFriends, fetchUnread, fetchTelnyxEligibility]);
+
+  // ─── SOCKET.IO EVENT LISTENERS ───────────────────────────────
+  // Join/leave conversation room
+  useEffect(() => {
+    if (!socket.connected || !activeConversationId) return;
+    socket.joinConversation(activeConversationId);
+    socket.markRead(activeConversationId);
+    return () => { socket.leaveConversation(activeConversationId); };
+  }, [socket.connected, activeConversationId, socket]);
+
+  // Real-time new messages
+  useEffect(() => {
+    if (!socket.connected) return;
+    const cleanup = socket.on('new-message', (data: any) => {
+      if (data.conversationId === activeConversationId) {
+        // Append new message to inline messages
+        setInlineMessages(prev => {
+          if (prev.some(m => m.id === data.message?.id)) return prev;
+          return [...prev, data.message];
+        });
+        // Mark as read since conversation is open
+        socket.markRead(activeConversationId);
+      }
+      // Refresh conversation list for latest message preview
+      fetchConversations();
+      fetchUnread();
+    });
+    return cleanup;
+  }, [socket.connected, activeConversationId, socket, fetchConversations, fetchUnread]);
+
+  // Typing indicators
+  useEffect(() => {
+    if (!socket.connected) return;
+    const cleanup = socket.on('user-typing', (data: { userId: string; conversationId: string; isTyping: boolean }) => {
+      if (data.conversationId !== activeConversationId || data.userId === user?.id) return;
+      setTypingUsers(prev => {
+        const next = new Map(prev);
+        if (data.isTyping) {
+          // Clear previous timeout if exists
+          const existing = next.get(data.userId);
+          if (existing?.timeout) clearTimeout(existing.timeout);
+          const timeout = setTimeout(() => {
+            setTypingUsers(p => { const n = new Map(p); n.delete(data.userId); return n; });
+          }, 5000);
+          next.set(data.userId, { name: data.userId, timeout });
+        } else {
+          const existing = next.get(data.userId);
+          if (existing?.timeout) clearTimeout(existing.timeout);
+          next.delete(data.userId);
+        }
+        return next;
+      });
+    });
+    return cleanup;
+  }, [socket.connected, activeConversationId, socket, user?.id]);
+
+  // Message status updates (delivered/read)
+  useEffect(() => {
+    if (!socket.connected) return;
+    return socket.on('messages-status-update', (data) => {
+      if (data.conversationId === activeConversationId) {
+        setInlineMessages(prev => prev.map(msg => {
+          if (data.messageIds?.includes(msg.id)) {
+            return { ...msg, status: data.status as Message['status'] };
+          }
+          return msg;
+        }));
+      }
+    });
+  }, [socket.connected, activeConversationId, socket]);
 
   // ─── SERVICE WORKER + WEB PUSH REGISTRATION ────────────────
   useEffect(() => {
@@ -314,25 +446,39 @@ const MessengerChat: React.FC = () => {
     const id = convId || activeConversationId;
     if (!id) return;
     try {
-      const data = await api.get(`/api/messenger/conversations/${id}/messages`);
+      const data = await api.get(`/api/messenger/conversations/${id}/messages`) as any;
       if (data?.messages) setInlineMessages(data.messages);
     } catch { /* silent */ }
   }, [api, activeConversationId]);
 
-  // Poll for new messages every 5s, refresh friends every 30s for online status
+  // Socket.io: Reaction events (must be after fetchInlineMessages declaration)
+  useEffect(() => {
+    if (!socket.connected) return;
+    const cleanup1 = socket.on('reaction-added', () => { if (activeConversationId) fetchInlineMessages(); });
+    const cleanup2 = socket.on('reaction-removed', () => { if (activeConversationId) fetchInlineMessages(); });
+    return () => { cleanup1(); cleanup2(); };
+  }, [socket.connected, activeConversationId, socket, fetchInlineMessages]);
+
+  // Socket.io: Pin events
+  useEffect(() => {
+    if (!socket.connected) return;
+    return socket.on('message-pinned', () => { if (activeConversationId) fetchInlineMessages(); });
+  }, [socket.connected, activeConversationId, socket, fetchInlineMessages]);
+
+  // Poll for new messages every 15s, refresh friends every 60s for online status
   const friendsPollCountRef = useRef(0);
   useEffect(() => {
     pollRef.current = setInterval(() => {
       fetchUnread();
       if (isListOpen || openChats.length > 0) fetchConversations();
       if (activeConversationId) fetchInlineMessages();
-      // Refresh friends list every 30s (every 6th poll) for online status updates
+      // Refresh friends list every 60s (every 4th poll) for online status updates
       friendsPollCountRef.current++;
-      if (friendsPollCountRef.current >= 6) {
+      if (friendsPollCountRef.current >= 4) {
         friendsPollCountRef.current = 0;
         fetchFriends();
       }
-    }, 5000);
+    }, 15000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [isListOpen, openChats, activeConversationId, fetchUnread, fetchConversations, fetchInlineMessages, fetchFriends]);
 
@@ -385,7 +531,7 @@ const MessengerChat: React.FC = () => {
     }
   }, [inlineMessages, activeConversationId]);
 
-  // Poll for incoming calls every 3s
+  // Poll for incoming calls every 10s
   useEffect(() => {
     if (activeCall) return; // don't poll while in a call
     const incomingPoll = setInterval(async () => {
@@ -419,7 +565,7 @@ const MessengerChat: React.FC = () => {
           });
         }
       } catch { /* silent */ }
-    }, 3000);
+    }, 10000);
     return () => clearInterval(incomingPoll);
   }, [api, activeCall]);
 
@@ -436,6 +582,11 @@ const MessengerChat: React.FC = () => {
   };
 
   const sendInlineMessage = async () => {
+    // If files are pending, upload them first
+    if (pendingFiles.length > 0) {
+      await uploadAndSendFiles();
+      return;
+    }
     if (!inlineNewMessage.trim() || inlineSending || !activeConversationId) return;
     setInlineSending(true);
     try {
@@ -444,8 +595,20 @@ const MessengerChat: React.FC = () => {
         payload.isEphemeral = true;
         payload.ephemeralTtl = ephemeralTtl;
       }
+      // Extract @mentions from content — find participant IDs matching @FirstName
+      const mentionRegex = /@(\w+)/g;
+      let match;
+      const mentionIds: string[] = [];
+      while ((match = mentionRegex.exec(inlineNewMessage)) !== null) {
+        const name = match[1].toLowerCase();
+        const found = currentParticipants.find(p => p.firstName.toLowerCase() === name);
+        if (found) mentionIds.push(found.id);
+      }
+      if (mentionIds.length > 0) payload.mentions = mentionIds;
+
       await api.post(`/api/messenger/conversations/${activeConversationId}/messages`, payload);
       setInlineNewMessage('');
+      setMentionQuery(null);
       await fetchInlineMessages();
       fetchConversations();
       inlineInputRef.current?.focus();
@@ -498,9 +661,187 @@ const MessengerChat: React.FC = () => {
     setOpenChats(prev => prev.filter(id => id !== convId));
   };
 
+  // ─── PHASE 2 ACTIONS ──────────────────────────────────────
+  const toggleReaction = async (messageId: string, emoji: string) => {
+    try {
+      await api.post(`/api/messenger/messages/${messageId}/reactions`, { emoji });
+      fetchInlineMessages();
+    } catch (e) { console.error('[MESSENGER] Reaction error:', e); }
+  };
+
+  const togglePin = async (messageId: string) => {
+    try {
+      await api.post(`/api/messenger/messages/${messageId}/pin`, {});
+      fetchInlineMessages();
+    } catch (e) { console.error('[MESSENGER] Pin error:', e); }
+  };
+
+  const deleteMessage = async (messageId: string) => {
+    try {
+      await api.delete(`/api/messenger/messages/${messageId}`);
+      fetchInlineMessages();
+      fetchConversations();
+    } catch (e) { console.error('[MESSENGER] Delete error:', e); }
+  };
+
+  const sendVoiceMessage = async (blob: Blob, duration: number) => {
+    if (!activeConversationId) return;
+    try {
+      // Step 1: Upload the voice file
+      const uploadForm = new FormData();
+      uploadForm.append('file', blob, 'voice.webm');
+      const uploadResult = await api.post('/api/messenger/upload', uploadForm) as any;
+      const urls = uploadResult?.urls;
+      if (!urls || !urls.length) throw new Error('Voice upload failed');
+
+      // Step 2: Send message with voice URLs
+      await api.post(`/api/messenger/conversations/${activeConversationId}/messages`, {
+        content: null,
+        mediaUrls: urls,
+        mediaType: 'voice',
+        voiceDuration: Math.round(duration),
+      });
+      fetchInlineMessages();
+      fetchConversations();
+    } catch (e) { console.error('[MESSENGER] Voice send error:', e); }
+    setShowVoiceRecorder(false);
+  };
+
+  const handleInputTyping = useCallback(() => {
+    if (!activeConversationId || !socket.connected) return;
+    socket.sendTyping(activeConversationId, true);
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      socket.sendTyping(activeConversationId, false);
+    }, 3000);
+  }, [activeConversationId, socket]);
+
+  const handleUpdateCustomStatus = async (status: string, emoji: string, expiresInMinutes?: number) => {
+    try {
+      await api.put('/api/messenger/status', { customStatus: status, customStatusEmoji: emoji, expiresInMinutes });
+      if (socket.connected) socket.updateStatus(status, emoji, expiresInMinutes);
+    } catch (e) { console.error('[MESSENGER] Status error:', e); }
+  };
+
+  // ─── FILE UPLOAD ───────────────────────────────────────────
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    setPendingFiles(prev => [...prev, ...Array.from(files)]);
+    // Reset input so same file can be selected again
+    e.target.value = '';
+  };
+
+  const removePendingFile = (index: number) => {
+    setPendingFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const uploadAndSendFiles = async () => {
+    if (!activeConversationId || pendingFiles.length === 0) return;
+    setUploadingFiles(true);
+    try {
+      const formData = new FormData();
+      pendingFiles.forEach(f => formData.append('file', f));
+      const uploadResult = await api.post('/api/messenger/upload', formData) as any;
+      const urls = uploadResult?.urls;
+      const mediaType = uploadResult?.mediaType || 'file';
+      if (!urls || !urls.length) throw new Error('Upload returned no URLs');
+      // Send message with media
+      await api.post(`/api/messenger/conversations/${activeConversationId}/messages`, {
+        content: inlineNewMessage.trim() || null,
+        mediaUrls: urls,
+        mediaType,
+      });
+      setPendingFiles([]);
+      setInlineNewMessage('');
+      await fetchInlineMessages();
+      fetchConversations();
+    } catch (e) { console.error('[MESSENGER] File upload error:', e); antMessage.error('Erreur lors de l\'envoi du fichier'); }
+    setUploadingFiles(false);
+  };
+
+  // ─── @ MENTIONS ────────────────────────────────────────────
+  const currentParticipants = useMemo(() => {
+    const conv = conversations.find(c => c.id === activeConversationId);
+    if (!conv) return [];
+    return conv.participants.filter(p => p.id !== user?.id);
+  }, [conversations, activeConversationId, user?.id]);
+
+  const mentionResults = useMemo(() => {
+    if (mentionQuery === null) return [];
+    const q = mentionQuery.toLowerCase();
+    return currentParticipants.filter(p =>
+      `${p.firstName} ${p.lastName}`.toLowerCase().includes(q) ||
+      p.firstName.toLowerCase().startsWith(q) ||
+      p.lastName.toLowerCase().startsWith(q)
+    ).slice(0, 5);
+  }, [mentionQuery, currentParticipants]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setInlineNewMessage(val);
+    handleInputTyping();
+
+    // Detect @ mention
+    const cursorPos = e.target.selectionStart || val.length;
+    const textBefore = val.slice(0, cursorPos);
+    const atIdx = textBefore.lastIndexOf('@');
+    if (atIdx >= 0 && (atIdx === 0 || textBefore[atIdx - 1] === ' ')) {
+      const query = textBefore.slice(atIdx + 1);
+      if (!query.includes(' ') || query.length < 20) {
+        setMentionQuery(query);
+        mentionStartPos.current = atIdx;
+        setMentionIndex(0);
+        return;
+      }
+    }
+    setMentionQuery(null);
+  };
+
+  const insertMention = (participant: Participant) => {
+    const before = inlineNewMessage.slice(0, mentionStartPos.current);
+    const after = inlineNewMessage.slice(
+      mentionStartPos.current + 1 + (mentionQuery?.length || 0)
+    );
+    const displayName = `@${participant.firstName}`;
+    const newVal = `${before}${displayName} ${after}`;
+    setInlineNewMessage(newVal);
+    setMentionQuery(null);
+    mentionStartPos.current = -1;
+    inlineInputRef.current?.focus();
+  };
+
+  // Build message action menu items
+  const getMessageMenuItems = (msg: Message) => {
+    const items: any[] = [];
+    items.push({
+      key: 'pin',
+      icon: msg.isPinned ? <PushpinFilled /> : <PushpinOutlined />,
+      label: msg.isPinned ? 'Désépingler' : 'Épingler',
+      onClick: () => togglePin(msg.id),
+    });
+    items.push({
+      key: 'task',
+      icon: <CheckOutlined />,
+      label: 'Créer une tâche',
+      onClick: () => setTaskModalMessage(msg),
+    });
+    if (msg.senderId === user?.id) {
+      items.push({ type: 'divider' as const });
+      items.push({
+        key: 'delete',
+        icon: <DeleteOutlined />,
+        label: 'Supprimer',
+        danger: true,
+        onClick: () => deleteMessage(msg.id),
+      });
+    }
+    return items;
+  };
+
   const startNewChat = async (friendId: string) => {
     try {
-      const conv = await api.post('/api/messenger/conversations', { participantIds: [friendId] });
+      const conv = await api.post('/api/messenger/conversations', { participantIds: [friendId] }) as any;
       if (conv?.id) {
         await fetchConversations();
         openChat(conv.id);
@@ -574,6 +915,29 @@ const MessengerChat: React.FC = () => {
       };
 
       const handleInlineKeyDown = (e: React.KeyboardEvent) => {
+        // Handle mention dropdown navigation
+        if (mentionQuery !== null && mentionResults.length > 0) {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setMentionIndex(i => Math.min(i + 1, mentionResults.length - 1));
+            return;
+          }
+          if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setMentionIndex(i => Math.max(i - 1, 0));
+            return;
+          }
+          if (e.key === 'Enter' || e.key === 'Tab') {
+            e.preventDefault();
+            insertMention(mentionResults[mentionIndex]);
+            return;
+          }
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            setMentionQuery(null);
+            return;
+          }
+        }
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
           sendInlineMessage();
@@ -602,6 +966,10 @@ const MessengerChat: React.FC = () => {
           .global-wizz-shake {
             animation: messengerWizz 0.5s ease-in-out;
           }
+          @keyframes typingDot {
+            0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+            40% { transform: scale(1); opacity: 1; }
+          }
         `}</style>
         <div className={isShaking ? 'messenger-wizz-shake' : ''} style={{
           position: 'fixed', bottom: 56, right: 16, width: CHAT_WIDTH, height: LIST_HEIGHT,
@@ -628,6 +996,13 @@ const MessengerChat: React.FC = () => {
               </div>
             </div>
             <div style={{ display: 'flex', gap: 4 }}>
+              <div onClick={() => setShowSharedFiles(true)}
+                title="Fichiers partagés"
+                style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                onMouseEnter={e => e.currentTarget.style.background = FB.hover}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <FolderOpenOutlined style={{ fontSize: 14, color: FB.blue }} />
+              </div>
               <div onClick={() => startCall(activeConversationId, 'audio', convName)}
                 title={t('messenger.audioCall')}
                 style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
@@ -714,7 +1089,10 @@ const MessengerChat: React.FC = () => {
                   display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start',
                   alignItems: 'flex-end', gap: 6,
                   marginTop: (i > 0 && inlineMessages[i - 1].senderId !== msg.senderId) ? 8 : 0,
-                }}>
+                }}
+                  onMouseEnter={() => setHoveredMessageId(msg.id)}
+                  onMouseLeave={() => setHoveredMessageId(null)}
+                >
                   {!isMine && (
                     <div style={{ width: 28, flexShrink: 0 }}>
                       {showAvatar && (
@@ -723,10 +1101,40 @@ const MessengerChat: React.FC = () => {
                       )}
                     </div>
                   )}
-                  <div style={{ maxWidth: '70%' }}>
+                  <div style={{ maxWidth: '70%', position: 'relative' }}>
                     {showName && (
                       <div style={{ fontSize: 11, color: FB.textSecondary, marginBottom: 2, paddingLeft: 12 }}>
                         {msg.sender.firstName}
+                      </div>
+                    )}
+                    {/* Pin indicator */}
+                    {msg.isPinned && (
+                      <div style={{ fontSize: 10, color: FB.blue, marginBottom: 2, paddingLeft: 12 }}>
+                        <PushpinFilled style={{ marginRight: 3, fontSize: 10 }} /> Épinglé
+                      </div>
+                    )}
+                    {/* Message actions on hover */}
+                    {hoveredMessageId === msg.id && !msg.isDeleted && (
+                      <div style={{
+                        position: 'absolute', top: -6, [isMine ? 'left' : 'right']: -8,
+                        display: 'flex', gap: 2, zIndex: 50,
+                      }}>
+                        <EmojiReactionPicker
+                          onSelect={(emoji) => { toggleReaction(msg.id, emoji); }}
+                          placement="top"
+                        >
+                          <Tooltip title="Réagir" zIndex={2100}>
+                            <div
+                              style={{ width: 24, height: 24, borderRadius: '50%', background: FB.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.15)' }}>
+                              <SmileOutlined />
+                            </div>
+                          </Tooltip>
+                        </EmojiReactionPicker>
+                        <Dropdown menu={{ items: getMessageMenuItems(msg) }} trigger={['click']} placement="bottomRight" overlayStyle={{ zIndex: 2000 }}>
+                          <div style={{ width: 24, height: 24, borderRadius: '50%', background: FB.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.15)' }}>
+                            <MoreOutlined />
+                          </div>
+                        </Dropdown>
                       </div>
                     )}
                     <div style={{
@@ -736,27 +1144,56 @@ const MessengerChat: React.FC = () => {
                         : (isMine ? FB.msgBlueBg : FB.msgBg),
                       color: isEph ? '#fff' : (isMine ? '#fff' : FB.text),
                       fontSize: 14, lineHeight: '1.35', wordBreak: 'break-word',
-                      border: isEph ? '1px solid rgba(225, 112, 85, 0.3)' : undefined,
-                      position: 'relative',
+                      border: isEph ? '1px solid rgba(225,112,85,0.3)' : undefined,
                     }}>
                       {msg.isDeleted ? (
                         <span style={{ fontStyle: 'italic', opacity: 0.6 }}>{t('messenger.messageDeleted')}</span>
                       ) : (
                         <>
-                          {msg.content}
+                          {/* Voice / media preview */}
+                          {msg.mediaUrls?.length ? (
+                            <div style={{ marginBottom: msg.content ? 6 : 0 }}>
+                              <FilePreview
+                                urls={msg.mediaUrls}
+                                mediaType={msg.mediaType || 'file'}
+                                voiceDuration={msg.voiceDuration}
+                                voiceTranscript={msg.voiceTranscript}
+                              />
+                            </div>
+                          ) : null}
+                          {msg.content && <span>{msg.content}</span>}
                           {isEph && (
                             <HourglassOutlined style={{ marginLeft: 6, fontSize: 11, opacity: 0.7, verticalAlign: 'middle' }} />
                           )}
                         </>
                       )}
                     </div>
+                    {/* Reactions display */}
+                    {msg.reactions && msg.reactions.length > 0 && (
+                      <div style={{ marginTop: 2, paddingLeft: isMine ? 0 : 12, paddingRight: isMine ? 12 : 0 }}>
+                        <MessageReactions
+                          reactions={(msg.reactions || []).map(r => ({
+                            emoji: r.emoji,
+                            userId: r.users?.[0]?.id || '',
+                            user: { id: r.users?.[0]?.id || '', firstName: r.users?.[0]?.name?.split(' ')[0] || '', lastName: r.users?.[0]?.name?.split(' ').slice(1).join(' ') || '' },
+                          }))}
+                          currentUserId={user?.id || ''}
+                          onToggleReaction={(emoji) => toggleReaction(msg.id, emoji)}
+                        />
+                      </div>
+                    )}
                     <div style={{
                       fontSize: 10, color: FB.textSecondary, marginTop: 2, display: 'flex', gap: 4,
+                      alignItems: 'center',
                       justifyContent: isMine ? 'flex-end' : 'flex-start',
                       paddingLeft: isMine ? 0 : 12, paddingRight: isMine ? 12 : 0,
                     }}>
                       {(i === inlineMessages.length - 1 || inlineMessages[i + 1].senderId !== msg.senderId) && (
                         <span>{formatTime(msg.createdAt)}</span>
+                      )}
+                      {/* Message status indicator for sent messages */}
+                      {isMine && msg.status && (i === inlineMessages.length - 1 || inlineMessages[i + 1].senderId !== msg.senderId) && (
+                        <MessageStatusIndicator status={msg.status} isOwnMessage={true} />
                       )}
                       {isEph && ephTtlLabel && (
                         <span style={{ color: '#E17055', fontWeight: 600 }}>⏳ {ephTtlLabel}</span>
@@ -769,6 +1206,18 @@ const MessengerChat: React.FC = () => {
                 </div>
               );
             })}
+            {/* Typing indicator */}
+            {typingUsers.size > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0', marginLeft: 34 }}>
+                <div style={{
+                  display: 'flex', gap: 3, background: FB.msgBg, borderRadius: 18, padding: '8px 14px',
+                }}>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: FB.textSecondary, animation: 'typingDot 1.4s infinite ease-in-out', animationDelay: '0s' }} />
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: FB.textSecondary, animation: 'typingDot 1.4s infinite ease-in-out', animationDelay: '0.2s' }} />
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: FB.textSecondary, animation: 'typingDot 1.4s infinite ease-in-out', animationDelay: '0.4s' }} />
+                </div>
+              </div>
+            )}
             <div ref={inlineMessagesEndRef} />
           </div>
 
@@ -800,23 +1249,158 @@ const MessengerChat: React.FC = () => {
             </div>
           )}
 
-          {/* Input */}
+          {/* Voice Recorder overlay */}
+          {showVoiceRecorder && (
+            <div style={{
+              padding: '8px 12px', borderTop: `1px solid ${FB.border}`, background: FB.bg,
+            }}>
+              <VoiceRecorder
+                onSend={sendVoiceMessage}
+                onCancel={() => setShowVoiceRecorder(false)}
+              />
+            </div>
+          )}
+
+          {/* Pending files preview */}
+          {pendingFiles.length > 0 && !showVoiceRecorder && (
+            <div style={{
+              padding: '6px 12px', borderTop: `1px solid ${FB.border}`, display: 'flex',
+              gap: 6, flexWrap: 'wrap', background: FB.bg,
+            }}>
+              {pendingFiles.map((f, i) => (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px',
+                  borderRadius: 12, background: FB.hover, fontSize: 12, color: FB.textSecondary,
+                  maxWidth: 160, overflow: 'hidden',
+                }}>
+                  {f.type.startsWith('image/') ? (
+                    <img src={URL.createObjectURL(f)} alt="" style={{ width: 24, height: 24, borderRadius: 4, objectFit: 'cover' }} />
+                  ) : (
+                    <FileOutlined style={{ fontSize: 14 }} />
+                  )}
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                    {f.name}
+                  </span>
+                  <DeleteOutlined
+                    style={{ cursor: 'pointer', fontSize: 12, color: '#E17055' }}
+                    onClick={() => removePendingFile(i)}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Input area */}
+          {!showVoiceRecorder && (
           <div style={{
-            padding: '8px 12px', borderTop: `1px solid ${FB.border}`, display: 'flex',
-            alignItems: 'center', gap: 6, flexShrink: 0,
+            padding: '8px 12px', borderTop: pendingFiles.length > 0 ? 'none' : `1px solid ${FB.border}`,
+            display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, position: 'relative',
           }}>
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.rar"
+              style={{ display: 'none' }}
+              onChange={handleFileSelect}
+            />
+
+            {/* @ Mention dropdown */}
+            {mentionQuery !== null && mentionResults.length > 0 && (
+              <div style={{
+                position: 'absolute', bottom: '100%', left: 12, right: 12,
+                background: '#fff', border: `1px solid ${FB.border}`,
+                borderRadius: 8, boxShadow: '0 -4px 12px rgba(0,0,0,0.15)',
+                maxHeight: 180, overflowY: 'auto', zIndex: 1100,
+              }}>
+                {mentionResults.map((p, idx) => (
+                  <div
+                    key={p.id}
+                    onClick={() => insertMention(p)}
+                    style={{
+                      padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8,
+                      cursor: 'pointer',
+                      background: idx === mentionIndex ? (FB.hover || 'rgba(0,0,0,0.05)') : 'transparent',
+                      transition: 'background 0.1s',
+                    }}
+                    onMouseEnter={() => setMentionIndex(idx)}
+                  >
+                    <Avatar size={24} src={p.avatarUrl} style={{ fontSize: 11 }}>
+                      {p.firstName?.[0]}{p.lastName?.[0]}
+                    </Avatar>
+                    <span style={{ fontSize: 13, color: FB.text, fontWeight: 500 }}>
+                      {p.firstName} {p.lastName}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Attach file button */}
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              title={t('messenger.attachFile', 'Joindre un fichier')}
+              style={{
+                width: 32, height: 32, borderRadius: '50%', display: 'flex',
+                alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = FB.hover}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <PaperClipOutlined style={{ fontSize: 16, color: FB.textSecondary }} />
+            </div>
+
+            {/* Text input */}
             <input
               ref={inlineInputRef}
               value={inlineNewMessage}
-              onChange={e => setInlineNewMessage(e.target.value)}
+              onChange={handleInputChange}
               onKeyDown={handleInlineKeyDown}
-              placeholder="Aa"
+              placeholder={t('messenger.placeholder', 'Aa')}
               autoFocus
               style={{
                 flex: 1, border: 'none', outline: 'none', borderRadius: 20,
                 padding: '8px 14px', background: FB.bg, fontSize: 14, color: FB.text,
               }}
             />
+
+            {/* Emoji picker for input */}
+            <EmojiReactionPicker
+              onSelect={(emoji) => {
+                setInlineNewMessage(prev => prev + emoji);
+                inlineInputRef.current?.focus();
+              }}
+              placement="top"
+            >
+              <div
+                title={t('messenger.emoji', 'Emoji')}
+                style={{
+                  width: 32, height: 32, borderRadius: '50%', display: 'flex',
+                  alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = FB.hover}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                <SmileOutlined style={{ fontSize: 16, color: FB.textSecondary }} />
+              </div>
+            </EmojiReactionPicker>
+
+            {/* Voice button */}
+            <div
+              onClick={() => setShowVoiceRecorder(true)}
+              title={t('messenger.voiceMessage', 'Message vocal')}
+              style={{
+                width: 32, height: 32, borderRadius: '50%', display: 'flex',
+                alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = FB.hover}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <AudioOutlined style={{ fontSize: 16, color: FB.textSecondary }} />
+            </div>
+
+            {/* Ephemeral toggle */}
             <div
               onClick={() => setEphemeralMode(!ephemeralMode)}
               title={ephemeralMode ? t('messenger.ephemeralOn', 'Mode éphémère activé') : t('messenger.ephemeralOff', 'Mode éphémère désactivé')}
@@ -832,32 +1416,83 @@ const MessengerChat: React.FC = () => {
             >
               <HourglassOutlined style={{ fontSize: 16, color: ephemeralMode ? '#fff' : FB.textSecondary }} />
             </div>
+
+            {/* Wizz button - larger */}
             <div
               onClick={sendWizz}
               title={t('messenger.wizz')}
               style={{
-                width: 32, height: 32, borderRadius: '50%', display: 'flex',
+                width: 40, height: 40, borderRadius: '50%', display: 'flex',
                 alignItems: 'center', justifyContent: 'center',
                 cursor: wizzCooldownRef.current ? 'not-allowed' : 'pointer',
-                opacity: wizzCooldownRef.current ? 0.3 : 0.7,
-                transition: 'opacity 0.2s',
+                opacity: wizzCooldownRef.current ? 0.3 : 1,
+                transition: 'all 0.2s',
               }}
-              onMouseEnter={e => { if (!wizzCooldownRef.current) e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = FB.hover; }}
-              onMouseLeave={e => { e.currentTarget.style.opacity = wizzCooldownRef.current ? '0.3' : '0.7'; e.currentTarget.style.background = 'transparent'; }}
+              onMouseEnter={e => { if (!wizzCooldownRef.current) { e.currentTarget.style.background = FB.hover; e.currentTarget.style.transform = 'scale(1.15)'; } }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.transform = 'scale(1)'; }}
             >
-              <WizzIcon size={24} />
+              <WizzIcon size={30} />
             </div>
+
+            {/* Send button */}
             <div
-              onClick={sendInlineMessage}
+              onClick={uploadingFiles ? undefined : sendInlineMessage}
               style={{
                 width: 32, height: 32, borderRadius: '50%', display: 'flex',
-                alignItems: 'center', justifyContent: 'center', cursor: inlineNewMessage.trim() ? 'pointer' : 'default',
-                opacity: inlineNewMessage.trim() ? 1 : 0.4,
+                alignItems: 'center', justifyContent: 'center',
+                cursor: (inlineNewMessage.trim() || pendingFiles.length > 0) && !uploadingFiles ? 'pointer' : 'default',
+                opacity: (inlineNewMessage.trim() || pendingFiles.length > 0) ? 1 : 0.4,
               }}
             >
-              <SendOutlined style={{ fontSize: 18, color: FB.blue }} />
+              {uploadingFiles ? (
+                <span style={{ fontSize: 12, color: FB.textSecondary }}>⏳</span>
+              ) : (
+                <SendOutlined style={{ fontSize: 18, color: FB.blue }} />
+              )}
             </div>
           </div>
+          )}
+
+          {/* Shared Files Drawer */}
+          <Drawer
+            title="📁 Fichiers partagés"
+            placement="right"
+            open={showSharedFiles}
+            onClose={() => setShowSharedFiles(false)}
+            width={320}
+            zIndex={1200}
+            destroyOnClose
+          >
+            {activeConversationId && (
+              <SharedFilesPanel conversationId={activeConversationId} api={api} />
+            )}
+          </Drawer>
+
+          {/* Task creation modal */}
+          {taskModalMessage && (
+            <TaskFromMessage
+              open={!!taskModalMessage}
+              onClose={() => setTaskModalMessage(null)}
+              onSubmit={async (data) => {
+                try {
+                  await api.post(`/api/messenger/messages/${taskModalMessage.id}/task`, data);
+                  setTaskModalMessage(null);
+                  antMessage.success('Tâche créée !');
+                } catch (e) { console.error('[MESSENGER] Task creation error:', e); antMessage.error('Erreur'); }
+              }}
+              messageContent={taskModalMessage.content || ''}
+              participants={(conversations.find(c => c.id === activeConversationId)?.participants || []).map(p => ({
+                id: p.id, firstName: p.firstName, lastName: p.lastName,
+              }))}
+            />
+          )}
+
+          {/* Custom Status Picker */}
+          <CustomStatusPicker
+            open={showCustomStatus}
+            onClose={() => setShowCustomStatus(false)}
+            onSubmit={handleUpdateCustomStatus}
+          />
         </div>
         </>
       );
@@ -1216,7 +1851,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
 
   const fetchMessages = useCallback(async () => {
     try {
-      const data = await api.get(`/api/messenger/conversations/${conversationId}/messages`);
+      const data = await api.get(`/api/messenger/conversations/${conversationId}/messages`) as any;
       if (data?.messages) setMessages(data.messages);
     } catch { /* silent */ }
   }, [api, conversationId]);
@@ -1229,7 +1864,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
 
   // Poll for new messages
   useEffect(() => {
-    pollRef.current = setInterval(fetchMessages, 3000);
+    pollRef.current = setInterval(fetchMessages, 10000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [fetchMessages]);
 
@@ -1530,7 +2165,7 @@ export const FriendsWidget: React.FC<FriendsWidgetProps> = ({ onStartChat }) => 
   useEffect(() => {
     const fetch = async () => {
       try {
-        const data = await api.get('/api/friends');
+        const data = await api.get('/api/friends') as any;
         if (data?.friends) {
           // Sort: online friends first, then alphabetical
           const sorted = [...data.friends].sort((a: Friend, b: Friend) => {

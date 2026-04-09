@@ -28,16 +28,35 @@ console.log(`📦 [Storage] Mode: GCS 100% (${isProduction ? 'production' : 'dev
  */
 class GcloudAuth {
   private token: string;
+  private tokenExpiry: number;
   constructor(token: string) {
     this.token = token;
+    this.tokenExpiry = Date.now() + 50 * 60 * 1000; // refresh after 50min
+  }
+  private refreshIfNeeded() {
+    if (Date.now() > this.tokenExpiry) {
+      try {
+        this.token = execSync('gcloud auth print-access-token', {
+          encoding: 'utf-8',
+          env: { ...process.env, GOOGLE_APPLICATION_CREDENTIALS: undefined },
+        }).trim();
+        this.tokenExpiry = Date.now() + 50 * 60 * 1000;
+        console.log('📦 [Storage] 🔄 Token refreshed');
+      } catch (e) {
+        console.error('📦 [Storage] ⚠️ Token refresh failed:', e);
+      }
+    }
   }
   async getAccessToken() {
+    this.refreshIfNeeded();
     return { token: this.token };
   }
   async getRequestHeaders() {
+    this.refreshIfNeeded();
     return { Authorization: `Bearer ${this.token}` };
   }
   async request(opts: { url: string; method?: string; headers?: Record<string, string>; body?: unknown }) {
+    this.refreshIfNeeded();
     const resp = await fetch(opts.url, {
       method: opts.method || 'GET',
       headers: { ...opts.headers, Authorization: `Bearer ${this.token}` },
@@ -83,7 +102,8 @@ export async function uploadFile(
   key: string,
   mimeType: string,
 ): Promise<string> {
-  const bucket = getStorage().bucket(GCS_BUCKET);
+  try {
+    const bucket = getStorage().bucket(GCS_BUCKET);
   const blob = bucket.file(key);
   await blob.save(buffer, {
     contentType: mimeType,
@@ -93,6 +113,14 @@ export async function uploadFile(
   const url = `https://storage.googleapis.com/${GCS_BUCKET}/${key}`;
   console.log(`📦 [Storage] ✅ Upload OK: ${key} (${(buffer.length / 1024).toFixed(1)} KB)`);
   return url;
+  } catch (err: any) {
+    // If auth error, reset storage to force re-auth on next call
+    if (!isProduction && (err?.code === 401 || err?.message?.includes('token') || err?.message?.includes('auth'))) {
+      console.warn('📦 [Storage] ⚠️ Auth error detected, resetting storage for re-auth');
+      storage = null;
+    }
+    throw err;
+  }
 }
 
 /**

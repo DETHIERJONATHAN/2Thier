@@ -1164,6 +1164,9 @@ model Organization {
 
   // Wax pins
   WaxPins                    WaxPin[]
+
+  // Messenger Quick Replies
+  QuickReplyTemplates        QuickReplyTemplate[]
 }
 
 model OrganizationModuleStatus {
@@ -2364,6 +2367,13 @@ model User {
   // Wax (carte + éphémère)
   UserLocation                                        UserLocation?
   WaxPins                                             WaxPin[]
+
+  // Messenger Phase 2
+  MessageReactions                                    MessageReaction[]    @relation("MessageReactionUser")
+  MessagesPinned                                      Message[]            @relation("MessagePinner")
+  TasksAssigned                                       MessageTask[]        @relation("TaskAssignee")
+  TasksCreated                                        MessageTask[]        @relation("TaskCreator")
+  QuickReplyTemplates                                 QuickReplyTemplate[] @relation("QuickReplyUser")
 
   @@index([organizationId, commercialSlug])
 }
@@ -4053,6 +4063,14 @@ model ConversationParticipant {
   lastReadAt      DateTime @default(now())
   isActive        Boolean  @default(true)
   joinedAt        DateTime @default(now())
+  // ── Granular Permissions (admin can configure per member) ──
+  canPin          Boolean  @default(true)   // Can pin messages
+  canManageMembers Boolean @default(false)  // Can add/remove members
+  canSeeFullHistory Boolean @default(true)  // Can see messages before joinedAt
+  canSendMedia    Boolean  @default(true)   // Can send files/images/voice
+  canCreateTasks  Boolean  @default(true)   // Can create tasks from messages
+  isMuted         Boolean  @default(false)  // Mute notifications for this conversation
+  mutedUntil      DateTime?                 // Mute until date (null = forever if isMuted)
 
   conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -4067,10 +4085,23 @@ model Message {
   senderId        String
   content         String?
   mediaUrls       Json?    // ["url1", "url2"]
-  mediaType       String?  // image, video, file
+  mediaType       String?  // image, video, file, voice, signature
   replyToId       String?
   isEdited        Boolean  @default(false)
   isDeleted       Boolean  @default(false)
+  // ── Message Status ──
+  status          String   @default("sent")  // sent | delivered | read
+  deliveredAt     DateTime?                   // When message was delivered to recipient(s)
+  readAt          DateTime?                   // When message was read by recipient(s)
+  // ── Pin ──
+  isPinned        Boolean  @default(false)
+  pinnedAt        DateTime?
+  pinnedById      String?
+  // ── Mentions ──
+  mentions        Json?    // ["userId1", "userId2"] — parsed from @mentions in content
+  // ── Voice message ──
+  voiceDuration   Int?     // Duration in seconds (for mediaType='voice')
+  voiceTranscript String?  @db.Text // Auto-transcribed text from voice message
   // ── Wax (ephemeral) ──
   isEphemeral     Boolean  @default(false)   // Snapchat-style: disappears after read or TTL
   ephemeralTtl    Int?                        // TTL in seconds (null = 24h default)
@@ -4085,9 +4116,75 @@ model Message {
   sender          User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
   replyTo         Message?     @relation("MessageReply", fields: [replyToId], references: [id], onDelete: SetNull)
   replies         Message[]    @relation("MessageReply")
+  reactions       MessageReaction[]
+  tasks           MessageTask[]
+  pinnedBy        User?        @relation("MessagePinner", fields: [pinnedById], references: [id], onDelete: SetNull)
 
   @@index([conversationId, createdAt])
   @@index([senderId])
+  @@index([conversationId, isPinned])
+  @@index([conversationId, mediaType])
+}
+
+/// Réactions emoji sur les messages (✅ ⚠️ 🔨 👍 ❤️ 😂 etc.)
+model MessageReaction {
+  id            String   @id @default(uuid())
+  messageId     String
+  userId        String
+  emoji         String   // The emoji character(s): "👍", "✅", "⚠️", "🔨", "❤️", "😂", "🎉", "😢"
+  createdAt     DateTime @default(now())
+
+  message       Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user          User     @relation("MessageReactionUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji]) // One reaction per emoji per user per message
+  @@index([messageId])
+  @@index([userId])
+}
+
+/// Tâche créée directement depuis un message Messenger
+model MessageTask {
+  id            String    @id @default(uuid())
+  messageId     String
+  conversationId String
+  title         String    // Task title (auto-filled from message content)
+  description   String?   @db.Text
+  assigneeId    String    // Responsible user
+  createdById   String    // Who created the task
+  deadline      DateTime?
+  priority      String    @default("medium") // low | medium | high | urgent
+  status        String    @default("todo")   // todo | in_progress | done | cancelled
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  message       Message   @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  assignee      User      @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: Cascade)
+  createdBy     User      @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([assigneeId, status])
+  @@index([messageId])
+}
+
+/// Modèles de messages rapides (par utilisateur ou par organisation)
+model QuickReplyTemplate {
+  id              String   @id @default(uuid())
+  userId          String?  // null = shared org template
+  organizationId  String?  // null = personal template
+  title           String   // Short label shown in picker
+  content         String   @db.Text // Template content
+  shortcut        String?  // Keyboard shortcut like "/meeting" or "/devis"
+  category        String?  // "greeting" | "closing" | "meeting" | "invoice" | custom
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User?         @relation("QuickReplyUser", fields: [userId], references: [id], onDelete: Cascade)
+  organization    Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([organizationId])
 }
 
 // ═══════════════════════════════════════════════════════
@@ -4492,17 +4589,21 @@ model UserBadge {
 }
 
 model UserStreak {
-  id            String    @id @default(uuid())
-  userId        String    @unique
-  currentStreak Int       @default(0)
-  longestStreak Int       @default(0)
-  lastActiveAt  DateTime  @default(now())
-  totalPoints   Int       @default(0)
-  level         Int       @default(1)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id               String    @id @default(uuid())
+  userId           String    @unique
+  currentStreak    Int       @default(0)
+  longestStreak    Int       @default(0)
+  lastActiveAt     DateTime  @default(now())
+  totalPoints      Int       @default(0)
+  level            Int       @default(1)
+  // ── Custom Status ("sur chantier", "en déplacement", etc.) ──
+  customStatus     String?              // Free text status
+  customStatusEmoji String?             // Emoji icon for status
+  customStatusExpiresAt DateTime?       // Auto-clear status after this time
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  user          User @relation("UserStreakData", fields: [userId], references: [id], onDelete: Cascade)
+  user             User @relation("UserStreakData", fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // ── CONTENT MODERATION ──

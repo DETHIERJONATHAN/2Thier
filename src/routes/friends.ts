@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
+import { sendPushToUser } from './push';
 
 const router = Router();
 
@@ -184,6 +185,15 @@ router.post('/request', async (req: Request, res: Response): Promise<void> => {
           updatedAt: new Date(),
         },
       });
+      // Push notification
+      sendPushToUser(userId, {
+        title: 'Nouvelle demande d\'ami',
+        body: `${requesterName} vous a envoyé une demande d'ami`,
+        icon: '/pwa-192x192.png',
+        tag: 'friend-request',
+        url: `/profile/${user.id}`,
+        type: 'notification',
+      }).catch(() => {});
     } catch (notifErr) {
       console.error('[FRIENDS] Notification error (non-blocking):', notifErr);
     }
@@ -385,6 +395,16 @@ router.post('/:id/accept', async (req: Request, res: Response): Promise<void> =>
           updatedAt: new Date(),
         },
       });
+      // Push notification
+      const acceptorName = `${acceptor?.firstName || ''} ${acceptor?.lastName || ''}`.trim();
+      sendPushToUser(friendship.requesterId, {
+        title: 'Demande d\'ami acceptée',
+        body: `${acceptorName} a accepté votre demande d'ami`,
+        icon: '/pwa-192x192.png',
+        tag: 'friend-accepted',
+        url: `/profile/${user.id}`,
+        type: 'notification',
+      }).catch(() => {});
     } catch (notifErr) {
       console.error('[FRIENDS] Notification error (non-blocking):', notifErr);
     }

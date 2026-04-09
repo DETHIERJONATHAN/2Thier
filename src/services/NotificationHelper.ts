@@ -5,9 +5,11 @@
  *        await notify.leadReceived(orgId, { leadName, source }, userId, '/leads/123');
  * 
  * Toutes les méthodes sont fire-and-forget : elles ne bloquent jamais le flux principal.
+ * Chaque notification créée en DB déclenche aussi un Web Push (si l'utilisateur est abonné).
  */
 import { db } from '../lib/database';
 import { v4 as uuidv4 } from 'uuid';
+import { sendPushToUser } from '../routes/push';
 
 type Priority = 'low' | 'normal' | 'high' | 'urgent';
 
@@ -38,6 +40,19 @@ async function createNotification(payload: NotifPayload): Promise<void> {
         updatedAt: new Date(),
       },
     });
+
+    // Envoyer aussi un Web Push si l'utilisateur est identifié
+    if (payload.userId) {
+      const message = (payload.data.message as string) || payload.type;
+      sendPushToUser(payload.userId, {
+        title: 'Zhiive',
+        body: message.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]\s*/gu, '').trim(),
+        icon: '/pwa-192x192.png',
+        tag: payload.type,
+        url: payload.actionUrl || '/',
+        type: 'notification',
+      }).catch(() => {}); // fire-and-forget
+    }
   } catch (err) {
     // Ne jamais bloquer le flux principal
     console.error(`[NotificationHelper] Erreur création notification (${payload.type}):`, err);
@@ -304,7 +319,7 @@ export const notify = {
   },
 
   // ───────── CALENDRIER ─────────
-  async calendarEventCreated(orgId: string, eventData: { title: string; startDate: string; creatorName?: string }, participantIds: string[], eventId?: string) {
+  async calendarEventCreated(orgId: string, eventData: { title: string; startDate: string; creatorName?: string }, participantIds: string[], _eventId?: string) {
     await notifyMultipleUsers(participantIds, {
       organizationId: orgId,
       type: 'CALENDAR_EVENT_INVITATION',

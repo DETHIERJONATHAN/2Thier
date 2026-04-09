@@ -6,6 +6,26 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 import { decrypt } from '../utils/crypto.js';
+import { sendPushToUser } from './push';
+
+/** Crée une notification en DB ET envoie un push */
+async function createChantierNotifWithPush(args: any) {
+  const notif = await db.notification.create(args);
+  const d = args.data;
+  if (d?.userId) {
+    const innerData = d.data || {};
+    const message = innerData.message || innerData.eventDescription || d.type;
+    sendPushToUser(d.userId, {
+      title: 'Zhiive — Chantier',
+      body: String(message).replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]\s*/gu, '').trim(),
+      icon: '/pwa-192x192.png',
+      tag: String(d.type || 'chantier'),
+      url: d.actionUrl || '/chantiers',
+      type: 'notification',
+    }).catch(() => {});
+  }
+  return notif;
+}
 
 const router = Router();
 
@@ -1538,7 +1558,7 @@ async function sendTransitionNotifications(
 
     // Créer les notifications CRM
     for (const u of targetUsers) {
-      await db.notification.create({
+      await createChantierNotifWithPush({
         data: {
           id: crypto.randomUUID(),
           userId: u.User.id,
@@ -1664,7 +1684,7 @@ async function notifyProblem(
 
     // Notifier le commercial assigné
     if (chantier?.commercialId) {
-      await db.notification.create({
+      await createChantierNotifWithPush({
         data: {
           id: crypto.randomUUID(),
           userId: chantier.commercialId,
@@ -1703,7 +1723,7 @@ async function notifyProblem(
       // Ne pas dupliquer si c'est le même que le commercial
       if (admin.User.id === chantier?.commercialId) continue;
 
-      await db.notification.create({
+      await createChantierNotifWithPush({
         data: {
           id: crypto.randomUUID(),
           userId: admin.User.id,
@@ -2103,7 +2123,7 @@ router.post('/events/:id/submit-review', authenticateToken, async (req, res) => 
         const notifMessage = `⚠️ Revue technique: ${reviews.filter(r => r.isModified).length} modifications détectées (${modifiedLabels.join(', ')})`;
 
         for (const admin of admins) {
-          await db.notification.create({
+          await createChantierNotifWithPush({
             data: {
               id: crypto.randomUUID(),
               userId: admin.userId,
@@ -2122,7 +2142,7 @@ router.post('/events/:id/submit-review', authenticateToken, async (req, res) => 
 
         // Notifier le commercial assigné
         if (event.Chantier.commercialId) {
-          await db.notification.create({
+          await createChantierNotifWithPush({
             data: {
               id: crypto.randomUUID(),
               userId: event.Chantier.commercialId,
@@ -2187,7 +2207,7 @@ router.post('/events/:id/submit-review', authenticateToken, async (req, res) => 
           select: { assignedToId: true, firstName: true, lastName: true },
         });
         if (lead?.assignedToId) {
-          await db.notification.create({
+          await createChantierNotifWithPush({
             data: {
               id: crypto.randomUUID(),
               userId: lead.assignedToId,
@@ -2425,7 +2445,7 @@ router.post('/chantiers/:chantierId/reject-to-lead', authenticateToken, isAdmin,
     // 4. Notification au commercial
     if (notifyCommercial && chantier.commercialId) {
       try {
-        await db.notification.create({
+        await createChantierNotifWithPush({
           data: {
             id: crypto.randomUUID(),
             userId: chantier.commercialId,
@@ -2802,7 +2822,7 @@ router.post('/reception/:token/sign', async (req, res) => {
           })
           .map(u => ({ userId: u.User.id }));
         for (const admin of receptionAdmins) {
-          await db.notification.create({
+          await createChantierNotifWithPush({
             data: {
               id: crypto.randomUUID(),
               userId: admin.userId,
@@ -2910,24 +2930,30 @@ router.post('/chantiers/:chantierId/reception/send-to-client', authenticateToken
 
     // Envoyer l'email (réutiliser le pattern existant)
     try {
-      const orgSettings = await db.organizationSettings.findFirst({
+      const emailAccount = await db.emailAccount.findFirst({
         where: { organizationId },
+        orderBy: { createdAt: 'asc' },
       });
-      const smtpConfig = orgSettings?.smtpConfig as any;
 
-      if (smtpConfig?.host) {
-        const decryptedPassword = smtpConfig.password ? decrypt(smtpConfig.password) : '';
+      if (emailAccount?.encryptedPassword) {
+        const decryptedPassword = decrypt(emailAccount.encryptedPassword);
+        let smtpHost = 'smtp.gmail.com';
+        let smtpPort = 587;
+        const provider = (emailAccount as any).mailProvider || '';
+        if (provider === 'outlook' || provider === 'hotmail') { smtpHost = 'smtp.office365.com'; smtpPort = 587; }
+        else if (provider === 'one.com' || provider === 'one') { smtpHost = 'send.one.com'; smtpPort = 465; }
+
         const transporter = nodemailer.createTransport({
-          host: smtpConfig.host,
-          port: smtpConfig.port || 587,
-          secure: smtpConfig.secure || false,
-          auth: { user: smtpConfig.user, pass: decryptedPassword },
+          host: smtpHost,
+          port: smtpPort,
+          secure: smtpPort === 465,
+          auth: { user: emailAccount.emailAddress, pass: decryptedPassword },
         });
 
         const receptionUrl = `${req.headers.origin || 'https://www.zhiive.com'}/reception/${reception.clientAccessToken}`;
 
         await transporter.sendMail({
-          from: smtpConfig.from || smtpConfig.user,
+          from: emailAccount.emailAddress,
           to: reception.clientEmail,
           subject: `Réception de vos travaux — ${chantier?.Organization?.name || '2Thier'}`,
           html: `

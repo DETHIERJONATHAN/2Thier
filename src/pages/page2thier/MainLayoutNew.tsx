@@ -22,6 +22,8 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useZhiiveNav, ZhiiveNavProvider, FeedMode } from '../../contexts/ZhiiveNavContext';
 import { ActiveIdentityProvider, useActiveIdentity } from '../../contexts/ActiveIdentityContext';
 import { SocialIdentityProvider } from '../../contexts/SocialIdentityContext';
+import { usePushNotifications } from '../../hooks/usePushNotifications';
+import PWAInstallPrompt from '../../components/PWAInstallPrompt';
 
 const { Header, Content } = Layout;
 
@@ -102,13 +104,13 @@ const TAB_ICON_MAP: Record<string, React.ComponentType<{ style?: React.CSSProper
 
 // ── Static fallback (used until API loads) ──
 const SF_TAB_CONFIG_FALLBACK: { id: string; label: string; icon: React.ComponentType<{ style?: React.CSSProperties }>; color: string }[] = [
-  { id: 'mur', label: 'Hive', icon: WallIcon, color: '#F5A623' },
+  { id: 'nectar', label: 'Nectar', icon: FlowWaveIcon, color: '#FDCB6E' },
+  { id: 'wax', label: 'Wax', icon: WaxMapIcon, color: '#E17055' },
   { id: 'explore', label: 'Scout', icon: CompassOutlined, color: '#00CEC9' },
   { id: 'reels', label: 'Reels', icon: ClapperboardIcon, color: '#e84393' },
-  { id: 'nectar', label: 'Nectar', icon: FlowWaveIcon, color: '#FDCB6E' },
+  { id: 'mur', label: 'Hive', icon: WallIcon, color: '#F5A623' },
   { id: 'mail', label: 'Mail', icon: MailOutlined, color: '#00B894' },
   { id: 'agenda', label: 'Agenda', icon: CalendarOutlined, color: '#0984E3' },
-  { id: 'wax', label: 'Wax', icon: WaxMapIcon, color: '#E17055' },
   { id: 'search', label: 'Search', icon: SearchOutlined, color: '#A29BFE' },
   { id: 'stats', label: 'Stats', icon: BarChartOutlined, color: '#FDCB6E' },
 ];
@@ -194,9 +196,10 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
     if (!isDashboard) {
       navigate('/dashboard');
     }
-    // On mobile, scroll the carousel to the matching position in tabOrder
+    // On mobile, scroll the carousel to the matching position in VISIBLE tabs
     if (isMobile) {
-      const panelPosition = tabOrder.indexOf(tabId);
+      // orderedTabs already has stats filtered for free users — use its index
+      const panelPosition = orderedTabs.findIndex(t => t.id === tabId);
       if (panelPosition >= 0) scrollMobileToPanel(panelPosition);
     }
     if (tabId === 'mur' || centerApp === tabId) {
@@ -208,7 +211,7 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
       setCenterApp(tabId as any);
       if (activeModule) setSearchParams({}, { replace: true });
     }
-  }, [isDashboard, navigate, setCenterApp, setSearchParams, activeModule, isMobile, scrollMobileToPanel, tabOrder, centerApp]);
+  }, [isDashboard, navigate, setCenterApp, setSearchParams, activeModule, isMobile, scrollMobileToPanel, orderedTabs, centerApp]);
 
   // Mobile: long press to start drag, then slide to reorder
   const onTouchStart = useCallback((tabId: string, e: React.TouchEvent) => {
@@ -277,11 +280,11 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
       margin: '0 4px',
       touchAction: dragId ? 'none' : 'auto',
     }}>
-      {orderedTabs.map(tab => {
+      {orderedTabs.map((tab, tabVisibleIdx) => {
         // Desktop: active = Mur if no centerApp and no module, else matches centerApp. Mobile: position.
         const isActive = isDashboard && (
           isMobile
-            ? mobilePanel === tabOrder.indexOf(tab.id)
+            ? mobilePanel === tabVisibleIdx
             : tab.id === 'mur'
               ? !activeModule && !centerApp
               : centerApp === tab.id
@@ -339,7 +342,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const { logout, user, currentOrganization } = useAuth();
   const { feedMode, setFeedMode, centerApp, setCenterApp, browseUrl, setBrowseUrl, wallViewUrl, setWallViewUrl, wallSearchQuery, setWallSearchQuery } = useZhiiveNav();
 
-  // 🐝 Identité centralisée — source unique de vérité pour l'avatar/nom du header
+  // � Enregistrement global des notifications push (Service Worker + VAPID)
+  usePushNotifications();
+
+  // �🐝 Identité centralisée — source unique de vérité pour l'avatar/nom du header
   const identity = useActiveIdentity();
 
   const userInitial = useMemo(() => {
@@ -568,6 +574,7 @@ const MainLayoutWithNav: React.FC<MainLayoutProps> = (props) => {
       <ActiveIdentityProvider>
         <SocialIdentityProvider>
           <MainLayout {...props} />
+          <PWAInstallPrompt />
         </SocialIdentityProvider>
       </ActiveIdentityProvider>
     </ZhiiveNavProvider>

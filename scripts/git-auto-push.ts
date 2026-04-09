@@ -10,7 +10,7 @@ type GitResult = {
 
 function runGit(args: string[], options?: { capture?: boolean }): GitResult {
   const capture = options?.capture ?? false;
-  const stdio = capture ? ["ignore", "pipe", "pipe"] : "inherit";
+  const stdio: any = capture ? ["ignore", "pipe", "pipe"] : "inherit";
   const encoding = capture ? "utf8" : undefined;
   const result = execFileSync("git", args, {
     stdio,

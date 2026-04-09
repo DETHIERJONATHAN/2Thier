@@ -3,9 +3,8 @@ import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
 import { getSocialContext, buildWallFeedWhere, FeedMode } from '../lib/feed-visibility';
 import { z } from 'zod';
-import path from 'path';
-import fs from 'fs/promises';
 import { uploadExpressFile } from '../lib/storage';
+import { sendPushToUser } from './push';
 
 const router = Router();
 
@@ -436,6 +435,22 @@ router.post('/posts/:id/reactions', authenticateToken, async (req: Request, res:
         data: { postId: id, userId: user.id, type },
       });
       await db.wallPost.update({ where: { id }, data: { likesCount: { increment: 1 } } });
+
+      // Push notification à l'auteur du post (sauf si c'est soi-même)
+      if (post.authorId && post.authorId !== user.id) {
+        const reactor = await db.user.findUnique({ where: { id: user.id }, select: { firstName: true, lastName: true } });
+        const reactorName = reactor ? `${reactor.firstName} ${reactor.lastName}`.trim() : 'Quelqu\'un';
+        const emojiMap: Record<string, string> = { like: '👍', love: '❤️', haha: '😂', wow: '😮', sad: '😢', angry: '😡' };
+        sendPushToUser(post.authorId, {
+          title: 'Zhiive — Réaction',
+          body: `${reactorName} a réagi ${emojiMap[type] || '👍'} à votre publication`,
+          icon: '/pwa-192x192.png',
+          tag: `wall-reaction-${id}`,
+          url: '/wall',
+          type: 'notification',
+        }).catch(() => {});
+      }
+
       return res.json({ action: 'added', reaction });
     }
   } catch (error) {
@@ -520,6 +535,20 @@ router.post('/posts/:id/comments', authenticateToken, async (req: Request, res: 
 
     // Incrémenter le compteur
     await db.wallPost.update({ where: { id }, data: { commentsCount: { increment: 1 } } });
+
+    // Push notification à l'auteur du post (sauf si c'est soi-même)
+    if (post.authorId && post.authorId !== user.id) {
+      const commenterName = comment.author ? `${comment.author.firstName} ${comment.author.lastName}`.trim() : 'Quelqu\'un';
+      const preview = data.content.length > 60 ? data.content.substring(0, 60) + '...' : data.content;
+      sendPushToUser(post.authorId, {
+        title: 'Zhiive — Commentaire',
+        body: `${commenterName} a commenté : "${preview}"`,
+        icon: '/pwa-192x192.png',
+        tag: `wall-comment-${id}`,
+        url: '/wall',
+        type: 'notification',
+      }).catch(() => {});
+    }
 
     res.status(201).json(comment);
   } catch (error) {

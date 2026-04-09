@@ -7,6 +7,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { sendTransitionNotifications } from './chantier-workflow';
 import { uploadExpressFile } from '../lib/storage';
+import { sendPushToUser } from './push';
 
 const router = Router();
 
@@ -1502,6 +1503,14 @@ router.post('/resubmit-to-chantier/:leadId', authenticateToken, async (req, res)
           updatedAt: new Date(),
         },
       });
+      sendPushToUser(chantier.Responsable.id, {
+        title: 'Zhiive — Chantier',
+        body: `Corrections effectuées — Le devis pour ${lead.firstName || ''} ${lead.lastName || ''} a été corrigé`,
+        icon: '/pwa-192x192.png',
+        tag: 'CHANTIER_STATUS_CHANGED',
+        url: '/chantiers',
+        type: 'notification',
+      }).catch(() => {});
     }
 
 

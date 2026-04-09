@@ -313,7 +313,7 @@ router.delete('/pins/:id', async (req, res) => {
 // ═══════════════════════════════════════════════════════
 // POST /api/wax/cleanup — Cron: delete expired pins & expired ephemeral messages
 // ═══════════════════════════════════════════════════════
-router.post('/cleanup', async (req, res) => {
+router.post('/cleanup', async (_req, res) => {
 	try {
 		const now = new Date();
 
@@ -330,8 +330,7 @@ router.post('/cleanup', async (req, res) => {
 				OR: [
 					// Viewed + TTL elapsed (default 10s after view)
 					{
-						viewedAt: { not: null },
-						viewedAt: { lt: new Date(Date.now() - 10 * 1000) },
+						viewedAt: { not: null, lt: new Date(Date.now() - 10 * 1000) },
 					},
 					// Never viewed but older than 24h
 					{
@@ -419,8 +418,35 @@ router.get('/geocode', async (req, res) => {
 			return res.status(400).json({ success: false, message: 'Query too short' });
 		}
 
-		// Nominatim (OpenStreetMap) — free, no API key, 1 req/s
-		const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=5&addressdetails=1&countrycodes=be,fr,lu,nl,de`;
+		// User's current position for country bias and distance sorting
+		const userLat = parseFloat(req.query.lat as string) || null;
+		const userLng = parseFloat(req.query.lng as string) || null;
+
+		// Detect country codes from query: if user types ".fr" or "france", extend to that country
+		let countryCodes = 'be'; // Default: Belgium
+		const qLower = q.toLowerCase();
+		if (/\.(fr|france)\b/i.test(qLower) || /\bfrance\b/i.test(qLower)) {
+			countryCodes = 'fr';
+		} else if (/\.(lu|luxembourg)\b/i.test(qLower) || /\bluxembourg\b/i.test(qLower)) {
+			countryCodes = 'lu';
+		} else if (/\.(nl|pays.bas|nederland)\b/i.test(qLower) || /\b(pays.bas|nederland|netherlands)\b/i.test(qLower)) {
+			countryCodes = 'nl';
+		} else if (/\.(de|allemagne)\b/i.test(qLower) || /\b(allemagne|deutschland|germany)\b/i.test(qLower)) {
+			countryCodes = 'de';
+		} else {
+			// Default: Belgian-first, with neighboring countries as fallback
+			countryCodes = 'be,lu,fr,nl,de';
+		}
+
+		// Build Nominatim query with viewbox bias around user position (if available)
+		let viewbox = '';
+		if (userLat && userLng) {
+			// Bias search results within ~100km of user
+			const bias = 0.9; // ~100km in degrees
+			viewbox = `&viewbox=${userLng - bias},${userLat + bias},${userLng + bias},${userLat - bias}&bounded=0`;
+		}
+
+		const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=10&addressdetails=1&countrycodes=${countryCodes}${viewbox}`;
 
 		const response = await fetch(url, {
 			headers: { 'User-Agent': 'Zhiive/1.0 (contact@2thier.be)' },
@@ -430,14 +456,30 @@ router.get('/geocode', async (req, res) => {
 		}
 
 		const results = await response.json();
+
+		let data = results.map((r: any) => ({
+			displayName: r.display_name,
+			lat: parseFloat(r.lat),
+			lng: parseFloat(r.lon),
+			type: r.type,
+			distance: null as number | null,
+		}));
+
+		// Sort by distance from user position (nearest first)
+		if (userLat && userLng) {
+			for (const d of data) {
+				const dLat = (d.lat - userLat) * Math.PI / 180;
+				const dLng = (d.lng - userLng) * Math.PI / 180;
+				const a = Math.sin(dLat / 2) ** 2 +
+					Math.cos(userLat * Math.PI / 180) * Math.cos(d.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+				d.distance = Math.round(6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 10) / 10; // km
+			}
+			data.sort((a: any, b: any) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
+		}
+
 		res.json({
 			success: true,
-			data: results.map((r: any) => ({
-				displayName: r.display_name,
-				lat: parseFloat(r.lat),
-				lng: parseFloat(r.lon),
-				type: r.type,
-			})),
+			data: data.slice(0, 8),
 		});
 	} catch (e) {
 		console.error('[wax] GET /geocode error:', e);

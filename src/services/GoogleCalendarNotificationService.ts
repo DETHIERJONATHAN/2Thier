@@ -93,7 +93,7 @@ export class GoogleCalendarNotificationService extends EventEmitter {
       const calendar = google.calendar({ version: 'v3', auth });
 
       // Configurer surveillance push notifications
-      const watchResponse = await calendar.events.watch({
+      await calendar.events.watch({
         calendarId: 'primary',
         requestBody: {
           id: `calendar-watch-${userId}-${Date.now()}`,
@@ -406,7 +406,7 @@ export class GoogleCalendarNotificationService extends EventEmitter {
     return userOrg?.organizationId || null;
   }
 
-  private async getUpcomingEvents(userId: string, start: Date, end: Date): Promise<any[]> {
+  private async getUpcomingEvents(_userId: string, _start: Date, _end: Date): Promise<any[]> {
     // TODO: Implémenter récupération événements via Google Calendar API
     return [];
   }

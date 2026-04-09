@@ -19,7 +19,6 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { SF } from './ZhiiveTheme';
 import { useAuth } from '../../auth/useAuth';
-import { useActiveIdentity } from '../../contexts/ActiveIdentityContext';
 
 // ── Types ──
 interface BeeMarker {
@@ -64,6 +63,7 @@ interface GeocodeSuggestion {
   lat: number;
   lng: number;
   type: string;
+  distance?: number | null;
 }
 
 interface WaxPanelProps { api: any; currentUser?: any; }
@@ -71,7 +71,6 @@ interface WaxPanelProps { api: any; currentUser?: any; }
 const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
   const { t } = useTranslation();
   const { currentOrganization: _currentOrganization } = useAuth();
-  const _identity = useActiveIdentity();
 
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -533,7 +532,12 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
     setGeocodeLoading(true);
     setGeocodeSearched(true);
     try {
-      const res = await api.get(`/api/wax/geocode?q=${encodeURIComponent(q)}`);
+      // Pass user position for country bias and distance sorting
+      let url = `/api/wax/geocode?q=${encodeURIComponent(q)}`;
+      if (userPosition) {
+        url += `&lat=${userPosition.lat}&lng=${userPosition.lng}`;
+      }
+      const res = await api.get(url);
       if (res?.success) setSuggestions(res.data || []);
       else setSuggestions([]);
     } catch {
@@ -541,7 +545,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
     } finally {
       setGeocodeLoading(false);
     }
-  }, [api]);
+  }, [api, userPosition]);
 
   const searchDestination = useCallback((query: string) => {
     setDestQuery(query);
@@ -1454,7 +1458,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
                   onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
                 >
                   <EnvironmentOutlined style={{ color: SF.primary, fontSize: 14, marginTop: 2, flexShrink: 0 }} />
-                  <div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ color: 'white', fontSize: 12, fontWeight: 600 }}>
                       {s.displayName.split(',')[0]}
                     </div>
@@ -1462,6 +1466,11 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
                       {s.displayName.split(',').slice(1, 3).join(',')}
                     </div>
                   </div>
+                  {s.distance != null && (
+                    <span style={{ color: SF.primary, fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0, marginTop: 2 }}>
+                      {s.distance < 1 ? `${Math.round(s.distance * 1000)}m` : `${s.distance}km`}
+                    </span>
+                  )}
                 </div>
               ))}
             </div>

@@ -331,7 +331,7 @@ const SearchPage: React.FC = () => {
   const { setWallViewUrl } = useZhiiveNav();
 
   // ── View mode: widget grid vs compact buttons ──
-  const [viewMode, setViewMode] = useState<ViewMode>('widgets');
+  const [viewMode, setViewMode] = useState<ViewMode>('buttons');
 
   // ── Search state ──
   const [query, setQuery] = useState('');
@@ -495,7 +495,7 @@ const SearchPage: React.FC = () => {
   }, [apiStable]);
 
   useEffect(() => { fetchAllFeeds(); }, [fetchAllFeeds]);
-  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 200); }, []);
+  useEffect(() => { setTimeout(() => inputRef.current?.focus({ preventScroll: true }), 200); }, []);
 
   // ── Drag & drop handlers ──
   const onDragStart = useCallback((bookmarkId: string) => { setDragId(bookmarkId); }, []);

@@ -187,7 +187,7 @@ export default function AgendaPage() {
         safeGet('/api/clients'),
         safeGet('/api/leads'),
         safeGet('/api/projects'),
-        safeGet('/api/emails?limit=100'),
+        safeGet('/api/postal/emails?limit=100'),
       ]);
       setClients(c); setLeads(l); setProjects(p); setEmails(e);
     };
