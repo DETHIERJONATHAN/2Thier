@@ -106,6 +106,8 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
   const carViewRef = useRef(false);
   const userArrowRef = useRef<maplibregl.Marker | null>(null);
   const currentBearingRef = useRef(0);
+  const routeDestRef = useRef<{ lat: number; lng: number } | null>(null);
+  const lastRerouteRef = useRef(0);
 
   const [reportingAlert, setReportingAlert] = useState(false);
   const [carView, setCarView] = useState(false);
@@ -652,6 +654,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
       setCurrentStepIndex(0);
       setSuggestions([]);
       setRoutingOpen(false);
+      routeDestRef.current = dest;
       message.destroy('route');
 
       // Draw route on map
@@ -738,6 +741,44 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
           const userLat = pos.coords.latitude;
           setUserPosition({ lat: userLat, lng: userLng });
 
+          // ── Auto-reroute: if user is >100m from nearest route point, recalculate ──
+          const routeCoords = routeData.geometry.coordinates as [number, number][];
+          let minRouteDist = Infinity;
+          for (let ri = 0; ri < routeCoords.length; ri += 3) { // check every 3rd point for perf
+            const [rLng, rLat] = routeCoords[ri];
+            const d = Math.sqrt(
+              Math.pow((userLat - rLat) * 111320, 2) +
+              Math.pow((userLng - rLng) * 111320 * Math.cos(userLat * Math.PI / 180), 2)
+            );
+            if (d < minRouteDist) minRouteDist = d;
+          }
+          // If >100m off route and haven't rerouted in last 10s
+          if (minRouteDist > 100 && routeDestRef.current && Date.now() - lastRerouteRef.current > 10000) {
+            lastRerouteRef.current = Date.now();
+            speakInstruction('Recalcul du trajet');
+            // Reroute silently (computeRoute wrapper)
+            const dest = routeDestRef.current;
+            api.get(`/api/wax/route?from_lng=${userLng}&from_lat=${userLat}&to_lng=${dest.lng}&to_lat=${dest.lat}`)
+              .then((res: any) => {
+                if (res?.success && res.data) {
+                  setRouteData(res.data);
+                  setCurrentStepIndex(0);
+                  // Redraw route
+                  const map = mapRef.current;
+                  if (map) {
+                    if (routeSourceAdded.current) {
+                      try { map.removeLayer('wax-route-line'); } catch { /* */ }
+                      try { map.removeLayer('wax-route-outline'); } catch { /* */ }
+                      try { map.removeSource('wax-route'); } catch { /* */ }
+                      routeSourceAdded.current = false;
+                    }
+                    drawRouteOnMap(res.data.geometry);
+                  }
+                }
+              })
+              .catch(() => { /* reroute failed, will retry */ });
+          }
+
           // Check if we're close to the next step's maneuver point
           setCurrentStepIndex(prev => {
             if (!routeData) return prev;
@@ -814,7 +855,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
         { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 },
       );
     }
-  }, [routeData, speakInstruction, computeBearing, currentStepIndex]);
+  }, [routeData, speakInstruction, computeBearing, currentStepIndex, api, drawRouteOnMap]);
 
   // ── Stop navigation ──
   const stopNavigation = useCallback(() => {
@@ -841,6 +882,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
     }
     setRouteData(null);
     setCarView(false);
+    routeDestRef.current = null;
 
     // Restore normal map view
     mapRef.current?.easeTo({ pitch: 50, bearing: -12, zoom: 12, duration: 1000 });
@@ -1023,15 +1065,27 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
           display: 'flex', alignItems: 'center', gap: 8,
         }}>
           {/* Arrow icon */}
-          <div style={{
-            width: 34, height: 34, borderRadius: 10, background: SF.primary,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            boxShadow: `0 0 12px ${SF.primary}40`,
-          }}>
+          <div
+            onClick={() => {
+              // Re-center on user position along the route
+              if (userPosition) {
+                const bearing = currentBearingRef.current;
+                if (carViewRef.current) {
+                  mapRef.current?.easeTo({ center: [userPosition.lng, userPosition.lat], bearing, pitch: 80, zoom: 18.5, duration: 800 });
+                } else {
+                  mapRef.current?.easeTo({ center: [userPosition.lng, userPosition.lat], bearing, pitch: 0, zoom: 17, duration: 800 });
+                }
+              }
+            }}
+            style={{
+              width: 42, height: 42, borderRadius: 12, background: SF.primary,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              boxShadow: `0 0 12px ${SF.primary}40`, cursor: 'pointer',
+            }}>
             {getManeuverIcon(
               routeData.steps[currentStepIndex]?.maneuver?.type,
               routeData.steps[currentStepIndex]?.maneuver?.modifier,
-              18,
+              24,
             )}
           </div>
           {/* Distance + instruction */}
@@ -1051,35 +1105,35 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
           {/* Next step preview */}
           {routeData.steps[currentStepIndex + 1] && (
             <div style={{
-              display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0, opacity: 0.45,
+              display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, opacity: 0.55,
             }}>
               <div style={{
-                width: 22, height: 22, borderRadius: 6, background: 'rgba(255,255,255,0.1)',
+                width: 30, height: 30, borderRadius: 8, background: 'rgba(255,255,255,0.12)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
                 {getManeuverIcon(
                   routeData.steps[currentStepIndex + 1]?.maneuver?.type,
                   routeData.steps[currentStepIndex + 1]?.maneuver?.modifier,
-                  11,
+                  16,
                 )}
               </div>
-              <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, fontWeight: 600 }}>
+              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: 700 }}>
                 {formatDistance(routeData.steps[currentStepIndex + 1]?.distance || 0)}
               </span>
             </div>
           )}
-          {/* Alert report quick button */}
+          {/* Alert report quick button — RED */}
           <div
             onClick={() => setReportingAlert(r => !r)}
             style={{
-              width: 28, height: 28, borderRadius: '50%', cursor: 'pointer', flexShrink: 0,
+              width: 32, height: 32, borderRadius: '50%', cursor: 'pointer', flexShrink: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: reportingAlert ? '#e1705530' : 'rgba(255,255,255,0.08)',
-              color: reportingAlert ? '#e17055' : 'rgba(255,255,255,0.4)',
-              border: `1px solid ${reportingAlert ? '#e1705540' : 'rgba(255,255,255,0.1)'}`,
+              background: reportingAlert ? '#d6303130' : '#d6303118',
+              color: reportingAlert ? '#ff4444' : '#e17055',
+              border: `1.5px solid ${reportingAlert ? '#d63031' : '#e1705550'}`,
             }}
           >
-            <WarningOutlined style={{ fontSize: 12 }} />
+            <WarningOutlined style={{ fontSize: 14 }} />
           </div>
         </div>
       )}
