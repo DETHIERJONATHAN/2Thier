@@ -616,20 +616,21 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
 
   // ── Compute route ──
   const computeRoute = useCallback(async (dest: { lat: number; lng: number }) => {
-    // Get current GPS position (fresh) as origin
-    let pos = userPosition;
-    if (!pos && navigator.geolocation) {
+    // ALWAYS get a fresh GPS position as origin (no cache)
+    let pos: { lat: number; lng: number } | null = null;
+    if (navigator.geolocation) {
       try {
         const gpsPos = await new Promise<GeolocationPosition>((resolve, reject) =>
           navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: true, timeout: 5000, maximumAge: 10000,
+            enableHighAccuracy: true, timeout: 8000, maximumAge: 0,
           })
         );
         pos = { lat: gpsPos.coords.latitude, lng: gpsPos.coords.longitude };
         setUserPosition(pos);
       } catch { /* fallback below */ }
     }
-    // Fallback: map center
+    // Fallback: use last known userPosition, then map center
+    if (!pos) pos = userPosition;
     if (!pos) {
       pos = mapRef.current ? { lat: mapRef.current.getCenter().lat, lng: mapRef.current.getCenter().lng } : null;
     }
