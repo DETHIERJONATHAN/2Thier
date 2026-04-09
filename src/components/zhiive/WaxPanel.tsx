@@ -108,6 +108,8 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
   const currentBearingRef = useRef(0);
   const routeDestRef = useRef<{ lat: number; lng: number } | null>(null);
   const lastRerouteRef = useRef(0);
+  const sharingRef = useRef(false);
+  const ghostModeRef = useRef<GhostMode>('visible');
 
   const [reportingAlert, setReportingAlert] = useState(false);
   const [carView, setCarView] = useState(false);
@@ -116,6 +118,8 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
   useEffect(() => { routeDataRef.current = routeData; }, [routeData]);
   useEffect(() => { navigatingRef.current = navigating; }, [navigating]);
   useEffect(() => { carViewRef.current = carView; }, [carView]);
+  useEffect(() => { sharingRef.current = sharing; }, [sharing]);
+  useEffect(() => { ghostModeRef.current = ghostMode; }, [ghostMode]);
 
   // Default: Belgium center
   const defaultCenter: [number, number] = [4.35, 50.85];
@@ -182,7 +186,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
     }), 'bottom-right');
 
     // When GeolocateControl gets a position, update userPosition
-    // and if there's an active route, re-center on route (car-view)
+    // Also auto-start location sharing (triggered by user clicking GPS button = user gesture)
     map.on('geolocate' as any, ((e: any) => {
       const coords = e.coords || e;
       if (coords?.latitude == null) return;
@@ -190,17 +194,20 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
       const userLng = coords.longitude;
       setUserPosition({ lat: userLat, lng: userLng });
 
-      const rd = routeDataRef.current;
-      if (!rd) return; // No active route, let GeolocateControl do its thing
+      // Auto-start sharing on first GPS fix (user clicked GPS = valid gesture)
+      if (!sharingRef.current && ghostModeRef.current !== 'ghost') {
+        shareLocation();
+      }
 
-      // Active route exists — override GeolocateControl's default flyTo
-      // Re-center on user position with route-aware view
-      if (navigatingRef.current || carViewRef.current) {
+      const rd = routeDataRef.current;
+      if (!rd) return; // No active route, let GeolocateControl center on user
+
+      // Only override GeolocateControl when actively navigating in car-view
+      if (navigatingRef.current && carViewRef.current) {
         // Car-view: compute bearing toward next step
         const steps = rd.steps;
         let bearing = map.getBearing();
         if (steps.length > 0) {
-          // Find closest upcoming step
           let closestIdx = 0;
           let minDist = Infinity;
           for (let i = 0; i < steps.length; i++) {
@@ -220,7 +227,6 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
           const x = Math.cos(lat1R) * Math.sin(lat2R) - Math.sin(lat1R) * Math.cos(lat2R) * Math.cos(dLng);
           bearing = ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
         }
-        // Small delay to override GeolocateControl's own flyTo
         setTimeout(() => {
           map.easeTo({
             center: [userLng, userLat],
@@ -230,17 +236,8 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
             duration: 800,
           });
         }, 50);
-      } else {
-        // Route exists but not navigating — re-fit to route bounds
-        const routeCoords = rd.geometry.coordinates as [number, number][];
-        const bounds = routeCoords.reduce(
-          (b, c) => b.extend(c as [number, number]),
-          new maplibregl.LngLatBounds(routeCoords[0], routeCoords[0])
-        );
-        setTimeout(() => {
-          map.fitBounds(bounds, { padding: 80, pitch: 50, bearing: -12, duration: 1200 });
-        }, 50);
       }
+      // Otherwise: let GeolocateControl center on user normally
     }) as any);
 
     map.on('load', () => {
@@ -350,13 +347,8 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
     return () => { map.off('moveend', onMoveEnd); clearInterval(interval); };
   }, [mapReady, fetchLocations]);
 
-  // Auto-start location sharing on mount (if not ghost)
-  useEffect(() => {
-    if (mapReady && ghostMode !== 'ghost' && !sharing) {
-      shareLocation();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapReady]);
+  // Auto-start location sharing is triggered from GeolocateControl's geolocate event
+  // (NOT from useEffect, which triggers browser [Violation] and can block GPS)
 
   // ── Share own location ──
   const shareLocation = useCallback(() => {
