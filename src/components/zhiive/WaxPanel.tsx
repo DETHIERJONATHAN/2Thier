@@ -104,6 +104,8 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
   const routeDataRef = useRef<RouteData | null>(null);
   const navigatingRef = useRef(false);
   const carViewRef = useRef(false);
+  const userArrowRef = useRef<maplibregl.Marker | null>(null);
+  const currentBearingRef = useRef(0);
 
   const [reportingAlert, setReportingAlert] = useState(false);
   const [carView, setCarView] = useState(false);
@@ -706,17 +708,27 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
       speakInstruction(routeData.steps[0].instruction);
     }
 
-    // Switch to car-view: close zoom, steep pitch, bearing along route
-    setCarView(true);
+    // Start in current view mode (carView keeps its state)
     const coords = routeData.geometry.coordinates as [number, number][];
     const initialBearing = coords.length >= 2 ? computeBearing(coords[0], coords[Math.min(5, coords.length - 1)]) : 0;
-    mapRef.current?.easeTo({
-      center: coords[0],
-      zoom: 19.5,
-      pitch: 85,
-      bearing: initialBearing,
-      duration: 1200,
-    });
+    currentBearingRef.current = initialBearing;
+    if (carViewRef.current) {
+      mapRef.current?.easeTo({
+        center: coords[0],
+        zoom: 18.5,
+        pitch: 80,
+        bearing: initialBearing,
+        duration: 1200,
+      });
+    } else {
+      mapRef.current?.easeTo({
+        center: coords[0],
+        zoom: 17,
+        pitch: 0,
+        bearing: initialBearing,
+        duration: 1200,
+      });
+    }
 
     // Watch position to advance steps
     if (navigator.geolocation) {
@@ -749,19 +761,54 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
             return prev;
           });
 
-          // Car-view: compute bearing toward next step, then easeTo in 3D
+          // Compute bearing toward next step
           const nextStep = routeData.steps[currentStepIndex + 1] || routeData.steps[currentStepIndex];
           const bearing = nextStep
             ? computeBearing([userLng, userLat], nextStep.location)
             : (mapRef.current?.getBearing() || 0);
+          currentBearingRef.current = bearing;
 
-          mapRef.current?.easeTo({
-            center: [userLng, userLat],
-            bearing,
-            pitch: 85,
-            zoom: 19.5,
-            duration: 800,
-          });
+          // Update or create the user arrow marker (shows in both 2D and 3D)
+          if (!userArrowRef.current) {
+            const arrowEl = document.createElement('div');
+            arrowEl.className = 'wax-nav-arrow';
+            arrowEl.innerHTML = `<div style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;">
+              <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+                <circle cx="18" cy="18" r="16" fill="${SF.primary}" stroke="white" stroke-width="3" opacity="0.9"/>
+                <path d="M18 8 L24 24 L18 20 L12 24 Z" fill="white"/>
+              </svg>
+            </div>`;
+            userArrowRef.current = new maplibregl.Marker({ element: arrowEl, rotationAlignment: 'map', pitchAlignment: 'map' })
+              .setLngLat([userLng, userLat])
+              .addTo(mapRef.current!);
+          } else {
+            userArrowRef.current.setLngLat([userLng, userLat]);
+          }
+          // Rotate arrow to match bearing
+          const arrowEl = userArrowRef.current.getElement();
+          if (arrowEl) {
+            arrowEl.style.transform = `${arrowEl.style.transform?.replace(/rotate\([^)]*\)/, '') || ''} rotate(${bearing}deg)`;
+          }
+
+          // 3D car-view: immersive windshield perspective
+          if (carViewRef.current) {
+            mapRef.current?.easeTo({
+              center: [userLng, userLat],
+              bearing,
+              pitch: 80,
+              zoom: 18.5,
+              duration: 800,
+            });
+          } else {
+            // 2D top-down: follow user with bearing, flat view
+            mapRef.current?.easeTo({
+              center: [userLng, userLat],
+              bearing,
+              pitch: 0,
+              zoom: 17,
+              duration: 800,
+            });
+          }
         },
         () => { /* GPS error, keep navigating */ },
         { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 },
@@ -777,6 +824,12 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
       navWatchRef.current = null;
     }
     window.speechSynthesis?.cancel();
+
+    // Remove user arrow marker
+    if (userArrowRef.current) {
+      userArrowRef.current.remove();
+      userArrowRef.current = null;
+    }
 
     // Remove route from map
     const map = mapRef.current;
@@ -826,6 +879,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
         .maplibregl-ctrl-bottom-right { bottom: 56px !important; right: 6px !important; }
         .maplibregl-ctrl-group button { width: 36px !important; height: 36px !important; }
         .maplibregl-ctrl-attrib { font-size: 9px !important; opacity: 0.5; }
+        .wax-nav-arrow { z-index: 10 !important; transition: transform 0.5s ease; pointer-events: none; }
         .wax-colony-marker, .wax-bee-marker, .wax-comb-marker, .wax-pin-marker {
           touch-action: none;
         }
@@ -1113,9 +1167,15 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
               const next = !carView;
               setCarView(next);
               if (next) {
-                mapRef.current?.easeTo({ pitch: 85, zoom: 19.5, duration: 800 });
+                // Switch to 3D car-view
+                mapRef.current?.easeTo({ pitch: 80, zoom: 18.5, bearing: currentBearingRef.current, duration: 800 });
               } else {
-                mapRef.current?.easeTo({ pitch: 50, bearing: -12, zoom: mapRef.current.getZoom() > 14 ? 12 : mapRef.current.getZoom(), duration: 800 });
+                // Switch to 2D top-down with bearing
+                if (navigating) {
+                  mapRef.current?.easeTo({ pitch: 0, bearing: currentBearingRef.current, zoom: 17, duration: 800 });
+                } else {
+                  mapRef.current?.easeTo({ pitch: 50, bearing: -12, zoom: mapRef.current?.getZoom() || 12, duration: 800 });
+                }
               }
             }}
             style={{
