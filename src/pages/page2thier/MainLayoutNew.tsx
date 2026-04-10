@@ -15,6 +15,7 @@ import {
   TeamOutlined,
   MailOutlined,
   CalendarOutlined,
+  CameraOutlined,
 } from '@ant-design/icons';
 import Icon from '@ant-design/icons';
 import { useAuth } from '../../auth/useAuth';
@@ -86,10 +87,19 @@ const FlowWaveIcon = (props: any) => <Icon component={FlowWaveSvg} {...props} />
 const UniverseIcon = (props: any) => <Icon component={UniverseSvg} {...props} />;
 const WaxMapIcon = (props: any) => <Icon component={WaxMapSvg} {...props} />;
 
+// ── Friends icon: camera with user inside ──
+const FriendsIcon: React.FC<{ style?: React.CSSProperties }> = ({ style }) => (
+  <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '1em', height: '1em', ...style }}>
+    <CameraOutlined style={{ fontSize: '1em', color: 'inherit' }} />
+    <UserOutlined style={{ position: 'absolute', fontSize: '0.4em', color: 'inherit', top: '22%', left: '28%' }} />
+  </span>
+);
+
 // ── Icon mapping: tabIcon string (from DB) → React component ──
 const TAB_ICON_MAP: Record<string, React.ComponentType<{ style?: React.CSSProperties }>> = {
   'wall': WallIcon,
-  'compass': CompassOutlined,
+  'compass': FriendsIcon,
+  'friends': FriendsIcon,
   'clapperboard': ClapperboardIcon,
   'flow-wave': FlowWaveIcon,
   'universe': UniverseIcon,
@@ -106,7 +116,7 @@ const TAB_ICON_MAP: Record<string, React.ComponentType<{ style?: React.CSSProper
 const SF_TAB_CONFIG_FALLBACK: { id: string; label: string; icon: React.ComponentType<{ style?: React.CSSProperties }>; color: string }[] = [
   { id: 'nectar', label: 'Nectar', icon: FlowWaveIcon, color: '#FDCB6E' },
   { id: 'wax', label: 'Wax', icon: WaxMapIcon, color: '#E17055' },
-  { id: 'explore', label: 'Scout', icon: CompassOutlined, color: '#00CEC9' },
+  { id: 'explore', label: 'Friends', icon: FriendsIcon, color: '#00CEC9' },
   { id: 'reels', label: 'Reels', icon: ClapperboardIcon, color: '#e84393' },
   { id: 'mur', label: 'Hive', icon: WallIcon, color: '#F5A623' },
   { id: 'mail', label: 'Mail', icon: MailOutlined, color: '#00B894' },

@@ -5,7 +5,7 @@
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Avatar, Progress, Tag, Badge, Modal, Input, DatePicker, Select, message } from 'antd';
+import { Avatar, Button, Dropdown, Progress, Tag, Badge, Modal, Input, DatePicker, Select, Tooltip, message } from 'antd';
 import {
   EyeInvisibleOutlined, TrophyOutlined,
   UserOutlined, LikeOutlined, DislikeOutlined,
@@ -13,11 +13,13 @@ import {
   TeamOutlined, CalendarOutlined,
   EnvironmentOutlined, HeartOutlined,
   LockOutlined, GiftOutlined,
+  ReloadOutlined, MoreOutlined,
 } from '@ant-design/icons';
 import { SF } from './ZhiiveTheme';
 import { useZhiiveNav } from '../../contexts/ZhiiveNavContext';
 import { useAuth } from '../../auth/useAuth';
 import { useActiveIdentity } from '../../contexts/ActiveIdentityContext';
+import ZhiiveModuleHeader from './ZhiiveModuleHeader';
 
 // ── Types ──
 interface SparkPost {
@@ -334,10 +336,10 @@ const NectarPanel: React.FC<NectarPanelProps> = ({ api, currentUser }) => {
   );
 
   const sections: { key: NectarSection; label: string; icon: string; color: string }[] = [
-    { key: 'spark', label: 'Spark', icon: '⚡', color: SF.gold },
+    { key: 'spark', label: t('flow.spark'), icon: '⚡', color: SF.gold },
     { key: 'battles', label: t('flow.battles'), icon: '⚔️', color: SF.accent },
     { key: 'quests', label: t('flow.quests'), icon: '🎯', color: SF.success },
-    { key: 'pulse', label: 'Pulse', icon: '💫', color: SF.primary },
+    { key: 'pulse', label: t('flow.pulse'), icon: '💫', color: SF.primary },
     { key: 'events', label: t('universe.events'), icon: '📅', color: SF.secondary },
     { key: 'capsules', label: t('universe.capsules'), icon: '⏳', color: SF.gold },
     { key: 'orbit', label: t('universe.orbit'), icon: '🪐', color: SF.accent },
@@ -345,16 +347,45 @@ const NectarPanel: React.FC<NectarPanelProps> = ({ api, currentUser }) => {
 
   const isFlowSection = activeSection === 'spark' || activeSection === 'battles' || activeSection === 'quests';
   const loading = isFlowSection ? flowLoading : universeLoading;
+  const handleRefresh = useCallback(() => {
+    fetchFlow();
+    fetchUniverse();
+  }, [fetchFlow, fetchUniverse]);
+
+  const sectionMenuItems = [
+    { key: 'spark', label: t('flow.spark') },
+    { key: 'battles', label: t('flow.battles') },
+    { key: 'quests', label: t('flow.quests') },
+    { key: 'pulse', label: t('flow.pulse') },
+    { key: 'events', label: t('universe.events') },
+    { key: 'capsules', label: t('universe.capsules') },
+    { key: 'orbit', label: t('universe.orbit') },
+  ];
 
   return (
-    <div style={{ flex: 1, height: '100%', overflowY: 'auto', padding: '8px 12px', scrollbarWidth: 'none', background: SF.bg }}>
-      {/* Header */}
-      <div style={{ textAlign: 'center', marginBottom: 10, paddingTop: 4 }}>
-        <span style={{ fontSize: 20, fontWeight: 800, background: SF.gradientPrimary, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-          🍯 Nectar
-        </span>
-      </div>
-
+    <div style={{ flex: 1, height: '100%', overflowY: 'auto', scrollbarWidth: 'none', background: SF.bg, display: 'flex', flexDirection: 'column' as const }}>
+      <ZhiiveModuleHeader
+        icon="🍯"
+        title={t('nectar')}
+        actions={(
+          <>
+            <Tooltip title={t('common.refresh')}>
+              <Button type="text" size="small" icon={<ReloadOutlined />} onClick={handleRefresh} />
+            </Tooltip>
+            <Dropdown
+              menu={{
+                items: sectionMenuItems,
+                onClick: ({ key }) => setActiveSection(key as NectarSection),
+              }}
+              placement="bottomRight"
+              trigger={['click']}
+            >
+              <Button type="text" size="small" icon={<MoreOutlined />} />
+            </Dropdown>
+          </>
+        )}
+      />
+      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px', scrollbarWidth: 'none' }}>
       {/* Section tabs — scrollable */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 12, overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: 2 }}>
         {sections.map(sec => (
@@ -615,6 +646,7 @@ const NectarPanel: React.FC<NectarPanelProps> = ({ api, currentUser }) => {
           )) : <EmptyState icon="🪐" title={t('universe.orbitEmpty')} subtitle={t('universe.addFriendsHint')} />}
         </div>
       )}
+    </div>
     </div>
   );
 };

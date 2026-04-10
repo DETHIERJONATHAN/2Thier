@@ -36,7 +36,8 @@
     },
     "copied": "Copié !",
     "linkCopied": "Lien copié !",
-    "launch": "Lancer"
+    "launch": "Lancer",
+    "more": "Plus"
   },
   "hive": {
     "buzz": "Buzz",
@@ -47,7 +48,7 @@
     "whispers": "Whispers",
     "colony": "Colony",
     "keeper": "Keeper",
-    "scout": "Scout",
+    "scout": "Friends",
     "panorama": "Panorama",
     "hiveMind": "Hive Mind",
     "nectar": "Nectar",
@@ -211,7 +212,7 @@
     "orbit": "Orbite"
   },
   "explore": {
-    "title": "🐝 Scout",
+    "title": "Friends",
     "gallery": "Galerie",
     "people": "Bees",
     "hashtags": "Hashtags",
@@ -268,13 +269,22 @@
     "blocked": "Bloqué",
     "userBlocked": "Utilisateur bloqué",
     "sendMessage": "Message",
-    "friendActionError": "Erreur lors de l'action"
+    "friendActionError": "Erreur lors de l'action",
+    "selectFile": "Sélectionnez un fichier",
+    "postCreated": "Publication créée ! 🎉",
+    "postError": "Erreur lors de la publication",
+    "addPhoto": "Ajouter une photo",
+    "addVideo": "Ajouter une vidéo",
+    "clickToSelect": "Cliquez pour sélectionner un fichier",
+    "captionPlaceholder": "Écrivez une légende..."
   },
   "flow": {
     "tagline": "Exister, Créer, Gagner !",
     "postAnonymously": "Postez anonymement, la Colony vote",
     "revealAt100": "À 100 votes, votre identité est révélée !",
     "createSpark": "⚡ Créer un Spark",
+    "spark": "Spark",
+    "pulse": "Pulse",
     "newSpark": "⚡ Nouveau Spark anonyme",
     "sparkPlaceholder": "Votre pensée anonyme...",
     "sparkFullPlaceholder": "Partagez quelque chose anonymement... votre identité sera révélée à 100 votes !",
@@ -546,7 +556,10 @@
       "voiceOff": "Guidage vocal désactivé",
       "go": "C'est parti",
       "stop": "Arrêter",
+      "stopSimulation": "Stop simulation",
       "goThere": "Y aller",
+      "simulate": "Simuler",
+      "simulationTooltip": "Simuler un trajet virtuel à 50 km/h pour vérifier le rendu",
       "view3D": "Vue 3D voiture",
       "view2D": "Vue carte 2D"
     },

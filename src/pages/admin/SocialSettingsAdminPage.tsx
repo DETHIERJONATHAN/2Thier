@@ -347,7 +347,7 @@ export default function SocialSettingsAdminPage() {
                     <SettingRow label="Battles" description="Sondages et comparaisons">
                       <Switch checked={settings.battlesEnabled} onChange={v => updateSetting('battlesEnabled', v)} />
                     </SettingRow>
-                    <SettingRow label="Explore (Scout)" description="Galerie de découverte de contenu">
+                    <SettingRow label="Friends" description="Galerie de découverte de contenu et amis">
                       <Switch checked={settings.exploreEnabled} onChange={v => updateSetting('exploreEnabled', v)} />
                     </SettingRow>
                     <SettingRow label="Hive Live" description="Ligne de vie interactive">

@@ -382,6 +382,30 @@ router.get('/route', async (req, res) => {
 		}
 
 		const route = data.routes[0];
+
+		// Fetch alert pins (signalements) near the route geometry
+		const routeCoords = route.geometry.coordinates as [number, number][];
+		let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
+		for (const [lng, lat] of routeCoords) {
+			if (lng < minLng) minLng = lng;
+			if (lng > maxLng) maxLng = lng;
+			if (lat < minLat) minLat = lat;
+			if (lat > maxLat) maxLat = lat;
+		}
+		const expand = 0.002; // ~200m buffer
+		let alertPins: { id: string; pinType: string; title: string | null; latitude: number; longitude: number }[] = [];
+		try {
+			alertPins = await db.waxPin.findMany({
+				where: {
+					latitude: { gte: minLat - expand, lte: maxLat + expand },
+					longitude: { gte: minLng - expand, lte: maxLng + expand },
+					expiresAt: { gt: new Date() },
+					pinType: { in: ['radar', 'police', 'accident', 'travaux', 'danger', 'embouteillage'] },
+				},
+				select: { id: true, pinType: true, title: true, latitude: true, longitude: true },
+			});
+		} catch { /* non-blocking: alerts are optional */ }
+
 		res.json({
 			success: true,
 			data: {
@@ -397,6 +421,7 @@ router.get('/route', async (req, res) => {
 					maneuver: s.maneuver,
 					location: s.maneuver.location,    // [lng, lat]
 				})),
+				alerts: alertPins,
 			},
 		});
 	} catch (e) {

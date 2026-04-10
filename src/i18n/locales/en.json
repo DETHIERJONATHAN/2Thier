@@ -36,7 +36,8 @@
     },
     "copied": "Copied!",
     "linkCopied": "Link copied!",
-    "launch": "Launch"
+    "launch": "Launch",
+    "more": "More"
   },
   "hive": {
     "buzz": "Buzz",
@@ -47,7 +48,7 @@
     "whispers": "Whispers",
     "colony": "Colony",
     "keeper": "Keeper",
-    "scout": "Scout",
+    "scout": "Friends",
     "panorama": "Panorama",
     "hiveMind": "Hive Mind",
     "nectar": "Nectar",
@@ -211,7 +212,7 @@
     "orbit": "Orbit"
   },
   "explore": {
-    "title": "🐝 Scout",
+    "title": "Friends",
     "gallery": "Gallery",
     "people": "Bees",
     "hashtags": "Hashtags",
@@ -268,13 +269,22 @@
     "blocked": "Blocked",
     "userBlocked": "User blocked",
     "sendMessage": "Message",
-    "friendActionError": "Action error"
+    "friendActionError": "Action error",
+    "selectFile": "Select a file",
+    "postCreated": "Post created! 🎉",
+    "postError": "Error creating post",
+    "addPhoto": "Add a photo",
+    "addVideo": "Add a video",
+    "clickToSelect": "Click to select a file",
+    "captionPlaceholder": "Write a caption..."
   },
   "flow": {
     "tagline": "Exist, Create, Win!",
     "postAnonymously": "Post anonymously, the Colony votes",
     "revealAt100": "At 100 votes, your identity is revealed!",
     "createSpark": "⚡ Create a Spark",
+    "spark": "Spark",
+    "pulse": "Pulse",
     "newSpark": "⚡ New Anonymous Spark",
     "sparkPlaceholder": "Your anonymous thought...",
     "sparkFullPlaceholder": "Share something anonymously... your identity will be revealed at 100 votes!",
@@ -546,7 +556,10 @@
       "voiceOff": "Voice guidance off",
       "go": "Let's go",
       "stop": "Stop",
+      "stopSimulation": "Stop simulation",
       "goThere": "Go there",
+      "simulate": "Simulate",
+      "simulationTooltip": "Simulate a virtual trip at 50 km/h to verify the rendering",
       "view3D": "3D car view",
       "view2D": "2D map view"
     },

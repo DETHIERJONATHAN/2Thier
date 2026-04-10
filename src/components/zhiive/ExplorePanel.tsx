@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef, type CSSProperties } from 'react';
-import { Avatar, Input, Tag, message, Modal } from 'antd';
+import { Avatar, Button, Dropdown, Input, Tag, Tooltip, message, Modal } from 'antd';
+import type { InputRef } from 'antd';
 import {
-  SearchOutlined, UserOutlined, FireOutlined, CompassOutlined,
+  SearchOutlined, UserOutlined, FireOutlined, CameraOutlined,
   TeamOutlined, RiseOutlined, HeartOutlined, HeartFilled,
+  ReloadOutlined, PlusOutlined, DownOutlined,
   CloseOutlined, MessageOutlined, SendOutlined,
   PictureOutlined, VideoCameraOutlined, PlayCircleOutlined,
   AppstoreOutlined, ClockCircleOutlined,
@@ -13,6 +15,7 @@ import { useActiveIdentity } from '../../contexts/ActiveIdentityContext';
 import { useAuth } from '../../auth/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import ZhiiveModuleHeader from './ZhiiveModuleHeader';
 
 /** Horizontal scroll row — swipe on mobile, click-drag on desktop */
 const ScrollRow: React.FC<{ style?: CSSProperties; children: React.ReactNode }> = ({ style, children }) => {
@@ -135,6 +138,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
   const [postComments, setPostComments] = useState<any[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [likedCommentsSet, setLikedCommentsSet] = useState<Set<string>>(new Set());
+  const searchInputRef = useRef<InputRef | null>(null);
 
   // ── People tab filters ──
   const [peopleScope, setPeopleScope] = useState<'all' | 'friends' | 'org'>('all');
@@ -143,6 +147,46 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
   const [mediaFilter, setMediaFilter] = useState<'all' | 'photo' | 'video'>('all');
   const [scope, setScope] = useState<'all' | 'friends' | 'org' | 'private'>('all');
   const [sortMode, setSortMode] = useState<'popular' | 'recent'>('popular');
+
+  // ── Create Post from Friends page ──
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [createMediaType, setCreateMediaType] = useState<'photo' | 'video'>('photo');
+  const [createFile, setCreateFile] = useState<File | null>(null);
+  const [createCaption, setCreateCaption] = useState('');
+  const [createLoading, setCreateLoading] = useState(false);
+  const createFileRef = useRef<HTMLInputElement | null>(null);
+
+  const handleCreatePost = (type: 'photo' | 'video') => {
+    setCreateMediaType(type);
+    setCreateFile(null);
+    setCreateCaption('');
+    setCreateModalOpen(true);
+  };
+
+  const handleSubmitPost = async () => {
+    if (!createFile) { message.warning(t('explore.selectFile')); return; }
+    setCreateLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('files', createFile);
+      const uploadRes = await api.post('/api/wall/upload', formData);
+      const mediaUrl = uploadRes?.urls?.[0];
+      if (!mediaUrl) throw new Error('Upload failed');
+      await api.post('/api/wall/posts', {
+        content: createCaption.trim(),
+        mediaUrl,
+        mediaType: createMediaType === 'photo' ? 'image' : 'video',
+        publishAsOrg: identity.publishAsOrg,
+      });
+      message.success(t('explore.postCreated'));
+      setCreateModalOpen(false);
+      handleRefresh();
+    } catch {
+      message.error(t('explore.postError'));
+    } finally {
+      setCreateLoading(false);
+    }
+  };
 
   // ── Like ──
   const handleLikePost = async (postId: string) => {
@@ -394,109 +438,163 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
     { emoji: '🛒', label: 'Market', key: 'market' },
   ];
 
+  const handleRefresh = useCallback(() => {
+    fetchGallery(searchQuery, activeCategory);
+  }, [activeCategory, fetchGallery, searchQuery]);
+
+  const handleFocusSearch = useCallback(() => {
+    setActiveTab('gallery');
+    searchInputRef.current?.focus();
+  }, []);
+
   return (
     <div ref={containerRef} style={{
-      height: '100%', overflowY: 'auto', padding: '8px 12px',
+      height: '100%', overflowY: 'auto',
       scrollbarWidth: 'none', background: SF.bg,
+      display: 'flex', flexDirection: 'column' as const,
     }}>
-      {/* Header */}
-      <div style={{ textAlign: 'center', marginBottom: 12, paddingTop: 4 }}>
-        <span style={{ fontSize: 20, fontWeight: 800, background: SF.gradientSecondary, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-          🐝 Scout
-        </span>
-      </div>
-      {/* Search */}
-      <Input
-        prefix={<SearchOutlined style={{ color: SF.textMuted }} />}
-        placeholder={t('explore.searchPlaceholder')}
-        value={searchQuery}
-        onChange={e => handleSearchChange(e.target.value)}
-        allowClear
-        style={{ borderRadius: 20, background: SF.cardBg, border: 'none', marginBottom: 10 }}
-        size="large"
+      <ZhiiveModuleHeader
+        icon={
+          <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24 }}>
+            <CameraOutlined style={{ fontSize: 22, color: '#00CEC9' }} />
+            <UserOutlined style={{ position: 'absolute', fontSize: 9, color: '#00CEC9', top: 5, left: 7 }} />
+          </span>
+        }
+        title="Friends"
+        center={
+          <Input
+            ref={searchInputRef}
+            prefix={<SearchOutlined style={{ color: SF.textMuted }} />}
+            placeholder={t('explore.searchPlaceholder')}
+            value={searchQuery}
+            onChange={e => handleSearchChange(e.target.value)}
+            allowClear
+            style={{ height: 32, borderRadius: SF.radiusSm, fontSize: 13, maxWidth: 280 }}
+          />
+        }
+        actions={(
+          <>
+            <Tooltip title={t('explore.gallery')}>
+              <Button type="text" size="small" icon={<AppstoreOutlined />}
+                style={{ color: activeTab === 'gallery' ? SF.primary : undefined }}
+                onClick={() => setActiveTab('gallery')} />
+            </Tooltip>
+            <Tooltip title={t('explore.people')}>
+              <Button type="text" size="small" icon={<TeamOutlined />}
+                style={{ color: activeTab === 'people' ? SF.primary : undefined }}
+                onClick={() => setActiveTab('people')} />
+            </Tooltip>
+            <Tooltip title={t('explore.hashtags')}>
+              <Button type="text" size="small" icon={<RiseOutlined />}
+                style={{ color: activeTab === 'hashtags' ? SF.primary : undefined }}
+                onClick={() => setActiveTab('hashtags')} />
+            </Tooltip>
+            <Dropdown
+              menu={{
+                items: [
+                  { key: 'photo', icon: <PictureOutlined />, label: t('explore.photos'), onClick: () => handleCreatePost('photo') },
+                  { key: 'video', icon: <VideoCameraOutlined />, label: t('explore.videos'), onClick: () => handleCreatePost('video') },
+                ],
+              }}
+              trigger={['click']}
+            >
+              <div style={{
+                width: 28, height: 28, borderRadius: 8,
+                background: '#1677ff', color: '#fff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', fontSize: 14,
+              }}>
+                <PlusOutlined />
+              </div>
+            </Dropdown>
+          </>
+        )}
       />
-
-      {/* Tabs */}
-      <ScrollRow style={{ gap: 0, marginBottom: 10, background: SF.cardBg, borderRadius: SF.radiusSm, boxShadow: SF.shadow }}>
-        {tabs.map(tab => (
-          <div
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            style={{
-              flexShrink: 0, padding: '8px 14px', textAlign: 'center', cursor: 'pointer',
-              fontSize: 12, fontWeight: 600, transition: 'all 0.2s', whiteSpace: 'nowrap',
-              color: activeTab === tab.key ? SF.primary : SF.textSecondary,
-              background: activeTab === tab.key ? SF.primary + '12' : 'transparent',
-              borderBottom: activeTab === tab.key ? `2px solid ${SF.primary}` : '2px solid transparent',
-            }}
-          >
-            {tab.icon} {tab.label}
-          </div>
-        ))}
-      </ScrollRow>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px', scrollbarWidth: 'none' }}>
 
       {/* ═══════════════════════════════════════════════════════════ */}
       {/* GALLERY TAB — Instagram-style media grid */}
       {/* ═══════════════════════════════════════════════════════════ */}
       {activeTab === 'gallery' && (
         <>
-          {/* ── Scope filter: Amis / Organisation / Privé / Tout le monde ── */}
-          <ScrollRow style={{ gap: 4, marginBottom: 8 }}>
-            {([
-              { key: 'all' as const, label: t('explore.allFilter'), },
-              { key: 'friends' as const, label: t('explore.friendsFilter') },
-              ...(currentOrganization ? [{ key: 'org' as const, label: '⬡ Colony' }] : []),
-              { key: 'private' as const, label: '🔒 Privé' },
-            ]).map(s => (
-              <div
-                key={s.key}
-                onClick={() => setScope(s.key)}
-                style={{
-                  flexShrink: 0, padding: '6px 12px', textAlign: 'center', cursor: 'pointer',
-                  borderRadius: 20, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
-                  background: scope === s.key ? SF.gradientPrimary : SF.cardBg,
-                  color: scope === s.key ? SF.textLight : SF.textSecondary,
-                  boxShadow: scope === s.key ? SF.shadowMd : SF.shadow,
-                  transition: 'all 0.2s',
-                }}
-              >
-                {s.label}
+          {/* ── Compact filter bar: 3 dropdowns on 1 line ── */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 8, alignItems: 'center' }}>
+            {/* Scope dropdown */}
+            <Dropdown
+              menu={{
+                items: [
+                  { key: 'all', label: t('explore.allFilter') },
+                  { key: 'friends', label: t('explore.friendsFilter') },
+                  ...(currentOrganization ? [{ key: 'org', label: '⬡ Colony' }] : []),
+                  { key: 'private', label: '🔒 Privé' },
+                ],
+                onClick: ({ key }) => setScope(key as typeof scope),
+                selectedKeys: [scope],
+              }}
+              trigger={['click']}
+            >
+              <div style={{
+                padding: '4px 10px', borderRadius: 16, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                background: SF.cardBg, color: SF.text, boxShadow: SF.shadow,
+                display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap',
+              }}>
+                {scope === 'all' ? t('explore.allFilter') : scope === 'friends' ? t('explore.friendsFilter') : scope === 'org' ? '⬡ Colony' : '🔒 Privé'}
+                <DownOutlined style={{ fontSize: 8, color: SF.textMuted }} />
               </div>
-            ))}
-          </ScrollRow>
+            </Dropdown>
 
-          {/* ── Type + Sort filters ── */}
-          <ScrollRow style={{ gap: 4, marginBottom: 8, alignItems: 'center' }}>
-            {/* Type filters */}
-            <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
-              {([
-                { key: 'all' as const, label: t('common.all'), icon: <AppstoreOutlined style={{ fontSize: 11 }} /> },
-                { key: 'photo' as const, label: t('explore.photos'), icon: <PictureOutlined style={{ fontSize: 11 }} /> },
-                { key: 'video' as const, label: t('explore.videos'), icon: <VideoCameraOutlined style={{ fontSize: 11 }} /> },
-              ]).map(f => (
-                <Tag
-                  key={f.key}
-                  onClick={() => setMediaFilter(f.key)}
-                  style={{
-                    borderRadius: 16, padding: '3px 10px', cursor: 'pointer', border: 'none',
-                    background: mediaFilter === f.key ? SF.secondary + '25' : SF.cardBg,
-                    color: mediaFilter === f.key ? SF.secondary : SF.textSecondary,
-                    fontSize: 11, fontWeight: 600, margin: 0,
-                  }}
-                >
-                  {f.icon} {f.label}
-                </Tag>
-              ))}
-            </div>
+            {/* Type dropdown */}
+            <Dropdown
+              menu={{
+                items: [
+                  { key: 'all', label: t('common.all') },
+                  { key: 'photo', label: t('explore.photos') },
+                  { key: 'video', label: t('explore.videos') },
+                ],
+                onClick: ({ key }) => setMediaFilter(key as typeof mediaFilter),
+                selectedKeys: [mediaFilter],
+              }}
+              trigger={['click']}
+            >
+              <div style={{
+                padding: '4px 10px', borderRadius: 16, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                background: SF.cardBg, color: SF.text, boxShadow: SF.shadow,
+                display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap',
+              }}>
+                {mediaFilter === 'all' ? t('common.all') : mediaFilter === 'photo' ? t('explore.photos') : t('explore.videos')}
+                <DownOutlined style={{ fontSize: 8, color: SF.textMuted }} />
+              </div>
+            </Dropdown>
+
+            {/* Category dropdown */}
+            <Dropdown
+              menu={{
+                items: [
+                  { key: '_none', label: t('common.all') },
+                  ...categories.map(c => ({ key: c.key, label: `${c.emoji} ${c.label}` })),
+                ],
+                onClick: ({ key }) => setActiveCategory(key === '_none' ? null : key),
+                selectedKeys: activeCategory ? [activeCategory] : ['_none'],
+              }}
+              trigger={['click']}
+            >
+              <div style={{
+                padding: '4px 10px', borderRadius: 16, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                background: SF.cardBg, color: SF.text, boxShadow: SF.shadow,
+                display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap',
+              }}>
+                {activeCategory ? `${categories.find(c => c.key === activeCategory)?.emoji || ''} ${categories.find(c => c.key === activeCategory)?.label || ''}` : t('explore.popular')}
+                <DownOutlined style={{ fontSize: 8, color: SF.textMuted }} />
+              </div>
+            </Dropdown>
 
             {/* Sort toggle */}
             <div
               onClick={() => setSortMode(sortMode === 'popular' ? 'recent' : 'popular')}
               style={{
-                padding: '4px 10px', borderRadius: 16, cursor: 'pointer',
-                background: SF.cardBg, fontSize: 11, fontWeight: 600,
-                color: SF.textSecondary, boxShadow: SF.shadow,
-                display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, whiteSpace: 'nowrap',
+                padding: '4px 10px', borderRadius: 16, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                background: SF.cardBg, color: SF.text, boxShadow: SF.shadow,
+                display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap', marginLeft: 'auto',
               }}
             >
               {sortMode === 'popular'
@@ -504,23 +602,7 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                 : <><ClockCircleOutlined style={{ color: SF.primary, fontSize: 12 }} /> {t('explore.recent')}</>
               }
             </div>
-          </ScrollRow>
-
-          {/* ── Category pills ── */}
-          <ScrollRow style={{ gap: 5, marginBottom: 10, paddingBottom: 2 }}>
-            {categories.map(cat => (
-              <Tag key={cat.key}
-                onClick={() => setActiveCategory(activeCategory === cat.key ? null : cat.key)}
-                style={{
-                  borderRadius: 20, padding: '3px 10px', cursor: 'pointer', border: 'none',
-                  background: activeCategory === cat.key ? SF.primary + '20' : SF.cardBg,
-                  color: activeCategory === cat.key ? SF.primary : SF.text,
-                  fontSize: 11, flexShrink: 0, boxShadow: SF.shadow, margin: 0,
-                }}>
-                {cat.emoji} {cat.label}
-              </Tag>
-            ))}
-          </ScrollRow>
+          </div>
 
           {/* ── Gallery Grid ── */}
           {loading ? (
@@ -908,6 +990,57 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
           </div>
         )}
       </Modal>
+
+      {/* ═══ Create Post Modal ═══ */}
+      <Modal
+        open={createModalOpen}
+        onCancel={() => setCreateModalOpen(false)}
+        onOk={handleSubmitPost}
+        confirmLoading={createLoading}
+        title={createMediaType === 'photo' ? t('explore.addPhoto') : t('explore.addVideo')}
+        okText={t('common.publish')}
+        cancelText={t('common.cancel')}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <input
+            ref={createFileRef}
+            type="file"
+            accept={createMediaType === 'photo' ? 'image/*' : 'video/*'}
+            onChange={e => setCreateFile(e.target.files?.[0] || null)}
+            style={{ display: 'none' }}
+          />
+          <div
+            onClick={() => createFileRef.current?.click()}
+            style={{
+              border: `2px dashed ${SF.border}`, borderRadius: 12, padding: 32,
+              textAlign: 'center', cursor: 'pointer', background: SF.cardBg,
+            }}
+          >
+            {createFile ? (
+              <div style={{ fontSize: 13, fontWeight: 600, color: SF.text }}>{createFile.name}</div>
+            ) : (
+              <>
+                {createMediaType === 'photo'
+                  ? <PictureOutlined style={{ fontSize: 32, color: SF.textMuted }} />
+                  : <VideoCameraOutlined style={{ fontSize: 32, color: SF.textMuted }} />}
+                <div style={{ fontSize: 12, color: SF.textMuted, marginTop: 8 }}>
+                  {t('explore.clickToSelect')}
+                </div>
+              </>
+            )}
+          </div>
+          <Input.TextArea
+            value={createCaption}
+            onChange={e => setCreateCaption(e.target.value)}
+            placeholder={t('explore.captionPlaceholder')}
+            rows={3}
+            maxLength={500}
+            showCount
+            style={{ borderRadius: 8 }}
+          />
+        </div>
+      </Modal>
+    </div>
     </div>
   );
 };

@@ -68,13 +68,14 @@ interface GeocodeSuggestion {
 
 interface WaxPanelProps { api: any; currentUser?: any; }
 
-const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
+const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
   const { t } = useTranslation();
-  const { currentOrganization: _currentOrganization } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
 
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
+  const liveSelfMarkerRef = useRef<maplibregl.Marker | null>(null);
 
   const [bees, setBees] = useState<BeeMarker[]>([]);
   const [colonies, setColonies] = useState<ColonyMarker[]>([]);
@@ -97,6 +98,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [navigating, setNavigating] = useState(false);
   const [userPosition, setUserPosition] = useState<{ lat: number; lng: number } | null>(null);
+  const userPositionRef = useRef<{ lat: number; lng: number } | null>(null);
   const navWatchRef = useRef<number | null>(null);
   const geocodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const routeSourceAdded = useRef(false);
@@ -112,13 +114,75 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
 
   const [reportingAlert, setReportingAlert] = useState(false);
   const [carView, setCarView] = useState(false);
+  const [simulating, setSimulating] = useState(false);
+  const simulationRef = useRef<{ timer: ReturnType<typeof setInterval> | null; traveled: number }>({ timer: null, traveled: 0 });
+  const voiceEnabledRef = useRef(true);
+  const lastPreAnnounceDistRef = useRef<Record<number, number>>({});
+  const announcedAlertIdsRef = useRef<Set<string>>(new Set());
+  const currentStepIdxRef = useRef(0);
+  const [routeAlerts, setRouteAlerts] = useState<{ id: string; pinType: string; title?: string | null; latitude: number; longitude: number }[]>([]);
+  const [simDistRemaining, setSimDistRemaining] = useState<number | null>(null);
+  const [simTimeRemaining, setSimTimeRemaining] = useState<number | null>(null);
+  const [liveDistToNextStep, setLiveDistToNextStep] = useState<number | null>(null);
+  const [liveDistToFollowingStep, setLiveDistToFollowingStep] = useState<number | null>(null);
+
+  const hudStepIndex = routeData ? Math.min(currentStepIndex + 1, routeData.steps.length - 1) : 0;
+  const hudNextStepIndex = routeData ? Math.min(hudStepIndex + 1, routeData.steps.length - 1) : 0;
 
   // Keep refs in sync with state
+  useEffect(() => { voiceEnabledRef.current = voiceEnabled; }, [voiceEnabled]);
   useEffect(() => { routeDataRef.current = routeData; }, [routeData]);
   useEffect(() => { navigatingRef.current = navigating; }, [navigating]);
   useEffect(() => { carViewRef.current = carView; }, [carView]);
   useEffect(() => { sharingRef.current = sharing; }, [sharing]);
   useEffect(() => { ghostModeRef.current = ghostMode; }, [ghostMode]);
+  useEffect(() => { currentStepIdxRef.current = currentStepIndex; }, [currentStepIndex]);
+  useEffect(() => { userPositionRef.current = userPosition; }, [userPosition]);
+
+  const selfUser = currentUser || user;
+
+  const updateUserPosition = useCallback((pos: { lat: number; lng: number }) => {
+    userPositionRef.current = pos;
+    setUserPosition(pos);
+  }, []);
+
+  // Collision offsets — shared between the markers useEffect and the liveSelf useEffect
+  const collisionOffsetsRef = useRef<Map<string, [number, number]>>(new Map());
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+
+    const pos = userPositionRef.current;
+    if (!pos) {
+      if (liveSelfMarkerRef.current) {
+        liveSelfMarkerRef.current.remove();
+        liveSelfMarkerRef.current = null;
+      }
+      return;
+    }
+
+    const el = liveSelfMarkerRef.current?.getElement() || document.createElement('div');
+    if (!liveSelfMarkerRef.current) {
+      el.className = 'wax-live-self-marker';
+      el.innerHTML = `
+        <div style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.95);border:3px solid ${SF.primary};box-shadow:0 0 0 8px ${SF.primary}30,0 4px 14px rgba(0,0,0,0.25);overflow:hidden;display:flex;align-items:center;justify-content:center;">
+          ${selfUser?.avatarUrl
+            ? `<img src="${selfUser.avatarUrl}" style="width:100%;height:100%;object-fit:cover;" />`
+            : `<span style="color:${SF.primary};font-weight:800;font-size:14px;">${(selfUser?.firstName || selfUser?.name || 'You')[0]}</span>`
+          }
+        </div>
+      `;
+      const selfOffset = collisionOffsetsRef.current.get('self') || [0, 0];
+      liveSelfMarkerRef.current = new maplibregl.Marker({ element: el, anchor: 'center', offset: selfOffset })
+        .setLngLat([pos.lng, pos.lat])
+        .addTo(map);
+    } else {
+      const selfOffset = collisionOffsetsRef.current.get('self') || [0, 0];
+      liveSelfMarkerRef.current.setOffset(selfOffset);
+      liveSelfMarkerRef.current.setLngLat([pos.lng, pos.lat]);
+    }
+  }, [mapReady, selfUser, userPosition, bees, colonies, combs, waxPins]);
 
   // Default: Belgium center
   const defaultCenter: [number, number] = [4.35, 50.85];
@@ -184,6 +248,12 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
       trackUserLocation: true,
     }), 'bottom-right');
 
+    // Enable 2-finger rotation (mobile) and right-click drag rotation (desktop)
+    map.dragRotate.enable();
+    map.touchZoomRotate.enable();
+    try { (map.touchZoomRotate as any).enableRotation(); } catch { /* */ }
+    map.touchPitch.enable();
+
     // When GeolocateControl gets a position, update userPosition
     // Also auto-start location sharing (triggered by user clicking GPS button = user gesture)
     map.on('geolocate' as any, ((e: any) => {
@@ -191,7 +261,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
       if (coords?.latitude == null) return;
       const userLat = coords.latitude;
       const userLng = coords.longitude;
-      setUserPosition({ lat: userLat, lng: userLng });
+      updateUserPosition({ lat: userLat, lng: userLng });
 
       // Auto-start sharing on first GPS fix (user clicked GPS = valid gesture)
       if (!sharingRef.current && ghostModeRef.current !== 'ghost') {
@@ -227,10 +297,11 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
           bearing = ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
         }
         setTimeout(() => {
+          const ahead = camera3DCenter(userLng, userLat, bearing, 60);
           map.easeTo({
-            center: [userLng, userLat],
-            zoom: 19.5,
-            pitch: 85,
+            center: ahead,
+            zoom: 18.5,
+            pitch: 75,
             bearing,
             duration: 800,
           });
@@ -346,8 +417,19 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
     return () => { map.off('moveend', onMoveEnd); clearInterval(interval); };
   }, [mapReady, fetchLocations]);
 
-  // Auto-start location sharing is triggered from GeolocateControl's geolocate event
-  // (NOT from useEffect, which triggers browser [Violation] and can block GPS)
+  // ── Auto-request GPS on mount: center map on user + set userPosition ──
+  useEffect(() => {
+    if (!mapReady || userPositionRef.current) return;
+    navigator.geolocation?.getCurrentPosition(
+      (pos) => {
+        const livePos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        updateUserPosition(livePos);
+        mapRef.current?.flyTo({ center: [livePos.lng, livePos.lat], zoom: 14, duration: 1500 });
+      },
+      () => { /* silent fail — user can still use GPS button */ },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+    );
+  }, [mapReady, updateUserPosition]);
 
   // ── Share own location ──
   const shareLocation = useCallback(() => {
@@ -355,19 +437,21 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
     setSharing(true);
     navigator.geolocation.watchPosition(
       async (pos) => {
+        const livePos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        updateUserPosition(livePos);
         try {
           await api.post('/api/wax/location', {
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
+            latitude: livePos.lat,
+            longitude: livePos.lng,
             accuracy: pos.coords.accuracy,
             heading: pos.coords.heading,
           });
         } catch { /* ignore */ }
       },
       () => { setSharing(false); },
-      { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 },
     );
-  }, [api]);
+  }, [api, updateUserPosition]);
 
   // ── Toggle ghost mode ──
   const toggleGhostMode = useCallback(async (mode: GhostMode) => {
@@ -398,14 +482,23 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
 
     // ── Collision offset: pixel-based (markers stay at correct address) ──
     // Group markers at ~same coords, then apply pixel offset so they sit side-by-side
+    // Include the live self marker in collision detection
     const allItems: { lat: number; lng: number; key: string }[] = [];
+    // Filter out self from API bees — the live GPS marker (liveSelfMarkerRef) shows our real position
+    const selfId = selfUser?.id;
+    const otherBees = bees.filter(b => b.id !== selfId);
+
+    // Add self position first so it participates in collision groups
+    const selfPos = userPositionRef.current;
+    if (selfPos) allItems.push({ lat: selfPos.lat, lng: selfPos.lng, key: 'self' });
+
     if (showLayer.colonies) colonies.forEach(c => { if (c.latitude != null && c.longitude != null) allItems.push({ lat: c.latitude, lng: c.longitude, key: `colony-${c.id}` }); });
-    if (showLayer.bees) bees.forEach(b => allItems.push({ lat: b.latitude, lng: b.longitude, key: `bee-${b.id}` }));
+    if (showLayer.bees) otherBees.forEach(b => allItems.push({ lat: b.latitude, lng: b.longitude, key: `bee-${b.id}` }));
     if (showLayer.combs) combs.forEach(c => { if (c.latitude != null && c.longitude != null) allItems.push({ lat: c.latitude, lng: c.longitude, key: `comb-${c.id}` }); });
     if (showLayer.pins) waxPins.forEach(p => allItems.push({ lat: p.latitude, lng: p.longitude, key: `pin-${p.id}` }));
 
-    // Group items that are very close (within ~0.00015° ≈ 15m)
-    const PROXIMITY = 0.00015;
+    // Group items that are very close (within ~0.0005° ≈ 55m — covers same-address markers)
+    const PROXIMITY = 0.0005;
     const pixelOffsets = new Map<string, [number, number]>();
     const processed = new Set<number>();
     for (let i = 0; i < allItems.length; i++) {
@@ -419,8 +512,8 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
         }
       }
       if (group.length > 1) {
-        // Pixel offset: spread markers 22px apart horizontally
-        const PX_SPREAD = 22;
+        // Pixel offset: spread markers 30px apart horizontally so they don't overlap
+        const PX_SPREAD = 30;
         const totalWidth = (group.length - 1) * PX_SPREAD;
         group.forEach((idx, gi) => {
           processed.add(idx);
@@ -431,6 +524,9 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
         });
       }
     }
+
+    // Store offsets in ref so the self marker effect can read them
+    collisionOffsetsRef.current = pixelOffsets;
 
     // Helper: get pixel offset for a marker key
     const getPixelOffset = (key: string): [number, number] => {
@@ -458,9 +554,9 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
       });
     }
 
-    // ── Bee markers (avatar circle) ──
+    // ── Bee markers (avatar circle) — self is excluded, shown via liveSelfMarkerRef ──
     if (showLayer.bees) {
-      bees.forEach(b => {
+      otherBees.forEach(b => {
         const borderColor = b.online ? SF.success : SF.textMuted;
         const el = createEl(
           `<div style="width:32px;height:32px;border-radius:50%;border:2.5px solid ${borderColor};overflow:hidden;cursor:pointer;background:${SF.primary};display:flex;align-items:center;justify-content:center;box-shadow:0 1px 6px rgba(0,0,0,0.3);">
@@ -516,7 +612,8 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
         markersRef.current.push(marker);
       });
     }
-  }, [bees, colonies, combs, waxPins, showLayer, mapReady]);
+
+  }, [bees, colonies, combs, waxPins, showLayer, mapReady, selfUser]);
 
   // Stats
   const stats = useMemo(() => ({
@@ -534,8 +631,8 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
     try {
       // Pass user position for country bias and distance sorting
       let url = `/api/wax/geocode?q=${encodeURIComponent(q)}`;
-      if (userPosition) {
-        url += `&lat=${userPosition.lat}&lng=${userPosition.lng}`;
+      if (userPositionRef.current) {
+        url += `&lat=${userPositionRef.current.lat}&lng=${userPositionRef.current.lng}`;
       }
       const res = await api.get(url);
       if (res?.success) setSuggestions(res.data || []);
@@ -545,7 +642,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
     } finally {
       setGeocodeLoading(false);
     }
-  }, [api, userPosition]);
+  }, [api]);
 
   const searchDestination = useCallback((query: string) => {
     setDestQuery(query);
@@ -630,11 +727,11 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
           })
         );
         pos = { lat: gpsPos.coords.latitude, lng: gpsPos.coords.longitude };
-        setUserPosition(pos);
+        updateUserPosition(pos);
       } catch { /* fallback below */ }
     }
     // Fallback: use last known userPosition, then map center
-    if (!pos) pos = userPosition;
+    if (!pos) pos = userPositionRef.current;
     if (!pos) {
       pos = mapRef.current ? { lat: mapRef.current.getCenter().lat, lng: mapRef.current.getCenter().lng } : null;
     }
@@ -652,6 +749,8 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
       setSuggestions([]);
       setRoutingOpen(false);
       routeDestRef.current = dest;
+      lastPreAnnounceDistRef.current = {};
+      if (res.data.alerts) setRouteAlerts(res.data.alerts);
       message.destroy('route');
 
       // Draw route on map
@@ -667,23 +766,32 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
     } catch {
       message.error({ content: t('wax.nav.error'), key: 'route' });
     }
-  }, [api, t, userPosition, drawRouteOnMap]);
+  }, [api, t, drawRouteOnMap, updateUserPosition]);
 
-  // ── Voice announce ──
+  // ── Voice announce (Chrome-resilient: periodic resume to prevent pause bug) ──
   const speakInstruction = useCallback((text: string) => {
-    if (!voiceEnabled || !window.speechSynthesis) return;
+    if (!voiceEnabledRef.current || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'fr-BE';
-    utterance.rate = 1.0;
+    utterance.rate = 1.05;
     utterance.pitch = 1.0;
     utterance.volume = 1.0;
-    // Prefer a French voice
     const voices = window.speechSynthesis.getVoices();
     const frVoice = voices.find(v => v.lang.startsWith('fr'));
     if (frVoice) utterance.voice = frVoice;
+    // Chrome workaround: speechSynthesis pauses internally after ~15s
+    let resumeTimer: ReturnType<typeof setInterval> | null = null;
+    utterance.onstart = () => {
+      resumeTimer = setInterval(() => {
+        if (!window.speechSynthesis.speaking) { if (resumeTimer) clearInterval(resumeTimer); return; }
+        if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+      }, 5000);
+    };
+    utterance.onend = () => { if (resumeTimer) clearInterval(resumeTimer); };
+    utterance.onerror = () => { if (resumeTimer) clearInterval(resumeTimer); };
     window.speechSynthesis.speak(utterance);
-  }, [voiceEnabled]);
+  }, []);
 
   // ── Compute bearing between two points ──
   const computeBearing = useCallback((from: [number, number], to: [number, number]) => {
@@ -697,37 +805,303 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
     return ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
   }, []);
 
+  // ── Format duration/distance (declared early for use in announcements) ──
+  const formatDuration = (s: number) => {
+    if (s < 60) return `${Math.round(s)}s`;
+    if (s < 3600) return `${Math.round(s / 60)} min`;
+    const h = Math.floor(s / 3600);
+    const m = Math.round((s % 3600) / 60);
+    return `${h}h${m > 0 ? m.toString().padStart(2, '0') : ''}`;
+  };
+  const formatDistance = (m: number) => {
+    if (m < 1000) return `${Math.round(m)} m`;
+    return `${(m / 1000).toFixed(1)} km`;
+  };
+
+  const formatDistanceForSpeech = useCallback((m: number) => {
+    const label = formatDistance(m);
+    return label.endsWith(' m') ? `${label.slice(0, -2)} mètres` : `${label.replace(' km', '')} kilomètres`;
+  }, []);
+
+  // ── Preload TTS voices so they're ready for first announcement ──
+  useEffect(() => {
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.getVoices();
+    const handler = () => window.speechSynthesis.getVoices();
+    window.speechSynthesis.addEventListener('voiceschanged', handler);
+    return () => window.speechSynthesis.removeEventListener('voiceschanged', handler);
+  }, []);
+
+  // ── Snap user position to nearest point on route polyline ──
+  const snapToRoute = useCallback((userLng: number, userLat: number, routeCoords: [number, number][]): [number, number] | null => {
+    if (routeCoords.length < 2) return null;
+    let nearest: [number, number] | null = null;
+    let minDist = Infinity;
+    const cosLat = Math.cos(userLat * Math.PI / 180);
+    for (let i = 0; i < routeCoords.length - 1; i++) {
+      const [x1, y1] = routeCoords[i];
+      const [x2, y2] = routeCoords[i + 1];
+      const dx = x2 - x1, dy = y2 - y1;
+      const len2 = dx * dx + dy * dy;
+      const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((userLng - x1) * dx + (userLat - y1) * dy) / len2));
+      const px = x1 + t * dx, py = y1 + t * dy;
+      const dist = Math.sqrt(((userLng - px) * 111320 * cosLat) ** 2 + ((userLat - py) * 111320) ** 2);
+      if (dist < minDist) { minDist = dist; nearest = [px, py]; }
+    }
+    return nearest && minDist < 50 ? nearest : null; // snap only if within 50m of route
+  }, []);
+
+  // ── Compute driving bearing from a projected point on the route ──
+  const bearingAlongRoute = useCallback((userLng: number, userLat: number, routeCoords: [number, number][], forwardMeters: number = 20) => {
+    if (routeCoords.length < 2) return 0;
+
+    const cosLat = Math.cos(userLat * Math.PI / 180);
+    let bestIdx = 0;
+    let bestT = 0;
+    let minDist = Infinity;
+
+    for (let i = 0; i < routeCoords.length - 1; i++) {
+      const [x1, y1] = routeCoords[i];
+      const [x2, y2] = routeCoords[i + 1];
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const len2 = dx * dx + dy * dy;
+      const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((userLng - x1) * dx + (userLat - y1) * dy) / len2));
+      const px = x1 + t * dx;
+      const py = y1 + t * dy;
+      const dist = Math.sqrt(((userLng - px) * 111320 * cosLat) ** 2 + ((userLat - py) * 111320) ** 2);
+      if (dist < minDist) {
+        minDist = dist;
+        bestIdx = i;
+        bestT = t;
+      }
+    }
+
+    const projected = routeCoords[bestIdx];
+    if (!projected) return 0;
+
+    let remaining = forwardMeters;
+    let fromLng = projected[0] + (routeCoords[bestIdx + 1][0] - projected[0]) * bestT;
+    let fromLat = projected[1] + (routeCoords[bestIdx + 1][1] - projected[1]) * bestT;
+
+    for (let i = bestIdx; i < routeCoords.length - 1; i++) {
+      const [sx, sy] = i === bestIdx
+        ? [fromLng, fromLat]
+        : routeCoords[i];
+      const [ex, ey] = routeCoords[i + 1];
+      const segmentLen = Math.sqrt(((ex - sx) * 111320 * Math.cos(((sy + ey) / 2) * Math.PI / 180)) ** 2 + ((ey - sy) * 111320) ** 2);
+      if (segmentLen >= remaining) {
+        const ratio = segmentLen > 0 ? remaining / segmentLen : 0;
+        const targetLng = sx + (ex - sx) * ratio;
+        const targetLat = sy + (ey - sy) * ratio;
+        return computeBearing([fromLng, fromLat], [targetLng, targetLat]);
+      }
+      remaining -= segmentLen;
+      fromLng = ex;
+      fromLat = ey;
+    }
+
+    return computeBearing([fromLng, fromLat], routeCoords[routeCoords.length - 1]);
+  }, [computeBearing]);
+
+  // ── Offset center forward along bearing for 3D first-person view ──
+  const camera3DCenter = useCallback((lng: number, lat: number, bearing: number, offsetMeters: number = 60): [number, number] => {
+    const bearingRad = bearing * Math.PI / 180;
+    const dLat = (offsetMeters / 111320) * Math.cos(bearingRad);
+    const dLng = (offsetMeters / (111320 * Math.cos(lat * Math.PI / 180))) * Math.sin(bearingRad);
+    return [lng + dLng, lat + dLat];
+  }, []);
+
+  // ── Project a point on the route and return its progress in meters ──
+  const routeProgressAtPoint = useCallback((lng: number, lat: number, routeCoords: [number, number][]) => {
+    if (routeCoords.length < 2) return 0;
+    const cosLat = Math.cos(lat * Math.PI / 180);
+    let bestIdx = 0;
+    let bestT = 0;
+    let minDist = Infinity;
+    const cumDist: number[] = [0];
+
+    for (let i = 1; i < routeCoords.length; i++) {
+      const [px1, py1] = routeCoords[i - 1];
+      const [px2, py2] = routeCoords[i];
+      const d = Math.sqrt(
+        ((py2 - py1) * 111320) ** 2 +
+        ((px2 - px1) * 111320 * Math.cos(((py1 + py2) / 2) * Math.PI / 180)) ** 2
+      );
+      cumDist.push(cumDist[i - 1] + d);
+    }
+
+    for (let i = 0; i < routeCoords.length - 1; i++) {
+      const [x1, y1] = routeCoords[i];
+      const [x2, y2] = routeCoords[i + 1];
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const len2 = dx * dx + dy * dy;
+      const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((lng - x1) * dx + (lat - y1) * dy) / len2));
+      const px = x1 + t * dx;
+      const py = y1 + t * dy;
+      const dist = Math.sqrt(((lng - px) * 111320 * cosLat) ** 2 + ((lat - py) * 111320) ** 2);
+      if (dist < minDist) {
+        minDist = dist;
+        bestIdx = i;
+        bestT = t;
+      }
+    }
+
+    const [sx, sy] = routeCoords[bestIdx];
+    const [ex, ey] = routeCoords[bestIdx + 1];
+    const segmentLen = Math.sqrt(
+      ((ey - sy) * 111320) ** 2 +
+      ((ex - sx) * 111320 * Math.cos(((sy + ey) / 2) * Math.PI / 180)) ** 2
+    );
+    return cumDist[bestIdx] + segmentLen * bestT;
+  }, []);
+
+  // ── Advance step index and announce directions (works for real AND simulation) ──
+  const advanceSteps = useCallback((userLat: number, userLng: number, steps: RouteStep[], currentSpeedMps: number | null = null) => {
+    const routeCoords = routeDataRef.current?.geometry.coordinates as [number, number][] | undefined;
+    const calcRouteDistToStep = (step: RouteStep) => {
+      if (!routeCoords || routeCoords.length < 2) {
+        const cosLat = Math.cos(userLat * Math.PI / 180);
+        const [sLng, sLat] = step.location;
+        return Math.sqrt(((userLat - sLat) * 111320) ** 2 + ((userLng - sLng) * 111320 * cosLat) ** 2);
+      }
+      const userProgress = routeProgressAtPoint(userLng, userLat, routeCoords);
+      const [sLng, sLat] = step.location;
+      const stepProgress = routeProgressAtPoint(sLng, sLat, routeCoords);
+      return Math.max(0, stepProgress - userProgress);
+    };
+
+    const activeIdx = currentStepIdxRef.current;
+    const nextStepIdx = Math.min(activeIdx + 1, steps.length - 1);
+    if (steps[nextStepIdx]) {
+      setLiveDistToNextStep(calcRouteDistToStep(steps[nextStepIdx]));
+    }
+    const followingStepIdx = Math.min(activeIdx + 2, steps.length - 1);
+    if (steps[followingStepIdx]) {
+      setLiveDistToFollowingStep(calcRouteDistToStep(steps[followingStepIdx]));
+    } else {
+      setLiveDistToFollowingStep(null);
+    }
+
+    setCurrentStepIndex(prev => {
+      // Check from current step onwards
+      for (let i = prev; i < steps.length; i++) {
+        const dist = calcRouteDistToStep(steps[i]);
+        // Within 30m → advance to this step
+        if (dist < 30 && i > prev) {
+          // Announce the step with distance to next
+          const nextDist = steps[i + 1] ? formatDistance(calcRouteDistToStep(steps[i + 1])) : '';
+          const announcement = nextDist && steps[i + 1]
+            ? `${steps[i].instruction}. Puis dans ${nextDist}, ${steps[i + 1].instruction.toLowerCase()}`
+            : steps[i].instruction;
+          speakInstruction(announcement);
+          lastPreAnnounceDistRef.current = {};
+          currentStepIdxRef.current = i;
+          return i;
+        }
+        // Pre-announce next step at decreasing distance thresholds
+        if (i === prev + 1 && dist > 30) {
+          const lastThreshold = lastPreAnnounceDistRef.current[i] ?? Infinity;
+          const distLabel = formatDistanceForSpeech(dist);
+          const instruction = steps[i].instruction.toLowerCase();
+          const etaSeconds = currentSpeedMps && currentSpeedMps > 0 ? dist / currentSpeedMps : null;
+          if (etaSeconds !== null) {
+            if (etaSeconds <= 0.5 && lastThreshold > 0.5) {
+              speakInstruction(`Maintenant, ${instruction}`);
+              lastPreAnnounceDistRef.current[i] = 0.5;
+            } else if (etaSeconds <= 2 && lastThreshold > 2) {
+              speakInstruction(`Dans ${distLabel}, ${instruction}`);
+              lastPreAnnounceDistRef.current[i] = 2;
+            } else if (etaSeconds <= 4 && lastThreshold > 4) {
+              speakInstruction(`Dans ${distLabel}, ${instruction}`);
+              lastPreAnnounceDistRef.current[i] = 4;
+            } else if (etaSeconds <= 8 && lastThreshold > 8) {
+              speakInstruction(`Préparez-vous: ${instruction}`);
+              lastPreAnnounceDistRef.current[i] = 8;
+            }
+          } else if (dist < 500 && lastThreshold > 500) {
+            speakInstruction(`Dans ${distLabel}, ${instruction}`);
+            lastPreAnnounceDistRef.current[i] = 500;
+          } else if (dist < 200 && lastThreshold > 200) {
+            speakInstruction(`Dans ${distLabel}, ${instruction}`);
+            lastPreAnnounceDistRef.current[i] = 200;
+          } else if (dist < 100 && lastThreshold > 100) {
+            speakInstruction(`Dans ${distLabel}, ${instruction}`);
+            lastPreAnnounceDistRef.current[i] = 100;
+          } else if (dist < 50 && lastThreshold > 50) {
+            speakInstruction(`Maintenant, ${instruction}`);
+            lastPreAnnounceDistRef.current[i] = 50;
+          }
+        }
+      }
+      // Check arrival at last step
+      if (prev >= steps.length - 1 && steps.length > 0) {
+        const dist = calcRouteDistToStep(steps[steps.length - 1]);
+        if (dist < 20 && (lastPreAnnounceDistRef.current[-1] ?? 1) > 0) {
+          speakInstruction('Vous êtes arrivé à destination');
+          lastPreAnnounceDistRef.current[-1] = 0;
+          currentStepIdxRef.current = steps.length - 1;
+        }
+      }
+      return prev;
+    });
+
+    // ── Announce nearby alerts (signalements) when within 200m ──
+    const alerts = routeAlerts;
+    if (alerts.length > 0) {
+      const alertLabels: Record<string, string> = {
+        radar: 'Attention, radar',
+        police: 'Attention, contrôle de police',
+        accident: 'Attention, accident signalé',
+        travaux: 'Attention, travaux',
+        danger: 'Attention, danger signalé',
+        embouteillage: 'Attention, embouteillage signalé',
+      };
+      for (const alert of alerts) {
+        if (announcedAlertIdsRef.current.has(alert.id)) continue;
+        const d = Math.sqrt(
+          ((userLat - alert.latitude) * 111320) ** 2 +
+          ((userLng - alert.longitude) * 111320 * Math.cos(userLat * Math.PI / 180)) ** 2
+        );
+        if (d < 200) {
+          announcedAlertIdsRef.current.add(alert.id);
+          speakInstruction(alertLabels[alert.pinType] || `Attention, ${alert.pinType} signalé`);
+        }
+      }
+    }
+  }, [speakInstruction, routeAlerts, formatDistanceForSpeech, routeProgressAtPoint]);
+
   // ── Start live navigation (3D car-view) ──
   const startNavigation = useCallback(() => {
     if (!routeData) return;
     setNavigating(true);
     setCurrentStepIndex(0);
+    lastPreAnnounceDistRef.current = {};
+    announcedAlertIdsRef.current = new Set();
 
     // Announce first step
     if (routeData.steps.length > 0) {
       speakInstruction(routeData.steps[0].instruction);
     }
 
-    // Start in current view mode (carView keeps its state)
+    // Announce alerts along route
+    if (routeAlerts.length > 0) {
+      const labels: Record<string, string> = { radar: 'radar', police: 'contrôle de police', accident: 'accident', travaux: 'travaux', danger: 'danger', embouteillage: 'embouteillage' };
+      const unique = [...new Set(routeAlerts.map(a => labels[a.pinType] || a.pinType))];
+      setTimeout(() => speakInstruction(`Attention sur votre trajet : ${unique.join(', ')}`), 3000);
+    }
+
+    // Start in current view mode
     const coords = routeData.geometry.coordinates as [number, number][];
     const initialBearing = coords.length >= 2 ? computeBearing(coords[0], coords[Math.min(5, coords.length - 1)]) : 0;
     currentBearingRef.current = initialBearing;
     if (carViewRef.current) {
-      mapRef.current?.easeTo({
-        center: coords[0],
-        zoom: 18.5,
-        pitch: 80,
-        bearing: initialBearing,
-        duration: 1200,
-      });
+      try { mapRef.current?.setTerrain(null); } catch { /* */ }
+      const ahead = camera3DCenter(coords[0][0], coords[0][1], initialBearing, 60);
+      mapRef.current?.easeTo({ center: ahead, zoom: 18.5, pitch: 75, bearing: initialBearing, duration: 1200 });
     } else {
-      mapRef.current?.easeTo({
-        center: coords[0],
-        zoom: 17,
-        pitch: 0,
-        bearing: initialBearing,
-        duration: 1200,
-      });
+      mapRef.current?.easeTo({ center: coords[0], zoom: 17, pitch: 0, bearing: initialBearing, duration: 1200 });
     }
 
     // Watch position to advance steps
@@ -736,12 +1110,12 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
         (pos) => {
           const userLng = pos.coords.longitude;
           const userLat = pos.coords.latitude;
-          setUserPosition({ lat: userLat, lng: userLng });
+          updateUserPosition({ lat: userLat, lng: userLng });
 
           // ── Auto-reroute: if user is >100m from nearest route point, recalculate ──
           const routeCoords = routeData.geometry.coordinates as [number, number][];
           let minRouteDist = Infinity;
-          for (let ri = 0; ri < routeCoords.length; ri += 3) { // check every 3rd point for perf
+          for (let ri = 0; ri < routeCoords.length; ri += 3) {
             const [rLng, rLat] = routeCoords[ri];
             const d = Math.sqrt(
               Math.pow((userLat - rLat) * 111320, 2) +
@@ -749,18 +1123,17 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
             );
             if (d < minRouteDist) minRouteDist = d;
           }
-          // If >100m off route and haven't rerouted in last 10s
           if (minRouteDist > 100 && routeDestRef.current && Date.now() - lastRerouteRef.current > 10000) {
             lastRerouteRef.current = Date.now();
             speakInstruction('Recalcul du trajet');
-            // Reroute silently (computeRoute wrapper)
             const dest = routeDestRef.current;
             api.get(`/api/wax/route?from_lng=${userLng}&from_lat=${userLat}&to_lng=${dest.lng}&to_lat=${dest.lat}`)
               .then((res: any) => {
                 if (res?.success && res.data) {
                   setRouteData(res.data);
                   setCurrentStepIndex(0);
-                  // Redraw route
+                  lastPreAnnounceDistRef.current = {};
+                  if (res.data.alerts) setRouteAlerts(res.data.alerts);
                   const map = mapRef.current;
                   if (map) {
                     if (routeSourceAdded.current) {
@@ -776,37 +1149,19 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
               .catch(() => { /* reroute failed, will retry */ });
           }
 
-          // Check if we're close to the next step's maneuver point
-          setCurrentStepIndex(prev => {
-            if (!routeData) return prev;
-            for (let i = prev; i < routeData.steps.length; i++) {
-              const [sLng, sLat] = routeData.steps[i].location;
-              const dist = Math.sqrt(
-                Math.pow((userLat - sLat) * 111320, 2) +
-                Math.pow((userLng - sLng) * 111320 * Math.cos(userLat * Math.PI / 180), 2)
-              );
-              // Within 50m of step → advance
-              if (dist < 50 && i > prev) {
-                speakInstruction(routeData.steps[i].instruction);
-                return i;
-              }
-              // Within 150m of NEXT step → pre-announce
-              if (i === prev + 1 && dist < 150 && dist > 50) {
-                const distRound = Math.round(dist / 10) * 10;
-                speakInstruction(`Dans ${distRound} mètres, ${routeData.steps[i].instruction.toLowerCase()}`);
-              }
-            }
-            return prev;
-          });
+          // Advance step announcements
+          advanceSteps(userLat, userLng, routeData.steps, typeof pos.coords.speed === 'number' ? pos.coords.speed : null);
 
-          // Compute bearing toward next step
-          const nextStep = routeData.steps[currentStepIndex + 1] || routeData.steps[currentStepIndex];
-          const bearing = nextStep
-            ? computeBearing([userLng, userLat], nextStep.location)
-            : (mapRef.current?.getBearing() || 0);
+          // Compute bearing from route geometry at user's position
+          const bearing = bearingAlongRoute(userLng, userLat, routeCoords, 20);
           currentBearingRef.current = bearing;
 
-          // Update or create the user arrow marker (shows in both 2D and 3D)
+          // Snap position to route line for accurate road alignment
+          const snapped = snapToRoute(userLng, userLat, routeCoords);
+          const displayLng = snapped ? snapped[0] : userLng;
+          const displayLat = snapped ? snapped[1] : userLat;
+
+          // Update or create the user arrow marker
           if (!userArrowRef.current) {
             const arrowEl = document.createElement('div');
             arrowEl.className = 'wax-nav-arrow';
@@ -817,49 +1172,39 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
               </svg>
             </div>`;
             userArrowRef.current = new maplibregl.Marker({ element: arrowEl, rotationAlignment: 'map', pitchAlignment: 'map' })
-              .setLngLat([userLng, userLat])
+              .setLngLat([displayLng, displayLat])
+              .setRotation(bearing)
               .addTo(mapRef.current!);
           } else {
-            userArrowRef.current.setLngLat([userLng, userLat]);
-          }
-          // Rotate arrow to match bearing
-          const arrowEl = userArrowRef.current.getElement();
-          if (arrowEl) {
-            arrowEl.style.transform = `${arrowEl.style.transform?.replace(/rotate\([^)]*\)/, '') || ''} rotate(${bearing}deg)`;
+            userArrowRef.current.setLngLat([displayLng, displayLat]);
+            userArrowRef.current.setRotation(bearing);
           }
 
-          // 3D car-view: immersive windshield perspective
+          // Camera follow — use snapped position
           if (carViewRef.current) {
-            mapRef.current?.easeTo({
-              center: [userLng, userLat],
-              bearing,
-              pitch: 80,
-              zoom: 18.5,
-              duration: 800,
-            });
+            const ahead = camera3DCenter(displayLng, displayLat, bearing, 60);
+            mapRef.current?.easeTo({ center: ahead, bearing, pitch: 75, zoom: 18.5, duration: 800 });
           } else {
-            // 2D top-down: follow user with bearing, flat view
-            mapRef.current?.easeTo({
-              center: [userLng, userLat],
-              bearing,
-              pitch: 0,
-              zoom: 17,
-              duration: 800,
-            });
+            mapRef.current?.easeTo({ center: [displayLng, displayLat], bearing, pitch: 0, zoom: 17, duration: 800 });
           }
         },
         () => { /* GPS error, keep navigating */ },
-        { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 },
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 },
       );
     }
-  }, [routeData, speakInstruction, computeBearing, currentStepIndex, api, drawRouteOnMap]);
+  }, [routeData, routeAlerts, speakInstruction, computeBearing, advanceSteps, bearingAlongRoute, snapToRoute, api, drawRouteOnMap, updateUserPosition, camera3DCenter]);
 
   // ── Stop navigation ──
   const stopNavigation = useCallback(() => {
     setNavigating(false);
+    setSimulating(false);
     if (navWatchRef.current !== null) {
       navigator.geolocation.clearWatch(navWatchRef.current);
       navWatchRef.current = null;
+    }
+    if (simulationRef.current.timer) {
+      clearInterval(simulationRef.current.timer);
+      simulationRef.current.timer = null;
     }
     window.speechSynthesis?.cancel();
 
@@ -878,33 +1223,165 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
       routeSourceAdded.current = false;
     }
     setRouteData(null);
+    setRouteAlerts([]);
     setCarView(false);
     routeDestRef.current = null;
+    lastPreAnnounceDistRef.current = {};
+    announcedAlertIdsRef.current = new Set();
+    setSimDistRemaining(null);
+    setSimTimeRemaining(null);
+    setLiveDistToNextStep(null);
+    setLiveDistToFollowingStep(null);
 
-    // Restore normal map view
-    mapRef.current?.easeTo({ pitch: 50, bearing: -12, zoom: 12, duration: 1000 });
+    // Re-enable terrain and restore normal map view
+    if (map) {
+      try { map.setTerrain({ source: 'terrain-dem', exaggeration: 1.5 }); } catch { /* */ }
+      map.easeTo({ pitch: 50, bearing: -12, zoom: 12, duration: 1000 });
+    }
   }, []);
 
   // Cleanup nav watch on unmount
   useEffect(() => {
+    const simRef = simulationRef.current;
     return () => {
       if (navWatchRef.current !== null) navigator.geolocation.clearWatch(navWatchRef.current);
+      if (simRef.timer) clearInterval(simRef.timer);
       window.speechSynthesis?.cancel();
     };
   }, []);
 
-  // ── Format duration/distance ──
-  const formatDuration = (s: number) => {
-    if (s < 60) return `${Math.round(s)}s`;
-    if (s < 3600) return `${Math.round(s / 60)} min`;
-    const h = Math.floor(s / 3600);
-    const m = Math.round((s % 3600) / 60);
-    return `${h}h${m > 0 ? m.toString().padStart(2, '0') : ''}`;
-  };
-  const formatDistance = (m: number) => {
-    if (m < 1000) return `${Math.round(m)} m`;
-    return `${(m / 1000).toFixed(1)} km`;
-  };
+  // ── Simulate driving along route at a given speed (km/h) ──
+  const startSimulation = useCallback((speedKmh: number = 50) => {
+    if (!isSuperAdmin) {
+      message.error(t('wax.nav.simulationTooltip'));
+      return;
+    }
+    const rd = routeDataRef.current;
+    if (!rd || !mapRef.current) return;
+    setSimulating(true);
+    setNavigating(true);
+    setCurrentStepIndex(0);
+    lastPreAnnounceDistRef.current = {};
+    announcedAlertIdsRef.current = new Set();
+
+    const coords = rd.geometry.coordinates as [number, number][];
+    if (coords.length < 2) return;
+
+    // Cumulative distances along route (meters)
+    const cumDist: number[] = [0];
+    for (let i = 1; i < coords.length; i++) {
+      const [lng1, lat1] = coords[i - 1];
+      const [lng2, lat2] = coords[i];
+      const d = Math.sqrt(
+        Math.pow((lat2 - lat1) * 111320, 2) +
+        Math.pow((lng2 - lng1) * 111320 * Math.cos(((lat1 + lat2) / 2) * Math.PI / 180), 2)
+      );
+      cumDist.push(cumDist[i - 1] + d);
+    }
+    const totalDist = cumDist[cumDist.length - 1];
+
+    const speedMs = speedKmh / 3.6;
+    const intervalMs = 200;
+    const distPerTick = speedMs * (intervalMs / 1000);
+    simulationRef.current.traveled = 0;
+
+    // Announce alerts summary after 5s
+    if (routeAlerts.length > 0) {
+      const labels: Record<string, string> = { radar: 'radar', police: 'contrôle de police', accident: 'accident', travaux: 'travaux', danger: 'danger', embouteillage: 'embouteillage' };
+      const unique = [...new Set(routeAlerts.map(a => labels[a.pinType] || a.pinType))];
+      setTimeout(() => speakInstruction(`Attention, ${routeAlerts.length} signalement${routeAlerts.length > 1 ? 's' : ''} sur votre trajet : ${unique.join(', ')}`), 5000);
+    }
+
+    // Initial camera
+    const initBearing = bearingAlongRoute(coords[0][0], coords[0][1], coords, 20);
+    currentBearingRef.current = initBearing;
+    if (carViewRef.current) {
+      try { mapRef.current.setTerrain(null); } catch { /* */ }
+      const ahead = camera3DCenter(coords[0][0], coords[0][1], initBearing, 60);
+      mapRef.current.easeTo({ center: ahead, zoom: 18.5, pitch: 75, bearing: initBearing, duration: 800 });
+    } else {
+      mapRef.current.easeTo({ center: coords[0], zoom: 17, pitch: 0, bearing: initBearing, duration: 800 });
+    }
+
+    // Update distance/time remaining display
+    setSimDistRemaining(totalDist);
+    setSimTimeRemaining(rd.duration);
+
+    // Periodic announcements: every 1km or every 2 min equivalent
+    let lastKmAnnounce = 0;
+
+    simulationRef.current.timer = setInterval(() => {
+      simulationRef.current.traveled += distPerTick;
+      const traveled = simulationRef.current.traveled;
+      if (traveled >= totalDist) {
+        speakInstruction('Vous êtes arrivé à destination.');
+        setSimDistRemaining(0);
+        setSimTimeRemaining(0);
+        stopNavigation();
+        return;
+      }
+
+      // Update distance/time remaining
+      const remaining = totalDist - traveled;
+      const timeRemaining = remaining / speedMs;
+      setSimDistRemaining(remaining);
+      setSimTimeRemaining(timeRemaining);
+
+      // Periodic km announcement
+      const kmTraveled = Math.floor(traveled / 1000);
+      if (kmTraveled > lastKmAnnounce && kmTraveled > 0) {
+        lastKmAnnounce = kmTraveled;
+        speakInstruction(`${formatDistance(remaining)} restants`);
+      }
+
+      // Interpolate position on route
+      let segIdx = 0;
+      for (let i = 1; i < cumDist.length; i++) {
+        if (cumDist[i] >= traveled) { segIdx = i - 1; break; }
+      }
+      const segStart = cumDist[segIdx];
+      const segEnd = cumDist[segIdx + 1] || cumDist[segIdx];
+      const t = segEnd > segStart ? (traveled - segStart) / (segEnd - segStart) : 0;
+      const [lng1, lat1] = coords[segIdx];
+      const [lng2, lat2] = coords[segIdx + 1] || coords[segIdx];
+      const simLng = lng1 + t * (lng2 - lng1);
+      const simLat = lat1 + t * (lat2 - lat1);
+
+      const bearing = bearingAlongRoute(simLng, simLat, coords, 20);
+      currentBearingRef.current = bearing;
+
+      // Update arrow
+      if (!userArrowRef.current) {
+        const arrowEl = document.createElement('div');
+        arrowEl.className = 'wax-nav-arrow';
+        arrowEl.innerHTML = `<div style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;">
+          <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+            <circle cx="18" cy="18" r="16" fill="${SF.primary}" stroke="white" stroke-width="3" opacity="0.9"/>
+            <path d="M18 8 L24 24 L18 20 L12 24 Z" fill="white"/>
+          </svg>
+        </div>`;
+        userArrowRef.current = new maplibregl.Marker({ element: arrowEl, rotationAlignment: 'map', pitchAlignment: 'map' })
+          .setLngLat([simLng, simLat])
+          .setRotation(bearing)
+          .addTo(mapRef.current!);
+      } else {
+        userArrowRef.current.setLngLat([simLng, simLat]);
+        userArrowRef.current.setRotation(bearing);
+      }
+
+      // Advance step announcements (same as real nav — with alerts)
+      const currentRd = routeDataRef.current;
+      if (currentRd) advanceSteps(simLat, simLng, currentRd.steps, speedMs);
+
+      // Camera follow — 3D: center ahead for first-person, 2D: center on arrow
+      if (carViewRef.current) {
+        const ahead = camera3DCenter(simLng, simLat, bearing, 60);
+        mapRef.current?.easeTo({ center: ahead, bearing, pitch: 75, zoom: 18.5, duration: 180 });
+      } else {
+        mapRef.current?.easeTo({ center: [simLng, simLat], bearing, pitch: 0, zoom: 17, duration: 180 });
+      }
+    }, intervalMs);
+  }, [routeAlerts, speakInstruction, bearingAlongRoute, advanceSteps, stopNavigation, camera3DCenter, isSuperAdmin, t]);
 
   return (
     <div style={{ flex: 1, height: '100%', position: 'relative', overflow: 'hidden', background: SF.dark }}>
@@ -914,6 +1391,12 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
           from { box-shadow: 0 0 12px 2px #FDCB6E60; }
           to { box-shadow: 0 0 24px 8px #FDCB6EAA; }
         }
+        @keyframes waxSelfPulse {
+          0% { box-shadow: 0 0 0 0 ${SF.primary}60; }
+          70% { box-shadow: 0 0 0 14px ${SF.primary}00; }
+          100% { box-shadow: 0 0 0 0 ${SF.primary}00; }
+        }
+        .wax-live-self-marker > div { animation: waxSelfPulse 2s ease-out infinite; }
         .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right { z-index: 5 !important; }
         .maplibregl-ctrl-bottom-right { bottom: 56px !important; right: 6px !important; }
         .maplibregl-ctrl-group button { width: 36px !important; height: 36px !important; }
@@ -962,13 +1445,22 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
               }}
               style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
             >
-              <CarOutlined style={{ color: SF.primary, fontSize: 13 }} />
+              <CarOutlined style={{ color: simulating ? '#FDCB6E' : SF.primary, fontSize: 13 }} />
               <span style={{ color: 'white', fontSize: 13, fontWeight: 800 }}>
-                {formatDuration(routeData.duration)}
+                {simulating && simTimeRemaining != null
+                  ? formatDuration(simTimeRemaining)
+                  : formatDuration(routeData.duration)}
               </span>
               <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10 }}>
-                {formatDistance(routeData.distance)}
+                {simulating && simDistRemaining != null
+                  ? formatDistance(simDistRemaining)
+                  : formatDistance(routeData.distance)}
               </span>
+              {simulating && (
+                <span style={{ color: '#FDCB6E', fontSize: 9, fontWeight: 700, background: '#FDCB6E15', padding: '1px 5px', borderRadius: 6 }}>
+                  SIMULATION
+                </span>
+              )}
             </div>
             {/* Voice toggle */}
             <div
@@ -984,15 +1476,30 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
             </div>
             {/* Stop / Go */}
             {!navigating ? (
-              <div
-                onClick={startNavigation}
-                style={{
-                  padding: '3px 10px', borderRadius: 14, cursor: 'pointer',
-                  background: SF.success, color: 'white', fontSize: 10, fontWeight: 700,
-                }}
-              >
-                {t('wax.nav.go')}
-              </div>
+              <>
+                <div
+                  onClick={startNavigation}
+                  style={{
+                    padding: '3px 10px', borderRadius: 14, cursor: 'pointer',
+                    background: SF.success, color: 'white', fontSize: 10, fontWeight: 700,
+                  }}
+                >
+                  {t('wax.nav.go')}
+                </div>
+                {isSuperAdmin && (
+                  <div
+                    onClick={() => startSimulation(50)}
+                    style={{
+                      padding: '3px 10px', borderRadius: 14, cursor: 'pointer',
+                      background: '#FDCB6E20', color: '#FDCB6E', fontSize: 10, fontWeight: 700,
+                      border: '1px solid #FDCB6E40',
+                    }}
+                    title={t('wax.nav.simulationTooltip')}
+                  >
+                    {t('wax.nav.simulate')}
+                  </div>
+                )}
+              </>
             ) : (
               <div
                 onClick={stopNavigation}
@@ -1001,7 +1508,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
                   background: '#e17055', color: 'white', fontSize: 10, fontWeight: 700,
                 }}
               >
-                {t('wax.nav.stop')}
+                {simulating ? t('wax.nav.stopSimulation') : t('wax.nav.stop')}
               </div>
             )}
             {/* Close route */}
@@ -1065,12 +1572,14 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
           <div
             onClick={() => {
               // Re-center on user position along the route
-              if (userPosition) {
+              const livePos = userPositionRef.current;
+              if (livePos) {
                 const bearing = currentBearingRef.current;
                 if (carViewRef.current) {
-                  mapRef.current?.easeTo({ center: [userPosition.lng, userPosition.lat], bearing, pitch: 80, zoom: 18.5, duration: 800 });
+                  const ahead = camera3DCenter(livePos.lng, livePos.lat, bearing, 60);
+                  mapRef.current?.easeTo({ center: ahead, bearing, pitch: 75, zoom: 18.5, duration: 800 });
                 } else {
-                  mapRef.current?.easeTo({ center: [userPosition.lng, userPosition.lat], bearing, pitch: 0, zoom: 17, duration: 800 });
+                  mapRef.current?.easeTo({ center: [livePos.lng, livePos.lat], bearing, pitch: 0, zoom: 17, duration: 800 });
                 }
               }
             }}
@@ -1080,8 +1589,8 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
               boxShadow: `0 0 12px ${SF.primary}40`, cursor: 'pointer',
             }}>
             {getManeuverIcon(
-              routeData.steps[currentStepIndex]?.maneuver?.type,
-              routeData.steps[currentStepIndex]?.maneuver?.modifier,
+              routeData.steps[hudStepIndex]?.maneuver?.type,
+              routeData.steps[hudStepIndex]?.maneuver?.modifier,
               24,
             )}
           </div>
@@ -1089,18 +1598,18 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
               <span style={{ color: 'white', fontSize: 16, fontWeight: 900 }}>
-                {formatDistance(routeData.steps[currentStepIndex]?.distance || 0)}
+                {formatDistance(liveDistToNextStep ?? routeData.steps[hudStepIndex]?.distance ?? 0)}
               </span>
               <span style={{
                 color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: 500,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
-                {routeData.steps[currentStepIndex]?.instruction}
+                {routeData.steps[hudStepIndex]?.instruction}
               </span>
             </div>
           </div>
           {/* Next step preview */}
-          {routeData.steps[currentStepIndex + 1] && (
+          {routeData.steps[hudNextStepIndex] && (
             <div style={{
               display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, opacity: 0.55,
             }}>
@@ -1109,13 +1618,13 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
                 {getManeuverIcon(
-                  routeData.steps[currentStepIndex + 1]?.maneuver?.type,
-                  routeData.steps[currentStepIndex + 1]?.maneuver?.modifier,
+                  routeData.steps[hudNextStepIndex]?.maneuver?.type,
+                  routeData.steps[hudNextStepIndex]?.maneuver?.modifier,
                   16,
                 )}
               </div>
               <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: 700 }}>
-                {formatDistance(routeData.steps[currentStepIndex + 1]?.distance || 0)}
+                {formatDistance(liveDistToFollowingStep ?? routeData.steps[hudNextStepIndex]?.distance ?? 0)}
               </span>
             </div>
           )}
@@ -1150,7 +1659,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
             <div
               key={at.type}
               onClick={async () => {
-                const pos = userPosition || (mapRef.current ? { lat: mapRef.current.getCenter().lat, lng: mapRef.current.getCenter().lng } : null);
+                const pos = userPositionRef.current || (mapRef.current ? { lat: mapRef.current.getCenter().lat, lng: mapRef.current.getCenter().lng } : null);
                 if (!pos) { message.warning(t('wax.nav.noPosition')); return; }
                 try {
                   await api.post('/api/wax/pins', {
@@ -1190,11 +1699,11 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
               onClick={() => {
                 setRoutingOpen(true);
                 // Pre-fetch GPS position so route starts from real location
-                if (!userPosition && navigator.geolocation) {
+                if (!userPositionRef.current && navigator.geolocation) {
                   navigator.geolocation.getCurrentPosition(
-                    (p) => setUserPosition({ lat: p.coords.latitude, lng: p.coords.longitude }),
+                    (p) => updateUserPosition({ lat: p.coords.latitude, lng: p.coords.longitude }),
                     () => { /* will fallback to map center */ },
-                    { enableHighAccuracy: true, timeout: 5000, maximumAge: 10000 },
+                    { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 },
                   );
                 }
               }}
@@ -1217,15 +1726,22 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api }) => {
             onClick={() => {
               const next = !carView;
               setCarView(next);
+              const map = mapRef.current;
+              if (!map) return;
               if (next) {
-                // Switch to 3D car-view
-                mapRef.current?.easeTo({ pitch: 80, zoom: 18.5, bearing: currentBearingRef.current, duration: 800 });
+                // Disable terrain in car-view to prevent visual artifacts at high pitch
+                try { map.setTerrain(null); } catch { /* */ }
+                const center = userPosition
+                  ? camera3DCenter(userPosition.lng, userPosition.lat, currentBearingRef.current, 60)
+                  : map.getCenter();
+                map.easeTo({ center, pitch: 75, zoom: 18.5, bearing: currentBearingRef.current, duration: 800 });
               } else {
-                // Switch to 2D top-down with bearing
+                // Re-enable terrain in normal view
+                try { map.setTerrain({ source: 'terrain-dem', exaggeration: 1.5 }); } catch { /* */ }
                 if (navigating) {
-                  mapRef.current?.easeTo({ pitch: 0, bearing: currentBearingRef.current, zoom: 17, duration: 800 });
+                  map.easeTo({ pitch: 0, bearing: currentBearingRef.current, zoom: 17, duration: 800 });
                 } else {
-                  mapRef.current?.easeTo({ pitch: 50, bearing: -12, zoom: mapRef.current?.getZoom() || 12, duration: 800 });
+                  map.easeTo({ pitch: 50, bearing: -12, zoom: map.getZoom() || 12, duration: 800 });
                 }
               }
             }}
