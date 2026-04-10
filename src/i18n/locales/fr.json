@@ -276,7 +276,12 @@
     "addPhoto": "Ajouter une photo",
     "addVideo": "Ajouter une vidéo",
     "clickToSelect": "Cliquez pour sélectionner un fichier",
-    "captionPlaceholder": "Écrivez une légende..."
+    "captionPlaceholder": "Écrivez une légende...",
+    "shared": "Partagé ! 🔗",
+    "shareError": "Erreur lors du partage",
+    "viewComments": "Voir les {{count}} commentaires",
+    "publishHint": "Publiez du contenu pour voir apparaître des médias ici !",
+    "justNow": "à l'instant"
   },
   "flow": {
     "tagline": "Exister, Créer, Gagner !",

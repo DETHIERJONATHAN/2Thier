@@ -276,7 +276,12 @@
     "addPhoto": "Add a photo",
     "addVideo": "Add a video",
     "clickToSelect": "Click to select a file",
-    "captionPlaceholder": "Write a caption..."
+    "captionPlaceholder": "Write a caption...",
+    "shared": "Shared! 🔗",
+    "shareError": "Failed to share",
+    "viewComments": "View all {{count}} comments",
+    "publishHint": "Publish content to see media appear here!",
+    "justNow": "just now"
   },
   "flow": {
     "tagline": "Exist, Create, Win!",

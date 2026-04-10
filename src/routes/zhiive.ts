@@ -254,6 +254,7 @@ router.get('/explore/gallery', authenticateToken, async (req: Request, res: Resp
     const orgId = user.organizationId;
     const userId = user.id;
     const limit = Math.min(parseInt(req.query.limit as string) || 40, 100);
+    const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
     const mediaFilter = (req.query.type as string) || 'all'; // 'photo' | 'video' | 'all'
     const scope = (req.query.scope as string) || 'all'; // 'friends' | 'org' | 'all'
     const sort = (req.query.sort as string) || 'popular'; // 'popular' | 'recent'
@@ -343,13 +344,15 @@ router.get('/explore/gallery', authenticateToken, async (req: Request, res: Resp
     const posts = await db.wallPost.findMany({
       where: postWhere,
       orderBy,
-      take: limit * 2, // Fetch extra to compensate for empty mediaUrls filtering
+      skip: offset,
+      take: limit + 10, // Fetch extra to compensate for empty mediaUrls filtering
       select: {
         id: true, mediaUrls: true, mediaType: true, likesCount: true, commentsCount: true,
         content: true, category: true, createdAt: true, publishAsOrg: true,
         author: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
         organization: { select: { id: true, name: true, logoUrl: true } },
         reactions: { where: { userId }, select: { type: true }, take: 1 },
+        savedBy: { where: { userId }, select: { id: true }, take: 1 },
       },
     });
 
@@ -364,6 +367,7 @@ router.get('/explore/gallery', authenticateToken, async (req: Request, res: Resp
         source: 'post' as const,
         mediaUrl: urls[0],
         mediaType: p.mediaType || 'image',
+        mediaCount: urls.length,
         likesCount: p.likesCount,
         commentsCount: p.commentsCount,
         caption: p.content || '',
@@ -373,14 +377,15 @@ router.get('/explore/gallery', authenticateToken, async (req: Request, res: Resp
         authorAvatar: isOrg ? (p.organization!.logoUrl || null) : p.author.avatarUrl,
         publishAsOrg: p.publishAsOrg,
         isLiked: p.reactions.length > 0,
+        isSaved: p.savedBy.length > 0,
         createdAt: p.createdAt,
       });
       if (galleryItems.length >= limit) break;
     }
 
-    // ── Fetch Stories (only if not filtering video-only) ──
+    // ── Fetch Stories (only if not filtering video-only and first page) ──
     let storyItems: any[] = [];
-    if (mediaFilter !== 'video') {
+    if (mediaFilter !== 'video' && offset === 0) {
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
       const storyWhere: any = {
         OR: [
@@ -461,6 +466,7 @@ router.get('/explore/gallery', authenticateToken, async (req: Request, res: Resp
     res.json({
       items: allItems.slice(0, limit),
       total: allItems.length,
+      hasMore: galleryItems.length >= limit,
     });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
