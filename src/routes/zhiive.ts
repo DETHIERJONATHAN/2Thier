@@ -163,6 +163,29 @@ router.post('/stories/:storyId/view', authenticateToken, async (req: Request, re
   }
 });
 
+// 🐝 React to a story (like) — uses StoryView upsert as interaction marker
+router.post('/stories/:storyId/react', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+    const storyId = req.params.storyId;
+
+    // Ensure the story exists
+    const story = await db.story.findUnique({ where: { id: storyId } });
+    if (!story) return res.status(404).json({ error: 'Story not found' });
+
+    // Upsert a view entry (if user already viewed, this is a no-op)
+    await db.storyView.upsert({
+      where: { storyId_viewerId: { storyId, viewerId: userId } },
+      update: {},
+      create: { storyId, viewerId: userId },
+    });
+
+    res.json({ success: true, liked: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.delete('/stories/:storyId', authenticateToken, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.id;

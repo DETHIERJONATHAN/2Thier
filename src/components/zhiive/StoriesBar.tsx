@@ -1,9 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Avatar, Tooltip, Modal, Input, message } from 'antd';
-import { PlusOutlined, UserOutlined, CameraOutlined, LoadingOutlined } from '@ant-design/icons';
+import {
+  PlusOutlined, UserOutlined, CameraOutlined, LoadingOutlined,
+  HeartOutlined, HeartFilled, ShareAltOutlined, SendOutlined,
+} from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { SF } from './ZhiiveTheme';
 import { useActiveIdentity } from '../../contexts/ActiveIdentityContext';
+import { useDoubleTap } from './shared/useDoubleTap';
+import HeartBurstOverlay, { heartBurstKeyframes } from './shared/HeartBurstOverlay';
 
 interface Story {
   id: string;
@@ -54,6 +59,57 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
   const [hiveLiveModalOpen, setHiveLiveModalOpen] = useState(false);
   const [hiveLiveTitle, setHiveLiveTitle] = useState('');
   const [hiveLiveSaving, setHiveLiveSaving] = useState(false);
+
+  // 🐝 Story interactions — like, share, DM, double-tap
+  const [storyLikedSet, setStoryLikedSet] = useState<Set<string>>(new Set());
+
+  const handleLikeStory = useCallback(async (storyId: string) => {
+    const wasLiked = storyLikedSet.has(storyId);
+    setStoryLikedSet(prev => {
+      const n = new Set(prev);
+      if (wasLiked) n.delete(storyId); else n.add(storyId);
+      return n;
+    });
+    try {
+      await api.post(`/api/zhiive/stories/${storyId}/react`, { type: 'LIKE' });
+    } catch {
+      setStoryLikedSet(prev => {
+        const n = new Set(prev);
+        if (wasLiked) n.add(storyId); else n.delete(storyId);
+        return n;
+      });
+    }
+  }, [api, storyLikedSet]);
+
+  const { handleTap: handleDoubleTapStory, heartAnimId } = useDoubleTap({
+    onDoubleTap: (id: string) => {
+      if (!storyLikedSet.has(id)) handleLikeStory(id);
+    },
+  });
+
+  const handleShareStory = useCallback(async (storyId: string) => {
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Story', text: t('stories.sharedStory') });
+      } else {
+        await navigator.clipboard?.writeText(`Story ${storyId}`);
+        message.success(t('explore.shared'));
+      }
+    } catch { /* cancelled */ }
+  }, [t]);
+
+  const handleStoryDM = useCallback(async (userId: string) => {
+    try {
+      const res = await api.post('/api/messenger/conversations', { participantIds: [userId] });
+      const convId = res?.conversation?.id || res?.id;
+      if (convId) {
+        window.dispatchEvent(new CustomEvent('open-messenger', { detail: { conversationId: convId } }));
+        message.success(t('explore.whisperOpened'));
+      }
+    } catch {
+      message.error(t('explore.whisperError'));
+    }
+  }, [api, t]);
 
   const fetchStories = useCallback(async () => {
     try {
@@ -446,17 +502,37 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
                 </>
               )}
             </div>
-            {viewingStory.mediaUrl ? (
-              viewingStory.mediaType === 'VIDEO' ? (
-                <video src={viewingStory.mediaUrl} controls autoPlay muted style={{ width: '100%', borderRadius: 12, maxHeight: 400 }} />
+            {/* Media with double-tap to like */}
+            <div onClick={() => handleDoubleTapStory(viewingStory.id)} style={{ position: 'relative', cursor: 'pointer' }}>
+              <style>{heartBurstKeyframes}</style>
+              <HeartBurstOverlay visible={heartAnimId === viewingStory.id} />
+              {viewingStory.mediaUrl ? (
+                viewingStory.mediaType === 'VIDEO' ? (
+                  <video src={viewingStory.mediaUrl} controls autoPlay muted style={{ width: '100%', borderRadius: 12, maxHeight: 400 }} />
+                ) : (
+                  <img src={viewingStory.mediaUrl} alt="" draggable={false} style={{ width: '100%', borderRadius: 12, maxHeight: 400, objectFit: 'cover', userSelect: 'none' }} />
+                )
               ) : (
-                <img src={viewingStory.mediaUrl} alt="" style={{ width: '100%', borderRadius: 12, maxHeight: 400, objectFit: 'cover' }} />
-              )
-            ) : (
-              <div style={{ padding: 40, background: SF.gradientPrimary, borderRadius: 12, color: 'white', fontSize: 18, fontWeight: 600 }}>
-                📸 Story
-              </div>
-            )}
+                <div style={{ padding: 40, background: SF.gradientPrimary, borderRadius: 12, color: 'white', fontSize: 18, fontWeight: 600 }}>
+                  📸 Story
+                </div>
+              )}
+            </div>
+
+            {/* 🐝 Interaction bar — Like / Share / DM */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24, padding: '10px 0 4px' }}>
+              <span onClick={() => handleLikeStory(viewingStory.id)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: storyLikedSet.has(viewingStory.id) ? SF.like : SF.textSecondary, transition: 'color 0.15s' }}>
+                {storyLikedSet.has(viewingStory.id) ? <HeartFilled style={{ fontSize: 20 }} /> : <HeartOutlined style={{ fontSize: 20 }} />}
+              </span>
+              <span onClick={() => handleShareStory(viewingStory.id)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: SF.textSecondary }}>
+                <ShareAltOutlined style={{ fontSize: 20 }} />
+              </span>
+              {viewingStory.userId !== currentUser?.id && (
+                <span onClick={() => handleStoryDM(viewingStory.userId)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: SF.textSecondary }}>
+                  <SendOutlined style={{ fontSize: 18 }} />
+                </span>
+              )}
+            </div>
 
             {/* Navigation arrows */}
             {viewingStoryList.length > 1 && (

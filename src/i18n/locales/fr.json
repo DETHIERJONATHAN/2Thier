@@ -113,7 +113,8 @@
     "preview": "Aperçu",
     "previousStory": "← Précédent",
     "nextStory": "Suivant →",
-    "closeStory": "Fermer ✓"
+    "closeStory": "Fermer ✓",
+    "sharedStory": "Regardez cette story !"
   },
   "reels": {
     "noReelsSaved": "Aucun reel enregistré",
@@ -539,6 +540,10 @@
     "online": "En ligne",
     "offline": "Hors ligne",
     "approximate": "Position approximative",
+    "mapSatellite": "Satellite",
+    "mapSatelliteTooltip": "Vue satellite — images aériennes réelles des bâtiments et du terrain",
+    "mapVector": "Carte",
+    "mapVectorTooltip": "Vue carte classique avec les routes et bâtiments stylisés",
     "noColonies": "Aucune colonie dans cette zone",
     "noBees": "Aucune Bee visible dans cette zone",
     "pinExpires": "Expire dans",

@@ -113,7 +113,8 @@
     "preview": "Preview",
     "previousStory": "← Previous",
     "nextStory": "Next →",
-    "closeStory": "Close ✓"
+    "closeStory": "Close ✓",
+    "sharedStory": "Check out this story!"
   },
   "reels": {
     "noReelsSaved": "No reels saved",
@@ -539,6 +540,10 @@
     "online": "Online",
     "offline": "Offline",
     "approximate": "Approximate location",
+    "mapSatellite": "Satellite",
+    "mapSatelliteTooltip": "Satellite view — real aerial imagery of buildings and terrain",
+    "mapVector": "Map",
+    "mapVectorTooltip": "Classic map view with styled roads and buildings",
     "noColonies": "No colonies in this area",
     "noBees": "No visible Bees in this area",
     "pinExpires": "Expires in",

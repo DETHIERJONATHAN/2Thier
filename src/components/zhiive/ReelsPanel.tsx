@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Avatar, Spin, Modal, Input } from 'antd';
+import { Avatar, Spin, Modal, Input, message } from 'antd';
 import {
   HeartOutlined, HeartFilled, MessageOutlined, ShareAltOutlined,
   SoundOutlined, PauseCircleOutlined, PlayCircleOutlined,
@@ -12,6 +12,8 @@ import { useTranslation } from 'react-i18next';
 import { useZhiiveNav } from '../../contexts/ZhiiveNavContext';
 import { useActiveIdentity } from '../../contexts/ActiveIdentityContext';
 import { SF } from './ZhiiveTheme';
+import { useDoubleTap } from './shared/useDoubleTap';
+import HeartBurstOverlay, { heartBurstKeyframes } from './shared/HeartBurstOverlay';
 
 interface Reel {
   id: string;
@@ -87,6 +89,29 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [showSaved, setShowSaved] = useState(false);
   const navigate = useNavigate();
+
+  // 🐝 Double-tap like with heart animation
+  const { handleTap: handleDoubleTap, heartAnimId } = useDoubleTap({
+    onDoubleTap: (id: string) => {
+      const idx = reels.findIndex(r => r.id === id);
+      if (idx >= 0 && !reels[idx].isLiked) toggleLike(idx);
+    },
+  });
+
+  // 🐝 Send DM
+  const handleSendDM = useCallback(async (authorId: string) => {
+    try {
+      const res = await api.post('/api/messenger/conversations', { participantIds: [authorId] });
+      const convId = res?.conversation?.id || res?.id;
+      if (convId) {
+        window.dispatchEvent(new CustomEvent('open-messenger', { detail: { conversationId: convId } }));
+        message.success(t('explore.whisperOpened'));
+      }
+    } catch {
+      message.error(t('explore.whisperError'));
+    }
+  }, [api, t]);
+
   const [toast, setToast] = useState<{ text: string; type: 'ok' | 'err' } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const showToast = useCallback((text: string, type: 'ok' | 'err' = 'ok') => {
@@ -560,18 +585,20 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             background: SF.dark,
           }}>
-            {/* Media — always video */}
+            {/* Media — always video — with double-tap to like */}
+            <div onClick={() => handleDoubleTap(reel.id)} style={{ width: '100%', height: '100%', position: 'relative' }}>
+              <HeartBurstOverlay visible={heartAnimId === reel.id} />
             {reel.mediaUrl ? (
               <video
                 ref={el => { videoRefs.current[index] = el; }}
                 src={reel.mediaUrl}
                 loop muted={muted} playsInline
-                onClick={togglePause}
+                onClick={(e) => { e.stopPropagation(); togglePause(); }}
                 style={{ width: '100%', height: '100%', objectFit: 'contain', background: SF.black, cursor: 'pointer' }}
               />
             ) : (
               /* Fallback if video URL is missing */
-              <div onClick={togglePause} style={{
+              <div onClick={(e) => { e.stopPropagation(); togglePause(); }} style={{
                 width: '100%', height: '100%', cursor: 'pointer',
                 background: SF.gradientFull,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -582,6 +609,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                 </div>
               </div>
             )}
+            </div>
 
             {/* Pause overlay */}
             {paused && index === activeIndex && (
@@ -646,6 +674,14 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                   {t('common.share')}
                 </div>
               </div>
+
+              {/* DM / Whisper */}
+              {reel.authorId && reel.authorId !== currentUser?.id && (
+                <div onClick={() => handleSendDM(reel.authorId)} style={{ cursor: 'pointer', textAlign: 'center' }}>
+                  <SendOutlined style={{ fontSize: 24, color: SF.textLight }} />
+                  <div style={{ fontSize: 11, color: SF.textLight, fontWeight: 600, marginTop: 2 }}>DM</div>
+                </div>
+              )}
 
               {/* Save/Bookmark */}
               <div onClick={() => handleSaveReel(reel.id)} style={{ cursor: 'pointer', textAlign: 'center' }}>
@@ -769,6 +805,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
           from { transform: translateY(100%); }
           to { transform: translateY(0); }
         }
+        ${heartBurstKeyframes}
       `}</style>
 
       </>
