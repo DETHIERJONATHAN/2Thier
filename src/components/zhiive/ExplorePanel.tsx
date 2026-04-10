@@ -7,7 +7,8 @@ import {
   ReloadOutlined, PlusOutlined, DownOutlined,
   CloseOutlined, MessageOutlined, SendOutlined,
   PictureOutlined, VideoCameraOutlined, PlayCircleOutlined,
-  AppstoreOutlined, ClockCircleOutlined,
+  AppstoreOutlined, ClockCircleOutlined, CompassOutlined,
+  LeftOutlined, RightOutlined,
 } from '@ant-design/icons';
 import { SF } from './ZhiiveTheme';
 import { useZhiiveNav } from '../../contexts/ZhiiveNavContext';
@@ -133,12 +134,17 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [likedSet, setLikedSet] = useState<Set<string>>(new Set());
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const [selectedPost, setSelectedPost] = useState<GalleryItem | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const selectedPost = selectedIndex !== null ? items[selectedIndex] ?? null : null;
   const [commentText, setCommentText] = useState('');
   const [postComments, setPostComments] = useState<any[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [likedCommentsSet, setLikedCommentsSet] = useState<Set<string>>(new Set());
   const searchInputRef = useRef<InputRef | null>(null);
+
+  // ── Fullscreen swipe state ──
+  const touchRef = useRef<{ startX: number; startY: number; startTime: number } | null>(null);
+  const [slideDir, setSlideDir] = useState<'left' | 'right' | null>(null);
 
   // ── People tab filters ──
   const [peopleScope, setPeopleScope] = useState<'all' | 'friends' | 'org'>('all');
@@ -211,19 +217,24 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
     }
   };
 
-  // ── Post Detail Modal ──
+  // ── Post Detail — Fullscreen ──
   const openPostDetail = async (item: GalleryItem) => {
-    setSelectedPost(item);
+    const idx = items.findIndex(i => i.id === item.id);
+    setSelectedIndex(idx >= 0 ? idx : 0);
     setPostComments([]);
     setCommentText('');
     setLikedCommentsSet(new Set());
-    if (item.source === 'story') return; // No comments on stories
+    setSlideDir(null);
+    if (item.source === 'story') return;
+    loadComments(item.id);
+  };
+
+  const loadComments = async (postId: string) => {
     setCommentsLoading(true);
     try {
-      const res = await api.get(`/api/wall/posts/${item.id}/comments?limit=20`);
+      const res = await api.get(`/api/wall/posts/${postId}/comments?limit=20`);
       if (res?.comments) {
         setPostComments(res.comments);
-        // Load liked state for these comments
         const commentIds = res.comments.map((c: any) => c.id);
         if (commentIds.length > 0) {
           try {
@@ -232,12 +243,69 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
           } catch { /* non-blocking */ }
         }
       }
-    } catch {
-      // Non-blocking
-    } finally {
-      setCommentsLoading(false);
-    }
+    } catch { /* non-blocking */ }
+    finally { setCommentsLoading(false); }
   };
+
+  const navigateFullscreen = useCallback((dir: 'prev' | 'next') => {
+    setSelectedIndex(prev => {
+      if (prev === null) return null;
+      const nextIdx = dir === 'next' ? prev + 1 : prev - 1;
+      if (nextIdx < 0 || nextIdx >= items.length) return prev;
+      return nextIdx;
+    });
+    setSlideDir(dir === 'next' ? 'left' : 'right');
+    setTimeout(() => setSlideDir(null), 300);
+  }, [items.length]);
+
+  // Load comments when navigating
+  useEffect(() => {
+    if (selectedIndex !== null && items[selectedIndex]) {
+      const item = items[selectedIndex];
+      setPostComments([]);
+      setCommentText('');
+      setLikedCommentsSet(new Set());
+      if (item.source !== 'story') loadComments(item.id);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIndex]);
+
+  // Keyboard nav for fullscreen
+  useEffect(() => {
+    if (selectedIndex === null) return;
+    // Lock body scroll
+    document.body.style.overflow = 'hidden';
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedIndex(null);
+      else if (e.key === 'ArrowRight') navigateFullscreen('next');
+      else if (e.key === 'ArrowLeft') navigateFullscreen('prev');
+    };
+    window.addEventListener('keydown', handler);
+    return () => {
+      window.removeEventListener('keydown', handler);
+      document.body.style.overflow = '';
+    };
+  }, [selectedIndex, navigateFullscreen]);
+
+  // Touch handlers for swipe
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchRef.current = { startX: t.clientX, startY: t.clientY, startTime: Date.now() };
+  }, []);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (!touchRef.current) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchRef.current.startX;
+    const dy = t.clientY - touchRef.current.startY;
+    const dt = Date.now() - touchRef.current.startTime;
+    touchRef.current = null;
+    // Only swipe if horizontal > vertical and fast enough
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5 && dt < 500) {
+      if (dx < 0) navigateFullscreen('next');
+      else navigateFullscreen('prev');
+    }
+  }, [navigateFullscreen]);
 
   // ── Add Comment ──
   const handleAddComment = async () => {
@@ -248,7 +316,6 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
         setPostComments(prev => [...prev, res]);
         setCommentText('');
         setItems(prev => prev.map(p => p.id === selectedPost.id ? { ...p, commentsCount: p.commentsCount + 1 } : p));
-        setSelectedPost(prev => prev ? { ...prev, commentsCount: prev.commentsCount + 1 } : null);
       }
     } catch {
       message.error(t('explore.buzzError'));
@@ -866,81 +933,169 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
         </div>
       )}
       
-      {/* Post / Story Detail Modal */}
-      <Modal
-        open={!!selectedPost}
-        onCancel={() => setSelectedPost(null)}
-        footer={null}
-        width="95vw"
-        style={{ maxWidth: 500, top: 20 }}
-        styles={{ body: { padding: 0 } }}
-        closeIcon={<CloseOutlined style={{ color: SF.textLight, fontSize: 16 }} />}
-      >
-        {selectedPost && (
-          <div style={{ background: SF.bg, borderRadius: 12, overflow: 'hidden' }}>
-            {/* Media */}
-            {selectedPost.mediaType === 'video' ? (
-              <video src={selectedPost.mediaUrl} controls autoPlay muted
-                style={{ width: '100%', maxHeight: '60vh', objectFit: 'contain', background: SF.black }} />
-            ) : (
-              <img src={selectedPost.mediaUrl} alt=""
-                style={{ width: '100%', maxHeight: '60vh', objectFit: 'contain', background: SF.black }} />
+      {/* ═══ Fullscreen Gallery Viewer ═══ */}
+      {selectedPost && selectedIndex !== null && (
+        <div
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 10000,
+            background: 'rgba(0,0,0,0.95)',
+            display: 'flex', flexDirection: 'column',
+            animation: 'fadeIn 0.2s ease',
+          }}
+        >
+          <style>{`
+            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes slideInLeft { from { transform: translateX(40px); opacity: 0.5; } to { transform: translateX(0); opacity: 1; } }
+            @keyframes slideInRight { from { transform: translateX(-40px); opacity: 0.5; } to { transform: translateX(0); opacity: 1; } }
+          `}</style>
+
+          {/* Top bar — close + counter */}
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '12px 16px', flexShrink: 0,
+          }}>
+            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>
+              {selectedIndex + 1} / {items.length}
+            </div>
+            <div
+              onClick={() => setSelectedIndex(null)}
+              style={{
+                width: 36, height: 36, borderRadius: '50%',
+                background: 'rgba(255,255,255,0.15)', display: 'flex',
+                alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+              }}
+            >
+              <CloseOutlined style={{ color: '#fff', fontSize: 16 }} />
+            </div>
+          </div>
+
+          {/* Media area — takes all available space */}
+          <div style={{
+            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            position: 'relative', overflow: 'hidden', minHeight: 0,
+          }}>
+            {/* Left arrow (desktop) */}
+            {selectedIndex > 0 && (
+              <div
+                onClick={() => navigateFullscreen('prev')}
+                style={{
+                  position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)',
+                  width: 44, height: 44, borderRadius: '50%', zIndex: 2,
+                  background: 'rgba(255,255,255,0.15)', display: 'flex',
+                  alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                  backdropFilter: 'blur(8px)', transition: 'background 0.2s',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.3)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.15)')}
+              >
+                <LeftOutlined style={{ color: '#fff', fontSize: 18 }} />
+              </div>
             )}
 
-            {/* Author & Actions */}
-            <div style={{ padding: '12px 16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                <Avatar size={36} src={selectedPost.authorAvatar}
-                  icon={!selectedPost.authorAvatar ? <UserOutlined /> : undefined}
-                  style={{ background: !selectedPost.authorAvatar ? SF.primary : undefined }} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: SF.text }}>{selectedPost.authorName}</div>
-                  {selectedPost.isStory && (
-                    <div style={{ fontSize: 11, color: SF.accent, fontWeight: 600 }}>
-                      {selectedPost.isHighlight ? '⭐ Highlight' : '◉ Story'}
-                    </div>
-                  )}
-                </div>
+            {/* Right arrow (desktop) */}
+            {selectedIndex < items.length - 1 && (
+              <div
+                onClick={() => navigateFullscreen('next')}
+                style={{
+                  position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                  width: 44, height: 44, borderRadius: '50%', zIndex: 2,
+                  background: 'rgba(255,255,255,0.15)', display: 'flex',
+                  alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                  backdropFilter: 'blur(8px)', transition: 'background 0.2s',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.3)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.15)')}
+              >
+                <RightOutlined style={{ color: '#fff', fontSize: 18 }} />
               </div>
+            )}
 
-              {selectedPost.caption && (
-                <div style={{ fontSize: 13, color: SF.text, marginBottom: 10, lineHeight: 1.5 }}>
-                  {selectedPost.caption}
-                </div>
+            {/* The media itself */}
+            <div
+              key={selectedPost.id}
+              style={{
+                maxWidth: '92%', maxHeight: '100%', display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+                animation: slideDir === 'left' ? 'slideInLeft 0.25s ease' : slideDir === 'right' ? 'slideInRight 0.25s ease' : undefined,
+              }}
+            >
+              {selectedPost.mediaType === 'video' ? (
+                <video
+                  src={selectedPost.mediaUrl}
+                  controls autoPlay muted
+                  style={{ maxWidth: '100%', maxHeight: '70vh', borderRadius: 8, objectFit: 'contain' }}
+                />
+              ) : (
+                <img
+                  src={selectedPost.mediaUrl}
+                  alt=""
+                  style={{ maxWidth: '100%', maxHeight: '70vh', borderRadius: 8, objectFit: 'contain' }}
+                />
               )}
+            </div>
+          </div>
 
-              {/* Action bar — only for posts, not stories */}
-              {selectedPost.source === 'post' && (
-                <>
-                  <div style={{ display: 'flex', gap: 16, padding: '8px 0', borderTop: `1px solid ${SF.border}`, borderBottom: `1px solid ${SF.border}` }}>
-                    <span
-                      onClick={() => handleLikePost(selectedPost.id)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 13, color: likedSet.has(selectedPost.id) ? SF.like : SF.textSecondary }}>
-                      {likedSet.has(selectedPost.id) ? <HeartFilled style={{ fontSize: 18 }} /> : <HeartOutlined style={{ fontSize: 18 }} />}
-                      {selectedPost.likesCount}
-                    </span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: SF.textSecondary }}>
-                      <MessageOutlined style={{ fontSize: 18 }} /> {selectedPost.commentsCount}
-                    </span>
+          {/* Bottom overlay — author + actions + comments */}
+          <div style={{
+            flexShrink: 0, maxHeight: '35vh', overflowY: 'auto',
+            background: 'linear-gradient(transparent, rgba(0,0,0,0.85) 20%)',
+            padding: '20px 16px 16px', scrollbarWidth: 'thin',
+          }}>
+            {/* Author row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+              <Avatar size={36} src={selectedPost.authorAvatar}
+                icon={!selectedPost.authorAvatar ? <UserOutlined /> : undefined}
+                style={{ background: !selectedPost.authorAvatar ? SF.primary : undefined }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: '#fff' }}>{selectedPost.authorName}</div>
+                {selectedPost.isStory && (
+                  <div style={{ fontSize: 11, color: SF.accent, fontWeight: 600 }}>
+                    {selectedPost.isHighlight ? '⭐ Highlight' : '◉ Story'}
                   </div>
+                )}
+              </div>
+            </div>
 
-                  {/* Comments */}
-                  <div style={{ maxHeight: 200, overflowY: 'auto', marginTop: 8, scrollbarWidth: 'thin' }}>
-                    {commentsLoading ? (
-                      <div style={{ textAlign: 'center', padding: 12, color: SF.textMuted, fontSize: 12 }}>Chargement...</div>
-                    ) : postComments.length > 0 ? (
-                      postComments.map((c: any) => {
-                        const cIsOrg = c.publishAsOrg && c.organization;
-                        const cAvatar = cIsOrg ? (c.organization?.logoUrl || null) : (c.authorAvatar || c.author?.avatarUrl || null);
-                        const cName = cIsOrg ? c.organization.name : (c.authorName || [c.author?.firstName, c.author?.lastName].filter(Boolean).join(' ') || 'Utilisateur');
-                        const isCommentLiked = likedCommentsSet.has(c.id);
-                        return (
-                        <div key={c.id} style={{ display: 'flex', gap: 8, padding: '6px 0', alignItems: 'flex-start' }}>
-                          <Avatar size={24} src={cAvatar} icon={!cAvatar ? <UserOutlined /> : undefined}
-                            style={{ background: !cAvatar ? (cIsOrg ? SF.primary : SF.primary) : undefined, flexShrink: 0 }} />
+            {selectedPost.caption && (
+              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)', marginBottom: 8, lineHeight: 1.5 }}>
+                {selectedPost.caption}
+              </div>
+            )}
+
+            {/* Action bar — posts only */}
+            {selectedPost.source === 'post' && (
+              <>
+                <div style={{ display: 'flex', gap: 16, padding: '8px 0', borderTop: '1px solid rgba(255,255,255,0.15)', borderBottom: '1px solid rgba(255,255,255,0.15)' }}>
+                  <span
+                    onClick={() => handleLikePost(selectedPost.id)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 13, color: likedSet.has(selectedPost.id) ? SF.like : 'rgba(255,255,255,0.7)' }}>
+                    {likedSet.has(selectedPost.id) ? <HeartFilled style={{ fontSize: 18 }} /> : <HeartOutlined style={{ fontSize: 18 }} />}
+                    {selectedPost.likesCount}
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>
+                    <MessageOutlined style={{ fontSize: 18 }} /> {selectedPost.commentsCount}
+                  </span>
+                </div>
+
+                {/* Comments */}
+                <div style={{ maxHeight: 120, overflowY: 'auto', marginTop: 6, scrollbarWidth: 'thin' }}>
+                  {commentsLoading ? (
+                    <div style={{ textAlign: 'center', padding: 8, color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>Chargement...</div>
+                  ) : postComments.length > 0 ? (
+                    postComments.map((c: any) => {
+                      const cIsOrg = c.publishAsOrg && c.organization;
+                      const cAvatar = cIsOrg ? (c.organization?.logoUrl || null) : (c.authorAvatar || c.author?.avatarUrl || null);
+                      const cName = cIsOrg ? c.organization.name : (c.authorName || [c.author?.firstName, c.author?.lastName].filter(Boolean).join(' ') || 'Utilisateur');
+                      const isCommentLiked = likedCommentsSet.has(c.id);
+                      return (
+                        <div key={c.id} style={{ display: 'flex', gap: 8, padding: '4px 0', alignItems: 'flex-start' }}>
+                          <Avatar size={22} src={cAvatar} icon={!cAvatar ? <UserOutlined /> : undefined}
+                            style={{ background: !cAvatar ? SF.primary : undefined, flexShrink: 0 }} />
                           <div style={{ flex: 1 }}>
-                            <span style={{ fontWeight: 600, fontSize: 12, color: SF.text }}>{cName} </span>
-                            <span style={{ fontSize: 12, color: SF.text }}>{c.content}</span>
+                            <span style={{ fontWeight: 600, fontSize: 12, color: '#fff' }}>{cName} </span>
+                            <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)' }}>{c.content}</span>
                           </div>
                           <HeartFilled
                             onClick={async () => {
@@ -953,43 +1108,43 @@ const ExplorePanel: React.FC<ExplorePanelProps> = ({ api }) => {
                                 });
                               } catch { /* non-blocking */ }
                             }}
-                            style={{ fontSize: 12, color: isCommentLiked ? SF.like : SF.textMuted, cursor: 'pointer', flexShrink: 0, marginTop: 2 }}
+                            style={{ fontSize: 12, color: isCommentLiked ? SF.like : 'rgba(255,255,255,0.4)', cursor: 'pointer', flexShrink: 0, marginTop: 2 }}
                           />
                         </div>
-                      ); })
-                    ) : (
-                      <div style={{ textAlign: 'center', padding: 12, color: SF.textMuted, fontSize: 12 }}>{t('explore.noBuzzesYet')}</div>
-                    )}
-                  </div>
-
-                  {/* Comment input */}
-                  <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
-                    <Input
-                      value={commentText}
-                      onChange={e => setCommentText(e.target.value)}
-                      onPressEnter={handleAddComment}
-                      placeholder={t('explore.dropABuzz')}
-                      style={{ borderRadius: 20, flex: 1, background: SF.cardBg, border: 'none' }}
-                      size="small"
-                    />
-                    <SendOutlined
-                      onClick={handleAddComment}
-                      style={{ fontSize: 16, color: commentText.trim() ? SF.primary : SF.textMuted, cursor: commentText.trim() ? 'pointer' : 'default' }}
-                    />
-                  </div>
-                </>
-              )}
-
-              {/* Story info */}
-              {selectedPost.source === 'story' && (
-                <div style={{ padding: '8px 0', borderTop: `1px solid ${SF.border}`, fontSize: 12, color: SF.textMuted, textAlign: 'center' }}>
-                  👁 {selectedPost.likesCount} vue{selectedPost.likesCount !== 1 ? 's' : ''}
+                      );
+                    })
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: 8, color: 'rgba(255,255,255,0.4)', fontSize: 12 }}>{t('explore.noBuzzesYet')}</div>
+                  )}
                 </div>
-              )}
-            </div>
+
+                {/* Comment input */}
+                <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
+                  <Input
+                    value={commentText}
+                    onChange={e => setCommentText(e.target.value)}
+                    onPressEnter={handleAddComment}
+                    placeholder={t('explore.dropABuzz')}
+                    style={{ borderRadius: 20, flex: 1, background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff' }}
+                    size="small"
+                  />
+                  <SendOutlined
+                    onClick={handleAddComment}
+                    style={{ fontSize: 16, color: commentText.trim() ? SF.primary : 'rgba(255,255,255,0.3)', cursor: commentText.trim() ? 'pointer' : 'default' }}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Story info */}
+            {selectedPost.source === 'story' && (
+              <div style={{ padding: '8px 0', borderTop: '1px solid rgba(255,255,255,0.15)', fontSize: 12, color: 'rgba(255,255,255,0.5)', textAlign: 'center' }}>
+                👁 {selectedPost.likesCount} vue{selectedPost.likesCount !== 1 ? 's' : ''}
+              </div>
+            )}
           </div>
-        )}
-      </Modal>
+        </div>
+      )}
 
       {/* ═══ Create Post Modal ═══ */}
       <Modal
