@@ -279,19 +279,35 @@ const ExplorePanel: React.FC<{ api: any; openModule?: (route: string) => void }>
   // ════════════════════════════════════════════════════════
 
   const handleLikePost = useCallback(async (postId: string) => {
-    if (postId.startsWith('story-')) return;
     const wasLiked = likedSet.has(postId);
     setLikedSet(prev => { const n = new Set(prev); if (wasLiked) n.delete(postId); else n.add(postId); return n; });
     setItems(prev => prev.map(p => p.id === postId ? { ...p, likesCount: p.likesCount + (wasLiked ? -1 : 1) } : p));
-    try { await api.post(`/api/wall/posts/${postId}/reactions`, { type: 'LIKE' }); }
-    catch {
+    try {
+      if (postId.startsWith('story-')) {
+        const storyId = postId.replace('story-', '');
+        await api.post(`/api/zhiive/stories/${storyId}/react`, { type: 'LIKE' });
+      } else {
+        await api.post(`/api/wall/posts/${postId}/reactions`, { type: 'LIKE' });
+      }
+    } catch {
       setLikedSet(prev => { const n = new Set(prev); if (wasLiked) n.add(postId); else n.delete(postId); return n; });
       setItems(prev => prev.map(p => p.id === postId ? { ...p, likesCount: p.likesCount + (wasLiked ? 1 : -1) } : p));
     }
   }, [api, likedSet]);
 
   const handleSave = useCallback(async (postId: string) => {
-    if (postId.startsWith('story-')) return;
+    if (postId.startsWith('story-')) {
+      // Stories: react as a "save" via the story react endpoint
+      const storyId = postId.replace('story-', '');
+      const wasSaved = savedSet.has(postId);
+      setSavedSet(prev => { const n = new Set(prev); if (wasSaved) n.delete(postId); else n.add(postId); return n; });
+      try {
+        await api.post(`/api/zhiive/stories/${storyId}/react`, { type: 'SAVE' });
+      } catch {
+        setSavedSet(prev => { const n = new Set(prev); if (wasSaved) n.add(postId); else n.delete(postId); return n; });
+      }
+      return;
+    }
     const wasSaved = savedSet.has(postId);
     setSavedSet(prev => { const n = new Set(prev); if (wasSaved) n.delete(postId); else n.add(postId); return n; });
     try {
@@ -303,7 +319,19 @@ const ExplorePanel: React.FC<{ api: any; openModule?: (route: string) => void }>
   }, [api, savedSet]);
 
   const handleShare = useCallback(async (postId: string) => {
-    if (postId.startsWith('story-')) return;
+    if (postId.startsWith('story-')) {
+      // Stories: share via Web Share API or clipboard
+      try {
+        const shareText = t('stories.sharedStory');
+        if (navigator.share) {
+          await navigator.share({ title: 'Zhiive', text: shareText });
+        } else {
+          await navigator.clipboard?.writeText(shareText);
+          message.success(t('explore.shared'));
+        }
+      } catch { /* user cancelled share */ }
+      return;
+    }
     try {
       await api.post(`/api/wall/posts/${postId}/share`, { targetType: 'INTERNAL' });
       message.success(t('explore.shared'));
