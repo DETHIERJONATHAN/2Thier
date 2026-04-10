@@ -737,37 +737,44 @@ const ExplorePanel: React.FC<{ api: any; openModule?: (route: string) => void }>
                 <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)', marginBottom: 8, lineHeight: 1.4 }}>{selectedPost.caption}</div>
               )}
 
-              {/* Action bar */}
-              {selectedPost.source === 'post' && (
-                <>
-                  <div style={{ display: 'flex', gap: 16, padding: '8px 0', borderTop: '1px solid rgba(255,255,255,0.12)', alignItems: 'center' }}>
-                    <ActionBtn icon={likedSet.has(selectedPost.id) ? <HeartFilled style={{ fontSize: 20 }} /> : <HeartOutlined style={{ fontSize: 20 }} />}
-                      label={String(selectedPost.likesCount)} color={likedSet.has(selectedPost.id) ? SF.like : 'rgba(255,255,255,0.7)'}
-                      onClick={() => handleLikePost(selectedPost.id)} />
+              {/* Action bar — unified for posts AND stories */}
+              <>
+                <div style={{ display: 'flex', gap: 16, padding: '8px 0', borderTop: '1px solid rgba(255,255,255,0.12)', alignItems: 'center' }}>
+                  <ActionBtn icon={likedSet.has(selectedPost.id) ? <HeartFilled style={{ fontSize: 20 }} /> : <HeartOutlined style={{ fontSize: 20 }} />}
+                    label={String(selectedPost.likesCount)} color={likedSet.has(selectedPost.id) ? SF.like : 'rgba(255,255,255,0.7)'}
+                    onClick={() => handleLikePost(selectedPost.id)} />
+                  {selectedPost.source === 'post' && (
                     <ActionBtn icon={<MessageOutlined style={{ fontSize: 20 }} />}
                       label={selectedPost.commentsCount > 0 ? String(selectedPost.commentsCount) : '0'}
                       color="rgba(255,255,255,0.7)" onClick={() => setShowComments(s => !s)} />
-                    <ActionBtn icon={<ShareAltOutlined style={{ fontSize: 20 }} />} color="rgba(255,255,255,0.7)"
-                      onClick={() => handleShare(selectedPost.id)} />
-                    {selectedPost.authorId && selectedPost.authorId !== user?.id && (
-                      <ActionBtn icon={<SendOutlined style={{ fontSize: 18 }} />} color="rgba(255,255,255,0.7)"
-                        onClick={() => selectedPost.authorId && handleSendDM(selectedPost.authorId)} />
-                    )}
-                    <div style={{ flex: 1 }} />
-                    <ActionBtn icon={savedSet.has(selectedPost.id) ? <BookFilled style={{ fontSize: 20 }} /> : <BookOutlined style={{ fontSize: 20 }} />}
-                      color={savedSet.has(selectedPost.id) ? '#FFD700' : 'rgba(255,255,255,0.7)'}
-                      onClick={() => handleSave(selectedPost.id)} />
-                  </div>
-
-                  {/* "View N comments" toggle */}
-                  {selectedPost.commentsCount > 0 && !showComments && (
-                    <div onClick={() => setShowComments(true)}
-                      style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: '4px 0' }}>
-                      {t('explore.viewComments', { count: selectedPost.commentsCount })}
-                    </div>
                   )}
+                  {selectedPost.source === 'story' && (
+                    <ActionBtn icon={<EyeOutlined style={{ fontSize: 20 }} />}
+                      label={`${selectedPost.likesCount} vue${selectedPost.likesCount !== 1 ? 's' : ''}`}
+                      color="rgba(255,255,255,0.5)" />
+                  )}
+                  <ActionBtn icon={<ShareAltOutlined style={{ fontSize: 20 }} />} color="rgba(255,255,255,0.7)"
+                    onClick={() => handleShare(selectedPost.id)} />
+                  {selectedPost.authorId && selectedPost.authorId !== user?.id && (
+                    <ActionBtn icon={<SendOutlined style={{ fontSize: 18 }} />} color="rgba(255,255,255,0.7)"
+                      onClick={() => selectedPost.authorId && handleSendDM(selectedPost.authorId)} />
+                  )}
+                  <div style={{ flex: 1 }} />
+                  <ActionBtn icon={savedSet.has(selectedPost.id) ? <BookFilled style={{ fontSize: 20 }} /> : <BookOutlined style={{ fontSize: 20 }} />}
+                    color={savedSet.has(selectedPost.id) ? '#FFD700' : 'rgba(255,255,255,0.7)'}
+                    onClick={() => handleSave(selectedPost.id)} />
+                </div>
 
-                  {showComments && (
+                {/* "View N comments" toggle — posts only */}
+                {selectedPost.source === 'post' && selectedPost.commentsCount > 0 && !showComments && (
+                  <div onClick={() => setShowComments(true)}
+                    style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: '4px 0' }}>
+                    {t('explore.viewComments', { count: selectedPost.commentsCount })}
+                  </div>
+                )}
+
+                {selectedPost.source === 'post' && showComments && (
+                  <>
                     <div style={{ maxHeight: 140, overflowY: 'auto', marginTop: 4, scrollbarWidth: 'thin' }}>
                       {commentsLoading ? (
                         <div style={{ textAlign: 'center', padding: 8, color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>
@@ -799,23 +806,17 @@ const ExplorePanel: React.FC<{ api: any; openModule?: (route: string) => void }>
                         <div style={{ textAlign: 'center', padding: 8, color: 'rgba(255,255,255,0.4)', fontSize: 12 }}>{t('explore.noBuzzesYet')}</div>
                       )}
                     </div>
-                  )}
 
-                  <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
-                    <Input value={commentText} onChange={e => setCommentText(e.target.value)} onPressEnter={handleAddComment}
-                      placeholder={t('explore.dropABuzz')}
-                      style={{ borderRadius: 20, flex: 1, background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff' }} size="small" />
-                    <SendOutlined onClick={handleAddComment}
-                      style={{ fontSize: 16, color: commentText.trim() ? SF.primary : 'rgba(255,255,255,0.3)', cursor: commentText.trim() ? 'pointer' : 'default' }} />
-                  </div>
-                </>
-              )}
-
-              {selectedPost.source === 'story' && (
-                <div style={{ padding: '8px 0', borderTop: '1px solid rgba(255,255,255,0.12)', fontSize: 12, color: 'rgba(255,255,255,0.5)', textAlign: 'center' }}>
-                  <EyeOutlined /> {selectedPost.likesCount} vue{selectedPost.likesCount !== 1 ? 's' : ''}
-                </div>
-              )}
+                    <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
+                      <Input value={commentText} onChange={e => setCommentText(e.target.value)} onPressEnter={handleAddComment}
+                        placeholder={t('explore.dropABuzz')}
+                        style={{ borderRadius: 20, flex: 1, background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff' }} size="small" />
+                      <SendOutlined onClick={handleAddComment}
+                        style={{ fontSize: 16, color: commentText.trim() ? SF.primary : 'rgba(255,255,255,0.3)', cursor: commentText.trim() ? 'pointer' : 'default' }} />
+                    </div>
+                  </>
+                )}
+              </>
             </div>
           </div>
         )}
