@@ -94,6 +94,7 @@ interface GalleryItem {
   isHighlight?: boolean;
   isSaved?: boolean;
   isLiked?: boolean;
+  viewCount?: number;
   createdAt?: string;
 }
 
@@ -278,36 +279,21 @@ const ExplorePanel: React.FC<{ api: any; openModule?: (route: string) => void }>
   // INTERACTIONS
   // ════════════════════════════════════════════════════════
 
+  // 🐝 Like — works for both posts and stories (stories have linked WallPost IDs)
   const handleLikePost = useCallback(async (postId: string) => {
     const wasLiked = likedSet.has(postId);
     setLikedSet(prev => { const n = new Set(prev); if (wasLiked) n.delete(postId); else n.add(postId); return n; });
     setItems(prev => prev.map(p => p.id === postId ? { ...p, likesCount: p.likesCount + (wasLiked ? -1 : 1) } : p));
     try {
-      if (postId.startsWith('story-')) {
-        const storyId = postId.replace('story-', '');
-        await api.post(`/api/zhiive/stories/${storyId}/react`, { type: 'LIKE' });
-      } else {
-        await api.post(`/api/wall/posts/${postId}/reactions`, { type: 'LIKE' });
-      }
+      await api.post(`/api/wall/posts/${postId}/reactions`, { type: 'LIKE' });
     } catch {
       setLikedSet(prev => { const n = new Set(prev); if (wasLiked) n.add(postId); else n.delete(postId); return n; });
       setItems(prev => prev.map(p => p.id === postId ? { ...p, likesCount: p.likesCount + (wasLiked ? 1 : -1) } : p));
     }
   }, [api, likedSet]);
 
+  // 🐝 Save — works for both posts and stories (stories have linked WallPost IDs)
   const handleSave = useCallback(async (postId: string) => {
-    if (postId.startsWith('story-')) {
-      // Stories: react as a "save" via the story react endpoint
-      const storyId = postId.replace('story-', '');
-      const wasSaved = savedSet.has(postId);
-      setSavedSet(prev => { const n = new Set(prev); if (wasSaved) n.delete(postId); else n.add(postId); return n; });
-      try {
-        await api.post(`/api/zhiive/stories/${storyId}/react`, { type: 'SAVE' });
-      } catch {
-        setSavedSet(prev => { const n = new Set(prev); if (wasSaved) n.add(postId); else n.delete(postId); return n; });
-      }
-      return;
-    }
     const wasSaved = savedSet.has(postId);
     setSavedSet(prev => { const n = new Set(prev); if (wasSaved) n.delete(postId); else n.add(postId); return n; });
     try {
@@ -318,20 +304,8 @@ const ExplorePanel: React.FC<{ api: any; openModule?: (route: string) => void }>
     }
   }, [api, savedSet]);
 
+  // 🐝 Share — works for both posts and stories (stories have linked WallPost IDs)
   const handleShare = useCallback(async (postId: string) => {
-    if (postId.startsWith('story-')) {
-      // Stories: share via Web Share API or clipboard
-      try {
-        const shareText = t('stories.sharedStory');
-        if (navigator.share) {
-          await navigator.share({ title: 'Zhiive', text: shareText });
-        } else {
-          await navigator.clipboard?.writeText(shareText);
-          message.success(t('explore.shared'));
-        }
-      } catch { /* user cancelled share */ }
-      return;
-    }
     try {
       await api.post(`/api/wall/posts/${postId}/share`, { targetType: 'INTERNAL' });
       message.success(t('explore.shared'));
@@ -460,7 +434,8 @@ const ExplorePanel: React.FC<{ api: any; openModule?: (route: string) => void }>
     const item = items[selectedIndex];
     if (!item) return;
     setPostComments([]); setCommentText(''); setLikedCommentsSet(new Set()); setShowComments(false);
-    if (item.source !== 'story') loadComments(item.id);
+    // 🐝 Load comments for ALL items (stories now have linked WallPost IDs)
+    loadComments(item.id);
   }, [selectedIndex, items, loadComments]);
 
   useEffect(() => {
@@ -505,8 +480,9 @@ const ExplorePanel: React.FC<{ api: any; openModule?: (route: string) => void }>
     }
   }, [likedSet, handleLikePost]);
 
+  // 🐝 Comments — works for both posts and stories (stories have linked WallPost IDs)
   const handleAddComment = useCallback(async () => {
-    if (!commentText.trim() || !selectedPost || selectedPost.source === 'story') return;
+    if (!commentText.trim() || !selectedPost) return;
     try {
       const res = await api.post(`/api/wall/posts/${selectedPost.id}/comments`, {
         content: commentText.trim(), publishAsOrg: identity.publishAsOrg,
@@ -765,21 +741,19 @@ const ExplorePanel: React.FC<{ api: any; openModule?: (route: string) => void }>
                 <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)', marginBottom: 8, lineHeight: 1.4 }}>{selectedPost.caption}</div>
               )}
 
-              {/* Action bar — unified for posts AND stories */}
+              {/* 🐝 Action bar — fully unified for posts AND stories */}
               <>
                 <div style={{ display: 'flex', gap: 16, padding: '8px 0', borderTop: '1px solid rgba(255,255,255,0.12)', alignItems: 'center' }}>
                   <ActionBtn icon={likedSet.has(selectedPost.id) ? <HeartFilled style={{ fontSize: 20 }} /> : <HeartOutlined style={{ fontSize: 20 }} />}
                     label={String(selectedPost.likesCount)} color={likedSet.has(selectedPost.id) ? SF.like : 'rgba(255,255,255,0.7)'}
                     onClick={() => handleLikePost(selectedPost.id)} />
-                  {selectedPost.source === 'post' && (
-                    <ActionBtn icon={<MessageOutlined style={{ fontSize: 20 }} />}
-                      label={selectedPost.commentsCount > 0 ? String(selectedPost.commentsCount) : '0'}
-                      color="rgba(255,255,255,0.7)" onClick={() => setShowComments(s => !s)} />
-                  )}
-                  {selectedPost.source === 'story' && (
-                    <ActionBtn icon={<EyeOutlined style={{ fontSize: 20 }} />}
-                      label={`${selectedPost.likesCount} vue${selectedPost.likesCount !== 1 ? 's' : ''}`}
-                      color="rgba(255,255,255,0.5)" />
+                  <ActionBtn icon={<MessageOutlined style={{ fontSize: 20 }} />}
+                    label={selectedPost.commentsCount > 0 ? String(selectedPost.commentsCount) : '0'}
+                    color="rgba(255,255,255,0.7)" onClick={() => setShowComments(s => !s)} />
+                  {selectedPost.isStory && (
+                    <ActionBtn icon={<EyeOutlined style={{ fontSize: 18 }} />}
+                      label={`${selectedPost.viewCount ?? 0}`}
+                      color="rgba(255,255,255,0.4)" />
                   )}
                   <ActionBtn icon={<ShareAltOutlined style={{ fontSize: 20 }} />} color="rgba(255,255,255,0.7)"
                     onClick={() => handleShare(selectedPost.id)} />
@@ -793,15 +767,15 @@ const ExplorePanel: React.FC<{ api: any; openModule?: (route: string) => void }>
                     onClick={() => handleSave(selectedPost.id)} />
                 </div>
 
-                {/* "View N comments" toggle — posts only */}
-                {selectedPost.source === 'post' && selectedPost.commentsCount > 0 && !showComments && (
+                {/* "View N comments" toggle */}
+                {selectedPost.commentsCount > 0 && !showComments && (
                   <div onClick={() => setShowComments(true)}
                     style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: '4px 0' }}>
                     {t('explore.viewComments', { count: selectedPost.commentsCount })}
                   </div>
                 )}
 
-                {selectedPost.source === 'post' && showComments && (
+                {showComments && (
                   <>
                     <div style={{ maxHeight: 140, overflowY: 'auto', marginTop: 4, scrollbarWidth: 'thin' }}>
                       {commentsLoading ? (

@@ -128,6 +128,9 @@ router.post('/stories', authenticateToken, async (req: Request, res: Response) =
     const orgId = (req as any).user.organizationId;
     const { mediaUrl, mediaType, text, visibility, publishAsOrg } = req.body;
 
+    const effectivePublishAsOrg = publishAsOrg && !!orgId ? true : false;
+    const effectiveVisibility = ['ALL', 'IN', 'OUT'].includes(visibility) ? visibility : 'ALL';
+
     const story = await db.story.create({
       data: {
         authorId: userId,
@@ -135,11 +138,33 @@ router.post('/stories', authenticateToken, async (req: Request, res: Response) =
         mediaUrl: mediaUrl || '',
         mediaType: mediaType || 'image',
         caption: text,
-        visibility: ['ALL', 'IN', 'OUT'].includes(visibility) ? visibility : 'ALL',
-        publishAsOrg: publishAsOrg && !!orgId ? true : false,
+        visibility: effectiveVisibility,
+        publishAsOrg: effectivePublishAsOrg,
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       },
     });
+
+    // 🐝 Auto-create a linked WallPost so all interactions (like, comment, share, save) work natively
+    try {
+      await db.wallPost.create({
+        data: {
+          authorId: userId,
+          organizationId: orgId,
+          content: text || '',
+          mediaUrls: mediaUrl ? [mediaUrl] : [],
+          mediaType: mediaType || 'image',
+          visibility: effectiveVisibility,
+          publishAsOrg: effectivePublishAsOrg,
+          crmEntityType: 'STORY',
+          crmEntityId: story.id,
+          isPublished: true,
+          publishedAt: new Date(),
+        },
+      });
+    } catch (linkErr) {
+      console.error('[ZHIIVE] Failed to create linked WallPost for story:', linkErr);
+    }
+
     res.json({ story });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -452,29 +477,69 @@ router.get('/explore/gallery', authenticateToken, async (req: Request, res: Resp
         },
       });
 
-      storyItems = stories
-        .filter(s => s.mediaUrl && s.mediaUrl.length > 0)
-        .map(s => {
-          const isOrg = s.publishAsOrg && s.organization;
-          return {
-            id: `story-${s.id}`,
-            source: 'story' as const,
-            mediaUrl: s.mediaUrl,
-            mediaType: s.mediaType || 'image',
-            likesCount: s._count.views,
-            commentsCount: 0,
-            caption: s.caption || '',
-            category: null,
-            authorId: s.author.id,
-            authorName: isOrg ? s.organization!.name : `${s.author.firstName} ${s.author.lastName}`.trim(),
-            authorAvatar: isOrg ? (s.organization!.logoUrl || null) : s.author.avatarUrl,
-            publishAsOrg: s.publishAsOrg,
-            isLiked: false,
-            createdAt: s.createdAt,
-            isStory: true,
-            isHighlight: s.isHighlight,
-          };
+      storyItems = [];
+      const storyIds = stories.filter(s => s.mediaUrl && s.mediaUrl.length > 0).map(s => s.id);
+
+      // 🐝 Find or create linked WallPosts for stories — enables native like/comment/share/save
+      const linkedPosts = storyIds.length > 0 ? await db.wallPost.findMany({
+        where: { crmEntityType: 'STORY', crmEntityId: { in: storyIds } },
+        select: {
+          id: true, crmEntityId: true, likesCount: true, commentsCount: true,
+          reactions: { where: { userId }, select: { type: true }, take: 1 },
+          savedBy: { where: { userId }, select: { id: true }, take: 1 },
+        },
+      }) : [];
+      const linkedMap = new Map(linkedPosts.map(lp => [lp.crmEntityId!, lp]));
+
+      // Create missing linked WallPosts for existing stories
+      const missingStories = stories.filter(s => s.mediaUrl && s.mediaUrl.length > 0 && !linkedMap.has(s.id));
+      for (const s of missingStories) {
+        try {
+          const wp = await db.wallPost.create({
+            data: {
+              authorId: s.authorId,
+              organizationId: s.organizationId,
+              content: s.caption || '',
+              mediaUrls: [s.mediaUrl],
+              mediaType: s.mediaType || 'image',
+              visibility: s.visibility || 'ALL',
+              publishAsOrg: s.publishAsOrg,
+              crmEntityType: 'STORY',
+              crmEntityId: s.id,
+              isPublished: true,
+              publishedAt: s.createdAt,
+              createdAt: s.createdAt,
+            },
+          });
+          linkedMap.set(s.id, { id: wp.id, crmEntityId: s.id, likesCount: 0, commentsCount: 0, reactions: [], savedBy: [] });
+        } catch { /* duplicate or other — skip */ }
+      }
+
+      for (const s of stories) {
+        if (!s.mediaUrl || s.mediaUrl.length === 0) continue;
+        const linked = linkedMap.get(s.id);
+        const isOrg = s.publishAsOrg && s.organization;
+        storyItems.push({
+          id: linked?.id || `story-${s.id}`,
+          source: 'story' as const,
+          mediaUrl: s.mediaUrl,
+          mediaType: s.mediaType || 'image',
+          likesCount: linked?.likesCount ?? s._count.views,
+          commentsCount: linked?.commentsCount ?? 0,
+          caption: s.caption || '',
+          category: null,
+          authorId: s.author.id,
+          authorName: isOrg ? s.organization!.name : `${s.author.firstName} ${s.author.lastName}`.trim(),
+          authorAvatar: isOrg ? (s.organization!.logoUrl || null) : s.author.avatarUrl,
+          publishAsOrg: s.publishAsOrg,
+          isLiked: linked ? linked.reactions.length > 0 : false,
+          isSaved: linked ? linked.savedBy.length > 0 : false,
+          createdAt: s.createdAt,
+          isStory: true,
+          isHighlight: s.isHighlight,
+          viewCount: s._count.views,
         });
+      }
     }
 
     // ── Merge and sort ──
