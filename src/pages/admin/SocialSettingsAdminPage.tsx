@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Card, Switch, InputNumber, Select, Tag, Alert, Tabs,
-  Spin, Empty, Button, Popconfirm, Tooltip,
+  Spin, Empty, Button, Popconfirm, Tooltip, message,
 } from 'antd';
 import {
   SettingOutlined, EyeOutlined, TeamOutlined, BellOutlined,
@@ -268,6 +268,7 @@ export default function SocialSettingsAdminPage() {
       await api.api.put(`/social-settings/${targetOrgId}`, { [key]: value });
     } catch (error) {
       console.error('Error saving:', error);
+      message.error('Erreur lors de la sauvegarde du paramètre');
       // Revert on error
       setSettings(settings);
     } finally {
@@ -302,8 +303,10 @@ export default function SocialSettingsAdminPage() {
     setSaving(true);
     try {
       await api.api.put(`/social-settings/${targetOrgId}`, defaults);
+      message.success('Section réinitialisée');
     } catch (error) {
       console.error('Error resetting:', error);
+      message.error('Erreur lors de la réinitialisation');
       setSettings(settings);
     } finally {
       setSaving(false);
@@ -318,8 +321,10 @@ export default function SocialSettingsAdminPage() {
     setSaving(true);
     try {
       await api.api.put(`/social-settings/${targetOrgId}`, allDefaults);
+      message.success('Tous les paramètres réinitialisés');
     } catch (error) {
       console.error('Error resetting all:', error);
+      message.error('Erreur lors de la réinitialisation globale');
       setSettings(settings);
     } finally {
       setSaving(false);

@@ -36,6 +36,8 @@ export interface SocialSettingsData {
   battlesEnabled: boolean;
   exploreEnabled: boolean;
   hiveLiveEnabled: boolean;
+  messengerEnabled: boolean;
+  callsEnabled: boolean;
   reactionsEnabled: boolean;
   commentsEnabled: boolean;
   sharesEnabled: boolean;
@@ -50,12 +52,50 @@ export interface SocialSettingsData {
   allowMembersReel: boolean;
   allowMembersSpark: boolean;
   requirePostApproval: boolean;
+  // Content moderation
+  allowGifs: boolean;
+  allowLinks: boolean;
+  allowHashtags: boolean;
+  profanityFilterEnabled: boolean;
+  pinnedPostsLimit: number;
+  autoArchiveDays: number;
+  // Interactions
+  commentDepthLimit: number;
+  // Follow & Friends
+  allowFollowColony: boolean;
+  autoFollowOnJoin: boolean;
+  friendRequestsEnabled: boolean;
+  maxFriendsPerUser: number;
+  allowBlockColony: boolean;
+  // Privacy
+  showMemberList: boolean;
+  showMemberCount: boolean;
+  profileVisibility: string;
+  // Notifications
+  notifyOnNewPost: boolean;
+  notifyOnComment: boolean;
+  notifyOnReaction: boolean;
+  notifyOnNewFollower: boolean;
+  notifyOnFriendRequest: boolean;
+  notifyOnMention: boolean;
+  // Analytics
+  showPostAnalytics: boolean;
+  showProfileViews: boolean;
+  // Wax
   waxEnabled: boolean;
   waxAlertsEnabled: boolean;
   waxDefaultRadiusKm: number;
+  waxGhostModeAllowed: boolean;
+  // Nectar sub-apps
+  questsEnabled: boolean;
   eventsEnabled: boolean;
   capsulesEnabled: boolean;
-  questsEnabled: boolean;
+  orbitEnabled: boolean;
+  pulseEnabled: boolean;
+  // Modération IA
+  moderationMode: string;
+  aiBannedCategories: string[];
+  bannedWords: string[];
   // Business auto-post
   autoPostOnDevisSigned: boolean;
   autoPostOnInvoicePaid: boolean;
@@ -65,6 +105,9 @@ export interface SocialSettingsData {
   autoPostOnCalendarEvent: boolean;
   autoPostOnTaskCompleted: boolean;
   autoPostDefaultVisibility: string;
+  // RGPD
+  gdprDataExportEnabled: boolean;
+  gdprRetentionDays: number;
 }
 
 export type FeedMode = 'personal' | 'org' | 'public';
@@ -398,6 +441,8 @@ const DEFAULT_SETTINGS: SocialSettingsData = {
   battlesEnabled: true,
   exploreEnabled: true,
   hiveLiveEnabled: true,
+  messengerEnabled: true,
+  callsEnabled: true,
   reactionsEnabled: true,
   commentsEnabled: true,
   sharesEnabled: true,
@@ -410,14 +455,52 @@ const DEFAULT_SETTINGS: SocialSettingsData = {
   allowMembersPost: true,
   allowMembersStory: true,
   allowMembersReel: true,
-  allowMembersSpark: true,
+  allowMembersSpark: false,
   requirePostApproval: false,
+  // Content moderation
+  allowGifs: true,
+  allowLinks: true,
+  allowHashtags: true,
+  profanityFilterEnabled: false,
+  pinnedPostsLimit: 3,
+  autoArchiveDays: 0,
+  // Interactions
+  commentDepthLimit: 3,
+  // Follow & Friends
+  allowFollowColony: true,
+  autoFollowOnJoin: true,
+  friendRequestsEnabled: true,
+  maxFriendsPerUser: 5000,
+  allowBlockColony: true,
+  // Privacy
+  showMemberList: true,
+  showMemberCount: true,
+  profileVisibility: 'public',
+  // Notifications
+  notifyOnNewPost: true,
+  notifyOnComment: true,
+  notifyOnReaction: false,
+  notifyOnNewFollower: true,
+  notifyOnFriendRequest: true,
+  notifyOnMention: true,
+  // Analytics
+  showPostAnalytics: false,
+  showProfileViews: false,
+  // Wax
   waxEnabled: true,
   waxAlertsEnabled: true,
   waxDefaultRadiusKm: 10,
+  waxGhostModeAllowed: true,
+  // Nectar sub-apps
+  questsEnabled: true,
   eventsEnabled: true,
   capsulesEnabled: true,
-  questsEnabled: true,
+  orbitEnabled: true,
+  pulseEnabled: true,
+  // Modération IA
+  moderationMode: 'ai_auto',
+  aiBannedCategories: [],
+  bannedWords: [],
   // Business auto-post
   autoPostOnDevisSigned: true,
   autoPostOnInvoicePaid: false,
@@ -427,6 +510,9 @@ const DEFAULT_SETTINGS: SocialSettingsData = {
   autoPostOnCalendarEvent: false,
   autoPostOnTaskCompleted: false,
   autoPostDefaultVisibility: 'IN',
+  // RGPD
+  gdprDataExportEnabled: true,
+  gdprRetentionDays: 0,
 };
 
 /**
@@ -438,45 +524,14 @@ export async function getOrgSocialSettings(orgId: string | null): Promise<Social
   if (!orgId) return DEFAULT_SETTINGS;
   const settings = await db.socialSettings.findUnique({ where: { organizationId: orgId } });
   if (!settings) return DEFAULT_SETTINGS;
-  return {
-    showPublicPostsInFeed: settings.showPublicPostsInFeed ?? DEFAULT_SETTINGS.showPublicPostsInFeed,
-    showFriendsPostsInFeed: settings.showFriendsPostsInFeed ?? DEFAULT_SETTINGS.showFriendsPostsInFeed,
-    showFollowedColoniesInFeed: settings.showFollowedColoniesInFeed ?? DEFAULT_SETTINGS.showFollowedColoniesInFeed,
-    wallEnabled: settings.wallEnabled ?? DEFAULT_SETTINGS.wallEnabled,
-    storiesEnabled: settings.storiesEnabled ?? DEFAULT_SETTINGS.storiesEnabled,
-    reelsEnabled: settings.reelsEnabled ?? DEFAULT_SETTINGS.reelsEnabled,
-    sparksEnabled: settings.sparksEnabled ?? DEFAULT_SETTINGS.sparksEnabled,
-    battlesEnabled: settings.battlesEnabled ?? DEFAULT_SETTINGS.battlesEnabled,
-    exploreEnabled: settings.exploreEnabled ?? DEFAULT_SETTINGS.exploreEnabled,
-    hiveLiveEnabled: settings.hiveLiveEnabled ?? DEFAULT_SETTINGS.hiveLiveEnabled,
-    reactionsEnabled: settings.reactionsEnabled ?? DEFAULT_SETTINGS.reactionsEnabled,
-    commentsEnabled: settings.commentsEnabled ?? DEFAULT_SETTINGS.commentsEnabled,
-    sharesEnabled: settings.sharesEnabled ?? DEFAULT_SETTINGS.sharesEnabled,
-    maxPostLength: settings.maxPostLength ?? DEFAULT_SETTINGS.maxPostLength,
-    maxCommentLength: settings.maxCommentLength ?? DEFAULT_SETTINGS.maxCommentLength,
-    maxMediaPerPost: settings.maxMediaPerPost ?? DEFAULT_SETTINGS.maxMediaPerPost,
-    maxVideoSizeMB: settings.maxVideoSizeMB ?? DEFAULT_SETTINGS.maxVideoSizeMB,
-    maxImageSizeMB: settings.maxImageSizeMB ?? DEFAULT_SETTINGS.maxImageSizeMB,
-    defaultPostVisibility: settings.defaultPostVisibility ?? DEFAULT_SETTINGS.defaultPostVisibility,
-    allowMembersPost: settings.allowMembersPost ?? DEFAULT_SETTINGS.allowMembersPost,
-    allowMembersStory: settings.allowMembersStory ?? DEFAULT_SETTINGS.allowMembersStory,
-    allowMembersReel: settings.allowMembersReel ?? DEFAULT_SETTINGS.allowMembersReel,
-    allowMembersSpark: settings.allowMembersSpark ?? DEFAULT_SETTINGS.allowMembersSpark,
-    requirePostApproval: settings.requirePostApproval ?? DEFAULT_SETTINGS.requirePostApproval,
-    waxEnabled: (settings as any).waxEnabled ?? DEFAULT_SETTINGS.waxEnabled,
-    waxAlertsEnabled: (settings as any).waxAlertsEnabled ?? DEFAULT_SETTINGS.waxAlertsEnabled,
-    waxDefaultRadiusKm: (settings as any).waxDefaultRadiusKm ?? DEFAULT_SETTINGS.waxDefaultRadiusKm,
-    eventsEnabled: (settings as any).eventsEnabled ?? DEFAULT_SETTINGS.eventsEnabled,
-    capsulesEnabled: (settings as any).capsulesEnabled ?? DEFAULT_SETTINGS.capsulesEnabled,
-    questsEnabled: (settings as any).questsEnabled ?? DEFAULT_SETTINGS.questsEnabled,
-    // Business auto-post
-    autoPostOnDevisSigned: (settings as any).autoPostOnDevisSigned ?? DEFAULT_SETTINGS.autoPostOnDevisSigned,
-    autoPostOnInvoicePaid: (settings as any).autoPostOnInvoicePaid ?? DEFAULT_SETTINGS.autoPostOnInvoicePaid,
-    autoPostOnChantierCreated: (settings as any).autoPostOnChantierCreated ?? DEFAULT_SETTINGS.autoPostOnChantierCreated,
-    autoPostOnChantierCompleted: (settings as any).autoPostOnChantierCompleted ?? DEFAULT_SETTINGS.autoPostOnChantierCompleted,
-    autoPostOnNewClient: (settings as any).autoPostOnNewClient ?? DEFAULT_SETTINGS.autoPostOnNewClient,
-    autoPostOnCalendarEvent: (settings as any).autoPostOnCalendarEvent ?? DEFAULT_SETTINGS.autoPostOnCalendarEvent,
-    autoPostOnTaskCompleted: (settings as any).autoPostOnTaskCompleted ?? DEFAULT_SETTINGS.autoPostOnTaskCompleted,
-    autoPostDefaultVisibility: (settings as any).autoPostDefaultVisibility ?? DEFAULT_SETTINGS.autoPostDefaultVisibility,
-  };
+
+  // Spread defaults first, then override with DB values (null → keep default via ?? loop)
+  const result: Record<string, any> = { ...DEFAULT_SETTINGS };
+  for (const key of Object.keys(DEFAULT_SETTINGS) as (keyof SocialSettingsData)[]) {
+    const dbVal = (settings as any)[key];
+    if (dbVal !== undefined && dbVal !== null) {
+      result[key] = dbVal;
+    }
+  }
+  return result as SocialSettingsData;
 }
