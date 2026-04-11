@@ -236,7 +236,7 @@ const LeadsKanbanWrapper: React.FC = () => {
         onClose={() => setIsSettingsOpen(false)}
         destroyOnHidden
       >
-        <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
+        <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}><Spin size="large" /></div>}>
           <LazyLeadsSettingsPage />
         </Suspense>
       </Drawer>

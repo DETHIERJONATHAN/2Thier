@@ -1,10 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
-import { getSocialContext, buildWallFeedWhere, FeedMode } from '../lib/feed-visibility';
+import { getSocialContext, buildWallFeedWhere, FeedMode, getOrgSocialSettings } from '../lib/feed-visibility';
 import { z } from 'zod';
 import { uploadExpressFile } from '../lib/storage';
 import { sendPushToUser } from './push';
+import { moderateContent } from '../services/ai-moderation';
+import { REACTION_TYPE_VALUES } from '../constants/reactions';
 
 const router = Router();
 
@@ -13,7 +15,7 @@ const router = Router();
 // ═══════════════════════════════════════════════════════════════
 
 const createPostSchema = z.object({
-  content: z.string().min(1).max(5000).optional(),
+  content: z.string().min(1).max(50000).optional(), // Max souple — enforcement dynamique via SocialSettings
   mediaUrls: z.array(z.string()).optional(),
   mediaType: z.enum(['image', 'video', 'document', 'gallery']).optional(),
   visibility: z.enum(['OUT', 'IN', 'ALL', 'CLIENT']).default('IN'),
@@ -28,14 +30,14 @@ const createPostSchema = z.object({
 });
 
 const createCommentSchema = z.object({
-  content: z.string().min(1).max(2000),
+  content: z.string().min(1).max(10000), // Max souple — enforcement dynamique via SocialSettings
   parentCommentId: z.string().optional(),
   mediaUrl: z.string().optional(),
   publishAsOrg: z.boolean().optional(),
 });
 
 const reactionSchema = z.object({
-  type: z.enum(['LIKE', 'LOVE', 'BRAVO', 'UTILE', 'WOW']).default('LIKE'),
+  type: z.enum(REACTION_TYPE_VALUES).default('LIKE'),
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -295,6 +297,22 @@ router.post('/posts', authenticateToken, async (req: Request, res: Response) => 
     const orgId = user.organizationId || req.headers['x-organization-id'] as string;
     const data = createPostSchema.parse(req.body);
 
+    // ═══ Enforcement SocialSettings ═══
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.wallEnabled) {
+      return res.status(403).json({ error: 'Le Mur est désactivé pour cette Colony' });
+    }
+    const isAdmin = user.role === 'admin' || user.role === 'super_admin' || user.isSuperAdmin;
+    if (!settings.allowMembersPost && !isAdmin) {
+      return res.status(403).json({ error: 'La publication est réservée aux administrateurs de cette Colony' });
+    }
+    if (data.content && data.content.length > settings.maxPostLength) {
+      return res.status(400).json({ error: `Le contenu dépasse la limite de ${settings.maxPostLength} caractères` });
+    }
+    if (data.mediaUrls && data.mediaUrls.length > settings.maxMediaPerPost) {
+      return res.status(400).json({ error: `Maximum ${settings.maxMediaPerPost} médias par publication` });
+    }
+
     // Free users (sans org) ne peuvent poster qu'en visibilité ALL
     if (!orgId && data.visibility && data.visibility !== 'ALL') {
       data.visibility = 'ALL';
@@ -308,6 +326,30 @@ router.post('/posts', authenticateToken, async (req: Request, res: Response) => 
     // Au moins du contenu ou des médias ou un partage
     if (!data.content && (!data.mediaUrls || data.mediaUrls.length === 0) && !data.parentPostId) {
       return res.status(400).json({ error: 'Contenu ou média requis' });
+    }
+
+    // 🤖 AI Moderation — check content before creating
+    let aiModerated = false;
+    if (data.content && (settings as any).moderationMode && (settings as any).moderationMode !== 'disabled') {
+      try {
+        const modResult = await moderateContent(data.content, {
+          moderationMode: (settings as any).moderationMode,
+          aiBannedCategories: (settings as any).aiBannedCategories,
+        });
+        if (modResult.flagged) {
+          if ((settings as any).moderationMode === 'ai_auto') {
+            return res.status(422).json({
+              error: 'Contenu rejeté par la modération automatique',
+              reason: modResult.reason,
+              categories: modResult.categories,
+            });
+          }
+          // ai_flag mode: create post but hold for review
+          aiModerated = true;
+        }
+      } catch (modErr) {
+        console.error('[WALL] AI moderation error (non-blocking):', modErr);
+      }
     }
 
     const post = await db.wallPost.create({
@@ -326,6 +368,7 @@ router.post('/posts', authenticateToken, async (req: Request, res: Response) => 
         isPinned: data.isPinned || false,
         publishAsOrg: data.publishAsOrg && !!orgId ? true : false,
         parentPostId: data.parentPostId || null,
+        isPublished: (settings.requirePostApproval && !isAdmin) || aiModerated ? false : true,
         publishedAt: new Date(),
       },
       include: {
@@ -409,6 +452,13 @@ router.post('/posts/:id/reactions', authenticateToken, async (req: Request, res:
     // Vérifier que le post existe
     const post = await db.wallPost.findUnique({ where: { id } });
     if (!post) return res.status(404).json({ error: 'Post non trouvé' });
+
+    // ═══ Enforcement SocialSettings ═══
+    const orgId = post.organizationId || user.organizationId || req.headers['x-organization-id'] as string;
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.reactionsEnabled) {
+      return res.status(403).json({ error: 'Les réactions sont désactivées pour cette Colony' });
+    }
 
     // Chercher réaction existante
     const existing = await db.wallReaction.findUnique({
@@ -513,6 +563,28 @@ router.post('/posts/:id/comments', authenticateToken, async (req: Request, res: 
     const post = await db.wallPost.findUnique({ where: { id } });
     if (!post) return res.status(404).json({ error: 'Post non trouvé' });
 
+    // ═══ Enforcement SocialSettings ═══
+    const orgId = post.organizationId || user.organizationId || req.headers['x-organization-id'] as string;
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.commentsEnabled) {
+      return res.status(403).json({ error: 'Les commentaires sont désactivés pour cette Colony' });
+    }
+    if (data.content.length > settings.maxCommentLength) {
+      return res.status(400).json({ error: `Le commentaire dépasse la limite de ${settings.maxCommentLength} caractères` });
+    }
+
+    // ═══ AI Moderation on comments ═══
+    if ((settings as any).moderationMode && (settings as any).moderationMode !== 'disabled') {
+      const modResult = await moderateContent(data.content, settings as any);
+      if (modResult.flagged && (settings as any).moderationMode === 'ai_auto') {
+        return res.status(422).json({
+          error: 'Commentaire bloqué par la modération',
+          reason: modResult.reason,
+          categories: modResult.categories,
+        });
+      }
+    }
+
     const comment = await db.wallComment.create({
       data: {
         postId: id,
@@ -601,6 +673,13 @@ router.post('/posts/:id/share', authenticateToken, async (req: Request, res: Res
 
     const post = await db.wallPost.findUnique({ where: { id } });
     if (!post) return res.status(404).json({ error: 'Post non trouvé' });
+
+    // ═══ Enforcement SocialSettings ═══
+    const orgId = post.organizationId || user.organizationId || req.headers['x-organization-id'] as string;
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.sharesEnabled) {
+      return res.status(403).json({ error: 'Le partage est désactivé pour cette Colony' });
+    }
 
     const allowedTypes = ['INTERNAL', 'FACEBOOK', 'LINKEDIN', 'WHATSAPP', 'EMAIL', 'LINK'];
     if (!allowedTypes.includes(targetType)) {

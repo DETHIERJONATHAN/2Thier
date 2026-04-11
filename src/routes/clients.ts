@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { db } from '../lib/database';
+import { createBusinessAutoPost } from '../services/business-auto-post';
 
 const router = Router();
 const prisma = db;
@@ -160,6 +161,16 @@ router.post('/', async (req, res) => {
       createdAt: lead.createdAt,
       updatedAt: lead.updatedAt
     };
+
+    // 🐝 Auto-post social : nouveau client
+    createBusinessAutoPost({
+      orgId: req.organizationId,
+      userId: (req as any).user?.id || (req as any).user?.userId,
+      eventType: 'new_client',
+      entityId: lead.id,
+      entityLabel: company || name || 'Nouveau client',
+      clientName: name || company || undefined,
+    }).catch(err => console.error('[CLIENTS] Auto-post error:', err));
 
     res.status(201).json(client);
 

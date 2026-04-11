@@ -18,6 +18,7 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 import { decrypt } from '../utils/crypto.js';
+import { createBusinessAutoPost } from '../services/business-auto-post';
 import { generateTblPdf, generateTblPdfWithHash, hashPdf } from '../services/tblPdfGenerator';
 import type { TblPdfData, TblPdfSection, TblPdfField, TblPdfSignatureInfo } from '../services/tblPdfGenerator';
 import { getPostalService } from '../services/PostalEmailService';
@@ -681,6 +682,16 @@ router.post('/:id/sign', async (req: Request, res: Response) => {
         signature.organizationId,
         { signerName: signature.signerName, signerEmail: signature.signerEmail, documentId: signature.documentId || undefined }
       );
+
+      // 🐝 Auto-post social : devis signé
+      createBusinessAutoPost({
+        orgId: signature.organizationId,
+        userId: signature.organizationId, // endpoint public, pas de userId
+        eventType: 'devis_signed',
+        entityId: id,
+        entityLabel: `Document signé par ${signature.signerName}`,
+        clientName: signature.signerName || undefined,
+      }).catch(err => console.error('[E-Signature] Auto-post error:', err));
     }
 
     return res.json({

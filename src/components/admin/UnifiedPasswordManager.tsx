@@ -234,7 +234,7 @@ const UnifiedPasswordManager: React.FC = () => {
         </Paragraph>
       </Card>
       
-      <Table 
+      <Table scroll={{ x: "max-content" }} 
         columns={columns}
         dataSource={users}
         rowKey="id"

@@ -272,8 +272,7 @@ const AdvancedAnalyticsPage: React.FC = () => {
       <Tabs defaultActiveKey="advertising">
         <TabPane tab="Publicités" key="advertising">
           <Card title="Performance par Plateforme Publicitaire">
-            <Table
-              columns={adMetricsColumns}
+            <Table scroll={{ x: "max-content" }}               columns={adMetricsColumns}
               dataSource={mockAdData}
               pagination={false}
               summary={() => (

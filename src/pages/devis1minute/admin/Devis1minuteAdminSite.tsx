@@ -113,7 +113,7 @@ export default function Devis1minuteAdminSite() {
         <Button icon={<ReloadOutlined />} onClick={load}>Rafraîchir</Button>
       </div>
       <Card>
-        <Table rowKey="id" loading={loading} dataSource={rows} columns={columns} pagination={{ pageSize: 10 }} />
+        <Table scroll={{ x: "max-content" }} rowKey="id" loading={loading} dataSource={rows} columns={columns} pagination={{ pageSize: 10 }} />
       </Card>
 
       <Modal open={open} onCancel={() => setOpen(false)} onOk={onSubmit} title={editing ? 'Modifier la page' : 'Nouvelle page'} okText="Enregistrer">

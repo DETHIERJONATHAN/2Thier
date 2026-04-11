@@ -498,8 +498,7 @@ const DocumentTemplatesPage = () => {
       <div style={{ background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow, padding: isMobile ? 8 : 16 }}>
         <Tabs defaultActiveKey="templates">
           <TabPane tab="Templates" key="templates">
-            <Table
-              dataSource={templates}
+            <Table scroll={{ x: "max-content" }}               dataSource={templates}
               columns={columns}
               rowKey="id"
               loading={loading}

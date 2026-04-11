@@ -287,6 +287,7 @@ const GestionTableauxPage: React.FC = () => {
       <Card>
         {filteredTableaux.length > 0 ? (
           <Table
+            scroll={{ x: 'max-content' }}
             columns={columns}
             dataSource={filteredTableaux}
             rowKey="id"

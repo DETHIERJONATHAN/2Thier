@@ -23,7 +23,7 @@ export const usePostInteractions = ({ api, t, userId: _userId }: UsePostInteract
   const initFollowing = useCallback((ids: string[]) => setFollowingSet(new Set(ids)), []);
 
   // ── Like / Unlike ──
-  const toggleLike = useCallback(async (postId: string): Promise<boolean> => {
+  const toggleLike = useCallback(async (postId: string, type = 'LIKE'): Promise<boolean> => {
     if (postId.startsWith('story-')) return false;
     const wasLiked = likedSet.has(postId);
     setLikedSet(prev => {
@@ -32,7 +32,7 @@ export const usePostInteractions = ({ api, t, userId: _userId }: UsePostInteract
       return n;
     });
     try {
-      await api.post(`/api/wall/posts/${postId}/reactions`, { type: 'LIKE' });
+      await api.post(`/api/wall/posts/${postId}/reactions`, { type });
       return !wasLiked;
     } catch {
       // Rollback

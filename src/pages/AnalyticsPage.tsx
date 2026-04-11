@@ -267,8 +267,7 @@ const AnalyticsPage: React.FC = () => {
 
       {/* 📋 AUDIT TRAIL */}
       <Card title="📋 Journal d'Audit" className="mb-6">
-        <Table
-          columns={auditColumns}
+        <Table scroll={{ x: "max-content" }}           columns={auditColumns}
           dataSource={auditLogs}
           rowKey="id"
           pagination={{ pageSize: 10 }}

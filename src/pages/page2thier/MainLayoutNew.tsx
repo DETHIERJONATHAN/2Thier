@@ -22,7 +22,7 @@ import { useAuth } from '../../auth/useAuth';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useZhiiveNav, ZhiiveNavProvider, FeedMode } from '../../contexts/ZhiiveNavContext';
 import { ActiveIdentityProvider, useActiveIdentity } from '../../contexts/ActiveIdentityContext';
-import { SocialIdentityProvider } from '../../contexts/SocialIdentityContext';
+import { SocialIdentityProvider, useSocialIdentity } from '../../contexts/SocialIdentityContext';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import PWAInstallPrompt from '../../components/PWAInstallPrompt';
 
@@ -134,6 +134,7 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
   const { centerApp, setCenterApp, tabOrder, reorderTabs, mobilePanel, scrollMobileToPanel } = useZhiiveNav();
   const { currentOrganization, isSuperAdmin } = useAuth();
   const { api } = useAuthenticatedApi();
+  const { isAppEnabled } = useSocialIdentity();
   const isFreeUser = !currentOrganization && !isSuperAdmin;
   const [dragId, setDragId] = useState<string | null>(null);
   const isDashboard = location.pathname === '/dashboard' || location.pathname === '/';
@@ -199,8 +200,22 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
       }
     }
     const result = ordered.filter(t => !(isFreeUser && t.id === 'stats'));
-    return result;
-  }, [tabOrder, isFreeUser, dynamicTabs]);
+
+    // ═══ Filter out apps disabled in SocialSettings ═══
+    const APP_TO_SETTING: Record<string, string> = {
+      explore: 'explore',
+      nectar: 'sparks',
+      reels: 'reels',
+      wax: 'wall', // Wax doesn't have its own setting yet — always enabled
+    };
+    const filtered = result.filter(t => {
+      const settingKey = APP_TO_SETTING[t.id];
+      if (!settingKey) return true; // mur, mail, agenda, search, stats → always show
+      return isAppEnabled(settingKey);
+    });
+
+    return filtered;
+  }, [tabOrder, isFreeUser, dynamicTabs, isAppEnabled]);
 
   const handleTabClick = useCallback((tabId: string) => {
     if (!isDashboard) {

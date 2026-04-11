@@ -86,6 +86,8 @@ import syncTempRoutes from './sync-temp'; // 🔄 TEMPORAIRE: Sync documents
 import joinRequestsRoutes from './join-requests'; // 📝 Routes demandes d'adhésion
 import wallRoutes from './wall'; // 🏠 Routes Mur / Réseau Social d'Entreprise
 import socialSettingsRoutes from './social-settings'; // 🐝 Routes Social Settings & OrgFollow
+import notificationPreferencesRoutes from './notification-preferences'; // 🔔 Notification per-user
+import rgpdRoutes from './rgpd'; // 🔒 RGPD / GDPR compliance
 import friendsRoutes from './friends'; // 👥 Routes Amis
 import messengerRoutes from './messenger'; // 💬 Routes Messenger
 import callsRoutes from './calls'; // 📹 Routes Appels Vidéo/Audio
@@ -397,6 +399,12 @@ apiRouter.use('/sync', syncTempRoutes);
 
 // 🐝 SOCIAL SETTINGS & ORG FOLLOW
 apiRouter.use('/social-settings', socialSettingsRoutes);
+
+// 🔔 NOTIFICATION PREFERENCES (per-user per-channel)
+apiRouter.use('/notification-preferences', notificationPreferencesRoutes);
+
+// 🔒 RGPD / GDPR COMPLIANCE
+apiRouter.use('/rgpd', rgpdRoutes);
 
 // 🏠 MUR / RÉSEAU SOCIAL D'ENTREPRISE
 apiRouter.use('/wall', wallRoutes);

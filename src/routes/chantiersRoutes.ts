@@ -8,6 +8,7 @@ import crypto from 'crypto';
 import { sendTransitionNotifications } from './chantier-workflow';
 import { uploadExpressFile } from '../lib/storage';
 import { sendPushToUser } from './push';
+import { createBusinessAutoPost } from '../services/business-auto-post';
 
 const router = Router();
 
@@ -629,6 +630,17 @@ router.post('/', authenticateToken, async (req, res) => {
       }
     });
 
+    // 🐝 Auto-post social : chantier créé
+    createBusinessAutoPost({
+      orgId: organizationId,
+      userId: user?.id,
+      eventType: 'chantier_created',
+      entityId: chantier.id,
+      entityLabel: data.productLabel || 'Nouveau chantier',
+      clientName: clientName || undefined,
+      amount: data.amount ? Number(data.amount) : undefined,
+    }).catch(err => console.error('[Chantiers] Auto-post error:', err));
+
     res.status(201).json({
       success: true,
       data: chantier,
@@ -906,6 +918,17 @@ router.post('/from-lead-document', authenticateToken, async (req, res) => {
         },
       }
     });
+
+    // 🐝 Auto-post social : chantier créé (depuis document signé)
+    createBusinessAutoPost({
+      orgId: organizationId,
+      userId: user?.id,
+      eventType: 'chantier_created',
+      entityId: chantier.id,
+      entityLabel: productLabel || 'Nouveau chantier',
+      clientName: clientName || undefined,
+      amount: amount ? parseFloat(amount) : undefined,
+    }).catch(err => console.error('[Chantiers] Auto-post error:', err));
 
     res.status(201).json({
       success: true,
@@ -1242,6 +1265,18 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
       }
     } catch (autoInvErr) {
       console.error('[Chantiers] Erreur auto-création factures (non bloquant):', autoInvErr);
+    }
+
+    // 🐝 Auto-post social : chantier terminé (si statut final)
+    const statusName = (chantier.ChantierStatus?.name || '').toLowerCase();
+    if (statusName.includes('termin') || statusName.includes('réception') || statusName.includes('clotur') || statusName.includes('fini')) {
+      createBusinessAutoPost({
+        orgId: organizationId,
+        userId: user?.userId || user?.id,
+        eventType: 'chantier_completed',
+        entityId: id,
+        entityLabel: `Chantier ${chantier.ChantierStatus?.name}`,
+      }).catch(err => console.error('[Chantiers] Auto-post error:', err));
     }
 
     res.json({

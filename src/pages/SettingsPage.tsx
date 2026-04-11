@@ -282,6 +282,8 @@ const SettingsPage = () => {
     const prefItems: MenuItem[] = [
       { key: 'ai-measure', to: '/settings/ai-measure', icon: <CameraOutlined />, label: 'IA Mesure', requiredPermission: 'organization:read' },
       { key: 'blocked', to: '/settings/blocked', icon: <StopOutlined />, label: 'Blocages', requiredPermission: null },
+      { key: 'notifications', to: '/settings/notifications', icon: <SettingOutlined />, label: 'Notifications', requiredPermission: null },
+      { key: 'privacy', to: '/settings/privacy', icon: <LockOutlined />, label: 'Confidentialité & RGPD', requiredPermission: null },
     ];
 
     // Category 4: Administration (Super Admin + Admin avancé)

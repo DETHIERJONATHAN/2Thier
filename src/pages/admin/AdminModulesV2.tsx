@@ -621,7 +621,7 @@ const AdminModulesV2: React.FC = () => {
 
   if (loading) {
     return (
-      <div style={{ textAlign: 'center', padding: '50px' }}>
+      <div style={{ textAlign: 'center', padding: '24px 16px' }}>
         <Spin size="large" />
         <div style={{ marginTop: 16 }}>
           <Text>Chargement du système de gestion des modules...</Text>
@@ -632,7 +632,7 @@ const AdminModulesV2: React.FC = () => {
 
   if (!hasAccess) {
     return (
-      <div style={{ textAlign: 'center', padding: '50px' }}>
+      <div style={{ textAlign: 'center', padding: '24px 16px' }}>
         <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚫</div>
         <Title level={3}>Accès restreint</Title>
         <Text type="secondary">
@@ -1066,8 +1066,7 @@ const AdminModulesV2: React.FC = () => {
                   border: '1px solid #f0f0f0'
                 }}
               >
-                <Table
-                  dataSource={filteredCategories.flatMap(cat => [
+                <Table scroll={{ x: "max-content" }}                   dataSource={filteredCategories.flatMap(cat => [
                     { 
                       ...cat, 
                       type: 'category', 

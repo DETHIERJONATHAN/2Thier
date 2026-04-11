@@ -97,6 +97,8 @@ const RolesSettings = lazy(() => import('./pages/settings/RolesSettings'));
 const CommercialSettings = lazy(() => import('./pages/settings/CommercialSettings'));
 const GoogleSettings = lazy(() => import('./pages/settings/GoogleSettings'));
 const BlockedSettings = lazy(() => import('./pages/settings/BlockedSettings'));
+const PrivacySettings = lazy(() => import('./pages/settings/PrivacySettings'));
+const NotificationPrefsSettings = lazy(() => import('./pages/settings/NotificationPrefsSettings'));
 const PeppolSettings = lazy(() => import('./pages/settings/PeppolSettings'));
 
 // Pages Documents (Admin)
@@ -325,6 +327,8 @@ export default function AppLayout() {
               <Route path="google" element={<GoogleSettings />} />
               <Route path="ai-measure" element={<AIMeasureSettings />} />
               <Route path="blocked" element={<BlockedSettings />} />
+              <Route path="privacy" element={<PrivacySettings />} />
+              <Route path="notifications" element={<NotificationPrefsSettings />} />
               <Route path="peppol" element={<PeppolSettings />} />
               {/* Pages admin intégrées aux paramètres */}
               {isSuperAdmin && <Route path="modules" element={<ModulesAdminPage />} />}

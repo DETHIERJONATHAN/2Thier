@@ -12,6 +12,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
+import { describe, it, expect } from 'vitest';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -40,10 +41,13 @@ function readSrc(rel: string): string {
   return fs.existsSync(p) ? fs.readFileSync(p, 'utf-8') : '';
 }
 
+describe('Peppol send unified audit', () => {
+it('audit checks pass', () => {
+
 console.log('\n⚡ TEST — Envoi Peppol unifié (ChantierInvoice + StandaloneInvoice)\n');
 
 const routes = readSrc('routes/peppol.ts');
-if (!routes) { fail('routes/peppol.ts manquant'); process.exit(1); }
+if (!routes) { fail('routes/peppol.ts manquant'); }
 ok('routes/peppol.ts existe');
 
 // ══════════════════════════════════════════════════
@@ -205,4 +209,6 @@ if (failed === 0) console.log('  🎉 Envoi Peppol unifié — TOUT OK');
 else console.log('  🚨 Envoi Peppol unifié — corrections nécessaires');
 console.log('─'.repeat(55) + '\n');
 
-process.exit(failed > 0 ? 1 : 0);
+expect(failed).toBe(0);
+});
+});

@@ -242,8 +242,7 @@ const UsersAdminPage: React.FC = () => {
         </Button>
       </div>
 
-      <Table
-        columns={userColumns}
+      <Table scroll={{ x: "max-content" }}         columns={userColumns}
         dataSource={users}
         loading={loading}
         rowKey="id"

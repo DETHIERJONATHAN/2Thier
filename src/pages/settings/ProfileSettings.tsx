@@ -159,7 +159,7 @@ const ProfileSettings: React.FC = () => {
   };
 
   if (loading) return (
-    <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>
+    <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}><Spin size="large" /></div>
   );
 
   const rl = roleLabel(user?.role);

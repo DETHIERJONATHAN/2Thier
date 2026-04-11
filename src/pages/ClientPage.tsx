@@ -171,7 +171,7 @@ const ClientPage: React.FC = () => {
 
       {/* Tableau des clients */}
       <Card title="Liste des Clients">
-        <Table 
+        <Table scroll={{ x: "max-content" }} 
           columns={columns} 
           dataSource={mockClients}
           pagination={{

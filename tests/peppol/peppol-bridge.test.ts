@@ -12,6 +12,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
+import { describe, it, expect } from 'vitest';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,6 +36,9 @@ function warn(label: string, detail?: string) {
   console.log(`  ⚠️  ${label}${detail ? ` — ${detail}` : ''}`);
 }
 
+describe('PeppolBridge audit', () => {
+it('audit checks pass', () => {
+
 console.log('\n🔌 TEST — PeppolBridge (structure & conventions)\n');
 
 // ── 1. Fichier existe ──
@@ -42,7 +46,7 @@ const bridgePath = path.join(SRC, 'services', 'peppolBridge.ts');
 const bridgeSrc = fs.existsSync(bridgePath) ? fs.readFileSync(bridgePath, 'utf-8') : '';
 
 if (bridgeSrc) ok('peppolBridge.ts existe');
-else { fail('peppolBridge.ts manquant'); process.exit(1); }
+else { fail('peppolBridge.ts manquant'); }
 
 // ── 2. Exports corrects ──
 if (bridgeSrc.includes('export class PeppolBridge'))  ok('export class PeppolBridge');
@@ -132,4 +136,6 @@ if (failed === 0) console.log('  🎉 PeppolBridge OK');
 else console.log('  🚨 PeppolBridge — corrections nécessaires');
 console.log('─'.repeat(50) + '\n');
 
-process.exit(failed > 0 ? 1 : 0);
+expect(failed).toBe(0);
+});
+});

@@ -86,6 +86,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
   const [showLayer, setShowLayer] = useState({ bees: true, colonies: true, combs: true, pins: true });
   const [mapReady, setMapReady] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [mapStyle, setMapStyle] = useState<'vector' | 'satellite'>('vector');
 
   // ── Routing state ──
   const [routingOpen, setRoutingOpen] = useState(false);
@@ -140,6 +141,219 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
   useEffect(() => { userPositionRef.current = userPosition; }, [userPosition]);
 
   const selfUser = currentUser || user;
+
+  // ── Switch map style (vector <-> satellite) ──
+  const switchMapStyle = useCallback((style: 'vector' | 'satellite') => {
+    const map = mapRef.current;
+    if (!map) return;
+    setMapStyle(style);
+
+    // Save current camera state
+    const center = map.getCenter();
+    const zoom = map.getZoom();
+    const pitch = map.getPitch();
+    const bearing = map.getBearing();
+
+    // Remove route layer/source before style swap
+    const hadRoute = routeSourceAdded.current;
+    const savedRouteData = routeDataRef.current;
+    routeSourceAdded.current = false;
+
+    // Remove existing markers (will be re-created on next render)
+    markersRef.current.forEach(m => m.remove());
+    markersRef.current = [];
+    if (liveSelfMarkerRef.current) {
+      liveSelfMarkerRef.current.remove();
+      liveSelfMarkerRef.current = null;
+    }
+
+    if (style === 'satellite') {
+      // Satellite hybrid style: ESRI aerial imagery + OpenMapTiles labels overlay
+      map.setStyle({
+        version: 8,
+        glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+        sources: {
+          'esri-satellite': {
+            type: 'raster',
+            tiles: [
+              'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+            ],
+            tileSize: 256,
+            maxzoom: 19,
+            attribution: '&copy; Esri, Maxar, Earthstar Geographics',
+          },
+          'openmaptiles': {
+            type: 'vector',
+            url: 'https://tiles.openfreemap.org/planet',
+          },
+        },
+        layers: [
+          {
+            id: 'satellite-tiles',
+            type: 'raster',
+            source: 'esri-satellite',
+            minzoom: 0,
+            maxzoom: 20,
+          },
+          // Road labels on top of satellite
+          {
+            id: 'road-labels',
+            type: 'symbol',
+            source: 'openmaptiles',
+            'source-layer': 'transportation_name',
+            minzoom: 14,
+            layout: {
+              'text-field': '{name}',
+              'text-size': 11,
+              'text-font': ['Open Sans Regular'],
+              'symbol-placement': 'line',
+              'text-max-angle': 30,
+              'text-padding': 2,
+            },
+            paint: {
+              'text-color': '#ffffff',
+              'text-halo-color': 'rgba(0,0,0,0.7)',
+              'text-halo-width': 1.5,
+            },
+          },
+          // Place labels (cities, towns)
+          {
+            id: 'place-labels',
+            type: 'symbol',
+            source: 'openmaptiles',
+            'source-layer': 'place',
+            minzoom: 6,
+            layout: {
+              'text-field': '{name}',
+              'text-size': ['interpolate', ['linear'], ['zoom'], 6, 10, 14, 16],
+              'text-font': ['Open Sans Bold'],
+              'text-anchor': 'center',
+              'text-padding': 4,
+            },
+            paint: {
+              'text-color': '#ffffff',
+              'text-halo-color': 'rgba(0,0,0,0.8)',
+              'text-halo-width': 2,
+            },
+          },
+        ],
+      } as any);
+    } else {
+      map.setStyle('https://tiles.openfreemap.org/styles/liberty');
+    }
+
+    map.once('style.load', () => {
+      // Restore camera
+      map.jumpTo({ center, zoom, pitch, bearing });
+
+      // Re-add terrain DEM
+      try {
+        map.addSource('terrain-dem', {
+          type: 'raster-dem',
+          tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+          tileSize: 256,
+          encoding: 'terrarium',
+          maxzoom: 15,
+        });
+        if (!carViewRef.current) {
+          map.setTerrain({ source: 'terrain-dem', exaggeration: 1.8 });
+        }
+      } catch { /* */ }
+
+      // Re-add sky
+      try {
+        map.setSky({
+          'sky-color': style === 'satellite' ? '#1a1a2e' : '#88c6fc',
+          'sky-horizon-blend': 0.5,
+          'horizon-color': style === 'satellite' ? '#2d3436' : '#f0e8d8',
+          'horizon-fog-blend': 0.5,
+          'fog-color': style === 'satellite' ? '#2d3436' : '#c8d6e5',
+          'fog-ground-blend': 0.5,
+          'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 12, 0],
+        } as any);
+      } catch { /* */ }
+
+      // Re-add 3D buildings on vector style
+      if (style === 'vector') {
+        try {
+          const layers = map.getStyle().layers || [];
+          const buildingLayer = layers.find((l: any) =>
+            l.id.includes('building') && (l.type === 'fill' || l['source-layer']?.includes('building'))
+          );
+          if (buildingLayer) {
+            map.addLayer({
+              id: 'buildings-3d',
+              source: (buildingLayer as any).source,
+              'source-layer': (buildingLayer as any)['source-layer'] || 'building',
+              type: 'fill-extrusion',
+              minzoom: 14,
+              paint: {
+                'fill-extrusion-color': [
+                  'interpolate', ['linear'], ['get', 'render_height'],
+                  0, '#e0d6f0', 20, '#c4b5e0', 40, '#a594cc',
+                ],
+                'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 10],
+                'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
+                'fill-extrusion-opacity': 0.7,
+              },
+            });
+          }
+        } catch { /* */ }
+      } else {
+        // Satellite: add 3D building extrusions from the vector source for depth
+        try {
+          map.addLayer({
+            id: 'buildings-3d-sat',
+            source: 'openmaptiles',
+            'source-layer': 'building',
+            type: 'fill-extrusion',
+            minzoom: 15,
+            paint: {
+              'fill-extrusion-color': 'rgba(200,200,220,0.3)',
+              'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 8],
+              'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
+              'fill-extrusion-opacity': 0.35,
+            },
+          });
+        } catch { /* */ }
+      }
+
+      // Restore route if there was one
+      if (hadRoute && savedRouteData) {
+        try {
+          map.addSource('route-line', {
+            type: 'geojson',
+            data: { type: 'Feature', geometry: savedRouteData.geometry, properties: {} },
+          });
+          map.addLayer({
+            id: 'route-line-bg',
+            type: 'line',
+            source: 'route-line',
+            paint: {
+              'line-color': '#000000',
+              'line-width': 10,
+              'line-opacity': 0.3,
+            },
+          });
+          map.addLayer({
+            id: 'route-line-main',
+            type: 'line',
+            source: 'route-line',
+            paint: {
+              'line-color': SF.primary,
+              'line-width': 6,
+              'line-opacity': 0.9,
+            },
+          });
+          routeSourceAdded.current = true;
+        } catch { /* */ }
+      }
+
+      // Trigger marker re-render
+      setMapReady(false);
+      setTimeout(() => setMapReady(true), 100);
+    });
+  }, []);
 
   const updateUserPosition = useCallback((pos: { lat: number; lng: number }) => {
     userPositionRef.current = pos;
@@ -1757,6 +1971,24 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
           >
             <span style={{ fontSize: 13 }}>🏙️</span>
             <span>{carView ? '2D' : '3D'}</span>
+          </div>
+        </Tooltip>
+        {/* Satellite / Map toggle */}
+        <Tooltip title={mapStyle === 'satellite' ? t('wax.mapVector') : t('wax.mapSatellite')} placement="right">
+          <div
+            onClick={() => switchMapStyle(mapStyle === 'satellite' ? 'vector' : 'satellite')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5, padding: '5px 8px',
+              borderRadius: 12, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+              background: mapStyle === 'satellite' ? 'rgba(0,180,148,0.25)' : 'rgba(0,0,0,0.6)',
+              color: mapStyle === 'satellite' ? SF.success : 'rgba(255,255,255,0.6)',
+              border: `1px solid ${mapStyle === 'satellite' ? SF.success + '50' : 'rgba(255,255,255,0.15)'}`,
+              backdropFilter: 'blur(8px)', transition: 'all 0.2s', whiteSpace: 'nowrap',
+              marginBottom: 2,
+            }}
+          >
+            <span style={{ fontSize: 13 }}>{mapStyle === 'satellite' ? '🗺️' : '🛰️'}</span>
+            <span>{mapStyle === 'satellite' ? t('wax.mapVector') : t('wax.mapSatellite')}</span>
           </div>
         </Tooltip>
         {[

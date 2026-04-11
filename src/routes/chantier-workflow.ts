@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 import { decrypt } from '../utils/crypto.js';
 import { sendPushToUser } from './push';
+import { createBusinessAutoPost } from '../services/business-auto-post';
 
 /** Crée une notification en DB ET envoie un push */
 async function createChantierNotifWithPush(args: any) {
@@ -969,6 +970,16 @@ router.put('/invoices/:id', authenticateToken, isAdmin, async (req, res) => {
 
       // Vérifier transitions automatiques basées sur le paiement
       await checkAutoTransitions(existing.chantierId, organizationId, 'AUTO_INVOICE_PAID', user);
+
+      // 🐝 Auto-post social : facture payée
+      createBusinessAutoPost({
+        orgId: organizationId,
+        userId: user?.userId || user?.id,
+        eventType: 'invoice_paid',
+        entityId: id,
+        entityLabel: existing.label || `Facture ${existing.type}`,
+        amount: existing.amount ? Number(existing.amount) : undefined,
+      }).catch(err => console.error('[ChantierWorkflow] Auto-post error:', err));
     }
 
     // Si le statut passe à SENT, enregistrer sentAt

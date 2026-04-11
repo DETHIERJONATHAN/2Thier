@@ -246,8 +246,7 @@ export const WebsitesAdminPage: React.FC = () => {
             style={{ marginBottom: 16 }}
           />
 
-          <Table
-            columns={columns}
+          <Table scroll={{ x: "max-content" }}             columns={columns}
             dataSource={websites}
             loading={loading}
             rowKey="id"

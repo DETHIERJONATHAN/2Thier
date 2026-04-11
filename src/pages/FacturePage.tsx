@@ -1488,7 +1488,7 @@ const FacturePage: React.FC = () => {
         {activeTab !== 'expenses' && activeTab !== 'accounting' && (
         <>
         {loading ? (
-          <div style={{ textAlign: 'center', padding: 60 }}>
+          <div style={{ textAlign: 'center', padding: 24 }}>
             <Spin size="large" />
             <div style={{ color: FB.textSecondary, marginTop: 12 }}>Chargement des factures...</div>
           </div>

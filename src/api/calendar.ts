@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { db } from '../lib/database';
 import { authMiddleware, AuthenticatedRequest } from '../middlewares/auth';
 import type { Response } from 'express';
+import { createBusinessAutoPost } from '../services/business-auto-post';
 
 const router = Router();
 const prisma = db;
@@ -227,6 +228,15 @@ router.post('/events', authMiddleware, async (req: AuthenticatedRequest, res: Re
         }
       }
     });
+
+    // 🐝 Auto-post social : événement calendrier créé
+    createBusinessAutoPost({
+      orgId: req.user!.organizationId,
+      userId: req.user!.userId,
+      eventType: 'calendar_event',
+      entityId: event.id,
+      entityLabel: title || 'Événement',
+    }).catch(err => console.error('[Calendar API] Auto-post error:', err));
 
     res.status(201).json(fullEvent);
   } catch (error) {

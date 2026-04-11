@@ -86,11 +86,11 @@ describe('Peppol Status Checker - Cron', () => {
       await runTransitionCheck();
       expect(mockFindMany).toHaveBeenCalledWith({
         where: {
-          registrationStatus: { in: ['PENDING', 'MIGRATION_PENDING'] },
+          registrationStatus: { in: ['PENDING', 'MIGRATION_PENDING', 'VERIFICATION_NEEDED'] },
           peppolEndpoint: { not: null },
         },
         include: {
-          organization: { select: { name: true } },
+          Organization: { select: { name: true } },
         },
       });
     });
@@ -103,7 +103,7 @@ describe('Peppol Status Checker - Cron', () => {
         registrationStatus: 'PENDING',
         odooCompanyId: 10,
         previousAccessPoint: null,
-        organization: { name: 'Test Corp' },
+        Organization: { name: 'Test Corp' },
       }]);
 
       mockCheckPeppolStatus.mockResolvedValue({
@@ -134,7 +134,7 @@ describe('Peppol Status Checker - Cron', () => {
         registrationStatus: 'MIGRATION_PENDING',
         odooCompanyId: 20,
         previousAccessPoint: 'Accountable',
-        organization: { name: 'Corp 2' },
+        Organization: { name: 'Corp 2' },
       }]);
 
       mockCheckPeppolStatus.mockResolvedValue({
@@ -164,7 +164,7 @@ describe('Peppol Status Checker - Cron', () => {
         registrationStatus: 'MIGRATION_PENDING',
         odooCompanyId: 30,
         previousAccessPoint: 'Accountable',
-        organization: { name: 'Corp 3' },
+        Organization: { name: 'Corp 3' },
       }]);
 
       mockCheckPeppolStatus.mockResolvedValue({
@@ -198,7 +198,7 @@ describe('Peppol Status Checker - Cron', () => {
         registrationStatus: 'PENDING',
         odooCompanyId: 40,
         previousAccessPoint: null,
-        organization: { name: 'Corp 4' },
+        Organization: { name: 'Corp 4' },
       }]);
 
       mockCheckPeppolStatus.mockResolvedValue({
@@ -229,7 +229,7 @@ describe('Peppol Status Checker - Cron', () => {
         registrationStatus: 'MIGRATION_PENDING',
         odooCompanyId: 50,
         previousAccessPoint: 'Accountable',
-        organization: { name: 'Corp 5' },
+        Organization: { name: 'Corp 5' },
       }]);
 
       mockCheckPeppolStatus.mockResolvedValue({
@@ -254,7 +254,7 @@ describe('Peppol Status Checker - Cron', () => {
           registrationStatus: 'PENDING',
           odooCompanyId: 60,
           previousAccessPoint: null,
-          organization: { name: 'Error Corp' },
+          Organization: { name: 'Error Corp' },
         },
         {
           organizationId: 'org-ok',
@@ -263,7 +263,7 @@ describe('Peppol Status Checker - Cron', () => {
           registrationStatus: 'PENDING',
           odooCompanyId: 70,
           previousAccessPoint: null,
-          organization: { name: 'OK Corp' },
+          Organization: { name: 'OK Corp' },
         },
       ]);
 
@@ -296,7 +296,7 @@ describe('Peppol Status Checker - Cron', () => {
         registrationStatus: 'PENDING',
         odooCompanyId: 80,
         previousAccessPoint: null,
-        organization: { name: 'Corp 6' },
+        Organization: { name: 'Corp 6' },
       }]);
 
       mockCheckPeppolStatus.mockResolvedValue({
@@ -321,7 +321,7 @@ describe('Peppol Status Checker - Cron', () => {
         registrationStatus: 'PENDING',
         odooCompanyId: null,
         previousAccessPoint: null,
-        organization: { name: 'Corp BE' },
+        Organization: { name: 'Corp BE' },
       }]);
 
       mockCheckPeppolStatus.mockResolvedValue({
@@ -365,7 +365,7 @@ describe('Peppol Status Checker - Cron', () => {
           peppolEndpoint: { not: null },
         },
         include: {
-          organization: { select: { name: true } },
+          Organization: { select: { name: true } },
         },
       });
     });
@@ -376,7 +376,7 @@ describe('Peppol Status Checker - Cron', () => {
         peppolEas: '0208',
         peppolEndpoint: '1025391354',
         registrationStatus: 'ACTIVE',
-        organization: { name: 'Active Corp' },
+        Organization: { name: 'Active Corp' },
       }]);
 
       mockCheckPeppolStatus.mockResolvedValue({
@@ -399,7 +399,7 @@ describe('Peppol Status Checker - Cron', () => {
         peppolEas: '0208',
         peppolEndpoint: '1025391354',
         registrationStatus: 'ACTIVE',
-        organization: { name: 'Stolen Corp' },
+        Organization: { name: 'Stolen Corp' },
       }]);
 
       mockCheckPeppolStatus.mockResolvedValue({
@@ -428,7 +428,7 @@ describe('Peppol Status Checker - Cron', () => {
         peppolEas: '0208',
         peppolEndpoint: '1025391354',
         registrationStatus: 'ACTIVE',
-        organization: { name: 'Vanished Corp' },
+        Organization: { name: 'Vanished Corp' },
       }]);
 
       mockCheckPeppolStatus.mockResolvedValue({
@@ -453,14 +453,14 @@ describe('Peppol Status Checker - Cron', () => {
           peppolEas: '0208',
           peppolEndpoint: '1111111111',
           registrationStatus: 'ACTIVE',
-          organization: { name: 'Error Corp 2' },
+          Organization: { name: 'Error Corp 2' },
         },
         {
           organizationId: 'org-ok2',
           peppolEas: '0208',
           peppolEndpoint: '2222222222',
           registrationStatus: 'ACTIVE',
-          organization: { name: 'OK Corp 2' },
+          Organization: { name: 'OK Corp 2' },
         },
       ]);
 

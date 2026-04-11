@@ -756,8 +756,7 @@ const ProductDocumentsPage: React.FC = () => {
             </Button>
           </Empty>
         ) : viewMode === 'list' ? (
-          <Table
-            dataSource={documents}
+          <Table scroll={{ x: "max-content" }}             dataSource={documents}
             columns={columns}
             rowKey="id"
             size="small"

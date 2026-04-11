@@ -1,6 +1,6 @@
-// Formula Engine avec prÃƒÂ©cÃƒÂ©dence, parenthÃƒÂ¨ses et variables nodeId
-// Fournit parsing d'expressions dÃƒÂ©jÃƒÂ  "templatisÃƒÂ©es" sous forme de tokens ou string.
-// ConÃƒÂ§u pour remplacer l'ÃƒÂ©valuation gauche->droite simpliste.
+// Formula Engine avec précédence, parenthèses et variables nodeId
+// Fournit parsing d'expressions déjÃƒÂ  "templatisées" sous forme de tokens ou string.
+// ConÃƒÂ§u pour remplacer l'évaluation gauche->droite simpliste.
 
 export type FormulaToken =
   | { type: 'number'; value: number }
@@ -14,17 +14,17 @@ export type FormulaToken =
 export interface EvaluateOptions {
   resolveVariable: (nodeId: string) => Promise<number | null> | number | null;
   onError?: (code: string, context?: Record<string, unknown>) => void;
-  divisionByZeroValue?: number; // dÃƒÂ©faut 0
-  strictVariables?: boolean; // erreur unknown_variable si variable non rÃƒÂ©solue
-  enableCache?: boolean; // activer cache RPN (par dÃƒÂ©faut true)
-  maxExpressionLength?: number; // sÃƒÂ©curitÃƒÂ© (dÃƒÂ©faut 500)
-  allowedCharsRegex?: RegExp; // whitelist (dÃƒÂ©faut fourni)
-  precisionScale?: number; // si dÃƒÂ©fini (>1), applique un scaling entier pour + - * / et round (sauf pow) pour rÃƒÂ©duire erreurs FP
+  divisionByZeroValue?: number; // défaut 0
+  strictVariables?: boolean; // erreur unknown_variable si variable non résolue
+  enableCache?: boolean; // activer cache RPN (par défaut true)
+  maxExpressionLength?: number; // sécurité (défaut 500)
+  allowedCharsRegex?: RegExp; // whitelist (défaut fourni)
+  precisionScale?: number; // si défini (>1), applique un scaling entier pour + - * / et round (sauf pow) pour réduire erreurs FP
 }
 
-// Ajout: opÃƒÂ©rateurs comparaison gÃƒÂ©rÃƒÂ©s en phase de parsing (transformÃƒÂ©s en fonctions boolÃƒÂ©ennes)
-// Ils ne sont PAS ajoutÃƒÂ©s ÃƒÂ  OP_PRECEDENCE pour ÃƒÂ©viter de modifier la logique arithmÃƒÂ©tique: au lieu de cela,
-// on rÃƒÂ©ÃƒÂ©crit 'a > b' en gt(a,b) directement sous forme de tokens fonction.
+// Ajout: opérateurs comparaison gérés en phase de parsing (transformés en fonctions booléennes)
+// Ils ne sont PAS ajoutés ÃƒÂ  OP_PRECEDENCE pour éviter de modifier la logique arithmétique: au lieu de cela,
+// on réécrit 'a > b' en gt(a,b) directement sous forme de tokens fonction.
 const OP_PRECEDENCE: Record<string, number> = {
   '+': 1,
   '-': 1,
@@ -46,7 +46,7 @@ const OP_ASSOC: Record<string, 'L' | 'R'> = {
   or: 'L'
 };
 
-// Cache RPN basÃƒÂ© sur empreinte des tokens
+// Cache RPN basé sur empreinte des tokens
 const rpnCache = new Map<string, FormulaToken[]>();
 let rpnParseCount = 0; // compteur pour tests / diagnostics
 export function getRpnCacheStats() { return { entries: rpnCache.size, parseCount: rpnParseCount }; }
@@ -97,13 +97,13 @@ function tokensFingerprint(tokens: FormulaToken[]): string {
   }).join('|');
 }
 
-// Validation sÃƒÂ©curitÃƒÂ©
+// Validation sécurité
 function validateExpression(expr: string, opts?: EvaluateOptions) {
   const maxLen = opts?.maxExpressionLength ?? 500;
   if (expr.length > maxLen) throw new Error('Expression trop longue');
   // Ajout de @ pour supporter @table.xxx et @value.xxx
   const allowed = opts?.allowedCharsRegex || /^[0-9A-Za-z_\s+*\-/^(),.{}:<>!=&"\\@]+$/;
-  if (!allowed.test(expr)) throw new Error('CaractÃƒÂ¨res non autorisÃƒÂ©s dans l\'expression');
+  if (!allowed.test(expr)) throw new Error('Caractères non autorisés dans l\'expression');
 }
 
 export function parseExpression(expr: string, roleToNodeId: Record<string,string>, opts?: EvaluateOptions): FormulaToken[] {
@@ -115,16 +115,16 @@ export function parseExpression(expr: string, roleToNodeId: Record<string,string
   const tokens: FormulaToken[] = [];
   let i = 0;
   let parenBalance = 0;
-  // Stack des fonctions en cours pour compter les arguments (liaison par parenthÃƒÂ¨se)
+  // Stack des fonctions en cours pour compter les arguments (liaison par parenthèse)
   const funcParenStack: Array<{ name: string; argCount: number }> = [];
   let lastToken: FormulaToken | null = null;
   while (i < working.length) {
     const ch = working[i];
     if (/\s/.test(ch)) { i++; continue; }
-    // Variable marquÃƒÂ©e
+    // Variable marquée
     if (working.startsWith('__VAR__', i)) {
       const end = working.indexOf('__', i + 7);
-      if (end === -1) throw new Error('Marqueur variable mal formÃƒÂ©');
+      if (end === -1) throw new Error('Marqueur variable mal formé');
       const role = working.substring(i + 7, end);
       // Essayer d'abord roleToNodeId, sinon utiliser le role directement (pour @table.xxx)
       const nodeId = roleToNodeId[role] || role;
@@ -142,7 +142,7 @@ export function parseExpression(expr: string, roleToNodeId: Record<string,string
       i = j; lastToken = tokens[tokens.length - 1];
       continue;
     }
-    // LittÃƒÂ©ral string
+    // Littéral string
     if (ch === '"') {
       let j = i + 1;
       let str = '';
@@ -157,7 +157,7 @@ export function parseExpression(expr: string, roleToNodeId: Record<string,string
         str += cc;
         j++;
       }
-      if (j >= working.length) throw new Error('ChaÃƒÂ®ne non terminÃƒÂ©e');
+      if (j >= working.length) throw new Error('ChaÃƒÂ®ne non terminée');
       tokens.push({ type: 'string', value: str });
       i = j + 1;
       lastToken = tokens[tokens.length - 1];
@@ -188,18 +188,18 @@ export function parseExpression(expr: string, roleToNodeId: Record<string,string
       let k = j; while (k < working.length && /\s/.test(working[k])) k++;
       if (working[k] === '(') {
         tokens.push({ type: 'func', name: lowerIdent });
-        // La parenthÃƒÂ¨se sera traitÃƒÂ©e dans cycle suivant
+        // La parenthèse sera traitée dans cycle suivant
         i = j; lastToken = tokens[tokens.length - 1];
         continue;
       } else {
-        // Identifiant seul non supportÃƒÂ© (on pourrait l'ÃƒÂ©tendre plus tard)
+        // Identifiant seul non supporté (on pourrait l'étendre plus tard)
         throw new Error('Identifiant inattendu: ' + ident);
       }
     }
-    // ParenthÃƒÂ¨ses
+    // Parenthèses
     if (ch === '(') {
       tokens.push({ type: 'paren', value: '(' });
-      // Lier ÃƒÂ  une fonction prÃƒÂ©cÃƒÂ©dente (si lastToken func sans paren encore ouverte)
+      // Lier ÃƒÂ  une fonction précédente (si lastToken func sans paren encore ouverte)
       const prev = lastToken;
       if (prev && prev.type === 'func') {
         funcParenStack.push({ name: prev.name, argCount: 0 });
@@ -211,10 +211,10 @@ export function parseExpression(expr: string, roleToNodeId: Record<string,string
     if (ch === ')') {
       tokens.push({ type: 'paren', value: ')' });
       parenBalance--;
-      if (parenBalance < 0) throw new Error('ParenthÃƒÂ¨ses dÃƒÂ©sÃƒÂ©quilibrÃƒÂ©es');
-      // Si on ferme une fonction: incrÃƒÂ©menter argCount si la derniÃƒÂ¨re chose n'ÃƒÂ©tait pas '(' (i.e. au moins une expr)
+      if (parenBalance < 0) throw new Error('Parenthèses déséquilibrées');
+      // Si on ferme une fonction: incrémenter argCount si la dernière chose n'était pas '(' (i.e. au moins une expr)
       if (funcParenStack.length) {
-        // On dÃƒÂ©cidera dans toRPN lequel associer
+        // On décidera dans toRPN lequel associer
       }
       i++; lastToken = tokens[tokens.length - 1];
       continue;
@@ -222,7 +222,7 @@ export function parseExpression(expr: string, roleToNodeId: Record<string,string
     // Virgule
     if (ch === ',') {
       tokens.push({ type: 'comma' });
-      // IncrÃƒÂ©menter compteur arg de la fonction en haut de pile
+      // Incrémenter compteur arg de la fonction en haut de pile
       if (funcParenStack.length) {
         const top = funcParenStack[funcParenStack.length - 1];
         top.argCount++;
@@ -230,13 +230,13 @@ export function parseExpression(expr: string, roleToNodeId: Record<string,string
       i++; lastToken = tokens[tokens.length - 1];
       continue;
     }
-    // OpÃƒÂ©rateurs simples arithmÃƒÂ©tiques + concat (&)
+    // Opérateurs simples arithmétiques + concat (&)
     if ('+-*/^&'.includes(ch)) {
       tokens.push({ type: 'operator', value: ch });
       i++; lastToken = tokens[tokens.length - 1];
       continue;
     }
-    // OpÃƒÂ©rateurs comparaison multi-caractÃƒÂ¨res (>=, <=, ==, !=)
+    // Opérateurs comparaison multi-caractères (>=, <=, ==, !=)
     if ((ch === '>' || ch === '<' || ch === '=' || ch === '!') && i + 1 < working.length) {
       const two = working.slice(i, i + 2);
       if (['>=', '<=', '==', '!='].includes(two)) {
@@ -245,28 +245,28 @@ export function parseExpression(expr: string, roleToNodeId: Record<string,string
         continue;
       }
     }
-    // OpÃƒÂ©rateurs comparaison simples (>, <)
+    // Opérateurs comparaison simples (>, <)
     if (ch === '>' || ch === '<') {
       tokens.push({ type: 'operator', value: ch });
       i++; lastToken = tokens[tokens.length - 1];
       continue;
     }
-    throw new Error('CaractÃƒÂ¨re inattendu: ' + ch);
+    throw new Error('Caractère inattendu: ' + ch);
   }
-  if (parenBalance !== 0) throw new Error('ParenthÃƒÂ¨ses dÃƒÂ©sÃƒÂ©quilibrÃƒÂ©es');
-  // RÃƒÂ©ÃƒÂ©criture comparaison Ã¢â€ â€™ fonctions (gt, gte, lt, lte, eq, neq)
+  if (parenBalance !== 0) throw new Error('Parenthèses déséquilibrées');
+  // Réécriture comparaison ââ€ â€™ fonctions (gt, gte, lt, lte, eq, neq)
   if (tokens.some(t => t.type === 'operator' && ['>','>=','<','<=','==','!='].includes((t as { type:'operator'; value:string }).value))) {
     const rewritten: FormulaToken[] = [];
     for (let idx = 0; idx < tokens.length; idx++) {
       const tk = tokens[idx];
       if (tk.type === 'operator' && ['>','>=','<','<=','==','!='].includes(tk.value)) {
-        // On suppose forme binaire: prÃƒÂ©cÃƒÂ©dent est une valeur/variable/paren fermante ou fonction dÃƒÂ©jÃƒÂ  sortie,
+        // On suppose forme binaire: précédent est une valeur/variable/paren fermante ou fonction déjÃƒÂ  sortie,
         // suivant est une valeur/variable/paren ouvrante ou fonction; on va transformer A op B en func(A,B)
-        // StratÃƒÂ©gie: On remonte ÃƒÂ  l'ÃƒÂ©lÃƒÂ©ment immÃƒÂ©diatement prÃƒÂ©cÃƒÂ©dent dans rewritten pour extraire l'opÃƒÂ©rande gauche
+        // Stratégie: On remonte ÃƒÂ  l'élément immédiatement précédent dans rewritten pour extraire l'opérande gauche
         const op = tk.value;
         const left = rewritten.pop();
         const right = tokens[idx + 1];
-        if (!left || !right) throw new Error('Expression comparaison mal formÃƒÂ©e');
+        if (!left || !right) throw new Error('Expression comparaison mal formée');
         // Consommer le token de droite en avanÃƒÂ§ant idx
         idx++;
         // Construire tokens fonction: name(left,right)
@@ -276,7 +276,7 @@ export function parseExpression(expr: string, roleToNodeId: Record<string,string
           : op === '<=' ? 'lte'
           : op === '==' ? 'eq'
           : op === '!=' ? 'neq' : 'eq';
-        // ModÃƒÂ¨le: func( left , right ) => [func, '(', left, ',', right, ')']
+        // Modèle: func( left , right ) => [func, '(', left, ',', right, ')']
         rewritten.push({ type: 'func', name: funcName });
         rewritten.push({ type: 'paren', value: '(' });
         rewritten.push(left);
@@ -295,7 +295,7 @@ export function parseExpression(expr: string, roleToNodeId: Record<string,string
 export function toRPN(tokens: FormulaToken[]): FormulaToken[] {
   const output: FormulaToken[] = [];
   const stack: FormulaToken[] = [];
-  // pile pour compter les arguments par fonction (index alignÃƒÂ© avec parenthÃƒÂ¨se ouvrante associÃƒÂ©e)
+  // pile pour compter les arguments par fonction (index aligné avec parenthèse ouvrante associée)
   const funcStack: Array<{ name: string; argCount: number }> = [];
   for (let idx = 0; idx < tokens.length; idx++) {
     const tk = tokens[idx];
@@ -304,9 +304,9 @@ export function toRPN(tokens: FormulaToken[]): FormulaToken[] {
       case 'variable':
       case 'string':
         output.push(tk);
-        // Si nous sommes dans une fonction et que le token prÃƒÂ©cÃƒÂ©dent est '(' ou ',' on compte cet argument
+        // Si nous sommes dans une fonction et que le token précédent est '(' ou ',' on compte cet argument
         if (funcStack.length) {
-          // incrÃƒÂ©ment implicite si dernier arg dÃƒÂ©marre; on gÃƒÂ¨re en sortie parenthÃƒÂ¨se
+          // incrément implicite si dernier arg démarre; on gère en sortie parenthèse
         }
         break;
       case 'func':
@@ -330,7 +330,7 @@ export function toRPN(tokens: FormulaToken[]): FormulaToken[] {
       case 'paren':
         if (tk.value === '(') {
           stack.push(tk);
-          // Si le token prÃƒÂ©cÃƒÂ©dent sur la pile est une fonction, initialiser compteur args=1 provisoire
+          // Si le token précédent sur la pile est une fonction, initialiser compteur args=1 provisoire
           const prev = stack[stack.length - 2];
           if (prev && prev.type === 'func') {
             funcStack.push({ name: prev.name, argCount: 1 });
@@ -342,8 +342,8 @@ export function toRPN(tokens: FormulaToken[]): FormulaToken[] {
             if (top.type === 'paren' && top.value === '(') { found = true; break; }
             output.push(top);
           }
-          if (!found) throw new Error('ParenthÃƒÂ¨ses dÃƒÂ©sÃƒÂ©quilibrÃƒÂ©es');
-          // Si juste aprÃƒÂ¨s '(' il y avait une fonction
+          if (!found) throw new Error('Parenthèses déséquilibrées');
+          // Si juste après '(' il y avait une fonction
           const maybeFunc = stack[stack.length - 1];
           if (maybeFunc && maybeFunc.type === 'func') {
             // Finaliser fonction (argCount obtenu)
@@ -355,20 +355,20 @@ export function toRPN(tokens: FormulaToken[]): FormulaToken[] {
         }
         break;
       case 'comma':
-        // vider la pile jusqu'ÃƒÂ  la parenthÃƒÂ¨se ouvrante
+        // vider la pile jusqu'ÃƒÂ  la parenthèse ouvrante
         while (stack.length) {
           const top = stack[stack.length - 1];
           if (top.type === 'paren' && top.value === '(') break;
           output.push(stack.pop() as FormulaToken);
         }
-        // IncrÃƒÂ©menter compteur args
+        // Incrémenter compteur args
         if (funcStack.length) funcStack[funcStack.length - 1].argCount++;
         break;
     }
   }
   while (stack.length) {
     const top = stack.pop() as FormulaToken;
-    if (top.type === 'paren') throw new Error('ParenthÃƒÂ¨ses dÃƒÂ©sÃƒÂ©quilibrÃƒÂ©es (fin)');
+    if (top.type === 'paren') throw new Error('Parenthèses déséquilibrées (fin)');
     output.push(top);
   }
   return output;
@@ -850,7 +850,7 @@ export async function evaluateTokens(tokens: FormulaToken[], opts: EvaluateOptio
           r = multiple === 0 ? val : Math.floor(val / multiple) * multiple;
           break; }
 
-        // Ã°Å¸â€œÂ TRIGONOMÃƒâ€°TRIE (complÃƒÂ©ments)
+        // Ã°Å¸â€œÂ TRIGONOMÃƒâ€°TRIE (compléments)
         case 'degres':
         case 'degrees':
           r = mapNumericValue(args[0] ?? 0, rad => rad * (180 / Math.PI));
@@ -877,7 +877,7 @@ export async function evaluateTokens(tokens: FormulaToken[], opts: EvaluateOptio
           r = Math.atan2(y, x);
           break; }
 
-        // Ã°Å¸â€Â¢ MATHÃƒâ€°MATIQUES (complÃƒÂ©ments)
+        // Ã°Å¸â€Â¢ MATHÃƒâ€°MATIQUES (compléments)
         case 'puissance':
         case 'power': {
           const base = toNumber(args[0] ?? 0);
@@ -1016,7 +1016,7 @@ export async function evaluateTokens(tokens: FormulaToken[], opts: EvaluateOptio
   return { value: finalValue, errors };
 }
 
-// Helper haut-niveau: compile & ÃƒÂ©value en une ÃƒÂ©tape (utilisÃƒÂ© potentiellement ailleurs)
+// Helper haut-niveau: compile & évalue en une étape (utilisé potentiellement ailleurs)
 export async function evaluateExpression(expr: string, roleToNodeId: Record<string,string>, opts: EvaluateOptions): Promise<{ value: number; errors: string[] }> {
   try {
     const tokens = parseExpression(expr, roleToNodeId, opts);

@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { authMiddleware, AuthenticatedRequest } from "../middlewares/auth";
 import { impersonationMiddleware } from "../middlewares/impersonation";
 import { prisma } from '../lib/prisma';
+import { createBusinessAutoPost } from '../services/business-auto-post';
 
 const router = Router();
 
@@ -306,6 +307,20 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
         });
         
         console.log('[TS-LEADS] Lead créé avec succès:', { id: newLead.id, status: newLead.status });
+
+        // 🐝 Auto-post social : nouveau client (si statut client)
+        if (status === 'client' || status === 'converti') {
+          const leadData = (data || {}) as Record<string, any>;
+          createBusinessAutoPost({
+            orgId: organizationId,
+            userId: authReq.user?.userId || authReq.user?.id,
+            eventType: 'new_client',
+            entityId: newLead.id,
+            entityLabel: leadData.company || leadData.name || 'Nouveau client',
+            clientName: leadData.name || leadData.company || undefined,
+          }).catch(err => console.error('[TS-LEADS] Auto-post error:', err));
+        }
+
         res.status(201).json(newLead);
     } catch (error: unknown) {
         console.error('[TS-LEADS] Erreur détaillée lors de la création du lead:', error);

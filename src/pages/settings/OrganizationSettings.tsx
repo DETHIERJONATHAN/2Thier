@@ -496,7 +496,7 @@ const OrganizationSettings: React.FC = () => {
               style={billingInputStyle(billingStreet, 'street')}
             />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr', gap: 14, marginBottom: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '120px 1fr 1fr', gap: 14, marginBottom: 14 }}>
             <div>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 4 }}>Code postal</label>
               <input type="text" value={billingZip} onChange={e => setBillingZip(e.target.value)}

@@ -15,6 +15,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
+import { describe, it, expect } from 'vitest';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,11 +39,14 @@ function warn(label: string, detail?: string) {
   console.log(`  ⚠️  ${label}${detail ? ` — ${detail}` : ''}`);
 }
 
+describe('Peppol FacturePage UI audit', () => {
+it('audit checks pass', () => {
+
 console.log('\n⚡ TEST — Bouton Peppol dans FacturePage\n');
 
 const facturePath = path.join(SRC, 'pages', 'FacturePage.tsx');
 const src = fs.existsSync(facturePath) ? fs.readFileSync(facturePath, 'utf-8') : '';
-if (!src) { fail('FacturePage.tsx manquant'); process.exit(1); }
+if (!src) { fail('FacturePage.tsx manquant'); }
 ok('FacturePage.tsx existe');
 
 // ══════════════════════════════════════════════════
@@ -258,4 +262,6 @@ if (failed === 0) console.log('  🎉 Bouton Peppol FacturePage — TOUT OK');
 else console.log('  🚨 Bouton Peppol FacturePage — corrections nécessaires');
 console.log('─'.repeat(55) + '\n');
 
-process.exit(failed > 0 ? 1 : 0);
+expect(failed).toBe(0);
+});
+});

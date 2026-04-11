@@ -19,22 +19,24 @@ import { execSync } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
+import { describe, it, expect } from 'vitest';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, '..', '..');
 
 // Liste des tests d'audit statiques (lancés avec tsx — PAS d'import vitest)
-const staticTests = [
+const staticTests: { name: string; file: string }[] = [
+  // Tous convertis en tests Vitest — voir vitestTests ci-dessous
+];
+
+// Tests Vitest (lancés avec vitest — contiennent import { ... } from 'vitest')
+const vitestTests = [
   { name: 'Routes API Peppol',                  file: 'peppol-routes.test.ts' },
   { name: 'Envoi unifié (dual-table)',           file: 'peppol-send-unified.test.ts' },
   { name: 'Bouton Peppol FacturePage',           file: 'peppol-facture-ui.test.ts' },
   { name: 'PeppolBridge (Odoo)',                 file: 'peppol-bridge.test.ts' },
   { name: 'Intégration E2E',                     file: 'peppol-integration.test.ts' },
-];
-
-// Tests Vitest (lancés avec vitest — contiennent import { ... } from 'vitest')
-const vitestTests = [
   { name: 'Cron Checker (unit)',                 file: 'peppol-cron-checker.test.ts' },
   { name: 'Cron Fetch Incoming (unit)',           file: 'peppol-fetch-incoming-cron.test.ts' },
   { name: 'Système Peppol complet',              file: 'peppol-system.test.ts' },
@@ -45,6 +47,9 @@ const vitestTests = [
 console.log('\n' + '═'.repeat(60));
 console.log('  🐝 AUDIT PEPPOL COMPLET — Zhiive');
 console.log('═'.repeat(60) + '\n');
+
+describe('Peppol audit-all orchestrator', () => {
+it('all audit suites pass', () => {
 
 let totalPassed = 0;
 let totalFailed = 0;
@@ -178,4 +183,6 @@ if (totalFailed === 0 && totalSkipped === 0) {
 }
 console.log('═'.repeat(60) + '\n');
 
-process.exit(totalFailed > 0 ? 1 : 0);
+expect(totalFailed).toBe(0);
+});
+});

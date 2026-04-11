@@ -331,7 +331,7 @@ const PremiumTestPageClean: React.FC = () => {
         }
         className="shadow-sm border border-gray-200 mb-6"
       >
-        <Table 
+        <Table scroll={{ x: "max-content" }} 
           dataSource={tableData} 
           columns={tableColumns} 
           pagination={{ pageSize: 5 }}

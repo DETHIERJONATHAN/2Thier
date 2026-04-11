@@ -34,7 +34,7 @@ const ZhiiveMailAdminPage = lazy(() => import('./admin/ZhiiveMailAdminPage'));
 const SettingsPageEmbedded: React.FC = () => {
   return (
     <MemoryRouter initialEntries={['/settings']}>
-      <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
+      <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}><Spin size="large" /></div>}>
         <Routes>
           <Route path="/settings" element={<SettingsPage />}>
             <Route path="profile" element={<ProfileSettings />} />

@@ -279,7 +279,7 @@ const EspaceProPage: React.FC = () => {
               </Space>
             }
           >
-            <Table 
+            <Table scroll={{ x: "max-content" }} 
               columns={columns} 
               dataSource={leads} 
               rowKey="id"

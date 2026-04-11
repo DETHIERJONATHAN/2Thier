@@ -2363,6 +2363,9 @@ model User {
 
   // User Preferences (replaces localStorage)
   UserPreferences                                     UserPreference[]
+  
+  // Notification Preferences (per-user per-channel)
+  NotificationPreference                              UserNotificationPreference?
 
   // Wax (carte + éphémère)
   UserLocation                                        UserLocation?
@@ -4799,6 +4802,37 @@ model SocialSettings {
   showPostAnalytics     Boolean @default(false)   // show view count, engagement
   showProfileViews      Boolean @default(false)
   
+  // ── Wax (Map) ──
+  waxEnabled            Boolean @default(true)
+  waxAlertsEnabled      Boolean @default(true)    // push alerts when WaxPin near user
+  waxDefaultRadiusKm    Int     @default(10)      // rayon de surveillance par défaut (km)
+  waxGhostModeAllowed   Boolean @default(true)    // users can go invisible on map
+  
+  // ── Nectar Sub-Apps ──
+  questsEnabled         Boolean @default(true)
+  eventsEnabled         Boolean @default(true)
+  capsulesEnabled       Boolean @default(true)
+  orbitEnabled          Boolean @default(true)
+  pulseEnabled          Boolean @default(true)
+  
+  // ── Modération IA ──
+  moderationMode        String  @default("ai_auto") // manual | ai_review | ai_auto
+  aiBannedCategories    String[] @default([])       // categories to auto-reject (e.g. "violence", "nsfw")
+  
+  // ── Business → Social Auto-Posts ──
+  autoPostOnDevisSigned      Boolean @default(true)
+  autoPostOnInvoicePaid      Boolean @default(false)
+  autoPostOnChantierCreated  Boolean @default(true)
+  autoPostOnChantierCompleted Boolean @default(true)
+  autoPostOnNewClient        Boolean @default(false)
+  autoPostOnCalendarEvent    Boolean @default(false)
+  autoPostOnTaskCompleted    Boolean @default(false)
+  autoPostDefaultVisibility  String  @default("IN")  // default visibility for auto-posts
+  
+  // ── RGPD / Privacy ──
+  gdprDataExportEnabled Boolean @default(true)       // allow users to export their data
+  gdprRetentionDays     Int     @default(0)          // 0 = keep forever, >0 = auto-purge after N days
+  
   // ── Advanced ──
   customReactions       Json?     // custom reaction types [{key, emoji, label}]
   bannedWords           String[]  @default([])    // words to auto-filter
@@ -4827,6 +4861,67 @@ model UserPreference {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, key])
+  @@index([userId])
+}
+
+// ═══════════════════════════════════════════════════════
+// USER NOTIFICATION PREFERENCES (per-user, per-event, per-channel)
+// ═══════════════════════════════════════════════════════
+
+model UserNotificationPreference {
+  id          String   @id @default(uuid())
+  userId      String
+  
+  // ── Push (Web Push / SW) ──
+  pushNewPost          Boolean @default(true)
+  pushComment          Boolean @default(true)
+  pushReaction         Boolean @default(false)
+  pushNewFollower      Boolean @default(true)
+  pushFriendRequest    Boolean @default(true)
+  pushMention          Boolean @default(true)
+  pushWhisper          Boolean @default(true)   // Whisper (messenger) messages
+  pushWaxAlert         Boolean @default(true)   // Wax proximity alerts
+  pushBusinessEvent    Boolean @default(true)   // Auto-post business events
+  pushCalendarReminder Boolean @default(true)
+  
+  // ── Email ──
+  emailNewPost         Boolean @default(false)
+  emailComment         Boolean @default(true)
+  emailReaction        Boolean @default(false)
+  emailNewFollower     Boolean @default(false)
+  emailFriendRequest   Boolean @default(true)
+  emailMention         Boolean @default(true)
+  emailWhisper         Boolean @default(false)
+  emailWaxAlert        Boolean @default(false)
+  emailBusinessEvent   Boolean @default(true)
+  emailCalendarReminder Boolean @default(true)
+  emailDigestFrequency String  @default("daily") // none | instant | daily | weekly
+  
+  // ── In-App ──
+  inAppNewPost         Boolean @default(true)
+  inAppComment         Boolean @default(true)
+  inAppReaction        Boolean @default(true)
+  inAppNewFollower     Boolean @default(true)
+  inAppFriendRequest   Boolean @default(true)
+  inAppMention         Boolean @default(true)
+  inAppWhisper         Boolean @default(true)
+  inAppWaxAlert        Boolean @default(true)
+  inAppBusinessEvent   Boolean @default(true)
+  inAppCalendarReminder Boolean @default(true)
+  
+  // ── Global ──
+  doNotDisturb         Boolean  @default(false)
+  doNotDisturbStart    String?  // HH:mm format (e.g. "22:00")
+  doNotDisturbEnd      String?  // HH:mm format (e.g. "07:00")
+  mutedColonyIds       String[] @default([])  // Colonies to mute
+  mutedUserIds         String[] @default([])  // Users to mute
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId])
   @@index([userId])
 }
 

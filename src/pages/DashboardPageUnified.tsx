@@ -7,6 +7,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from "react-router-do
 import { WallNavigationProvider } from "../contexts/WallNavigationContext";
 import { useZhiiveNav } from "../contexts/ZhiiveNavContext";
 import { useActiveIdentity } from "../contexts/ActiveIdentityContext";
+import { useSocialIdentity } from "../contexts/SocialIdentityContext";
 
 /* ═══════════════════════════════════════════════════════════════
    LAZY-LOADED MODULE COMPONENTS (embedded in dashboard)
@@ -172,6 +173,7 @@ import {
   Area,
 } from "recharts";
 import { NotificationManager } from "../components/Notifications";
+import { REACTION_TYPES, getReactionByType } from "../constants/reactions";
 import { FriendsWidget } from "../components/MessengerChat";
 
 /* ═══════════════════════════════════════════════════════════════
@@ -334,34 +336,34 @@ const activityColor = (type: string) => {
   }
 };
 
-const activityVerb = (type: string) => {
+const activityVerb = (type: string, t: (k: string) => string) => {
   switch (type) {
-    case "creation": return "a ajouté un nouveau lead";
-    case "email": return "a envoyé un email";
-    case "meeting": return "a planifié une réunion";
-    case "task": return "a complété une tâche";
-    default: return "a effectué une action";
+    case "creation": return t('dashboard.activity.createdLead');
+    case "email": return t('dashboard.activity.sentEmail');
+    case "meeting": return t('dashboard.activity.plannedMeeting');
+    case "task": return t('dashboard.activity.completedTask');
+    default: return t('dashboard.activity.performedAction');
   }
 };
 
-const timeAgo = (timestamp: string): string => {
+const timeAgo = (timestamp: string, t?: (k: string, o?: any) => string): string => {
   const diff = Date.now() - new Date(timestamp).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "À l\u0027instant";
-  if (mins < 60) return "il y a " + mins + " min";
+  if (mins < 1) return t ? t('common.justNow') : 'À l\'instant';
+  if (mins < 60) return t ? t('common.timeAgo.minutes', { count: mins }) : `il y a ${mins} min`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return "il y a " + hrs + "h";
+  if (hrs < 24) return t ? t('common.timeAgo.hours', { count: hrs }) : `il y a ${hrs}h`;
   const days = Math.floor(hrs / 24);
-  if (days < 7) return "il y a " + days + "j";
-  return new Date(timestamp).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+  if (days < 7) return t ? t('common.timeAgo.days', { count: days }) : `il y a ${days}j`;
+  return new Date(timestamp).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 };
 
-const visibilityLabel: Record<string, { icon: React.ReactNode; label: string; color: string }> = {
-  OUT: { icon: <LockOutlined />, label: "Privé", color: "#8c8c8c" },
-  IN: { icon: <TeamOutlined />, label: "Colony", color: "#1890ff" },
-  ALL: { icon: <GlobalOutlined />, label: "Public", color: "#52c41a" },
-  CLIENT: { icon: <UserOutlined />, label: "Client", color: "#722ed1" },
-};
+const getVisibilityLabel = (t: (k: string) => string): Record<string, { icon: React.ReactNode; label: string; color: string }> => ({
+  OUT: { icon: <LockOutlined />, label: t('common.private'), color: "#8c8c8c" },
+  IN: { icon: <TeamOutlined />, label: t('hive.colony'), color: "#1890ff" },
+  ALL: { icon: <GlobalOutlined />, label: t('common.public'), color: "#52c41a" },
+  CLIENT: { icon: <UserOutlined />, label: t('dashboard.client'), color: "#722ed1" },
+});
 
 const crmEventIcon = (type?: string) => {
   switch (type) {
@@ -506,22 +508,15 @@ export const WallPostCard: React.FC<{
 
   const authorName = post.publishAsOrg && post.organization?.name
     ? post.organization.name
-    : [post.author.firstName, post.author.lastName].filter(Boolean).join(" ") || "Système";
+    : [post.author.firstName, post.author.lastName].filter(Boolean).join(" ") || t('common.loading');
   const authorAvatar = post.publishAsOrg && post.organization?.logoUrl
     ? post.organization.logoUrl
     : post.author.avatarUrl;
   const authorInitial = post.publishAsOrg && post.organization?.name
     ? post.organization.name[0]?.toUpperCase()
     : (post.author.firstName?.[0] || '?').toUpperCase();
-  const vis = visibilityLabel[post.visibility] || visibilityLabel.IN;
-
-  const reactionTypes = [
-    { type: "LIKE", emoji: "👍", label: "Pollen", color: FB.blue },
-    { type: "LOVE", emoji: "❤️", label: "Nectar", color: "#e74c3c" },
-    { type: "BRAVO", emoji: "👏", label: "Bravo", color: "#f39c12" },
-    { type: "UTILE", emoji: "💡", label: "Gold", color: "#27ae60" },
-    { type: "WOW", emoji: "😮", label: "Wow", color: "#9b59b6" },
-  ];
+  const visibilityLabels = getVisibilityLabel(t);
+  const vis = visibilityLabels[post.visibility] || visibilityLabels.IN;
 
   const handleReaction = async (type = "LIKE") => {
     try {
@@ -609,7 +604,7 @@ export const WallPostCard: React.FC<{
 
   const handleShare = async (targetType = 'LINK') => {
     const url = `${window.location.origin}/wall/post/${post.id}`;
-    const text = post.content ? post.content.substring(0, 200) : `Post de ${authorName}`;
+    const text = post.content ? post.content.substring(0, 200) : t('dashboard.postBy', { name: authorName });
     if (targetType === 'HIVELIVE') {
       setShowShareMenu(false);
       setHiveLiveTitle(post.content ? post.content.substring(0, 100) : '');
@@ -642,7 +637,7 @@ export const WallPostCard: React.FC<{
             document.execCommand('copy');
             document.body.removeChild(input);
           }
-          NotificationManager.success("Lien copié !");
+          NotificationManager.success(t('common.linkCopied'));
           break;
         }
         case 'FACEBOOK':
@@ -658,7 +653,7 @@ export const WallPostCard: React.FC<{
           window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, '_blank', 'width=600,height=400');
           break;
         case 'EMAIL': {
-          const subject = encodeURIComponent(`Post de ${authorName}`);
+          const subject = encodeURIComponent(t('dashboard.postBy', { name: authorName }));
           const body = encodeURIComponent(`${text}\n\n${url}`);
           window.open(`mailto:?subject=${subject}&body=${body}`);
           break;
@@ -734,7 +729,7 @@ export const WallPostCard: React.FC<{
               onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none'; }}
             >{authorName}</span>
             {post.parentPost && (
-              <span style={{ color: FB.textSecondary, fontSize: 13, fontWeight: 400 }}> a partagé un Buzz</span>
+              <span style={{ color: FB.textSecondary, fontSize: 13, fontWeight: 400 }}> {t('dashboard.sharedBuzz')}</span>
             )}
             {post.crmEventType && (
               <span style={{ color: FB.textSecondary, fontSize: 14 }}>
@@ -788,7 +783,7 @@ export const WallPostCard: React.FC<{
         const pp = post.parentPost;
         const ppName = pp.publishAsOrg && pp.organization?.name
           ? pp.organization.name
-          : [pp.author.firstName, pp.author.lastName].filter(Boolean).join(" ") || "Utilisateur";
+          : [pp.author.firstName, pp.author.lastName].filter(Boolean).join(" ") || t('common.user');
         const ppAvatar = pp.publishAsOrg && pp.organization?.logoUrl
           ? pp.organization.logoUrl
           : pp.author.avatarUrl;
@@ -943,10 +938,10 @@ export const WallPostCard: React.FC<{
         <div style={{ display: "flex", gap: 12 }}>
           {commentsCount > 0 && (
             <span style={{ cursor: "pointer" }} onClick={handleToggleComments}>
-              {commentsCount} buzz{commentsCount > 1 ? "s" : ""}
+              {commentsCount > 1 ? t('wall.buzzCountPlural', { count: commentsCount }) : t('wall.buzzCount', { count: commentsCount })}
             </span>
           )}
-          {post.totalShares > 0 && <span>{post.totalShares} partage{post.totalShares > 1 ? "s" : ""}</span>}
+          {post.totalShares > 0 && <span>{post.totalShares > 1 ? t('wall.shareCountPlural', { count: post.totalShares }) : t('wall.shareCount', { count: post.totalShares })}</span>}
         </div>
       </div>
 
@@ -974,7 +969,7 @@ export const WallPostCard: React.FC<{
               background: FB.white, borderRadius: 24, boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
               zIndex: 100,
             }}>
-              {reactionTypes.map(r => (
+              {REACTION_TYPES.map(r => (
                 <div key={r.type}
                   onClick={(e) => { e.stopPropagation(); handleReaction(r.type); setShowReactionPicker(false); }}
                   style={{
@@ -984,7 +979,7 @@ export const WallPostCard: React.FC<{
                   }}
                   onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.3)"; }}
                   onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; }}
-                  title={r.label}
+                  title={t(r.i18nKey)}
                 >
                   {r.emoji}
                 </div>
@@ -996,16 +991,16 @@ export const WallPostCard: React.FC<{
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
               gap: 6, padding: "8px 0", borderRadius: FB.radius, cursor: "pointer",
-              color: isLiked ? (reactionTypes.find(r => r.type === myReaction?.type)?.color || FB.blue) : FB.textSecondary,
+              color: isLiked ? (getReactionByType(myReaction?.type || 'LIKE').color) : FB.textSecondary,
               fontWeight: 600, fontSize: isMobile ? 13 : 14, transition: "background 0.15s",
             }}
             onMouseEnter={e => (e.currentTarget.style.background = FB.btnGray)}
             onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
           >
             {isLiked
-              ? <span style={{ fontSize: 16 }}>{reactionTypes.find(r => r.type === myReaction?.type)?.emoji || "👍"}</span>
+              ? <span style={{ fontSize: 16 }}>{getReactionByType(myReaction?.type || 'LIKE').emoji}</span>
               : <LikeOutlined />}
-            {!isMobile && <span>{isLiked ? (reactionTypes.find(r => r.type === myReaction?.type)?.label || "Pollen") : "Pollen"}</span>}
+            {!isMobile && <span>{isLiked ? t(getReactionByType(myReaction?.type || 'LIKE').i18nKey) : t('reactions.pollen')}</span>}
           </div>
         </div>
 
@@ -1021,7 +1016,7 @@ export const WallPostCard: React.FC<{
           onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
         >
           <MessageOutlined />
-          {!isMobile && <span>Buzz</span>}
+          {!isMobile && <span>{t('wall.buzz')}</span>}
         </div>
 
         {/* Share button with menu */}
@@ -1037,7 +1032,7 @@ export const WallPostCard: React.FC<{
             onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
           >
             <ShareAltOutlined />
-            {!isMobile && <span>Share</span>}
+            {!isMobile && <span>{t('wall.share')}</span>}
           </div>
           {showShareMenu && (
             <div style={{
@@ -1046,9 +1041,9 @@ export const WallPostCard: React.FC<{
               padding: 4, minWidth: 180, zIndex: 100,
             }}>
               {[
-                { type: "WALL", icon: "📝", label: "Share on my Hive" },
+                { type: "WALL", icon: "📝", label: t('wall.shareOnMyHive') },
                 { type: "HIVELIVE", icon: "🐝", label: "Hive Live" },
-                { type: "LINK", icon: "🔗", label: "Copier le lien" },
+                { type: "LINK", icon: "🔗", label: t('wall.copyLink') },
                 { type: "FACEBOOK", icon: "📘", label: "Facebook" },
                 { type: "LINKEDIN", icon: "💼", label: "LinkedIn" },
                 { type: "WHATSAPP", icon: "💬", label: "WhatsApp" },
@@ -1111,7 +1106,7 @@ export const WallPostCard: React.FC<{
                           ? (commentReactions[comment.id] === '❤️' ? '#e74c3c' : commentReactions[comment.id] === '😮' ? '#9b59b6' : FB.blue)
                           : FB.textSecondary,
                       }}>
-                      {likedComments.has(comment.id) ? (commentReactions[comment.id] || '👍') : "Pollen"}
+                      {likedComments.has(comment.id) ? (commentReactions[comment.id] || '👍') : t('wall.pollen')}
                     </span>
                     {/* Mini reaction picker on hover */}
                     {hoverReactionCommentId === comment.id && (
@@ -1123,10 +1118,10 @@ export const WallPostCard: React.FC<{
                           background: FB.white, borderRadius: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
                           padding: '4px 6px', display: 'flex', gap: 2, zIndex: 100,
                         }}>
-                        {reactionTypes.map(r => (
+                        {REACTION_TYPES.map(r => (
                           <span key={r.type}
                             onClick={(e) => { e.stopPropagation(); handleCommentLike(comment.id, r.emoji); }}
-                            title={r.label}
+                            title={t(r.i18nKey)}
                             style={{ fontSize: 18, cursor: 'pointer', padding: '2px 4px', borderRadius: 8,
                               transition: 'transform 0.15s' }}
                             onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.3)'; }}
@@ -1138,7 +1133,7 @@ export const WallPostCard: React.FC<{
                     <span
                       onClick={() => { setReplyingTo(replyingTo === comment.id ? null : comment.id); setReplyText(''); }}
                       style={{ fontSize: 12, fontWeight: 700, cursor: 'pointer', color: FB.textSecondary }}>
-                      Répondre
+                      {t('common.reply')}
                     </span>
                     <span style={{ fontSize: 11, color: FB.textSecondary }}>{timeAgo(comment.createdAt)}</span>
                   </div>
@@ -1177,7 +1172,7 @@ export const WallPostCard: React.FC<{
                                       ? (commentReactions[reply.id] === '❤️' ? '#e74c3c' : commentReactions[reply.id] === '😮' ? '#9b59b6' : FB.blue)
                                       : FB.textSecondary,
                                   }}>
-                                  {likedComments.has(reply.id) ? (commentReactions[reply.id] || '👍') : "Pollen"}
+                                  {likedComments.has(reply.id) ? (commentReactions[reply.id] || '👍') : t('wall.pollen')}
                                 </span>
                                 {hoverReactionCommentId === reply.id && (
                                   <div
@@ -1188,10 +1183,10 @@ export const WallPostCard: React.FC<{
                                       background: FB.white, borderRadius: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
                                       padding: '4px 6px', display: 'flex', gap: 2, zIndex: 100,
                                     }}>
-                                    {reactionTypes.map(r => (
+                                    {REACTION_TYPES.map(r => (
                                       <span key={r.type}
                                         onClick={(e) => { e.stopPropagation(); handleCommentLike(reply.id, r.emoji); }}
-                                        title={r.label}
+                                        title={t(r.i18nKey)}
                                         style={{ fontSize: 16, cursor: 'pointer', padding: '2px 3px', borderRadius: 8,
                                           transition: 'transform 0.15s' }}
                                         onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.3)'; }}
@@ -1203,7 +1198,7 @@ export const WallPostCard: React.FC<{
                                 <span
                                   onClick={() => { setReplyingTo(replyingTo === comment.id ? null : comment.id); setReplyText(''); }}
                                   style={{ fontSize: 11, fontWeight: 700, cursor: 'pointer', color: FB.textSecondary }}>
-                                  Répondre
+                                  {t('common.reply')}
                                 </span>
                                 <span style={{ fontSize: 10, color: FB.textSecondary }}>{timeAgo(reply.createdAt)}</span>
                               </div>
@@ -1231,7 +1226,7 @@ export const WallPostCard: React.FC<{
                           value={replyText}
                           onChange={e => setReplyText(e.target.value)}
                           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleComment(comment.id); } }}
-                          placeholder={`Répondre à ${[comment.author.firstName].filter(Boolean).join(" ") || 'ce commentaire'}…`}
+                          placeholder={t('dashboard.replyTo', { name: [comment.author.firstName].filter(Boolean).join(" ") || t('wall.thisComment') })}
                           autoFocus
                           style={{
                             flex: 1, border: "none", background: "transparent", outline: "none",
@@ -1301,7 +1296,7 @@ export const WallPostCard: React.FC<{
         styles={{ body: { padding: 0 } }}
         title={
           <div style={{ textAlign: 'center', fontSize: 20, fontWeight: 700, padding: '4px 0' }}>
-            Share a Buzz
+            {t('wall.shareABuzz')}
           </div>
         }
       >
@@ -1331,9 +1326,9 @@ export const WallPostCard: React.FC<{
                     cursor: 'pointer', outline: 'none',
                   }}
                 >
-                  <option value="ALL">🌐 Public</option>
-                  {currentOrganization && <option value="IN">👥 Colony</option>}
-                  <option value="OUT">🔒 Privé</option>
+                  <option value="ALL">{t('wall.visibilityPublic')}</option>
+                  {currentOrganization && <option value="IN">{t('wall.visibilityColony')}</option>}
+                  <option value="OUT">{t('wall.visibilityPrivate')}</option>
                 </select>
                 {/* Publish as org toggle */}
                 {currentOrganization && (
@@ -1345,7 +1340,7 @@ export const WallPostCard: React.FC<{
                   }}>
                     <input type="checkbox" checked={shareAsOrg} onChange={e => setShareAsOrg(e.target.checked)}
                       style={{ width: 14, height: 14, accentColor: '#6C5CE7' }} />
-                    En tant que {currentOrganization.name}
+                    {t('dashboard.asOrg', { name: currentOrganization.name })}
                   </label>
                 )}
               </div>
@@ -1378,7 +1373,7 @@ export const WallPostCard: React.FC<{
             <input type="checkbox" checked={shareIncludeOriginal}
               onChange={e => setShareIncludeOriginal(e.target.checked)}
               style={{ width: 18, height: 18, accentColor: FB.blue }} />
-            <span style={{ fontSize: 14, fontWeight: 500, color: FB.text }}>Include original Buzz</span>
+            <span style={{ fontSize: 14, fontWeight: 500, color: FB.text }}>{t('wall.includeOriginal')}</span>
           </label>
         </div>
 
@@ -1434,7 +1429,7 @@ export const WallPostCard: React.FC<{
               transition: 'background 0.2s',
             }}
           >
-            {sharingPost ? 'Buzzing...' : 'Buzz it'}
+            {sharingPost ? t('wall.buzzing') : t('wall.buzzIt')}
           </button>
         </div>
       </Modal>
@@ -1497,23 +1492,25 @@ const StatWidget: React.FC<{
 /* ═══════════════════════════════════════════════════════════════
    NO-ORG PROMPT
    ═══════════════════════════════════════════════════════════════ */
-const CreateOrganizationPrompt = () => (
+const CreateOrganizationPrompt = () => {
+  const { t } = useTranslation();
+  return (
   <div style={{
     minHeight: "100vh", background: FB.bg, display: "flex",
     alignItems: "center", justifyContent: "center", padding: 24,
   }}>
     <FBCard style={{ maxWidth: 420, width: "100%", textAlign: "center" }}>
       <Avatar size={64} icon={<BankOutlined />} style={{ marginBottom: 16 }} />
-      <h3 style={{ fontSize: 20, fontWeight: 700, color: FB.text, margin: "0 0 8px" }}>Bienvenue</h3>
+      <h3 style={{ fontSize: 20, fontWeight: 700, color: FB.text, margin: "0 0 8px" }}>{t('dashboard.welcome')}</h3>
       <p style={{ color: FB.textSecondary, marginBottom: 20 }}>
-        Pour commencer, vous devez créer ou rejoindre une Colony.
+        {t('dashboard.createOrJoin')}
       </p>
       <Link to="/organization/create">
         <button style={{
           width: "100%", padding: "10px 0", background: FB.blue, color: FB.white,
           border: "none", borderRadius: 6, fontWeight: 600, fontSize: 15, cursor: "pointer", marginBottom: 10,
         }}>
-          <PlusOutlined /> Fonder une Colony
+          <PlusOutlined /> {t('dashboard.createOrganization')}
         </button>
       </Link>
       <Link to="/settings/profile">
@@ -1521,12 +1518,13 @@ const CreateOrganizationPrompt = () => (
           width: "100%", padding: "10px 0", background: FB.btnGray, color: FB.text,
           border: "none", borderRadius: 6, fontWeight: 600, fontSize: 15, cursor: "pointer",
         }}>
-          <SettingOutlined /> Paramètres du profil
+          <SettingOutlined /> {t('dashboard.profileSettings')}
         </button>
       </Link>
     </FBCard>
   </div>
-);
+  );
+};
 
 /* ═══════════════════════════════════════════════════════════════
    MAIN COMPONENT — FACEBOOK NEWS FEED / WALL
@@ -1591,6 +1589,7 @@ export default function DashboardPageUnified() {
   // 🐝 Identité centralisée — source unique de "qui poste" (org ou personnel)
   // NE JAMAIS recalculer `feedMode === 'org' && !!currentOrganization` localement !
   const identity = useActiveIdentity();
+  const { isAppEnabled } = useSocialIdentity();
 
   // 🐝 Default visibility sync: si on est en mode org → "IN" (Organisation), sinon "ALL" (Public)
   useEffect(() => {
@@ -1717,11 +1716,11 @@ export default function DashboardPageUnified() {
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   const moods = [
-    { emoji: "😊", label: "Heureux" }, { emoji: "💪", label: "Motivé" },
-    { emoji: "🎉", label: "Fête" }, { emoji: "🤝", label: "Reconnaissant" },
-    { emoji: "🔥", label: "En feu" }, { emoji: "☕", label: "Café" },
-    { emoji: "🏗️", label: "Au chantier" }, { emoji: "📊", label: "Concentré" },
-    { emoji: "🎯", label: "Objectif" }, { emoji: "❤️", label: "Passionné" },
+    { emoji: "😊", label: t('mood.happy') }, { emoji: "💪", label: t('mood.motivated') },
+    { emoji: "🎉", label: t('mood.party') }, { emoji: "🤝", label: t('mood.grateful') },
+    { emoji: "🔥", label: t('mood.onFire') }, { emoji: "☕", label: t('mood.coffee') },
+    { emoji: "🏗️", label: t('mood.atWork') }, { emoji: "📊", label: t('mood.focused') },
+    { emoji: "🎯", label: t('mood.goal') }, { emoji: "❤️", label: t('mood.passionate') },
   ];
 
   /* ─── DATA FETCHING ────────────────────────────────────────── */
@@ -1807,7 +1806,7 @@ export default function DashboardPageUnified() {
         nom: l.lastName || l.data?.lastName || "N/A",
         prenom: l.firstName || l.data?.firstName || "",
         entreprise: l.company || l.data?.company || "",
-        status: l.LeadStatus?.name || "Inconnu",
+        status: l.LeadStatus?.name || t('wall.unknown'),
         statusColor: l.LeadStatus?.color,
         score: l.data?.score || 50,
         createdAt: l.createdAt,
@@ -1817,10 +1816,10 @@ export default function DashboardPageUnified() {
       const acts: RecentActivity[] = [];
       leads.forEach((lead: any) => {
         acts.push({
-          id: "creation-" + lead.id, type: "creation", title: "Nouveau lead",
+          id: "creation-" + lead.id, type: "creation", title: t('dashboard.newLead'),
           description: ((lead.firstName || "") + " " + (lead.lastName || "") + " " + (lead.company ? "(" + lead.company + ")" : "")).trim(),
           timestamp: lead.createdAt, status: "success",
-          user: lead.assignedTo ? ((lead.assignedTo.firstName || "") + " " + (lead.assignedTo.lastName || "")).trim() : "Système",
+          user: lead.assignedTo ? ((lead.assignedTo.firstName || "") + " " + (lead.assignedTo.lastName || "")).trim() : t('common.system'),
         });
         if (lead.TimelineEvent && Array.isArray(lead.TimelineEvent)) {
           lead.TimelineEvent.forEach((ev: any) => {
@@ -1828,8 +1827,8 @@ export default function DashboardPageUnified() {
               id: ev.id,
               type: ev.eventType === "email" ? "email" : ev.eventType === "meeting" ? "meeting" : "task",
               title: ev.eventType,
-              description: ev.data?.description || "Événement " + ev.eventType,
-              timestamp: ev.createdAt, status: "info", user: "Utilisateur",
+              description: ev.data?.description || t('dashboard.event', { type: ev.eventType }),
+              timestamp: ev.createdAt, status: "info", user: t('common.user'),
             });
           });
         }
@@ -1838,7 +1837,7 @@ export default function DashboardPageUnified() {
       setRecentActivities(acts.slice(0, 30));
     } catch (error) {
       console.error("Erreur chargement données:", error);
-      NotificationManager.error("Impossible de charger les données du dashboard");
+      NotificationManager.error(t('dashboard.errorLoad'));
     } finally {
       setLoading(false);
     }
@@ -1993,7 +1992,7 @@ export default function DashboardPageUnified() {
 
       // Don't post if upload failed and no text content
       if (!content && mediaUrls.length === 0) {
-        NotificationManager.error("Ajoutez du texte ou des médias valides");
+        NotificationManager.error(t('dashboard.addTextOrMedia'));
         setPostSubmitting(false);
         return;
       }
@@ -2022,10 +2021,10 @@ export default function DashboardPageUnified() {
       setPostCategory(null);
       postMediaPreviews.forEach(m => URL.revokeObjectURL(m.preview));
       setPostMediaPreviews([]);
-      NotificationManager.success("Buzz published! 🐝");
+      NotificationManager.success(t('wall.buzzPublished'));
     } catch (error) {
       console.error("[WALL] Erreur création post:", error);
-      NotificationManager.error("Failed to publish Buzz");
+      NotificationManager.error(t('wall.publishFailed'));
     }
     setPostSubmitting(false);
   }, [api, newPostContent, newPostVisibility, postSubmitting, postMediaPreviews, postMood, postCategory, identity.publishAsOrg]);
@@ -2034,7 +2033,7 @@ export default function DashboardPageUnified() {
     setRefreshing(true);
     await Promise.all([fetchDashboardData(), fetchWallFeed(true)]);
     setRefreshing(false);
-    NotificationManager.success("Données actualisées !");
+    NotificationManager.success(t('dashboard.refreshed'));
   }, [fetchDashboardData, fetchWallFeed]);
 
   // Hooks must be called before any early return to respect Rules of Hooks
@@ -2230,14 +2229,14 @@ export default function DashboardPageUnified() {
   };
 
   const allQuickActions = [
-    { icon: <FunnelPlotOutlined />, label: "Nouveau Lead", to: "/leads/kanban", color: "#ff7a45", features: ['leads_access'] },
-    { icon: <UserOutlined />, label: "Nouveau Client", to: "/clients", color: FB.green, features: ['clients_access'] },
-    { icon: <CalendarOutlined />, label: "Planifier RDV", to: "/agenda", color: FB.orange, features: ['Agenda'] },
-    { icon: <MailOutlined />, label: "Envoyer Email", to: "/google-gmail", color: FB.red, features: ['google_gmail_access', 'google_gmail'] },
+    { icon: <FunnelPlotOutlined />, label: t('dashboard.quickAction.newLead'), to: "/leads/kanban", color: "#ff7a45", features: ['leads_access'] },
+    { icon: <UserOutlined />, label: t('dashboard.quickAction.newClient'), to: "/clients", color: FB.green, features: ['clients_access'] },
+    { icon: <CalendarOutlined />, label: t('dashboard.quickAction.planMeeting'), to: "/agenda", color: FB.orange, features: ['Agenda'] },
+    { icon: <MailOutlined />, label: t('dashboard.quickAction.sendEmail'), to: "/google-gmail", color: FB.red, features: ['google_gmail_access', 'google_gmail'] },
   ];
   const _quickActions = allQuickActions.filter(a => a.features.length === 0 || a.features.some(f => hasFeature(f)));
 
-  const userName = user ? ((user.firstName || "") + " " + (user.lastName || "")).trim() || "Utilisateur" : "Utilisateur";
+  const userName = user ? ((user.firstName || "") + " " + (user.lastName || "")).trim() || t('common.user') : t('common.user');
 
   /* ═══════════════════════════════════════════════════════════
      LEFT SIDEBAR (kept for module navigation — used when a module is active)
@@ -2275,13 +2274,13 @@ export default function DashboardPageUnified() {
 
       {/* Fixed items: Paramètres */}
       <div style={{ height: 1, background: FB.border, margin: "12px 8px" }} />
-      <ShortcutItem icon={<SettingOutlined />} label="Paramètres" to="/settings" color={FB.textSecondary} onClick={openModule} />
+      <ShortcutItem icon={<SettingOutlined />} label={t('common.settings')} to="/settings" color={FB.textSecondary} onClick={openModule} />
 
       <div style={{ height: 1, background: FB.border, margin: "12px 8px" }} />
       {currentOrganization && (
         <div style={{ padding: "8px 8px", fontSize: 13, color: FB.textSecondary }}>
           <span style={{ fontWeight: 600 }}>{currentOrganization.name}</span><br />
-          <span style={{ fontSize: 12 }}>{stats.totalUsers} membres · {stats.totalLeads} leads</span>
+          <span style={{ fontSize: 12 }}>{t('dashboard.orgStats', { members: stats.totalUsers, leads: stats.totalLeads })}</span>
         </div>
       )}
     </div>
@@ -2298,9 +2297,9 @@ export default function DashboardPageUnified() {
 
   const getRoleLabel = (role: string) => {
     const labels: Record<string, string> = {
-      super_admin: "Super Admin", admin: "Admin", comptable: "Comptable",
-      commercial: "Commercial", technicien: "Technicien", chef_equipe: "Chef d'équipe",
-      contremaitre: "Contremaître", sous_traitant: "Sous-traitant", user: "Utilisateur",
+      super_admin: t('roles.super_admin'), admin: t('roles.admin'), comptable: t('roles.admin'),
+      commercial: t('roles.commercial'), technicien: t('roles.user'), chef_equipe: t('roles.manager'),
+      contremaitre: t('roles.manager'), sous_traitant: t('roles.prestataire'), user: t('roles.user'),
     };
     return labels[role] || role;
   };
@@ -2316,10 +2315,10 @@ export default function DashboardPageUnified() {
         <FBCard>
           <span style={{ fontSize: 14, fontWeight: 700, color: FB.text, display: "block", marginBottom: 8 }}>
             <BarChartOutlined style={{ marginRight: 6, color: FB.blue }} />
-            Analytics
+            {t('dashboard.analytics')}
           </span>
           <Select
-            placeholder="Vue globale"
+            placeholder={t('dashboard.globalView')}
             allowClear
             showSearch
             style={{ width: "100%", fontSize: 13 }}
@@ -2335,7 +2334,7 @@ export default function DashboardPageUnified() {
           />
           {selectedCollaborator && (
             <div style={{ marginTop: 6, fontSize: 11, color: FB.textSecondary }}>
-              Vue des stats de : <b>{analytics.collaborators.find((c: any) => c.id === selectedCollaborator)?.name}</b>
+              {t('dashboard.statsViewOf', { name: analytics.collaborators.find((c: any) => c.id === selectedCollaborator)?.name })}
             </div>
           )}
         </FBCard>
@@ -2345,9 +2344,9 @@ export default function DashboardPageUnified() {
       <FBCard>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <span style={{ fontSize: 14, fontWeight: 700, color: FB.text }}>
-            {selectedCollaborator ? "Performance perso" : "Performance globale"}
+            {selectedCollaborator ? t('dashboard.personalPerf') : t('dashboard.globalPerf')}
           </span>
-          <AntTooltip title="Actualiser">
+          <AntTooltip title={t('common.refresh')}>
             <ReloadOutlined spin={refreshing || analyticsLoading}
               style={{ fontSize: 14, color: FB.textSecondary, cursor: "pointer" }}
               onClick={() => { handleRefresh(); fetchAnalytics(selectedCollaborator); }} />
@@ -2361,12 +2360,12 @@ export default function DashboardPageUnified() {
             {/* KPIs pour Admin/Comptable */}
             {(isAdminRole || user?.role === "comptable") && !selectedCollaborator && (
               <>
-                <StatWidget icon={<FunnelPlotOutlined />} label="Total Leads" value={analytics.totalLeads} color="#1890ff" sub={`+${analytics.newLeadsThisMonth} ce mois`} />
-                <StatWidget icon={<TrophyOutlined />} label="Convertis" value={analytics.convertedLeads} color={FB.green} sub={`${analytics.conversionRate}%`} />
-                <StatWidget icon={<ToolOutlined />} label="Chantiers" value={analytics.totalChantiers} color="#fa8c16" />
-                <StatWidget icon={<RiseOutlined />} label="Chiffre d'Affaires" value={formatRevenue(analytics.totalRevenue)} color="#722ed1" />
+                <StatWidget icon={<FunnelPlotOutlined />} label={t('dashboard.totalLeads')} value={analytics.totalLeads} color="#1890ff" sub={t('dashboard.thisMonth', { count: analytics.newLeadsThisMonth })} />
+                <StatWidget icon={<TrophyOutlined />} label={t('dashboard.converted')} value={analytics.convertedLeads} color={FB.green} sub={`${analytics.conversionRate}%`} />
+                <StatWidget icon={<ToolOutlined />} label={t('dashboard.chantiers')} value={analytics.totalChantiers} color="#fa8c16" />
+                <StatWidget icon={<RiseOutlined />} label={t('dashboard.revenue')} value={formatRevenue(analytics.totalRevenue)} color="#722ed1" />
                 {analytics.roleStats?.totalUsers != null && (
-                  <StatWidget icon={<TeamOutlined />} label="Équipe active" value={analytics.roleStats.totalUsers} color={FB.blue} />
+                  <StatWidget icon={<TeamOutlined />} label={t('dashboard.activeTeam')} value={analytics.roleStats.totalUsers} color={FB.blue} />
                 )}
               </>
             )}
@@ -2374,19 +2373,19 @@ export default function DashboardPageUnified() {
             {/* KPIs pour Commercial / User ou collaborateur sélectionné */}
             {((!isTechRole && !isAdminRole) || selectedCollaborator) && analytics.roleStats?.myLeads != null && (
               <>
-                <StatWidget icon={<FunnelPlotOutlined />} label="Mes Leads" value={analytics.roleStats.myLeads} color="#1890ff" />
-                <StatWidget icon={<TrophyOutlined />} label="Mes Convertis" value={analytics.roleStats.myConvertedLeads} color={FB.green} sub={`${analytics.roleStats.myConversion}%`} />
-                <StatWidget icon={<ToolOutlined />} label="Mes Chantiers" value={analytics.roleStats.myChantiers} color="#fa8c16" />
-                <StatWidget icon={<RiseOutlined />} label="Mon CA" value={formatRevenue(analytics.roleStats.myRevenue)} color="#722ed1" />
+                <StatWidget icon={<FunnelPlotOutlined />} label={t('dashboard.myLeads')} value={analytics.roleStats.myLeads} color="#1890ff" />
+                <StatWidget icon={<TrophyOutlined />} label={t('dashboard.myConverted')} value={analytics.roleStats.myConvertedLeads} color={FB.green} sub={`${analytics.roleStats.myConversion}%`} />
+                <StatWidget icon={<ToolOutlined />} label={t('dashboard.myChantiers')} value={analytics.roleStats.myChantiers} color="#fa8c16" />
+                <StatWidget icon={<RiseOutlined />} label={t('dashboard.myRevenue')} value={formatRevenue(analytics.roleStats.myRevenue)} color="#722ed1" />
               </>
             )}
 
             {/* KPIs pour Technicien / Chef d'équipe / Contremaître / Sous-traitant */}
             {(isTechRole || (selectedCollaborator && analytics.roleStats?.assignedChantiers != null)) && (
               <>
-                <StatWidget icon={<ToolOutlined />} label="Chantiers assignés" value={analytics.roleStats.assignedChantiers || 0} color="#fa8c16" />
-                <StatWidget icon={<ClockCircleOutlined />} label="Heures ce mois" value={`${analytics.roleStats.hoursThisMonth || 0}h`} color={FB.blue} />
-                <StatWidget icon={<CalendarOutlined />} label="Jours travaillés" value={analytics.roleStats.daysWorkedThisMonth || 0} color={FB.green} />
+                <StatWidget icon={<ToolOutlined />} label={t('dashboard.assignedChantiers')} value={analytics.roleStats.assignedChantiers || 0} color="#fa8c16" />
+                <StatWidget icon={<ClockCircleOutlined />} label={t('dashboard.hoursThisMonth')} value={`${analytics.roleStats.hoursThisMonth || 0}h`} color={FB.blue} />
+                <StatWidget icon={<CalendarOutlined />} label={t('dashboard.daysWorked')} value={analytics.roleStats.daysWorkedThisMonth || 0} color={FB.green} />
               </>
             )}
           </>
@@ -2397,7 +2396,7 @@ export default function DashboardPageUnified() {
       {analytics?.monthlyData?.length > 0 && (
         <FBCard>
           <span style={{ fontSize: 14, fontWeight: 700, color: FB.text, display: "block", marginBottom: 8 }}>
-            Évolution mensuelle
+            {t('dashboard.monthlyEvolution')}
           </span>
           <div style={{ height: 140, minWidth: 0, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
@@ -2406,9 +2405,9 @@ export default function DashboardPageUnified() {
                 <YAxis tick={{ fontSize: 10, fill: FB.textSecondary }} axisLine={false} tickLine={false} />
                 <RechartsTooltip
                   contentStyle={{ fontSize: 12, borderRadius: 8, border: "none", boxShadow: FB.shadow }}
-                  formatter={(value: any, name: string) => [name === "revenue" ? formatRevenue(value) : value, name === "revenue" ? "CA" : "Chantiers"]}
+                  formatter={(value: any, name: string) => [name === "revenue" ? formatRevenue(value) : value, name === "revenue" ? t('dashboard.revenueShort') : t('dashboard.chantiers')]}
                 />
-                <Bar dataKey="chantiers" fill={FB.blue} radius={[4, 4, 0, 0]} barSize={16} name="Chantiers" />
+                <Bar dataKey="chantiers" fill={FB.blue} radius={[4, 4, 0, 0]} barSize={16} name={t('dashboard.chantiers')} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -2419,7 +2418,7 @@ export default function DashboardPageUnified() {
       {analytics?.monthlyData?.length > 0 && analytics.monthlyData.some((d: any) => d.revenue > 0) && (
         <FBCard>
           <span style={{ fontSize: 14, fontWeight: 700, color: FB.text, display: "block", marginBottom: 8 }}>
-            CA mensuel
+            {t('dashboard.monthlyRevenue')}
           </span>
           <div style={{ height: 120, minWidth: 0, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
@@ -2447,7 +2446,7 @@ export default function DashboardPageUnified() {
       {chartData.leadsByStatus.length > 0 && (
         <FBCard>
           <span style={{ fontSize: 14, fontWeight: 700, color: FB.text, display: "block", marginBottom: 8 }}>
-            Leads par statut
+            {t('dashboard.leadsByStatus')}
           </span>
           <div style={{ height: 140, minWidth: 0, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
@@ -2478,7 +2477,7 @@ export default function DashboardPageUnified() {
       {isAdminRole && analytics?.roleStats?.chantiersByStatus?.length > 0 && !selectedCollaborator && (
         <FBCard>
           <span style={{ fontSize: 14, fontWeight: 700, color: FB.text, display: "block", marginBottom: 8 }}>
-            Chantiers par statut
+            {t('dashboard.chantiersByStatus')}
           </span>
           {analytics.roleStats.chantiersByStatus.map((s: any, i: number) => (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0" }}>
@@ -2495,7 +2494,7 @@ export default function DashboardPageUnified() {
       {isAdminRole && analytics?.roleStats?.topCommercials?.length > 0 && !selectedCollaborator && (
         <FBCard>
           <span style={{ fontSize: 14, fontWeight: 700, color: FB.text, display: "block", marginBottom: 8 }}>
-            Top Commerciaux
+            {t('dashboard.topCommercials')}
           </span>
           {analytics.roleStats.topCommercials.map((c: any, i: number) => (
             <div key={i} style={{
@@ -2524,8 +2523,8 @@ export default function DashboardPageUnified() {
       {topLeads.length > 0 && (
         <FBCard>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <span style={{ fontSize: 14, fontWeight: 700, color: FB.text }}>Top Leads</span>
-            <span onClick={() => openModule('/leads')} style={{ fontSize: 12, color: FB.blue, textDecoration: "none", cursor: "pointer" }}>Voir tous</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: FB.text }}>{t('dashboard.topLeads')}</span>
+            <span onClick={() => openModule('/leads')} style={{ fontSize: 12, color: FB.blue, textDecoration: "none", cursor: "pointer" }}>{t('common.viewAll')}</span>
           </div>
           {topLeads.slice(0, 4).map(lead => (
             <div key={lead.id} onClick={() => openModule('/leads')} style={{ textDecoration: "none", cursor: "pointer" }}>
@@ -2559,7 +2558,7 @@ export default function DashboardPageUnified() {
       {/* === CONTACTS === */}
       <FBCard>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: FB.text }}>Contacts</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: FB.text }}>{t('dashboard.contacts')}</span>
         </div>
         <FriendsWidget onStartChat={() => {}} />
       </FBCard>
@@ -2575,9 +2574,9 @@ export default function DashboardPageUnified() {
       {isAdminRole && analytics?.collaborators?.length > 0 && (
         <FBCard>
           <span style={{ fontSize: 13, fontWeight: 700, color: FB.text, display: "block", marginBottom: 6 }}>
-            <BarChartOutlined style={{ marginRight: 4, color: FB.blue }} /> Analytics
+            <BarChartOutlined style={{ marginRight: 4, color: FB.blue }} /> {t('dashboard.analytics')}
           </span>
-          <Select placeholder="Vue globale" allowClear showSearch
+          <Select placeholder={t('dashboard.globalView')} allowClear showSearch
             style={{ width: "100%", fontSize: 12 }}
             value={selectedCollaborator}
             onChange={(val) => setSelectedCollaborator(val || null)}
@@ -2591,7 +2590,7 @@ export default function DashboardPageUnified() {
       <FBCard>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: FB.text }}>
-            {selectedCollaborator ? "Performance perso" : "Performance"}
+            {selectedCollaborator ? t('dashboard.personalPerf') : t('dashboard.performance')}
           </span>
           <ReloadOutlined spin={refreshing || analyticsLoading}
             style={{ fontSize: 13, color: FB.textSecondary, cursor: "pointer" }}
@@ -2603,25 +2602,25 @@ export default function DashboardPageUnified() {
           <>
             {(isAdminRole || user?.role === "comptable") && !selectedCollaborator && (
               <>
-                <StatWidget icon={<FunnelPlotOutlined />} label="Total Leads" value={analytics.totalLeads} color="#1890ff" sub={`+${analytics.newLeadsThisMonth} ce mois`} />
-                <StatWidget icon={<TrophyOutlined />} label="Convertis" value={analytics.convertedLeads} color={FB.green} sub={`${analytics.conversionRate}%`} />
-                <StatWidget icon={<ToolOutlined />} label="Chantiers" value={analytics.totalChantiers} color="#fa8c16" />
-                <StatWidget icon={<RiseOutlined />} label="CA" value={formatRevenue(analytics.totalRevenue)} color="#722ed1" />
+                <StatWidget icon={<FunnelPlotOutlined />} label={t('dashboard.totalLeads')} value={analytics.totalLeads} color="#1890ff" sub={t('dashboard.thisMonth', { count: analytics.newLeadsThisMonth })} />
+                <StatWidget icon={<TrophyOutlined />} label={t('dashboard.converted')} value={analytics.convertedLeads} color={FB.green} sub={`${analytics.conversionRate}%`} />
+                <StatWidget icon={<ToolOutlined />} label={t('dashboard.chantiers')} value={analytics.totalChantiers} color="#fa8c16" />
+                <StatWidget icon={<RiseOutlined />} label={t('dashboard.revenueShort')} value={formatRevenue(analytics.totalRevenue)} color="#722ed1" />
               </>
             )}
             {((!isTechRole && !isAdminRole) || selectedCollaborator) && analytics.roleStats?.myLeads != null && (
               <>
-                <StatWidget icon={<FunnelPlotOutlined />} label="Mes Leads" value={analytics.roleStats.myLeads} color="#1890ff" />
-                <StatWidget icon={<TrophyOutlined />} label="Mes Convertis" value={analytics.roleStats.myConvertedLeads} color={FB.green} sub={`${analytics.roleStats.myConversion}%`} />
-                <StatWidget icon={<ToolOutlined />} label="Mes Chantiers" value={analytics.roleStats.myChantiers} color="#fa8c16" />
-                <StatWidget icon={<RiseOutlined />} label="Mon CA" value={formatRevenue(analytics.roleStats.myRevenue)} color="#722ed1" />
+                <StatWidget icon={<FunnelPlotOutlined />} label={t('dashboard.myLeads')} value={analytics.roleStats.myLeads} color="#1890ff" />
+                <StatWidget icon={<TrophyOutlined />} label={t('dashboard.myConverted')} value={analytics.roleStats.myConvertedLeads} color={FB.green} sub={`${analytics.roleStats.myConversion}%`} />
+                <StatWidget icon={<ToolOutlined />} label={t('dashboard.myChantiers')} value={analytics.roleStats.myChantiers} color="#fa8c16" />
+                <StatWidget icon={<RiseOutlined />} label={t('dashboard.myRevenue')} value={formatRevenue(analytics.roleStats.myRevenue)} color="#722ed1" />
               </>
             )}
             {(isTechRole || (selectedCollaborator && analytics.roleStats?.assignedChantiers != null)) && (
               <>
-                <StatWidget icon={<ToolOutlined />} label="Chantiers assignés" value={analytics.roleStats.assignedChantiers || 0} color="#fa8c16" />
-                <StatWidget icon={<ClockCircleOutlined />} label="Heures ce mois" value={`${analytics.roleStats.hoursThisMonth || 0}h`} color={FB.blue} />
-                <StatWidget icon={<CalendarOutlined />} label="Jours travaillés" value={analytics.roleStats.daysWorkedThisMonth || 0} color={FB.green} />
+                <StatWidget icon={<ToolOutlined />} label={t('dashboard.assignedChantiers')} value={analytics.roleStats.assignedChantiers || 0} color="#fa8c16" />
+                <StatWidget icon={<ClockCircleOutlined />} label={t('dashboard.hoursThisMonth')} value={`${analytics.roleStats.hoursThisMonth || 0}h`} color={FB.blue} />
+                <StatWidget icon={<CalendarOutlined />} label={t('dashboard.daysWorked')} value={analytics.roleStats.daysWorkedThisMonth || 0} color={FB.green} />
               </>
             )}
           </>
@@ -2631,14 +2630,14 @@ export default function DashboardPageUnified() {
       {/* Monthly bar chart */}
       {analytics?.monthlyData?.length > 0 && (
         <FBCard>
-          <span style={{ fontSize: 13, fontWeight: 700, color: FB.text, display: "block", marginBottom: 6 }}>Évolution mensuelle</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: FB.text, display: "block", marginBottom: 6 }}>{t('dashboard.monthlyEvolution')}</span>
           <div style={{ height: 130, minWidth: 0, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <BarChart data={analytics.monthlyData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                 <XAxis dataKey="month" tick={{ fontSize: 10, fill: FB.textSecondary }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 10, fill: FB.textSecondary }} axisLine={false} tickLine={false} />
                 <RechartsTooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: "none", boxShadow: FB.shadow }} />
-                <Bar dataKey="chantiers" fill={FB.blue} radius={[4, 4, 0, 0]} barSize={16} name="Chantiers" />
+                <Bar dataKey="chantiers" fill={FB.blue} radius={[4, 4, 0, 0]} barSize={16} name={t('dashboard.chantiers')} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -2648,7 +2647,7 @@ export default function DashboardPageUnified() {
       {/* Revenue area chart */}
       {analytics?.monthlyData?.length > 0 && analytics.monthlyData.some((d: any) => d.revenue > 0) && (
         <FBCard>
-          <span style={{ fontSize: 13, fontWeight: 700, color: FB.text, display: "block", marginBottom: 6 }}>CA mensuel</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: FB.text, display: "block", marginBottom: 6 }}>{t('dashboard.monthlyRevenue')}</span>
           <div style={{ height: 110, minWidth: 0, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <AreaChart data={analytics.monthlyData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
@@ -2660,7 +2659,7 @@ export default function DashboardPageUnified() {
                 </defs>
                 <XAxis dataKey="month" tick={{ fontSize: 10, fill: FB.textSecondary }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 10, fill: FB.textSecondary }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? `${v / 1000}k` : v} />
-                <RechartsTooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: "none", boxShadow: FB.shadow }} formatter={(value: any) => [formatRevenue(value), "CA"]} />
+                <RechartsTooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: "none", boxShadow: FB.shadow }} formatter={(value: any) => [formatRevenue(value), t('dashboard.revenueShort')]} />
                 <Area type="monotone" dataKey="revenue" stroke="#722ed1" strokeWidth={2} fill="url(#mobileRevenueGrad)" />
               </AreaChart>
             </ResponsiveContainer>
@@ -2671,7 +2670,7 @@ export default function DashboardPageUnified() {
       {/* Pie chart leads */}
       {chartData.leadsByStatus.length > 0 && (
         <FBCard>
-          <span style={{ fontSize: 13, fontWeight: 700, color: FB.text, display: "block", marginBottom: 6 }}>Leads par statut</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: FB.text, display: "block", marginBottom: 6 }}>{t('dashboard.leadsByStatus')}</span>
           <div style={{ height: 130, minWidth: 0, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <PieChart>
@@ -2699,7 +2698,7 @@ export default function DashboardPageUnified() {
       {/* Top Leads */}
       {topLeads.length > 0 && (
         <FBCard>
-          <span style={{ fontSize: 13, fontWeight: 700, color: FB.text, display: "block", marginBottom: 6 }}>Top Leads</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: FB.text, display: "block", marginBottom: 6 }}>{t('dashboard.topLeads')}</span>
           {topLeads.slice(0, 5).map(lead => (
             <div key={lead.id} onClick={() => openModule('/leads')} style={{ textDecoration: "none", cursor: "pointer" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0" }}>
@@ -2757,9 +2756,9 @@ export default function DashboardPageUnified() {
           {/* Action icons inline à droite */}
           <div style={{ display: "flex", gap: 2, flexShrink: 0, alignItems: "center" }}>
             {[
-              { emoji: "📷", action: () => handleMediaSelect('image/*'), tip: "Photo" },
-              { emoji: "🎥", action: () => handleMediaSelect('video/*'), tip: "Vidéo" },
-              { emoji: "📎", action: () => handleMediaSelect('*/*'), tip: "Fichier" },
+              { emoji: "📷", action: () => handleMediaSelect('image/*'), tip: t('wall.mediaPhoto') },
+              { emoji: "🎥", action: () => handleMediaSelect('video/*'), tip: t('wall.mediaVideo') },
+              { emoji: "📎", action: () => handleMediaSelect('*/*'), tip: t('wall.mediaFile') },
             ].map((btn, i) => (
               <AntTooltip key={i} title={btn.tip}>
                 <div onClick={btn.action}
@@ -2771,7 +2770,7 @@ export default function DashboardPageUnified() {
               </AntTooltip>
             ))}
             <div style={{ position: 'relative' }}>
-              <AntTooltip title="Humeur">
+              <AntTooltip title={t('wall.moodTooltip')}>
                 <div onClick={() => setShowMoodPicker(!showMoodPicker)}
                   style={{ width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 14, transition: "background 0.15s" }}
                   onMouseEnter={e => (e.currentTarget.style.background = FB.btnGray)}
@@ -2825,13 +2824,13 @@ export default function DashboardPageUnified() {
         {(newPostContent.trim() || postMediaPreviews.length > 0) && (
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6, marginLeft: 36 }}>
             {[
-              { value: 'projet', label: '📋 Projet', color: '#3b82f6' },
-              { value: 'chantier_realise', label: '🔨 Chantier', color: '#f59e0b' },
-              { value: 'promotion', label: '📢 Promo', color: '#ef4444' },
-              { value: 'conseil', label: '💡 Conseil', color: '#10b981' },
-              { value: 'actualite', label: '📰 Actu', color: '#8b5cf6' },
-              { value: 'emploi', label: '💼 Emploi', color: '#0ea5e9' },
-              { value: 'market', label: '🛒 Market', color: '#f97316' },
+              { value: 'projet', label: t('wall.category.project'), color: '#3b82f6' },
+              { value: 'chantier_realise', label: t('wall.category.chantier'), color: '#f59e0b' },
+              { value: 'promotion', label: t('wall.category.promo'), color: '#ef4444' },
+              { value: 'conseil', label: t('wall.category.conseil'), color: '#10b981' },
+              { value: 'actualite', label: t('wall.category.news'), color: '#8b5cf6' },
+              { value: 'emploi', label: t('wall.category.job'), color: '#0ea5e9' },
+              { value: 'market', label: t('wall.category.market'), color: '#f97316' },
             ].map(cat => (
               <div key={cat.value}
                 onClick={() => setPostCategory(postCategory === cat.value ? null : cat.value)}
@@ -2853,7 +2852,7 @@ export default function DashboardPageUnified() {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6 }}>
             <div style={{ display: "flex", gap: 4 }}>
               {(currentOrganization ? ["IN", "ALL", "OUT"] as WallVisibility[] : ["ALL", "OUT"] as WallVisibility[]).map(v => {
-                const vis = visibilityLabel[v];
+                const vis = getVisibilityLabel(t)[v];
                 const active = newPostVisibility === v;
                 return (
                   <div key={v} onClick={() => setNewPostVisibility(v)}
@@ -2878,7 +2877,7 @@ export default function DashboardPageUnified() {
                 cursor: postSubmitting ? "not-allowed" : "pointer",
                 opacity: postSubmitting ? 0.6 : 1,
               }}>
-              {postSubmitting ? "..." : "Buzz it"}
+              {postSubmitting ? "..." : t('wall.buzzIt')}
             </button>
           </div>
         )}
@@ -2981,7 +2980,7 @@ export default function DashboardPageUnified() {
                     {wallSearchQuery}
                   </span>
                   <span style={{ fontSize: 11, color: FB.textSecondary, fontWeight: 500 }}>
-                    — {wallSearchResults.length} résultat{wallSearchResults.length > 1 ? 's' : ''}
+                    — {wallSearchResults.length > 1 ? t('search.resultCountPlural', { count: wallSearchResults.length }) : t('search.resultCount', { count: wallSearchResults.length })}
                   </span>
                 </div>
                 <div onClick={() => setWallSearchQuery(null)}
@@ -3074,7 +3073,7 @@ export default function DashboardPageUnified() {
                       border: "none", borderRadius: 4, fontWeight: 600,
                       fontSize: 14, cursor: "pointer",
                     }}>
-                    Plus de résultats
+                    {t('search.moreResults')}
                   </button>
                 </div>
               )}
@@ -3082,14 +3081,14 @@ export default function DashboardPageUnified() {
               {!wallSearchLoading && wallSearchResults.length === 0 && (
                 <div style={{ textAlign: "center", padding: "40px 16px" }}>
                   <GlobalOutlined style={{ fontSize: 36, color: FB.border, marginBottom: 12 }} />
-                  <div style={{ fontSize: 15, fontWeight: 600, color: FB.text, marginBottom: 6 }}>Aucun résultat</div>
-                  <div style={{ color: FB.textSecondary, fontSize: 13 }}>Essayez avec d'autres mots-clés</div>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: FB.text, marginBottom: 6 }}>{t('search.noResults')}</div>
+                  <div style={{ color: FB.textSecondary, fontSize: 13 }}>{t('search.tryOtherKeywords')}</div>
                 </div>
               )}
 
               {!wallSearchLoading && !wallSearchHasMore && wallSearchResults.length > 0 && (
                 <div style={{ textAlign: "center", padding: "16px 0", color: FB.textSecondary, fontSize: 13, borderTop: `1px solid ${FB.btnGray}` }}>
-                  Fin des résultats
+                  {t('search.endOfResults')}
                 </div>
               )}
 
@@ -3098,7 +3097,7 @@ export default function DashboardPageUnified() {
 
       {/* Feed header — single compact line with filter dropdown */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0 4px", marginBottom: 4, position: "relative" }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: FB.text }}>Fil</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: FB.text }}>{t('wall.feed')}</span>
         {wallPosts.length > 0 && (
           <span style={{ fontSize: 10, color: FB.textSecondary, background: FB.btnGray, borderRadius: 8, padding: "0 5px", fontWeight: 600 }}>
             {wallPosts.length}
@@ -3106,7 +3105,7 @@ export default function DashboardPageUnified() {
         )}
         {feedFilter && (
           <span style={{ fontSize: 10, background: FB.blue + "15", color: FB.blue, borderRadius: 8, padding: "1px 6px", fontWeight: 600 }}>
-            {({ projet: "📋 Projets", chantier_realise: "🔨 Chantiers", promotion: "📢 Promos", conseil: "💡 Conseils" } as Record<string,string>)[feedFilter]}
+            {({ projet: t('wall.filterIcon.projects'), chantier_realise: t('wall.filterIcon.chantiers'), promotion: t('wall.filterIcon.promos'), conseil: t('wall.filterIcon.conseils') } as Record<string,string>)[feedFilter]}
             <span onClick={() => { setFeedFilter(""); setWallPosts([]); setWallCursor(null); }} style={{ cursor: "pointer", marginLeft: 3 }}>✕</span>
           </span>
         )}
@@ -3128,11 +3127,11 @@ export default function DashboardPageUnified() {
             padding: 6, display: "flex", flexDirection: "column", gap: 2, minWidth: 150, marginTop: 2,
           }}>
             {[
-              { key: "", label: "Tout", icon: "🏠" },
-              { key: "projet", label: "Projets", icon: "📋" },
-              { key: "chantier_realise", label: "Chantiers", icon: "🔨" },
-              { key: "promotion", label: "Promos", icon: "📢" },
-              { key: "conseil", label: "Conseils", icon: "💡" },
+              { key: "", label: t('wall.filter.all'), icon: "🏠" },
+              { key: "projet", label: t('wall.filter.projects'), icon: "📋" },
+              { key: "chantier_realise", label: t('wall.filter.chantiers'), icon: "🔨" },
+              { key: "promotion", label: t('wall.filter.promos'), icon: "📢" },
+              { key: "conseil", label: t('wall.filter.conseils'), icon: "💡" },
             ].map(cat => (
               <div key={cat.key} onClick={() => { setFeedFilter(cat.key); setWallPosts([]); setWallCursor(null); setShowFilterDropdown(false); }}
                 style={{
@@ -3167,7 +3166,7 @@ export default function DashboardPageUnified() {
                   border: `1px solid ${FB.blue}`, borderRadius: 20, fontWeight: 600,
                   fontSize: 14, cursor: wallLoading ? "not-allowed" : "pointer",
                 }}>
-                {wallLoading ? "Chargement..." : "Voir plus"}
+                {wallLoading ? t('common.loading') : t('common.viewMore')}
               </button>
             </div>
           )}
@@ -3175,17 +3174,17 @@ export default function DashboardPageUnified() {
       ) : wallLoading ? (
         <FBCard style={{ textAlign: "center", padding: "40px 16px" }}>
           <Spin size="default" />
-          <div style={{ color: FB.textSecondary, fontSize: 14, marginTop: 12 }}>Chargement du fil…</div>
+          <div style={{ color: FB.textSecondary, fontSize: 14, marginTop: 12 }}>{t('dashboard.loadingFeed')}</div>
         </FBCard>
       ) : recentActivities.length > 0 ? (
         /* Fallback: legacy activity feed when no wall posts exist yet */
         <>
           <div style={{ fontSize: 12, color: FB.textSecondary, textAlign: "center", marginBottom: 8 }}>
-            Activité récente
+            {t('dashboard.recentActivity')}
           </div>
           {recentActivities.slice(0, 10).map(activity => {
             // Convert legacy activity to minimal card display
-            const authorName = activity.user || "Système";
+            const authorName = activity.user || t('common.system');
             return (
               <FBCard key={activity.id} noPadding>
                 <div style={{ display: "flex", alignItems: "center", padding: "12px 16px", gap: 8 }}>
@@ -3194,7 +3193,7 @@ export default function DashboardPageUnified() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div>
                       <span style={{ fontWeight: 600, fontSize: 14, color: FB.text }}>{authorName}</span>{" "}
-                      <span style={{ color: FB.textSecondary, fontSize: 14 }}>{activityVerb(activity.type)}</span>
+                      <span style={{ color: FB.textSecondary, fontSize: 14 }}>{activityVerb(activity.type, t)}</span>
                     </div>
                     <div style={{ fontSize: 14, color: FB.text, marginTop: 4 }}>{activity.description}</div>
                     <div style={{ fontSize: 12, color: FB.textSecondary, marginTop: 4 }}>{timeAgo(activity.timestamp)}</div>
@@ -3208,10 +3207,10 @@ export default function DashboardPageUnified() {
         <FBCard style={{ textAlign: "center", padding: "40px 16px" }}>
           <BulbOutlined style={{ fontSize: 48, color: FB.border, marginBottom: 16 }} />
           <div style={{ fontSize: 17, fontWeight: 600, color: FB.text, marginBottom: 8 }}>
-            Bienvenue sur le Hive !
+            {t('dashboard.welcomeToHive')}
           </div>
           <div style={{ color: FB.textSecondary, fontSize: 14 }}>
-            Publiez votre premier Buzz ou commencez à utiliser le Hive pour voir l'activité ici.
+            {t('dashboard.emptyFeedMessage')}
           </div>
         </FBCard>
       )}
@@ -3220,7 +3219,7 @@ export default function DashboardPageUnified() {
       {wallPosts.length > 0 && !wallCursor && (
         <div style={{ textAlign: "center", padding: "20px 0 40px", color: FB.textSecondary, fontSize: 14 }}>
           <CheckCircleOutlined style={{ fontSize: 24, marginBottom: 8, display: "block" }} />
-          Vous êtes à jour ! Aucune nouvelle activité.
+          {t('dashboard.upToDate')}
         </div>
       )}
       </>)}
@@ -3234,6 +3233,13 @@ export default function DashboardPageUnified() {
   /** Renders the embedded module component inside the dashboard shell */
   // Render any Zhiive app panel by its ID
   const renderPanel = (appId: string, sidebar?: boolean) => {
+    // ═══ Enforcement SocialSettings: ne pas rendre les apps désactivées ═══
+    const APP_TO_SETTING: Record<string, string> = {
+      explore: 'explore', nectar: 'sparks', reels: 'reels',
+    };
+    const settingKey = APP_TO_SETTING[appId];
+    if (settingKey && !isAppEnabled(settingKey)) return null;
+
     switch (appId) {
       case 'explore': return <LazyExplorePanel api={api} openModule={openModule} />;
       case 'nectar': return <LazyNectarPanel api={api} currentUser={user} />;
@@ -3340,7 +3346,7 @@ export default function DashboardPageUnified() {
               }
               return (
                 <div key={tabId} style={panelStyle}>
-                  <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
+                  <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}><Spin size="large" /></div>}>
                     {renderPanel(tabId)}
                   </Suspense>
                 </div>
@@ -3397,7 +3403,7 @@ export default function DashboardPageUnified() {
                   </div>
                 </div>
               ) : centerApp ? (
-                <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spin size="large" /></div>}>
+                <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}><Spin size="large" /></div>}>
                   <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                     {renderPanel(centerApp)}
                   </div>

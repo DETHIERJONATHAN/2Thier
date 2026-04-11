@@ -81,17 +81,17 @@ describe('Peppol Auto-Fetch Incoming Invoices (Cron)', () => {
     vi.restoreAllMocks();
   });
 
-  // Callback pour le job fetch-incoming (toutes les 4h)
-  const runFetchIncoming = () => cronCallbacks['0 */4 * * *']();
+  // Callback pour le job fetch-incoming (toutes les 1h)
+  const runFetchIncoming = () => cronCallbacks['0 */1 * * *']();
 
   // ════════════════════════════════════════════
   // EXISTENCE DU JOB
   // ════════════════════════════════════════════
 
   describe('Enregistrement du cron', () => {
-    it('doit enregistrer un cron job toutes les 4 heures', () => {
-      expect(cronCallbacks['0 */4 * * *']).toBeDefined();
-      expect(typeof cronCallbacks['0 */4 * * *']).toBe('function');
+    it('doit enregistrer un cron job toutes les heures', () => {
+      expect(cronCallbacks['0 */1 * * *']).toBeDefined();
+      expect(typeof cronCallbacks['0 */1 * * *']).toBe('function');
     });
   });
 
@@ -141,7 +141,7 @@ describe('Peppol Auto-Fetch Incoming Invoices (Cron)', () => {
       registrationStatus: 'ACTIVE',
       enabled: true,
       autoReceiveEnabled: true,
-      organization: { name: 'Test Peppol Corp' },
+      Organization: { name: 'Test Peppol Corp' },
     };
 
     it('appelle fetchIncomingDocuments puis getIncomingInvoices', async () => {
@@ -239,12 +239,12 @@ describe('Peppol Auto-Fetch Incoming Invoices (Cron)', () => {
         {
           organizationId: 'org-fail',
           odooCompanyId: 10,
-          organization: { name: 'Fail Corp' },
+          Organization: { name: 'Fail Corp' },
         },
         {
           organizationId: 'org-ok',
           odooCompanyId: 20,
-          organization: { name: 'OK Corp' },
+          Organization: { name: 'OK Corp' },
         },
       ];
       mockFindMany.mockResolvedValue(configs);

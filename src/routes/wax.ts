@@ -15,6 +15,8 @@
 import { Router } from 'express';
 import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
+import { getOrgSocialSettings } from '../lib/feed-visibility';
+import { sendPushToUser } from './push';
 
 const router = Router();
 
@@ -141,6 +143,9 @@ router.post('/location', async (req, res) => {
 		const user = extractUser(req);
 		if (!user) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
+		const settings = await getOrgSocialSettings(user.organizationId || null);
+		if (!settings.waxEnabled) return res.status(403).json({ success: false, message: 'Wax disabled' });
+
 		const { latitude, longitude, accuracy, heading } = req.body;
 		if (typeof latitude !== 'number' || typeof longitude !== 'number') {
 			return res.status(400).json({ success: false, message: 'latitude and longitude required' });
@@ -245,6 +250,9 @@ router.post('/pins', async (req, res) => {
 		const user = extractUser(req);
 		if (!user) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
+		const settings = await getOrgSocialSettings(user.organizationId || null);
+		if (!settings.waxEnabled) return res.status(403).json({ success: false, message: 'Wax disabled' });
+
 		const { latitude, longitude, pinType, title, previewUrl, messageId, ttlHours, publishAsOrg } = req.body;
 		if (typeof latitude !== 'number' || typeof longitude !== 'number') {
 			return res.status(400).json({ success: false, message: 'latitude and longitude required' });
@@ -268,6 +276,11 @@ router.post('/pins', async (req, res) => {
 		});
 
 		res.json({ success: true, data: pin });
+
+		// 🐝 Alertes de proximité — Notifier les utilisateurs proches (async, non bloquant)
+		notifyNearbyUsers(pin, user).catch(err =>
+			console.error('[wax] proximity alert error:', err)
+		);
 	} catch (e) {
 		console.error('[wax] POST /pins error:', e);
 		res.status(500).json({ success: false, message: 'Error creating pin' });
@@ -530,6 +543,66 @@ function getManeuverText(type: string, modifier?: string): string {
 	const verb = typeMap[type] || 'Continuez';
 	const dir = modMap[modifier || ''] || '';
 	return `${verb} ${dir}`.trim();
+}
+
+// ═══════════════════════════════════════════════════════
+// 🐝 PROXIMITY ALERTS — Notify nearby users when a pin is created
+// ═══════════════════════════════════════════════════════
+
+/** Haversine distance in km between two lat/lng points */
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+	const R = 6371;
+	const dLat = (lat2 - lat1) * Math.PI / 180;
+	const dLng = (lng2 - lng1) * Math.PI / 180;
+	const a = Math.sin(dLat / 2) ** 2 +
+		Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+		Math.sin(dLng / 2) ** 2;
+	return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+async function notifyNearbyUsers(pin: { id: string; latitude: number; longitude: number; pinType: string; title: string | null; userId: string; organizationId: string | null }, creator: { id: string; organizationId?: string }) {
+	// Load org settings to check if alerts are enabled
+	const settings = await getOrgSocialSettings(creator.organizationId || null);
+	if (!settings.waxEnabled || !settings.waxAlertsEnabled) return;
+
+	const radiusKm = settings.waxDefaultRadiusKm || 10;
+
+	// Bounding box approximation (1° lat ≈ 111 km)
+	const latDeg = radiusKm / 111;
+	const lngDeg = radiusKm / (111 * Math.cos(pin.latitude * Math.PI / 180));
+
+	// Find nearby users with recent location (last 24h), not in ghost mode, not the creator
+	const nearbyUsers = await db.userLocation.findMany({
+		where: {
+			latitude: { gte: pin.latitude - latDeg, lte: pin.latitude + latDeg },
+			longitude: { gte: pin.longitude - lngDeg, lte: pin.longitude + lngDeg },
+			ghostMode: 'visible',
+			userId: { not: creator.id },
+			updatedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+		},
+		select: { userId: true, latitude: true, longitude: true },
+	});
+
+	// Filter by actual haversine distance and send push
+	const pinTitle = pin.title || 'Nouveau pin Wax';
+	let sent = 0;
+	for (const loc of nearbyUsers) {
+		const dist = haversineKm(pin.latitude, pin.longitude, loc.latitude, loc.longitude);
+		if (dist <= radiusKm) {
+			const distLabel = dist < 1 ? `${Math.round(dist * 1000)}m` : `${dist.toFixed(1)}km`;
+			sendPushToUser(loc.userId, {
+				title: 'Wax — Nouveau contenu à proximité',
+				body: `${pinTitle} (${distLabel} de vous)`,
+				tag: `wax_alert_${pin.id}`,
+				type: 'wax_alert',
+			});
+			sent++;
+		}
+	}
+
+	if (sent > 0) {
+		console.log(`[wax] Proximity alerts: ${sent} user(s) notified for pin ${pin.id}`);
+	}
 }
 
 export default router;

@@ -2184,7 +2184,7 @@ export default function DevisPage() {
                             )}
 
                             {/* Tableau des données actuelles */}
-                            <div className="border border-gray-300 rounded-md">
+                            <div className="border border-gray-300 rounded-md overflow-x-auto">
                               <table className="min-w-full">
                                 <thead className="bg-gray-50">
                                   <tr>

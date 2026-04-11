@@ -348,7 +348,7 @@ const PermissionsAdminPage: React.FC = () => {
         display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end',
       }}>
         {/* Role Select */}
-        <div style={{ flex: isMobile ? '1 1 100%' : '1 1 220px', minWidth: 180 }}>
+        <div style={{ flex: isMobile ? '1 1 100%' : '1 1 220px', minWidth: isMobile ? 0 : 180 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 6 }}>Rôle à modifier :</div>
           <div style={{ position: 'relative' }}>
             <div onClick={() => setRoleDropdownOpen(!roleDropdownOpen)} style={{
@@ -391,7 +391,7 @@ const PermissionsAdminPage: React.FC = () => {
         </div>
 
         {/* Search */}
-        <div style={{ flex: isMobile ? '1 1 100%' : '1 1 220px', minWidth: 180 }}>
+        <div style={{ flex: isMobile ? '1 1 100%' : '1 1 220px', minWidth: isMobile ? 0 : 180 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 6 }}>Rechercher :</div>
           <div style={{
             border: `1px solid ${FB.border}`, borderRadius: FB.radius, padding: '8px 12px',
@@ -406,7 +406,7 @@ const PermissionsAdminPage: React.FC = () => {
         </div>
 
         {/* Category */}
-        <div style={{ flex: isMobile ? '1 1 100%' : '1 1 200px', minWidth: 160 }}>
+        <div style={{ flex: isMobile ? '1 1 100%' : '1 1 200px', minWidth: isMobile ? 0 : 160 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 6 }}>Catégorie :</div>
           <div style={{ position: 'relative' }}>
             <div onClick={() => setCatDropdownOpen(!catDropdownOpen)} style={{

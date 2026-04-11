@@ -54,6 +54,17 @@ export interface SocialSettingsData {
   allowMembersReel: boolean;
   allowMembersSpark: boolean;
   requirePostApproval: boolean;
+  waxEnabled: boolean;
+  waxAlertsEnabled: boolean;
+  waxDefaultRadiusKm: number;
+  questsEnabled: boolean;
+  eventsEnabled: boolean;
+  capsulesEnabled: boolean;
+  orbitEnabled: boolean;
+  pulseEnabled: boolean;
+  moderationMode: string;
+  autoPostOnDevisSigned: boolean;
+  autoPostOnChantierCompleted: boolean;
 }
 
 interface SocialIdentityContextType {
@@ -174,6 +185,12 @@ export function SocialIdentityProvider({ children }: { children: React.ReactNode
       reactions: s.reactionsEnabled,
       comments: s.commentsEnabled,
       shares: s.sharesEnabled,
+      wax: s.waxEnabled ?? true,
+      quests: s.questsEnabled ?? true,
+      events: s.eventsEnabled ?? true,
+      capsules: s.capsulesEnabled ?? true,
+      orbit: s.orbitEnabled ?? true,
+      pulse: s.pulseEnabled ?? true,
     };
     return appMap[app] ?? true;
   }, [socialContext?.settings]);

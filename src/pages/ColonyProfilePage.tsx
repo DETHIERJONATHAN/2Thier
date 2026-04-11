@@ -124,7 +124,7 @@ const ColonyProfilePage: React.FC = () => {
   }
 
   if (!colony) {
-    return <div style={{ textAlign: 'center', padding: 64, color: FB.textSecondary }}>Colony introuvable</div>;
+    return <div style={{ textAlign: 'center', padding: 24, color: FB.textSecondary }}>Colony introuvable</div>;
   }
 
   const coverH = isMobile ? 200 : 300;

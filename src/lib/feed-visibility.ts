@@ -50,6 +50,12 @@ export interface SocialSettingsData {
   allowMembersReel: boolean;
   allowMembersSpark: boolean;
   requirePostApproval: boolean;
+  waxEnabled: boolean;
+  waxAlertsEnabled: boolean;
+  waxDefaultRadiusKm: number;
+  eventsEnabled: boolean;
+  capsulesEnabled: boolean;
+  questsEnabled: boolean;
 }
 
 export type FeedMode = 'personal' | 'org' | 'public';
@@ -365,4 +371,85 @@ export function buildExploreFeedWhere(
 
   // Default: all public
   return { visibility: 'ALL', ...blockedOrgFilter };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GET ORG SETTINGS — Helper léger pour l'enforcement backend
+// ═══════════════════════════════════════════════════════════════
+
+/** Default values when no SocialSettings exist for an org */
+const DEFAULT_SETTINGS: SocialSettingsData = {
+  showPublicPostsInFeed: true,
+  showFriendsPostsInFeed: true,
+  showFollowedColoniesInFeed: true,
+  wallEnabled: true,
+  storiesEnabled: true,
+  reelsEnabled: true,
+  sparksEnabled: true,
+  battlesEnabled: true,
+  exploreEnabled: true,
+  hiveLiveEnabled: true,
+  reactionsEnabled: true,
+  commentsEnabled: true,
+  sharesEnabled: true,
+  maxPostLength: 5000,
+  maxCommentLength: 2000,
+  maxMediaPerPost: 10,
+  maxVideoSizeMB: 100,
+  maxImageSizeMB: 10,
+  defaultPostVisibility: 'IN',
+  allowMembersPost: true,
+  allowMembersStory: true,
+  allowMembersReel: true,
+  allowMembersSpark: true,
+  requirePostApproval: false,
+  waxEnabled: true,
+  waxAlertsEnabled: true,
+  waxDefaultRadiusKm: 10,
+  eventsEnabled: true,
+  capsulesEnabled: true,
+  questsEnabled: true,
+};
+
+/**
+ * Récupère les SocialSettings d'une org, avec fallback sur les défauts.
+ * À utiliser dans toutes les routes d'écriture (post, comment, reaction, story, reel)
+ * pour enforcer dynamiquement les limites configurées par l'admin.
+ */
+export async function getOrgSocialSettings(orgId: string | null): Promise<SocialSettingsData> {
+  if (!orgId) return DEFAULT_SETTINGS;
+  const settings = await db.socialSettings.findUnique({ where: { organizationId: orgId } });
+  if (!settings) return DEFAULT_SETTINGS;
+  return {
+    showPublicPostsInFeed: settings.showPublicPostsInFeed ?? DEFAULT_SETTINGS.showPublicPostsInFeed,
+    showFriendsPostsInFeed: settings.showFriendsPostsInFeed ?? DEFAULT_SETTINGS.showFriendsPostsInFeed,
+    showFollowedColoniesInFeed: settings.showFollowedColoniesInFeed ?? DEFAULT_SETTINGS.showFollowedColoniesInFeed,
+    wallEnabled: settings.wallEnabled ?? DEFAULT_SETTINGS.wallEnabled,
+    storiesEnabled: settings.storiesEnabled ?? DEFAULT_SETTINGS.storiesEnabled,
+    reelsEnabled: settings.reelsEnabled ?? DEFAULT_SETTINGS.reelsEnabled,
+    sparksEnabled: settings.sparksEnabled ?? DEFAULT_SETTINGS.sparksEnabled,
+    battlesEnabled: settings.battlesEnabled ?? DEFAULT_SETTINGS.battlesEnabled,
+    exploreEnabled: settings.exploreEnabled ?? DEFAULT_SETTINGS.exploreEnabled,
+    hiveLiveEnabled: settings.hiveLiveEnabled ?? DEFAULT_SETTINGS.hiveLiveEnabled,
+    reactionsEnabled: settings.reactionsEnabled ?? DEFAULT_SETTINGS.reactionsEnabled,
+    commentsEnabled: settings.commentsEnabled ?? DEFAULT_SETTINGS.commentsEnabled,
+    sharesEnabled: settings.sharesEnabled ?? DEFAULT_SETTINGS.sharesEnabled,
+    maxPostLength: settings.maxPostLength ?? DEFAULT_SETTINGS.maxPostLength,
+    maxCommentLength: settings.maxCommentLength ?? DEFAULT_SETTINGS.maxCommentLength,
+    maxMediaPerPost: settings.maxMediaPerPost ?? DEFAULT_SETTINGS.maxMediaPerPost,
+    maxVideoSizeMB: settings.maxVideoSizeMB ?? DEFAULT_SETTINGS.maxVideoSizeMB,
+    maxImageSizeMB: settings.maxImageSizeMB ?? DEFAULT_SETTINGS.maxImageSizeMB,
+    defaultPostVisibility: settings.defaultPostVisibility ?? DEFAULT_SETTINGS.defaultPostVisibility,
+    allowMembersPost: settings.allowMembersPost ?? DEFAULT_SETTINGS.allowMembersPost,
+    allowMembersStory: settings.allowMembersStory ?? DEFAULT_SETTINGS.allowMembersStory,
+    allowMembersReel: settings.allowMembersReel ?? DEFAULT_SETTINGS.allowMembersReel,
+    allowMembersSpark: settings.allowMembersSpark ?? DEFAULT_SETTINGS.allowMembersSpark,
+    requirePostApproval: settings.requirePostApproval ?? DEFAULT_SETTINGS.requirePostApproval,
+    waxEnabled: (settings as any).waxEnabled ?? DEFAULT_SETTINGS.waxEnabled,
+    waxAlertsEnabled: (settings as any).waxAlertsEnabled ?? DEFAULT_SETTINGS.waxAlertsEnabled,
+    waxDefaultRadiusKm: (settings as any).waxDefaultRadiusKm ?? DEFAULT_SETTINGS.waxDefaultRadiusKm,
+    eventsEnabled: (settings as any).eventsEnabled ?? DEFAULT_SETTINGS.eventsEnabled,
+    capsulesEnabled: (settings as any).capsulesEnabled ?? DEFAULT_SETTINGS.capsulesEnabled,
+    questsEnabled: (settings as any).questsEnabled ?? DEFAULT_SETTINGS.questsEnabled,
+  };
 }

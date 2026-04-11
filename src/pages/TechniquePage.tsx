@@ -308,7 +308,7 @@ const TechniquePage: React.FC = () => {
 
       {/* Tableau des tickets */}
       <Card title="Tickets de Support">
-        <Table 
+        <Table scroll={{ x: "max-content" }} 
           columns={columns} 
           dataSource={mockTickets}
           pagination={{

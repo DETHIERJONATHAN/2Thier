@@ -87,6 +87,33 @@ const socialSettingsUpdateSchema = z.object({
   notifyOnMention: z.boolean().optional(),
   showPostAnalytics: z.boolean().optional(),
   showProfileViews: z.boolean().optional(),
+  // ── Wax (Map) ──
+  waxEnabled: z.boolean().optional(),
+  waxAlertsEnabled: z.boolean().optional(),
+  waxDefaultRadiusKm: z.number().int().min(1).max(200).optional(),
+  waxGhostModeAllowed: z.boolean().optional(),
+  // ── Nectar Sub-Apps ──
+  questsEnabled: z.boolean().optional(),
+  eventsEnabled: z.boolean().optional(),
+  capsulesEnabled: z.boolean().optional(),
+  orbitEnabled: z.boolean().optional(),
+  pulseEnabled: z.boolean().optional(),
+  // ── Moderation IA ──
+  moderationMode: z.enum(['manual', 'ai_review', 'ai_auto']).optional(),
+  aiBannedCategories: z.array(z.string()).optional(),
+  // ── Business → Social Auto-Posts ──
+  autoPostOnDevisSigned: z.boolean().optional(),
+  autoPostOnInvoicePaid: z.boolean().optional(),
+  autoPostOnChantierCreated: z.boolean().optional(),
+  autoPostOnChantierCompleted: z.boolean().optional(),
+  autoPostOnNewClient: z.boolean().optional(),
+  autoPostOnCalendarEvent: z.boolean().optional(),
+  autoPostOnTaskCompleted: z.boolean().optional(),
+  autoPostDefaultVisibility: z.enum(['OUT', 'IN', 'ALL']).optional(),
+  // ── RGPD ──
+  gdprDataExportEnabled: z.boolean().optional(),
+  gdprRetentionDays: z.number().int().min(0).max(3650).optional(),
+  // ── Advanced ──
   customReactions: z.any().optional(),
   bannedWords: z.array(z.string()).optional(),
   pinnedPostsLimit: z.number().int().min(0).max(20).optional(),

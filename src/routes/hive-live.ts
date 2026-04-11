@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
+import { getOrgSocialSettings } from '../lib/feed-visibility';
 import { z } from 'zod';
 
 const router = Router();
@@ -61,6 +62,9 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
     const data = createMomentSchema.parse(req.body);
     const orgId = req.headers['x-organization-id'] as string || user.organizationId || null;
 
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.hiveLiveEnabled) return res.status(403).json({ error: 'Hive Live disabled' });
+
     const moment = await db.hiveLiveMoment.create({
       data: {
         userId: user.id,
@@ -116,8 +120,12 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
 router.post('/from-post/:postId', authenticateToken, async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
+    const orgId = req.headers['x-organization-id'] as string || user.organizationId || null;
     const { postId } = req.params;
     const { title, momentDate, visibility } = req.body;
+
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.hiveLiveEnabled) return res.status(403).json({ error: 'Hive Live disabled' });
 
     const post = await db.wallPost.findUnique({
       where: { id: postId },
@@ -162,8 +170,12 @@ router.post('/from-post/:postId', authenticateToken, async (req: Request, res: R
 router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
+    const orgId = req.headers['x-organization-id'] as string || user.organizationId || null;
     const { id } = req.params;
     const data = updateMomentSchema.parse(req.body);
+
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.hiveLiveEnabled) return res.status(403).json({ error: 'Hive Live disabled' });
 
     // Verify ownership
     const existing = await db.hiveLiveMoment.findUnique({ where: { id } });

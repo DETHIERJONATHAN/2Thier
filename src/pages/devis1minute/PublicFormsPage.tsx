@@ -899,8 +899,7 @@ export default function PublicFormsPage() {
 
       {/* Tableau des formulaires */}
       <Card>
-        <Table
-          columns={columns}
+        <Table scroll={{ x: "max-content" }}           columns={columns}
           dataSource={forms}
           rowKey="id"
           loading={loading}
@@ -1047,8 +1046,7 @@ export default function PublicFormsPage() {
               </Col>
             </Row>
 
-            <Table
-              columns={submissionColumns}
+            <Table scroll={{ x: "max-content" }}               columns={submissionColumns}
               dataSource={submissions}
               rowKey="id"
               pagination={{

@@ -12,6 +12,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
+import { describe, it, expect } from 'vitest';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -44,6 +45,9 @@ function readRoot(rel: string): string {
   const p = path.join(ROOT, rel);
   return fs.existsSync(p) ? fs.readFileSync(p, 'utf-8') : '';
 }
+
+describe('Peppol integration E2E audit', () => {
+it('audit checks pass', () => {
 
 console.log('\n🔗 TEST — Intégrité Peppol End-to-End\n');
 
@@ -247,4 +251,6 @@ if (failed === 0) console.log('  🎉 Intégrité Peppol E2E OK');
 else console.log('  🚨 Intégrité Peppol — incohérences détectées');
 console.log('─'.repeat(50) + '\n');
 
-process.exit(failed > 0 ? 1 : 0);
+expect(failed).toBe(0);
+});
+});

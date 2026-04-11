@@ -589,8 +589,7 @@ export default function CampaignAnalyticsPage() {
 
       {/* Tableau détaillé par campagne */}
       <Card title="Détail par campagne">
-        <Table
-          columns={campaignColumns}
+        <Table scroll={{ x: "max-content" }}           columns={campaignColumns}
           dataSource={data.campaigns}
           rowKey="campaignId"
           loading={loading}

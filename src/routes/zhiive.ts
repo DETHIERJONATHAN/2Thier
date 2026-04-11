@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
-import { getSocialContext, buildMediaFeedWhere, buildExploreFeedWhere, FeedMode } from '../lib/feed-visibility';
+import { getSocialContext, buildMediaFeedWhere, buildExploreFeedWhere, FeedMode, getOrgSocialSettings } from '../lib/feed-visibility';
 import { z } from 'zod';
 
 const router = Router();
@@ -128,6 +128,17 @@ router.post('/stories', authenticateToken, async (req: Request, res: Response) =
     const orgId = (req as any).user.organizationId;
     const { mediaUrl, mediaType, text, visibility, publishAsOrg } = req.body;
 
+    // ═══ Enforcement SocialSettings ═══
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.storiesEnabled) {
+      return res.status(403).json({ error: 'Les Stories sont désactivées pour cette Colony' });
+    }
+    const user = (req as any).user;
+    const isAdmin = user.role === 'admin' || user.role === 'super_admin' || user.isSuperAdmin;
+    if (!settings.allowMembersStory && !isAdmin) {
+      return res.status(403).json({ error: 'La création de Stories est réservée aux administrateurs' });
+    }
+
     const effectivePublishAsOrg = publishAsOrg && !!orgId ? true : false;
     const effectiveVisibility = ['ALL', 'IN', 'OUT'].includes(visibility) ? visibility : 'ALL';
 
@@ -192,7 +203,11 @@ router.post('/stories/:storyId/view', authenticateToken, async (req: Request, re
 router.post('/stories/:storyId/react', authenticateToken, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.id;
+    const orgId = (req as any).user.organizationId;
     const storyId = req.params.storyId;
+
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.reactionsEnabled) return res.status(403).json({ error: 'Reactions disabled' });
 
     // Ensure the story exists
     const story = await db.story.findUnique({ where: { id: storyId } });
@@ -799,6 +814,18 @@ router.post('/sparks', authenticateToken, async (req: Request, res: Response) =>
   try {
     const userId = (req as any).user.id;
     const orgId = (req as any).user.organizationId;
+
+    // ═══ Enforcement SocialSettings ═══
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.sparksEnabled) {
+      return res.status(403).json({ error: 'Les Sparks sont désactivés pour cette Colony' });
+    }
+    const user = (req as any).user;
+    const isAdmin = user.role === 'admin' || user.role === 'super_admin' || user.isSuperAdmin;
+    if (!settings.allowMembersSpark && !isAdmin) {
+      return res.status(403).json({ error: 'La création de Sparks est réservée aux administrateurs' });
+    }
+
     const { content } = createSparkSchema.parse(req.body);
 
     const spark = await db.spark.create({
@@ -814,7 +841,11 @@ router.post('/sparks', authenticateToken, async (req: Request, res: Response) =>
 router.post('/sparks/:sparkId/vote', authenticateToken, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.id;
+    const orgId = (req as any).user.organizationId;
     const sparkId = req.params.sparkId;
+
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.sparksEnabled) return res.status(403).json({ error: 'Sparks disabled' });
 
     // Check if already voted
     const existing = await db.sparkVote.findUnique({
@@ -913,6 +944,13 @@ router.post('/battles', authenticateToken, async (req: Request, res: Response) =
   try {
     const userId = (req as any).user.id;
     const orgId = (req as any).user.organizationId;
+
+    // ═══ Enforcement SocialSettings ═══
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.battlesEnabled) {
+      return res.status(403).json({ error: 'Les Battles sont désactivées pour cette Colony' });
+    }
+
     const { title, description, opponentId, endsAt } = req.body;
 
     if (!title || title.length < 3) return res.status(400).json({ error: 'Titre requis (min 3 caractères)' });
@@ -936,7 +974,12 @@ router.post('/battles', authenticateToken, async (req: Request, res: Response) =
 router.post('/battles/:id/join', authenticateToken, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.id;
+    const orgId = (req as any).user.organizationId;
     const battleId = req.params.id;
+
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.battlesEnabled) return res.status(403).json({ error: 'Battles disabled' });
+
     const battle = await db.battle.findUnique({ where: { id: battleId } });
     if (!battle) return res.status(404).json({ error: 'Battle non trouvé' });
     if (battle.challengerId === userId) return res.status(400).json({ error: 'Vous êtes le créateur de ce battle' });
@@ -1097,6 +1140,10 @@ router.post('/events', authenticateToken, async (req: Request, res: Response) =>
   try {
     const userId = (req as any).user.id;
     const orgId = (req as any).user.organizationId;
+
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.eventsEnabled) return res.status(403).json({ error: 'Events disabled' });
+
     const { title, description, type, location, startDate, endDate, maxAttendees, coverImage } = req.body;
 
     if (!title) return res.status(400).json({ error: 'Titre requis' });
@@ -1211,6 +1258,10 @@ router.post('/capsules', authenticateToken, async (req: Request, res: Response) 
   try {
     const userId = (req as any).user.id;
     const orgId = (req as any).user.organizationId;
+
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.capsulesEnabled) return res.status(403).json({ error: 'Capsules disabled' });
+
     const { content, mediaUrl, mediaType, unlocksAt, recipientId, publishAsOrg } = req.body;
 
     if (!unlocksAt) return res.status(400).json({ error: 'Date de déverrouillage requise' });
@@ -1433,7 +1484,11 @@ router.post('/comments/liked', authenticateToken, async (req: Request, res: Resp
 router.post('/comments/:commentId/like', authenticateToken, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.id;
+    const orgId = (req as any).user.organizationId;
     const commentId = req.params.commentId;
+
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.reactionsEnabled) return res.status(403).json({ error: 'Reactions disabled' });
 
     const existing = await db.commentLike.findUnique({
       where: { commentId_userId: { commentId, userId } },
@@ -1459,7 +1514,11 @@ router.post('/comments/:commentId/like', authenticateToken, async (req: Request,
 router.post('/quests/:questId/progress', authenticateToken, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.id;
+    const orgId = (req as any).user.organizationId;
     const questId = req.params.questId;
+
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.questsEnabled) return res.status(403).json({ error: 'Quests disabled' });
 
     const quest = await db.quest.findUnique({ where: { id: questId } });
     if (!quest) return res.status(404).json({ error: 'Quête introuvable' });

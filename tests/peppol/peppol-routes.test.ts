@@ -12,6 +12,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
+import { describe, it, expect } from 'vitest';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,13 +36,16 @@ function warn(label: string, detail?: string) {
   console.log(`  ⚠️  ${label}${detail ? ` — ${detail}` : ''}`);
 }
 
+describe('Peppol routes audit', () => {
+it('audit checks pass', () => {
+
 console.log('\n🔌 TEST — Routes API Peppol (structure & sécurité)\n');
 
 // ── Lire le fichier ──
 const routesPath = path.join(SRC, 'routes', 'peppol.ts');
 const src = fs.existsSync(routesPath) ? fs.readFileSync(routesPath, 'utf-8') : '';
 
-if (!src) { fail('routes/peppol.ts manquant'); process.exit(1); }
+if (!src) { fail('routes/peppol.ts manquant'); }
 ok('routes/peppol.ts existe');
 
 const lines = src.split('\n');
@@ -233,4 +237,6 @@ if (failed === 0) console.log('  🎉 Routes Peppol OK');
 else console.log('  🚨 Routes Peppol — corrections nécessaires');
 console.log('─'.repeat(50) + '\n');
 
-process.exit(failed > 0 ? 1 : 0);
+expect(failed).toBe(0);
+});
+});

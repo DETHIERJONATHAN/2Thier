@@ -33,6 +33,17 @@ import { SF } from '../../components/zhiive/ZhiiveTheme';
 
 const { Title, Text, Paragraph } = Typography;
 
+// ── Responsive Hook ──
+function useScreenSize() {
+  const [w, setW] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
+  useEffect(() => {
+    const h = () => setW(window.innerWidth);
+    window.addEventListener('resize', h);
+    return () => window.removeEventListener('resize', h);
+  }, []);
+  return { width: w, isMobile: w < 768 };
+}
+
 // ═══ Types ═══════════════════════════════════════════════════
 
 interface SmtpStatus {
@@ -94,6 +105,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook, []);
   const { isSuperAdmin } = useAuth();
+  const { isMobile } = useScreenSize();
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [status, setStatus] = useState<SystemStatus | null>(null);
@@ -241,7 +253,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
 
   // ─── Guard ───────────────────────────────────────────────
   if (!isSuperAdmin) return <Alert type="error" message="Accès réservé aux Super Admins" showIcon />;
-  if (loading && !status) return <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>;
+  if (loading && !status) return <div style={{ textAlign: 'center', padding: 24 }}><Spin size="large" /></div>;
 
   // ═══ HELPERS ═══════════════════════════════════════════════
   const statusColor = (s: string) => {
@@ -384,7 +396,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
                   <Descriptions.Item label="Compte">{status.smtp.user}</Descriptions.Item>
                 </Descriptions>
                 <Space>
-                  <Input placeholder="Email test" value={testEmail} onChange={e => setTestEmail(e.target.value)} style={{ width: 200 }} size="small" />
+                  <Input placeholder="Email test" value={testEmail} onChange={e => setTestEmail(e.target.value)} style={{ width: isMobile ? '100%' : 200 }} size="small" />
                   <Button type="primary" icon={<SendOutlined />} loading={testLoading} onClick={handleTestSmtp} size="small" style={{ background: SF.primary, borderColor: SF.primary }}>Tester</Button>
                 </Space>
               </Space>
@@ -395,7 +407,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
 
       {postalStats?.daily && postalStats.daily.length > 0 && (
         <Card size="small" title="Activité récente (7 derniers jours)" style={{ marginTop: 16 }}>
-          <Table dataSource={postalStats.daily.slice(0, 7)} rowKey="date" size="small" pagination={false}
+          <Table scroll={{ x: isMobile ? "max-content" : undefined }} dataSource={postalStats.daily.slice(0, 7)} rowKey="date" size="small" pagination={false}
             columns={[
               { title: 'Date', dataIndex: 'date', key: 'date' },
               { title: 'Entrants', dataIndex: 'incoming', key: 'incoming', render: (v: number) => <Tag color="blue">{v}</Tag> },
@@ -414,7 +426,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
   const renderMessages = () => (
     <Card title={<><MailOutlined /> Messages Postal (serveur Hetzner)</>}
       extra={<Button icon={<ReloadOutlined />} onClick={fetchPostalMessages} size="small">Rafraîchir</Button>}>
-      <Table dataSource={postalMessages} rowKey="id" size="small"
+      <Table scroll={{ x: isMobile ? "max-content" : undefined }} dataSource={postalMessages} rowKey="id" size="small"
         pagination={{ pageSize: 25, showSizeChanger: true }}
         columns={[
           { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
@@ -456,7 +468,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
           </Popconfirm>
         </Space>
       }>
-      <Table dataSource={accounts} rowKey="id" size="small"
+      <Table scroll={{ x: isMobile ? "max-content" : undefined }} dataSource={accounts} rowKey="id" size="small"
         pagination={{ pageSize: 20, showSizeChanger: true }}
         columns={[
           {
@@ -492,7 +504,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
   const renderInfrastructure = () => (
     <Space direction="vertical" style={{ width: '100%' }} size={16}>
       <Card size="small" title={<><GlobalOutlined /> Domaines Postal</>}>
-        <Table dataSource={postalDomains} rowKey="id" size="small" pagination={false}
+        <Table scroll={{ x: isMobile ? "max-content" : undefined }} dataSource={postalDomains} rowKey="id" size="small" pagination={false}
           columns={[
             { title: 'Domaine', dataIndex: 'name', key: 'name', render: (n: string) => <Text strong>{n}</Text> },
             { title: 'Vérifié', dataIndex: 'verified', key: 'verified', render: (v: boolean) => v ? <Tag color="green">Oui</Tag> : <Tag color="red">Non</Tag> },
@@ -507,7 +519,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
       </Card>
 
       <Card size="small" title={<><ApiOutlined /> Credentials SMTP/API</>}>
-        <Table dataSource={postalCredentials} rowKey="id" size="small" pagination={false}
+        <Table scroll={{ x: isMobile ? "max-content" : undefined }} dataSource={postalCredentials} rowKey="id" size="small" pagination={false}
           columns={[
             { title: 'Nom', dataIndex: 'name', key: 'name' },
             { title: 'Type', dataIndex: 'type', key: 'type', render: (t: string) => <Tag color={t === 'API' ? 'purple' : 'blue'}>{t}</Tag> },
@@ -518,7 +530,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
       </Card>
 
       <Card size="small" title={<><SettingOutlined /> Routes email</>}>
-        <Table dataSource={postalRoutes} rowKey="id" size="small" pagination={false}
+        <Table scroll={{ x: isMobile ? "max-content" : undefined }} dataSource={postalRoutes} rowKey="id" size="small" pagination={false}
           columns={[
             { title: 'ID', dataIndex: 'id', key: 'id', width: 50 },
             { title: 'Pattern', dataIndex: 'name', key: 'name', render: (n: string) => <Tag>{n}</Tag> },

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Card, Switch, InputNumber, Select, Tag, Alert, Tabs,
-  Spin, Empty,
+  Spin, Empty, Button, Popconfirm, Tooltip,
 } from 'antd';
 import {
   SettingOutlined, EyeOutlined, TeamOutlined, BellOutlined,
@@ -10,11 +10,25 @@ import {
   PictureOutlined, FileTextOutlined, FireOutlined, CompassOutlined,
   LockOutlined, UserOutlined, BlockOutlined, SoundOutlined,
   CheckCircleOutlined, CloseCircleOutlined, InfoCircleOutlined,
+  EnvironmentOutlined, RobotOutlined, ShopOutlined,
+  AuditOutlined, UndoOutlined, DeleteOutlined,
+  RadarChartOutlined, ExperimentOutlined, AppstoreOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../../auth/useAuth';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 
 import { SF } from '../../components/zhiive/ZhiiveTheme';
+
+// ── Responsive Hook ──
+function useScreenSize() {
+  const [w, setW] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
+  useEffect(() => {
+    const h = () => setW(window.innerWidth);
+    window.addEventListener('resize', h);
+    return () => window.removeEventListener('resize', h);
+  }, []);
+  return { width: w, isMobile: w < 768, isTablet: w < 1024 };
+}
 
 // ── Design Tokens ──
 const FB = {
@@ -36,16 +50,16 @@ function SettingSection({ icon, title, description, children }: SettingSectionPr
   return (
     <Card
       style={{ marginBottom: 16, borderRadius: FB.radius, border: `1px solid ${FB.border}` }}
-      bodyStyle={{ padding: '16px 20px' }}
+      bodyStyle={{ padding: '12px 12px' }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: description ? 4 : 12 }}>
         <span style={{ fontSize: 18, color: FB.purple }}>{icon}</span>
         <span style={{ fontSize: 15, fontWeight: 600, color: FB.text }}>{title}</span>
       </div>
       {description && (
-        <p style={{ color: FB.textSecondary, fontSize: 13, margin: '0 0 12px 28px' }}>{description}</p>
+        <p style={{ color: FB.textSecondary, fontSize: 13, margin: '0 0 12px 0' }}>{description}</p>
       )}
-      <div style={{ marginLeft: 0 }}>{children}</div>
+      <div>{children}</div>
     </Card>
   );
 }
@@ -61,11 +75,11 @@ interface SettingRowProps {
 function SettingRow({ label, description, children, indent }: SettingRowProps) {
   return (
     <div style={{
-      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center',
       padding: '8px 0', borderBottom: `1px solid ${FB.border}22`,
-      marginLeft: indent ? 28 : 0,
+      marginLeft: indent ? 16 : 0, gap: 8,
     }}>
-      <div style={{ flex: 1, marginRight: 16 }}>
+      <div style={{ flex: '1 1 200px', minWidth: 0 }}>
         <div style={{ fontSize: 14, color: FB.text, fontWeight: 500 }}>{label}</div>
         {description && <div style={{ fontSize: 12, color: FB.textSecondary, marginTop: 2 }}>{description}</div>}
       </div>
@@ -78,6 +92,7 @@ function SettingRow({ label, description, children, indent }: SettingRowProps) {
 interface SocialSettingsData {
   id: string;
   organizationId: string;
+  // Apps
   wallEnabled: boolean;
   storiesEnabled: boolean;
   reelsEnabled: boolean;
@@ -87,6 +102,7 @@ interface SocialSettingsData {
   hiveLiveEnabled: boolean;
   messengerEnabled: boolean;
   callsEnabled: boolean;
+  // Feed
   defaultPostVisibility: string;
   allowMembersPost: boolean;
   allowMembersStory: boolean;
@@ -96,6 +112,7 @@ interface SocialSettingsData {
   showPublicPostsInFeed: boolean;
   showFriendsPostsInFeed: boolean;
   showFollowedColoniesInFeed: boolean;
+  // Content
   maxPostLength: number;
   maxCommentLength: number;
   maxMediaPerPost: number;
@@ -105,26 +122,58 @@ interface SocialSettingsData {
   allowLinks: boolean;
   allowHashtags: boolean;
   profanityFilterEnabled: boolean;
+  // Interactions
   reactionsEnabled: boolean;
   commentsEnabled: boolean;
   sharesEnabled: boolean;
   commentDepthLimit: number;
+  // Follow
   allowFollowColony: boolean;
   autoFollowOnJoin: boolean;
   friendRequestsEnabled: boolean;
   maxFriendsPerUser: number;
   allowBlockColony: boolean;
+  // Privacy
   showMemberList: boolean;
   showMemberCount: boolean;
   profileVisibility: string;
+  // Notifications
   notifyOnNewPost: boolean;
   notifyOnComment: boolean;
   notifyOnReaction: boolean;
   notifyOnNewFollower: boolean;
   notifyOnFriendRequest: boolean;
   notifyOnMention: boolean;
+  // Analytics
   showPostAnalytics: boolean;
   showProfileViews: boolean;
+  // Wax
+  waxEnabled: boolean;
+  waxAlertsEnabled: boolean;
+  waxDefaultRadiusKm: number;
+  waxGhostModeAllowed: boolean;
+  // Nectar sub-apps
+  questsEnabled: boolean;
+  eventsEnabled: boolean;
+  capsulesEnabled: boolean;
+  orbitEnabled: boolean;
+  pulseEnabled: boolean;
+  // Moderation IA
+  moderationMode: string;
+  aiBannedCategories: string[];
+  // Business → Social
+  autoPostOnDevisSigned: boolean;
+  autoPostOnInvoicePaid: boolean;
+  autoPostOnChantierCreated: boolean;
+  autoPostOnChantierCompleted: boolean;
+  autoPostOnNewClient: boolean;
+  autoPostOnCalendarEvent: boolean;
+  autoPostOnTaskCompleted: boolean;
+  autoPostDefaultVisibility: string;
+  // RGPD
+  gdprDataExportEnabled: boolean;
+  gdprRetentionDays: number;
+  // Advanced
   customReactions: any;
   bannedWords: string[];
   pinnedPostsLimit: number;
@@ -145,6 +194,7 @@ export default function SocialSettingsAdminPage() {
   const { isSuperAdmin, currentOrganization } = useAuth();
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook, [apiHook]);
+  const { isMobile, isTablet } = useScreenSize();
 
   const [settings, setSettings] = useState<SocialSettingsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -232,6 +282,57 @@ export default function SocialSettingsAdminPage() {
     }
   }, [api.api, settings, targetOrgId]);
 
+  // Reset a section to its defaults
+  const SECTION_DEFAULTS: Record<string, Record<string, any>> = {
+    apps: { wallEnabled: true, storiesEnabled: true, reelsEnabled: true, sparksEnabled: true, battlesEnabled: true, exploreEnabled: true, hiveLiveEnabled: true, messengerEnabled: true, callsEnabled: true },
+    nectar: { questsEnabled: true, eventsEnabled: true, capsulesEnabled: true, orbitEnabled: true, pulseEnabled: true },
+    wax: { waxEnabled: true, waxAlertsEnabled: true, waxDefaultRadiusKm: 10, waxGhostModeAllowed: true },
+    whisper: { messengerEnabled: true, callsEnabled: true },
+    feed: { defaultPostVisibility: 'IN', allowMembersPost: true, allowMembersStory: true, allowMembersReel: true, allowMembersSpark: false, requirePostApproval: false, showPublicPostsInFeed: true, showFriendsPostsInFeed: true, showFollowedColoniesInFeed: true },
+    content: { maxPostLength: 5000, maxCommentLength: 2000, maxMediaPerPost: 10, maxVideoSizeMB: 100, maxImageSizeMB: 10, allowGifs: true, allowLinks: true, allowHashtags: true, pinnedPostsLimit: 3, autoArchiveDays: 0 },
+    moderation: { profanityFilterEnabled: false, moderationMode: 'ai_auto', aiBannedCategories: [], bannedWords: [] },
+    interactions: { reactionsEnabled: true, commentsEnabled: true, sharesEnabled: true, commentDepthLimit: 3 },
+    follow: { allowFollowColony: true, autoFollowOnJoin: true, friendRequestsEnabled: true, maxFriendsPerUser: 5000, allowBlockColony: true },
+    privacy: { showMemberList: true, showMemberCount: true, profileVisibility: 'public' },
+    notifications: { notifyOnNewPost: true, notifyOnComment: true, notifyOnReaction: false, notifyOnNewFollower: true, notifyOnFriendRequest: true, notifyOnMention: true },
+    business: { autoPostOnDevisSigned: true, autoPostOnInvoicePaid: false, autoPostOnChantierCreated: true, autoPostOnChantierCompleted: true, autoPostOnNewClient: false, autoPostOnCalendarEvent: false, autoPostOnTaskCompleted: false, autoPostDefaultVisibility: 'IN' },
+    rgpd: { gdprDataExportEnabled: true, gdprRetentionDays: 0 },
+    analytics: { showPostAnalytics: false, showProfileViews: false },
+  };
+
+  const resetSection = useCallback(async (section: string) => {
+    if (!settings || !targetOrgId) return;
+    const defaults = SECTION_DEFAULTS[section];
+    if (!defaults) return;
+    const newSettings = { ...settings, ...defaults };
+    setSettings(newSettings);
+    setSaving(true);
+    try {
+      await api.api.put(`/social-settings/${targetOrgId}`, defaults);
+    } catch (error) {
+      console.error('Error resetting:', error);
+      setSettings(settings);
+    } finally {
+      setSaving(false);
+    }
+  }, [api.api, settings, targetOrgId]);
+
+  const resetAll = useCallback(async () => {
+    if (!settings || !targetOrgId) return;
+    const allDefaults = Object.values(SECTION_DEFAULTS).reduce((acc, d) => ({ ...acc, ...d }), {});
+    const newSettings = { ...settings, ...allDefaults };
+    setSettings(newSettings);
+    setSaving(true);
+    try {
+      await api.api.put(`/social-settings/${targetOrgId}`, allDefaults);
+    } catch (error) {
+      console.error('Error resetting all:', error);
+      setSettings(settings);
+    } finally {
+      setSaving(false);
+    }
+  }, [api.api, settings, targetOrgId]);
+
   // ─── RENDER ───
   if (!isSuperAdmin) {
     return (
@@ -253,13 +354,162 @@ export default function SocialSettingsAdminPage() {
 
   const selectedOrg = allOrgs.find(o => o.id === targetOrgId);
 
-  return (
-    <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 16px' }}>
-      {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+  // ═══ LIVE PREVIEW COMPONENT ═══
+  const LivePreview = () => {
+    if (!settings) return null;
+    const enabledApps = [
+      settings.wallEnabled && 'Wall',
+      settings.storiesEnabled && 'Stories',
+      settings.reelsEnabled && 'Reels',
+      settings.sparksEnabled && 'Sparks',
+      settings.battlesEnabled && 'Battles',
+      settings.exploreEnabled && 'Friends',
+      settings.hiveLiveEnabled && 'HiveLive',
+      (settings as any).waxEnabled && 'Wax',
+    ].filter(Boolean);
+
+    const disabledApps = [
+      !settings.wallEnabled && 'Wall',
+      !settings.storiesEnabled && 'Stories',
+      !settings.reelsEnabled && 'Reels',
+      !settings.sparksEnabled && 'Sparks',
+      !settings.battlesEnabled && 'Battles',
+      !settings.exploreEnabled && 'Friends',
+      !settings.hiveLiveEnabled && 'HiveLive',
+      !(settings as any).waxEnabled && 'Wax',
+    ].filter(Boolean);
+
+    return (
+      <div style={{
+        position: 'sticky', top: 24,
+        background: FB.white,
+        borderRadius: FB.radius,
+        border: `1px solid ${FB.border}`,
+        padding: 16,
+        boxShadow: FB.shadow,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+          <EyeOutlined style={{ color: SF.primary, fontSize: 16 }} />
+          <span style={{ fontWeight: 700, fontSize: 14, color: FB.text }}>Aperçu en direct</span>
+        </div>
+
+        {/* Mock Phone Frame */}
+        <div style={{
+          width: '100%', maxWidth: isTablet ? 200 : 240, margin: '0 auto',
+          border: `2px solid ${FB.border}`,
+          borderRadius: 20, padding: 8,
+          background: '#1a1a2e',
+          minHeight: isTablet ? 300 : 380,
+        }}>
+          {/* Status Bar */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 8px', color: '#fff', fontSize: 10 }}>
+            <span>9:41</span>
+            <span>●●●</span>
+          </div>
+
+          {/* Nav Tabs Preview */}
           <div style={{
-            width: 40, height: 40, borderRadius: 10,
+            display: 'flex', gap: 2, padding: '4px 4px', overflowX: 'auto',
+            borderBottom: `1px solid ${SF.primary}33`,
+          }}>
+            {enabledApps.map((app, i) => (
+              <div key={i} style={{
+                fontSize: 8, padding: '3px 6px', borderRadius: 10,
+                background: i === 0 ? SF.primary : 'transparent',
+                color: i === 0 ? '#fff' : '#999',
+                whiteSpace: 'nowrap',
+              }}>
+                {app as string}
+              </div>
+            ))}
+          </div>
+
+          {/* Feed Preview */}
+          <div style={{ padding: 6, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {/* Stories Bar */}
+            {settings.storiesEnabled && (
+              <div style={{ display: 'flex', gap: 4, padding: '4px 0' }}>
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} style={{
+                    width: 32, height: 32, borderRadius: 16,
+                    border: `2px solid ${SF.primary}`,
+                    background: '#2a2a4a',
+                  }} />
+                ))}
+              </div>
+            )}
+
+            {/* Post Preview */}
+            {settings.wallEnabled && (
+              <div style={{
+                background: '#2a2a4a', borderRadius: 8, padding: 8,
+              }}>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
+                  <div style={{ width: 20, height: 20, borderRadius: 10, background: SF.primary }} />
+                  <div>
+                    <div style={{ fontSize: 8, color: '#fff', fontWeight: 600 }}>{selectedOrg?.name || 'Colony'}</div>
+                    <div style={{ fontSize: 7, color: '#999' }}>Maintenant</div>
+                  </div>
+                </div>
+                <div style={{ fontSize: 8, color: '#ccc', marginBottom: 6 }}>
+                  Exemple de Buzz avec max {settings.maxPostLength} caractères...
+                </div>
+                <div style={{ display: 'flex', gap: 8, borderTop: '1px solid #3a3a5a', paddingTop: 4 }}>
+                  {settings.reactionsEnabled && <span style={{ fontSize: 7, color: '#999' }}>🌼 Pollen</span>}
+                  {settings.commentsEnabled && <span style={{ fontSize: 7, color: '#999' }}>💬 Buzz</span>}
+                  {settings.sharesEnabled && <span style={{ fontSize: 7, color: '#999' }}>↗ Share</span>}
+                </div>
+              </div>
+            )}
+
+            {/* Spark Preview */}
+            {settings.sparksEnabled && (
+              <div style={{
+                background: 'linear-gradient(135deg, #6C5CE730, #a29bfe30)',
+                borderRadius: 8, padding: 8,
+              }}>
+                <div style={{ fontSize: 8, color: '#ccc' }}>✨ Spark anonyme</div>
+                <div style={{ fontSize: 7, color: '#999', marginTop: 2 }}>12/100 votes pour reveal</div>
+              </div>
+            )}
+          </div>
+
+          {/* Disabled indicator */}
+          {disabledApps.length > 0 && (
+            <div style={{ padding: '6px 8px', borderTop: '1px solid #3a3a5a' }}>
+              <div style={{ fontSize: 7, color: '#ff6b6b' }}>
+                Désactivés : {(disabledApps as string[]).join(', ')}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Summary Stats */}
+        <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+          <div style={{ fontSize: 11, color: FB.textSecondary }}>
+            Apps actives : <strong style={{ color: FB.green }}>{enabledApps.length}</strong>
+          </div>
+          <div style={{ fontSize: 11, color: FB.textSecondary }}>
+            Max post : <strong>{settings.maxPostLength}</strong>
+          </div>
+          <div style={{ fontSize: 11, color: FB.textSecondary }}>
+            Visibilité : <strong>{settings.defaultPostVisibility}</strong>
+          </div>
+          <div style={{ fontSize: 11, color: FB.textSecondary }}>
+            Modération : <strong>{(settings as any).moderationMode || 'off'}</strong>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ maxWidth: 1200, margin: '0 auto', padding: isMobile ? '12px 8px' : '24px 16px' }}>
+      {/* Header */}
+      <div style={{ marginBottom: isMobile ? 16 : 24 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+          <div style={{
+            width: isMobile ? 32 : 40, height: isMobile ? 32 : 40, borderRadius: 10,
             background: SF.gradientPrimary,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             color: '#fff', fontSize: 20,
@@ -267,10 +517,10 @@ export default function SocialSettingsAdminPage() {
             <SettingOutlined />
           </div>
           <div>
-            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: FB.text }}>
+            <h1 style={{ margin: 0, fontSize: isMobile ? 18 : 22, fontWeight: 700, color: FB.text }}>
               Hive Social Settings
             </h1>
-            <p style={{ margin: 0, fontSize: 13, color: FB.textSecondary }}>
+            <p style={{ margin: 0, fontSize: 13, color: FB.textSecondary, display: isMobile ? 'none' : 'block' }}>
               Configuration complète du réseau social Zhiive
             </p>
           </div>
@@ -279,17 +529,35 @@ export default function SocialSettingsAdminPage() {
               Enregistrement...
             </Tag>
           )}
+          {settings && (
+            <Popconfirm
+              title="Reset global"
+              description="Réinitialiser TOUS les paramètres aux valeurs par défaut ?"
+              onConfirm={resetAll}
+              okText="Reset tout"
+              cancelText="Annuler"
+            >
+              <Button
+                icon={<DeleteOutlined />}
+                danger
+                size="small"
+                style={{ marginLeft: saving ? 8 : 'auto' }}
+              >
+                Reset global
+              </Button>
+            </Popconfirm>
+          )}
         </div>
       </div>
 
       {/* Organization Selector (Super Admin) */}
       {isSuperAdmin && (
         <Card style={{ marginBottom: 16, borderRadius: FB.radius, border: `2px solid ${SF.primary}33` }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
             <GlobalOutlined style={{ fontSize: 18, color: SF.primary }} />
             <span style={{ fontWeight: 600, color: FB.text }}>Colony :</span>
             <Select
-              style={{ flex: 1, maxWidth: 400 }}
+              style={{ flex: '1 1 200px', minWidth: 0 }}
               value={selectedOrgId}
               onChange={setSelectedOrgId}
               placeholder="Sélectionner une Colony"
@@ -300,7 +568,7 @@ export default function SocialSettingsAdminPage() {
                 label: o.name,
               }))}
             />
-            {selectedOrg && (
+            {selectedOrg && !isMobile && (
               <Tag color="blue">{selectedOrg.name}</Tag>
             )}
           </div>
@@ -310,9 +578,13 @@ export default function SocialSettingsAdminPage() {
       {!settings ? (
         <Empty description="Sélectionnez une Colony pour configurer ses paramètres sociaux" />
       ) : (
+        <div style={{ display: 'flex', flexDirection: isTablet ? 'column' : 'row', gap: isMobile ? 12 : 20, alignItems: 'flex-start' }}>
+          {/* Left: Settings Tabs */}
+          <div style={{ flex: 1, minWidth: 0, width: '100%' }}>
         <Tabs
           defaultActiveKey="apps"
           type="card"
+          tabBarStyle={isMobile ? { fontSize: 12 } : undefined}
           style={{ marginTop: 8 }}
           items={[
             // ═══════ TAB 1: APPLICATIONS ═══════
@@ -382,7 +654,7 @@ export default function SocialSettingsAdminPage() {
                   >
                     <SettingRow label="Visibilité par défaut des nouvelles publications">
                       <Select
-                        style={{ width: 200 }}
+                        style={{ width: isMobile ? '100%' : 200 }}
                         value={settings.defaultPostVisibility}
                         onChange={v => updateSetting('defaultPostVisibility', v)}
                         options={[
@@ -461,7 +733,7 @@ export default function SocialSettingsAdminPage() {
                         min={100} max={50000} step={100}
                         value={settings.maxPostLength}
                         onChange={v => v && updateSetting('maxPostLength', v)}
-                        style={{ width: 120 }}
+                        style={{ width: isMobile ? '100%' : 120 }}
                       />
                     </SettingRow>
                     <SettingRow label="Longueur max d'un commentaire (caractères)">
@@ -469,7 +741,7 @@ export default function SocialSettingsAdminPage() {
                         min={50} max={10000} step={50}
                         value={settings.maxCommentLength}
                         onChange={v => v && updateSetting('maxCommentLength', v)}
-                        style={{ width: 120 }}
+                        style={{ width: isMobile ? '100%' : 120 }}
                       />
                     </SettingRow>
                     <SettingRow label="Nombre max de médias par Buzz">
@@ -477,7 +749,7 @@ export default function SocialSettingsAdminPage() {
                         min={1} max={50}
                         value={settings.maxMediaPerPost}
                         onChange={v => v && updateSetting('maxMediaPerPost', v)}
-                        style={{ width: 120 }}
+                        style={{ width: isMobile ? '100%' : 120 }}
                       />
                     </SettingRow>
                     <SettingRow label="Taille max d'une vidéo (MB)">
@@ -485,7 +757,7 @@ export default function SocialSettingsAdminPage() {
                         min={1} max={500}
                         value={settings.maxVideoSizeMB}
                         onChange={v => v && updateSetting('maxVideoSizeMB', v)}
-                        style={{ width: 120 }}
+                        style={{ width: isMobile ? '100%' : 120 }}
                       />
                     </SettingRow>
                     <SettingRow label="Taille max d'une image (MB)">
@@ -493,7 +765,7 @@ export default function SocialSettingsAdminPage() {
                         min={1} max={50}
                         value={settings.maxImageSizeMB}
                         onChange={v => v && updateSetting('maxImageSizeMB', v)}
-                        style={{ width: 120 }}
+                        style={{ width: isMobile ? '100%' : 120 }}
                       />
                     </SettingRow>
                     <SettingRow label="Posts épinglés max">
@@ -501,7 +773,7 @@ export default function SocialSettingsAdminPage() {
                         min={0} max={20}
                         value={settings.pinnedPostsLimit}
                         onChange={v => v !== null && updateSetting('pinnedPostsLimit', v)}
-                        style={{ width: 120 }}
+                        style={{ width: isMobile ? '100%' : 120 }}
                       />
                     </SettingRow>
                     <SettingRow label="Auto-archivage après (jours)" description="0 = jamais">
@@ -509,7 +781,7 @@ export default function SocialSettingsAdminPage() {
                         min={0} max={3650}
                         value={settings.autoArchiveDays}
                         onChange={v => v !== null && updateSetting('autoArchiveDays', v)}
-                        style={{ width: 120 }}
+                        style={{ width: isMobile ? '100%' : 120 }}
                       />
                     </SettingRow>
                   </SettingSection>
@@ -576,7 +848,7 @@ export default function SocialSettingsAdminPage() {
                         min={1} max={10}
                         value={settings.commentDepthLimit}
                         onChange={v => v && updateSetting('commentDepthLimit', v)}
-                        style={{ width: 120 }}
+                        style={{ width: isMobile ? '100%' : 120 }}
                       />
                     </SettingRow>
                   </SettingSection>
@@ -622,7 +894,7 @@ export default function SocialSettingsAdminPage() {
                         min={50} max={50000} step={100}
                         value={settings.maxFriendsPerUser}
                         onChange={v => v && updateSetting('maxFriendsPerUser', v)}
-                        style={{ width: 140 }}
+                        style={{ width: isMobile ? '100%' : 140 }}
                       />
                     </SettingRow>
                   </SettingSection>
@@ -650,7 +922,7 @@ export default function SocialSettingsAdminPage() {
                   <SettingSection icon={<LockOutlined />} title="Profil Colony">
                     <SettingRow label="Visibilité du profil Colony">
                       <Select
-                        style={{ width: 200 }}
+                        style={{ width: isMobile ? '100%' : 200 }}
                         value={settings.profileVisibility}
                         onChange={v => updateSetting('profileVisibility', v)}
                         options={[
@@ -703,7 +975,285 @@ export default function SocialSettingsAdminPage() {
               ),
             },
 
-            // ═══════ TAB 8: ANALYTICS ═══════
+            // ═══════ TAB 8: WAX & CARTE ═══════
+            {
+              key: 'wax',
+              label: (
+                <span><EnvironmentOutlined /> Wax & Carte</span>
+              ),
+              children: (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                    <Popconfirm title="Reset cette section ?" onConfirm={() => resetSection('wax')} okText="Reset" cancelText="Annuler">
+                      <Button size="small" icon={<UndoOutlined />}>Reset section</Button>
+                    </Popconfirm>
+                  </div>
+                  <SettingSection icon={<EnvironmentOutlined />} title="Carte Wax" description="Carte interactive 3D avec pins éphémères et navigation">
+                    <SettingRow label="Wax activé" description="Active la carte interactive pour cette Colony">
+                      <Switch checked={settings.waxEnabled} onChange={v => updateSetting('waxEnabled', v)} />
+                    </SettingRow>
+                    <SettingRow label="Alertes de proximité" description="Push notification quand un WaxPin est créé à proximité">
+                      <Switch checked={settings.waxAlertsEnabled} onChange={v => updateSetting('waxAlertsEnabled', v)} disabled={!settings.waxEnabled} />
+                    </SettingRow>
+                    <SettingRow label="Rayon de surveillance par défaut (km)" description="L'utilisateur peut personnaliser son rayon">
+                      <InputNumber
+                        min={1} max={200}
+                        value={settings.waxDefaultRadiusKm}
+                        onChange={v => v && updateSetting('waxDefaultRadiusKm', v)}
+                        style={{ width: isMobile ? '100%' : 120 }}
+                        disabled={!settings.waxEnabled || !settings.waxAlertsEnabled}
+                      />
+                    </SettingRow>
+                    <SettingRow label="Mode Fantôme autorisé" description="Les Bees peuvent masquer leur position sur la carte">
+                      <Switch checked={settings.waxGhostModeAllowed} onChange={v => updateSetting('waxGhostModeAllowed', v)} disabled={!settings.waxEnabled} />
+                    </SettingRow>
+                  </SettingSection>
+                </div>
+              ),
+            },
+
+            // ═══════ TAB 9: NECTAR SUB-APPS ═══════
+            {
+              key: 'nectar',
+              label: (
+                <span><AppstoreOutlined /> Nectar</span>
+              ),
+              children: (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                    <Popconfirm title="Reset cette section ?" onConfirm={() => resetSection('nectar')} okText="Reset" cancelText="Annuler">
+                      <Button size="small" icon={<UndoOutlined />}>Reset section</Button>
+                    </Popconfirm>
+                  </div>
+                  <Alert
+                    type="info" showIcon icon={<InfoCircleOutlined />}
+                    message="Nectar est le hub central contenant les mini-applications de la Colony."
+                    style={{ marginBottom: 16, borderRadius: FB.radius }}
+                  />
+                  <SettingSection icon={<AppstoreOutlined />} title="Mini-applications Nectar">
+                    <SettingRow label="Sparks" description="Ideas et discussions rapides (déjà dans Applications)">
+                      <Switch checked={settings.sparksEnabled} onChange={v => updateSetting('sparksEnabled', v)} />
+                    </SettingRow>
+                    <SettingRow label="Battles" description="Sondages et comparaisons (déjà dans Applications)">
+                      <Switch checked={settings.battlesEnabled} onChange={v => updateSetting('battlesEnabled', v)} />
+                    </SettingRow>
+                    <SettingRow label="Quests" description="Défis et missions gamifiées">
+                      <Switch checked={settings.questsEnabled} onChange={v => updateSetting('questsEnabled', v)} />
+                    </SettingRow>
+                    <SettingRow label="Events" description="Événements et rencontres Colony">
+                      <Switch checked={settings.eventsEnabled} onChange={v => updateSetting('eventsEnabled', v)} />
+                    </SettingRow>
+                    <SettingRow label="Capsules" description="Contenus capsule temporels (time capsule)">
+                      <Switch checked={settings.capsulesEnabled} onChange={v => updateSetting('capsulesEnabled', v)} />
+                    </SettingRow>
+                    <SettingRow label="Orbit" description="Réseau de recommandations et cercles sociaux">
+                      <Switch checked={settings.orbitEnabled} onChange={v => updateSetting('orbitEnabled', v)} />
+                    </SettingRow>
+                    <SettingRow label="Pulse" description="Sondages et feedback rapides en temps réel">
+                      <Switch checked={settings.pulseEnabled} onChange={v => updateSetting('pulseEnabled', v)} />
+                    </SettingRow>
+                  </SettingSection>
+                </div>
+              ),
+            },
+
+            // ═══════ TAB 10: WHISPER (MESSENGER) ═══════
+            {
+              key: 'whisper',
+              label: (
+                <span><MessageOutlined /> Whisper</span>
+              ),
+              children: (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                    <Popconfirm title="Reset cette section ?" onConfirm={() => resetSection('whisper')} okText="Reset" cancelText="Annuler">
+                      <Button size="small" icon={<UndoOutlined />}>Reset section</Button>
+                    </Popconfirm>
+                  </div>
+                  <SettingSection icon={<MessageOutlined />} title="Whisper (Messagerie)" description="Messagerie privée en temps réel entre les Bees">
+                    <SettingRow label="Whisper activé" description="Messagerie privée entre les Bees">
+                      <Switch checked={settings.messengerEnabled} onChange={v => updateSetting('messengerEnabled', v)} />
+                    </SettingRow>
+                    <SettingRow label="Appels Vidéo/Audio" description="Appels en temps réel via WebRTC">
+                      <Switch checked={settings.callsEnabled} onChange={v => updateSetting('callsEnabled', v)} disabled={!settings.messengerEnabled} />
+                    </SettingRow>
+                  </SettingSection>
+                </div>
+              ),
+            },
+
+            // ═══════ TAB 11: MODÉRATION IA ═══════
+            {
+              key: 'moderation_ia',
+              label: (
+                <span><RobotOutlined /> Modération IA</span>
+              ),
+              children: (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                    <Popconfirm title="Reset cette section ?" onConfirm={() => resetSection('moderation')} okText="Reset" cancelText="Annuler">
+                      <Button size="small" icon={<UndoOutlined />}>Reset section</Button>
+                    </Popconfirm>
+                  </div>
+                  <Alert
+                    type="warning" showIcon
+                    message="La modération IA utilise Google Gemini pour analyser automatiquement le contenu avant publication."
+                    style={{ marginBottom: 16, borderRadius: FB.radius }}
+                  />
+                  <SettingSection icon={<RobotOutlined />} title="Mode de modération">
+                    <SettingRow label="Mode de modération" description="Comment le contenu est vérifié avant d'être visible">
+                      <Select
+                        style={{ width: isMobile ? '100%' : 250 }}
+                        value={settings.moderationMode}
+                        onChange={v => updateSetting('moderationMode', v)}
+                        options={[
+                          { value: 'manual', label: '👤 Manuelle (admin uniquement)' },
+                          { value: 'ai_review', label: '🤖 IA + validation admin' },
+                          { value: 'ai_auto', label: '⚡ IA automatique + signalement' },
+                        ]}
+                      />
+                    </SettingRow>
+                  </SettingSection>
+                  <SettingSection icon={<SafetyOutlined />} title="Catégories bloquées par l'IA">
+                    <Select
+                      mode="tags"
+                      style={{ width: '100%' }}
+                      placeholder="Ex: violence, nsfw, spam, hate_speech..."
+                      value={settings.aiBannedCategories || []}
+                      onChange={v => updateSetting('aiBannedCategories', v)}
+                      tokenSeparators={[',']}
+                      options={[
+                        { value: 'violence', label: 'Violence' },
+                        { value: 'nsfw', label: 'NSFW / Contenu adulte' },
+                        { value: 'spam', label: 'Spam' },
+                        { value: 'hate_speech', label: 'Discours haineux' },
+                        { value: 'harassment', label: 'Harcèlement' },
+                        { value: 'misinformation', label: 'Désinformation' },
+                        { value: 'self_harm', label: 'Auto-mutilation' },
+                      ]}
+                    />
+                  </SettingSection>
+                  <SettingSection icon={<SoundOutlined />} title="Filtre anti-profanité">
+                    <SettingRow label="Filtre de mots interdits activé">
+                      <Switch checked={settings.profanityFilterEnabled} onChange={v => updateSetting('profanityFilterEnabled', v)} />
+                    </SettingRow>
+                    {settings.profanityFilterEnabled && (
+                      <div style={{ marginTop: 12 }}>
+                        <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>
+                          Mots interdits ({settings.bannedWords?.length || 0}) :
+                        </div>
+                        <Select
+                          mode="tags" style={{ width: '100%' }}
+                          placeholder="Tapez un mot et appuyez sur Entrée"
+                          value={settings.bannedWords || []}
+                          onChange={v => updateSetting('bannedWords', v)}
+                          tokenSeparators={[',']}
+                        />
+                      </div>
+                    )}
+                  </SettingSection>
+                </div>
+              ),
+            },
+
+            // ═══════ TAB 12: BUSINESS → SOCIAL ═══════
+            {
+              key: 'business',
+              label: (
+                <span><ShopOutlined /> Business → Social</span>
+              ),
+              children: (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                    <Popconfirm title="Reset cette section ?" onConfirm={() => resetSection('business')} okText="Reset" cancelText="Annuler">
+                      <Button size="small" icon={<UndoOutlined />}>Reset section</Button>
+                    </Popconfirm>
+                  </div>
+                  <Alert
+                    type="info" showIcon icon={<InfoCircleOutlined />}
+                    message="Quand un événement business se produit, 3 auto-posts sont créés : (1) Post privé CLIENT pour le client, (2) Annonce interne Colony, (3) Publication publique."
+                    style={{ marginBottom: 16, borderRadius: FB.radius }}
+                  />
+                  <SettingSection icon={<ShopOutlined />} title="Événements déclencheurs" description="Quels événements business créent des auto-posts">
+                    <SettingRow label="Devis signé" description="Quand un devis est signé par le client">
+                      <Switch checked={settings.autoPostOnDevisSigned} onChange={v => updateSetting('autoPostOnDevisSigned', v)} />
+                    </SettingRow>
+                    <SettingRow label="Facture payée" description="Quand une facture est marquée comme payée">
+                      <Switch checked={settings.autoPostOnInvoicePaid} onChange={v => updateSetting('autoPostOnInvoicePaid', v)} />
+                    </SettingRow>
+                    <SettingRow label="Nouveau chantier créé" description="Quand un nouveau chantier est lancé">
+                      <Switch checked={settings.autoPostOnChantierCreated} onChange={v => updateSetting('autoPostOnChantierCreated', v)} />
+                    </SettingRow>
+                    <SettingRow label="Chantier terminé" description="Quand un chantier est marqué comme terminé">
+                      <Switch checked={settings.autoPostOnChantierCompleted} onChange={v => updateSetting('autoPostOnChantierCompleted', v)} />
+                    </SettingRow>
+                    <SettingRow label="Nouveau client ajouté" description="Quand un nouveau lead devient client">
+                      <Switch checked={settings.autoPostOnNewClient} onChange={v => updateSetting('autoPostOnNewClient', v)} />
+                    </SettingRow>
+                    <SettingRow label="Événement calendrier" description="Quand un événement d'agenda est créé">
+                      <Switch checked={settings.autoPostOnCalendarEvent} onChange={v => updateSetting('autoPostOnCalendarEvent', v)} />
+                    </SettingRow>
+                    <SettingRow label="Tâche terminée" description="Quand une tâche est marquée comme complète">
+                      <Switch checked={settings.autoPostOnTaskCompleted} onChange={v => updateSetting('autoPostOnTaskCompleted', v)} />
+                    </SettingRow>
+                  </SettingSection>
+                  <SettingSection icon={<EyeOutlined />} title="Visibilité des auto-posts">
+                    <SettingRow label="Visibilité par défaut des auto-posts">
+                      <Select
+                        style={{ width: isMobile ? '100%' : 200 }}
+                        value={settings.autoPostDefaultVisibility}
+                        onChange={v => updateSetting('autoPostDefaultVisibility', v)}
+                        options={[
+                          { value: 'OUT', label: '🔒 Privé' },
+                          { value: 'IN', label: '🏠 Colony (interne)' },
+                          { value: 'ALL', label: '🌐 Public' },
+                        ]}
+                      />
+                    </SettingRow>
+                  </SettingSection>
+                </div>
+              ),
+            },
+
+            // ═══════ TAB 13: RGPD & DONNÉES ═══════
+            {
+              key: 'rgpd',
+              label: (
+                <span><AuditOutlined /> RGPD</span>
+              ),
+              children: (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                    <Popconfirm title="Reset cette section ?" onConfirm={() => resetSection('rgpd')} okText="Reset" cancelText="Annuler">
+                      <Button size="small" icon={<UndoOutlined />}>Reset section</Button>
+                    </Popconfirm>
+                  </div>
+                  <Alert
+                    type="warning" showIcon
+                    message="Le RGPD est obligatoire dans l'UE. Les utilisateurs doivent pouvoir exporter et supprimer leurs données."
+                    style={{ marginBottom: 16, borderRadius: FB.radius }}
+                  />
+                  <SettingSection icon={<AuditOutlined />} title="Export des données" description="Permettre aux Bees d'exporter leurs données personnelles">
+                    <SettingRow label="Export de données activé" description="Bouton 'Exporter mes données' dans le profil">
+                      <Switch checked={settings.gdprDataExportEnabled} onChange={v => updateSetting('gdprDataExportEnabled', v)} />
+                    </SettingRow>
+                  </SettingSection>
+                  <SettingSection icon={<LockOutlined />} title="Rétention des données" description="Durée de conservation des données inactives">
+                    <SettingRow label="Jours de rétention (0 = illimité)" description="Après ce délai, les données inactives sont supprimées">
+                      <InputNumber
+                        min={0} max={3650}
+                        value={settings.gdprRetentionDays}
+                        onChange={v => v !== null && updateSetting('gdprRetentionDays', v)}
+                        style={{ width: isMobile ? '100%' : 120 }}
+                        addonAfter="jours"
+                      />
+                    </SettingRow>
+                  </SettingSection>
+                </div>
+              ),
+            },
+
+            // ═══════ TAB 14: ANALYTICS ═══════
             {
               key: 'analytics',
               label: (
@@ -727,7 +1277,7 @@ export default function SocialSettingsAdminPage() {
                   </SettingSection>
 
                   <SettingSection icon={<CompassOutlined />} title="Résumé de la configuration">
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginTop: 8 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginTop: 8 }}>
                       {[
                         { label: 'Mur', enabled: settings.wallEnabled },
                         { label: 'Stories', enabled: settings.storiesEnabled },
@@ -736,14 +1286,24 @@ export default function SocialSettingsAdminPage() {
                         { label: 'Battles', enabled: settings.battlesEnabled },
                         { label: 'Explore', enabled: settings.exploreEnabled },
                         { label: 'Hive Live', enabled: settings.hiveLiveEnabled },
-                        { label: 'Whispers', enabled: settings.messengerEnabled },
+                        { label: 'Whisper', enabled: settings.messengerEnabled },
                         { label: 'Appels', enabled: settings.callsEnabled },
+                        { label: 'Wax', enabled: settings.waxEnabled },
+                        { label: 'Quests', enabled: settings.questsEnabled },
+                        { label: 'Events', enabled: settings.eventsEnabled },
+                        { label: 'Capsules', enabled: settings.capsulesEnabled },
+                        { label: 'Orbit', enabled: settings.orbitEnabled },
+                        { label: 'Pulse', enabled: settings.pulseEnabled },
                         { label: 'Réactions', enabled: settings.reactionsEnabled },
                         { label: 'Commentaires', enabled: settings.commentsEnabled },
                         { label: 'Partages', enabled: settings.sharesEnabled },
                         { label: 'Follow Colony', enabled: settings.allowFollowColony },
                         { label: 'Amis', enabled: settings.friendRequestsEnabled },
                         { label: 'Block Colony', enabled: settings.allowBlockColony },
+                        { label: 'Modération IA', enabled: settings.moderationMode !== 'manual' },
+                        { label: 'Auto-post Devis', enabled: settings.autoPostOnDevisSigned },
+                        { label: 'Auto-post Chantier', enabled: settings.autoPostOnChantierCompleted },
+                        { label: 'RGPD Export', enabled: settings.gdprDataExportEnabled },
                         { label: 'Post Analytics', enabled: settings.showPostAnalytics },
                       ].map(item => (
                         <div
@@ -769,6 +1329,12 @@ export default function SocialSettingsAdminPage() {
             },
           ]}
         />
+          </div>
+          {/* Right: Live Preview */}
+          <div style={{ width: isTablet ? '100%' : 280, flexShrink: 0 }}>
+            <LivePreview />
+          </div>
+        </div>
       )}
     </div>
   );

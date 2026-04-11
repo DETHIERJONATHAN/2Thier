@@ -5,6 +5,7 @@ import { decrypt } from '../utils/crypto';
 import { sendPushToUser } from './push';
 import { emitToConversation, emitToUser as _emitToUser, isUserOnline as _isUserOnline, getOnlineUsers } from '../lib/socket';
 import { uploadExpressFile } from '../lib/storage';
+import { createBusinessAutoPost } from '../services/business-auto-post';
 
 const router = Router();
 
@@ -964,6 +965,21 @@ router.put('/tasks/:id', async (req: Request, res: Response): Promise<void> => {
     });
 
     emitToConversation(task.conversationId, 'task-updated', { task: updated });
+
+    // 🐝 Auto-post social : tâche terminée
+    if (status === 'done') {
+      // Récupérer l'orgId via la conversation
+      const conv = await db.conversation.findUnique({ where: { id: task.conversationId }, select: { organizationId: true } });
+      if (conv?.organizationId) {
+        createBusinessAutoPost({
+          orgId: conv.organizationId,
+          userId: user.id,
+          eventType: 'task_completed',
+          entityId: updated.id,
+          entityLabel: updated.title || 'Tâche terminée',
+        }).catch(err => console.error('[MESSENGER] Auto-post error:', err));
+      }
+    }
 
     res.json(updated);
   } catch (err) {
