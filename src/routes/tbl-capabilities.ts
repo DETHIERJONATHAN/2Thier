@@ -192,7 +192,18 @@ router.get('/capabilities', authenticateToken, async (req, res) => {
     const includeRaw = req.query.raw === '1' || req.query.raw === 'true';
     const extractDeps = req.query.deps === '1' || req.query.deps === 'true';
 
-    // TODO: Vérifier ownership/organization du treeId avant de retourner les données
+    // Ownership check: verify tree belongs to user's organization
+    const user = req.user;
+    const organizationId = user?.organizationId || null;
+    const isSuperAdmin = user?.isSuperAdmin || false;
+    const treeWhereFilter = isSuperAdmin || !organizationId
+      ? { id: treeId }
+      : { id: treeId, organizationId };
+    const tree = await prisma.treeBranchLeafTree.findFirst({ where: treeWhereFilter });
+    if (!tree) {
+      return res.status(404).json({ error: 'Arbre non trouvé' });
+    }
+
     const data = await resolveCapabilities(treeId, { includeRaw, extractDependencies: extractDeps });
 
     res.json({

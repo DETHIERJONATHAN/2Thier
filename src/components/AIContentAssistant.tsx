@@ -1,3 +1,4 @@
+import { SF } from './zhiive/ZhiiveTheme';
 /**
  * Composant Assistant IA pour la génération de contenu
  * Utilise l'API AI Content pour générer automatiquement du contenu
@@ -227,10 +228,10 @@ export const AIContentAssistant: React.FC<AIContentAssistantProps> = ({
 
     return (
       <Card 
-        style={{ marginTop: 16, background: '#f0f9ff', borderColor: '#3b82f6' }}
+        style={{ marginTop: 16, background: '#f0f9ff', borderColor: SF.blue }}
         title={
           <Space>
-            <CheckCircleOutlined style={{ color: '#10b981' }} />
+            <CheckCircleOutlined style={{ color: SF.emerald }} />
             <Text strong>Contenu Généré</Text>
           </Space>
         }
@@ -320,7 +321,7 @@ export const AIContentAssistant: React.FC<AIContentAssistantProps> = ({
         icon={<RobotOutlined />}
         onClick={() => setModalVisible(true)}
         type="dashed"
-        style={{ borderColor: '#3b82f6', color: '#3b82f6' }}
+        style={{ borderColor: SF.blue, color: SF.blue }}
       >
         {buttonText || '✨ Générer avec l\'IA'}
       </Button>

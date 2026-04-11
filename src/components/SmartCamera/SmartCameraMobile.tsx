@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { MAX_PHOTO_SIZE } from '../../lib/constants';
 import { Button, Card, Space, Typography, Progress, Image, message, Tooltip } from 'antd';
 import { 
   CameraOutlined, 
@@ -494,7 +495,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
         return;
       }
       // Limite de taille: 50MB max
-      if (file.size > 50 * 1024 * 1024) {
+      if (file.size > MAX_PHOTO_SIZE) {
         message.error('Image trop volumineuse (max 50MB)');
         if (inputRef.current) inputRef.current.value = '';
         return;

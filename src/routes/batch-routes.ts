@@ -22,7 +22,7 @@ interface AuthContext {
 }
 
 function getAuthCtx(req: Request): AuthContext {
-  const user = (req as any).user;
+  const user = req.user;
   return {
     userId: user?.id,
     organizationId: user?.organizationId || null,

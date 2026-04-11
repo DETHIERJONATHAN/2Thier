@@ -3,7 +3,7 @@ import { useAuth } from '../auth/useAuth';
 import { Alert } from 'antd';
 import AgendaPage from '../plugins/ModuleAgenda/AgendaPage';
 
-const AgendaWrapper: React.FC = () => {
+const AgendaWrapper: React.FC<{ compact?: boolean }> = ({ compact }) => {
   const { user, hasFeature } = useAuth();
 
   // Vérification que l'utilisateur est connecté
@@ -31,7 +31,7 @@ const AgendaWrapper: React.FC = () => {
     );
   }
 
-  return <AgendaPage />;
+  return <AgendaPage compact={compact} />;
 };
 
 export default AgendaWrapper;

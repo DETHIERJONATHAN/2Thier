@@ -68,7 +68,7 @@ const updatePrefsSchema = z.object({
 
 router.get('/', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = req.user.id;
 
     let prefs = await db.userNotificationPreference.findUnique({
       where: { userId },
@@ -97,7 +97,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
 
 router.put('/', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = req.user.id;
     const parsed = updatePrefsSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: 'Données invalides', details: parsed.error.flatten() });

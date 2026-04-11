@@ -9,6 +9,7 @@
  * - AFFICHE que la réponse finale
  */
 
+import { SF } from '../../../../../components/zhiive/ZhiiveTheme';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { tblLog } from '../../../../../utils/tblDebug';
 // Debug flag opt-in: localStorage.TBL_SMART_DEBUG='1'
@@ -1263,7 +1264,7 @@ export function SmartCalculatedField({
   // Si on a une valeur mirror et pas de résultat final, utiliser le mirror (que l'on soit en loading ou pas)
   if (mirrorValue !== null && result === null) {
     return (
-      <span style={{ fontWeight: 'bold', color: '#059669' }} data-testid={`smart-calculated-field-${strippedSourceRef}`}>
+      <span style={{ fontWeight: 'bold', color: SF.emeraldDark }} data-testid={`smart-calculated-field-${strippedSourceRef}`}>
         {formatResult(mirrorValue)}
       </span>
     );
@@ -1280,7 +1281,7 @@ export function SmartCalculatedField({
 
   // Résultat final calculé (priorité sur mirror)
   return (
-    <span style={{ fontWeight: 'bold', color: result !== null ? '#059669' : '#999' }} data-testid={`smart-calculated-field-${strippedSourceRef}`}>
+    <span style={{ fontWeight: 'bold', color: result !== null ? SF.emeraldDark : '#999' }} data-testid={`smart-calculated-field-${strippedSourceRef}`}>
       {formatResult(result)}
     </span>
   );

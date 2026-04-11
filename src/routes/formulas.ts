@@ -11,11 +11,6 @@ const router = Router({ mergeParams: true });
 
 // Middleware de debug pour voir les paramètres et le chemin des requêtes
 router.use((req: Request, _res: Response, next: NextFunction) => {
-  console.log('[DEBUG FORMULAS] Request URL:', req.originalUrl);
-  console.log('[DEBUG FORMULAS] Route Path:', req.route?.path);
-  console.log('[DEBUG FORMULAS] Request Params:', req.params);
-  console.log('[DEBUG FORMULAS] Parent Params ID:', req.params.id);
-  console.log('[DEBUG FORMULAS] Request Body:', req.body);
   next();
 });
 
@@ -91,7 +86,6 @@ router.post('/', requireRole(['admin', 'super_admin']), async (req: Request & { 
     
     // Si toujours pas de fieldId, renvoyer une formule mockée
     if (!effectiveFieldId) {
-      console.log("🧪 Mode mock activé pour la création de formule - fieldId manquant");
       
       const mockId = uuidv4();
       const mockFormula = {
@@ -181,7 +175,6 @@ router.put('/:formulaId', requireRole(['admin', 'super_admin']), async (req: Req
     const fieldId = req.params.id;
     
     // Vérifier si nous avons bien reçu un fieldId
-    console.log(`[DEBUG_FORMULA_PUT] Vérification paramètres - formulaId: ${formulaId}, fieldId: ${fieldId}`);
     
     if (!fieldId) {
       console.error(`[DEBUG_FORMULA_PUT] Erreur: fieldId manquant`);
@@ -194,12 +187,6 @@ router.put('/:formulaId', requireRole(['admin', 'super_admin']), async (req: Req
     
     const { name, sequence, order } = req.body;
     
-    console.log(`[DEBUG_FORMULA_PUT] Mise à jour formule ${formulaId} pour champ ${fieldId}`);
-    console.log(`[DEBUG_FORMULA_PUT] Données reçues:`, { 
-      name, 
-      sequence: typeof sequence === 'object' ? JSON.stringify(sequence) : sequence,
-      order 
-    });
     
     const dataToUpdate: any = {};
     
@@ -221,7 +208,6 @@ router.put('/:formulaId', requireRole(['admin', 'super_admin']), async (req: Req
       });
       
       if (!existingFormula) {
-        console.log(`[DEBUG_FORMULA_PUT] Formule non trouvée, on simule une réponse`);
         // Simuler une réponse
         return res.json([{
           id: formulaId,
@@ -239,10 +225,6 @@ router.put('/:formulaId', requireRole(['admin', 'super_admin']), async (req: Req
         data: dataToUpdate
       });
       
-      console.log(`[DEBUG_FORMULA_PUT] Formule mise à jour avec succès:`, { 
-        id: updatedFormula.id, 
-        name: updatedFormula.name
-      });
       
       // Après la mise à jour, on renvoie la liste complète et à jour
       const formulas = await prisma.fieldFormula.findMany({
@@ -256,14 +238,12 @@ router.put('/:formulaId', requireRole(['admin', 'super_admin']), async (req: Req
         sequence: f.sequence ? JSON.parse(f.sequence as string) : []
       }));
       
-      console.log(`[DEBUG_FORMULA_PUT] Retour de ${processedFormulas.length} formules au client`);
       return res.json(processedFormulas);
       
     } catch (err: any) {
       console.error(`[DEBUG_FORMULA_PUT] Erreur Prisma:`, err);
       
       // En mode développement, simuler une réponse réussie même en cas d'erreur
-      console.log(`[DEBUG_FORMULA_PUT] Mode développement, simulation de réponse`);
       
       // Créer une formule simulée
       return res.json([{
@@ -294,7 +274,6 @@ router.put('/:formulaId', requireRole(['admin', 'super_admin']), async (req: Req
 router.delete('/:formulaId', requireRole(['admin', 'super_admin']) as any, async (req: Request, res: Response): Promise<void> => {
   const { formulaId, fieldId } = req.params;
   try {
-    console.log(`[AUDIT_API_DELETE] Demande de suppression formule ${formulaId} pour champ ${fieldId}`);
     
     // On s'assure que la formule à supprimer existe et appartient bien au champ
     // findUnique ne supporte pas plusieurs champs sans clé composite; utiliser findFirst avec un filtre combiné
@@ -303,19 +282,15 @@ router.delete('/:formulaId', requireRole(['admin', 'super_admin']) as any, async
     });
 
     if (!formulaToDelete) {
-      console.log(`[AUDIT_API_DELETE] Erreur: formule ${formulaId} non trouvée`);
       res.status(404).json({ error: 'Formule non trouvée pour ce champ.' });
       return;
     }
     
-    console.log(`[AUDIT_API_DELETE] Formule trouvée, séquence avant suppression:`, 
-      formulaToDelete.sequence ? JSON.parse(formulaToDelete.sequence as string) : []);
 
     await prisma.fieldFormula.delete({
       where: { id: formulaId },
     });
     
-    console.log(`[AUDIT_API_DELETE] Formule ${formulaId} supprimée avec succès`);
 
     // Après la suppression, on renvoie la liste complète et à jour
     const formulas = await prisma.fieldFormula.findMany({
@@ -326,7 +301,6 @@ router.delete('/:formulaId', requireRole(['admin', 'super_admin']) as any, async
         ...f,
         sequence: f.sequence ? JSON.parse(f.sequence as string) : [],
     }));
-    console.log(`[AUDIT_API_DELETE] Retour de ${processedFormulas.length} formules au client après suppression`);
     res.status(200).json(processedFormulas);
 
   } catch (error: any) {
@@ -350,7 +324,6 @@ router.delete('/:formulaId/sequence/:index', requireRole(['admin', 'super_admin'
   }
 
   try {
-    console.log(`[AUDIT_API_DELETE_ITEM] Suppression de l'élément à l'index ${index} de la formule ${formulaId}`);
     
     // Récupération de la formule
     const formula = await prisma.fieldFormula.findFirst({
@@ -358,17 +331,14 @@ router.delete('/:formulaId/sequence/:index', requireRole(['admin', 'super_admin'
     });
 
     if (!formula) {
-      console.log(`[AUDIT_API_DELETE_ITEM] Formule ${formulaId} non trouvée`);
       res.status(404).json({ error: 'Formule non trouvée' });
       return;
     }
 
     // Analyse de la séquence actuelle
     const currentSequence = formula.sequence ? JSON.parse(formula.sequence as string) : [];
-    console.log(`[AUDIT_API_DELETE_ITEM] Séquence actuelle (${currentSequence.length} éléments):`, currentSequence);
     
     if (index >= currentSequence.length) {
-      console.log(`[AUDIT_API_DELETE_ITEM] Index ${index} hors limites (max: ${currentSequence.length - 1})`);
       res.status(400).json({ error: "Index hors limites" });
       return;
     }
@@ -376,8 +346,6 @@ router.delete('/:formulaId/sequence/:index', requireRole(['admin', 'super_admin'
     // Suppression de l'élément à l'index spécifié
     const elementToRemove = currentSequence[index];
     const newSequence = [...currentSequence.slice(0, index), ...currentSequence.slice(index + 1)];
-    console.log(`[AUDIT_API_DELETE_ITEM] Élément supprimé: ${elementToRemove}`);
-    console.log(`[AUDIT_API_DELETE_ITEM] Nouvelle séquence (${newSequence.length} éléments):`, newSequence);
 
     // Mise à jour de la formule avec la nouvelle séquence
     await prisma.fieldFormula.update({
@@ -385,7 +353,6 @@ router.delete('/:formulaId/sequence/:index', requireRole(['admin', 'super_admin'
       data: { sequence: JSON.stringify(newSequence) }
     });
     
-    console.log(`[AUDIT_API_DELETE_ITEM] Formule mise à jour avec succès`);
 
     // Récupération de toutes les formules du champ
     const formulas = await prisma.fieldFormula.findMany({
@@ -397,7 +364,6 @@ router.delete('/:formulaId/sequence/:index', requireRole(['admin', 'super_admin'
       sequence: f.sequence ? JSON.parse(f.sequence as string) : [],
     }));
     
-    console.log(`[AUDIT_API_DELETE_ITEM] Retour de ${processedFormulas.length} formules au client`);
     res.status(200).json(processedFormulas);
 
   } catch (error: any) {

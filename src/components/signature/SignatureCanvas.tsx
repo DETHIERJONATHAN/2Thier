@@ -7,6 +7,7 @@
  */
 
 import React, { useRef, useEffect, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
+import { SF } from '../zhiive/ZhiiveTheme';
 
 export interface SignatureCanvasRef {
   /** Exporte la signature en base64 data URL (PNG) */
@@ -33,7 +34,7 @@ interface SignatureCanvasProps {
 const SignatureCanvas = forwardRef<SignatureCanvasRef, SignatureCanvasProps>(({
   width = 500,
   height = 200,
-  penColor = '#1a1a2e',
+  penColor = SF.dark,
   penWidth = 2.5,
   backgroundColor = '#ffffff',
   borderColor = '#d9d9d9',

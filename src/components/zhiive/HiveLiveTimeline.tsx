@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { MAX_VIDEO_SIZE } from '../../lib/constants';
 import { Avatar, Spin, Empty, Modal, Button, Input, DatePicker, Upload, Carousel, Select, message } from 'antd';
 import type { UploadFile, RcFile } from 'antd/es/upload';
 import { PlusOutlined, EditOutlined, DeleteOutlined, HeartFilled, CalendarOutlined, CameraOutlined, LeftOutlined, RightOutlined, EyeOutlined, InboxOutlined, CloseCircleFilled, PlayCircleFilled, VideoCameraOutlined } from '@ant-design/icons';
@@ -853,7 +854,7 @@ const MomentFormModal: React.FC<MomentFormModalProps> = ({
   }, []);
 
   const handleFilesSelected = async (files: FileList | File[]) => {
-    const MAX_SIZE = 100 * 1024 * 1024; // 100MB
+    const MAX_SIZE = MAX_VIDEO_SIZE;
     const allowed = /^(image|video)\//;
     const newItems: MediaItem[] = [];
 

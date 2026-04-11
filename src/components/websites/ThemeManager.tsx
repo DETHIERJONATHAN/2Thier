@@ -1,3 +1,4 @@
+import { SF, WEBSITE_DEFAULTS } from '../zhiive/ZhiiveTheme';
 import React, { useState, useEffect } from 'react';
 import { Card, Space, Typography, ColorPicker, Input, Select, Button, message, Spin, Tabs, Row, Col } from 'antd';
 import { SaveOutlined, ReloadOutlined, BgColorsOutlined } from '@ant-design/icons';
@@ -45,9 +46,9 @@ const ThemeManager: React.FC<ThemeManagerProps> = ({ websiteId }) => {
   const getDefaultTheme = () => ({
     websiteId,
     name: 'Thème par défaut',
-    primaryColor: '#10b981',
-    secondaryColor: '#059669',
-    accentColor: '#047857',
+    primaryColor: WEBSITE_DEFAULTS.primaryColor,
+    secondaryColor: SF.emeraldDark,
+    accentColor: SF.emeraldDeep,
     textColor: '#1f2937',
     textLightColor: '#6b7280',
     backgroundColor: '#ffffff',
@@ -88,9 +89,9 @@ const ThemeManager: React.FC<ThemeManagerProps> = ({ websiteId }) => {
     const presets: any = {
       'vert-energie': {
         name: 'Vert Énergie',
-        primaryColor: '#10b981',
-        secondaryColor: '#059669',
-        accentColor: '#047857',
+        primaryColor: WEBSITE_DEFAULTS.primaryColor,
+        secondaryColor: SF.emeraldDark,
+        accentColor: SF.emeraldDeep,
         textColor: '#1f2937',
         textLightColor: '#6b7280',
         backgroundColor: '#ffffff',
@@ -98,7 +99,7 @@ const ThemeManager: React.FC<ThemeManagerProps> = ({ websiteId }) => {
       },
       'bleu-business': {
         name: 'Bleu Business',
-        primaryColor: '#3b82f6',
+        primaryColor: SF.blue,
         secondaryColor: '#2563eb',
         accentColor: '#1d4ed8',
         textColor: '#1e293b',
@@ -108,7 +109,7 @@ const ThemeManager: React.FC<ThemeManagerProps> = ({ websiteId }) => {
       },
       'violet-tech': {
         name: 'Violet Tech',
-        primaryColor: '#8b5cf6',
+        primaryColor: SF.violet,
         secondaryColor: '#7c3aed',
         accentColor: '#6d28d9',
         textColor: '#1f2937',
@@ -194,7 +195,7 @@ const ThemeManager: React.FC<ThemeManagerProps> = ({ websiteId }) => {
                 onClick={() => applyPreset('vert-energie')}
                 style={{ 
                   height: '80px', 
-                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  background: WEBSITE_DEFAULTS.gradient,
                   color: '#ffffff',
                   border: 'none'
                 }}
@@ -211,7 +212,7 @@ const ThemeManager: React.FC<ThemeManagerProps> = ({ websiteId }) => {
                 onClick={() => applyPreset('bleu-business')}
                 style={{ 
                   height: '80px', 
-                  background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                  background: `linear-gradient(135deg, ${SF.blue} 0%, #2563eb 100%)`,
                   color: '#ffffff',
                   border: 'none'
                 }}
@@ -228,7 +229,7 @@ const ThemeManager: React.FC<ThemeManagerProps> = ({ websiteId }) => {
                 onClick={() => applyPreset('violet-tech')}
                 style={{ 
                   height: '80px', 
-                  background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                  background: `linear-gradient(135deg, ${SF.violet} 0%, #7c3aed 100%)`,
                   color: '#ffffff',
                   border: 'none'
                 }}

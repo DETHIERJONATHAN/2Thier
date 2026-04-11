@@ -1,3 +1,4 @@
+import { FB } from '../components/zhiive/ZhiiveTheme';
 /**
  * TelnyxDialer — Composant dialer PSTN intégré au Messenger
  * 
@@ -26,7 +27,7 @@ import type { TelnyxCallState } from '../hooks/useTelnyxCall';
 const DIALER = {
   bg: '#fff',
   cardBg: '#f8f9fa',
-  primary: '#1877f2',
+  primary: FB.blue,
   green: '#31a24c',
   red: '#ff3b30',
   orange: '#ff9500',

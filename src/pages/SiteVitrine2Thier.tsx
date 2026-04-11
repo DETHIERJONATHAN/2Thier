@@ -1,3 +1,4 @@
+import { SF, WEBSITE_DEFAULTS } from '../components/zhiive/ZhiiveTheme';
 ﻿import React, { useState } from 'react';
 import { 
   Layout,
@@ -49,17 +50,17 @@ const { TextArea } = Input;
 
 // Mapping des icônes Ant Design par nom
 const iconMap: Record<string, React.ReactNode> = {
-  ThunderboltOutlined: <ThunderboltOutlined style={{ fontSize: '32px', color: '#10b981' }} />,
-  BulbOutlined: <BulbOutlined style={{ fontSize: '32px', color: '#f59e0b' }} />,
-  CarOutlined: <CarOutlined style={{ fontSize: '32px', color: '#3b82f6' }} />,
-  FireOutlined: <FireOutlined style={{ fontSize: '32px', color: '#ef4444' }} />,
-  HomeOutlined: <HomeOutlined style={{ fontSize: '32px', color: '#8b5cf6' }} />,
+  ThunderboltOutlined: <ThunderboltOutlined style={{ fontSize: '32px', color: SF.emerald }} />,
+  BulbOutlined: <BulbOutlined style={{ fontSize: '32px', color: SF.amber }} />,
+  CarOutlined: <CarOutlined style={{ fontSize: '32px', color: SF.blue }} />,
+  FireOutlined: <FireOutlined style={{ fontSize: '32px', color: SF.red }} />,
+  HomeOutlined: <HomeOutlined style={{ fontSize: '32px', color: SF.violet }} />,
   CloudOutlined: <CloudOutlined style={{ fontSize: '32px', color: '#06b6d4' }} />,
   ToolOutlined: <ToolOutlined style={{ fontSize: '32px', color: '#64748b' }} />,
-  SafetyCertificateOutlined: <SafetyCertificateOutlined style={{ fontSize: '48px', color: '#10b981' }} />,
-  StarFilled: <StarFilled style={{ fontSize: '48px', color: '#10b981' }} />,
-  CustomerServiceOutlined: <CustomerServiceOutlined style={{ fontSize: '48px', color: '#10b981' }} />,
-  CheckCircleOutlined: <CheckCircleOutlined style={{ fontSize: '48px', color: '#10b981' }} />
+  SafetyCertificateOutlined: <SafetyCertificateOutlined style={{ fontSize: '48px', color: SF.emerald }} />,
+  StarFilled: <StarFilled style={{ fontSize: '48px', color: SF.emerald }} />,
+  CustomerServiceOutlined: <CustomerServiceOutlined style={{ fontSize: '48px', color: SF.emerald }} />,
+  CheckCircleOutlined: <CheckCircleOutlined style={{ fontSize: '48px', color: SF.emerald }} />
 };
 
 interface Service {
@@ -106,7 +107,7 @@ const SiteVitrine2Thier: React.FC = () => {
         justifyContent: 'center', 
         alignItems: 'center', 
         minHeight: '100vh',
-        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+        background: WEBSITE_DEFAULTS.gradient
       }}>
         <Space direction="vertical" align="center">
           <Spin indicator={<LoadingOutlined style={{ fontSize: 48, color: 'white' }} spin />} />
@@ -199,14 +200,14 @@ const SiteVitrine2Thier: React.FC = () => {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '40px' }}>
-          <Title level={3} style={{ margin: 0, color: '#10b981' }}>
+          <Title level={3} style={{ margin: 0, color: SF.emerald }}>
             ⚡ 2THIER ENERGY
           </Title>
           <Space size="large" style={{ display: 'none' }}>
             {/* TODO: Navigation desktop */}
           </Space>
         </div>
-        <Button type="primary" size="large" style={{ backgroundColor: '#10b981', borderColor: '#10b981' }}>
+        <Button type="primary" size="large" style={{ backgroundColor: SF.emerald, borderColor: SF.emerald }}>
           DEVIS GRATUIT
         </Button>
       </Header>
@@ -215,7 +216,7 @@ const SiteVitrine2Thier: React.FC = () => {
         {/* HERO SECTION */}
         <div
           style={{
-            background: 'linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)',
+            background: WEBSITE_DEFAULTS.gradientFull,
             minHeight: '600px',
             display: 'flex',
             alignItems: 'center',
@@ -247,7 +248,7 @@ const SiteVitrine2Thier: React.FC = () => {
                     fontSize: '18px',
                     backgroundColor: 'white',
                     borderColor: 'white',
-                    color: '#10b981',
+                    color: SF.emerald,
                     fontWeight: 'bold'
                   }}
                 >
@@ -295,7 +296,7 @@ const SiteVitrine2Thier: React.FC = () => {
                   <Statistic 
                     title={stat.subtitle}
                     value={stat.title}
-                    valueStyle={{ color: '#10b981', fontSize: '32px', fontWeight: 'bold' }}
+                    valueStyle={{ color: SF.emerald, fontSize: '32px', fontWeight: 'bold' }}
                   />
                 </Card>
               </Col>
@@ -340,7 +341,7 @@ const SiteVitrine2Thier: React.FC = () => {
                       renderItem={(item) => (
                         <List.Item style={{ padding: '4px 0', border: 'none' }}>
                           <Text style={{ fontSize: '13px' }}>
-                            <CheckCircleOutlined style={{ color: '#10b981', marginRight: '8px' }} />
+                            <CheckCircleOutlined style={{ color: SF.emerald, marginRight: '8px' }} />
                             {item}
                           </Text>
                         </List.Item>
@@ -350,8 +351,8 @@ const SiteVitrine2Thier: React.FC = () => {
                       type="primary" 
                       block
                       style={{ 
-                        backgroundColor: '#10b981',
-                        borderColor: '#10b981',
+                        backgroundColor: SF.emerald,
+                        borderColor: SF.emerald,
                         marginTop: 'auto'
                       }}
                     >
@@ -505,7 +506,7 @@ const SiteVitrine2Thier: React.FC = () => {
         {/* CTA FINAL */}
         <div 
           style={{
-            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+            background: WEBSITE_DEFAULTS.gradient,
             padding: '80px 24px',
             textAlign: 'center'
           }}
@@ -526,7 +527,7 @@ const SiteVitrine2Thier: React.FC = () => {
                 style={{ 
                   background: 'white',
                   borderColor: 'white',
-                  color: '#10b981',
+                  color: SF.emerald,
                   height: 'auto',
                   padding: '16px 32px',
                   fontSize: '18px',

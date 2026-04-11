@@ -322,7 +322,7 @@ const FeedButton: React.FC<{
 // ══════════════════════════════════════════════════════════════
 // ── MAIN SEARCH PAGE
 // ══════════════════════════════════════════════════════════════
-const SearchPage: React.FC = () => {
+const SearchPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { api } = useAuthenticatedApi();
@@ -550,6 +550,7 @@ const SearchPage: React.FC = () => {
         borderBottom: `1px solid ${SF.border}`,
         background: SF.cardBg,
         flexShrink: 0,
+        position: 'sticky', top: 0, zIndex: 10,
       }}>
         {/* Left: Title */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
@@ -753,7 +754,7 @@ const SearchPage: React.FC = () => {
 
         {/* ── Widget mode: grid of feed cards ── */}
         {!feedsLoading && bookmarks.length > 0 && viewMode === 'widgets' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16, maxWidth: 1400, margin: '0 auto' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${compact ? '200px' : '320px'}, 1fr))`, gap: compact ? 8 : 16, maxWidth: compact ? undefined : 1400, margin: '0 auto' }}>
             {allFeeds.map(feed => (
               <div
                 key={feed.bookmarkId}
@@ -784,7 +785,7 @@ const SearchPage: React.FC = () => {
 
         {/* ── Button mode: compact list ── */}
         {!feedsLoading && bookmarks.length > 0 && viewMode === 'buttons' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 8, maxWidth: 1400, margin: '0 auto' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${compact ? '200px' : '280px'}, 1fr))`, gap: 8, maxWidth: compact ? undefined : 1400, margin: '0 auto' }}>
             {allFeeds.map(feed => (
               <div
                 key={feed.bookmarkId}

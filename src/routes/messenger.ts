@@ -15,7 +15,7 @@ router.use(authenticateToken as any);
 // GET /messenger/conversations — List user's conversations
 // ═══════════════════════════════════════════════════════════════
 router.get('/conversations', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   try {
@@ -92,7 +92,7 @@ router.get('/conversations', async (req: Request, res: Response): Promise<void> 
 // POST /messenger/conversations — Create or find 1-to-1 / group
 // ═══════════════════════════════════════════════════════════════
 router.post('/conversations', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   const { participantIds, name, isGroup } = req.body;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
   if (!participantIds || !Array.isArray(participantIds) || participantIds.length === 0) {
@@ -153,7 +153,7 @@ router.post('/conversations', async (req: Request, res: Response): Promise<void>
 // GET /messenger/conversations/:id/messages — Get messages (paginated)
 // ═══════════════════════════════════════════════════════════════
 router.get('/conversations/:id/messages', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   const conversationId = req.params.id;
@@ -218,7 +218,7 @@ router.get('/conversations/:id/messages', async (req: Request, res: Response): P
 // POST /messenger/conversations/:id/messages — Send a message
 // ═══════════════════════════════════════════════════════════════
 router.post('/conversations/:id/messages', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   const conversationId = req.params.id;
@@ -334,7 +334,7 @@ router.post('/conversations/:id/messages', async (req: Request, res: Response): 
 // POST /messenger/conversations/:id/read — Mark conversation as read
 // ═══════════════════════════════════════════════════════════════
 router.post('/conversations/:id/read', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   try {
@@ -353,7 +353,7 @@ router.post('/conversations/:id/read', async (req: Request, res: Response): Prom
 // DELETE /messenger/messages/:id — Delete (soft) a message
 // ═══════════════════════════════════════════════════════════════
 router.delete('/messages/:id', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   try {
@@ -379,7 +379,7 @@ router.delete('/messages/:id', async (req: Request, res: Response): Promise<void
 // Uses express-fileupload (global middleware in api-server-clean.ts)
 // ═══════════════════════════════════════════════════════════════
 router.post('/upload', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   try {
@@ -433,7 +433,7 @@ router.post('/upload', async (req: Request, res: Response): Promise<void> => {
 // POST /messenger/messages/:id/view-ephemeral — Mark ephemeral as viewed
 // ═══════════════════════════════════════════════════════════════
 router.post('/messages/:id/view-ephemeral', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   try {
@@ -462,7 +462,7 @@ router.post('/messages/:id/view-ephemeral', async (req: Request, res: Response):
 // GET /messenger/unread — Get total unread count
 // ═══════════════════════════════════════════════════════════════
 router.get('/unread', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   try {
@@ -517,7 +517,7 @@ router.get('/unread', async (req: Request, res: Response): Promise<void> => {
 // Returns SIP credentials if eligible (org has Telnyx + user has permission)
 // ═══════════════════════════════════════════════════════════════
 router.get('/telnyx-eligibility', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   try {
@@ -628,7 +628,7 @@ router.get('/telnyx-eligibility', async (req: Request, res: Response): Promise<v
 
 // POST /messenger/messages/:id/reactions — Add a reaction
 router.post('/messages/:id/reactions', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   const { emoji } = req.body;
@@ -683,7 +683,7 @@ router.post('/messages/:id/reactions', async (req: Request, res: Response): Prom
 
 // GET /messenger/messages/:id/reactions — Get all reactions for a message
 router.get('/messages/:id/reactions', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   try {
@@ -714,7 +714,7 @@ router.get('/messages/:id/reactions', async (req: Request, res: Response): Promi
 
 // POST /messenger/messages/:id/pin — Pin or unpin a message
 router.post('/messages/:id/pin', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   try {
@@ -762,7 +762,7 @@ router.post('/messages/:id/pin', async (req: Request, res: Response): Promise<vo
 
 // GET /messenger/conversations/:id/pinned — Get all pinned messages
 router.get('/conversations/:id/pinned', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   try {
@@ -791,7 +791,7 @@ router.get('/conversations/:id/pinned', async (req: Request, res: Response): Pro
 
 // GET /messenger/conversations/:id/files — Get all shared files in conversation
 router.get('/conversations/:id/files', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   try {
@@ -836,7 +836,7 @@ router.get('/conversations/:id/files', async (req: Request, res: Response): Prom
 
 // POST /messenger/messages/:id/task — Create a task from a message
 router.post('/messages/:id/task', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   const { title, assigneeId, deadline, priority, description } = req.body;
@@ -901,7 +901,7 @@ router.post('/messages/:id/task', async (req: Request, res: Response): Promise<v
 
 // GET /messenger/tasks — List all tasks for user
 router.get('/tasks', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   const statusFilter = req.query.status as string;
@@ -932,7 +932,7 @@ router.get('/tasks', async (req: Request, res: Response): Promise<void> => {
 
 // PUT /messenger/tasks/:id — Update task status
 router.put('/tasks/:id', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   const { status, title, deadline, priority } = req.body;
@@ -992,7 +992,7 @@ router.put('/tasks/:id', async (req: Request, res: Response): Promise<void> => {
 
 // GET /messenger/templates — Get user's quick reply templates
 router.get('/templates', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   try {
@@ -1016,7 +1016,7 @@ router.get('/templates', async (req: Request, res: Response): Promise<void> => {
 
 // POST /messenger/templates — Create a quick reply template
 router.post('/templates', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   const { title, content, shortcut, category, isOrganization } = req.body;
@@ -1044,7 +1044,7 @@ router.post('/templates', async (req: Request, res: Response): Promise<void> => 
 
 // DELETE /messenger/templates/:id — Delete a template
 router.delete('/templates/:id', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   try {
@@ -1066,7 +1066,7 @@ router.delete('/templates/:id', async (req: Request, res: Response): Promise<voi
 
 // PUT /messenger/status — Update user's custom status
 router.put('/status', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   const { customStatus, customStatusEmoji, expiresInMinutes } = req.body;
@@ -1102,7 +1102,7 @@ router.put('/status', async (req: Request, res: Response): Promise<void> => {
 
 // GET /messenger/online — Get online users list
 router.get('/online', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   try {
@@ -1145,7 +1145,7 @@ router.get('/online', async (req: Request, res: Response): Promise<void> => {
 
 // PUT /messenger/conversations/:id/permissions — Update member permissions (admin only)
 router.put('/conversations/:id/permissions', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   const { targetUserId, permissions } = req.body;
@@ -1193,7 +1193,7 @@ router.put('/conversations/:id/permissions', async (req: Request, res: Response)
 
 // POST /messenger/conversations/:id/members — Add members
 router.post('/conversations/:id/members', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   const { userIds } = req.body;
@@ -1249,7 +1249,7 @@ router.post('/conversations/:id/members', async (req: Request, res: Response): P
 
 // DELETE /messenger/conversations/:id/members/:userId — Remove a member
 router.delete('/conversations/:id/members/:userId', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   try {
@@ -1286,7 +1286,7 @@ router.delete('/conversations/:id/members/:userId', async (req: Request, res: Re
 
 // POST /messenger/messages/:id/transcribe — Transcribe a voice message using Gemini
 router.post('/messages/:id/transcribe', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   try {

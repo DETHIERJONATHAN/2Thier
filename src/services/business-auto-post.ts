@@ -75,7 +75,7 @@ export async function createBusinessAutoPost(params: AutoPostParams): Promise<{ 
   // 1. Check if this event type is enabled in SocialSettings
   const settings = await getOrgSocialSettings(orgId);
   const settingKey = EVENT_SETTING_MAP[eventType];
-  if (!(settings as any)[settingKey]) {
+  if (!settings[settingKey as keyof typeof settings]) {
     return { created: 0, postIds: [] };
   }
 

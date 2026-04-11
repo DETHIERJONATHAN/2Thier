@@ -9,6 +9,7 @@
  * - Capacités (condition, formula, table, api, etc.)
  */
 
+import { SF } from '../../../../../components/zhiive/ZhiiveTheme';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Form, 
@@ -4363,7 +4364,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
               style={{
                 ...LABEL_REQUIRED_BADGE_STYLE,
                 color: fieldConfig.required
-                  ? (isValidation ? '#ef4444' : '#16a34a')
+                  ? (isValidation ? SF.red : '#16a34a')
                   : 'transparent'
               }}
             >
@@ -4395,7 +4396,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       help={shouldDisplayValidationHelp ? (
         <div 
           style={{ 
-            color: isValidation ? '#dc2626' : '#059669',
+            color: isValidation ? SF.red : SF.emeraldDark,
             fontWeight: '400',
             fontSize: '14px',
             marginTop: '4px'

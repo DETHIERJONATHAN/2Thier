@@ -10,6 +10,7 @@
  * @author IA Assistant - 9 octobre 2025
  */
 
+import { WEBSITE_DEFAULTS } from '../components/zhiive/ZhiiveTheme';
 import React from 'react';
 import { Layout, Spin, Alert, Space } from 'antd';
 import { LoadingOutlined } from '@ant-design/icons';
@@ -29,7 +30,7 @@ const SiteVitrine2ThierDynamic: React.FC = () => {
         justifyContent: 'center',
         alignItems: 'center',
         minHeight: '100vh',
-        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+        background: WEBSITE_DEFAULTS.gradient
       }}>
         <Space direction="vertical" align="center">
           <Spin indicator={<LoadingOutlined style={{ fontSize: 48, color: 'white' }} spin />} />

@@ -1,6 +1,7 @@
 // Routes pour la gestion des entreprises
 import { Router } from 'express';
 import { authMiddleware, type AuthenticatedRequest, requireRole } from '../middlewares/auth.js';
+import { db } from '../lib/database.js';
 
 const router = Router();
 
@@ -15,22 +16,14 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
   try {
     const { organizationId } = req.user!;
     
-    // TODO: Récupérer les informations de l'entreprise depuis la base de données
-    const companyInfo = {
-      id: organizationId,
-      name: "2Thier CRM",
-      address: "Rue de Floreffe 37, 5150 Franière",
-      phone: "0470/29.50.77",
-      email: "info@2thier.be",
-      website: "https://2thier.be",
-      vatNumber: "BE0123456789",
-      registrationNumber: "123456789"
-    };
-    
-    res.json({
-      success: true,
-      data: companyInfo
+    const org = await db.organization.findUnique({
+      where: { id: organizationId },
+      select: { id: true, name: true, address: true, phone: true, email: true, website: true, vatNumber: true, legalName: true, logoUrl: true },
     });
+
+    if (!org) return res.status(404).json({ success: false, message: 'Organisation introuvable' });
+    
+    res.json({ success: true, data: org });
     
   } catch (error) {
     console.error('❌ [CompanyAPI] Erreur récupération entreprise:', error);
@@ -48,14 +41,27 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
 router.put('/', requireRole(['admin', 'super_admin']), async (req: AuthenticatedRequest, res) => {
   try {
     const { organizationId } = req.user!;
-    const updateData = req.body;
+    const { name, address, phone, email, website, vatNumber, legalName } = req.body;
     
-    // TODO: Mettre à jour les informations dans la base de données
+    const updated = await db.organization.update({
+      where: { id: organizationId },
+      data: {
+        ...(name !== undefined && { name }),
+        ...(address !== undefined && { address }),
+        ...(phone !== undefined && { phone }),
+        ...(email !== undefined && { email }),
+        ...(website !== undefined && { website }),
+        ...(vatNumber !== undefined && { vatNumber }),
+        ...(legalName !== undefined && { legalName }),
+        updatedAt: new Date(),
+      },
+      select: { id: true, name: true, address: true, phone: true, email: true, website: true, vatNumber: true, legalName: true },
+    });
     
     res.json({
       success: true,
       message: 'Informations de l\'entreprise mises à jour avec succès',
-      data: updateData
+      data: updated,
     });
     
   } catch (error) {
@@ -75,21 +81,25 @@ router.get('/settings', requireRole(['admin', 'super_admin']), async (req: Authe
   try {
     const { organizationId } = req.user!;
 
-    // TODO: Récupérer les paramètres depuis la base de données
+    const org = await db.organization.findUnique({
+      where: { id: organizationId },
+      select: { id: true, name: true },
+    });
+
+    if (!org) return res.status(404).json({ success: false, message: 'Organisation introuvable' });
+
+    // Paramètres applicatifs (non stockés en DB pour l'instant)
     const settings = {
       organizationId,
-      currency: "EUR",
-      timezone: "Europe/Brussels",
-      language: "fr",
-      dateFormat: "DD/MM/YYYY",
-      invoicePrefix: "INV-",
-      quotePrefix: "DEV-"
+      currency: 'EUR',
+      timezone: 'Europe/Brussels',
+      language: 'fr',
+      dateFormat: 'DD/MM/YYYY',
+      invoicePrefix: 'INV-',
+      quotePrefix: 'DEV-',
     };
     
-    res.json({
-      success: true,
-      data: settings
-    });
+    res.json({ success: true, data: settings });
     
   } catch (error) {
     console.error('❌ [CompanyAPI] Erreur paramètres entreprise:', error);

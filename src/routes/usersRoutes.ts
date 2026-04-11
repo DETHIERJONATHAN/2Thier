@@ -3,6 +3,7 @@ import { authMiddleware } from '../middlewares/auth.js';
 import { requireRole } from '../middlewares/requireRole.js';
 import invitationRoutes from './invitations.js';
 import { db } from '../lib/database';
+import { SF } from '../components/zhiive/ZhiiveTheme';
 import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
 import { randomBytes } from 'crypto';
@@ -880,7 +881,7 @@ router.post('/:userId/resend-verification', requireRole(['admin', 'super_admin']
             <div style="text-align: center; margin-bottom: 30px;">
               <h1 style="color: #2563eb; margin: 0; font-size: 28px;">Zhiive</h1>
             </div>
-            <h2 style="color: #1a1a2e; margin-top: 0;">Bonjour ${firstName} !</h2>
+            <h2 style="color: ${SF.dark}; margin-top: 0;">Bonjour ${firstName} !</h2>
             <p style="color: #444; line-height: 1.6;">Un administrateur vous a renvoy&eacute; le lien d'activation. Cliquez ci-dessous pour activer votre compte :</p>
             <p style="text-align: center; margin: 35px 0;">
               <a href="${verifyUrl}" style="background-color: #2563eb; color: white; padding: 14px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block;">Activer mon compte</a>

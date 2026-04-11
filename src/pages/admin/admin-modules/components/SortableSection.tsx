@@ -1,3 +1,4 @@
+import {FB, SF} from '../../../../components/zhiive/ZhiiveTheme';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Button,
@@ -21,13 +22,6 @@ import { useAuth } from '../../../../auth/useAuth';
 import IconRenderer from './shared/IconRenderer';
 
 // ── Facebook Design Tokens ──
-const FB = {
-  bg: '#f0f2f5', white: '#ffffff', text: '#050505', textSecondary: '#65676b',
-  blue: '#1877f2', blueHover: '#166fe5', border: '#ced0d4', btnGray: '#e4e6eb',
-  btnGrayHover: '#d8dadf', green: '#42b72a', red: '#e4405f', orange: '#f7931a',
-  shadow: '0 1px 2px rgba(0,0,0,0.1)', radius: 8,
-};
-
 // ── FBToggle (identique à UsersAdminPageNew) ──
 const FBToggle = ({ checked, onChange, disabled, size = 'small' }: {
   checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; size?: 'small' | 'default';
@@ -87,7 +81,7 @@ const DraggableModuleCard: React.FC<DraggableModuleCardProps> = ({
 
   const isGlobal = !module.organizationId;
   const badge = isGlobal ? (
-       <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 12, background: '#e7f3ff', color: '#1877f2', fontWeight: 600 }}>Global</span>
+       <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 12, background: FB.activeBlue, color: FB.blue, fontWeight: 600 }}>Global</span>
   ) : module.feature?.startsWith('super_admin_') ? (
        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 12, background: '#fff3e0', color: '#f7931a', fontWeight: 600 }}>Super Admin</span>
   ) : (
@@ -137,13 +131,13 @@ const DraggableModuleCard: React.FC<DraggableModuleCardProps> = ({
               <div
                 style={{
                   borderRadius: 8, padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  backgroundColor: `${module.iconColor || section.iconColor || '#3b82f6'}15`,
+                  backgroundColor: `${module.iconColor || section.iconColor || SF.blue}15`,
                   width: 40, height: 40,
                 }}
               >
                 <IconRenderer 
                   name={module.icon || 'AppstoreOutlined'} 
-                  color={module.iconColor || section.iconColor || '#3b82f6'} 
+                  color={module.iconColor || section.iconColor || SF.blue} 
                   size={20} 
                 />
               </div>
@@ -346,7 +340,7 @@ export const SortableSection: React.FC<SortableSectionProps> = ({
     });
   };
 
-  // ── FB Action Button (identical to UsersAdminPageNew) ──
+  // ──FB, SFAction Button (identical to UsersAdminPageNew) ──
   const ActionBtn = ({ label, icon, onClick, danger, primary, disabled }: {
     label: string; icon: string; onClick: () => void;
     danger?: boolean; primary?: boolean; disabled?: boolean;
@@ -392,7 +386,7 @@ export const SortableSection: React.FC<SortableSectionProps> = ({
             <div 
               style={{
                 height: 44, width: 44, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                backgroundColor: `${section.iconColor || '#3b82f6'}15`,
+                backgroundColor: `${section.iconColor || SF.blue}15`,
               }}
             >
               {iconEl}
@@ -428,7 +422,7 @@ export const SortableSection: React.FC<SortableSectionProps> = ({
                     fontSize: 11, color: FB.text,
                   }}
                 >
-                  <IconRenderer name={module.icon || 'AppstoreOutlined'} color={module.iconColor || section.iconColor || '#3b82f6'} size={12} />
+                  <IconRenderer name={module.icon || 'AppstoreOutlined'} color={module.iconColor || section.iconColor || SF.blue} size={12} />
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 100 }}>{module.label}</span>
                 </div>
               ))}
@@ -441,7 +435,7 @@ export const SortableSection: React.FC<SortableSectionProps> = ({
           )}
         </div>
 
-        {/* Toolbar - FB style action buttons like UsersAdminPageNew */}
+        {/* Toolbar -FB, SFstyle action buttons like UsersAdminPageNew */}
         <div style={{
           padding: '10px 20px', borderTop: `1px solid ${FB.border}`, background: FB.white,
           display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 10,

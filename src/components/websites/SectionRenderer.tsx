@@ -1,3 +1,4 @@
+import { SF, WEBSITE_DEFAULTS } from '../zhiive/ZhiiveTheme';
 import React, { useEffect, useState } from 'react';
 import { Layout, Card, Row, Col, Typography, Button, Space, Statistic, Carousel, Steps, Tag, List, Spin } from 'antd';
 import {
@@ -44,17 +45,17 @@ const iconMap: Record<string, React.ReactNode> = {
   ThunderboltOutlined: <ThunderboltOutlined style={{ fontSize: '48px' }} />,
   StarFilled: <StarFilled style={{ fontSize: '48px' }} />,
   EnvironmentOutlined: <EnvironmentOutlined style={{ fontSize: '48px' }} />,
-  CheckCircleOutlined: <CheckCircleOutlined style={{ fontSize: '48px', color: '#10b981' }} />,
-  SafetyCertificateOutlined: <SafetyCertificateOutlined style={{ fontSize: '48px', color: '#10b981' }} />,
-  CustomerServiceOutlined: <CustomerServiceOutlined style={{ fontSize: '48px', color: '#10b981' }} />,
-  RocketOutlined: <RocketOutlined style={{ fontSize: '32px', color: '#10b981' }} />,
-  BulbOutlined: <BulbOutlined style={{ fontSize: '32px', color: '#f59e0b' }} />,
-  CarOutlined: <CarOutlined style={{ fontSize: '32px', color: '#3b82f6' }} />,
-  FireOutlined: <FireOutlined style={{ fontSize: '32px', color: '#ef4444' }} />,
+  CheckCircleOutlined: <CheckCircleOutlined style={{ fontSize: '48px', color: WEBSITE_DEFAULTS.primaryColor }} />,
+  SafetyCertificateOutlined: <SafetyCertificateOutlined style={{ fontSize: '48px', color: WEBSITE_DEFAULTS.primaryColor }} />,
+  CustomerServiceOutlined: <CustomerServiceOutlined style={{ fontSize: '48px', color: WEBSITE_DEFAULTS.primaryColor }} />,
+  RocketOutlined: <RocketOutlined style={{ fontSize: '32px', color: WEBSITE_DEFAULTS.primaryColor }} />,
+  BulbOutlined: <BulbOutlined style={{ fontSize: '32px', color: SF.amber }} />,
+  CarOutlined: <CarOutlined style={{ fontSize: '32px', color: SF.blue }} />,
+  FireOutlined: <FireOutlined style={{ fontSize: '32px', color: SF.red }} />,
   CloudOutlined: <CloudOutlined style={{ fontSize: '32px', color: '#06b6d4' }} />,
   ToolOutlined: <ToolOutlined style={{ fontSize: '32px', color: '#64748b' }} />,
-  TeamOutlined: <TeamOutlined style={{ fontSize: '32px', color: '#10b981' }} />,
-  PhoneOutlined: <PhoneOutlined style={{ fontSize: '32px', color: '#10b981' }} />
+  TeamOutlined: <TeamOutlined style={{ fontSize: '32px', color: WEBSITE_DEFAULTS.primaryColor }} />,
+  PhoneOutlined: <PhoneOutlined style={{ fontSize: '32px', color: WEBSITE_DEFAULTS.primaryColor }} />
 };
 
 // Helper pour extraire le texte d'un champ (objet ou string)
@@ -110,7 +111,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
   switch (section.type) {
     case 'header':
       const logoText = getText(section.content?.logo, 'Logo');
-      const logoColor = typeof section.content?.logo === 'object' ? section.content.logo.color : '#10b981';
+      const logoColor = typeof section.content?.logo === 'object' ? section.content.logo.color : WEBSITE_DEFAULTS.primaryColor;
       const ctaButtonText = getText(section.content?.ctaButton, 'CTA');
       
       return (
@@ -132,7 +133,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
           <Title level={3} style={{ margin: 0, color: logoColor }}>
             {logoText}
           </Title>
-          <Button type="primary" size="large" style={{ backgroundColor: '#10b981', borderColor: '#10b981' }}>
+          <Button type="primary" size="large" style={{ backgroundColor: WEBSITE_DEFAULTS.primaryColor, borderColor: WEBSITE_DEFAULTS.primaryColor }}>
             {ctaButtonText}
           </Button>
         </Header>
@@ -144,7 +145,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
       
       return (
         <div style={{
-          background: section.content?.backgroundGradient || bgColor || 'linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)',
+          background: section.content?.backgroundGradient || bgColor || WEBSITE_DEFAULTS.gradientFull,
           minHeight: '600px',
           display: 'flex',
           alignItems: 'center',
@@ -183,7 +184,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
                         fontSize: '18px',
                         backgroundColor: btn.backgroundColor || (idx === 0 ? 'white' : 'rgba(255,255,255,0.1)'),
                         borderColor: btn.borderColor || 'white',
-                        color: btn.textColor || (idx === 0 ? '#10b981' : 'white'),
+                        color: btn.textColor || (idx === 0 ? WEBSITE_DEFAULTS.primaryColor : 'white'),
                         fontWeight: btn.fontWeight || (idx === 0 ? 'bold' : 'normal')
                       }}
                     >
@@ -228,13 +229,13 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
                     boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
                   }}
                 >
-                  <div style={{ fontSize: '48px', marginBottom: '8px', color: stat.color || '#10b981' }}>
+                  <div style={{ fontSize: '48px', marginBottom: '8px', color: stat.color || WEBSITE_DEFAULTS.primaryColor }}>
                     {statsIconMap[stat.icon] || stat.icon}
                   </div>
                   <Statistic 
                     title={stat.label}
                     value={stat.value}
-                    valueStyle={{ color: stat.color || '#10b981', fontSize: '32px', fontWeight: 'bold' }}
+                    valueStyle={{ color: stat.color || WEBSITE_DEFAULTS.primaryColor, fontSize: '32px', fontWeight: 'bold' }}
                   />
                 </Card>
               </Col>
@@ -303,7 +304,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
                           renderItem={(feature: string) => (
                             <List.Item style={{ border: 'none', padding: '4px 0' }}>
                               <Text style={{ fontSize: '14px', color: '#475569' }}>
-                                <CheckCircleOutlined style={{ color: '#10b981', marginRight: '8px' }} />
+                                <CheckCircleOutlined style={{ color: WEBSITE_DEFAULTS.primaryColor, marginRight: '8px' }} />
                                 {feature}
                               </Text>
                             </List.Item>
@@ -319,8 +320,8 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
                           block
                           style={{ 
                             marginTop: 'auto',
-                            backgroundColor: '#10b981',
-                            borderColor: '#10b981',
+                            backgroundColor: WEBSITE_DEFAULTS.primaryColor,
+                            borderColor: WEBSITE_DEFAULTS.primaryColor,
                             height: '48px',
                             fontSize: '16px',
                             fontWeight: '600'
@@ -376,7 +377,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
                       ) : (
                         <div style={{ 
                           height: '200px', 
-                          background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                          background: WEBSITE_DEFAULTS.gradient,
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -437,7 +438,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
                 {getText(section.content?.title, '⭐ Témoignages Clients')}
               </Title>
               {section.content?.summary && (
-                <Text style={{ fontSize: '20px', color: '#10b981', fontWeight: '600' }}>
+                <Text style={{ fontSize: '20px', color: WEBSITE_DEFAULTS.primaryColor, fontWeight: '600' }}>
                   ⭐ {getText(section.content.summary)}
                 </Text>
               )}
@@ -595,7 +596,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
                     width: '48px', 
                     height: '48px', 
                     borderRadius: '50%', 
-                    background: '#10b981',
+                    background: WEBSITE_DEFAULTS.primaryColor,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -617,7 +618,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
       
       return (
         <div style={{
-          background: section.content?.backgroundGradient || bgColor || 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+          background: section.content?.backgroundGradient || bgColor || WEBSITE_DEFAULTS.gradient,
           padding: '80px 24px',
           textAlign: 'center'
         }}>
@@ -638,7 +639,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
                     style={{ 
                       background: btn.backgroundColor || (idx === 0 ? 'white' : 'rgba(255,255,255,0.1)'),
                       borderColor: btn.borderColor || 'white',
-                      color: btn.textColor || (idx === 0 ? '#10b981' : 'white'),
+                      color: btn.textColor || (idx === 0 ? WEBSITE_DEFAULTS.primaryColor : 'white'),
                       height: 'auto',
                       padding: '16px 32px',
                       fontSize: '18px',

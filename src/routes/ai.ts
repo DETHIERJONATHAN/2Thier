@@ -1,3 +1,4 @@
+import { WEBSITE_DEFAULTS } from '../components/zhiive/ZhiiveTheme';
 /**
  * 🤖 ROUTES API INTELLIGENCE ARTIFICIELLE
  * Routes pour l'assistant IA vocal et les recommandations intelligentes
@@ -229,7 +230,7 @@ ${JSON.stringify(content, null, 2).slice(0, 3000)}
       "changes": { 
         "<nomDuChamp>": "<valeurProposée>",
         "// Exemple: title": "Nouveau titre optimisé",
-        "// Exemple: backgroundColor": "#10b981"
+        "// Exemple: backgroundColor": WEBSITE_DEFAULTS.primaryColor
       },
       "preview": {
         "before": "<valeur actuelle dans CETTE section>",
@@ -492,7 +493,7 @@ function generateMockSectionAnalysis(sectionType: string, content: any): any {
         changes: { 
           buttonText: 'Commencer maintenant',
           buttonSize: 'large',
-          buttonColor: '#10b981'
+          buttonColor: WEBSITE_DEFAULTS.primaryColor
         },
         preview: { 
           before: 'Pas de bouton', 
@@ -512,7 +513,7 @@ function generateMockSectionAnalysis(sectionType: string, content: any): any {
         impact: 'high',
         changes: { 
           backgroundColor: '#f0fdf4',
-          borderColor: '#10b981',
+          borderColor: WEBSITE_DEFAULTS.primaryColor,
           borderWidth: '2px'
         },
         preview: { 

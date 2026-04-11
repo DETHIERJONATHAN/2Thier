@@ -10,14 +10,15 @@ const prisma = db;
 // Étendre le type Request pour inclure user et les fichiers uploadés
 export interface AuthenticatedRequest extends ExpressRequest {
   user?: {
+    id: string;         // Alias de userId pour compatibilité avec les routes
     userId: string;
     role: string;
     organizationId: string | null;
-    roles?: string[]; // Ajout pour la compatibilité avec requireSuperAdmin
-    firstname?: string; // Ajout pour personnaliser l'utilisateur
-    lastname?: string;  // Ajout pour personnaliser l'utilisateur
-    email?: string;     // Ajout pour personnaliser l'utilisateur
-    isSuperAdmin?: boolean; // 👑 CRUCIAL: Pour que les middlewares reconnaissent le SuperAdmin ! 👑
+    roles?: string[];
+    firstname?: string;
+    lastname?: string;
+    email?: string;
+    isSuperAdmin?: boolean;
   };
   originalUser?: { // Pour l'usurpation
     userId: string;
@@ -107,6 +108,7 @@ export const authMiddleware = async (req: AuthenticatedRequest, res: Response, n
         
         // Configurer l'utilisateur dans la requête
         req.user = {
+            id: user.id,
             userId: user.id,
             role: user.role || 'user',
             organizationId,

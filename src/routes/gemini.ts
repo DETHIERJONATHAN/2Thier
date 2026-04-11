@@ -6,6 +6,7 @@
 import express from 'express';
 import { getGeminiService } from '../services/GoogleGeminiService';
 import { authenticateToken } from '../middleware/auth';
+import { db } from '../lib/database';
 
 const router = express.Router();
 const geminiService = getGeminiService();
@@ -268,18 +269,18 @@ router.get('/test', async (req, res) => {
  */
 router.get('/stats', async (req, res) => {
   try {
-    // TODO: Implémenter le tracking des statistiques
+    const organizationId = (req as any).user?.organizationId;
+    const where = organizationId ? { organizationId } : {};
+    const [total, lastEntry] = await Promise.all([
+      db.aIRecommendation.count({ where }),
+      db.aIRecommendation.findFirst({ where, orderBy: { createdAt: 'desc' }, select: { createdAt: true } }),
+    ]);
     res.json({
       success: true,
       stats: {
-        emailsGenerated: 0,
-        leadsAnalyzed: 0,
-        proposalsCreated: 0,
-        sentimentAnalyses: 0,
-        responseSuggestions: 0,
-        lastUsed: new Date().toISOString()
+        totalRecommendations: total,
+        lastUsed: lastEntry?.createdAt ?? null,
       },
-      message: 'Statistiques Gemini (à implémenter)'
     });
   } catch (error) {
     console.error('❌ Erreur stats Gemini:', error);

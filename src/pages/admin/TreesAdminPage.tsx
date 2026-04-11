@@ -1,3 +1,4 @@
+import { FB } from '../../components/zhiive/ZhiiveTheme';
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Card, Table, Button, Modal, Form, Select, Tag, Space,
@@ -20,14 +21,6 @@ const { Panel } = Collapse;
 const { Option } = Select;
 
 // ── Facebook Design Tokens ──
-const FB = {
-  bg: '#f0f2f5', white: '#ffffff', text: '#050505', textSecondary: '#65676b',
-  blue: '#1877f2', blueHover: '#166fe5', border: '#ced0d4',
-  btnGray: '#e4e6eb', btnGrayHover: '#d8dadf',
-  green: '#42b72a', red: '#e4405f', orange: '#f7931a', purple: '#722ed1',
-  shadow: '0 1px 2px rgba(0,0,0,0.1)', radius: 8,
-};
-
 // ── FBToggle (identique à UsersAdminPageNew) ──
 const FBToggle = ({ checked, onChange, disabled, size = 'small' }: {
   checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; size?: 'small' | 'default';

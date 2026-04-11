@@ -17,7 +17,7 @@ import {
 import { useAuth } from '../../auth/useAuth';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 
-import { SF } from '../../components/zhiive/ZhiiveTheme';
+import { SF, FB } from '../../components/zhiive/ZhiiveTheme';
 
 // ── Responsive Hook ──
 function useScreenSize() {
@@ -31,13 +31,6 @@ function useScreenSize() {
 }
 
 // ── Design Tokens ──
-const FB = {
-  bg: '#f0f2f5', white: '#ffffff', text: '#050505', textSecondary: '#65676b',
-  blue: '#1877f2', blueHover: '#166fe5', border: '#ced0d4',
-  green: '#42b72a', red: '#e4405f', orange: '#f7931a', purple: SF.primary,
-  shadow: '0 1px 2px rgba(0,0,0,0.1)', radius: 8,
-};
-
 // ── Section Component ──
 interface SettingSectionProps {
   icon: React.ReactNode;
@@ -398,7 +391,7 @@ export default function SocialSettingsAdminPage() {
           width: '100%', maxWidth: isTablet ? 200 : 240, margin: '0 auto',
           border: `2px solid ${FB.border}`,
           borderRadius: 20, padding: 8,
-          background: '#1a1a2e',
+          background: SF.dark,
           minHeight: isTablet ? 300 : 380,
         }}>
           {/* Status Bar */}
@@ -465,7 +458,7 @@ export default function SocialSettingsAdminPage() {
             {/* Spark Preview */}
             {settings.sparksEnabled && (
               <div style={{
-                background: 'linear-gradient(135deg, #6C5CE730, #a29bfe30)',
+                background: `linear-gradient(135deg, ${SF.primary}30, ${SF.primaryLight}30)`,  
                 borderRadius: 8, padding: 8,
               }}>
                 <div style={{ fontSize: 8, color: '#ccc' }}>✨ Spark anonyme</div>
@@ -477,7 +470,7 @@ export default function SocialSettingsAdminPage() {
           {/* Disabled indicator */}
           {disabledApps.length > 0 && (
             <div style={{ padding: '6px 8px', borderTop: '1px solid #3a3a5a' }}>
-              <div style={{ fontSize: 7, color: '#ff6b6b' }}>
+              <div style={{ fontSize: 7, color: SF.like }}>
                 Désactivés : {(disabledApps as string[]).join(', ')}
               </div>
             </div>

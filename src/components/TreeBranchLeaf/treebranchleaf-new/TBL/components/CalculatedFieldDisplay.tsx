@@ -1,3 +1,4 @@
+import { SF } from '../../../../../components/zhiive/ZhiiveTheme';
 import React from 'react';
 import { Spin, Alert, Tag } from 'antd';
 import { EyeInvisibleOutlined } from '@ant-design/icons';
@@ -142,7 +143,7 @@ export const CalculatedFieldDisplay: React.FC<CalculatedFieldDisplayProps> = ({
   };
 
   return (
-    <span style={{ fontWeight: 'bold', color: '#047857' }}>
+    <span style={{ fontWeight: 'bold', color: SF.emeraldDeep }}>
       {formatValue(value)}
       {/* 👑 Badge Super Admin pour les valeurs cachées */}
       {!isVisible && isSuperAdmin && (

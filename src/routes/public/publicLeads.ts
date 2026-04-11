@@ -201,9 +201,19 @@ router.post('/leads', publicLeadLimiter, validatePublicLead, async (req, res) =>
     });
 
 
-    // TODO: Déclencher processus de qualification IA et notification
-    // await triggerAIQualification(newLead.id);
-    // await notifyAvailableProfessionals(newLead);
+    // Déclencher un TimelineEvent pour notifier l'équipe (traitement asynchrone non-bloquant)
+    prisma.timelineEvent.create({
+      data: {
+        id: crypto.randomUUID(),
+        leadId: newLead.id,
+        organizationId: newLead.organizationId,
+        entityType: 'lead',
+        entityId: newLead.id,
+        eventType: 'lead_received',
+        data: { aiQualityScore, source: utmSource ?? 'public_form', title: 'Nouveau lead public reçu' } as any,
+        createdAt: new Date(),
+      },
+    }).catch(err => console.error('⚠️ [PUBLIC-API] TimelineEvent non créé:', err));
 
     // Réponse de succès
     res.status(201).json({

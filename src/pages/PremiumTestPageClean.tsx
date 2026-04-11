@@ -1,3 +1,4 @@
+import { SF } from '../components/zhiive/ZhiiveTheme';
 import React, { useState } from 'react';
 import { 
   Card, 
@@ -285,17 +286,17 @@ const PremiumTestPageClean: React.FC = () => {
               {/* Barres de progression épurées */}
               <div className="border-l-4 border-blue-500 pl-4 py-2">
                 <Text className="text-sm text-gray-600 mb-2 block">Objectif Mensuel</Text>
-                <Progress percent={75} strokeColor="#3b82f6" />
+                <Progress percent={75} strokeColor=SF.blue />
               </div>
               
               <div className="border-l-4 border-green-500 pl-4 py-2">
                 <Text className="text-sm text-gray-600 mb-2 block">Satisfaction Client</Text>
-                <Progress percent={92} strokeColor="#10b981" />
+                <Progress percent={92} strokeColor={SF.emerald} />
               </div>
               
               <div className="border-l-4 border-orange-500 pl-4 py-2">
                 <Text className="text-sm text-gray-600 mb-2 block">Performance Équipe</Text>
-                <Progress percent={84} strokeColor="#f59e0b" />
+                <Progress percent={84} strokeColor=SF.amber />
               </div>
 
               {/* Actions rapides */}

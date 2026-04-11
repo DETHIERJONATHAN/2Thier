@@ -11,6 +11,7 @@ import listPlugin from '@fullcalendar/list';
 import frLocale from '@fullcalendar/core/locales/fr';
 import dayjs from 'dayjs';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { SF } from '../../components/zhiive/ZhiiveTheme';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -103,9 +104,9 @@ function encodePriority(notes: string | undefined, priority: string | undefined)
   return `[priority:${priority}] ${cleaned}`.trim();
 }
 
-export default function AgendaPage() {
+export default function AgendaPage({ compact }: { compact?: boolean }) {
   const screens = Grid.useBreakpoint();
-  const isMobile = !screens.md; // <768px
+  const isMobile = compact || !screens.md; // compact = sidebar mode, or <768px viewport
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -231,9 +232,9 @@ export default function AgendaPage() {
         bgColor = event.callDirection === 'outbound' ? '#3498db' : '#27ae60';
         borderColor = event.callDirection === 'outbound' ? '#2980b9' : '#219a52';
       } else if (hasLink) {
-        bgColor = '#3b82f6'; borderColor = '#2563eb';
+        bgColor = SF.blue; borderColor = SF.blueDark;
       } else {
-        bgColor = '#10b981'; borderColor = '#059669';
+        bgColor = SF.emerald; borderColor = SF.emeraldDark;
       }
 
       let prefix = '';
@@ -539,36 +540,127 @@ export default function AgendaPage() {
   );
 
   return (
-    <div className="agenda-page" style={{ padding: isMobile ? 0 : 24 }}>
+    <div className="agenda-page" style={{ padding: isMobile ? 0 : 24, maxWidth: '100%', overflow: 'hidden' }}>
       {/* === MOBILE CSS FullCalendar === */}
       {isMobile && (
         <style>{`
-          .agenda-page .fc { font-size: 12px; }
-          .agenda-page .fc .fc-toolbar { padding: 6px 8px; margin-bottom: 0 !important; gap: 4px; }
-          .agenda-page .fc .fc-toolbar-title { font-size: 14px !important; font-weight: 600; }
-          .agenda-page .fc .fc-button { padding: 4px 8px; font-size: 12px; height: 28px; }
-          .agenda-page .fc .fc-button-group .fc-button { padding: 4px 6px; }
-          .agenda-page .fc .fc-daygrid-day { min-height: 60px; }
-          .agenda-page .fc .fc-daygrid-day-number { font-size: 12px; padding: 2px 4px; }
-          .agenda-page .fc .fc-daygrid-event { font-size: 11px; padding: 1px 3px; margin: 0 1px 1px; border-radius: 3px; }
-          .agenda-page .fc .fc-list-event { font-size: 13px; }
-          .agenda-page .fc .fc-list-event-time { font-size: 12px; }
-          .agenda-page .fc .fc-list-day-cushion { padding: 4px 8px; font-size: 13px; }
-          .agenda-page .fc .fc-col-header-cell { font-size: 11px; padding: 4px 0; }
-          .agenda-page .fc .fc-scrollgrid { border: none; }
-          .agenda-page .fc .fc-more-link { font-size: 11px; }
-          .agenda-page .mf { display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; height: 26px; border-radius: 13px; border: 1.5px solid #e0e0e0; cursor: pointer; transition: all 0.15s; background: #fff; font-size: 11px; font-weight: 600; white-space: nowrap; color: #666; }
+          .agenda-page .fc { font-size: 11px; max-width: 100%; overflow: hidden; }
+          .agenda-page .fc .fc-toolbar { padding: 6px 8px; margin-bottom: 0 !important; gap: 4px; flex-wrap: wrap; justify-content: center; }
+          .agenda-page .fc .fc-toolbar-title { font-size: 13px !important; font-weight: 700; color: ${SF.text}; text-transform: capitalize; }
+          .agenda-page .fc .fc-button {
+            padding: 0 8px !important; font-size: 11px !important;
+            height: 28px !important; min-height: 28px !important; max-height: 28px !important;
+            border-radius: 14px !important;
+            font-weight: 600; border: 1.5px solid ${SF.border} !important;
+            background: ${SF.cardBg} !important; color: ${SF.text} !important;
+            box-shadow: none !important; text-transform: capitalize;
+            transition: all 0.2s ease;
+            box-sizing: border-box !important; line-height: 25px !important;
+            vertical-align: middle !important; margin: 0 !important;
+          }
+          .agenda-page .fc .fc-button:hover { background: ${SF.primary}10 !important; border-color: ${SF.primary}60 !important; }
+          .agenda-page .fc .fc-button-active {
+            background: ${SF.primary} !important; color: #fff !important;
+            border-color: ${SF.primary} !important;
+          }
+          .agenda-page .fc .fc-button-group { border-radius: 14px; overflow: hidden; display: inline-flex !important; align-items: center !important; }
+          .agenda-page .fc .fc-button-group .fc-button { border-radius: 0 !important; margin: 0 !important; border-left-width: 0 !important; height: 28px !important; min-height: 28px !important; max-height: 28px !important; line-height: 25px !important; padding: 0 8px !important; }
+          .agenda-page .fc .fc-button-group .fc-button:first-child { border-radius: 14px 0 0 14px !important; border-left-width: 1.5px !important; }
+          .agenda-page .fc .fc-button-group .fc-button:last-child { border-radius: 0 14px 14px 0 !important; }
+          .agenda-page .fc .fc-prev-button, .agenda-page .fc .fc-next-button {
+            width: 28px !important; height: 28px !important; min-height: 28px !important; max-height: 28px !important;
+            padding: 0 !important;
+            display: inline-flex !important; align-items: center !important; justify-content: center !important;
+            border-radius: 50% !important; background: ${SF.cardBg} !important;
+            color: ${SF.primary} !important; border: 1.5px solid ${SF.primary}30 !important;
+            box-sizing: border-box !important;
+          }
+          .agenda-page .fc .fc-prev-button:hover, .agenda-page .fc .fc-next-button:hover {
+            background: ${SF.primary}15 !important; border-color: ${SF.primary} !important;
+          }
+          .agenda-page .fc .fc-today-button { font-size: 10px !important; padding: 0 8px !important; height: 28px !important; min-height: 28px !important; max-height: 28px !important; border-radius: 14px !important; line-height: 25px !important; }
+          .agenda-page .fc .fc-toolbar-chunk { overflow: hidden; display: flex !important; flex-wrap: wrap; gap: 4px; align-items: center !important; }
+          .agenda-page .fc .fc-daygrid-day { min-height: 50px; }
+          .agenda-page .fc .fc-daygrid-day-number { font-size: 11px; padding: 2px 3px; }
+          .agenda-page .fc .fc-daygrid-event { font-size: 10px; padding: 1px 3px; margin: 0 1px 1px; border-radius: 4px; }
+          .agenda-page .fc .fc-list-event { font-size: 12px; }
+          .agenda-page .fc .fc-list-event-time { font-size: 11px; }
+          .agenda-page .fc .fc-list-day-cushion { padding: 4px 6px; font-size: 12px; }
+          .agenda-page .fc .fc-col-header-cell { font-size: 10px; padding: 3px 0; }
+          .agenda-page .fc .fc-scrollgrid { border: none; max-width: 100%; }
+          .agenda-page .fc .fc-scrollgrid-section > td,
+          .agenda-page .fc .fc-scrollgrid-section > th { overflow: hidden; }
+          .agenda-page .fc .fc-more-link { font-size: 10px; }
+          .agenda-page .fc .fc-view-harness { overflow-x: auto; overflow-y: hidden; }
+          .agenda-page .fc table { table-layout: fixed; width: 100% !important; }
+          .agenda-page .ant-card { max-width: 100% !important; overflow: hidden; }
+          .agenda-page .mf { display: inline-flex; align-items: center; gap: 2px; padding: 0 6px; height: 28px; border-radius: 14px; border: 1.5px solid #e0e0e0; cursor: pointer; transition: all 0.15s; background: #fff; font-size: 11px; font-weight: 600; white-space: nowrap; color: #666; }
           .agenda-page .mf.on { color: #fff; border-color: transparent; }
           .agenda-page .mf.off { opacity: 0.35; }
-          .agenda-page .mobile-segment { padding: 8px 12px 0; }
-          .agenda-page .mobile-segment .ant-segmented { border-radius: 8px; }
-          .agenda-page .mobile-segment .ant-segmented-item { min-height: 36px; font-size: 13px; }
+          .agenda-page .mobile-segment { padding: 6px 6px 0; }
+          .agenda-page .mobile-segment .ant-segmented { border-radius: 8px; width: 100%; }
+          .agenda-page .mobile-segment .ant-segmented-item { min-height: 32px; font-size: 12px; }
+        `}</style>
+      )}
+
+      {!isMobile && (
+        <style>{`
+          .agenda-page .fc .fc-toolbar-title { font-size: 16px; font-weight: 700; color: ${SF.text}; text-transform: capitalize; }
+          .agenda-page .fc .fc-button {
+            padding: 0 12px !important; font-size: 12px !important;
+            height: 30px !important; min-height: 30px !important; max-height: 30px !important;
+            border-radius: 15px !important;
+            font-weight: 600; border: 1.5px solid ${SF.border} !important;
+            background: ${SF.cardBg} !important; color: ${SF.text} !important;
+            box-shadow: none !important; text-transform: capitalize;
+            transition: all 0.2s ease;
+            box-sizing: border-box !important; line-height: 27px !important;
+            vertical-align: middle !important; margin: 0 !important;
+          }
+          .agenda-page .fc .fc-button:hover { background: ${SF.primary}12 !important; border-color: ${SF.primary}60 !important; color: ${SF.primary} !important; }
+          .agenda-page .fc .fc-button-active {
+            background: ${SF.primary} !important; color: #fff !important;
+            border-color: ${SF.primary} !important;
+          }
+          .agenda-page .fc .fc-button-group { border-radius: 15px; overflow: hidden; gap: 0; display: inline-flex !important; align-items: center !important; }
+          .agenda-page .fc .fc-button-group .fc-button { border-radius: 0 !important; margin: 0 !important; border-left-width: 0 !important; height: 30px !important; min-height: 30px !important; max-height: 30px !important; line-height: 27px !important; }
+          .agenda-page .fc .fc-button-group .fc-button:first-child { border-radius: 15px 0 0 15px !important; border-left-width: 1.5px !important; }
+          .agenda-page .fc .fc-button-group .fc-button:last-child { border-radius: 0 15px 15px 0 !important; }
+          .agenda-page .fc .fc-prev-button, .agenda-page .fc .fc-next-button {
+            width: 30px !important; height: 30px !important; min-height: 30px !important; max-height: 30px !important;
+            padding: 0 !important;
+            display: inline-flex !important; align-items: center !important; justify-content: center !important;
+            border-radius: 50% !important; background: ${SF.cardBg} !important;
+            color: ${SF.primary} !important; border: 1.5px solid ${SF.primary}30 !important;
+            box-sizing: border-box !important;
+          }
+          .agenda-page .fc .fc-prev-button:hover, .agenda-page .fc .fc-next-button:hover {
+            background: ${SF.primary}15 !important; border-color: ${SF.primary} !important; transform: scale(1.05);
+          }
+          .agenda-page .fc .fc-today-button {
+            height: 30px !important; min-height: 30px !important; max-height: 30px !important;
+            border-radius: 15px !important; background: ${SF.primary}10 !important;
+            color: ${SF.primary} !important; border-color: ${SF.primary}40 !important; font-weight: 600;
+          }
+          .agenda-page .fc .fc-today-button:hover { background: ${SF.primary}20 !important; }
+          .agenda-page .fc .fc-today-button:disabled { opacity: 0.4; }
+          .agenda-page .fc .fc-toolbar-chunk { display: flex !important; align-items: center !important; gap: 4px; }
+          .agenda-page .fc .fc-daygrid-event { border-radius: 4px; font-size: 12px; padding: 1px 4px; }
+          .agenda-page .fc .fc-toolbar { margin-bottom: 12px !important; }
+          .agenda-page .fc .fc-daygrid-day-frame { padding: 2px 4px; }
+          .agenda-page .fc .fc-daygrid-day.fc-day-today { background: ${SF.primary}08 !important; }
+          .agenda-page .fc .fc-daygrid-day.fc-day-today .fc-daygrid-day-number { 
+            background: ${SF.primary}; color: #fff; border-radius: 50%; width: 22px; height: 22px;
+            display: flex; align-items: center; justify-content: center; font-size: 12px;
+          }
+          .agenda-page > .ant-card { border-radius: 12px !important; box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important; border: 1px solid ${SF.border} !important; }
+          .agenda-page > .ant-card > .ant-card-body { padding: 0 !important; }
         `}</style>
       )}
 
       <Card
-        bodyStyle={{ padding: isMobile ? 0 : 24 }}
-        style={{ borderRadius: isMobile ? 0 : undefined, border: isMobile ? 'none' : undefined }}
+        bodyStyle={{ padding: isMobile ? 0 : 0 }}
+        style={{ borderRadius: isMobile ? 0 : undefined, border: isMobile ? 'none' : undefined, maxWidth: '100%', overflow: 'hidden' }}
       >
         {/* === HEADER === */}
         {isMobile ? (
@@ -577,53 +669,47 @@ export default function AgendaPage() {
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              height: 48,
-              padding: '0 10px',
+              height: 44,
+              padding: '0 4px',
               borderBottom: '1px solid #f0f0f0',
               background: '#fff',
               position: 'sticky' as const,
               top: 0,
               zIndex: 10,
-              gap: 8,
+              gap: 3,
+              maxWidth: '100%',
+              overflow: 'hidden',
             }}>
               {/* Left: title */}
-              <CalendarOutlined style={{ color: '#6C5CE7', fontSize: 16, flexShrink: 0 }} />
-              <span style={{ fontWeight: 700, fontSize: 15, flexShrink: 0 }}>Agenda</span>
+              <CalendarOutlined style={{ color: SF.primary, fontSize: 14, flexShrink: 0 }} />
+              <span style={{ fontWeight: 700, fontSize: 13, flexShrink: 0 }}>Agenda</span>
 
-              {/* Center: filter pills */}
-              <div style={{ flex: 1, display: 'flex', justifyContent: 'center', gap: 4 }}>
-                <div
+              {/* Center: filter pills — icons only to save space */}
+              <div style={{ flex: 1, display: 'flex', justifyContent: 'center', gap: 3, overflow: 'hidden' }}>
+                <Tooltip title="RDV"><div
                   className={`mf ${showEvents ? 'on' : 'off'}`}
-                  style={showEvents ? { background: '#10b981' } : {}}
+                  style={showEvents ? { background: SF.emerald } : {}}
                   onClick={() => setShowEvents(!showEvents)}
-                >
-                  <CalendarOutlined style={{ fontSize: 11 }} />RDV
-                </div>
-                <div
+                ><CalendarOutlined style={{ fontSize: 11 }} /></div></Tooltip>
+                <Tooltip title="Tâches"><div
                   className={`mf ${showTasks ? 'on' : 'off'}`}
                   style={showTasks ? { background: '#722ed1' } : {}}
                   onClick={() => setShowTasks(!showTasks)}
-                >
-                  <CheckSquareOutlined style={{ fontSize: 11 }} />Tâches
-                </div>
-                <div
+                ><CheckSquareOutlined style={{ fontSize: 11 }} /></div></Tooltip>
+                <Tooltip title="Sites"><div
                   className={`mf ${showChantier ? 'on' : 'off'}`}
                   style={showChantier ? { background: '#e67e22' } : {}}
                   onClick={() => setShowChantier(!showChantier)}
-                >
-                  <ToolOutlined style={{ fontSize: 11 }} />Sites
-                </div>
-                <div
+                ><ToolOutlined style={{ fontSize: 11 }} /></div></Tooltip>
+                <Tooltip title="Appels"><div
                   className={`mf ${showCalls ? 'on' : 'off'}`}
                   style={showCalls ? { background: '#3498db' } : {}}
                   onClick={() => setShowCalls(!showCalls)}
-                >
-                  <PhoneOutlined style={{ fontSize: 11 }} />Appels
-                </div>
+                ><PhoneOutlined style={{ fontSize: 11 }} /></div></Tooltip>
               </div>
 
-              {/* Right: tasks badge + solid add button */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+              {/* Right: tasks badge + add button */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                 <div
                   onClick={() => setTaskDrawerOpen(true)}
                   style={{ position: 'relative', cursor: 'pointer', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -633,7 +719,7 @@ export default function AgendaPage() {
                     <Badge
                       count={pendingTasks.length}
                       size="small"
-                      style={{ backgroundColor: '#722ed1', position: 'absolute', top: -4, right: -6, fontSize: 10 }}
+                      style={{ backgroundColor: '#722ed1', position: 'absolute', top: -4, right: -6, fontSize: 9 }}
                     />
                   )}
                 </div>
@@ -647,10 +733,11 @@ export default function AgendaPage() {
                   trigger={['click']}
                 >
                   <div style={{
-                    width: 32, height: 32, borderRadius: 8,
-                    background: '#1677ff', color: '#fff',
+                    width: 28, height: 28, borderRadius: 8,
+                    background: SF.primary, color: '#fff',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    cursor: 'pointer', fontWeight: 700, fontSize: 18,
+                    cursor: 'pointer', fontSize: 16,
+                    boxShadow: `0 2px 6px ${SF.primary}50`,
                   }}>
                     <PlusOutlined />
                   </div>
@@ -678,53 +765,52 @@ export default function AgendaPage() {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: 16,
+            padding: '12px 16px 12px',
+            borderBottom: `1px solid ${SF.border}`,
+            background: '#fff',
+            gap: 12,
             flexWrap: 'wrap',
-            gap: 8,
           }}>
-            <Title level={2} style={{ margin: 0 }}>
-              <CalendarOutlined style={{ color: '#6C5CE7', marginRight: 8 }} />
-              Agenda
-            </Title>
-            
-            <Space size={8} wrap>
-              <Tooltip title="Afficher/masquer les événements">
-                <Button
-                  icon={<CalendarOutlined />}
-                  type={showEvents ? 'primary' : 'default'}
-                  onClick={() => setShowEvents(!showEvents)}
-                  size="small"
-                />
-              </Tooltip>
-              <Tooltip title="Afficher/masquer les tâches">
-                <Button
-                  icon={<CheckSquareOutlined />}
-                  type={showTasks ? 'primary' : 'default'}
-                  style={showTasks ? { background: '#722ed1', borderColor: '#722ed1' } : {}}
-                  onClick={() => setShowTasks(!showTasks)}
-                  size="small"
-                />
-              </Tooltip>
-              <Tooltip title="Afficher/masquer les chantiers">
-                <Button
-                  type={showChantier ? 'primary' : 'default'}
-                  style={showChantier ? { background: '#e67e22', borderColor: '#e67e22' } : {}}
-                  onClick={() => setShowChantier(!showChantier)}
-                  size="small"
-                >
-                  🏗️
-                </Button>
-              </Tooltip>
-              <Tooltip title="Afficher/masquer les appels">
-                <Button
-                  type={showCalls ? 'primary' : 'default'}
-                  style={showCalls ? { background: '#3498db', borderColor: '#3498db' } : {}}
-                  onClick={() => setShowCalls(!showCalls)}
-                  size="small"
-                >
-                  📞
-                </Button>
-              </Tooltip>
+            {/* Left: title */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{
+                width: 34, height: 34, borderRadius: 10,
+                background: `linear-gradient(135deg, ${SF.primary}20, ${SF.primary}10)`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                border: `1.5px solid ${SF.primary}30`,
+              }}>
+                <CalendarOutlined style={{ color: SF.primary, fontSize: 16 }} />
+              </div>
+              <span style={{ fontWeight: 800, fontSize: 18, color: SF.text, letterSpacing: -0.3 }}>Agenda</span>
+            </div>
+
+            {/* Right: filter pills + add */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              {[
+                { key: 'events', icon: <CalendarOutlined />, label: 'RDV', color: SF.emerald, active: showEvents, toggle: () => setShowEvents(!showEvents) },
+                { key: 'tasks', icon: <CheckSquareOutlined />, label: 'Tâches', color: '#722ed1', active: showTasks, toggle: () => setShowTasks(!showTasks) },
+                { key: 'chantier', icon: <ToolOutlined />, label: 'Sites', color: '#e67e22', active: showChantier, toggle: () => setShowChantier(!showChantier) },
+                { key: 'calls', icon: <PhoneOutlined />, label: 'Appels', color: '#3498db', active: showCalls, toggle: () => setShowCalls(!showCalls) },
+              ].map(f => (
+                <Tooltip key={f.key} title={f.label}>
+                  <div
+                    onClick={f.toggle}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 5,
+                      padding: '0 12px', height: 30, borderRadius: 15, cursor: 'pointer',
+                      fontSize: 12, fontWeight: 600, transition: 'all 0.18s',
+                      background: f.active ? f.color + '15' : SF.bg,
+                      color: f.active ? f.color : SF.textSecondary,
+                      border: `1.5px solid ${f.active ? f.color + '50' : SF.border}`,
+                    }}
+                  >
+                    {f.icon}
+                    <span>{f.label}</span>
+                  </div>
+                </Tooltip>
+              ))}
+
+              <div style={{ width: 1, height: 20, background: SF.border, margin: '0 2px' }} />
 
               <Dropdown
                 menu={{
@@ -733,12 +819,21 @@ export default function AgendaPage() {
                     { key: 'task', icon: <CheckSquareOutlined />, label: 'Tâche', onClick: openNewTask },
                   ],
                 }}
+                trigger={['click']}
               >
-                <Button type="primary" icon={<PlusOutlined />} size="middle">
-                  Nouveau
-                </Button>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '0 14px', height: 30, borderRadius: 15, cursor: 'pointer',
+                  background: SF.primary, color: '#fff',
+                  fontWeight: 700, fontSize: 13,
+                  boxShadow: `0 2px 8px ${SF.primary}40`,
+                  transition: 'all 0.18s',
+                }}>
+                  <PlusOutlined style={{ fontSize: 13 }} />
+                  <span>Nouveau</span>
+                </div>
               </Dropdown>
-            </Space>
+            </div>
           </div>
         )}
 
@@ -747,12 +842,12 @@ export default function AgendaPage() {
           // Mobile layout
           <>
             {mobileView === 'calendar' && (
-              <div style={{ padding: '8px 0 0' }}>
+              <div style={{ padding: '4px 0 0' }}>
                 <FullCalendar
                   ref={calendarRef}
                   plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
                   headerToolbar={{
-                    left: 'prev,next today',
+                    left: 'prev,next',
                     center: 'title',
                     right: 'listWeek,dayGridMonth'
                   }}
@@ -762,7 +857,8 @@ export default function AgendaPage() {
                   selectMirror={true}
                   dayMaxEvents={3}
                   weekends={true}
-                  height="calc(100vh - 240px)"
+                  height="auto"
+                  contentHeight="auto"
                   events={fullCalendarEvents}
                   select={handleDateSelect}
                   eventClick={handleEventClick}
@@ -788,6 +884,7 @@ export default function AgendaPage() {
           </>
         ) : (
           // Desktop layout
+          <div style={{ padding: '16px 20px' }}>
           <div style={{ display: 'flex', gap: 16 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <FullCalendar
@@ -850,6 +947,7 @@ export default function AgendaPage() {
             <div style={{ width: 280, flexShrink: 0, borderLeft: '1px solid #f0f0f0', paddingLeft: 16 }}>
               <TaskListPanel />
             </div>
+          </div>
           </div>
         )}
       </Card>

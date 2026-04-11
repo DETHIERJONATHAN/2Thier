@@ -13,6 +13,7 @@
  * @version 2.0
  */
 
+import { SF } from '../../components/zhiive/ZhiiveTheme';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -142,7 +143,7 @@ const styles = {
   },
 
   phoneButton: {
-    background: '#10b981',
+    background: SF.emerald,
     border: 'none',
     borderRadius: '20px',
     padding: '8px 16px',
@@ -197,7 +198,7 @@ const styles = {
 
   optionCard: (selected: boolean) => ({
     background: selected ? '#eff6ff' : 'white',
-    border: selected ? '2px solid #3b82f6' : '2px solid #e5e7eb',
+    border: selected ? `2px solid ${SF.blue}` : '2px solid #e5e7eb',
     borderRadius: '16px',
     padding: '20px 16px',
     cursor: 'pointer',
@@ -241,7 +242,7 @@ const styles = {
     position: 'absolute' as const,
     top: '8px',
     right: '8px',
-    color: '#3b82f6',
+    color: SF.blue,
     fontSize: '20px'
   },
 
@@ -274,7 +275,7 @@ const styles = {
   },
 
   continueButton: (enabled: boolean) => ({
-    background: enabled ? '#3b82f6' : '#d1d5db',
+    background: enabled ? SF.blue : '#d1d5db',
     color: 'white',
     border: 'none',
     borderRadius: '12px',
@@ -289,7 +290,7 @@ const styles = {
 
   checkboxOption: (selected: boolean) => ({
     background: selected ? '#eff6ff' : 'white',
-    border: selected ? '2px solid #3b82f6' : '2px solid #e5e7eb',
+    border: selected ? `2px solid ${SF.blue}` : '2px solid #e5e7eb',
     borderRadius: '12px',
     padding: '16px',
     cursor: 'pointer',
@@ -797,7 +798,7 @@ const EffyFormRenderer: React.FC = () => {
   if (loading) {
     return (
       <div style={{ ...styles.container, justifyContent: 'center', alignItems: 'center' }}>
-        <Spin indicator={<LoadingOutlined style={{ fontSize: 48, color: '#3b82f6' }} spin />} />
+        <Spin indicator={<LoadingOutlined style={{ fontSize: 48, color: SF.blue }} spin />} />
         <p style={{ marginTop: '16px', color: '#6b7280' }}>Chargement du simulateur...</p>
       </div>
     );
@@ -845,7 +846,7 @@ const EffyFormRenderer: React.FC = () => {
   if (submitting) {
     return (
       <div style={{ ...styles.container, justifyContent: 'center', alignItems: 'center' }}>
-        <Spin indicator={<LoadingOutlined style={{ fontSize: 48, color: '#3b82f6' }} spin />} />
+        <Spin indicator={<LoadingOutlined style={{ fontSize: 48, color: SF.blue }} spin />} />
         <p style={{ marginTop: '16px', color: '#6b7280' }}>Envoi en cours...</p>
       </div>
     );
@@ -903,7 +904,7 @@ const EffyFormRenderer: React.FC = () => {
           <Progress 
             percent={progress} 
             showInfo={false}
-            strokeColor="#3b82f6"
+            strokeColor={SF.blue}
             trailColor="#e5e7eb"
             size="small"
           />

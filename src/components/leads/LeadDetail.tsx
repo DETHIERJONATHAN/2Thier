@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { SF } from '../zhiive/ZhiiveTheme';
 import { Card, Descriptions, Tag, Avatar, Space, Button, Timeline, Spin, Row, Col, Tabs, Upload, message, Tooltip, Grid, Popconfirm, Alert, Modal } from 'antd';
 import { 
   UserOutlined, 
@@ -553,7 +554,7 @@ export default function LeadDetail({ leadId, onEdit, onDelete, onCall, onEmail, 
                 {/* Coordonnées */}
                 <div>
                   <div className="flex items-center gap-2 mb-3">
-                    <UserOutlined style={{ color: '#3b82f6' }} />
+                    <UserOutlined style={{ color: SF.blue }} />
                     <span style={{ fontWeight: 600, color: '#374151' }}>Coordonnées</span>
                   </div>
                   <div style={{ border: '1px solid #e5e7eb', borderRadius: '6px', overflow: 'hidden' }}>
@@ -577,7 +578,7 @@ export default function LeadDetail({ leadId, onEdit, onDelete, onCall, onEmail, 
                 {/* Statut & Suivi */}
                 <div>
                   <div className="flex items-center gap-2 mb-3">
-                    <CalendarOutlined style={{ color: '#8b5cf6' }} />
+                    <CalendarOutlined style={{ color: SF.violet }} />
                     <span style={{ fontWeight: 600, color: '#374151' }}>Statut & Suivi</span>
                   </div>
                   <div style={{ border: '1px solid #e5e7eb', borderRadius: '6px', overflow: 'hidden' }}>

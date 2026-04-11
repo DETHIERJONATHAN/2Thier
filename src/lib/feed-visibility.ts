@@ -56,6 +56,15 @@ export interface SocialSettingsData {
   eventsEnabled: boolean;
   capsulesEnabled: boolean;
   questsEnabled: boolean;
+  // Business auto-post
+  autoPostOnDevisSigned: boolean;
+  autoPostOnInvoicePaid: boolean;
+  autoPostOnChantierCreated: boolean;
+  autoPostOnChantierCompleted: boolean;
+  autoPostOnNewClient: boolean;
+  autoPostOnCalendarEvent: boolean;
+  autoPostOnTaskCompleted: boolean;
+  autoPostDefaultVisibility: string;
 }
 
 export type FeedMode = 'personal' | 'org' | 'public';
@@ -345,7 +354,7 @@ export function buildSparkFeedWhere(
  */
 export function buildExploreFeedWhere(
   ctx: SocialContext,
-  mode: FeedMode,
+  _mode: FeedMode,
   scope?: 'friends' | 'org' | 'all' | 'private'
 ): Record<string, any> {
   const blockedOrgFilter = ctx.blockedOrgIds.length > 0
@@ -409,6 +418,15 @@ const DEFAULT_SETTINGS: SocialSettingsData = {
   eventsEnabled: true,
   capsulesEnabled: true,
   questsEnabled: true,
+  // Business auto-post
+  autoPostOnDevisSigned: true,
+  autoPostOnInvoicePaid: false,
+  autoPostOnChantierCreated: true,
+  autoPostOnChantierCompleted: true,
+  autoPostOnNewClient: false,
+  autoPostOnCalendarEvent: false,
+  autoPostOnTaskCompleted: false,
+  autoPostDefaultVisibility: 'IN',
 };
 
 /**
@@ -451,5 +469,14 @@ export async function getOrgSocialSettings(orgId: string | null): Promise<Social
     eventsEnabled: (settings as any).eventsEnabled ?? DEFAULT_SETTINGS.eventsEnabled,
     capsulesEnabled: (settings as any).capsulesEnabled ?? DEFAULT_SETTINGS.capsulesEnabled,
     questsEnabled: (settings as any).questsEnabled ?? DEFAULT_SETTINGS.questsEnabled,
+    // Business auto-post
+    autoPostOnDevisSigned: (settings as any).autoPostOnDevisSigned ?? DEFAULT_SETTINGS.autoPostOnDevisSigned,
+    autoPostOnInvoicePaid: (settings as any).autoPostOnInvoicePaid ?? DEFAULT_SETTINGS.autoPostOnInvoicePaid,
+    autoPostOnChantierCreated: (settings as any).autoPostOnChantierCreated ?? DEFAULT_SETTINGS.autoPostOnChantierCreated,
+    autoPostOnChantierCompleted: (settings as any).autoPostOnChantierCompleted ?? DEFAULT_SETTINGS.autoPostOnChantierCompleted,
+    autoPostOnNewClient: (settings as any).autoPostOnNewClient ?? DEFAULT_SETTINGS.autoPostOnNewClient,
+    autoPostOnCalendarEvent: (settings as any).autoPostOnCalendarEvent ?? DEFAULT_SETTINGS.autoPostOnCalendarEvent,
+    autoPostOnTaskCompleted: (settings as any).autoPostOnTaskCompleted ?? DEFAULT_SETTINGS.autoPostOnTaskCompleted,
+    autoPostDefaultVisibility: (settings as any).autoPostDefaultVisibility ?? DEFAULT_SETTINGS.autoPostDefaultVisibility,
   };
 }

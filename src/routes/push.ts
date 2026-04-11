@@ -27,7 +27,7 @@ router.get('/vapid-key', (_req: Request, res: Response) => {
 // POST /push/subscribe — Save push subscription for current user
 // ═══════════════════════════════════════════════════════════════
 router.post('/subscribe', authenticateToken as any, async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   const { endpoint, keys } = req.body;
@@ -65,7 +65,7 @@ router.post('/subscribe', authenticateToken as any, async (req: Request, res: Re
 // DELETE /push/unsubscribe — Remove push subscription
 // ═══════════════════════════════════════════════════════════════
 router.delete('/unsubscribe', authenticateToken as any, async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   const { endpoint } = req.body;

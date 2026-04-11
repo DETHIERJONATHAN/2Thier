@@ -1,3 +1,4 @@
+import { SF, FB } from '../../components/zhiive/ZhiiveTheme';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   App,
@@ -66,14 +67,6 @@ import {
 const { Title, Text } = Typography;
 
 // ── Facebook Design Tokens ──
-const FB = {
-  bg: '#f0f2f5', white: '#ffffff', text: '#050505', textSecondary: '#65676b',
-  blue: '#1877f2', blueHover: '#166fe5', border: '#ced0d4',
-  btnGray: '#e4e6eb', btnGrayHover: '#d8dadf',
-  green: '#42b72a', red: '#e4405f', orange: '#f7931a', purple: '#722ed1',
-  shadow: '0 1px 2px rgba(0,0,0,0.1)', radius: 8,
-};
-
 // ── FBToggle (identique à UsersAdminPageNew) ──
 const FBToggle = ({ checked, onChange, disabled, size = 'default' }: {
   checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; size?: 'small' | 'default';
@@ -1195,7 +1188,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
                 {ab('✏️', 'Modifier', () => openEditOrganization(record), { bg: '#f9f0ff', color: FB.purple })}
                 {ab('🔗', 'Google WS', () => openGoogleWorkspaceConfig(record), { bg: '#e6f4ff', color: '#4285F4' })}
                 {ab('🚀', 'GW Modules', () => handleActivateGoogleWorkspaceModules(record.id), { bg: '#fff1f0', color: FB.red })}
-                {ab('📞', 'Telnyx', () => openTelnyxConfig(record), { bg: '#fff0f0', color: '#FF6B6B' })}
+                {ab('📞', 'Telnyx', () => openTelnyxConfig(record), { bg: '#fff0f0', color: SF.like })}
                 {ab('🧩', 'Modules', () => openModulesManager(record), { bg: '#f6ffed', color: FB.green })}
                 {ab('🚀', 'Devis1Min', () => openDevis1Minute(record), { bg: '#fff7e6', color: '#ff7a00' })}
                 <Popconfirm

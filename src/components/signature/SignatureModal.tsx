@@ -13,6 +13,7 @@ import { Modal, Steps, Button, Input, Typography, Space, Alert, Checkbox, Result
 import { MailOutlined, SafetyCertificateOutlined, EditOutlined, CheckCircleOutlined, LockOutlined, ReloadOutlined } from '@ant-design/icons';
 import SignatureCanvas, { type SignatureCanvasRef } from './SignatureCanvas';
 import SignedPdfPreviewModal from './SignedPdfPreviewModal';
+import { SF } from '../zhiive/ZhiiveTheme';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 
 const { Text, Title } = Typography;
@@ -482,7 +483,7 @@ const SignatureModal: React.FC<SignatureModalProps> = ({
                 ref={canvasRef}
                 width={560}
                 height={180}
-                penColor="#1a1a2e"
+                penColor={SF.dark}
                 penWidth={2.5}
               />
             </div>

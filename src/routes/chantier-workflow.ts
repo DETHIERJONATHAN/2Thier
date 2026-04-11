@@ -203,7 +203,7 @@ router.get('/transitions/allowed-targets', authenticateToken, async (req, res) =
   try {
     const organizationId = req.headers['x-organization-id'] as string;
     const { fromStatusId } = req.query;
-    const user = (req as any).user;
+    const user = req.user;
     const userRole = user?.role || 'commercial';
     const isSuperAdmin = user?.isSuperAdmin === true;
 
@@ -278,7 +278,7 @@ router.post('/transitions/check', authenticateToken, async (req, res) => {
   try {
     const organizationId = req.headers['x-organization-id'] as string;
     const { fromStatusId, toStatusId } = req.body;
-    const user = (req as any).user;
+    const user = req.user;
     const userRole = user?.role || 'commercial';
     const isSuperAdmin = user?.isSuperAdmin === true;
 
@@ -497,7 +497,7 @@ router.delete('/invoice-templates/:id', authenticateToken, isAdmin, async (req, 
 router.get('/chantiers/:chantierId/billing-plan', authenticateToken, async (req, res) => {
   try {
     const { chantierId } = req.params;
-    const organizationId = req.headers['x-organization-id'] as string || (req as any).user.organizationId;
+    const organizationId = req.headers['x-organization-id'] as string || req.user.organizationId;
 
     // 1) Charger les items du plan spécifique au chantier
     const items = await db.chantierBillingPlanItem.findMany({
@@ -532,7 +532,7 @@ router.get('/chantiers/:chantierId/billing-plan', authenticateToken, async (req,
 router.put('/chantiers/:chantierId/billing-plan', authenticateToken, isAdmin, async (req, res) => {
   try {
     const { chantierId } = req.params;
-    const organizationId = req.headers['x-organization-id'] as string || (req as any).user.organizationId;
+    const organizationId = req.headers['x-organization-id'] as string || req.user.organizationId;
     const { items } = req.body as { items: Array<{
       statusId?: string | null;
       type: string;
@@ -590,7 +590,7 @@ router.put('/chantiers/:chantierId/billing-plan', authenticateToken, isAdmin, as
         chantierId,
         action: 'BILLING_PLAN_UPDATED',
         toValue: `${items.length} lignes, total ${totalPercentage.toFixed(0)}%`,
-        userId: (req as any).user.userId,
+        userId: req.user.userId,
       },
     });
 
@@ -608,7 +608,7 @@ router.put('/chantiers/:chantierId/billing-plan', authenticateToken, isAdmin, as
 router.post('/chantiers/:chantierId/billing-plan/init', authenticateToken, isAdmin, async (req, res) => {
   try {
     const { chantierId } = req.params;
-    const organizationId = req.headers['x-organization-id'] as string || (req as any).user.organizationId;
+    const organizationId = req.headers['x-organization-id'] as string || req.user.organizationId;
 
     // Vérifier que le chantier existe
     const chantier = await db.chantier.findFirst({ where: { id: chantierId, organizationId } });
@@ -662,8 +662,8 @@ router.post('/chantiers/:chantierId/billing-plan/init', authenticateToken, isAdm
 router.post('/chantiers/:chantierId/validate', authenticateToken, isAdmin, async (req, res) => {
   try {
     const { chantierId } = req.params;
-    const organizationId = req.headers['x-organization-id'] as string || (req as any).user.organizationId;
-    const userId = (req as any).user.userId;
+    const organizationId = req.headers['x-organization-id'] as string || req.user.organizationId;
+    const userId = req.user.userId;
     const { notes } = req.body || {};
 
     const chantier = await db.chantier.findFirst({ where: { id: chantierId, organizationId } });
@@ -775,7 +775,7 @@ router.post('/chantiers/:chantierId/validate', authenticateToken, isAdmin, async
 router.post('/chantiers/:chantierId/unvalidate', authenticateToken, isAdmin, async (req, res) => {
   try {
     const { chantierId } = req.params;
-    const organizationId = req.headers['x-organization-id'] as string || (req as any).user.organizationId;
+    const organizationId = req.headers['x-organization-id'] as string || req.user.organizationId;
 
     const chantier = await db.chantier.findFirst({ where: { id: chantierId, organizationId } });
     if (!chantier) return res.status(404).json({ success: false, message: 'Chantier introuvable' });
@@ -797,7 +797,7 @@ router.post('/chantiers/:chantierId/unvalidate', authenticateToken, isAdmin, asy
         chantierId,
         action: 'CHANTIER_UNVALIDATED',
         toValue: 'Validation retirée',
-        userId: (req as any).user.userId,
+        userId: req.user.userId,
       },
     });
 
@@ -865,7 +865,7 @@ router.post('/chantiers/:chantierId/invoices', authenticateToken, isAdmin, async
   try {
     const { chantierId } = req.params;
     const organizationId = req.headers['x-organization-id'] as string;
-    const user = (req as any).user;
+    const user = req.user;
 
     if (!organizationId) {
       return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
@@ -930,7 +930,7 @@ router.put('/invoices/:id', authenticateToken, isAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const organizationId = req.headers['x-organization-id'] as string;
-    const user = (req as any).user;
+    const user = req.user;
 
     if (!organizationId) {
       return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
@@ -1097,7 +1097,7 @@ router.post('/chantiers/:chantierId/events', authenticateToken, requireChantierA
   try {
     const { chantierId } = req.params;
     const organizationId = req.headers['x-organization-id'] as string;
-    const user = (req as any).user;
+    const user = req.user;
 
     if (!organizationId) {
       return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
@@ -1161,7 +1161,7 @@ router.post('/chantiers/:chantierId/events', authenticateToken, requireChantierA
 router.put('/events/:id', authenticateToken, requireChantierAction('edit'), async (req, res) => {
   try {
     const { id } = req.params;
-    const user = (req as any).user;
+    const user = req.user;
     const organizationId = req.headers['x-organization-id'] as string;
 
     if (!organizationId) {
@@ -1258,7 +1258,7 @@ router.put('/events/:id/lock-subcontract', authenticateToken, isAdmin, async (re
   try {
     const { id } = req.params;
     const organizationId = req.headers['x-organization-id'] as string;
-    const user = (req as any).user;
+    const user = req.user;
 
     if (!organizationId) {
       return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
@@ -1373,7 +1373,7 @@ router.post('/chantiers/:chantierId/history', authenticateToken, async (req, res
   try {
     const { chantierId } = req.params;
     const organizationId = req.headers['x-organization-id'] as string;
-    const user = (req as any).user;
+    const user = req.user;
 
     if (!organizationId) {
       return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
@@ -1961,7 +1961,7 @@ const submitReviewSchema = z.object({
 router.post('/events/:id/submit-review', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const user = (req as any).user;
+    const user = req.user;
     const organizationId = req.headers['x-organization-id'] as string;
     const userId = user?.userId || user?.id;
 
@@ -2355,7 +2355,7 @@ router.get('/chantiers/:chantierId/review-summary', authenticateToken, async (re
 router.post('/chantiers/:chantierId/reject-to-lead', authenticateToken, isAdmin, async (req, res) => {
   try {
     const { chantierId } = req.params;
-    const user = (req as any).user;
+    const user = req.user;
     const organizationId = req.headers['x-organization-id'] as string;
     const userId = user?.userId || user?.id;
 
@@ -2509,7 +2509,7 @@ const DEFAULT_SATISFACTION_QUESTIONS = [
 router.post('/chantiers/:chantierId/reception/prepare', authenticateToken, async (req, res) => {
   try {
     const { chantierId } = req.params;
-    const user = (req as any).user;
+    const user = req.user;
     const organizationId = req.headers['x-organization-id'] as string;
     const userId = user?.userId || user?.id;
 
@@ -2904,7 +2904,7 @@ router.get('/chantiers/:chantierId/reception', authenticateToken, async (req, re
 router.post('/chantiers/:chantierId/reception/send-to-client', authenticateToken, async (req, res) => {
   try {
     const { chantierId } = req.params;
-    const user = (req as any).user;
+    const user = req.user;
     const organizationId = req.headers['x-organization-id'] as string;
 
     if (!organizationId) {
@@ -3198,7 +3198,7 @@ export { sendTransitionNotifications };
 router.post('/events/:id/submit-commercial-correction', authenticateToken, async (req, res) => {
   try {
     const { id: eventId } = req.params;
-    const user = (req as any).user;
+    const user = req.user;
     const organizationId = req.headers['x-organization-id'] as string;
     const userId = user?.userId || user?.id;
 

@@ -1,3 +1,4 @@
+import { FB } from '../../components/zhiive/ZhiiveTheme';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../auth/useAuth';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
@@ -21,18 +22,6 @@ import {
   DeleteOutlined,
   MobileOutlined,
 } from '@ant-design/icons';
-
-const FB = {
-  bg: '#f0f2f5', white: '#ffffff', text: '#050505', textSecondary: '#65676b',
-  blue: '#1877f2', blueHover: '#166fe5', border: '#ced0d4',
-  btnGray: '#e4e6eb', btnGrayHover: '#d8dadf', green: '#42b72a',
-  shadow: '0 1px 2px rgba(0,0,0,0.1)', radius: 8,
-  // Status & Info
-  danger: '#ff4d4f', disabled: '#f5f5f5',
-  infoBg: '#e6f7ff', infoBorder: '#91d5ff', infoTitle: '#0050b3', infoText: '#003a8c',
-  warningBg: '#fffbe6', warningBorder: '#ffe58f', warningText: '#ad6800',
-  orange: '#fa8c16',
-};
 
 interface PeppolConfigData {
   enabled: boolean;

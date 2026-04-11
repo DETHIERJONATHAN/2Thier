@@ -101,7 +101,7 @@ router.get('/technicians', authenticateToken, async (req, res) => {
     let allowedTechIds: string[] | null = null; // null = pas de filtre
 
     if (scopeAction) {
-      const user = (req as any).user;
+      const user = req.user;
       const resolved = await resolveChantierScope(user, organizationId, scopeAction);
       allowedTechIds = resolved.technicianIds; // null = all, [] = rien, [...] = filtré
     }
@@ -475,7 +475,7 @@ router.get('/', authenticateToken, async (req, res) => {
     if (!organizationId) return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });
 
     // Résolution scope: filtrer les équipes visibles
-    const user = (req as any).user;
+    const user = req.user;
     const resolved = await resolveChantierScope(user, organizationId, 'view');
     const allowedTechIds = resolved.technicianIds;
 
@@ -745,7 +745,7 @@ router.get('/time-entries', authenticateToken, async (req, res) => {
     const { chantierId, technicianId, date, startDate, endDate } = req.query;
 
     // Résolution scope pour filtrer les pointages visibles
-    const user = (req as any).user;
+    const user = req.user;
     const resolved = await resolveChantierScope(user, organizationId, 'pointage');
 
     const where: any = { organizationId };

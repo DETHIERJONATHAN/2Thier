@@ -48,6 +48,7 @@ import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import { isCopyFromRepeater } from '../utils/isCopyFromRepeater';
 import { useTBLBatchOptional } from '../contexts/TBLBatchContext';
 import { preSeedCalculatedValues } from '../../../../../hooks/useNodeCalculatedValue';
+import { SF } from '../../../../zhiive/ZhiiveTheme';
 
 const { Text } = Typography;
 const { Panel } = Collapse;
@@ -240,10 +241,10 @@ const STATUS_ACCENTS: Record<string, string> = {
   info: '#0ea5e9',
   success: '#16a34a',
   warning: '#f97316',
-  danger: '#ef4444',
-  error: '#ef4444',
+  danger: SF.red,
+  error: SF.red,
   alert: '#f97316',
-  primary: '#3b82f6',
+  primary: SF.blue,
   neutral: '#64748b'
 };
 
@@ -4617,7 +4618,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 const nodeId = (capabilities?.data?.activeId) || (capabilities?.data?.instances ? Object.keys(capabilities.data.instances)[0] : undefined);
                 if (nodeId && batchCacheRef.current[nodeId] != null) {
                   const val = batchCacheRef.current[nodeId];
-                  return <span style={{ fontWeight: 'bold', color: '#047857' }}>{formatValueWithConfig(val, dataInstance)}</span>;
+                  return <span style={{ fontWeight: 'bold', color: SF.emeraldDeep }}>{formatValueWithConfig(val, dataInstance)}</span>;
                 }
               }
               
@@ -4648,7 +4649,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               dlog(`🎯 [DATA VARIABLE] nodeId utilisé pour évaluation: ${instanceId}`);
               const preVal = batchLoaded ? batchCacheRef.current[instanceId] : null;
               if (batchLoaded && preVal != null) {
-                return <span style={{ fontWeight: 'bold', color: '#047857' }}>{formatValueWithConfig(preVal, dataInstance)}</span>;
+                return <span style={{ fontWeight: 'bold', color: SF.emeraldDeep }}>{formatValueWithConfig(preVal, dataInstance)}</span>;
               }
               
               if (!treeId) {
@@ -5036,7 +5037,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       width: 20,
       height: 20,
       borderRadius: '50%',
-      backgroundColor: '#ef4444',
+      backgroundColor: SF.red,
       color: '#ffffff',
       fontSize: 11,
       fontWeight: 700,
@@ -5400,7 +5401,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                     width: 8,
                                     height: 8,
                                     borderRadius: '50%',
-                                    backgroundColor: depth === 1 ? '#6366f1' : depth === 2 ? '#8b5cf6' : '#a855f7',
+                                    backgroundColor: depth === 1 ? '#6366f1' : depth === 2 ? SF.violet : '#a855f7',
                                     border: '2px solid #fff',
                                     zIndex: 10,
                                   }} />
@@ -5455,7 +5456,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                     width: 8,
                                     height: 8,
                                     borderRadius: '50%',
-                                    backgroundColor: depth === 1 ? '#6366f1' : depth === 2 ? '#8b5cf6' : '#a855f7',
+                                    backgroundColor: depth === 1 ? '#6366f1' : depth === 2 ? SF.violet : '#a855f7',
                                     border: '2px solid #fff',
                                     zIndex: 10,
                                   }} />

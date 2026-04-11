@@ -16,7 +16,7 @@ router.use(authenticateToken as any);
 
 // Helper: extract user from request
 function getUser(req: Request) {
-  return (req as any).user as { id: string; organizationId?: string; isSuperAdmin?: boolean } | undefined;
+  return req.user as { id: string; organizationId?: string; isSuperAdmin?: boolean } | undefined;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -124,13 +124,13 @@ router.get('/export', async (req: Request, res: Response) => {
       // Notifications
       db.notification.findMany({
         where: { userId: user.id },
-        select: { id: true, type: true, data: true, read: true, createdAt: true },
+        select: { id: true, type: true, data: true, readAt: true, createdAt: true },
         orderBy: { createdAt: 'desc' },
         take: 1000,
       }),
       // Calendar events created by user
       db.calendarEvent.findMany({
-        where: { userId: user.id },
+        where: { ownerId: user.id },
         select: { id: true, title: true, description: true, startDate: true, endDate: true, type: true, location: true },
         orderBy: { startDate: 'desc' },
       }),
@@ -311,7 +311,7 @@ router.post('/retention-cleanup', async (req: Request, res: Response) => {
         where: {
           organizationId: org.organizationId,
           createdAt: { lt: cutoffDate },
-          read: true, // Only purge read notifications
+          readAt: { not: null }, // Only purge read notifications
         },
       });
 

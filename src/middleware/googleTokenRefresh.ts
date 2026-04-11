@@ -189,7 +189,7 @@ export function googleTokenRefreshMiddleware() {
       }
 
       // Récupérer userId depuis la requête authentifiée
-      const userId = (req as any).user?.userId || (req as any).user?.id;
+      const userId = req.user?.userId || req.user?.id;
       console.log('[REFRESH-MIDDLEWARE] 🔍 Vérification token pour organisation:', organizationId, 'userId:', userId);
 
       // Tenter le refresh si nécessaire

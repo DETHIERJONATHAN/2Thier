@@ -45,7 +45,7 @@ const reactionSchema = z.object({
 // ═══════════════════════════════════════════════════════════════
 router.get('/feed', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     const orgId = user.organizationId || req.headers['x-organization-id'] as string;
     const {
       visibility,
@@ -155,7 +155,7 @@ router.get('/feed', authenticateToken, async (req: Request, res: Response) => {
 // ═══════════════════════════════════════════════════════════════
 router.get('/my-feed', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     const { cursor, limit = '20', mode } = req.query;
     const take = Math.min(parseInt(limit as string) || 20, 50);
 
@@ -231,7 +231,7 @@ router.get('/my-feed', authenticateToken, async (req: Request, res: Response) =>
 // ═══════════════════════════════════════════════════════════════
 router.get('/client-feed/:leadId', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     const { leadId } = req.params;
     const { cursor, limit = '20' } = req.query;
     const take = Math.min(parseInt(limit as string) || 20, 50);
@@ -293,7 +293,7 @@ router.get('/client-feed/:leadId', authenticateToken, async (req: Request, res: 
 // ═══════════════════════════════════════════════════════════════
 router.post('/posts', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     const orgId = user.organizationId || req.headers['x-organization-id'] as string;
     const data = createPostSchema.parse(req.body);
 
@@ -420,7 +420,7 @@ router.post('/posts', authenticateToken, async (req: Request, res: Response) => 
 // ═══════════════════════════════════════════════════════════════
 router.delete('/posts/:id', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     const { id } = req.params;
 
     const post = await db.wallPost.findUnique({ where: { id } });
@@ -445,7 +445,7 @@ router.delete('/posts/:id', authenticateToken, async (req: Request, res: Respons
 // ═══════════════════════════════════════════════════════════════
 router.post('/posts/:id/reactions', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     const { id } = req.params;
     const { type } = reactionSchema.parse(req.body);
 
@@ -555,7 +555,7 @@ router.get('/posts/:id/comments', authenticateToken, async (req: Request, res: R
 // ═══════════════════════════════════════════════════════════════
 router.post('/posts/:id/comments', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     const { id } = req.params;
     const data = createCommentSchema.parse(req.body);
 
@@ -637,7 +637,7 @@ router.post('/posts/:id/comments', authenticateToken, async (req: Request, res: 
 // ═══════════════════════════════════════════════════════════════
 router.delete('/comments/:id', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     const { id } = req.params;
 
     const comment = await db.wallComment.findUnique({ where: { id } });
@@ -667,7 +667,7 @@ router.delete('/comments/:id', authenticateToken, async (req: Request, res: Resp
 // ═══════════════════════════════════════════════════════════════
 router.post('/posts/:id/share', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     const { id } = req.params;
     const { targetType = 'LINK' } = req.body;
 
@@ -700,11 +700,59 @@ router.post('/posts/:id/share', authenticateToken, async (req: Request, res: Res
 });
 
 // ═══════════════════════════════════════════════════════════════
+// GET /wall/posts/:id/reactions — Qui a réagi à un post
+// ═══════════════════════════════════════════════════════════════
+router.get('/posts/:id/reactions', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const post = await db.wallPost.findUnique({ where: { id } });
+    if (!post) return res.status(404).json({ error: 'Post non trouvé' });
+
+    const reactions = await db.wallReaction.findMany({
+      where: { postId: id },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    res.json(reactions);
+  } catch (error) {
+    console.error('[WALL] Erreur liste réactions:', error);
+    res.status(500).json({ error: 'Erreur lors du chargement des réactions' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// GET /wall/posts/:id/shares — Qui a partagé un post
+// ═══════════════════════════════════════════════════════════════
+router.get('/posts/:id/shares', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const post = await db.wallPost.findUnique({ where: { id } });
+    if (!post) return res.status(404).json({ error: 'Post non trouvé' });
+
+    const shares = await db.wallShare.findMany({
+      where: { postId: id },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    res.json(shares);
+  } catch (error) {
+    console.error('[WALL] Erreur liste partages:', error);
+    res.status(500).json({ error: 'Erreur lors du chargement des partages' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
 // GET /wall/stats — Statistiques du mur (admin)
 // ═══════════════════════════════════════════════════════════════
 router.get('/stats', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     const orgId = user.organizationId || req.headers['x-organization-id'] as string;
 
     const [totalPosts, totalReactions, totalComments, totalShares] = await Promise.all([
@@ -732,6 +780,9 @@ router.post('/upload', authenticateToken, async (req: Request, res: Response) =>
       return res.status(400).json({ error: 'Aucun fichier fourni' });
     }
 
+    const orgId = req.user.organizationId || req.headers['x-organization-id'] as string;
+    const settings = await getOrgSocialSettings(orgId);
+
     // express-fileupload can give single file or array under 'files' key
     const fileList = Array.isArray(uploadedFiles.files)
       ? uploadedFiles.files
@@ -745,6 +796,13 @@ router.post('/upload', authenticateToken, async (req: Request, res: Response) =>
     for (const file of fileList) {
       if (!allowedMime.test(file.mimetype) && file.mimetype !== 'application/pdf') {
         continue; // skip non-allowed types
+      }
+      const maxBytes = file.mimetype.startsWith('video/')
+        ? settings.maxVideoSizeMB * 1024 * 1024
+        : settings.maxImageSizeMB * 1024 * 1024;
+      if (file.size > maxBytes) {
+        const limitMB = file.mimetype.startsWith('video/') ? settings.maxVideoSizeMB : settings.maxImageSizeMB;
+        return res.status(400).json({ error: `Le fichier ${file.name} dépasse la limite de ${limitMB} Mo` });
       }
       const safeName = file.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_.-]/g, '');
       const filename = `${Date.now()}_${safeName}`;

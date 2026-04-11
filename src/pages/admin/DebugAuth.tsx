@@ -1,3 +1,4 @@
+import { SF, WEBSITE_DEFAULTS } from '../../components/zhiive/ZhiiveTheme';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, Spin, Alert, Button, Tooltip, Tag, Statistic, Row, Col, Collapse, Typography, Space } from 'antd';
 import { BugOutlined, UserOutlined, KeyOutlined, ReloadOutlined, EyeOutlined, EyeInvisibleOutlined, 
@@ -174,14 +175,14 @@ const DebugAuth: React.FC = React.memo(() => {
                 borderRadius: '12px',
                 border: '2px solid #e5e7eb',
                 fontWeight: '600',
-                background: showRawData ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'white',
+                background: showRawData ? WEBSITE_DEFAULTS.gradient : 'white',
                 color: showRawData ? 'white' : '#374151',
                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.transform = 'translateY(-2px)';
                 if (!showRawData) {
-                  e.currentTarget.style.borderColor = '#10b981';
+                  e.currentTarget.style.borderColor = SF.emerald;
                   e.currentTarget.style.boxShadow = '0 8px 25px rgba(16, 185, 129, 0.15)';
                 }
               }}
@@ -244,13 +245,13 @@ const DebugAuth: React.FC = React.memo(() => {
                   left: 0,
                   right: 0,
                   height: '4px',
-                  background: 'linear-gradient(90deg, #3b82f6 0%, #1d4ed8 100%)'
+                  background: `linear-gradient(90deg, ${SF.blue} 0%, #1d4ed8 100%)`
                 }} />
                 <Statistic
                   title={debugTranslations.totalPermissions}
                   value={permissionStats.total}
-                  valueStyle={{ color: '#3b82f6', fontSize: '2rem', fontWeight: 800 }}
-                  prefix={<KeyOutlined style={{ color: '#3b82f6' }} />}
+                  valueStyle={{ color: SF.blue, fontSize: '2rem', fontWeight: 800 }}
+                  prefix={<KeyOutlined style={{ color: SF.blue }} />}
                 />
               </Card>
             </Col>
@@ -282,13 +283,13 @@ const DebugAuth: React.FC = React.memo(() => {
                   left: 0,
                   right: 0,
                   height: '4px',
-                  background: 'linear-gradient(90deg, #10b981 0%, #059669 100%)'
+                  background: WEBSITE_DEFAULTS.gradient
                 }} />
                 <Statistic
                   title="Permissions Autorisées"
                   value={permissionStats.allowed}
-                  valueStyle={{ color: '#10b981', fontSize: '2rem', fontWeight: 800 }}
-                  prefix={<SafetyOutlined style={{ color: '#10b981' }} />}
+                  valueStyle={{ color: SF.emerald, fontSize: '2rem', fontWeight: 800 }}
+                  prefix={<SafetyOutlined style={{ color: SF.emerald }} />}
                 />
               </Card>
             </Col>
@@ -320,13 +321,13 @@ const DebugAuth: React.FC = React.memo(() => {
                   left: 0,
                   right: 0,
                   height: '4px',
-                  background: 'linear-gradient(90deg, #ef4444 0%, #dc2626 100%)'
+                  background: `linear-gradient(90deg, ${SF.red} 0%, #dc2626 100%)`
                 }} />
                 <Statistic
                   title="Permissions Refusées"
                   value={permissionStats.denied}
-                  valueStyle={{ color: '#ef4444', fontSize: '2rem', fontWeight: 800 }}
-                  prefix={<SafetyOutlined style={{ color: '#ef4444' }} />}
+                  valueStyle={{ color: SF.red, fontSize: '2rem', fontWeight: 800 }}
+                  prefix={<SafetyOutlined style={{ color: SF.red }} />}
                 />
               </Card>
             </Col>
@@ -358,13 +359,13 @@ const DebugAuth: React.FC = React.memo(() => {
                   left: 0,
                   right: 0,
                   height: '4px',
-                  background: 'linear-gradient(90deg, #8b5cf6 0%, #7c3aed 100%)'
+                  background: `linear-gradient(90deg, ${SF.violet} 0%, #7c3aed 100%)`
                 }} />
                 <Statistic
                   title="Super Admin"
                   value={isSuperAdmin ? 'OUI' : 'NON'}
-                  valueStyle={{ color: isSuperAdmin ? '#10b981' : '#f59e0b', fontSize: '1.4rem', fontWeight: 800 }}
-                  prefix={<TeamOutlined style={{ color: isSuperAdmin ? '#10b981' : '#f59e0b' }} />}
+                  valueStyle={{ color: isSuperAdmin ? SF.emerald : SF.amber, fontSize: '1.4rem', fontWeight: 800 }}
+                  prefix={<TeamOutlined style={{ color: isSuperAdmin ? SF.emerald : SF.amber }} />}
                 />
               </Card>
             </Col>

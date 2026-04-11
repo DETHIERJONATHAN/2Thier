@@ -11,6 +11,7 @@
  * - 🔄 Synchronisation temps réel de tous les composants
  */
 
+import { SF } from '../../components/zhiive/ZhiiveTheme';
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
@@ -677,7 +678,7 @@ Avez-vous quelques minutes pour échanger à ce sujet ?"
               <Card
                 title={
                   <div className="flex items-center gap-2">
-                    <UserOutlined style={{ color: '#3b82f6' }} />
+                    <UserOutlined style={{ color: SF.blue }} />
                     <span style={{ fontWeight: 600, color: '#374151' }}>Coordonnées</span>
                   </div>
                 }

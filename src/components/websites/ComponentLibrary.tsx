@@ -1,3 +1,4 @@
+import { SF, WEBSITE_DEFAULTS } from '../zhiive/ZhiiveTheme';
 import React, { useState } from 'react';
 import { Input, Collapse, Card, Typography, Space, Tag } from 'antd';
 import {
@@ -114,7 +115,7 @@ const ComponentLibrary: React.FC<{
       template: {
         type: 'card-icon',
         icon: 'ThunderboltOutlined',
-        iconColor: '#10b981',
+        iconColor: WEBSITE_DEFAULTS.primaryColor,
         iconSize: 32,
         title: 'Titre avec icône',
         description: 'Description de la carte',
@@ -136,8 +137,8 @@ const ComponentLibrary: React.FC<{
         value: '+500',
         label: 'Clients satisfaits',
         icon: 'StarOutlined',
-        iconColor: '#10b981',
-        valueColor: '#10b981',
+        iconColor: WEBSITE_DEFAULTS.primaryColor,
+        valueColor: WEBSITE_DEFAULTS.primaryColor,
         animated: true
       }
     },
@@ -187,7 +188,7 @@ const ComponentLibrary: React.FC<{
           sectionAnchor: ['#services']
         },
         backgroundType: 'gradient',
-        backgroundGradient: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+        backgroundGradient: WEBSITE_DEFAULTS.gradient,
         textColor: '#ffffff',
         minHeight: '600px'
       }
@@ -254,7 +255,7 @@ const ComponentLibrary: React.FC<{
           sectionAnchor: ['#services'],
           icon: 'MailOutlined'
         },
-        backgroundGradient: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+        backgroundGradient: WEBSITE_DEFAULTS.gradient,
         textColor: '#ffffff'
       }
     },
@@ -410,14 +411,14 @@ const ComponentLibrary: React.FC<{
             title: 'Création de l\'entreprise',
             description: 'Début de l\'aventure 2Thier',
             icon: 'RocketOutlined',
-            color: '#10b981'
+            color: WEBSITE_DEFAULTS.primaryColor
           },
           {
             date: '2022-06-15',
             title: '500+ installations',
             description: 'Franchissement d\'un cap important',
             icon: 'TrophyOutlined',
-            color: '#059669'
+            color: SF.emeraldDark
           }
         ],
         mode: 'left'

@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { SIGNAL_EXPIRY_MS } from '../lib/constants';
 import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
 import { getGeminiService } from '../services/GoogleGeminiService';
@@ -90,7 +91,7 @@ router.get('/ice-servers', async (_req: Request, res: Response): Promise<void> =
 // POST /calls/start — Initiate a call from a conversation
 // ═══════════════════════════════════════════════════════════════
 router.post('/start', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   const { conversationId, callType = 'video', title } = req.body;
@@ -182,7 +183,7 @@ router.post('/start', async (req: Request, res: Response): Promise<void> => {
 // POST /calls/:id/join — Join a call
 // ═══════════════════════════════════════════════════════════════
 router.post('/:id/join', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   try {
@@ -217,7 +218,7 @@ router.post('/:id/join', async (req: Request, res: Response): Promise<void> => {
 // POST /calls/:id/leave — Leave a call
 // ═══════════════════════════════════════════════════════════════
 router.post('/:id/leave', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   try {
@@ -302,7 +303,7 @@ router.post('/:id/leave', async (req: Request, res: Response): Promise<void> => 
 // POST /calls/:id/reject — Reject/decline a call
 // ═══════════════════════════════════════════════════════════════
 router.post('/:id/reject', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   try {
@@ -339,7 +340,7 @@ router.post('/:id/reject', async (req: Request, res: Response): Promise<void> =>
 // GET /calls/:id — Get call status & participants (polling)
 // ═══════════════════════════════════════════════════════════════
 router.get('/:id', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   try {
@@ -365,7 +366,7 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
 // GET /calls/incoming — Check for incoming calls
 // ═══════════════════════════════════════════════════════════════
 router.get('/check/incoming', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   try {
@@ -413,7 +414,7 @@ setInterval(() => {
 }, 60000);
 
 router.post('/:id/signal', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   const { to, type, data } = req.body; // type: 'offer' | 'answer' | 'ice-candidate'
@@ -426,7 +427,7 @@ router.post('/:id/signal', async (req: Request, res: Response): Promise<void> =>
   // Clean old signals (> 120s) — allows time for callee to join and receive offer
   const now = Date.now();
   const signals = signalingBuffer.get(key)!;
-  const cleaned = signals.filter(s => now - s.ts < 120000);
+  const cleaned = signals.filter(s => now - s.ts < SIGNAL_EXPIRY_MS);
   signalingBuffer.set(key, cleaned);
 
   res.json({ success: true });
@@ -434,7 +435,7 @@ router.post('/:id/signal', async (req: Request, res: Response): Promise<void> =>
 
 // GET /calls/:id/signal — Poll for signaling messages
 router.get('/:id/signal', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   const callId = req.params.id;
@@ -456,7 +457,7 @@ router.get('/:id/signal', async (req: Request, res: Response): Promise<void> => 
 // POST /calls/:id/transcribe — Generate meeting summary with Gemini
 // ═══════════════════════════════════════════════════════════════
 router.post('/:id/transcribe', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   const { transcription } = req.body;
@@ -514,7 +515,7 @@ Sois concis et professionnel.`;
 // GET /calls/history — Call history for user
 // ═══════════════════════════════════════════════════════════════
 router.get('/history/list', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   try {

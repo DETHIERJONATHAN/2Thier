@@ -70,7 +70,7 @@ const SAFE_IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 // Recherche universelle — scanne TOUTE la base de données
 // ═══════════════════════════════════════════════════════════════
 router.get('/global', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   const q = (req.query.q as string || '').trim();
@@ -236,7 +236,7 @@ const WEB_SEARCH_RATE_LIMIT = new Map<string, { count: number; resetAt: number }
 const MAX_WEB_SEARCHES_PER_MINUTE = 20;
 
 router.get('/web', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   const q = (req.query.q as string || '').trim();
@@ -581,7 +581,7 @@ function buildInterceptorScript(pageUrl: string): string {
 }
 
 router.get('/browse-proxy', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   const targetUrl = (req.query.url as string || '').trim();

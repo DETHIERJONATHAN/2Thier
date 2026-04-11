@@ -263,7 +263,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
       // Re-add sky
       try {
         map.setSky({
-          'sky-color': style === 'satellite' ? '#1a1a2e' : '#88c6fc',
+          'sky-color': style === 'satellite' ? SF.dark : '#88c6fc',
           'sky-horizon-blend': 0.5,
           'horizon-color': style === 'satellite' ? '#2d3436' : '#f0e8d8',
           'horizon-fog-blend': 0.5,
@@ -585,10 +585,23 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
       } catch { /* buildings extrusion failed — harmless */ }
 
       setMapReady(true);
+      // Force resize after load to fix WebGL canvas in sidebar/contained layouts
+      setTimeout(() => { map.resize(); }, 100);
+      setTimeout(() => { map.resize(); }, 500);
+      setTimeout(() => { map.resize(); }, 1500);
     });
 
     mapRef.current = map;
-    return () => { map.remove(); mapRef.current = null; };
+
+    // ResizeObserver: force map resize whenever container changes size (e.g. sidebar mount)
+    const container = mapContainerRef.current;
+    let ro: ResizeObserver | null = null;
+    if (container) {
+      ro = new ResizeObserver(() => { map.resize(); });
+      ro.observe(container);
+    }
+
+    return () => { ro?.disconnect(); map.remove(); mapRef.current = null; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1598,7 +1611,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
   }, [routeAlerts, speakInstruction, bearingAlongRoute, advanceSteps, stopNavigation, camera3DCenter, isSuperAdmin, t]);
 
   return (
-    <div style={{ flex: 1, height: '100%', position: 'relative', overflow: 'hidden', background: SF.dark }}>
+    <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden', background: SF.dark, width: '100%', maxWidth: '100%' }}>
       {/* CSS for glow animation + mobile */}
       <style>{`
         @keyframes waxGlow {
@@ -1621,8 +1634,8 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
         }
       `}</style>
 
-      {/* Map container */}
-      <div ref={mapContainerRef} style={{ width: '100%', height: '100%', touchAction: 'none' }} />
+      {/* Map container — absolute positioning to guarantee dimensions regardless of parent height chain */}
+      <div ref={mapContainerRef} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, touchAction: 'none' }} />
 
       {/* ── Top bar: title + ghost toggle ── */}
       <div style={{
@@ -1630,7 +1643,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
         background: 'rgba(10, 10, 25, 0.88)',
         backdropFilter: 'blur(10px)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0 10px', zIndex: 10,
+        padding: '0 8px', zIndex: 10, overflow: 'hidden', maxWidth: '100%', boxSizing: 'border-box',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ fontSize: 18 }}>🕯️</span>
@@ -1733,14 +1746,14 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
           </div>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, overflow: 'hidden' }}>
           {/* Ghost mode toggle */}
           <Tooltip title={ghostMode === 'ghost' ? t('wax.ghostTooltip') : t('wax.visibleTooltip')} placement="bottom">
             <div
               onClick={() => toggleGhostMode(ghostMode === 'ghost' ? 'visible' : 'ghost')}
               style={{
-                display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px',
-                borderRadius: 16, cursor: 'pointer', fontSize: 10, fontWeight: 600,
+                display: 'flex', alignItems: 'center', gap: 3, padding: '3px 6px',
+                borderRadius: 14, cursor: 'pointer', fontSize: 10, fontWeight: 600,
                 background: ghostMode === 'ghost' ? 'rgba(255,255,255,0.15)' : 'rgba(0,184,148,0.2)',
                 color: ghostMode === 'ghost' ? '#dfe6e9' : SF.success,
                 border: `1px solid ${ghostMode === 'ghost' ? 'rgba(255,255,255,0.2)' : SF.success + '40'}`,
@@ -1748,18 +1761,18 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
               }}
             >
               {ghostMode === 'ghost' ? <EyeInvisibleOutlined /> : <EyeOutlined />}
-              {ghostMode === 'ghost' ? t('wax.ghost') : t('wax.visible')}
+              <span className="wax-btn-label">{ghostMode === 'ghost' ? t('wax.ghost') : t('wax.visible')}</span>
             </div>
           </Tooltip>
           {/* Share location button */}
           {!sharing && ghostMode !== 'ghost' && (
             <Tooltip title={t('wax.shareLocationTooltip')} placement="bottom">
               <div onClick={shareLocation} style={{
-                padding: '4px 8px', borderRadius: 16, cursor: 'pointer', fontSize: 10,
+                padding: '3px 6px', borderRadius: 14, cursor: 'pointer', fontSize: 10,
                 fontWeight: 600, background: '#FDCB6E20', color: '#FDCB6E', border: '1px solid #FDCB6E40',
-                whiteSpace: 'nowrap',
+                whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 3,
               }}>
-                <AimOutlined /> {t('wax.shareLocation')}
+                <AimOutlined /> <span className="wax-btn-label">{t('wax.shareLocation')}</span>
               </div>
             </Tooltip>
           )}

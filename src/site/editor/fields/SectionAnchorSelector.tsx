@@ -27,6 +27,7 @@
  * @author 2Thier CRM Team
  */
 
+import { SF } from '../../../components/zhiive/ZhiiveTheme';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Select, Typography, Spin, Space, Tag } from 'antd';
 import { 
@@ -67,11 +68,11 @@ interface SectionAnchorSelectorProps {
 const getSectionIcon = (type: string) => {
   const iconMap: Record<string, React.ReactNode> = {
     header: <MenuOutlined style={{ color: '#10b981' }} />,
-    hero: <RocketOutlined style={{ color: '#3b82f6' }} />,
-    services: <AppstoreOutlined style={{ color: '#f59e0b' }} />,
-    stats: <BarChartOutlined style={{ color: '#8b5cf6' }} />,
+    hero: <RocketOutlined style={{ color: SF.blue }} />,
+    services: <AppstoreOutlined style={{ color: SF.amber }} />,
+    stats: <BarChartOutlined style={{ color: SF.violet }} />,
     testimonials: <CommentOutlined style={{ color: '#ec4899' }} />,
-    cta: <PhoneOutlined style={{ color: '#ef4444' }} />,
+    cta: <PhoneOutlined style={{ color: SF.red }} />,
     footer: <MenuOutlined style={{ color: '#6b7280' }} />,
     values: <AppstoreOutlined style={{ color: '#14b8a6' }} />,
     process: <BarChartOutlined style={{ color: '#06b6d4' }} />,

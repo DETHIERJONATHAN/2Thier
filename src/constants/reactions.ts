@@ -8,6 +8,8 @@
  *   import { REACTION_TYPES, getReactionByType } from '@/constants/reactions';
  */
 
+import { SF } from '../components/zhiive/ZhiiveTheme';
+
 export interface ReactionType {
   /** Internal DB value */
   type: string;
@@ -26,11 +28,11 @@ export interface ReactionType {
  * Colors reference SF/theme tokens as hex to avoid import cycle.
  */
 export const REACTION_TYPES: readonly ReactionType[] = [
-  { type: 'LIKE',  emoji: '👍', i18nKey: 'reactions.pollen',   fallback: 'Pollen',   color: '#1877f2' },
-  { type: 'LOVE',  emoji: '❤️', i18nKey: 'reactions.honey',    fallback: 'Honey',    color: '#ff2d55' },
-  { type: 'BRAVO', emoji: '👏', i18nKey: 'reactions.waggle',   fallback: 'Waggle',   color: '#FDCB6E' },
-  { type: 'UTILE', emoji: '💡', i18nKey: 'reactions.propolis',  fallback: 'Propolis',  color: '#00B894' },
-  { type: 'WOW',   emoji: '😮', i18nKey: 'reactions.royal',    fallback: 'Royal',    color: '#6C5CE7' },
+  { type: 'LIKE',  emoji: '👍', i18nKey: 'reactions.pollen',   fallback: 'Pollen',   color: SF.info },
+  { type: 'LOVE',  emoji: '❤️', i18nKey: 'reactions.honey',    fallback: 'Honey',    color: SF.like },
+  { type: 'BRAVO', emoji: '👏', i18nKey: 'reactions.waggle',   fallback: 'Waggle',   color: SF.gold },
+  { type: 'UTILE', emoji: '💡', i18nKey: 'reactions.propolis',  fallback: 'Propolis',  color: SF.success },
+  { type: 'WOW',   emoji: '😮', i18nKey: 'reactions.royal',    fallback: 'Royal',    color: SF.primary },
 ] as const;
 
 /** Default reaction type (the simple tap/click) */

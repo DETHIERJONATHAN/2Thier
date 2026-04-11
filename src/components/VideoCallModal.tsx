@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import {SF, FB} from './zhiive/ZhiiveTheme';
 import { Avatar, Button, Tooltip, Modal, Spin } from 'antd';
 import {
   PhoneOutlined,
@@ -54,12 +55,12 @@ interface VideoCallModalProps {
 // STYLES
 // ═══════════════════════════════════════════════════════════════
 const COLORS = {
-  bg: '#1a1a2e',
+  bg: SF.dark,
   surface: '#16213e',
   accent: '#0f3460',
   green: '#4caf50',
   red: '#f44336',
-  blue: '#1877f2',
+  blue: FB.blue,
   text: '#ffffff',
   textDim: '#a0a0b0',
 };

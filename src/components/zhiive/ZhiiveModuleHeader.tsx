@@ -21,33 +21,36 @@ const ZhiiveModuleHeader: React.FC<ZhiiveModuleHeaderProps> = ({ icon, title, ce
       style={{
         display: 'flex',
         alignItems: 'center',
-        height: 48,
-        padding: '0 10px',
+        height: 44,
+        padding: '0 6px',
         borderBottom: '1px solid #f0f0f0',
         background: '#fff',
         position: 'sticky',
         top: 0,
         zIndex: 10,
-        gap: 8,
+        gap: 4,
         flexShrink: 0,
+        overflow: 'hidden',
+        width: '100%',
+        maxWidth: '100%',
       }}
     >
       {/* Left: icon + title */}
-      {icon && <span style={{ fontSize: 16, flexShrink: 0, display: 'flex', alignItems: 'center' }}>{icon}</span>}
-      <span style={{ fontWeight: 700, fontSize: 15, flexShrink: 0, color: SF.text }}>{title}</span>
+      {icon && <span style={{ fontSize: 14, flexShrink: 0, display: 'flex', alignItems: 'center' }}>{icon}</span>}
+      <span style={{ fontWeight: 700, fontSize: 13, flexShrink: 0, color: SF.text, whiteSpace: 'nowrap' }}>{title}</span>
 
       {/* Center: optional pills / filters */}
       {center ? (
-        <div style={{ flex: 1, display: 'flex', justifyContent: 'center', gap: 4, overflow: 'hidden' }}>
+        <div style={{ flex: 1, display: 'flex', justifyContent: 'center', gap: 4, overflow: 'hidden', minWidth: 0 }}>
           {center}
         </div>
       ) : (
-        <div style={{ flex: 1 }} />
+        <div style={{ flex: 1, minWidth: 0 }} />
       )}
 
       {/* Right: action buttons */}
       {actions && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
           {actions}
         </div>
       )}

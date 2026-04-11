@@ -8,7 +8,7 @@ export interface AuthContext {
 
 // Helper pour extraire le contexte d'auth de façon robuste
 export function getAuthCtx(req: Request): AuthContext {
-  const user = (req as any).user;
+  const user = req.user;
   return {
     organizationId: user?.organizationId || null,
     isSuperAdmin: user?.isSuperAdmin || false

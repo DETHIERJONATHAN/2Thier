@@ -363,7 +363,7 @@ const NectarPanel: React.FC<NectarPanelProps> = ({ api, currentUser }) => {
   ];
 
   return (
-    <div style={{ flex: 1, height: '100%', overflowY: 'auto', scrollbarWidth: 'none', background: SF.bg, display: 'flex', flexDirection: 'column' as const }}>
+    <div style={{ flex: 1, height: '100%', overflowY: 'auto', overflowX: 'hidden', scrollbarWidth: 'none', background: SF.bg, display: 'flex', flexDirection: 'column' as const, width: '100%', maxWidth: '100%', minWidth: 0 }}>
       <ZhiiveModuleHeader
         icon="🍯"
         title={t('nectar')}
@@ -385,21 +385,23 @@ const NectarPanel: React.FC<NectarPanelProps> = ({ api, currentUser }) => {
           </>
         )}
       />
-      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px', scrollbarWidth: 'none' }}>
-      {/* Section tabs — scrollable */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 12, overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: 2 }}>
+      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '8px 12px', scrollbarWidth: 'none', minWidth: 0 }}>
+      {/* Section tabs — icon-only with tooltips */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 12, overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: 2, maxWidth: '100%', flexWrap: 'nowrap' }}>
         {sections.map(sec => (
-          <div key={sec.key} onClick={() => setActiveSection(sec.key)} style={{
-            flexShrink: 0, padding: '7px 10px', textAlign: 'center', cursor: 'pointer',
-            borderRadius: SF.radiusSm, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
-            transition: 'all 0.25s',
-            background: activeSection === sec.key ? sec.color + '18' : SF.cardBg,
-            color: activeSection === sec.key ? sec.color : SF.textSecondary,
-            boxShadow: activeSection === sec.key ? `0 2px 8px ${sec.color}30` : SF.shadow,
-            border: activeSection === sec.key ? `1.5px solid ${sec.color}40` : '1.5px solid transparent',
-          }}>
-            {sec.icon} {sec.label}
-          </div>
+          <Tooltip key={sec.key} title={sec.label} placement="bottom">
+            <div onClick={() => setActiveSection(sec.key)} style={{
+              flexShrink: 0, width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', borderRadius: SF.radiusSm, fontSize: 16,
+              transition: 'all 0.25s',
+              background: activeSection === sec.key ? sec.color + '18' : SF.cardBg,
+              color: activeSection === sec.key ? sec.color : SF.textSecondary,
+              boxShadow: activeSection === sec.key ? `0 2px 8px ${sec.color}30` : SF.shadow,
+              border: activeSection === sec.key ? `1.5px solid ${sec.color}40` : '1.5px solid transparent',
+            }}>
+              {sec.icon}
+            </div>
+          </Tooltip>
         ))}
       </div>
 

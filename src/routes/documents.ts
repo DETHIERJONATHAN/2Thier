@@ -1,5 +1,7 @@
 import { Router, type Request, type Response } from 'express';
+import { SF } from '../components/zhiive/ZhiiveTheme';
 import { db } from '../lib/database';
+import { deleteFile } from '../lib/storage';
 import { nanoid } from 'nanoid';
 import crypto from 'crypto';
 import { renderDocumentPdf } from '../services/documentPdfRenderer';
@@ -1191,7 +1193,10 @@ router.delete('/generated/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Document non trouvé' });
     }
 
-    // TODO: Supprimer aussi le fichier physique du stockage
+    // Delete the physical file from GCS if it exists
+    if (document.pdfUrl) {
+      await deleteFile(document.pdfUrl).catch(() => {});
+    }
 
     await prisma.generatedDocument.delete({
       where: { id }
@@ -2017,7 +2022,7 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
 <body style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #333; line-height: 1.6; margin: 0; padding: 0; background-color: #f5f5f5;">
   <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
     <tr>
-      <td style="background-color: #1a1a2e; padding: 20px 30px; text-align: center;">
+      <td style="background-color: ${SF.dark}; padding: 20px 30px; text-align: center;">
         <h2 style="color: #ffffff; margin: 0; font-size: 20px;">${orgName}</h2>
       </td>
     </tr>

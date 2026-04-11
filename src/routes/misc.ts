@@ -1,4 +1,5 @@
 import { Router, Response, Request, RequestHandler } from "express";
+import { SF } from '../components/zhiive/ZhiiveTheme';
 import { Prisma, UserOrganizationStatus } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -230,7 +231,7 @@ router.post("/register", async (req: Request, res: Response) => {
               <div style="text-align: center; margin-bottom: 30px;">
                 <h1 style="color: #2563eb; margin: 0; font-size: 28px;">Zhiive</h1>
               </div>
-              <h2 style="color: #1a1a2e; margin-top: 0;">Bienvenue ${firstName} !</h2>
+              <h2 style="color: ${SF.dark}; margin-top: 0;">Bienvenue ${firstName} !</h2>
               <p style="color: #444; line-height: 1.6;">Merci de vous etre inscrit(e) sur Zhiive. Pour activer votre compte et commencer a utiliser la plateforme, cliquez sur le bouton ci-dessous :</p>
               <p style="text-align: center; margin: 35px 0;">
                 <a href="${verifyUrl}" style="background-color: #2563eb; color: white; padding: 14px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block;">Activer mon compte</a>
@@ -379,7 +380,7 @@ router.post("/resend-verification", async (req: Request, res: Response) => {
             <div style="text-align: center; margin-bottom: 30px;">
               <h1 style="color: #2563eb; margin: 0; font-size: 28px;">Zhiive</h1>
             </div>
-            <h2 style="color: #1a1a2e; margin-top: 0;">Nouveau lien d'activation</h2>
+            <h2 style="color: ${SF.dark}; margin-top: 0;">Nouveau lien d'activation</h2>
             <p style="color: #444; line-height: 1.6;">Voici votre nouveau lien pour activer votre compte Zhiive :</p>
             <p style="text-align: center; margin: 35px 0;">
               <a href="${verifyUrl}" style="background-color: #2563eb; color: white; padding: 14px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block;">Activer mon compte</a>

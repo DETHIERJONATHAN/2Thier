@@ -1,3 +1,4 @@
+import { FB } from '../../components/zhiive/ZhiiveTheme';
 /**
  * 😀 EmojiReactionPicker — Full Facebook-style emoji picker
  * Quick reactions bar + comprehensive categorized emoji grid
@@ -261,7 +262,7 @@ export const EmojiReactionPicker: React.FC<EmojiReactionPickerProps> = ({
               style={{
                 fontSize: 18, padding: '4px 6px', borderRadius: 8, flexShrink: 0,
                 background: !search && activeCategory === key ? '#e7f3ff' : 'transparent',
-                border: !search && activeCategory === key ? '1px solid #1877f2' : '1px solid transparent',
+                border: !search && activeCategory === key ? '1px solid ${FB.blue}' : '1px solid transparent',
               }}
             >
               {cat.icon}

@@ -1,3 +1,4 @@
+import { SF } from '../../components/zhiive/ZhiiveTheme';
 import React, { useCallback, useMemo, useEffect, useState, useRef, lazy, Suspense } from 'react';
 import { Layout, Dropdown, Avatar, Spin } from 'antd';
 import NotificationsBell from '../../components/NotificationsBell';
@@ -386,7 +387,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const headerAvatarSrc = identity.avatarUrl;
   const headerAvatarFallback = showOrgAvatar ? (!orgLogo && orgInitial) : (!user?.avatarUrl && userInitial);
   const headerAvatarBg = showOrgAvatar
-    ? (orgLogo ? 'transparent' : '#6C5CE7')
+    ? (orgLogo ? 'transparent' : SF.primary)
     : (user?.avatarUrl ? 'transparent' : '#1890ff');
   const headerAvatarBorder = showOrgAvatar ? '2px solid rgba(108,92,231,0.5)' : '2px solid rgba(255,255,255,0.3)';
 
@@ -435,7 +436,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             <div style={{ display: 'flex', gap: 4, padding: '2px 0' }} onClick={e => e.stopPropagation()}>
               {([
                 { key: 'personal' as const, label: '👤 Mon Hive', color: '#00CEC9' },
-                { key: 'org' as const, label: '🏢 Colony', color: '#6C5CE7' },
+                { key: 'org' as const, label: '🏢 Colony', color: SF.primary },
               ]).map(m => (
                 <div
                   key={m.key}

@@ -43,11 +43,11 @@ function getUser(req: Request): AuthUser {
   if (headerUserId) {
     return {
       id: headerUserId,
-      organizationId: headerOrgId || (req as any).user?.organizationId || '',
-      role: (req as any).user?.role
+      organizationId: headerOrgId || req.user?.organizationId || '',
+      role: req.user?.role
     };
   }
-  return (req as any).user as AuthUser;
+  return req.user as AuthUser;
 }
 
 function getOrgId(req: Request): string {

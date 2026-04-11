@@ -144,15 +144,19 @@ function hasGoogleWorkspaceEnabled(
   return hasActiveModules || hasActiveConfig;
 };
 
-// 🔧 UTILITAIRE DOMAIN GOOGLE WORKSPACE (TODO amélioré)
+// 🔧 UTILITAIRE DOMAIN GOOGLE WORKSPACE
 interface OrganizationWithFeatures {
   name: string;
   features?: string[];
+  GoogleWorkspaceConfig?: { domain?: string | null } | null;
 }
 
 const extractGoogleWorkspaceDomain = (organization: OrganizationWithFeatures): string | null => {
-  // TODO: À terme, récupérer depuis un champ dédié googleWorkspaceDomain
-  // Pour l'instant, logique de fallback basique
+  // Priorité : champ dédié dans GoogleWorkspaceConfig
+  if (organization.GoogleWorkspaceConfig?.domain) {
+    return organization.GoogleWorkspaceConfig.domain;
+  }
+  // Fallback : dériver depuis le nom si le module est activé
   if (organization.features?.includes('google_workspace')) {
     return `${organization.name.toLowerCase().replace(/\s+/g, '')}.com`;
   }

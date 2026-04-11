@@ -15,7 +15,7 @@ import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
 import { z } from 'zod';
-import crypto from 'crypto';
+import { OTP_MIN, OTP_MAX } from '../lib/constants';
 import nodemailer from 'nodemailer';
 import { decrypt } from '../utils/crypto.js';
 import { createBusinessAutoPost } from '../services/business-auto-post';
@@ -32,7 +32,7 @@ const router = Router();
 // ═══════════════════════════════════════════════════
 
 function generateOtp(): string {
-  return crypto.randomInt(100000, 999999).toString();
+  return crypto.randomInt(OTP_MIN, OTP_MAX).toString();
 }
 
 function hashOtp(otp: string): string {

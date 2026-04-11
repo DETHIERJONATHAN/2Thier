@@ -13,6 +13,7 @@
 
 import cron from 'node-cron';
 import { db } from '../lib/database';
+import { SF } from '../components/zhiive/ZhiiveTheme';
 import { checkPeppolStatus } from '../services/vatLookupService';
 import { getPeppolBridge } from '../services/peppolBridge';
 import { notify } from '../services/NotificationHelper';
@@ -320,7 +321,7 @@ export const fetchIncomingInvoices = cron.schedule('0 */1 * * *', async () => {
               const zhiiveEmail = admin.User?.EmailAccount?.emailAddress;
               if (zhiiveEmail) {
                 const postal = getPostalService();
-                const htmlEmail = `<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;"><div style="background:linear-gradient(135deg,#6C5CE7,#a855f7);padding:20px;border-radius:12px 12px 0 0;color:white;"><h2 style="margin:0;">${title}</h2><p style="margin:5px 0 0;opacity:0.9;">${orgName} — Peppol e-Invoicing</p></div><div style="background:#f8f9fa;padding:20px;border-radius:0 0 12px 12px;"><p>${shortBody}</p><p style="margin-top:16px;"><a href="https://app.2thier.be/facture?tab=incoming" style="background:#6C5CE7;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block;">Voir les factures</a></p></div></div>`;
+                const htmlEmail = `<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;"><div style="background:linear-gradient(135deg,${SF.primary},#a855f7);padding:20px;border-radius:12px 12px 0 0;color:white;"><h2 style="margin:0;">${title}</h2><p style="margin:5px 0 0;opacity:0.9;">${orgName} — Peppol e-Invoicing</p></div><div style="background:#f8f9fa;padding:20px;border-radius:0 0 12px 12px;"><p>${shortBody}</p><p style="margin-top:16px;"><a href="https://app.2thier.be/facture?tab=incoming" style="background:${SF.primary};color:white;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block;">Voir les factures</a></p></div></div>`;
                 postal.sendEmail({
                   from: 'comptabilite@zhiive.com',
                   to: zhiiveEmail,
@@ -334,7 +335,7 @@ export const fetchIncomingInvoices = cron.schedule('0 */1 * * *', async () => {
             // Email Colony
             if (org?.email) {
               const postal = getPostalService();
-              const htmlEmail = `<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;"><div style="background:linear-gradient(135deg,#6C5CE7,#a855f7);padding:20px;border-radius:12px 12px 0 0;color:white;"><h2 style="margin:0;">${title}</h2><p style="margin:5px 0 0;opacity:0.9;">${orgName} — Peppol e-Invoicing</p></div><div style="background:#f8f9fa;padding:20px;border-radius:0 0 12px 12px;"><p>${shortBody}</p><p style="margin-top:16px;"><a href="https://app.2thier.be/facture?tab=incoming" style="background:#6C5CE7;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block;">Voir les factures</a></p></div></div>`;
+              const htmlEmail = `<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;"><div style="background:linear-gradient(135deg,${SF.primary},#a855f7);padding:20px;border-radius:12px 12px 0 0;color:white;"><h2 style="margin:0;">${title}</h2><p style="margin:5px 0 0;opacity:0.9;">${orgName} — Peppol e-Invoicing</p></div><div style="background:#f8f9fa;padding:20px;border-radius:0 0 12px 12px;"><p>${shortBody}</p><p style="margin-top:16px;"><a href="https://app.2thier.be/facture?tab=incoming" style="background:${SF.primary};color:white;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block;">Voir les factures</a></p></div></div>`;
               postal.sendEmail({
                 from: 'comptabilite@zhiive.com',
                 to: org.email,

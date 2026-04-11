@@ -165,7 +165,7 @@ router.post('/', async (req, res) => {
     // 🐝 Auto-post social : nouveau client
     createBusinessAutoPost({
       orgId: req.organizationId,
-      userId: (req as any).user?.id || (req as any).user?.userId,
+      userId: req.user?.id || req.user?.userId,
       eventType: 'new_client',
       entityId: lead.id,
       entityLabel: company || name || 'Nouveau client',

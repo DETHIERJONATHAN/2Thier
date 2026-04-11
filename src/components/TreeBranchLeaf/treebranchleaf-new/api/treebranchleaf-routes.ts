@@ -138,7 +138,7 @@ const computeLogicVersion = () => {
 };
 
 // Helper pour unifier le contexte d'auth (org/superadmin) mÃƒÆ’Ã‚Âªme si req.user est partiel
-type MinimalReqUser = { organizationId?: string | null; isSuperAdmin?: boolean; role?: string; userRole?: string };
+type MinimalReqUser = { id?: string; userId?: string; organizationId?: string | null; isSuperAdmin?: boolean; role?: string; userRole?: string };
 type MinimalReq = { user?: MinimalReqUser; headers?: Record<string, unknown> };
 function getAuthCtx(req: MinimalReq): { organizationId: string | null; isSuperAdmin: boolean } {
   const user: MinimalReqUser = (req && req.user) || {};

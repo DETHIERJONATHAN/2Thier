@@ -1,5 +1,6 @@
 import express from 'express';
 import { authenticateToken, requireRole } from '../middleware/auth';
+import { db } from '../lib/database';
 
 const router = express.Router();
 
@@ -61,18 +62,36 @@ router.post('/devis', authenticateToken, requireRole(['user', 'admin', 'super_ad
       updatedAt: new Date()
     };
 
-    // Pour l'instant, on utilise une table générique ou on stocke en JSON
-    // TODO: Créer une table dédiée tbl_devis si nécessaire
-    
-    // Simuler la sauvegarde pour le moment
-    const devisId = `tbl_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    console.log('✅ [TBL API] Devis sauvegardé avec succès:', { devisId, devisData });
+    // Sauvegarder comme TreeBranchLeafSubmission
+    const submission = await db.treeBranchLeafSubmission.upsert({
+      where: { id: `tbl_${treeId}_${clientId}_${organizationId}` },
+      update: {
+        status: isDraft ? 'draft' : 'completed',
+        summary: devisData as any,
+        exportData: formData as any,
+        updatedAt: new Date(),
+        completedAt: isDraft ? null : new Date(),
+      },
+      create: {
+        id: `tbl_${treeId}_${clientId}_${organizationId}`,
+        treeId,
+        userId,
+        leadId: clientId,
+        organizationId,
+        status: isDraft ? 'draft' : 'completed',
+        summary: devisData as any,
+        exportData: formData as any,
+        updatedAt: new Date(),
+        completedAt: isDraft ? null : new Date(),
+      },
+    });
+    console.log('✅ [TBL API] Devis sauvegardé avec succès:', submission.id);
 
     res.json({
       success: true,
-      devisId,
+      devisId: submission.id,
       message: 'Devis TBL sauvegardé avec succès',
-      data: devisData
+      data: devisData,
     });
 
   } catch (error) {
@@ -99,10 +118,11 @@ router.get('/devis/client/:clientId', authenticateToken, requireRole(['user', 'a
       });
     }
 
-    // TODO: Implémenter la récupération depuis la base de données
-    // Pour l'instant, retourner un tableau vide
-    
-    res.json([]);
+    const submissions = await db.treeBranchLeafSubmission.findMany({
+      where: { leadId: clientId, ...(role !== 'super_admin' ? { organizationId } : {}) },
+      orderBy: { updatedAt: 'desc' },
+    });
+    res.json(submissions.map(s => ({ devisId: s.id, ...((s.summary as Record<string, unknown>) ?? {}), formData: s.exportData, status: s.status, updatedAt: s.updatedAt })));
 
   } catch (error) {
     console.error('❌ [TBL API] Erreur récupération devis client:', error);
@@ -127,12 +147,11 @@ router.get('/devis/:devisId', authenticateToken, requireRole(['user', 'admin', '
       });
     }
 
-    // TODO: Implémenter la récupération depuis la base de données
-    // Pour l'instant, retourner null
-    
-    res.json({
-      formData: null
+    const submission = await db.treeBranchLeafSubmission.findFirst({
+      where: { id: devisId, ...(role !== 'super_admin' ? { organizationId } : {}) },
     });
+    if (!submission) return res.status(404).json({ error: 'Devis introuvable' });
+    res.json({ devisId: submission.id, formData: submission.exportData ?? null, status: submission.status, summary: submission.summary });
 
   } catch (error) {
     console.error('❌ [TBL API] Erreur chargement devis:', error);
@@ -162,10 +181,8 @@ router.get('/clients/:clientId/access-check', authenticateToken, requireRole(['u
       });
     }
 
-    // TODO: Vérifier dans la base de données si le client appartient à l'organisation
-    // Pour l'instant, accorder l'accès aux utilisateurs authentifiés
-    
-    res.json({ hasAccess: true });
+    const lead = await db.lead.findFirst({ where: { id: clientId, organizationId }, select: { id: true } });
+    res.json({ hasAccess: !!lead });
 
   } catch (error) {
     console.error('❌ [TBL API] Erreur vérification accès client:', error);

@@ -10,7 +10,7 @@ const router = Router();
 router.get('/trees/:treeId/exposed', async (req: Request, res: Response) => {
   try {
     const { treeId } = req.params;
-    const user = (req as any).user;
+    const user = req.user;
     const organizationId = user?.organizationId;
 
     if (!organizationId) {
@@ -173,7 +173,7 @@ router.get('/trees/:treeId/exposed', async (req: Request, res: Response) => {
 // ──────────────────────────────────────────────────────
 router.patch('/override/variable', async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     const organizationId = user?.organizationId;
     const { variableId, nodeId, treeId, value } = req.body;
 
@@ -226,7 +226,7 @@ router.patch('/override/variable', async (req: Request, res: Response) => {
 // ──────────────────────────────────────────────────────
 const handleOverrideConstant = async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     const organizationId = user?.organizationId;
     const { constId, nodeId, treeId, value, label } = req.body;
 
@@ -280,7 +280,7 @@ router.post('/override/constant', handleOverrideConstant);
 // ──────────────────────────────────────────────────────
 router.patch('/override/table', async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     const organizationId = user?.organizationId;
     const { tableId, nodeId, treeId, data } = req.body;
 
@@ -335,7 +335,7 @@ router.patch('/override/table', async (req: Request, res: Response) => {
 router.delete('/constant/:constId', async (req: Request, res: Response) => {
   try {
     const { constId } = req.params;
-    const user = (req as any).user;
+    const user = req.user;
     const organizationId = user?.organizationId;
     if (!organizationId || !constId) {
       return res.status(400).json({ error: 'Missing constId' });
@@ -384,7 +384,7 @@ router.delete('/constant/:constId', async (req: Request, res: Response) => {
 router.delete('/override/:overrideId', async (req: Request, res: Response) => {
   try {
     const { overrideId } = req.params;
-    const user = (req as any).user;
+    const user = req.user;
     const organizationId = user?.organizationId;
 
     const override = await db.gestionnaireOverride.findUnique({

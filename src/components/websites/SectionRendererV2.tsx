@@ -1,3 +1,4 @@
+import { SF, WEBSITE_DEFAULTS } from '../zhiive/ZhiiveTheme';
 /**
  * 🎨 SECTION RENDERER V2 - ULTRA PIXEL-PERFECT
  * 
@@ -53,7 +54,7 @@ const getIcon = (iconName: string, size = '48px', color?: string): React.ReactNo
   if (!iconName) return null;
   
   // Créer le style pour l'icône
-  const style = { fontSize: size, color: color || '#10b981' };
+  const style = { fontSize: size, color: color || WEBSITE_DEFAULTS.primaryColor };
   
   // Récupérer le composant d'icône dynamiquement
   const IconComponent = (Icons as any)[iconName];
@@ -64,7 +65,7 @@ const getIcon = (iconName: string, size = '48px', color?: string): React.ReactNo
   }
   
   // Sinon, retourner l'emoji/texte brut
-  return <span style={{ fontSize: size, color: color || '#10b981' }}>{iconName}</span>;
+  return <span style={{ fontSize: size, color: color || WEBSITE_DEFAULTS.primaryColor }}>{iconName}</span>;
 };
 
 // ============================================================
@@ -212,7 +213,7 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
           level={3}
           style={{
             margin: 0,
-            color: logo.color || '#10b981',
+            color: logo.color || WEBSITE_DEFAULTS.primaryColor,
             fontSize: logo.fontSize || '24px',
             fontWeight: logo.fontWeight || 'bold'
           }}
@@ -233,8 +234,8 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
           size={ctaButton.size || 'large'}
           href={ctaButton.href}
           style={{
-            backgroundColor: ctaButton.backgroundColor || '#10b981',
-            borderColor: ctaButton.borderColor || '#10b981'
+            backgroundColor: ctaButton.backgroundColor || WEBSITE_DEFAULTS.primaryColor,
+            borderColor: ctaButton.borderColor || WEBSITE_DEFAULTS.primaryColor
           }}
         >
           {ctaButton.text || 'CTA'}
@@ -259,7 +260,7 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
       <div
         className="gradient-animated" // 🎨 Animation gradient
         style={{
-          background: content.backgroundGradient || 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+          background: content.backgroundGradient || WEBSITE_DEFAULTS.gradient,
           minHeight: content.minHeight || '500px',
           display: 'flex',
           alignItems: 'center',
@@ -310,7 +311,7 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
                     fontSize: btn.fontSize || '18px',
                     backgroundColor: btn.backgroundColor || 'white',
                     borderColor: btn.borderColor || 'white',
-                    color: btn.textColor || '#10b981',
+                    color: btn.textColor || WEBSITE_DEFAULTS.primaryColor,
                     fontWeight: btn.fontWeight || 'normal'
                   }}
                 >
@@ -403,7 +404,7 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
                       fontSize: stat.iconSize || style.iconSize || cardStyle.iconSize || '48px',
                       lineHeight: 1
                     }}>
-                      {getIcon(stat.icon, stat.iconSize || style.iconSize || cardStyle.iconSize || '48px', stat.iconColor || style.iconColor || cardStyle.iconColor || '#10b981')}
+                      {getIcon(stat.icon, stat.iconSize || style.iconSize || cardStyle.iconSize || '48px', stat.iconColor || style.iconColor || cardStyle.iconColor || WEBSITE_DEFAULTS.primaryColor)}
                     </div>
                     
                     <Statistic
@@ -503,13 +504,13 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
                   >
                     <div style={{ 
                       fontSize: service.iconSize || cardStyle.iconSize || '48px',
-                      color: service.iconColor || cardStyle.iconColor || '#10b981',
+                      color: service.iconColor || cardStyle.iconColor || WEBSITE_DEFAULTS.primaryColor,
                       lineHeight: 1
                     }}>
                       {getIcon(
                         service.icon, 
                         service.iconSize || cardStyle.iconSize || '48px', 
-                        service.iconColor || cardStyle.iconColor || '#10b981'
+                        service.iconColor || cardStyle.iconColor || WEBSITE_DEFAULTS.primaryColor
                       ) || service.icon}
                     </div>
                     <Title level={4} style={{ margin: 0, fontSize: '18px' }}>
@@ -526,7 +527,7 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
                         return (
                           <List.Item style={{ padding: '4px 0', border: 'none' }}>
                             <Text style={{ fontSize: '13px' }}>
-                              {CheckIcon && <CheckIcon style={{ color: '#10b981', marginRight: '8px' }} />}
+                              {CheckIcon && <CheckIcon style={{ color: WEBSITE_DEFAULTS.primaryColor, marginRight: '8px' }} />}
                               {item}
                             </Text>
                           </List.Item>
@@ -537,8 +538,8 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
                       type={ctaButtonStyle.type || 'primary'}
                       block={ctaButtonStyle.block}
                       style={{
-                        backgroundColor: ctaButtonStyle.backgroundColor || '#10b981',
-                        borderColor: ctaButtonStyle.borderColor || '#10b981',
+                        backgroundColor: ctaButtonStyle.backgroundColor || WEBSITE_DEFAULTS.primaryColor,
+                        borderColor: ctaButtonStyle.borderColor || WEBSITE_DEFAULTS.primaryColor,
                         marginTop: 'auto'
                       }}
                     >
@@ -618,13 +619,13 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
                   >
                     <div style={{ 
                       fontSize: value.iconSize || cardStyle.iconSize || '48px',
-                      color: value.color || cardStyle.iconColor || '#10b981',
+                      color: value.color || cardStyle.iconColor || WEBSITE_DEFAULTS.primaryColor,
                       lineHeight: 1
                     }}>
                       {getIcon(
                         value.emoji, 
                         value.iconSize || cardStyle.iconSize || '48px', 
-                        value.color || cardStyle.iconColor || '#10b981'
+                        value.color || cardStyle.iconColor || WEBSITE_DEFAULTS.primaryColor
                       ) || value.emoji}
                     </div>
                     <Title level={4} style={{ margin: 0 }}>{value.title}</Title>
@@ -805,7 +806,7 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
                         {project.tags.map((tag: string) => (
                           <Tag 
                             key={tag} 
-                            color={project.badgeColor || '#10b981'}
+                            color={project.badgeColor || WEBSITE_DEFAULTS.primaryColor}
                             style={{ borderRadius: '12px' }}
                           >
                             {tag}
@@ -964,7 +965,7 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
 
       <div
         style={{
-          background: content.backgroundGradient || 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+          background: content.backgroundGradient || WEBSITE_DEFAULTS.gradient,
           padding: content.padding || '40px 24px',
           textAlign: content.textAlign || 'center'
         }}

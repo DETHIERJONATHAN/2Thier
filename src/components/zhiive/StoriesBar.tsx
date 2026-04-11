@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { MAX_PHOTO_SIZE } from '../../lib/constants';
 import { Avatar, Tooltip, Modal, Input, message } from 'antd';
 import {
   PlusOutlined, UserOutlined, CameraOutlined, LoadingOutlined,
@@ -150,7 +151,7 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
       message.error(t('stories.onlyImagesVideos'));
       return;
     }
-    if (file.size > 50 * 1024 * 1024) {
+    if (file.size > MAX_PHOTO_SIZE) {
       message.error(t('stories.fileTooLarge50'));
       return;
     }

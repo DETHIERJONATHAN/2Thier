@@ -1,3 +1,4 @@
+import { FB } from '../components/zhiive/ZhiiveTheme';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Avatar, Input, Modal, Form, DatePicker, TimePicker, message as antMessage, Tooltip, Dropdown, Drawer } from 'antd';
 import {
@@ -124,12 +125,6 @@ interface Friend {
 // ═══════════════════════════════════════════════════════════════
 // STYLES
 // ═══════════════════════════════════════════════════════════════
-
-const FB = {
-  blue: '#1877f2', bg: '#f0f2f5', white: '#fff', text: '#1c1e21',
-  textSecondary: '#65676b', border: '#e4e6eb', green: '#31a24c',
-  hover: '#f2f3f5', msgBg: '#e4e6eb', msgBlueBg: '#0084ff',
-};
 
 const CHAT_WIDTH = 400;
 const CHAT_HEIGHT = 550;

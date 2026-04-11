@@ -12,7 +12,7 @@ router.use(authenticateToken as any);
 // GET /friends — List all friends (accepted) + pending requests
 // ═══════════════════════════════════════════════════════════════
 router.get('/', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   try {
@@ -88,7 +88,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
 // POST /friends/sync-org — Auto-add org members as friends
 // ═══════════════════════════════════════════════════════════════
 router.post('/sync-org', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id || !user.organizationId) { res.status(400).json({ error: 'Organisation requise' }); return; }
 
   try {
@@ -134,7 +134,7 @@ router.post('/sync-org', async (req: Request, res: Response): Promise<void> => {
 // POST /friends/request — Send friend request
 // ═══════════════════════════════════════════════════════════════
 router.post('/request', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   const { userId } = req.body;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
   if (!userId || userId === user.id) { res.status(400).json({ error: 'userId invalide' }); return; }
@@ -209,7 +209,7 @@ router.post('/request', async (req: Request, res: Response): Promise<void> => {
 // POST /friends/block-user — Block a user (creates friendship if needed)
 // ═══════════════════════════════════════════════════════════════
 router.post('/block-user', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   const { userId } = req.body;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
   if (!userId || userId === user.id) { res.status(400).json({ error: 'userId invalide' }); return; }
@@ -264,7 +264,7 @@ router.post('/block-user', async (req: Request, res: Response): Promise<void> =>
 // POST /friends/unblock-user — Unblock a user (removes friendship)
 // ═══════════════════════════════════════════════════════════════
 router.post('/unblock-user', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   const { userId } = req.body;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
   if (!userId) { res.status(400).json({ error: 'userId requis' }); return; }
@@ -294,7 +294,7 @@ router.post('/unblock-user', async (req: Request, res: Response): Promise<void> 
 // GET /friends/blocked — List all blocked users
 // ═══════════════════════════════════════════════════════════════
 router.get('/blocked', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   try {
@@ -328,7 +328,7 @@ router.get('/blocked', async (req: Request, res: Response): Promise<void> => {
 // POST /friends/:id/accept — Accept friend request
 // ═══════════════════════════════════════════════════════════════
 router.post('/:id/accept', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   try {
@@ -420,7 +420,7 @@ router.post('/:id/accept', async (req: Request, res: Response): Promise<void> =>
 // POST /friends/:id/block — Block a user
 // ═══════════════════════════════════════════════════════════════
 router.post('/:id/block', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   try {
@@ -474,7 +474,7 @@ router.post('/:id/block', async (req: Request, res: Response): Promise<void> => 
 // DELETE /friends/:id — Remove friend / reject request
 // ═══════════════════════════════════════════════════════════════
 router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   try {
@@ -513,7 +513,7 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
 // GET /friends/status/:userId — Check friendship status with a user
 // ═══════════════════════════════════════════════════════════════
 router.get('/status/:userId', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
   const { userId } = req.params;
   if (!userId || userId === user.id) { res.json({ status: null }); return; }
@@ -546,7 +546,7 @@ router.get('/status/:userId', async (req: Request, res: Response): Promise<void>
 // GET /friends/search — Search users to add as friends
 // ═══════════════════════════════════════════════════════════════
 router.get('/search', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   const q = (req.query.q as string || '').trim();
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
   if (q.length < 2) { res.json([]); return; }
@@ -597,7 +597,7 @@ router.get('/search', async (req: Request, res: Response): Promise<void> => {
 // POST /friends/block-org — Block a Colony (organization)
 // ═══════════════════════════════════════════════════════════════
 router.post('/block-org', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   const { organizationId, reason } = req.body;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
   if (!organizationId) { res.status(400).json({ error: 'organizationId requis' }); return; }
@@ -627,7 +627,7 @@ router.post('/block-org', async (req: Request, res: Response): Promise<void> => 
 // POST /friends/unblock-org — Unblock a Colony
 // ═══════════════════════════════════════════════════════════════
 router.post('/unblock-org', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   const { organizationId } = req.body;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
   if (!organizationId) { res.status(400).json({ error: 'organizationId requis' }); return; }
@@ -650,7 +650,7 @@ router.post('/unblock-org', async (req: Request, res: Response): Promise<void> =
 // GET /friends/blocked-orgs — List blocked organizations
 // ═══════════════════════════════════════════════════════════════
 router.get('/blocked-orgs', async (req: Request, res: Response): Promise<void> => {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
   try {

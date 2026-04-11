@@ -1,3 +1,4 @@
+import { SF, WEBSITE_DEFAULTS } from '../zhiive/ZhiiveTheme';
 /**
  * 🎨 PAGE BUILDER - Gestionnaire de sections de site web
  * Permet de créer, éditer, réorganiser toutes les sections d'un site
@@ -112,7 +113,7 @@ const SortableItem: React.FC<{
         style={{
           marginBottom: 8,
           opacity: section.isActive ? 1 : 0.5,
-          borderLeft: `4px solid ${section.backgroundColor || '#3b82f6'}`,
+          borderLeft: `4px solid ${section.backgroundColor || SF.blue}`,
           transition: 'opacity 0.3s ease'
         }}
         styles={{ body: { padding: '12px' } }}
@@ -384,7 +385,7 @@ export const SectionsManager: React.FC<SectionsManagerProps> = ({ websiteId, sit
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <div>
             <strong>{sections.length} section(s)</strong>
-            <span style={{ marginLeft: '10px', color: '#10b981' }}>
+            <span style={{ marginLeft: '10px', color: WEBSITE_DEFAULTS.primaryColor }}>
               {sections.filter(s => s.isActive).length} active(s)
             </span>
             <span style={{ marginLeft: '10px', color: '#999' }}>

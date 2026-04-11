@@ -1,3 +1,4 @@
+import { SF } from '../components/zhiive/ZhiiveTheme';
 import React, { useState } from 'react';
 import { 
   Card, 
@@ -137,8 +138,8 @@ const Devis1minuteVitrinePage: React.FC = () => {
             size="large"
             icon={<RocketOutlined />}
             style={{ 
-              backgroundColor: '#10b981',
-              borderColor: '#10b981',
+              backgroundColor: SF.emerald,
+              borderColor: SF.emerald,
               height: 'auto',
               padding: '14px 28px',
               fontSize: 'clamp(14px, 3.5vw, 16px)',
@@ -355,7 +356,7 @@ const Devis1minuteVitrinePage: React.FC = () => {
           <Col xs={24} lg={12}>
             <Card 
               title={<span style={{ fontWeight: 'bold' }}>🔥 Leads Récents</span>}
-              extra={<Badge count={recentLeads.length} style={{ backgroundColor: '#10b981' }} />}
+              extra={<Badge count={recentLeads.length} style={{ backgroundColor: SF.emerald }} />}
               style={{ borderRadius: '12px' }}
             >
               <List
@@ -368,7 +369,7 @@ const Devis1minuteVitrinePage: React.FC = () => {
                         type="primary" 
                         size="small" 
                         onClick={() => setPartnerModalVisible(true)}
-                        style={{ backgroundColor: '#10b981', borderColor: '#10b981' }}
+                        style={{ backgroundColor: SF.emerald, borderColor: SF.emerald }}
                       >
                         Contacter
                       </Button>
@@ -381,7 +382,7 @@ const Devis1minuteVitrinePage: React.FC = () => {
                       title={<span style={{ fontSize: '14px' }}>{lead.type} - {lead.client}</span>}
                       description={
                         <Space wrap size="small">
-                          <Text strong style={{ color: '#10b981' }}>{lead.value.toLocaleString()}€</Text>
+                          <Text strong style={{ color: SF.emerald }}>{lead.value.toLocaleString()}€</Text>
                           <Tag color={getStatusColor(lead.status)}>{getStatusText(lead.status)}</Tag>
                           <Text type="secondary" style={{ fontSize: '12px' }}>{lead.date}</Text>
                         </Space>
@@ -398,10 +399,10 @@ const Devis1minuteVitrinePage: React.FC = () => {
             <Card title={<span style={{ fontWeight: 'bold' }}>🎯 Types de Projets</span>} style={{ borderRadius: '12px' }}>
               <Row gutter={[12, 12]}>
                 {[
-                  { name: 'Pompes à Chaleur', color: '#10b981', leads: '2,450' },
-                  { name: 'Panneaux Solaires', color: '#f59e0b', leads: '3,120' },
-                  { name: 'Isolation', color: '#3b82f6', leads: '1,890' },
-                  { name: 'Chaudières', color: '#8b5cf6', leads: '1,640' },
+                  { name: 'Pompes à Chaleur', color: SF.emerald, leads: '2,450' },
+                  { name: 'Panneaux Solaires', color: SF.amber, leads: '3,120' },
+                  { name: 'Isolation', color: SF.blue, leads: '1,890' },
+                  { name: 'Chaudières', color: SF.violet, leads: '1,640' },
                   { name: 'Ventilation', color: '#ec4899', leads: '780' },
                   { name: 'Autres', color: '#6366f1', leads: '540' }
                 ].map((type) => (

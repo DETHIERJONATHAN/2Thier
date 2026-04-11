@@ -1,3 +1,4 @@
+import { FB } from '../components/zhiive/ZhiiveTheme';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Spin, App, Modal, InputNumber, DatePicker, Tooltip, Switch, Image,
@@ -22,16 +23,6 @@ dayjs.extend(relativeTime);
 dayjs.locale('fr');
 
 // ── Facebook Theme ──
-const FB = {
-  bg: '#f0f2f5', white: '#ffffff', text: '#050505', textSecondary: '#65676b',
-  blue: '#1877f2', blueHover: '#166fe5', border: '#ced0d4',
-  btnGray: '#e4e6eb', btnGrayHover: '#d8dadf', green: '#42b72a',
-  red: '#e4405f', orange: '#f7931a', purple: '#722ed1',
-  shadow: '0 1px 2px rgba(0,0,0,0.1)', radius: 8,
-  // Light backgrounds for status badges
-  lightBlue: '#e7f3ff', lightGreen: '#e6f4ea', lightRed: '#fce8e6', lightPurple: '#f3e8fd',
-};
-
 // ── Types ──
 interface UnifiedInvoice {
   id: string;

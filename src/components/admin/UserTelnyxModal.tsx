@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { SF } from '../zhiive/ZhiiveTheme';
 import {
   Modal,
   Form,
@@ -163,7 +164,7 @@ const UserTelnyxModal: React.FC<UserTelnyxModalProps> = ({
     <Modal
       title={
         <Space>
-          <PhoneOutlined style={{ color: '#FF6B6B' }} />
+          <PhoneOutlined style={{ color: SF.like }} />
           Configuration Telnyx - {user?.firstName} {user?.lastName}
         </Space>
       }

@@ -15,7 +15,7 @@ const router = Router();
 
 router.post('/follow/:userId', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const followerId = (req as any).user.id;
+    const followerId = req.user.id;
     const followingId = req.params.userId;
     if (followerId === followingId) return res.status(400).json({ error: 'Impossible de se suivre soi-même' });
 
@@ -33,7 +33,7 @@ router.post('/follow/:userId', authenticateToken, async (req: Request, res: Resp
 
 router.delete('/follow/:userId', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const followerId = (req as any).user.id;
+    const followerId = req.user.id;
     const followingId = req.params.userId;
     await db.follow.deleteMany({ where: { followerId, followingId } });
     res.json({ success: true });
@@ -74,10 +74,10 @@ router.get('/following/:userId', authenticateToken, async (req: Request, res: Re
 
 router.get('/stories/feed', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const orgId = (req as any).user.organizationId;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
     const mode: FeedMode = (req.query.mode as string) === 'personal' ? 'personal' : 'org';
-    const isSuperAdmin = (req as any).user.role === 'super_admin' || (req as any).user.isSuperAdmin;
+    const isSuperAdmin = req.user.role === 'super_admin' || req.user.isSuperAdmin;
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
     // Use centralized social context for stories
@@ -124,8 +124,8 @@ router.get('/stories/feed', authenticateToken, async (req: Request, res: Respons
 
 router.post('/stories', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const orgId = (req as any).user.organizationId;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
     const { mediaUrl, mediaType, text, visibility, publishAsOrg } = req.body;
 
     // ═══ Enforcement SocialSettings ═══
@@ -133,7 +133,7 @@ router.post('/stories', authenticateToken, async (req: Request, res: Response) =
     if (!settings.storiesEnabled) {
       return res.status(403).json({ error: 'Les Stories sont désactivées pour cette Colony' });
     }
-    const user = (req as any).user;
+    const user = req.user;
     const isAdmin = user.role === 'admin' || user.role === 'super_admin' || user.isSuperAdmin;
     if (!settings.allowMembersStory && !isAdmin) {
       return res.status(403).json({ error: 'La création de Stories est réservée aux administrateurs' });
@@ -184,8 +184,12 @@ router.post('/stories', authenticateToken, async (req: Request, res: Response) =
 
 router.post('/stories/:storyId/view', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
     const storyId = req.params.storyId;
+
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.storiesEnabled) return res.status(403).json({ error: 'Stories disabled' });
 
     const existing = await db.storyView.findUnique({
       where: { storyId_viewerId: { storyId, viewerId: userId } },
@@ -202,8 +206,8 @@ router.post('/stories/:storyId/view', authenticateToken, async (req: Request, re
 // 🐝 React to a story (like) — uses StoryView upsert as interaction marker
 router.post('/stories/:storyId/react', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const orgId = (req as any).user.organizationId;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
     const storyId = req.params.storyId;
 
     const settings = await getOrgSocialSettings(orgId);
@@ -228,7 +232,7 @@ router.post('/stories/:storyId/react', authenticateToken, async (req: Request, r
 
 router.delete('/stories/:storyId', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = req.user.id;
     const storyId = req.params.storyId;
     const story = await db.story.findUnique({ where: { id: storyId } });
     if (!story) return res.status(404).json({ error: 'Story non trouvée' });
@@ -246,7 +250,7 @@ router.delete('/stories/:storyId', authenticateToken, async (req: Request, res: 
 // Legacy endpoint kept for compatibility
 router.get('/explore/posts', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     const orgId = user.organizationId;
     const limit = Math.min(parseInt(req.query.limit as string) || 30, 100);
     const category = req.query.category as string | undefined;
@@ -313,7 +317,7 @@ router.get('/explore/posts', authenticateToken, async (req: Request, res: Respon
 
 router.get('/explore/gallery', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     const orgId = user.organizationId;
     const userId = user.id;
     const limit = Math.min(parseInt(req.query.limit as string) || 40, 100);
@@ -580,7 +584,7 @@ router.get('/explore/gallery', authenticateToken, async (req: Request, res: Resp
 
 router.get('/reels', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     const orgId = user.organizationId;
     const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
     const mode: FeedMode = (req.query.mode as string) === 'personal' ? 'personal'
@@ -667,8 +671,8 @@ router.get('/explore/hashtags', authenticateToken, async (req: Request, res: Res
 
 router.get('/explore/suggested-users', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const orgId = (req as any).user.organizationId;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
     const limit = Math.min(parseInt(req.query.limit as string) || 10, 30);
 
     const scopeFilter = (req.query.scope as string) || 'all'; // 'all' | 'friends' | 'org'
@@ -758,8 +762,8 @@ const createSparkSchema = z.object({
 
 router.get('/sparks', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const orgId = (req as any).user.organizationId;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
     const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
     const mode = (req.query.mode as string) || 'org';
 
@@ -812,15 +816,15 @@ router.get('/sparks', authenticateToken, async (req: Request, res: Response) => 
 
 router.post('/sparks', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const orgId = (req as any).user.organizationId;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
 
     // ═══ Enforcement SocialSettings ═══
     const settings = await getOrgSocialSettings(orgId);
     if (!settings.sparksEnabled) {
       return res.status(403).json({ error: 'Les Sparks sont désactivés pour cette Colony' });
     }
-    const user = (req as any).user;
+    const user = req.user;
     const isAdmin = user.role === 'admin' || user.role === 'super_admin' || user.isSuperAdmin;
     if (!settings.allowMembersSpark && !isAdmin) {
       return res.status(403).json({ error: 'La création de Sparks est réservée aux administrateurs' });
@@ -840,8 +844,8 @@ router.post('/sparks', authenticateToken, async (req: Request, res: Response) =>
 
 router.post('/sparks/:sparkId/vote', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const orgId = (req as any).user.organizationId;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
     const sparkId = req.params.sparkId;
 
     const settings = await getOrgSocialSettings(orgId);
@@ -877,8 +881,12 @@ router.post('/sparks/:sparkId/vote', authenticateToken, async (req: Request, res
 // POST /sparks/:sparkId/dismiss — Masquer un spark du feed (persisté en DB)
 router.post('/sparks/:sparkId/dismiss', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
     const sparkId = req.params.sparkId;
+
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.sparksEnabled) return res.status(403).json({ error: 'Sparks disabled' });
 
     await db.sparkDismiss.upsert({
       where: { sparkId_userId: { sparkId, userId } },
@@ -896,7 +904,7 @@ router.post('/sparks/:sparkId/dismiss', authenticateToken, async (req: Request, 
 
 router.get('/battles', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const orgId = (req as any).user.organizationId;
+    const orgId = req.user.organizationId;
     const limit = Math.min(parseInt(req.query.limit as string) || 10, 30);
     const mode = (req.query.mode as string) || 'org';
 
@@ -904,7 +912,7 @@ router.get('/battles', authenticateToken, async (req: Request, res: Response) =>
     if (mode === 'personal' || !orgId) {
       whereClause.OR = [
         { organizationId: null },
-        { challengerId: (req as any).user.id },
+        { challengerId: req.user.id },
       ];
     } else {
       whereClause.organizationId = orgId;
@@ -942,8 +950,8 @@ router.get('/battles', authenticateToken, async (req: Request, res: Response) =>
 
 router.post('/battles', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const orgId = (req as any).user.organizationId;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
 
     // ═══ Enforcement SocialSettings ═══
     const settings = await getOrgSocialSettings(orgId);
@@ -973,8 +981,8 @@ router.post('/battles', authenticateToken, async (req: Request, res: Response) =
 
 router.post('/battles/:id/join', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const orgId = (req as any).user.organizationId;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
     const battleId = req.params.id;
 
     const settings = await getOrgSocialSettings(orgId);
@@ -1002,8 +1010,8 @@ router.post('/battles/:id/join', authenticateToken, async (req: Request, res: Re
 
 router.get('/quests/available', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const orgId = (req as any).user.organizationId;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
 
     const quests = await db.quest.findMany({
       where: {
@@ -1040,8 +1048,8 @@ router.get('/quests/available', authenticateToken, async (req: Request, res: Res
 
 router.get('/pulse', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const orgId = (req as any).user.organizationId;
-    const userId = (req as any).user.id;
+    const orgId = req.user.organizationId;
+    const userId = req.user.id;
     const mode = (req.query.mode as string) || 'org';
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
@@ -1080,8 +1088,8 @@ router.get('/pulse', authenticateToken, async (req: Request, res: Response) => {
 
 router.get('/events', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const orgId = (req as any).user.organizationId;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
     const limit = Math.min(parseInt(req.query.limit as string) || 10, 30);
     const mode = (req.query.mode as string) || 'org';
 
@@ -1138,8 +1146,8 @@ router.get('/events', authenticateToken, async (req: Request, res: Response) => 
 
 router.post('/events', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const orgId = (req as any).user.organizationId;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
 
     const settings = await getOrgSocialSettings(orgId);
     if (!settings.eventsEnabled) return res.status(403).json({ error: 'Events disabled' });
@@ -1168,9 +1176,13 @@ router.post('/events', authenticateToken, async (req: Request, res: Response) =>
 
 router.post('/events/:eventId/rsvp', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
     const eventId = req.params.eventId;
     const status = req.body.status || 'GOING';
+
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.eventsEnabled) return res.status(403).json({ error: 'Events disabled' });
 
     const existing = await db.eventAttendee.findUnique({
       where: { eventId_userId: { eventId, userId } },
@@ -1189,8 +1201,13 @@ router.post('/events/:eventId/rsvp', authenticateToken, async (req: Request, res
 
 router.delete('/events/:eventId/rsvp', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
     const eventId = req.params.eventId;
+
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.eventsEnabled) return res.status(403).json({ error: 'Events disabled' });
+
     await db.eventAttendee.deleteMany({ where: { eventId, userId } });
     res.json({ success: true });
   } catch (e: any) {
@@ -1202,8 +1219,8 @@ router.delete('/events/:eventId/rsvp', authenticateToken, async (req: Request, r
 
 router.get('/capsules', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const orgId = (req as any).user.organizationId;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
     const mode = (req.query.mode as string) || 'org';
     const limit = Math.min(parseInt(req.query.limit as string) || 10, 30);
 
@@ -1256,8 +1273,8 @@ router.get('/capsules', authenticateToken, async (req: Request, res: Response) =
 
 router.post('/capsules', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const orgId = (req as any).user.organizationId;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
 
     const settings = await getOrgSocialSettings(orgId);
     if (!settings.capsulesEnabled) return res.status(403).json({ error: 'Capsules disabled' });
@@ -1286,8 +1303,8 @@ router.post('/capsules', authenticateToken, async (req: Request, res: Response) 
 
 router.get('/orbit', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const orgId = (req as any).user.organizationId;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
     const mode = (req.query.mode as string) || 'org';
 
     // Get friends with interaction frequency
@@ -1371,7 +1388,7 @@ router.get('/orbit', authenticateToken, async (req: Request, res: Response) => {
 
 router.get('/gamification/me', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = req.user.id;
 
     const [streak, badges, allBadges] = await Promise.all([
       db.userStreak.findUnique({ where: { userId } }),
@@ -1412,7 +1429,7 @@ router.get('/gamification/me', authenticateToken, async (req: Request, res: Resp
 // GET /saved-reels — Liste des posts sauvegardés par l'utilisateur
 router.get('/saved-reels', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = req.user.id;
 
     const saved = await db.savedReel.findMany({
       where: { userId },
@@ -1429,8 +1446,12 @@ router.get('/saved-reels', authenticateToken, async (req: Request, res: Response
 // POST /saved-reels/:postId — Sauvegarder un post
 router.post('/saved-reels/:postId', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
     const postId = req.params.postId;
+
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.reelsEnabled) return res.status(403).json({ error: 'Reels disabled' });
 
     await db.savedReel.upsert({
       where: { postId_userId: { postId, userId } },
@@ -1447,8 +1468,12 @@ router.post('/saved-reels/:postId', authenticateToken, async (req: Request, res:
 // DELETE /saved-reels/:postId — Retirer un post des sauvegardés
 router.delete('/saved-reels/:postId', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
     const postId = req.params.postId;
+
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.reelsEnabled) return res.status(403).json({ error: 'Reels disabled' });
 
     await db.savedReel.deleteMany({
       where: { postId, userId },
@@ -1465,7 +1490,7 @@ router.delete('/saved-reels/:postId', authenticateToken, async (req: Request, re
 // POST /comments/liked — Récupérer les IDs de commentaires likés par l'utilisateur (doit être AVANT :commentId)
 router.post('/comments/liked', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = req.user.id;
     const { commentIds } = req.body;
     if (!Array.isArray(commentIds)) return res.json({ likedIds: [] });
 
@@ -1483,8 +1508,8 @@ router.post('/comments/liked', authenticateToken, async (req: Request, res: Resp
 // POST /comments/:commentId/like — Toggle like sur un commentaire
 router.post('/comments/:commentId/like', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const orgId = (req as any).user.organizationId;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
     const commentId = req.params.commentId;
 
     const settings = await getOrgSocialSettings(orgId);
@@ -1513,8 +1538,8 @@ router.post('/comments/:commentId/like', authenticateToken, async (req: Request,
 // POST /quests/:questId/progress — Incrémenter la progression d'une quête
 router.post('/quests/:questId/progress', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const orgId = (req as any).user.organizationId;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
     const questId = req.params.questId;
 
     const settings = await getOrgSocialSettings(orgId);

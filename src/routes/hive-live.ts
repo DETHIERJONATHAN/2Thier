@@ -58,7 +58,7 @@ router.get('/org/:orgId', authenticateToken, async (req: Request, res: Response)
 // ══════════════════════════════════════════════════════════
 router.post('/', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     const data = createMomentSchema.parse(req.body);
     const orgId = req.headers['x-organization-id'] as string || user.organizationId || null;
 
@@ -119,7 +119,7 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
 // ══════════════════════════════════════════════════════════
 router.post('/from-post/:postId', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     const orgId = req.headers['x-organization-id'] as string || user.organizationId || null;
     const { postId } = req.params;
     const { title, momentDate, visibility } = req.body;
@@ -169,7 +169,7 @@ router.post('/from-post/:postId', authenticateToken, async (req: Request, res: R
 // ══════════════════════════════════════════════════════════
 router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     const orgId = req.headers['x-organization-id'] as string || user.organizationId || null;
     const { id } = req.params;
     const data = updateMomentSchema.parse(req.body);
@@ -228,7 +228,7 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
 // ══════════════════════════════════════════════════════════
 router.delete('/:id', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     const { id } = req.params;
 
     const existing = await db.hiveLiveMoment.findUnique({ where: { id } });
@@ -250,7 +250,7 @@ router.delete('/:id', authenticateToken, async (req: Request, res: Response) => 
 router.get('/:userId', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
-    const viewer = (req as any).user;
+    const viewer = req.user;
     const isOwner = viewer.id === userId;
 
     // Build visibility filter

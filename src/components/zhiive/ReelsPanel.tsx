@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { MAX_VIDEO_SIZE } from '../../lib/constants';
 import { useNavigate } from 'react-router-dom';
 import { Avatar, Spin, Modal, Input, message } from 'antd';
 import {
@@ -319,7 +320,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
       showToast(t('reels.onlyVideos'), 'err');
       return;
     }
-    if (file.size > 100 * 1024 * 1024) {
+    if (file.size > MAX_VIDEO_SIZE) {
       showToast(t('reels.fileTooLarge100'), 'err');
       return;
     }
@@ -459,11 +460,11 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
   }
 
   return (
-    <div style={{ height: '100%', background: SF.dark, position: 'relative' }}>
+    <div style={{ height: '100%', background: SF.dark, position: 'relative', overflow: 'hidden', width: '100%', maxWidth: '100%', minWidth: 0 }}>
       {/* Header */}
       <div style={{
         position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
-        padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '8px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         background: SF.gradientOverlayTop,
       }}>
         <span onClick={() => showSaved && setShowSaved(false)} style={{ fontSize: 18, fontWeight: 800, color: SF.textLight, letterSpacing: -0.5, cursor: showSaved ? 'pointer' : 'default' }}>

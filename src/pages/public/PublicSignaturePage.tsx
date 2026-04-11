@@ -6,6 +6,7 @@
  * Il peut voir les infos du devis et signer directement.
  */
 
+import { SF } from '../../components/zhiive/ZhiiveTheme';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import SignatureCanvas, { type SignatureCanvasRef } from '../../components/signature/SignatureCanvas';
@@ -288,7 +289,7 @@ const PublicSignaturePage: React.FC = () => {
               ref={canvasRef}
               width={480}
               height={180}
-              penColor="#1a1a2e"
+              penColor={SF.dark}
               penWidth={2.5}
               backgroundColor="#fafafa"
               borderColor={canvasEmpty ? '#d9d9d9' : '#1890ff'}
@@ -346,7 +347,7 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: 'hidden',
   },
   header: {
-    background: 'linear-gradient(135deg, #1a1a2e, #16213e)',
+    background: `linear-gradient(135deg, ${SF.dark}, ${SF.darkDeep})`,
     padding: '20px 30px',
   },
   spinner: {

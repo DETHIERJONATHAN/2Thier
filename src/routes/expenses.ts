@@ -25,7 +25,7 @@ const getOrganizationId = (req: Request): string | null =>
   (req as any).organizationId || req.headers['x-organization-id'] as string || null;
 
 const getUserId = (req: Request): string | null =>
-  (req as any).userId || null;
+  req.userId || null;
 
 // ── Catégories de dépenses ──
 const EXPENSE_CATEGORIES = [

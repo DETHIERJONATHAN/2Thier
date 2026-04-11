@@ -18,6 +18,7 @@
 import { Router } from 'express';
 import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.js';
 import { db } from '../lib/database.js';
+import { SF } from '../components/zhiive/ZhiiveTheme';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import { execSync } from 'child_process';
@@ -132,7 +133,7 @@ router.post('/test-smtp', authMiddleware, requireSuperAdmin, async (req: Authent
       subject: '✅ Test ZhiiveMail - Connexion SMTP OK',
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px;">
-          <h2 style="color: #6C5CE7;">🐝 ZhiiveMail - Test SMTP</h2>
+          <h2 style="color: ${SF.primary};">🐝 ZhiiveMail - Test SMTP</h2>
           <p>La connexion SMTP fonctionne correctement.</p>
           <ul>
             <li><strong>Serveur:</strong> ${smtpHost}:${smtpPort}</li>

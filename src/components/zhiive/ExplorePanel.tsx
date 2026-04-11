@@ -117,7 +117,7 @@ interface SuggestedUser {
 // ══════════════════════════════════════════════════════════════════
 // ExplorePanel — Friends (Instagram-style)
 // ══════════════════════════════════════════════════════════════════
-const ExplorePanel: React.FC<{ api: any; openModule?: (route: string) => void }> = ({ api }) => {
+const ExplorePanel: React.FC<{ api: any; openModule?: (route: string) => void; compact?: boolean }> = ({ api, compact }) => {
   const { feedMode } = useZhiiveNav();
   const { currentOrganization, user } = useAuth();
   const navigate = useNavigate();
@@ -511,13 +511,14 @@ const ExplorePanel: React.FC<{ api: any; openModule?: (route: string) => void }>
     <div ref={containerRef} style={{
       height: '100%', overflowY: 'auto', scrollbarWidth: 'none',
       background: SF.bg, display: 'flex', flexDirection: 'column',
+      width: '100%', maxWidth: '100%', overflow: 'hidden',
     }}>
       {/* Header */}
       <ZhiiveModuleHeader
         icon={
-          <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24 }}>
-            <CameraOutlined style={{ fontSize: 22, color: '#00CEC9' }} />
-            <UserOutlined style={{ position: 'absolute', fontSize: 9, color: '#00CEC9', top: 5, left: 7 }} />
+          <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20 }}>
+            <CameraOutlined style={{ fontSize: 18, color: '#00CEC9' }} />
+            <UserOutlined style={{ position: 'absolute', fontSize: 8, color: '#00CEC9', top: 4, left: 6 }} />
           </span>
         }
         title="Friends"
@@ -525,7 +526,7 @@ const ExplorePanel: React.FC<{ api: any; openModule?: (route: string) => void }>
           <Input ref={searchInputRef} prefix={<SearchOutlined style={{ color: SF.textMuted }} />}
             placeholder={t('explore.searchPlaceholder')} value={searchQuery}
             onChange={e => handleSearchChange(e.target.value)} allowClear
-            style={{ height: 32, borderRadius: SF.radiusSm, fontSize: 13, maxWidth: 280 }} />
+            style={{ height: 28, borderRadius: SF.radiusSm, fontSize: 12, width: '100%', minWidth: 0 }} />
         }
         actions={<>
           <Tooltip title={t('explore.people')}>
@@ -538,11 +539,6 @@ const ExplorePanel: React.FC<{ api: any; openModule?: (route: string) => void }>
               style={{ color: activeTab === 'gallery' ? SF.primary : undefined }}
               onClick={() => setActiveTab('gallery')} />
           </Tooltip>
-          <Tooltip title={t('explore.hashtags')}>
-            <Button type="text" size="small" icon={<RiseOutlined />}
-              style={{ color: activeTab === 'hashtags' ? SF.primary : undefined }}
-              onClick={() => setActiveTab('hashtags')} />
-          </Tooltip>
           <Dropdown menu={{
             items: [
               { key: 'photo', icon: <PictureOutlined />, label: t('explore.photos'), onClick: () => handleCreatePost('photo') },
@@ -550,19 +546,19 @@ const ExplorePanel: React.FC<{ api: any; openModule?: (route: string) => void }>
             ],
           }} trigger={['click']}>
             <div style={{
-              width: 28, height: 28, borderRadius: 8, background: SF.primary, color: '#fff',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 14,
+              width: 24, height: 24, borderRadius: 6, background: SF.primary, color: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 12,
             }}><PlusOutlined /></div>
           </Dropdown>
         </>}
       />
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px', scrollbarWidth: 'none' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '6px 8px', scrollbarWidth: 'none' }}>
 
         {/* ═══ GALLERY TAB ═══ */}
         {activeTab === 'gallery' && (
           <>
-            <div style={{ display: 'flex', gap: 6, marginBottom: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 4, marginBottom: 6, alignItems: 'center', overflowX: 'auto', scrollbarWidth: 'none', flexWrap: 'nowrap' }}>
               <FilterPill label={scope === 'all' ? t('explore.allFilter') : scope === 'friends' ? t('explore.friendsFilter') : scope === 'org' ? '⬡ Colony' : '🔒 Privé'}
                 items={[ { key: 'all', label: t('explore.allFilter') }, { key: 'friends', label: t('explore.friendsFilter') }, ...(currentOrganization ? [{ key: 'org', label: '⬡ Colony' }] : []), { key: 'private', label: '🔒 Privé' } ]}
                 selected={scope} onSelect={k => setScope(k as typeof scope)} />
@@ -585,14 +581,14 @@ const ExplorePanel: React.FC<{ api: any; openModule?: (route: string) => void }>
             </div>
 
             {loading ? (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 3 }}>
-                {Array.from({ length: 9 }).map((_, i) => (
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${compact ? 2 : 3}, 1fr)`, gap: 3 }}>
+                {Array.from({ length: compact ? 4 : 9 }).map((_, i) => (
                   <div key={i} style={{ aspectRatio: '1/1', background: SF.border, borderRadius: 4, animation: 'pulse 1.5s infinite' }} />
                 ))}
               </div>
             ) : items.length > 0 ? (
               <>
-                <InstaGrid items={items} likedSet={likedSet} onOpen={openPostDetail} />
+                <InstaGrid items={items} likedSet={likedSet} onOpen={openPostDetail} cols={compact ? 2 : 3} />
                 {hasMore && (
                   <div ref={sentinelRef} style={{ textAlign: 'center', padding: 20 }}>
                     {loadingMore && <LoadingOutlined style={{ fontSize: 20, color: SF.primary }} />}
@@ -873,18 +869,18 @@ const ActionBtn: React.FC<{ icon: React.ReactNode; label?: string; color: string
 );
 
 /** Instagram-style mixed grid */
-const InstaGrid: React.FC<{ items: GalleryItem[]; likedSet: Set<string>; onOpen: (item: GalleryItem) => void }> = ({ items, likedSet, onOpen }) => {
+const InstaGrid: React.FC<{ items: GalleryItem[]; likedSet: Set<string>; onOpen: (item: GalleryItem) => void; cols?: number }> = ({ items, likedSet, onOpen, cols = 3 }) => {
   const rows: React.ReactNode[] = [];
   let i = 0;
 
   while (i < items.length) {
     const groupIndex = Math.floor(i / 9) % 2;
 
-    // 2 normal rows (3 each)
+    // 2 normal rows (cols each)
     for (let row = 0; row < 2 && i < items.length; row++) {
-      const rowItems = items.slice(i, Math.min(i + 3, items.length));
+      const rowItems = items.slice(i, Math.min(i + cols, items.length));
       rows.push(
-        <div key={`r-${i}`} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 3 }}>
+        <div key={`r-${i}`} style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 3 }}>
           {rowItems.map(item => <GridCell key={item.id} item={item} liked={likedSet.has(item.id)} onOpen={onOpen} />)}
         </div>
       );

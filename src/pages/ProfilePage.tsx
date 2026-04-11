@@ -21,23 +21,8 @@ import HiveLiveTimeline from '../components/zhiive/HiveLiveTimeline';
 /* ═══════════════════════════════════════════════════════════════
    FACEBOOK COLORS — exactement les mêmes tokens
    ═══════════════════════════════════════════════════════════════ */
-const FB = {
-  bg: '#f0f2f5',
-  white: '#ffffff',
-  text: '#050505',
-  textSecondary: '#65676b',
-  blue: '#1877f2',
-  blueHover: '#166fe5',
-  border: '#ced0d4',
-  btnGray: '#e4e6eb',
-  btnGrayHover: '#d8dadf',
-  activeBlue: '#e7f3ff',
-  shadow: '0 1px 2px rgba(0,0,0,0.1)',
-  shadowHover: '0 2px 8px rgba(0,0,0,0.1)',
-  radius: 8,
-};
-
-const ORG_COLOR = '#6C5CE7';
+import { SF, FB } from '../components/zhiive/ZhiiveTheme';
+const ORG_COLOR = SF.primary;
 
 /* ═══════════════════════════════════════════════════════════════
    RESPONSIVE HOOK
@@ -967,7 +952,7 @@ const ProfilePage = () => {
                   padding: isMobile ? '12px 12px' : '16px 16px',
                   fontSize: isMobile ? 14 : 15, fontWeight: 600, cursor: 'pointer',
                   background: 'none', border: 'none', whiteSpace: 'nowrap',
-                  borderBottom: activeTab === tab.key ? '3px solid #1877f2' : '3px solid transparent',
+                  borderBottom: activeTab === tab.key ? `3px solid ${FB.blue}` : '3px solid transparent',
                   color: activeTab === tab.key ? FB.blue : FB.textSecondary,
                   borderRadius: activeTab === tab.key ? 0 : '6px 6px 0 0',
                   transition: 'all 0.15s', flexShrink: 0,

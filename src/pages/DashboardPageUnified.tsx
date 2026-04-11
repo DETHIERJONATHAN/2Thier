@@ -1,3 +1,5 @@
+import { SF, FB } from '../components/zhiive/ZhiiveTheme';
+import { SIDEBAR_LEFT_WIDTH, SIDEBAR_RIGHT_WIDTH, TOP_NAV_HEIGHT } from '../lib/constants';
 import React, { useEffect, useState, useMemo, useCallback, useRef, Suspense } from "react";
 import { useTranslation } from 'react-i18next';
 import { useAuthenticatedApi } from "../hooks/useAuthenticatedApi";
@@ -179,25 +181,6 @@ import { FriendsWidget } from "../components/MessengerChat";
 /* ═══════════════════════════════════════════════════════════════
    FACEBOOK COLORS — exactement les mêmes tokens
    ═══════════════════════════════════════════════════════════════ */
-const FB = {
-  bg: "#f0f2f5",
-  white: "#ffffff",
-  text: "#050505",
-  textSecondary: "#65676b",
-  blue: "#1877f2",
-  blueHover: "#166fe5",
-  border: "#ced0d4",
-  btnGray: "#e4e6eb",
-  btnGrayHover: "#d8dadf",
-  activeBlue: "#e7f3ff",
-  green: "#42b72a",
-  red: "#e4405f",
-  orange: "#f7931a",
-  shadow: "0 1px 2px rgba(0,0,0,0.1)",
-  shadowHover: "0 2px 8px rgba(0,0,0,0.15)",
-  radius: 8,
-};
-
 /* ═══════════════════════════════════════════════════════════════
    RESPONSIVE HOOK
    ═══════════════════════════════════════════════════════════════ */
@@ -450,7 +433,7 @@ const ShortcutItem: React.FC<{
           <div style={{ flexShrink: 0 }}>{icon}</div>
         )}
         <span style={{
-          fontSize: 15, fontWeight: isActive ? 600 : 500, color: isActive ? '#1877f2' : FB.text,
+          fontSize: 15, fontWeight: isActive ? 600 : 500, color: isActive ? FB.blue : FB.text,
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         }}>
           {label}
@@ -505,6 +488,40 @@ export const WallPostCard: React.FC<{
   const [showHiveLiveModal, setShowHiveLiveModal] = useState(false);
   const [hiveLiveTitle, setHiveLiveTitle] = useState('');
   const [hiveLiveSaving, setHiveLiveSaving] = useState(false);
+
+  // Modals "qui a réagi / qui a partagé"
+  const [showReactorsModal, setShowReactorsModal] = useState(false);
+  const [reactorsList, setReactorsList] = useState<{ id: string; userId: string; type: string; user: { id: string; firstName?: string; lastName?: string; avatarUrl?: string } }[]>([]);
+  const [reactorsLoading, setReactorsLoading] = useState(false);
+  const [showSharersModal, setShowSharersModal] = useState(false);
+  const [sharersList, setSharersList] = useState<{ id: string; userId: string; targetType: string; user: { id: string; firstName?: string; lastName?: string; avatarUrl?: string } }[]>([]);
+  const [sharersLoading, setSharersLoading] = useState(false);
+
+  const handleShowReactors = useCallback(async () => {
+    setShowReactorsModal(true);
+    setReactorsLoading(true);
+    try {
+      const data = await api.get(`/api/wall/posts/${post.id}/reactions`);
+      setReactorsList(data || []);
+    } catch {
+      setReactorsList([]);
+    } finally {
+      setReactorsLoading(false);
+    }
+  }, [api, post.id]);
+
+  const handleShowSharers = useCallback(async () => {
+    setShowSharersModal(true);
+    setSharersLoading(true);
+    try {
+      const data = await api.get(`/api/wall/posts/${post.id}/shares`);
+      setSharersList(data || []);
+    } catch {
+      setSharersList([]);
+    } finally {
+      setSharersLoading(false);
+    }
+  }, [api, post.id]);
 
   const authorName = post.publishAsOrg && post.organization?.name
     ? post.organization.name
@@ -719,7 +736,7 @@ export const WallPostCard: React.FC<{
         <Avatar size={40} src={authorAvatar}
           onClick={handleAuthorClick}
           icon={!authorAvatar ? <UserOutlined /> : undefined}
-          style={{ backgroundColor: !authorAvatar ? (post.publishAsOrg ? '#6C5CE7' : FB.blue) : undefined, flexShrink: 0, cursor: 'pointer' }}>
+          style={{ backgroundColor: !authorAvatar ? (post.publishAsOrg ? SF.primary : FB.blue) : undefined, flexShrink: 0, cursor: 'pointer' }}>
           {!authorAvatar && authorInitial}
         </Avatar>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -798,7 +815,7 @@ export const WallPostCard: React.FC<{
             {/* Original post header */}
             <div style={{ display: "flex", alignItems: "center", padding: "10px 12px", gap: 8 }}>
               <Avatar size={32} src={ppAvatar}
-                style={!ppAvatar ? { background: pp.publishAsOrg ? '#6C5CE7' : FB.blue, fontSize: 14 } : undefined}>
+                style={!ppAvatar ? { background: pp.publishAsOrg ? SF.primary : FB.blue, fontSize: 14 } : undefined}>
                 {!ppAvatar && ppInitial}
               </Avatar>
               <div>
@@ -916,7 +933,10 @@ export const WallPostCard: React.FC<{
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           {likesCount > 0 && (
-            <>
+            <span
+              style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}
+              onClick={handleShowReactors}
+            >
               {/* Show unique reaction type emojis */}
               <span style={{ display: "inline-flex", gap: -2 }}>
                 {(() => {
@@ -932,7 +952,7 @@ export const WallPostCard: React.FC<{
                 })()}
               </span>
               <span>{likesCount}</span>
-            </>
+            </span>
           )}
         </div>
         <div style={{ display: "flex", gap: 12 }}>
@@ -941,7 +961,11 @@ export const WallPostCard: React.FC<{
               {commentsCount > 1 ? t('wall.buzzCountPlural', { count: commentsCount }) : t('wall.buzzCount', { count: commentsCount })}
             </span>
           )}
-          {post.totalShares > 0 && <span>{post.totalShares > 1 ? t('wall.shareCountPlural', { count: post.totalShares }) : t('wall.shareCount', { count: post.totalShares })}</span>}
+          {post.totalShares > 0 && (
+            <span style={{ cursor: "pointer" }} onClick={handleShowSharers}>
+              {post.totalShares > 1 ? t('wall.shareCountPlural', { count: post.totalShares }) : t('wall.shareCount', { count: post.totalShares })}
+            </span>
+          )}
         </div>
       </div>
 
@@ -1083,7 +1107,7 @@ export const WallPostCard: React.FC<{
               <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                 <Avatar size={28} src={cAvatar}
                   icon={!cAvatar ? <UserOutlined /> : undefined}
-                  style={{ backgroundColor: !cAvatar ? (cIsOrg ? '#6C5CE7' : FB.blue) : undefined, flexShrink: 0 }} />
+                  style={{ backgroundColor: !cAvatar ? (cIsOrg ? SF.primary : FB.blue) : undefined, flexShrink: 0 }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{
                     background: FB.btnGray, borderRadius: 12, padding: "8px 12px",
@@ -1150,7 +1174,7 @@ export const WallPostCard: React.FC<{
                           <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
                             <Avatar size={24} src={rAvatar}
                               icon={!rAvatar ? <UserOutlined /> : undefined}
-                              style={{ backgroundColor: !rAvatar ? (rIsOrg ? '#6C5CE7' : "#bbb") : undefined, flexShrink: 0 }} />
+                              style={{ backgroundColor: !rAvatar ? (rIsOrg ? SF.primary : "#bbb") : undefined, flexShrink: 0 }} />
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{
                                 background: FB.btnGray, borderRadius: 10, padding: "6px 10px",
@@ -1335,11 +1359,11 @@ export const WallPostCard: React.FC<{
                   <label style={{
                     fontSize: 12, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4,
                     padding: '2px 8px', borderRadius: 6, border: `1px solid ${FB.border}`,
-                    background: shareAsOrg ? '#6C5CE715' : FB.btnGray, color: shareAsOrg ? '#6C5CE7' : FB.text,
+                    background: shareAsOrg ? '${SF.primary}15' : FB.btnGray, color: shareAsOrg ? SF.primary : FB.text,
                     cursor: 'pointer',
                   }}>
                     <input type="checkbox" checked={shareAsOrg} onChange={e => setShareAsOrg(e.target.checked)}
-                      style={{ width: 14, height: 14, accentColor: '#6C5CE7' }} />
+                      style={{ width: 14, height: 14, accentColor: SF.primary }} />
                     {t('dashboard.asOrg', { name: currentOrganization.name })}
                   </label>
                 )}
@@ -1399,7 +1423,7 @@ export const WallPostCard: React.FC<{
             <div style={{ padding: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                 <Avatar size={28} src={authorAvatar}
-                  style={!authorAvatar ? { background: post.publishAsOrg ? '#6C5CE7' : FB.blue, fontSize: 12 } : undefined}>
+                  style={!authorAvatar ? { background: post.publishAsOrg ? SF.primary : FB.blue, fontSize: 12 } : undefined}>
                   {!authorAvatar && authorInitial}
                 </Avatar>
                 <div>
@@ -1461,6 +1485,72 @@ export const WallPostCard: React.FC<{
             {t('hive.hiveLiveExplanation', 'Ce Buzz sera ajouté comme moment sur votre ligne de vie Hive Live.')}
           </p>
         </div>
+      </Modal>
+
+      {/* Modal — Qui a réagi */}
+      <Modal
+        open={showReactorsModal}
+        onCancel={() => setShowReactorsModal(false)}
+        title={<span style={{ fontWeight: 700 }}>👍 {t('wall.whoReacted', 'Qui a réagi')}</span>}
+        footer={null}
+        width={400}
+        centered
+      >
+        {reactorsLoading
+          ? <div style={{ textAlign: 'center', padding: 24 }}><Spin /></div>
+          : reactorsList.length === 0
+            ? <p style={{ textAlign: 'center', color: FB.textSecondary, padding: 16 }}>{t('wall.noReactions', 'Aucune réaction')}</p>
+            : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 360, overflowY: 'auto', padding: '8px 0' }}>
+                {reactorsList.map(r => {
+                  const emojiMap: Record<string, string> = { LIKE: "👍", LOVE: "❤️", BRAVO: "👏", UTILE: "💡", WOW: "😮" };
+                  const name = [r.user.firstName, r.user.lastName].filter(Boolean).join(' ') || t('common.unknown', 'Inconnu');
+                  return (
+                    <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <Avatar src={r.user.avatarUrl || undefined} style={{ background: SF.primary, flexShrink: 0 }}>
+                        {r.user.firstName?.[0]?.toUpperCase() || '?'}
+                      </Avatar>
+                      <span style={{ flex: 1, fontWeight: 500 }}>{name}</span>
+                      <span style={{ fontSize: 18 }}>{emojiMap[r.type] || '👍'}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )
+        }
+      </Modal>
+
+      {/* Modal — Qui a partagé */}
+      <Modal
+        open={showSharersModal}
+        onCancel={() => setShowSharersModal(false)}
+        title={<span style={{ fontWeight: 700 }}>🔁 {t('wall.whoShared', 'Qui a partagé')}</span>}
+        footer={null}
+        width={400}
+        centered
+      >
+        {sharersLoading
+          ? <div style={{ textAlign: 'center', padding: 24 }}><Spin /></div>
+          : sharersList.length === 0
+            ? <p style={{ textAlign: 'center', color: FB.textSecondary, padding: 16 }}>{t('wall.noShares', 'Aucun partage')}</p>
+            : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 360, overflowY: 'auto', padding: '8px 0' }}>
+                {sharersList.map(s => {
+                  const typeLabels: Record<string, string> = { INTERNAL: '🐝 Ruche', FACEBOOK: 'Facebook', LINKEDIN: 'LinkedIn', WHATSAPP: 'WhatsApp', EMAIL: '📧 Email', LINK: '🔗 Copié' };
+                  const name = [s.user.firstName, s.user.lastName].filter(Boolean).join(' ') || t('common.unknown', 'Inconnu');
+                  return (
+                    <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <Avatar src={s.user.avatarUrl || undefined} style={{ background: SF.primary, flexShrink: 0 }}>
+                        {s.user.firstName?.[0]?.toUpperCase() || '?'}
+                      </Avatar>
+                      <span style={{ flex: 1, fontWeight: 500 }}>{name}</span>
+                      <span style={{ fontSize: 12, color: FB.textSecondary }}>{typeLabels[s.targetType] || s.targetType}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )
+        }
       </Modal>
     </FBCard>
   );
@@ -2242,7 +2332,7 @@ export default function DashboardPageUnified() {
      LEFT SIDEBAR (kept for module navigation — used when a module is active)
      ═══════════════════════════════════════════════════════════ */
   const _renderLeftSidebar = () => (
-    <div style={{ position: "fixed", left: 0, top: 56, width: 280, height: "calc(100vh - 56px)", overflowY: "auto", paddingTop: 8, paddingLeft: 8, paddingRight: 8, paddingBottom: 16, scrollbarWidth: "none", background: FB.bg, zIndex: 10 }}>
+    <div style={{ position: "fixed", left: 0, top: TOP_NAV_HEIGHT, width: SIDEBAR_LEFT_WIDTH, minWidth: SIDEBAR_LEFT_WIDTH, height: `calc(100vh - ${TOP_NAV_HEIGHT}px)`, overflowY: "auto", paddingTop: 8, paddingLeft: 8, paddingRight: 8, paddingBottom: 16, scrollbarWidth: "none", background: FB.bg, zIndex: 10 }}>
       <ShortcutItem
         icon={
           <Avatar size={36} src={user?.avatarUrl}
@@ -2308,7 +2398,7 @@ export default function DashboardPageUnified() {
   const isTechRole = ["technicien", "chef_equipe", "contremaitre", "sous_traitant"].includes(user?.role || "");
 
   const _renderRightSidebar = () => (
-    <div style={{ position: "fixed", right: 0, top: 56, width: 300, height: "calc(100vh - 56px)", overflowY: "auto", paddingTop: 8, paddingRight: 8, paddingLeft: 8, paddingBottom: 16, scrollbarWidth: "none", background: FB.bg, zIndex: 10 }}>
+    <div style={{ position: "fixed", right: 0, top: TOP_NAV_HEIGHT, width: SIDEBAR_RIGHT_WIDTH, height: `calc(100vh - ${TOP_NAV_HEIGHT}px)`, overflowY: "auto", paddingTop: 8, paddingRight: 8, paddingLeft: 8, paddingBottom: 16, scrollbarWidth: "none", background: FB.bg, zIndex: 10 }}>
 
       {/* === SÉLECTEUR DE COLLABORATEUR (admin) === */}
       {isAdminRole && analytics?.collaborators?.length > 0 && (
@@ -2824,11 +2914,11 @@ export default function DashboardPageUnified() {
         {(newPostContent.trim() || postMediaPreviews.length > 0) && (
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6, marginLeft: 36 }}>
             {[
-              { value: 'projet', label: t('wall.category.project'), color: '#3b82f6' },
-              { value: 'chantier_realise', label: t('wall.category.chantier'), color: '#f59e0b' },
-              { value: 'promotion', label: t('wall.category.promo'), color: '#ef4444' },
-              { value: 'conseil', label: t('wall.category.conseil'), color: '#10b981' },
-              { value: 'actualite', label: t('wall.category.news'), color: '#8b5cf6' },
+              { value: 'projet', label: t('wall.category.project'), color: SF.blue },
+              { value: 'chantier_realise', label: t('wall.category.chantier'), color: SF.amber },
+              { value: 'promotion', label: t('wall.category.promo'), color: SF.red },
+              { value: 'conseil', label: t('wall.category.conseil'), color: SF.emerald },
+              { value: 'actualite', label: t('wall.category.news'), color: SF.violet },
               { value: 'emploi', label: t('wall.category.job'), color: '#0ea5e9' },
               { value: 'market', label: t('wall.category.market'), color: '#f97316' },
             ].map(cat => (
@@ -2943,7 +3033,7 @@ export default function DashboardPageUnified() {
                   borderRadius: 14,
                   background: isActive ? '#e7f3ff' : isFav ? 'linear-gradient(135deg, #FFF8E1, #FFF3CD)' : FB.white,
                   boxShadow: isFav ? '0 1px 4px rgba(218,165,32,0.3)' : FB.shadow,
-                  border: isActive ? '1.5px solid #1877f2' : isFav ? '1.5px solid #DAA520' : '1.5px solid transparent',
+                  border: isActive ? `1.5px solid ${FB.blue}` : isFav ? '1.5px solid #DAA520' : '1.5px solid transparent',
                 }}>
                   <div style={{
                     width: 22, height: 22, borderRadius: "50%",
@@ -2953,7 +3043,7 @@ export default function DashboardPageUnified() {
                   }}>
                     {isFav ? '⭐' : getModuleIcon(mod)}
                   </div>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: isActive ? '#1877f2' : isFav ? '#B8860B' : FB.text, whiteSpace: "nowrap" }}>{mod.label || mod.name || mod.key}</span>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: isActive ? FB.blue : isFav ? '#B8860B' : FB.text, whiteSpace: "nowrap" }}>{mod.label || mod.name || mod.key}</span>
                 </div>
               </div>
             );
@@ -3241,13 +3331,13 @@ export default function DashboardPageUnified() {
     if (settingKey && !isAppEnabled(settingKey)) return null;
 
     switch (appId) {
-      case 'explore': return <LazyExplorePanel api={api} openModule={openModule} />;
+      case 'explore': return <LazyExplorePanel api={api} openModule={openModule} compact={sidebar} />;
       case 'nectar': return <LazyNectarPanel api={api} currentUser={user} />;
       case 'reels': return <LazyReelsPanel api={api} currentUser={user} />;
       case 'wax': return <LazyWaxPanel api={api} currentUser={user} />;
       case 'mail': return <LazyGoogleGmailPageV2 compact={sidebar} />;
-      case 'agenda': return <LazyAgendaWrapper />;
-      case 'search': return <LazySearchPage />;
+      case 'agenda': return <LazyAgendaWrapper compact={sidebar} />;
+      case 'search': return <LazySearchPage compact={sidebar} />;
       case 'stats': return !isFreeUser ? renderMobileAnalytics() : null;
       default: return null;
     }
@@ -3295,7 +3385,7 @@ export default function DashboardPageUnified() {
         isMobile ? (
           <div style={{
             display: 'flex', flexDirection: 'column',
-            padding: "4px 8px", height: "calc(100vh - 56px)",
+            padding: "4px 8px", height: `calc(100vh - ${TOP_NAV_HEIGHT}px)`,
           }}>
             <div style={{ flex: '0 0 auto' }}>
               {renderFeed()}
@@ -3324,7 +3414,7 @@ export default function DashboardPageUnified() {
               display: "flex", overflowX: "auto", overflowY: "hidden",
               scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch",
               scrollbarWidth: "none", msOverflowStyle: "none" as any,
-              height: "calc(100vh - 56px)",
+              height: `calc(100vh - ${TOP_NAV_HEIGHT}px)`,
             }}
           >
             {tabOrder.map(tabId => {
@@ -3364,19 +3454,44 @@ export default function DashboardPageUnified() {
            Right sidebar: selected right app (closest to Mur by default)
            ═══════════════════════════════════════════════════════ */
         <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+          {/* Force ALL sidebar children to respect 300px boundary */}
+          <style>{`
+            .sf-sidebar { overflow: hidden; width: 300px; }
+            .sf-sidebar > div { overflow: hidden; max-width: 300px; width: 300px; }
+            .sf-sidebar div { box-sizing: border-box; }
+            .sf-sidebar .ant-layout { min-width: 0 !important; width: 100% !important; max-width: 300px !important; }
+            .sf-sidebar .ant-layout-content { min-width: 0 !important; width: 100% !important; }
+            .sf-sidebar .ant-layout-sider { display: none !important; }
+            .sf-sidebar .ant-card { max-width: 100% !important; }
+            .sf-sidebar .ant-card-body { max-width: 100% !important; overflow: hidden !important; }
+            .sf-sidebar .fc { max-width: 100% !important; }
+            .sf-sidebar .fc-scrollgrid,
+            .sf-sidebar .fc table { max-width: 100% !important; table-layout: fixed !important; }
+            .sf-sidebar .fc-view-harness { overflow-x: auto !important; }
+            .sf-sidebar .ant-input { max-width: 100% !important; }
+            .sf-sidebar .ant-btn { max-width: 100% !important; overflow: hidden !important; text-overflow: ellipsis !important; }
+            .sf-sidebar .ant-tabs-nav-list { max-width: 100% !important; }
+            .sf-sidebar .wax-btn-label { display: none !important; }
+            .sf-sidebar .group { max-width: 300px !important; overflow: hidden !important; }
+            .sf-sidebar .flex-1 { min-width: 0 !important; }
+            .sf-sidebar .truncate { max-width: 100% !important; display: block !important; }
+            .sf-sidebar .maplibregl-map, .sf-sidebar .maplibregl-canvas-container, .sf-sidebar .maplibregl-canvas { max-width: none !important; width: 100% !important; }
+          `}</style>
 
-          {/* ── LEFT SIDEBAR (280px) — all left apps stacked ── */}
+          {/* ── LEFT SIDEBAR (300px) — all left apps stacked ── */}
           <div style={{
-            width: 280, minWidth: 280, height: "100%",
+            width: 300, minWidth: 300, maxWidth: 300, height: "100%",
             display: "flex", flexDirection: "column",
             borderRight: `1px solid ${FB.border}`, background: FB.bg,
+            overflow: 'hidden',
           }}>
-            <div className="sf-sidebar" style={{ flex: 1, overflowY: "auto", scrollbarWidth: "none" }}>
+            <div className="sf-sidebar" style={{ flex: 1, overflowY: "auto", overflowX: "hidden", scrollbarWidth: "none", width: 300 }}>
               {[...leftApps].filter(a => a !== centerApp).reverse().map(appId => (
                 <div key={appId} style={{
-                  minHeight: appId === 'reels' ? '100%' : '60vh',
+                  ...(appId === 'reels' ? { height: '100%', minHeight: '100%' } : { minHeight: '60vh' }),
                   borderBottom: `1px solid ${FB.border}`,
                   display: 'flex', flexDirection: 'column',
+                  width: 300, maxWidth: 300,
                 }}>
                   <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spin /></div>}>
                     {renderPanel(appId, true)}
@@ -3421,16 +3536,18 @@ export default function DashboardPageUnified() {
 
           {/* ── RIGHT SIDEBAR (300px) — all right apps stacked ── */}
           <div style={{
-            width: 300, minWidth: 300, height: "100%",
+            width: 300, minWidth: 300, maxWidth: 300, height: "100%",
             display: "flex", flexDirection: "column",
             borderLeft: `1px solid ${FB.border}`, background: FB.bg,
+            overflow: 'hidden',
           }}>
-            <div className="sf-sidebar" style={{ flex: 1, overflowY: "auto", scrollbarWidth: "none" }}>
+            <div className="sf-sidebar" style={{ flex: 1, overflowY: "auto", overflowX: "hidden", scrollbarWidth: "none", width: 300 }}>
               {rightApps.filter(a => a !== centerApp).map(appId => (
                 <div key={appId} style={{
                   minHeight: '60vh',
                   borderBottom: `1px solid ${FB.border}`,
                   display: 'flex', flexDirection: 'column',
+                  width: 300, maxWidth: 300,
                 }}>
                   <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spin /></div>}>
                     {renderPanel(appId, true)}

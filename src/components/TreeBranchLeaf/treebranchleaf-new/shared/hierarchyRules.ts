@@ -1,3 +1,4 @@
+import { SF } from '../../../../components/zhiive/ZhiiveTheme';
 ﻿/**
  * ­ƒî│ SYST├êME DE VALIDATION HI├ëRARCHIQUE AVANC├ë - TreeBranchLeaf
  * 
@@ -813,7 +814,7 @@ export const NODE_THEMES = {
     icon: '­ƒî│'
   },
   branch: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: SF.blue,
     textColor: '#ffffff', 
     borderColor: '#2563eb',
     icon: '­ƒî┐'
@@ -821,17 +822,17 @@ export const NODE_THEMES = {
   leaf_field: {
     backgroundColor: '#10b981',
     textColor: '#ffffff',
-    borderColor: '#059669',
+    borderColor: SF.emeraldDark,
     icon: '­ƒôØ'
   },
   leaf_option: {
-    backgroundColor: '#f59e0b',
+    backgroundColor: SF.amber,
     textColor: '#ffffff',
     borderColor: '#d97706',
     icon: 'ÔÜ¬'
   },
   leaf_option_field: {
-    backgroundColor: '#8b5cf6',
+    backgroundColor: SF.violet,
     textColor: '#ffffff',
     borderColor: '#7c3aed',
     icon: '­ƒÄ»'

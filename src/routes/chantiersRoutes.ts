@@ -59,7 +59,7 @@ router.get('/', authenticateToken, async (req, res) => {
     }
 
     // SuperAdmin voit tout
-    const user = (req as any).user;
+    const user = req.user;
     const isSuperAdmin = user?.role === 'super_admin' || user?.isSuperAdmin === true;
 
     const where: any = {};
@@ -520,7 +520,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 router.post('/', authenticateToken, async (req, res) => {
   try {
     const organizationId = req.headers['x-organization-id'] as string;
-    const user = (req as any).user;
+    const user = req.user;
 
     if (!organizationId) {
       return res.status(400).json({
@@ -663,7 +663,7 @@ router.post('/', authenticateToken, async (req, res) => {
 router.post('/from-lead-document', authenticateToken, async (req, res) => {
   try {
     const organizationId = req.headers['x-organization-id'] as string;
-    const user = (req as any).user;
+    const user = req.user;
 
     if (!organizationId) {
       return res.status(400).json({
@@ -1054,7 +1054,7 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const { statusId, force } = req.body;
     const organizationId = req.headers['x-organization-id'] as string;
-    const user = (req as any).user;
+    const user = req.user;
     const userRole = user?.role || 'commercial';
     const isSuperAdmin = user?.isSuperAdmin === true;
 
@@ -1450,7 +1450,7 @@ router.post('/resubmit-to-chantier/:leadId', authenticateToken, async (req, res)
   try {
     const { leadId } = req.params;
     const organizationId = req.headers['x-organization-id'] as string;
-    const userId = (req as any).user?.id;
+    const userId = req.user?.id;
 
     if (!organizationId) {
       return res.status(400).json({ success: false, message: 'ID d\'organisation requis' });

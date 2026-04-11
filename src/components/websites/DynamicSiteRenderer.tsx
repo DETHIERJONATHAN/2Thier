@@ -1,3 +1,4 @@
+import { SF, WEBSITE_DEFAULTS } from '../zhiive/ZhiiveTheme';
 import React, { useEffect, useState, useMemo } from 'react';
 import { Spin, Alert } from 'antd';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
@@ -172,7 +173,7 @@ const HeaderSection: React.FC<SectionProps> = ({ content, style }) => {
           <a 
             href={content.ctaButton.url}
             style={{
-              backgroundColor: content.ctaButton.backgroundColor || '#10b981',
+              backgroundColor: content.ctaButton.backgroundColor || WEBSITE_DEFAULTS.primaryColor,
               color: content.ctaButton.textColor || 'white',
               padding: '10px 24px',
               borderRadius: '6px',
@@ -231,7 +232,7 @@ const HeroSection: React.FC<SectionProps> = ({ content, style }) => {
               key={index}
               href={button.url}
               style={{
-                backgroundColor: button.backgroundColor || '#10b981',
+                backgroundColor: button.backgroundColor || WEBSITE_DEFAULTS.primaryColor,
                 color: button.textColor || 'white',
                 padding: '12px 30px',
                 borderRadius: '6px',
@@ -264,7 +265,7 @@ const StatsSection: React.FC<SectionProps> = ({ content, style }) => {
             {stat.icon && (
               <div style={{ fontSize: '3rem', marginBottom: '15px' }}>{stat.icon}</div>
             )}
-            <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: style.color || '#10b981' }}>
+            <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: style.color || WEBSITE_DEFAULTS.primaryColor }}>
               {stat.value}
             </div>
             <div style={{ fontSize: '1rem', color: style.color || '#666', marginTop: '10px' }}>

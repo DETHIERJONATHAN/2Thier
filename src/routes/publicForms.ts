@@ -618,7 +618,7 @@ router.get(
   async (req, res) => {
     try {
       const { formId } = req.params;
-      const user = (req as any).user;
+      const user = req.user;
 
       const form = await prisma.publicForm.findFirst({
         where: {

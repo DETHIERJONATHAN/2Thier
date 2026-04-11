@@ -1,4 +1,5 @@
 // Sections du formulaire (FormSections) - gestion drag & drop, ajout/suppression/édition de section et de champ
+import { SF } from '../../components/zhiive/ZhiiveTheme';
 import useCRMStore from '../../store';
 import type { Section, Field } from '../../store/slices/types';
 import { useState, useEffect, useCallback } from 'react';
@@ -101,7 +102,7 @@ const SortableSection = ({ section, children, handleEditSectionName, editingSect
             )}
             {!isSectionValid(section) && (
               <Tooltip title="Certains champs obligatoires ne sont pas remplis">
-                <ExclamationCircleOutlined style={{ color: '#f59e0b' }} />
+                <ExclamationCircleOutlined style={{ color: SF.amber }} />
               </Tooltip>
             )}
             <Select

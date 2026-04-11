@@ -29,7 +29,7 @@ const router = Router();
 // ═══════════════════════════════════════════════════════
 
 function getUserContext(req: Request) {
-  const user = (req as any).user;
+  const user = req.user;
   const orgId = user.organizationId || (req.headers['x-organization-id'] as string) || null;
   const isSuperAdmin = user.role === 'super_admin' || user.isSuperAdmin;
   return { user, orgId, isSuperAdmin, userId: user.id as string };

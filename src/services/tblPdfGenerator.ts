@@ -8,6 +8,7 @@
 
 import PDFDocument from 'pdfkit';
 import * as crypto from 'crypto';
+import { SF } from '../components/zhiive/ZhiiveTheme';
 
 // ============================================================
 // TYPES
@@ -132,7 +133,7 @@ export async function generateTblPdf(data: TblPdfData): Promise<Buffer> {
       const margin = 45;
       const contentWidth = 595.28 - margin * 2; // A4 width
       const primaryColor = '#1677ff';
-      const darkColor = '#1a1a2e';
+      const darkColor = SF.dark;
       const lightGray = '#f5f5f5';
       const borderColor = '#e0e0e0';
 

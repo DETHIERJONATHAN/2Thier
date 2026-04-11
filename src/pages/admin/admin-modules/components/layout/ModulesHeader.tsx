@@ -1,14 +1,9 @@
+import { SF, FB } from '../../../../../components/zhiive/ZhiiveTheme';
 import React from 'react';
 import { Input, Button, Tooltip, Badge } from 'antd';
 import { ReloadOutlined, AppstoreOutlined, CheckCircleOutlined, RocketOutlined } from '@ant-design/icons';
 
 // ── Facebook Design Tokens ──
-const FB = {
-	bg: '#f0f2f5', white: '#ffffff', text: '#050505', textSecondary: '#65676b',
-	blue: '#1877f2', border: '#ced0d4', green: '#42b72a',
-	shadow: '0 1px 2px rgba(0,0,0,0.1)', radius: 8,
-};
-
 type ModulesHeaderProps = {
 	categoriesCount: number;
 	totalModules: number;
@@ -94,7 +89,7 @@ export default function ModulesHeader(props: ModulesHeaderProps) {
 							<div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, color: FB.textSecondary }}>Actifs ({orgName || 'Orga'})</div>
 							<div style={{ fontSize: 22, fontWeight: 700, color: FB.text }}>{totalActiveForOrg}</div>
 						</div>
-						<CheckCircleOutlined style={{ fontSize: 26, color: '#10b981' }} />
+						<CheckCircleOutlined style={{ fontSize: 26, color: SF.emerald }} />
 					</div>
 				</div>
 			</div>

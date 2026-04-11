@@ -1,3 +1,4 @@
+import { SF, WEBSITE_DEFAULTS } from '../zhiive/ZhiiveTheme';
 /**
  * 📌 Éditeur de Header/Bandeau COMPLET
  * Logo, menu, boutons, styles avancés, responsive, sticky, animations
@@ -59,7 +60,7 @@ export const HeaderEditor: React.FC<HeaderEditorProps> = ({ section, onSave, onC
         menuPosition: content.menuPosition || 'center',
         menuItems: content.menuItems || [],
         menuItemColor: content.menuItemColor || '#000000',
-        menuItemHoverColor: content.menuItemHoverColor || '#10b981',
+        menuItemHoverColor: content.menuItemHoverColor || WEBSITE_DEFAULTS.primaryColor,
         menuFontSize: content.menuFontSize || 16,
         menuFontWeight: content.menuFontWeight || 500,
         menuSpacing: content.menuSpacing || 32,
@@ -67,7 +68,7 @@ export const HeaderEditor: React.FC<HeaderEditorProps> = ({ section, onSave, onC
         // CTA Buttons
         ctaButton: content.ctaButton || '',
         ctaButtonUrl: content.ctaButtonUrl || '',
-        ctaButtonColor: content.ctaButtonColor || '#10b981',
+        ctaButtonColor: content.ctaButtonColor || WEBSITE_DEFAULTS.primaryColor,
         ctaButtonTextColor: content.ctaButtonTextColor || '#ffffff',
         ctaButtonSize: content.ctaButtonSize || 'default',
         ctaButtonStyle: content.ctaButtonStyle || 'solid',

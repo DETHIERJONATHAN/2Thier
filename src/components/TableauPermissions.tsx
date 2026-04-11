@@ -1,3 +1,4 @@
+import { SF } from './zhiive/ZhiiveTheme';
 import React, { useState, useCallback, useMemo } from 'react';
 import { Table, Button, Space, Modal, message, Typography, Tag, Tooltip } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, ExportOutlined, ImportOutlined, EyeOutlined, LockOutlined } from '@ant-design/icons';
@@ -216,7 +217,7 @@ const TableauPermissions: React.FC<TableauPermissionsProps> = ({
           {column.label}
           {column.permissions && !column.permissions.edit?.includes(user?.role?.name) && (
             <Tooltip title="Colonne en lecture seule pour votre rôle">
-              <LockOutlined style={{ color: '#ff6b6b', fontSize: '12px' }} />
+              <LockOutlined style={{ color: SF.like, fontSize: '12px' }} />
             </Tooltip>
           )}
         </Space>
@@ -292,7 +293,7 @@ const TableauPermissions: React.FC<TableauPermissionsProps> = ({
               
               {!canEditRow && !canDeleteRow && canView && (
                 <Tooltip title="Actions limitées pour votre rôle">
-                  <LockOutlined style={{ color: '#ff6b6b', fontSize: '12px' }} />
+                  <LockOutlined style={{ color: SF.like, fontSize: '12px' }} />
                 </Tooltip>
               )}
             </Space>

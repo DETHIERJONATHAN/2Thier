@@ -90,7 +90,8 @@ interface ActiveIdentityType {
 // ---------------------------------------------------------------------------
 
 /** Violet pour l'organisation */
-const ORG_COLOR = '#6C5CE7';
+import { SF } from '../components/zhiive/ZhiiveTheme';
+const ORG_COLOR = SF.primary;
 /** Bleu pour le personnel */
 const PERSONAL_COLOR = '#1890ff';
 

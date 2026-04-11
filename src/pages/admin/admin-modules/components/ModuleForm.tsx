@@ -1,3 +1,4 @@
+import { FB } from '../../../../components/zhiive/ZhiiveTheme';
 import React, { useEffect, useState } from 'react';
 import { Card, Form, Input, InputNumber, Button, ColorPicker, Select } from 'antd';
 import IconPicker from '../components/shared/IconPicker';
@@ -6,7 +7,6 @@ import { useAuth } from '../../../../auth/useAuth';
 import { ModuleWithStatus } from '../types';
 
 // ── FB Tokens + Toggle ──
-const FB = { blue: '#1877f2', white: '#ffffff' };
 const FBToggle = ({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) => {
   const w = 44, h = 24, dot = 20;
   return (

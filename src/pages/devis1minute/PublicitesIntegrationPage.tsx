@@ -1,3 +1,4 @@
+import { FB } from '../../components/zhiive/ZhiiveTheme';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Card,
@@ -204,7 +205,7 @@ const PublicitesIntegrationPage: React.FC = () => {
       id: 'meta_ads',
       name: 'Meta Ads (Facebook/Instagram)',
       icon: <FacebookOutlined />,
-      color: '#1877f2'
+      color: FB.blue
     },
     {
       id: 'linkedin_ads',

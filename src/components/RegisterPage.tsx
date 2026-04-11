@@ -1,4 +1,6 @@
+import { SF } from '../components/zhiive/ZhiiveTheme';
 import { useState, useMemo } from 'react';
+import { SF } from './zhiive/ZhiiveTheme';
 import { useNavigate } from 'react-router-dom';
 import { Form, Input, Button, Typography, Divider, message } from 'antd';
 import {
@@ -64,7 +66,7 @@ export default function RegisterPage() {
     },
     {
       value: 'createOrg' as const,
-      icon: <BankOutlined style={{ fontSize: 28, color: '#059669' }} />,
+      icon: <BankOutlined style={{ fontSize: 28, color: SF.emeraldDark }} />,
       title: 'Found a Colony',
       desc: 'Devis, factures, projets — devenez Keeper',
     },
@@ -97,7 +99,7 @@ export default function RegisterPage() {
         {/* === PANNEAU GAUCHE — Branding === */}
         <div className="zhiive-reg-brand" style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #2563eb 100%)' }}>
           <div style={{ position: 'absolute', top: 0, right: 0, width: 380, height: 380, borderRadius: '50%', opacity: 0.08, background: 'radial-gradient(circle, #60a5fa 0%, transparent 70%)', transform: 'translate(30%, -30%)' }} />
-          <div style={{ position: 'absolute', bottom: 0, left: 0, width: 280, height: 280, borderRadius: '50%', opacity: 0.08, background: 'radial-gradient(circle, #3b82f6 0%, transparent 70%)', transform: 'translate(-20%, 20%)' }} />
+          <div style={{ position: 'absolute', bottom: 0, left: 0, width: 280, height: 280, borderRadius: '50%', opacity: 0.08, background: `radial-gradient(circle, ${SF.blue} 0%, transparent 70%)`, transform: 'translate(-20%, 20%)' }} />
           <div className="zhiive-reg-dot" style={{ top: '25%', right: '25%', width: 6, height: 6, background: '#60a5fa' }} />
           <div className="zhiive-reg-dot" style={{ top: '60%', right: '35%', width: 8, height: 8, background: '#93c5fd', animationDelay: '1s', animationDuration: '4s' }} />
           <div className="zhiive-reg-dot" style={{ top: '45%', left: '20%', width: 5, height: 5, background: '#38bdf8', animationDelay: '0.5s', animationDuration: '3.5s' }} />
@@ -152,7 +154,7 @@ export default function RegisterPage() {
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   margin: '0 auto 24px',
                 }}>
-                  <MailOutlined style={{ fontSize: 36, color: '#059669' }} />
+                  <MailOutlined style={{ fontSize: 36, color: SF.emeraldDark }} />
                 </div>
 
                 <Title level={3} style={{ color: '#111827', margin: '0 0 12px' }}>

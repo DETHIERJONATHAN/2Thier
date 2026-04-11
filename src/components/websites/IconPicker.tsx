@@ -1,3 +1,4 @@
+import { SF, WEBSITE_DEFAULTS } from '../zhiive/ZhiiveTheme';
 import React, { useState, useMemo } from 'react';
 import { Input, Popover, Space, Typography, Tag, Button, Row, Col, Empty } from 'antd';
 import {
@@ -205,8 +206,8 @@ const { Text, Title } = Typography;
 const iconCategories = [
   {
     name: 'Énergie & Environnement',
-    color: '#10b981',
-    gradient: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+    color: WEBSITE_DEFAULTS.primaryColor,
+    gradient: WEBSITE_DEFAULTS.gradient,
     icons: [
       { name: 'ThunderboltFilled', component: ThunderboltFilled, keywords: ['éclair', 'électricité', 'énergie', 'rapide', 'power'] },
       { name: 'ThunderboltOutlined', component: ThunderboltOutlined, keywords: ['éclair', 'électricité', 'énergie'] },
@@ -219,7 +220,7 @@ const iconCategories = [
   },
   {
     name: 'Business & Commerce',
-    color: '#3b82f6',
+    color: SF.blue,
     gradient: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
     icons: [
       { name: 'ShopOutlined', component: ShopOutlined, keywords: ['magasin', 'boutique', 'commerce'] },
@@ -234,7 +235,7 @@ const iconCategories = [
   },
   {
     name: 'Communication',
-    color: '#8b5cf6',
+    color: SF.violet,
     gradient: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
     icons: [
       { name: 'PhoneOutlined', component: PhoneOutlined, keywords: ['téléphone', 'appel', 'contact'] },
@@ -261,7 +262,7 @@ const iconCategories = [
   },
   {
     name: 'Technologie',
-    color: '#f59e0b',
+    color: SF.amber,
     gradient: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
     icons: [
       { name: 'RocketOutlined', component: RocketOutlined, keywords: ['fusée', 'rapide', 'démarrage', 'startup'] },
@@ -306,7 +307,7 @@ const iconCategories = [
   },
   {
     name: 'Statut & Indicateurs',
-    color: '#f59e0b',
+    color: SF.amber,
     gradient: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
     icons: [
       { name: 'StarOutlined', component: StarOutlined, keywords: ['étoile', 'favori', 'star'] },
@@ -332,7 +333,7 @@ const iconCategories = [
   },
   {
     name: 'Temps & Calendrier',
-    color: '#ef4444',
+    color: SF.red,
     gradient: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
     icons: [
       { name: 'ClockCircleOutlined', component: ClockCircleOutlined, keywords: ['horloge', 'temps', 'heure'] },
@@ -343,7 +344,7 @@ const iconCategories = [
   },
   {
     name: 'Graphiques & Données',
-    color: '#8b5cf6',
+    color: SF.violet,
     gradient: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
     icons: [
       { name: 'BarChartOutlined', component: BarChartOutlined, keywords: ['graphique', 'barre', 'chart'] },
@@ -358,7 +359,7 @@ const iconCategories = [
   },
   {
     name: 'Alertes & Notifications',
-    color: '#ef4444',
+    color: SF.red,
     gradient: 'linear-gradient(135deg, #fbbf24 0%, #ef4444 100%)',
     icons: [
       { name: 'BellOutlined', component: BellOutlined, keywords: ['cloche', 'notification', 'alerte'] },
@@ -466,14 +467,14 @@ export const IconPicker: React.FC<IconPickerProps> = ({
         <Input
           size="large"
           placeholder="Rechercher une icône (énergie, téléphone, email...)"
-          prefix={<SearchOutlined style={{ color: '#10b981', fontSize: '18px' }} />}
+          prefix={<SearchOutlined style={{ color: WEBSITE_DEFAULTS.primaryColor, fontSize: '18px' }} />}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           allowClear
           autoFocus
           style={{
             borderRadius: '8px',
-            border: '2px solid #10b981'
+            border: `2px solid ${WEBSITE_DEFAULTS.primaryColor}`
           }}
         />
         <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginTop: '8px' }}>
@@ -609,7 +610,7 @@ export const IconPicker: React.FC<IconPickerProps> = ({
           minHeight: '40px'
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.borderColor = '#10b981';
+          e.currentTarget.style.borderColor = WEBSITE_DEFAULTS.primaryColor;
           e.currentTarget.style.boxShadow = '0 0 0 2px rgba(16, 185, 129, 0.1)';
         }}
         onMouseLeave={(e) => {

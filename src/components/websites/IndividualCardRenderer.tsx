@@ -1,3 +1,4 @@
+import { SF, WEBSITE_DEFAULTS } from '../zhiive/ZhiiveTheme';
 /**
  * 🎴 IndividualCardRenderer - Affichage d'une carte configurée
  * 
@@ -132,7 +133,7 @@ export const IndividualCardRenderer: React.FC<IndividualCardRendererProps> = ({
       '--hover-scale': config.style?.hover?.scale || 1.02,
       '--hover-translate-y': `${config.style?.hover?.translateY || -4}px`,
       '--hover-shadow-intensity': config.style?.hover?.shadowIntensity || 1.5,
-      '--hover-border-color': config.style?.hover?.borderColor || '#3b82f6',
+      '--hover-border-color': config.style?.hover?.borderColor || SF.blue,
     } as React.CSSProperties;
   };
 
@@ -147,7 +148,7 @@ export const IndividualCardRenderer: React.FC<IndividualCardRendererProps> = ({
         <div 
           className={`individual-card__badge individual-card__badge--${config.header.badge.position || 'top-right'}`}
           style={{
-            backgroundColor: config.header.badge.color || '#3b82f6',
+            backgroundColor: config.header.badge.color || SF.blue,
           }}
         >
           {config.header.badge.text}
@@ -284,7 +285,7 @@ export const IndividualCardRenderer: React.FC<IndividualCardRendererProps> = ({
             <a
               href={!preview ? config.footer.link.url : undefined}
               className="individual-card__footer-link"
-              style={{ color: config.footer.textColor || '#3b82f6' }}
+              style={{ color: config.footer.textColor || SF.blue }}
               onClick={(e) => preview && e.preventDefault()}
             >
               {config.footer.link.text}

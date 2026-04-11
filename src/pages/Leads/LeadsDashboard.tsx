@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { SF } from '../../components/zhiive/ZhiiveTheme';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useLeadStatuses } from '../../hooks/useLeadStatuses';
 import { useAuth } from '../../auth/useAuth';
@@ -574,7 +575,7 @@ export default function LeadsDashboard() {
                       <XAxis dataKey="name" />
                       <YAxis />
                       <Tooltip />
-                      <Bar dataKey="value" fill="#3B82F6" />
+                      <Bar dataKey="value" fill={SF.blue} />
                     </BarChart>
                   )}
                 </ResponsiveContainer>

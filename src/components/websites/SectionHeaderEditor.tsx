@@ -1,3 +1,4 @@
+import { SF, WEBSITE_DEFAULTS } from '../zhiive/ZhiiveTheme';
 /**
  * 📋 SectionHeaderEditor - Éditeur de header de section
  * Permet de personnaliser le titre, sous-titre, description, badge, etc.
@@ -83,7 +84,7 @@ const DEFAULT_HEADER: SectionHeaderConfig = {
   description: '',
   showBadge: false,
   badgeText: '',
-  badgeColor: '#10b981',
+  badgeColor: WEBSITE_DEFAULTS.primaryColor,
   titleColor: '#1f2937',
   titleSize: 'xl',
   titleWeight: 700,

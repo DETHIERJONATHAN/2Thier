@@ -15,7 +15,7 @@ const router = Router();
 
 router.post('/follow/:userId', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const followerId = (req as any).user.id;
+    const followerId = req.user.id;
     const followingId = req.params.userId;
     if (followerId === followingId) return res.status(400).json({ error: 'Impossible de se suivre soi-même' });
 
@@ -33,7 +33,7 @@ router.post('/follow/:userId', authenticateToken, async (req: Request, res: Resp
 
 router.delete('/follow/:userId', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const followerId = (req as any).user.id;
+    const followerId = req.user.id;
     const followingId = req.params.userId;
     await db.follow.deleteMany({ where: { followerId, followingId } });
     res.json({ success: true });
@@ -72,8 +72,8 @@ router.get('/following/:userId', authenticateToken, async (req: Request, res: Re
 
 router.get('/stories/feed', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const orgId = (req as any).user.organizationId;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
     const stories = await db.story.findMany({
@@ -115,8 +115,8 @@ router.get('/stories/feed', authenticateToken, async (req: Request, res: Respons
 
 router.post('/stories', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const orgId = (req as any).user.organizationId;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
     const { mediaUrl, mediaType, text } = req.body;
 
     const settings = await getOrgSocialSettings(orgId);
@@ -141,7 +141,7 @@ router.post('/stories', authenticateToken, async (req: Request, res: Response) =
 
 router.post('/stories/:storyId/view', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = req.user.id;
     const storyId = req.params.storyId;
 
     const existing = await db.storyView.findUnique({
@@ -158,7 +158,7 @@ router.post('/stories/:storyId/view', authenticateToken, async (req: Request, re
 
 router.delete('/stories/:storyId', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = req.user.id;
     const storyId = req.params.storyId;
     const story = await db.story.findUnique({ where: { id: storyId } });
     if (!story) return res.status(404).json({ error: 'Story non trouvée' });
@@ -176,7 +176,7 @@ router.delete('/stories/:storyId', authenticateToken, async (req: Request, res: 
 // Legacy endpoint kept for compatibility
 router.get('/explore/posts', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     const orgId = user.organizationId;
     const limit = Math.min(parseInt(req.query.limit as string) || 30, 100);
     const category = req.query.category as string | undefined;
@@ -243,7 +243,7 @@ router.get('/explore/posts', authenticateToken, async (req: Request, res: Respon
 
 router.get('/explore/gallery', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     const orgId = user.organizationId;
     const userId = user.id;
     const limit = Math.min(parseInt(req.query.limit as string) || 40, 100);
@@ -443,7 +443,7 @@ router.get('/explore/gallery', authenticateToken, async (req: Request, res: Resp
 
 router.get('/reels', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     const orgId = user.organizationId;
     const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
 
@@ -518,8 +518,8 @@ router.get('/explore/hashtags', authenticateToken, async (req: Request, res: Res
 
 router.get('/explore/suggested-users', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const orgId = (req as any).user.organizationId;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
     const limit = Math.min(parseInt(req.query.limit as string) || 10, 30);
 
     // Users from same org that the current user doesn't follow yet
@@ -587,14 +587,14 @@ const createSparkSchema = z.object({
 
 router.get('/sparks', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const orgId = (req as any).user.organizationId;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
     const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
     const mode: FeedMode = (req.query.mode as string) === 'personal' ? 'personal'
       : (req.query.mode as string) === 'public' ? 'public' : 'org';
 
     // Use centralized social context for sparks
-    const isSuperAdmin = (req as any).user.role === 'super_admin' || (req as any).user.isSuperAdmin;
+    const isSuperAdmin = req.user.role === 'super_admin' || req.user.isSuperAdmin;
     const socialCtx = await getSocialContext(userId, orgId, isSuperAdmin);
     const whereClause: any = buildSparkFeedWhere(socialCtx, mode);
 
@@ -628,8 +628,8 @@ router.get('/sparks', authenticateToken, async (req: Request, res: Response) => 
 
 router.post('/sparks', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const orgId = (req as any).user.organizationId;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
 
     const settings = await getOrgSocialSettings(orgId);
     if (!settings.sparksEnabled) return res.status(403).json({ error: 'Sparks disabled' });
@@ -649,8 +649,8 @@ router.post('/sparks', authenticateToken, async (req: Request, res: Response) =>
 
 router.post('/sparks/:sparkId/vote', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const orgId = (req as any).user.organizationId;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
     const sparkId = req.params.sparkId;
 
     const settings = await getOrgSocialSettings(orgId);
@@ -687,8 +687,8 @@ router.post('/sparks/:sparkId/vote', authenticateToken, async (req: Request, res
 
 router.get('/battles', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const orgId = (req as any).user.organizationId;
-    const userId = (req as any).user.id;
+    const orgId = req.user.organizationId;
+    const userId = req.user.id;
     const limit = Math.min(parseInt(req.query.limit as string) || 10, 30);
     const mode = (req.query.mode as string) || 'org';
 
@@ -734,8 +734,8 @@ router.get('/battles', authenticateToken, async (req: Request, res: Response) =>
 
 router.post('/battles', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const orgId = (req as any).user.organizationId;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
 
     const settings = await getOrgSocialSettings(orgId);
     if (!settings.battlesEnabled) return res.status(403).json({ error: 'Battles disabled' });
@@ -763,8 +763,8 @@ router.post('/battles', authenticateToken, async (req: Request, res: Response) =
 
 router.post('/battles/:id/join', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const orgId = (req as any).user.organizationId;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
     const battleId = req.params.id;
 
     const settings = await getOrgSocialSettings(orgId);
@@ -792,8 +792,8 @@ router.post('/battles/:id/join', authenticateToken, async (req: Request, res: Re
 
 router.get('/quests/available', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const orgId = (req as any).user.organizationId;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
 
     const quests = await db.quest.findMany({
       where: {
@@ -830,7 +830,7 @@ router.get('/quests/available', authenticateToken, async (req: Request, res: Res
 
 router.get('/events', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const orgId = (req as any).user.organizationId;
+    const orgId = req.user.organizationId;
     const limit = Math.min(parseInt(req.query.limit as string) || 10, 30);
 
     const events = await db.socialEvent.findMany({
@@ -869,8 +869,8 @@ router.get('/events', authenticateToken, async (req: Request, res: Response) => 
 
 router.post('/events', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const orgId = (req as any).user.organizationId;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
 
     const settings = await getOrgSocialSettings(orgId);
     if (!settings.eventsEnabled) return res.status(403).json({ error: 'Events disabled' });
@@ -897,7 +897,7 @@ router.post('/events', authenticateToken, async (req: Request, res: Response) =>
 
 router.post('/events/:eventId/rsvp', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = req.user.id;
     const eventId = req.params.eventId;
     const status = req.body.status || 'GOING';
 
@@ -918,7 +918,7 @@ router.post('/events/:eventId/rsvp', authenticateToken, async (req: Request, res
 
 router.delete('/events/:eventId/rsvp', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = req.user.id;
     const eventId = req.params.eventId;
     await db.eventAttendee.deleteMany({ where: { eventId, userId } });
     res.json({ success: true });
@@ -931,7 +931,7 @@ router.delete('/events/:eventId/rsvp', authenticateToken, async (req: Request, r
 
 router.get('/capsules', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = req.user.id;
     const limit = Math.min(parseInt(req.query.limit as string) || 10, 30);
 
     const capsules = await db.timeCapsule.findMany({
@@ -967,8 +967,8 @@ router.get('/capsules', authenticateToken, async (req: Request, res: Response) =
 
 router.post('/capsules', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const orgId = (req as any).user.organizationId;
+    const userId = req.user.id;
+    const orgId = req.user.organizationId;
 
     const settings = await getOrgSocialSettings(orgId);
     if (!settings.capsulesEnabled) return res.status(403).json({ error: 'Capsules disabled' });
@@ -995,7 +995,7 @@ router.post('/capsules', authenticateToken, async (req: Request, res: Response) 
 
 router.get('/orbit', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = req.user.id;
 
     // Get friends with interaction frequency
     const friendships = await db.friendship.findMany({
@@ -1056,7 +1056,7 @@ router.get('/orbit', authenticateToken, async (req: Request, res: Response) => {
 
 router.get('/gamification/me', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = req.user.id;
 
     const [streak, badges, allBadges] = await Promise.all([
       db.userStreak.findUnique({ where: { userId } }),

@@ -1,3 +1,4 @@
+import { SF } from '../components/zhiive/ZhiiveTheme';
 /**
  * ============================================================
  *  PAGE UNIFIÉE DE MESSAGERIE — Zhiive Mail (@zhiive.com)
@@ -801,7 +802,7 @@ const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
             icon={<MenuOutlined />}
             onClick={() => setMobileSidebarOpen(true)}
           />
-          <span style={{ fontWeight: 600, fontSize: 16, color: '#1a1a2e', whiteSpace: 'nowrap' }}>Mail</span>
+          <span style={{ fontWeight: 600, fontSize: 16, color: SF.dark, whiteSpace: 'nowrap' }}>Mail</span>
         </div>
       )}
 
@@ -886,7 +887,7 @@ const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
   // ═══════════════════════════════════════════════════════════
 
   const renderMessageList = () => (
-    <div ref={_messageListRef} style={{ flex: 1, overflowY: 'auto', minHeight: 0, backgroundColor: '#fff' }}>
+    <div ref={_messageListRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0, backgroundColor: '#fff', width: '100%', maxWidth: '100%' }}>
       {isLoading && messages.length === 0 ? (
         <div className="p-4">
           {Array.from({ length: 8 }).map((_, i) => (
@@ -925,6 +926,9 @@ const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
                   padding: isMobile ? '10px 12px 10px 4px' : '0 16px 0 8px',
                   minHeight: isMobile ? 72 : 48,
                   borderBottom: '1px solid #f2f2f2',
+                  overflow: 'hidden',
+                  maxWidth: '100%',
+                  width: '100%',
                   backgroundColor: isActive
                     ? '#c2dbff'
                     : isChecked
@@ -1014,8 +1018,7 @@ const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
                     {/* Ligne 3 : Snippet */}
                     {msg.snippet && (
                       <div
-                        className="truncate"
-                        style={{ fontSize: 12, color: '#9aa0a6', fontWeight: 400, marginTop: 1 }}
+                        style={{ fontSize: 12, color: '#9aa0a6', fontWeight: 400, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', wordBreak: 'break-all' }}
                       >
                         {msg.snippet}
                       </div>
@@ -1855,6 +1858,74 @@ document.querySelectorAll('img').forEach(function(img) {
   //  Mobile:   [Toolbar + ListeMessages plein écran]
   //            Sidebar = Drawer, Détail = Drawer plein écran
   // ═══════════════════════════════════════════════════════════
+
+  // ─── Mode compact (sidebar 300px) : layout simplifié sans Ant Layout ───
+  if (compact) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', overflow: 'hidden', backgroundColor: '#fff', position: 'relative', minWidth: 0, maxWidth: '100%' }}>
+        {msgCtx}
+        {/* Sidebar mobile (colonne glissante) */}
+        {mobileSidebarOpen && (
+          <div
+            onClick={() => setMobileSidebarOpen(false)}
+            style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.3)', zIndex: 10 }}
+          />
+        )}
+        <div style={{
+          position: 'absolute', top: 0, left: 0, bottom: 0, width: 260, zIndex: 11,
+          backgroundColor: '#fff', borderRight: '1px solid #e0e0e0',
+          transform: mobileSidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+          transition: 'transform 0.25s ease', overflow: 'hidden',
+        }}>
+          {sidebarContent}
+        </div>
+        {/* Toolbar compact */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          height: 44, borderBottom: '1px solid #e0e0e0', backgroundColor: '#fff',
+          flexShrink: 0, padding: '0 4px', gap: 2, width: '100%', overflow: 'hidden',
+          position: 'sticky', top: 0, zIndex: 10,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+            <Button type="text" size="small" icon={<MenuOutlined />} onClick={() => setMobileSidebarOpen(true)} />
+            <span style={{ fontWeight: 600, fontSize: 14, color: SF.dark, whiteSpace: 'nowrap' }}>Mail</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2, overflow: 'hidden', flex: 1, justifyContent: 'flex-end' }}>
+            <Button type="text" size="small" icon={<SearchOutlined />} onClick={() => setSearchExpanded(!searchExpanded)} style={{ color: searchExpanded ? '#1677ff' : undefined }} />
+            <Button type="text" size="small" icon={<ReloadOutlined />} onClick={() => loadMessages(currentLabelId, searchQuery)} loading={isLoading} />
+            <Button type="text" size="small" icon={<CloudSyncOutlined />} onClick={handleMailSync} loading={isSyncing} style={{ color: '#d48806' }} />
+          </div>
+          <EditOutlined onClick={() => handleCompose('new')} style={{ fontSize: 18, color: '#1677ff', cursor: 'pointer', padding: 4, flexShrink: 0 }} />
+        </div>
+        {searchExpanded && (
+          <div style={{ backgroundColor: '#f8f9fa', borderBottom: '1px solid #e0e0e0', padding: '6px 8px', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, width: '100%' }}>
+            <Input
+              ref={searchInputRef}
+              placeholder="Rechercher..."
+              prefix={<SearchOutlined style={{ color: '#999' }} />}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onPressEnter={() => handleSearch(searchQuery)}
+              allowClear
+              onClear={() => { handleSearch(''); setSearchExpanded(false); }}
+              style={{ flex: 1, borderRadius: 8 }}
+              size="small"
+              autoFocus
+            />
+            <CloseOutlined
+              onClick={() => { setSearchExpanded(false); if (searchQuery) { setSearchQuery(''); handleSearch(''); } }}
+              style={{ color: '#666', fontSize: 12, cursor: 'pointer', padding: 2 }}
+            />
+          </div>
+        )}
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', width: '100%' }}>
+          {renderMessageList()}
+        </div>
+        {!isDesktop && renderMessageDetail()}
+        {renderComposeModal()}
+      </div>
+    );
+  }
 
   return (
     <Layout style={{ flex: 1, height: '100%', overflow: 'hidden', backgroundColor: '#fff', position: 'relative' }}>

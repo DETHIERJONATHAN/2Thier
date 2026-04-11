@@ -557,10 +557,15 @@ router.get('/export', requireRole(['admin', 'super_admin']), async (req: Authent
     });
 
     if (format === 'csv') {
-      // TODO: Implémenter export CSV si nécessaire
-      res.setHeader('Content-Type', 'text/csv');
+      const header = 'id,prenom,nom,email,telephone,entreprise,statut,source,cree_le\n';
+      const rows = leads.map(l =>
+        [l.id, l.firstName ?? '', l.lastName ?? '', l.email ?? '', l.phone ?? '', l.company ?? '', l.status ?? '', l.source ?? '', l.createdAt.toISOString()]
+          .map(v => `"${String(v).replace(/"/g, '""')}"`)
+          .join(',')
+      ).join('\n');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', 'attachment; filename="leads-export.csv"');
-      res.send('CSV export à implémenter');
+      res.send(header + rows);
     } else {
       res.json({
         success: true,

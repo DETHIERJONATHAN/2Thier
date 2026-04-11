@@ -18,6 +18,7 @@
 
 import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
+import { SF } from '../components/zhiive/ZhiiveTheme';
 import { authenticateToken, isAdmin } from '../middleware/auth';
 import { z } from 'zod';
 import { getPeppolBridge } from '../services/peppolBridge';
@@ -37,13 +38,13 @@ function getOrganizationId(req: Request): string | null {
   const fromHeader = req.headers['x-organization-id'] as string | undefined;
   if (fromHeader && fromHeader !== 'all') return fromHeader;
   // 2. Fallback: organisation dans le token JWT / session (super admin)
-  const user = (req as any).user as { organizationId?: string; currentOrganizationId?: string } | undefined;
+  const user = req.user as { organizationId?: string; currentOrganizationId?: string } | undefined;
   const fallback = user?.organizationId || user?.currentOrganizationId || null;
   return (fallback && fallback !== 'all') ? fallback : null;
 }
 
 function getUserId(req: Request): string | null {
-  const user = (req as any).user as { userId?: string; id?: string } | undefined;
+  const user = req.user as { userId?: string; id?: string } | undefined;
   return user?.userId || user?.id || null;
 }
 
@@ -120,7 +121,7 @@ async function notifyIncomingInvoices(
     const postal = getPostalService();
     const htmlBody = `
       <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <div style="background: linear-gradient(135deg, #6C5CE7, #a855f7); padding: 20px; border-radius: 12px 12px 0 0; color: white;">
+        <div style="background: linear-gradient(135deg, ${SF.primary}, #a855f7); padding: 20px; border-radius: 12px 12px 0 0; color: white;">
           <h2 style="margin: 0;">🧾 ${title}</h2>
           <p style="margin: 5px 0 0; opacity: 0.9;">${orgName} — Peppol e-Invoicing</p>
         </div>
@@ -144,7 +145,7 @@ async function notifyIncomingInvoices(
             </tbody>
           </table>
           <p style="margin-top: 16px; color: #666; font-size: 13px;">
-            Connectez-vous à <a href="https://app.2thier.be/facture?tab=incoming" style="color: #6C5CE7; text-decoration: none;">Zhiive</a> pour examiner et accepter ces factures.
+            Connectez-vous à <a href="https://app.2thier.be/facture?tab=incoming" style="color: ${SF.primary}; text-decoration: none;">Zhiive</a> pour examiner et accepter ces factures.
           </p>
         </div>
       </div>
@@ -237,7 +238,7 @@ router.put('/config', authenticateToken, isAdmin, async (req: Request, res: Resp
   try {
     const organizationId = getOrganizationId(req);
     if (!organizationId) {
-      return res.status(400).json({ success: false, message: 'ID d\'organisation requis. Sélectionnez une Colony.', debug: { header: req.headers['x-organization-id'], userOrgId: (req as any).user?.organizationId } });
+      return res.status(400).json({ success: false, message: 'ID d\'organisation requis. Sélectionnez une Colony.', debug: { header: req.headers['x-organization-id'], userOrgId: req.user?.organizationId } });
     }
 
     const validation = configSchema.safeParse(req.body);
@@ -769,12 +770,12 @@ router.post('/send/:invoiceId', authenticateToken, isAdmin, async (req: Request,
 
       const emailHtml = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #1877f2;">Facture envoyée via Peppol</h2>
+          <h2 style="color: ${SF.primary};">Facture envoyée via Peppol</h2>
           <p>La facture <strong>${invoiceNum}</strong> a été transmise au réseau Peppol.</p>
           <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
             <tr><td style="padding: 8px; color: #666;">Destinataire</td><td style="padding: 8px; font-weight: 600;">${clientName}</td></tr>
             <tr><td style="padding: 8px; color: #666;">Montant</td><td style="padding: 8px; font-weight: 600;">&euro;${invoiceData.amount.toFixed(2)}</td></tr>
-            <tr><td style="padding: 8px; color: #666;">Statut</td><td style="padding: 8px; font-weight: 600; color: #1877f2;">En cours de livraison Peppol</td></tr>
+            <tr><td style="padding: 8px; color: #666;">Statut</td><td style="padding: 8px; font-weight: 600; color: ${SF.primary};">En cours de livraison Peppol</td></tr>
           </table>
           <p style="font-size: 13px; color: #888;">Une confirmation sera envoyée dès que la facture sera délivrée au destinataire.</p>
           <p style="font-size: 12px; color: #aaa;">— ${orgName} via Zhiive</p>
