@@ -12,6 +12,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useZhiiveNav } from '../../contexts/ZhiiveNavContext';
 import { useActiveIdentity } from '../../contexts/ActiveIdentityContext';
+import { useSocialIdentity } from '../../contexts/SocialIdentityContext';
 import { SF } from './ZhiiveTheme';
 import { useDoubleTap } from './shared/useDoubleTap';
 import HeartBurstOverlay, { heartBurstKeyframes } from './shared/HeartBurstOverlay';
@@ -81,6 +82,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
   const [savedSet, setSavedSet] = useState<Set<string>>(new Set());
 
   // === Hive Live ===
+  const { isAppEnabled } = useSocialIdentity();
   const [hiveLiveModalOpen, setHiveLiveModalOpen] = useState(false);
   const [hiveLiveTitle, setHiveLiveTitle] = useState('');
   const [hiveLiveSaving, setHiveLiveSaving] = useState(false);
@@ -1169,7 +1171,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                   </div>
                   <span style={{ fontSize: 11, color: SF.textDark, textAlign: 'center' }}>{t('reels.copyLink')}</span>
                 </div>
-                {shareReel?.authorId === currentUser?.id && (
+                {isAppEnabled('hiveLive') && shareReel?.authorId === currentUser?.id && (
                   <div onClick={() => {
                     setHiveLiveTitle(shareReel?.caption?.substring(0, 100) || '');
                     setHiveLiveModalOpen(true);

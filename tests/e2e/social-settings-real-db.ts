@@ -66,11 +66,14 @@ const ALL_BOOLEAN_FIELDS = [
 const ALL_NUMBER_FIELDS = [
   'maxPostLength', 'maxCommentLength', 'maxMediaPerPost', 'maxVideoSizeMB', 'maxImageSizeMB',
   'commentDepthLimit', 'maxFriendsPerUser', 'waxDefaultRadiusKm', 'gdprRetentionDays',
+  'pinnedPostsLimit', 'autoArchiveDays',
 ];
 
 const ALL_STRING_FIELDS = [
   'defaultPostVisibility', 'profileVisibility', 'moderationMode', 'autoPostDefaultVisibility',
 ];
+
+const ALL_NULLABLE_FIELDS = ['customReactions'];
 
 // ═══ MAIN ═══
 async function main() {

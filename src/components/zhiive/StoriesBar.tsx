@@ -8,6 +8,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { SF } from './ZhiiveTheme';
 import { useActiveIdentity } from '../../contexts/ActiveIdentityContext';
+import { useSocialIdentity } from '../../contexts/SocialIdentityContext';
 import { useDoubleTap } from './shared/useDoubleTap';
 import HeartBurstOverlay, { heartBurstKeyframes } from './shared/HeartBurstOverlay';
 
@@ -57,6 +58,7 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 🐝 Hive Live integration
+  const { isAppEnabled } = useSocialIdentity();
   const [hiveLiveModalOpen, setHiveLiveModalOpen] = useState(false);
   const [hiveLiveTitle, setHiveLiveTitle] = useState('');
   const [hiveLiveSaving, setHiveLiveSaving] = useState(false);
@@ -490,12 +492,12 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
               {/* Actions for own stories */}
               {currentUser?.id === viewingStory.userId && (
                 <>
-                  <Tooltip title={t('hive.addToHiveLive')}>
+                  {isAppEnabled('hiveLive') && <Tooltip title={t('hive.addToHiveLive')}>
                     <span
                       onClick={() => { setHiveLiveTitle(viewingStory.userName + ' — Story'); setHiveLiveModalOpen(true); }}
                       style={{ fontSize: 14, cursor: 'pointer' }}
                     >🐝</span>
-                  </Tooltip>
+                  </Tooltip>}
                   <span
                     onClick={() => handleDeleteStory(viewingStory.id)}
                     style={{ fontSize: 12, color: SF.danger, cursor: 'pointer', fontWeight: 600 }}

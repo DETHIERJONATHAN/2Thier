@@ -108,6 +108,8 @@ export interface SocialSettingsData {
   // RGPD
   gdprDataExportEnabled: boolean;
   gdprRetentionDays: number;
+  // Advanced (extensibilité)
+  customReactions: any | null;
 }
 
 export type FeedMode = 'personal' | 'org' | 'public';
@@ -513,6 +515,8 @@ const DEFAULT_SETTINGS: SocialSettingsData = {
   // RGPD
   gdprDataExportEnabled: true,
   gdprRetentionDays: 0,
+  // Advanced
+  customReactions: null,
 };
 
 /**

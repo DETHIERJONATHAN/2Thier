@@ -19,6 +19,7 @@ import { SF } from './ZhiiveTheme';
 import { useZhiiveNav } from '../../contexts/ZhiiveNavContext';
 import { useAuth } from '../../auth/useAuth';
 import { useActiveIdentity } from '../../contexts/ActiveIdentityContext';
+import { useSocialIdentity } from '../../contexts/SocialIdentityContext';
 import ZhiiveModuleHeader from './ZhiiveModuleHeader';
 
 // ── Types ──
@@ -72,6 +73,7 @@ const NectarPanel: React.FC<NectarPanelProps> = ({ api, currentUser }) => {
   const { feedMode } = useZhiiveNav();
   const { currentOrganization } = useAuth();
   const identity = useActiveIdentity();
+  const { isAppEnabled } = useSocialIdentity();
   const { isOrgMode, organization: identityOrg } = identity;
   const orgLogo = identityOrg?.logoUrl || null;
 
@@ -335,6 +337,12 @@ const NectarPanel: React.FC<NectarPanelProps> = ({ api, currentUser }) => {
     </div>
   );
 
+  // Map NectarSection key → isAppEnabled key
+  const SECTION_TO_APP: Record<NectarSection, string> = {
+    spark: 'sparks', battles: 'battles', quests: 'quests',
+    pulse: 'pulse', events: 'events', capsules: 'capsules', orbit: 'orbit',
+  };
+
   const sections: { key: NectarSection; label: string; icon: string; color: string }[] = [
     { key: 'spark', label: t('flow.spark'), icon: '⚡', color: SF.gold },
     { key: 'battles', label: t('flow.battles'), icon: '⚔️', color: SF.accent },
@@ -343,7 +351,7 @@ const NectarPanel: React.FC<NectarPanelProps> = ({ api, currentUser }) => {
     { key: 'events', label: t('universe.events'), icon: '📅', color: SF.secondary },
     { key: 'capsules', label: t('universe.capsules'), icon: '⏳', color: SF.gold },
     { key: 'orbit', label: t('universe.orbit'), icon: '🪐', color: SF.accent },
-  ];
+  ].filter(sec => isAppEnabled(SECTION_TO_APP[sec.key]));
 
   const isFlowSection = activeSection === 'spark' || activeSection === 'battles' || activeSection === 'quests';
   const loading = isFlowSection ? flowLoading : universeLoading;
@@ -360,7 +368,7 @@ const NectarPanel: React.FC<NectarPanelProps> = ({ api, currentUser }) => {
     { key: 'events', label: t('universe.events') },
     { key: 'capsules', label: t('universe.capsules') },
     { key: 'orbit', label: t('universe.orbit') },
-  ];
+  ].filter(item => isAppEnabled(SECTION_TO_APP[item.key as NectarSection]));
 
   return (
     <div style={{ flex: 1, height: '100%', overflowY: 'auto', overflowX: 'hidden', scrollbarWidth: 'none', background: SF.bg, display: 'flex', flexDirection: 'column' as const, width: '100%', maxWidth: '100%', minWidth: 0 }}>

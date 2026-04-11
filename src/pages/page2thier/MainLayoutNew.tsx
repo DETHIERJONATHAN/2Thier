@@ -153,9 +153,10 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
         const orgId = currentOrganization?.id || '';
         const res = await api.get(`/api/modules/swipe-tabs?organizationId=${orgId}`);
         if (cancelled || !res?.success || !res.data) return;
+        const LABEL_FIX: Record<string, string> = { explore: 'Friends', flow: 'Nectar', universe: 'Nectar' };
         const tabs: TabConfig[] = res.data.map((t: any) => ({
           id: t.id === 'flow' || t.id === 'universe' ? 'nectar' : t.id,
-          label: t.id === 'flow' || t.id === 'universe' ? 'Nectar' : t.label,
+          label: LABEL_FIX[t.id] || t.label,
           icon: TAB_ICON_MAP[t.id === 'flow' || t.id === 'universe' ? 'nectar' : t.icon] || BarChartOutlined,
           color: t.id === 'flow' || t.id === 'universe' ? '#FDCB6E' : (t.color || '#999'),
         }));
@@ -204,14 +205,19 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
 
     // ═══ Filter out apps disabled in SocialSettings ═══
     const APP_TO_SETTING: Record<string, string> = {
-      explore: 'explore',
-      nectar: 'sparks',
+      mur: 'wall',
       reels: 'reels',
-      wax: 'wall', // Wax doesn't have its own setting yet — always enabled
+      explore: 'explore',
+      wax: 'wax',
     };
     const filtered = result.filter(t => {
+      // Nectar = hub de sous-apps → ne cacher que si TOUTES les sous-apps sont désactivées
+      if (t.id === 'nectar') {
+        const subApps = ['sparks', 'battles', 'quests', 'events', 'capsules', 'orbit', 'pulse'];
+        return subApps.some(app => isAppEnabled(app));
+      }
       const settingKey = APP_TO_SETTING[t.id];
-      if (!settingKey) return true; // mur, mail, agenda, search, stats → always show
+      if (!settingKey) return true; // mail, agenda, search, stats → always show
       return isAppEnabled(settingKey);
     });
 
@@ -348,6 +354,17 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
       })}
     </div>
     </>
+  );
+};
+
+// Messenger conditionné au SocialSettings messengerEnabled
+const MessengerChatGated: React.FC = () => {
+  const { isAppEnabled } = useSocialIdentity();
+  if (!isAppEnabled('messenger')) return null;
+  return (
+    <Suspense fallback={null}>
+      <MessengerChat />
+    </Suspense>
   );
 };
 
@@ -558,9 +575,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       }}>
         {children}
       </Content>
-      <Suspense fallback={null}>
-        <MessengerChat />
-      </Suspense>
+      <MessengerChatGated />
 
       {/* 🌐 In-app browser overlay — plein écran au-dessus de tout */}
       {wallViewUrl && (

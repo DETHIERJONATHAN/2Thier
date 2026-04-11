@@ -262,11 +262,18 @@ router.get('/swipe-tabs', async (req, res) => {
 			}
 		}
 
+		// Canonical label overrides (DB may have stale names)
+		const LABEL_OVERRIDES: Record<string, string> = {
+			explore: 'Friends',
+			flow: 'Nectar',
+			universe: 'Nectar',
+		};
+
 		const tabs = Array.from(byKey.values())
 			.sort((a, b) => (a.order ?? 99) - (b.order ?? 99))
 			.map(m => ({
 				id: m.key === 'flow' || m.key === 'universe' ? 'nectar' : m.key,
-				label: m.key === 'flow' || m.key === 'universe' ? 'Nectar' : m.label,
+				label: LABEL_OVERRIDES[m.key] || m.label,
 				color: m.key === 'flow' || m.key === 'universe' ? '#FDCB6E' : (m.tabColor || '#999'),
 				icon: m.key === 'flow' || m.key === 'universe' ? 'nectar' : (m.tabIcon || 'app'),
 				order: m.order ?? 99,

@@ -140,6 +140,13 @@ router.post('/request', async (req: Request, res: Response): Promise<void> => {
   if (!userId || userId === user.id) { res.status(400).json({ error: 'userId invalide' }); return; }
 
   try {
+    // Check if friend requests are enabled for the user's org
+    const orgMember = await db.organizationMember.findFirst({ where: { userId: user.id }, select: { organizationId: true } });
+    if (orgMember?.organizationId) {
+      const settings = await db.socialSettings.findUnique({ where: { organizationId: orgMember.organizationId }, select: { friendRequestsEnabled: true } });
+      if (settings && !settings.friendRequestsEnabled) { res.status(403).json({ error: 'Les demandes d\'amis sont désactivées pour cette Colony' }); return; }
+    }
+
     // Check if friendship already exists
     const existing = await db.friendship.findFirst({
       where: {

@@ -191,6 +191,8 @@ export function SocialIdentityProvider({ children }: { children: React.ReactNode
       capsules: s.capsulesEnabled ?? true,
       orbit: s.orbitEnabled ?? true,
       pulse: s.pulseEnabled ?? true,
+      friendRequests: s.friendRequestsEnabled ?? true,
+      allowFollowColony: s.allowFollowColony ?? true,
     };
     return appMap[app] ?? true;
   }, [socialContext?.settings]);

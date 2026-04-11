@@ -363,7 +363,14 @@ export default function SocialSettingsAdminPage() {
       settings.battlesEnabled && 'Battles',
       settings.exploreEnabled && 'Friends',
       settings.hiveLiveEnabled && 'HiveLive',
-      (settings as any).waxEnabled && 'Wax',
+      settings.waxEnabled && 'Wax',
+      settings.messengerEnabled && 'Whisper',
+      settings.callsEnabled && 'Calls',
+      settings.questsEnabled && 'Quests',
+      settings.eventsEnabled && 'Events',
+      settings.capsulesEnabled && 'Capsules',
+      settings.orbitEnabled && 'Orbit',
+      settings.pulseEnabled && 'Pulse',
     ].filter(Boolean);
 
     const disabledApps = [
@@ -374,7 +381,14 @@ export default function SocialSettingsAdminPage() {
       !settings.battlesEnabled && 'Battles',
       !settings.exploreEnabled && 'Friends',
       !settings.hiveLiveEnabled && 'HiveLive',
-      !(settings as any).waxEnabled && 'Wax',
+      !settings.waxEnabled && 'Wax',
+      !settings.messengerEnabled && 'Whisper',
+      !settings.callsEnabled && 'Calls',
+      !settings.questsEnabled && 'Quests',
+      !settings.eventsEnabled && 'Events',
+      !settings.capsulesEnabled && 'Capsules',
+      !settings.orbitEnabled && 'Orbit',
+      !settings.pulseEnabled && 'Pulse',
     ].filter(Boolean);
 
     return (
@@ -597,40 +611,107 @@ export default function SocialSettingsAdminPage() {
                     type="info"
                     showIcon
                     icon={<InfoCircleOutlined />}
-                    message="Activez ou désactivez les différentes applications du réseau social pour cette Colony."
+                    message="Activez ou désactivez les applications et leurs sous-fonctionnalités pour cette Colony."
                     style={{ marginBottom: 16, borderRadius: FB.radius }}
                   />
 
-                  <SettingSection icon={<FireOutlined />} title="Applications Principales">
+                  {/* ── HIVE (Mur) ── */}
+                  <SettingSection icon={<FireOutlined />} title="🐝 Hive (Mur)">
                     <SettingRow label="Mur (Wall)" description="Fil d'actualité principal avec publications">
                       <Switch checked={settings.wallEnabled} onChange={v => updateSetting('wallEnabled', v)} />
                     </SettingRow>
-                    <SettingRow label="Stories" description="Contenus éphémères en haut du mur">
-                      <Switch checked={settings.storiesEnabled} onChange={v => updateSetting('storiesEnabled', v)} />
+                    <SettingRow label="Stories" description="Contenus éphémères en haut du mur" indent>
+                      <Switch checked={settings.storiesEnabled} onChange={v => updateSetting('storiesEnabled', v)} disabled={!settings.wallEnabled} />
                     </SettingRow>
+                    <SettingRow label="Hive Live" description="Ligne de vie interactive" indent>
+                      <Switch checked={settings.hiveLiveEnabled} onChange={v => updateSetting('hiveLiveEnabled', v)} disabled={!settings.wallEnabled} />
+                    </SettingRow>
+                    <SettingRow label="Réactions (Pollen)" description="Les Bees peuvent réagir aux Buzz" indent>
+                      <Switch checked={settings.reactionsEnabled} onChange={v => updateSetting('reactionsEnabled', v)} disabled={!settings.wallEnabled} />
+                    </SettingRow>
+                    <SettingRow label="Commentaires (Buzz Replies)" description="Les Bees peuvent commenter les publications" indent>
+                      <Switch checked={settings.commentsEnabled} onChange={v => updateSetting('commentsEnabled', v)} disabled={!settings.wallEnabled} />
+                    </SettingRow>
+                    <SettingRow label="Partages" description="Les Bees peuvent partager les Buzz" indent>
+                      <Switch checked={settings.sharesEnabled} onChange={v => updateSetting('sharesEnabled', v)} disabled={!settings.wallEnabled} />
+                    </SettingRow>
+                  </SettingSection>
+
+                  {/* ── REELS ── */}
+                  <SettingSection icon={<PictureOutlined />} title="🎬 Reels">
                     <SettingRow label="Reels" description="Vidéos courtes format vertical">
                       <Switch checked={settings.reelsEnabled} onChange={v => updateSetting('reelsEnabled', v)} />
                     </SettingRow>
-                    <SettingRow label="Sparks" description="Ideas et discussions (SpaceFlow)">
+                  </SettingSection>
+
+                  {/* ── FRIENDS (Explore) ── */}
+                  <SettingSection icon={<CompassOutlined />} title="🔭 Friends">
+                    <SettingRow label="Friends" description="Galerie de découverte de contenu et amis">
+                      <Switch checked={settings.exploreEnabled} onChange={v => updateSetting('exploreEnabled', v)} />
+                    </SettingRow>
+                    <SettingRow label="Demandes d'amis" description="Les Bees peuvent envoyer des demandes d'amis" indent>
+                      <Switch checked={settings.friendRequestsEnabled} onChange={v => updateSetting('friendRequestsEnabled', v)} disabled={!settings.exploreEnabled} />
+                    </SettingRow>
+                    <SettingRow label="Follow Colony" description="Les Bees extérieurs peuvent suivre cette Colony" indent>
+                      <Switch checked={settings.allowFollowColony} onChange={v => updateSetting('allowFollowColony', v)} disabled={!settings.exploreEnabled} />
+                    </SettingRow>
+                  </SettingSection>
+
+                  {/* ── NECTAR (Hub de mini-apps) ── */}
+                  <SettingSection icon={<AppstoreOutlined />} title="🍯 Nectar (Hub)">
+                    <SettingRow label="Sparks" description="Idées et discussions (SpaceFlow)">
                       <Switch checked={settings.sparksEnabled} onChange={v => updateSetting('sparksEnabled', v)} />
                     </SettingRow>
                     <SettingRow label="Battles" description="Sondages et comparaisons">
                       <Switch checked={settings.battlesEnabled} onChange={v => updateSetting('battlesEnabled', v)} />
                     </SettingRow>
-                    <SettingRow label="Friends" description="Galerie de découverte de contenu et amis">
-                      <Switch checked={settings.exploreEnabled} onChange={v => updateSetting('exploreEnabled', v)} />
+                    <SettingRow label="Quests" description="Défis et missions gamifiées">
+                      <Switch checked={settings.questsEnabled} onChange={v => updateSetting('questsEnabled', v)} />
                     </SettingRow>
-                    <SettingRow label="Hive Live" description="Ligne de vie interactive">
-                      <Switch checked={settings.hiveLiveEnabled} onChange={v => updateSetting('hiveLiveEnabled', v)} />
+                    <SettingRow label="Events" description="Événements et rencontres Colony">
+                      <Switch checked={settings.eventsEnabled} onChange={v => updateSetting('eventsEnabled', v)} />
+                    </SettingRow>
+                    <SettingRow label="Capsules" description="Contenus capsule temporels (time capsule)">
+                      <Switch checked={settings.capsulesEnabled} onChange={v => updateSetting('capsulesEnabled', v)} />
+                    </SettingRow>
+                    <SettingRow label="Orbit" description="Réseau de recommandations et cercles sociaux">
+                      <Switch checked={settings.orbitEnabled} onChange={v => updateSetting('orbitEnabled', v)} />
+                    </SettingRow>
+                    <SettingRow label="Pulse" description="Sondages et feedback rapides en temps réel">
+                      <Switch checked={settings.pulseEnabled} onChange={v => updateSetting('pulseEnabled', v)} />
                     </SettingRow>
                   </SettingSection>
 
-                  <SettingSection icon={<MessageOutlined />} title="Communication">
+                  {/* ── WAX (Carte) ── */}
+                  <SettingSection icon={<EnvironmentOutlined />} title="📍 Wax (Carte)">
+                    <SettingRow label="Wax" description="Carte interactive 3D avec pins éphémères et navigation">
+                      <Switch checked={settings.waxEnabled} onChange={v => updateSetting('waxEnabled', v)} />
+                    </SettingRow>
+                    <SettingRow label="Alertes de proximité" description="Push notification quand un WaxPin est créé à proximité" indent>
+                      <Switch checked={settings.waxAlertsEnabled} onChange={v => updateSetting('waxAlertsEnabled', v)} disabled={!settings.waxEnabled} />
+                    </SettingRow>
+                    <SettingRow label="Mode Fantôme" description="Les Bees peuvent masquer leur position sur la carte" indent>
+                      <Switch checked={settings.waxGhostModeAllowed} onChange={v => updateSetting('waxGhostModeAllowed', v)} disabled={!settings.waxEnabled} />
+                    </SettingRow>
+                    <SettingRow label="Rayon de surveillance par défaut" description="Rayon en km pour les alertes de proximité" indent>
+                      <InputNumber
+                        min={1} max={200}
+                        value={settings.waxDefaultRadiusKm}
+                        onChange={v => v && updateSetting('waxDefaultRadiusKm', v)}
+                        style={{ width: isMobile ? '100%' : 120 }}
+                        disabled={!settings.waxEnabled || !settings.waxAlertsEnabled}
+                        addonAfter="km"
+                      />
+                    </SettingRow>
+                  </SettingSection>
+
+                  {/* ── COMMUNICATION (Whisper) ── */}
+                  <SettingSection icon={<MessageOutlined />} title="💬 Communication (Whisper)">
                     <SettingRow label="Whispers (Messenger)" description="Messagerie privée entre les Bees">
                       <Switch checked={settings.messengerEnabled} onChange={v => updateSetting('messengerEnabled', v)} />
                     </SettingRow>
-                    <SettingRow label="Appels Vidéo/Audio" description="Appels en temps réel">
-                      <Switch checked={settings.callsEnabled} onChange={v => updateSetting('callsEnabled', v)} />
+                    <SettingRow label="Appels Vidéo/Audio" description="Appels en temps réel via WebRTC" indent>
+                      <Switch checked={settings.callsEnabled} onChange={v => updateSetting('callsEnabled', v)} disabled={!settings.messengerEnabled} />
                     </SettingRow>
                   </SettingSection>
                 </div>

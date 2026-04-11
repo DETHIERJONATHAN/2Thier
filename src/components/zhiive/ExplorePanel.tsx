@@ -14,6 +14,7 @@ import {
 import { SF } from './ZhiiveTheme';
 import { useZhiiveNav } from '../../contexts/ZhiiveNavContext';
 import { useActiveIdentity } from '../../contexts/ActiveIdentityContext';
+import { useSocialIdentity } from '../../contexts/SocialIdentityContext';
 import { useAuth } from '../../auth/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -122,6 +123,7 @@ const ExplorePanel: React.FC<{ api: any; openModule?: (route: string) => void; c
   const { currentOrganization, user } = useAuth();
   const navigate = useNavigate();
   const identity = useActiveIdentity();
+  const { isAppEnabled } = useSocialIdentity();
   const { t } = useTranslation();
 
   // ── Core state ──
@@ -620,8 +622,8 @@ const ExplorePanel: React.FC<{ api: any; openModule?: (route: string) => void; c
             {filteredUsers.length > 0 ? filteredUsers.map(su => (
               <PeopleCard key={su.id} user={su} isFollowed={followingSet.has(su.id)}
                 onNavigate={() => navigate(`/profile/${su.id}`)} onMessage={() => handleOpenMessenger(su.id)}
-                onFriend={() => handleFriendAction(su.id, su.friendStatus, su.friendDirection, su.friendshipId)}
-                onFollow={() => handleFollow(su.id)} t={t} />
+                onFriend={isAppEnabled('friendRequests') ? () => handleFriendAction(su.id, su.friendStatus, su.friendDirection, su.friendshipId) : undefined}
+                onFollow={isAppEnabled('allowFollowColony') ? () => handleFollow(su.id) : undefined} t={t} />
             )) : (
               <EmptyState icon={<TeamOutlined style={{ fontSize: 40, color: SF.primary }} />}
                 title={peopleScope === 'friends' ? t('explore.noFriendsYet') : t('explore.noBeesFound')}
@@ -969,7 +971,7 @@ const GridCell: React.FC<{ item: GalleryItem; liked: boolean; onOpen: (item: Gal
 /** People card */
 const PeopleCard: React.FC<{
   user: SuggestedUser; isFollowed: boolean;
-  onNavigate: () => void; onMessage: () => void; onFriend: () => void; onFollow: () => void;
+  onNavigate: () => void; onMessage: () => void; onFriend?: () => void; onFollow?: () => void;
   t: (key: string) => string;
 }> = React.memo(({ user: su, isFollowed, onNavigate, onMessage, onFriend, onFollow, t }) => {
   const isFriend = su.friendStatus === 'accepted';
@@ -989,19 +991,19 @@ const PeopleCard: React.FC<{
       </div>
       <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
         <CircleBtn icon={<MessageOutlined />} bg={SF.bgInfoTint} color={SF.info} onClick={onMessage} />
-        <CircleBtn
+        {onFriend && <CircleBtn
           icon={isFriend ? '🤝' : (isPending && su.friendDirection === 'received') ? '✅' : isPending ? '⏳' : <TeamOutlined />}
           bg={isFriend ? SF.bgSuccessTint : (isPending && su.friendDirection === 'received') ? SF.bgInfoTint : isPending ? SF.bgWarningTint : SF.bgCard}
           color={isFriend ? SF.successAlt : (isPending && su.friendDirection === 'received') ? SF.info : isPending ? SF.orangeAlt : SF.textSecondary}
           border={isFriend ? `1px solid ${SF.successBorder}` : (isPending && su.friendDirection === 'received') ? `2px solid ${SF.info}` : isPending ? `1px solid ${SF.warningBorder}` : `1px solid ${SF.borderLight}`}
-          pulse={isPending && su.friendDirection === 'received'} onClick={onFriend} />
-        <div onClick={onFollow} style={{
+          pulse={isPending && su.friendDirection === 'received'} onClick={onFriend} />}
+        {onFollow && <div onClick={onFollow} style={{
           padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600,
           background: isFollowed ? SF.bg : SF.gradientPrimary, color: isFollowed ? SF.textSecondary : 'white',
           cursor: 'pointer', display: 'flex', alignItems: 'center',
           border: isFollowed ? `1px solid ${SF.border}` : 'none', transition: 'all 0.15s' }}>
           {isFollowed ? t('common.following') : t('common.follow')}
-        </div>
+        </div>}
       </div>
     </div>
   );

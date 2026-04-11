@@ -458,6 +458,7 @@ export const WallPostCard: React.FC<{
 }> = ({ post, isMobile, currentUserId: _uid, currentUser, api, onUpdate: _onUpdate, feedMode: _feedModeProp, currentOrganization: _orgProp }) => {
   // 🐝 Identité centralisée — on utilise le hook au lieu des props feedMode/currentOrganization
   const cardIdentity = useActiveIdentity();
+  const { isAppEnabled } = useSocialIdentity();
   const { t } = useTranslation();
   const postNavigate = useNavigate();
   const feedMode = undefined; // ← BLOQUÉ : forcer l'utilisation de cardIdentity.publishAsOrg
@@ -974,8 +975,8 @@ export const WallPostCard: React.FC<{
 
       {/* Action buttons */}
       <div style={{ display: "flex", padding: "4px 16px", position: "relative" }}>
-        {/* Like button with reaction picker */}
-        <div style={{ flex: 1, position: "relative" }}
+        {/* Like button with reaction picker — gated on reactionsEnabled */}
+        {isAppEnabled('reactions') && <div style={{ flex: 1, position: "relative" }}
           onMouseEnter={() => {
             if (reactionPickerTimer.current) clearTimeout(reactionPickerTimer.current);
             reactionPickerTimer.current = setTimeout(() => setShowReactionPicker(true), 400);
@@ -1026,10 +1027,10 @@ export const WallPostCard: React.FC<{
               : <LikeOutlined />}
             {!isMobile && <span>{isLiked ? t(getReactionByType(myReaction?.type || 'LIKE').i18nKey) : t('reactions.pollen')}</span>}
           </div>
-        </div>
+        </div>}
 
-        {/* Comment button */}
-        <div onClick={handleToggleComments}
+        {/* Comment button — gated on commentsEnabled */}
+        {isAppEnabled('comments') && <div onClick={handleToggleComments}
           style={{
             flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
             gap: 6, padding: "8px 0", borderRadius: FB.radius, cursor: "pointer",
@@ -1041,10 +1042,10 @@ export const WallPostCard: React.FC<{
         >
           <MessageOutlined />
           {!isMobile && <span>{t('wall.buzz')}</span>}
-        </div>
+        </div>}
 
-        {/* Share button with menu */}
-        <div style={{ flex: 1, position: "relative" }}>
+        {/* Share button with menu — gated on sharesEnabled */}
+        {isAppEnabled('shares') && <div style={{ flex: 1, position: "relative" }}>
           <div onClick={() => setShowShareMenu(!showShareMenu)}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
@@ -1066,7 +1067,7 @@ export const WallPostCard: React.FC<{
             }}>
               {[
                 { type: "WALL", icon: "📝", label: t('wall.shareOnMyHive') },
-                { type: "HIVELIVE", icon: "🐝", label: "Hive Live" },
+                ...(isAppEnabled('hiveLive') ? [{ type: "HIVELIVE", icon: "🐝", label: "Hive Live" }] : []),
                 { type: "LINK", icon: "🔗", label: t('wall.copyLink') },
                 { type: "FACEBOOK", icon: "📘", label: "Facebook" },
                 { type: "LINKEDIN", icon: "💼", label: "LinkedIn" },
@@ -1090,11 +1091,11 @@ export const WallPostCard: React.FC<{
               ))}
             </div>
           )}
-        </div>
+        </div>}
       </div>
 
-      {/* Comments section */}
-      {showComments && (
+      {/* Comments section — gated on commentsEnabled */}
+      {isAppEnabled('comments') && showComments && (
         <div style={{ padding: "4px 16px 12px 8px", textAlign: 'left' }}>
           {/* Existing comments */}
           {allComments.map((comment) => {
@@ -1458,8 +1459,8 @@ export const WallPostCard: React.FC<{
         </div>
       </Modal>
 
-      {/* Hive Live — add moment from post */}
-      <Modal
+      {/* Hive Live — add moment from post (gated) */}
+      {isAppEnabled('hiveLive') && <Modal
         open={showHiveLiveModal}
         onCancel={() => { setShowHiveLiveModal(false); setHiveLiveTitle(''); }}
         title={<span style={{ fontWeight: 700 }}>🐝 {t('hive.addToHiveLive', 'Ajouter à mon Hive Live')}</span>}
@@ -1485,7 +1486,7 @@ export const WallPostCard: React.FC<{
             {t('hive.hiveLiveExplanation', 'Ce Buzz sera ajouté comme moment sur votre ligne de vie Hive Live.')}
           </p>
         </div>
-      </Modal>
+      </Modal>}
 
       {/* Modal — Qui a réagi */}
       <Modal
@@ -3325,7 +3326,7 @@ export default function DashboardPageUnified() {
   const renderPanel = (appId: string, sidebar?: boolean) => {
     // ═══ Enforcement SocialSettings: ne pas rendre les apps désactivées ═══
     const APP_TO_SETTING: Record<string, string> = {
-      explore: 'explore', nectar: 'sparks', reels: 'reels',
+      explore: 'explore', nectar: 'sparks', reels: 'reels', wax: 'wax',
     };
     const settingKey = APP_TO_SETTING[appId];
     if (settingKey && !isAppEnabled(settingKey)) return null;
@@ -3427,9 +3428,9 @@ export default function DashboardPageUnified() {
               if (tabId === 'mur') {
                 return (
                   <div key="mur" style={panelStyle}>
-                    <Suspense fallback={null}>
+                    {isAppEnabled('stories') && <Suspense fallback={null}>
                       <LazyStoriesBar api={api} currentUser={user} />
-                    </Suspense>
+                    </Suspense>}
                     {renderFeed()}
                   </div>
                 );
@@ -3525,9 +3526,9 @@ export default function DashboardPageUnified() {
                 </Suspense>
               ) : (
                 <div style={{ padding: '8px 12px' }}>
-                  <Suspense fallback={null}>
+                  {isAppEnabled('stories') && <Suspense fallback={null}>
                     <LazyStoriesBar api={api} currentUser={user} />
-                  </Suspense>
+                  </Suspense>}
                   {renderFeed()}
                 </div>
               )}

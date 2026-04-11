@@ -22,6 +22,7 @@ import HiveLiveTimeline from '../components/zhiive/HiveLiveTimeline';
    FACEBOOK COLORS — exactement les mêmes tokens
    ═══════════════════════════════════════════════════════════════ */
 import { SF, FB } from '../components/zhiive/ZhiiveTheme';
+import { useSocialIdentity } from '../contexts/SocialIdentityContext';
 const ORG_COLOR = SF.primary;
 
 /* ═══════════════════════════════════════════════════════════════
@@ -183,6 +184,7 @@ const ProfilePage = () => {
   const isViewingOther = !!viewUserId && viewUserId !== user?.id;
   const { moduleNavigate } = useModuleNavigation();
   const { feedMode } = useZhiiveNav();
+  const { isAppEnabled } = useSocialIdentity();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const orgLogoInputRef = useRef<HTMLInputElement>(null);
@@ -743,7 +745,7 @@ const ProfilePage = () => {
     { key: 'publications', label: 'Publications' },
     { key: 'media', label: 'Médias' },
     { key: 'photos', label: 'Photos' },
-    { key: 'hivelive', label: 'Hive Live' },
+    ...(isAppEnabled('hiveLive') ? [{ key: 'hivelive', label: 'Hive Live' }] : []),
   ];
 
   /* ── Responsive dimensions ─────────────────────────────────── */
