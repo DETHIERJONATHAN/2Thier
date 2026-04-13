@@ -9,8 +9,10 @@ import UserOrganizationsModal from '../../components/admin/UserOrganizationsModa
 import UserGoogleWorkspaceModal from '../../components/admin/UserGoogleWorkspaceModal';
 import InvitationsList from '../../components/admin/InvitationsList';
 import { User, Role, UserService } from '../../types';
+import { useTranslation } from 'react-i18next';
 
 const UsersAdminPage: React.FC = () => {
+  const { t } = useTranslation();
   const { api } = useAuthenticatedApi();
   // Correction ici : on récupère 'permissions' et on crée 'hasPermission' manuellement
   const { permissions } = useAuth();
@@ -219,8 +221,8 @@ const UsersAdminPage: React.FC = () => {
               title="Supprimer l'utilisateur"
               description={`Êtes-vous sûr de vouloir supprimer ${record.email} ? Cette action est irréversible.`}
               onConfirm={() => handleDeleteUser(record)}
-              okText="Supprimer"
-              cancelText="Annuler"
+              okText={t('common.delete')}
+              cancelText={t('common.cancel')}
               okButtonProps={{ danger: true }}
             >
               <Tooltip title="Supprimer l'utilisateur">

@@ -18,6 +18,7 @@ import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/fr';
 import DOMPurify from 'dompurify';
+import { useTranslation } from 'react-i18next';
 
 dayjs.extend(relativeTime);
 dayjs.locale('fr');
@@ -218,6 +219,7 @@ const getCategoryInfo = (key: string) => CATEGORY_MAP[key] || CATEGORY_MAP.other
 // ═══════════════════════════════════════════════════════════
 
 const FacturePage: React.FC = () => {
+  const { t } = useTranslation();
   const { api } = useAuthenticatedApi();
   const { user: _user } = useAuth();
   const { isMobile } = useScreenSize();
@@ -1152,7 +1154,7 @@ const FacturePage: React.FC = () => {
                 color: FB.textSecondary, fontSize: 14, zIndex: 1,
               }} />
               <input
-                placeholder="Rechercher..."
+                placeholder={t('common.searchPlaceholder')}
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 style={{
@@ -2098,7 +2100,7 @@ const FacturePage: React.FC = () => {
                   value={formData.dueDate}
                   onChange={d => setFormData(p => ({ ...p, dueDate: d }))}
                   style={{ width: '100%' }}
-                  placeholder="Sélectionner..."
+                  placeholder={t('common.selectPlaceholder')}
                   format="DD/MM/YYYY"
                 />
               </div>

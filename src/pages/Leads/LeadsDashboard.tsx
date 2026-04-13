@@ -48,6 +48,7 @@ import {
   CheckCircleOutlined,
   WarningOutlined
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text, Paragraph } = Typography;
 const { RangePicker } = DatePicker;
@@ -79,6 +80,7 @@ interface LeadDashboardState {
 }
 
 export default function LeadsDashboard() {
+  const { t } = useTranslation();
   // Stabiliser l'API selon les instructions du projet
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, [apiHook.api]);
@@ -392,13 +394,13 @@ export default function LeadsDashboard() {
                   </Button>
                 </AntTooltip>
                 
-                <AntTooltip title="Filtres">
+                <AntTooltip title={t('common.filters')}>
                   <Button icon={<FilterOutlined />}>
                     Filtres
                   </Button>
                 </AntTooltip>
                 
-                <AntTooltip title="Exporter">
+                <AntTooltip title={t('common.export')}>
                   <Button icon={<ExportOutlined />}>
                     Export
                   </Button>

@@ -2,6 +2,7 @@ import React from 'react';
 import { Card, Button, Space, Dropdown, Tag, Select, notification, Popconfirm, Tooltip } from 'antd';
 import { EditOutlined, DeleteOutlined, MoreOutlined, DragOutlined, LinkOutlined } from '@ant-design/icons';
 import { useDrag, useDrop } from 'react-dnd';
+import { useTranslation } from 'react-i18next';
 
 interface CallStatus {
   id?: string;
@@ -46,6 +47,7 @@ const SortableCallStatus: React.FC<SortableCallStatusProps> = ({
   onUpdateMapping,
   onDragEnd
 }) => {
+  const { t } = useTranslation();
   const [isEditingMapping, setIsEditingMapping] = React.useState(false);
   const [selectedLeadStatus, setSelectedLeadStatus] = React.useState(callStatus.mappedToLeadStatus);
 
@@ -274,8 +276,8 @@ const SortableCallStatus: React.FC<SortableCallStatusProps> = ({
                 title="Supprimer ce statut ?"
                 description="Cette action est irréversible"
                 onConfirm={() => callStatus.id && onDelete(callStatus.id)}
-                okText="Supprimer"
-                cancelText="Annuler"
+                okText={t('common.delete')}
+                cancelText={t('common.cancel')}
                 okType="danger"
               >
                 <Tooltip title="Supprimer ce statut d'appel">

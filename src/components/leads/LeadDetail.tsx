@@ -29,6 +29,7 @@ import type { Lead } from '../../types/leads';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import LeadGagneTab from '../../pages/Leads/components/LeadGagneTab';
+import { useTranslation } from 'react-i18next';
 
 interface LeadDetailProps {
   leadId: string;
@@ -43,6 +44,7 @@ interface LeadDetailProps {
  * 📋 Composant de détail complet d'un lead
  */
 export default function LeadDetail({ leadId, onEdit, onDelete, onCall, onEmail, onSchedule }: LeadDetailProps) {
+  const { t } = useTranslation();
   type LeadDocument = {
     id: string;
     name: string;
@@ -913,7 +915,7 @@ export default function LeadDetail({ leadId, onEdit, onDelete, onCall, onEmail, 
             />
           </Tooltip>
           {onEdit && (
-            <Tooltip title="Modifier">
+            <Tooltip title={t('common.edit')}>
               <Button icon={<EditOutlined />} onClick={() => onEdit(lead)} />
             </Tooltip>
           )}
@@ -921,11 +923,11 @@ export default function LeadDetail({ leadId, onEdit, onDelete, onCall, onEmail, 
             <Popconfirm
               title="Supprimer le lead"
               description="Êtes-vous sûr de vouloir supprimer ce lead ?"
-              okText="Supprimer"
-              cancelText="Annuler"
+              okText={t('common.delete')}
+              cancelText={t('common.cancel')}
               onConfirm={() => onDelete(lead.id)}
             >
-              <Tooltip title="Supprimer">
+              <Tooltip title={t('common.delete')}>
                 <Button danger icon={<DeleteOutlined />} />
               </Tooltip>
             </Popconfirm>

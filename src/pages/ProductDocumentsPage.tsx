@@ -39,6 +39,7 @@ import {
   DOCUMENT_CATEGORIES,
   DocumentCategory
 } from '../hooks/useProductDocuments';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text } = Typography;
 const { Search } = Input;
@@ -88,6 +89,7 @@ function getCategoryLabel(category: string): string {
 // ─── Composant Principal ────────────────────────────────────
 
 const ProductDocumentsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { provider, isLoading: providerLoading } = useStorageProvider();
   const productDocs = useProductDocuments();
   const productDocsRef = useRef(productDocs);
@@ -431,11 +433,11 @@ const ProductDocumentsPage: React.FC = () => {
             title="Supprimer ce document ?"
             description="Cette action est irréversible."
             onConfirm={() => handleDelete(record)}
-            okText="Supprimer"
-            cancelText="Annuler"
+            okText={t('common.delete')}
+            cancelText={t('common.cancel')}
             okButtonProps={{ danger: true }}
           >
-            <Tooltip title="Supprimer">
+            <Tooltip title={t('common.delete')}>
               <Button type="text" size="small" danger icon={<DeleteOutlined />} />
             </Tooltip>
           </Popconfirm>
@@ -455,7 +457,7 @@ const ProductDocumentsPage: React.FC = () => {
             size="small"
             className="h-full"
             actions={[
-              <Tooltip key="download" title="Télécharger">
+              <Tooltip key="download" title={t('common.download')}>
                 <DownloadOutlined onClick={() => handleDownload(doc)} />
               </Tooltip>,
               doc.driveUrl ? (
@@ -467,8 +469,8 @@ const ProductDocumentsPage: React.FC = () => {
                 key="del"
                 title="Supprimer ?"
                 onConfirm={() => handleDelete(doc)}
-                okText="Oui"
-                cancelText="Non"
+                okText={t('common.yes')}
+                cancelText={t('common.no')}
               >
                 <DeleteOutlined style={{ color: '#ff4d4f' }} />
               </Popconfirm>
@@ -789,7 +791,7 @@ const ProductDocumentsPage: React.FC = () => {
         onCancel={() => { setUploadModalVisible(false); resetUploadForm(); }}
         onOk={handleUpload}
         okText="Uploader"
-        cancelText="Annuler"
+        cancelText={t('common.cancel')}
         confirmLoading={uploading}
         okButtonProps={{ disabled: !uploadFile || uploadNodeIds.length === 0 }}
         width={560}
@@ -858,7 +860,7 @@ const ProductDocumentsPage: React.FC = () => {
         onCancel={() => { setUrlModalVisible(false); resetUrlForm(); }}
         onOk={handleUrlUpload}
         okText="Lier"
-        cancelText="Annuler"
+        cancelText={t('common.cancel')}
         confirmLoading={uploading}
         okButtonProps={{ disabled: !urlValue || urlNodeIds.length === 0 }}
         width={560}

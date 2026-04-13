@@ -36,6 +36,7 @@ import {
 import {
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable';
+import { useTranslation } from 'react-i18next';
 
 const { Text, Title } = Typography;
 
@@ -148,6 +149,7 @@ const TreeStructure: React.FC<TreeStructureProps> = ({
   onDeleteNode,
   onAddChildNode,
 }) => {
+  const { t } = useTranslation();
   if (!tree) {
     return (
       <div style={{ textAlign: 'center', padding: '48px 0', color: '#8c8c8c' }}>
@@ -1825,7 +1827,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
         onOk={handleConfirmCreateTree}
         onCancel={handleCancelCreateTree}
         okText="CrÃ©er"
-        cancelText="Annuler"
+        cancelText={t('common.cancel')}
       >
         <div style={{ marginBottom: '16px' }}>
           <Input
@@ -1845,7 +1847,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
         onOk={handleConfirmRenameTree}
         onCancel={handleCancelRenameTree}
         okText="Renommer"
-        cancelText="Annuler"
+        cancelText={t('common.cancel')}
       >
         <Input
           placeholder="Nouveau nom de l'arbre"

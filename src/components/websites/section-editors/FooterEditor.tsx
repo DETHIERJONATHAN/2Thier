@@ -10,6 +10,7 @@ import type { UploadFile } from 'antd';
 import { AIAssistant } from '../AIAssistant';
 import { GridLayoutEditor } from '../GridLayoutEditor';
 import { SectionHeaderEditor } from '../SectionHeaderEditor';
+import { useTranslation } from 'react-i18next';
 
 const { TextArea } = Input;
 
@@ -20,6 +21,7 @@ interface FooterEditorProps {
 }
 
 export const FooterEditor: React.FC<FooterEditorProps> = ({ section, onSave, onCancel }) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
       const [gridLayout, setGridLayout] = useState<any>(null);
   const [sectionHeader, setSectionHeader] = useState<any>(null);
@@ -178,11 +180,11 @@ export const FooterEditor: React.FC<FooterEditorProps> = ({ section, onSave, onC
         </Upload>
       </Form.Item>
 
-      <Form.Item label="Nom de l'entreprise" name="companyName">
+      <Form.Item label={t('fields.companyName')} name="companyName">
         <Input placeholder="2Thier Énergies" />
       </Form.Item>
 
-      <Form.Item label="Description" name="description">
+      <Form.Item label={t('fields.description')} name="description">
         <TextArea rows={2} placeholder="Votre partenaire en transition énergétique..."
           suffix={
             <Button
@@ -199,15 +201,15 @@ export const FooterEditor: React.FC<FooterEditorProps> = ({ section, onSave, onC
          />
       </Form.Item>
 
-      <Form.Item label="Adresse" name="address">
+      <Form.Item label={t('fields.address')} name="address">
         <Input placeholder="Rue de l'Exemple 123, 1000 Bruxelles" />
       </Form.Item>
 
-      <Form.Item label="Téléphone" name="phone">
+      <Form.Item label={t('fields.phone')} name="phone">
         <Input placeholder="+32 XXX XX XX XX" />
       </Form.Item>
 
-      <Form.Item label="Email" name="email">
+      <Form.Item label={t('fields.email')} name="email">
         <Input placeholder="contact@2thier.be" />
       </Form.Item>
 

@@ -19,6 +19,7 @@ import { AIAssistant } from '../AIAssistant';
 import { GridLayoutEditor } from '../GridLayoutEditor';
 import { SectionHeaderEditor } from '../SectionHeaderEditor';
 import ColorInput from '../common/ColorInput';
+import { useTranslation } from 'react-i18next';
 
 const { Panel } = Collapse;
 const { TextArea } = Input;
@@ -30,6 +31,7 @@ interface HeaderEditorProps {
 }
 
 export const HeaderEditor: React.FC<HeaderEditorProps> = ({ section, onSave, onCancel }) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
   const [gridLayout, setGridLayout] = useState<any>(null);
   const [sectionHeader, setSectionHeader] = useState<any>(null);
@@ -435,11 +437,11 @@ export const HeaderEditor: React.FC<HeaderEditorProps> = ({ section, onSave, onC
             <Switch />
           </Form.Item>
 
-          <Form.Item label="Téléphone" name="phone">
+          <Form.Item label={t('fields.phone')} name="phone">
             <Input placeholder="+32 XXX XX XX XX" />
           </Form.Item>
 
-          <Form.Item label="Email" name="email">
+          <Form.Item label={t('fields.email')} name="email">
             <Input placeholder="contact@2thier.be" type="email" />
           </Form.Item>
         </Panel>

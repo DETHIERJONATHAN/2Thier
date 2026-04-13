@@ -169,6 +169,7 @@ import * as XLSX from 'xlsx';
 import { DeleteOutlined, PlusOutlined, LinkOutlined, InfoCircleOutlined, DownloadOutlined, FilterOutlined, PlayCircleOutlined, BulbOutlined, CheckCircleOutlined, CloseCircleOutlined, ThunderboltOutlined, FullscreenOutlined } from '@ant-design/icons';
 import NodeTreeSelector, { NodeTreeSelectorValue } from '../shared/NodeTreeSelector';
 import TableFullscreenEditor from './TableFullscreenEditor';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text } = Typography;
 
@@ -525,6 +526,7 @@ const instanceToConfig = (instance?: TableInstance | null): TableConfig => {
 };
 
 const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, value: _value, onChange: _onChange, readOnly }) => {
+  const { t } = useTranslation();
   const { api } = useAuthenticatedApi();
   const tblBatch = useTBLBatch();
   const [cfg, setCfg] = useState<TableConfig>({ type: 'matrix', columns: [], rows: [] });
@@ -5929,7 +5931,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
           setGestionnaireLabel('');
         }}
         okText="Exposer"
-        cancelText="Annuler"
+        cancelText={t('common.cancel')}
       >
         <div style={{ marginBottom: 12 }}>
           <Text>Donnez un label lisible pour ce tableau. Il sera visible dans le panneau Gestionnaire.</Text>

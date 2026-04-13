@@ -23,6 +23,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
 import type { LeadCreatorModalProps, CreateLeadData, TBLLead } from './types/lead-types';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -37,6 +38,7 @@ const LeadCreatorModal: React.FC<LeadCreatorModalPropsExtended> = ({
   onLeadCreated,
   onCreateLead
 }) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const { api } = useAuthenticatedApi();
@@ -108,7 +110,7 @@ const LeadCreatorModal: React.FC<LeadCreatorModalPropsExtended> = ({
           <Col span={12}>
             <Form.Item
               name="firstName"
-              label="Prénom"
+              label={t('fields.firstName')}
               rules={[
                 { required: true, message: 'Le prénom est requis' },
                 { min: 2, message: 'Le prénom doit contenir au moins 2 caractères' }
@@ -125,7 +127,7 @@ const LeadCreatorModal: React.FC<LeadCreatorModalPropsExtended> = ({
           <Col span={12}>
             <Form.Item
               name="lastName"
-              label="Nom"
+              label={t('fields.name')}
               rules={[
                 { required: true, message: 'Le nom est requis' },
                 { min: 2, message: 'Le nom doit contenir au moins 2 caractères' }
@@ -142,7 +144,7 @@ const LeadCreatorModal: React.FC<LeadCreatorModalPropsExtended> = ({
 
         <Form.Item
           name="email"
-          label="Email"
+          label={t('fields.email')}
           rules={[
             { type: 'email', message: 'Format email invalide' }
           ]}
@@ -158,7 +160,7 @@ const LeadCreatorModal: React.FC<LeadCreatorModalPropsExtended> = ({
           <Col span={12}>
             <Form.Item
               name="phone"
-              label="Téléphone"
+              label={t('fields.phone')}
             >
               <Input
                 prefix={<PhoneOutlined />}
@@ -171,7 +173,7 @@ const LeadCreatorModal: React.FC<LeadCreatorModalPropsExtended> = ({
           <Col span={12}>
             <Form.Item
               name="company"
-              label="Entreprise"
+              label={t('fields.company')}
             >
               <Input
                 prefix={<BankOutlined />}
@@ -184,7 +186,7 @@ const LeadCreatorModal: React.FC<LeadCreatorModalPropsExtended> = ({
 
         <Form.Item
           name="notes"
-          label="Notes"
+          label={t('fields.notes')}
         >
           <TextArea
             rows={3}

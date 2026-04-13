@@ -33,6 +33,7 @@ import {
 } from '../../utils/leadTimeline';
 import dayjs from 'dayjs';
 import { getErrorMessage } from '../../utils/errorHandling';
+import { useTranslation } from 'react-i18next';
 
 const { Title } = Typography;
 const { Option } = Select;
@@ -60,6 +61,7 @@ export default function LeadsHomePage({
   refreshTrigger = 0,
   openInline = true
 }: LeadsHomePageProps): React.ReactElement {
+  const { t } = useTranslation();
   const screens = useBreakpoint();
   const isMobile = !screens.md;
   
@@ -668,7 +670,7 @@ export default function LeadsHomePage({
             size="small" 
             icon={<EditOutlined />} 
             onClick={() => handleEdit(lead)}
-            title="Modifier"
+            title={t('common.edit')}
           />
           <Button 
             size="small" 
@@ -684,8 +686,8 @@ export default function LeadsHomePage({
           <Popconfirm
             title="Supprimer le lead"
             description="Cette action est irréversible. Confirmez la suppression ?"
-            okText="Supprimer"
-            cancelText="Annuler"
+            okText={t('common.delete')}
+            cancelText={t('common.cancel')}
             okButtonProps={{ danger: true }}
             onConfirm={() => handleDelete(lead)}
           >
@@ -694,7 +696,7 @@ export default function LeadsHomePage({
               danger
               loading={deletingId === lead.id}
               icon={<DeleteOutlined />}
-              title="Supprimer"
+              title={t('common.delete')}
             />
           </Popconfirm>
         </Space>

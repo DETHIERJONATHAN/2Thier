@@ -4,6 +4,7 @@ import TokenDropZone from '../shared/TokenDropZone';
 import TokenChip from '../shared/TokenChip';
 import { useOptimizedApi } from '../../../hooks/useOptimizedApi';
 import NodeTreeSelector, { NodeTreeSelectorValue } from '../shared/NodeTreeSelector';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text } = Typography;
 
@@ -46,6 +47,7 @@ const extractFormulaAlias = (token?: string | null): string | null => {
 };
 
 const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, readOnly }) => {
+  const { t } = useTranslation();
   // API optimisée pour éviter les conflits
   const { api, clearCache } = useOptimizedApi();
   
@@ -1304,7 +1306,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
           appendToken(v);
           setShowNumberModal(false);
         }}
-        okText="Ajouter"
+        okText={t('common.add')}
       >
         <Input
           placeholder="Ex: 10, 3.14"
@@ -1324,7 +1326,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
           appendToken(quoted);
           setShowTextModal(false);
         }}
-        okText="Ajouter"
+        okText={t('common.add')}
       >
         <Input
           placeholder="Ex: TVA"
@@ -1362,8 +1364,8 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
         open={showDeleteModal}
         onOk={confirmDelete}
         onCancel={cancelDelete}
-        okText="Supprimer"
-        cancelText="Annuler"
+        okText={t('common.delete')}
+        cancelText={t('common.cancel')}
         okButtonProps={{ danger: true, loading: isDeleting }}
         cancelButtonProps={{ disabled: isDeleting }}
       >
@@ -1387,7 +1389,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
             ? (gestionnaireModal.constId ? 'Retirer' : 'Exposer')
             : (exposedNodeIds.has(gestionnaireModal.nodeId) ? 'Retirer' : 'Exposer')
         }
-        cancelText="Annuler"
+        cancelText={t('common.cancel')}
         okButtonProps={(gestionnaireModal.isNumber ? gestionnaireModal.constId : exposedNodeIds.has(gestionnaireModal.nodeId)) ? { danger: true } : {}}
       >
         {gestionnaireModal.isNumber ? (

@@ -17,6 +17,7 @@ import {
   HistoryOutlined,
   UserOutlined
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 
 interface GoogleVoiceWidgetProps {
   leadPhone: string;
@@ -36,6 +37,7 @@ const GoogleVoiceWidget: React.FC<GoogleVoiceWidgetProps> = ({
   leadId,
   onCallComplete 
 }) => {
+  const { t } = useTranslation();
   const [calling, setCalling] = useState(false);
   const [sendingSMS, setSendingSMS] = useState(false);
   const [smsModalVisible, setSmsModalVisible] = useState(false);
@@ -179,14 +181,14 @@ const GoogleVoiceWidget: React.FC<GoogleVoiceWidgetProps> = ({
         >
           <Form.Item
             name="phoneNumber"
-            label="Numéro de téléphone"
+            label={t('fields.phoneNumber')}
           >
             <Input disabled value={leadPhone} />
           </Form.Item>
 
           <Form.Item
             name="message"
-            label="Message"
+            label={t('fields.message')}
             rules={[
               { required: true, message: 'Veuillez saisir un message' },
               { max: 160, message: 'Maximum 160 caractères' }

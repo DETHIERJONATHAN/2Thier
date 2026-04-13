@@ -5,8 +5,10 @@ import CreateLeadForm from './CreateLeadForm';
 import EditLeadForm from './EditLeadForm';
 import { Lead } from '../../types/lead';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 
 export const LeadsList: React.FC = () => {
+  const { t } = useTranslation();
   const { api } = useAuthenticatedApi();
   const [loading, setLoading] = React.useState(false);
   const [leads, setLeads] = React.useState<Lead[]>([]);
@@ -92,8 +94,8 @@ export const LeadsList: React.FC = () => {
           <Popconfirm
             title="Êtes-vous sûr de vouloir supprimer ce lead ?"
             onConfirm={() => handleDelete(record.id)}
-            okText="Oui"
-            cancelText="Non"
+            okText={t('common.yes')}
+            cancelText={t('common.no')}
           >
             <Button type="text" danger icon={<DeleteOutlined />} />
           </Popconfirm>

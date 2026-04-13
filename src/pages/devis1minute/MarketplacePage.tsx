@@ -31,6 +31,7 @@ import {
   BellOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -119,6 +120,7 @@ const PurchaseModal: React.FC<PurchaseModalProps> = ({
   onConfirm, 
   loading 
 }) => {
+  const { t } = useTranslation();
   if (!lead) return null;
 
   return (
@@ -623,7 +625,7 @@ export default function MarketplacePage() {
         >
           <Row gutter={16} className="w-full">
             <Col span={4}>
-              <Form.Item name="category" label="Catégorie">
+              <Form.Item name="category" label={t('fields.category')}>
                 <Select placeholder="Toutes" allowClear style={{ width: '100%' }}>
                   <Option value="renovation">Rénovation</Option>
                   <Option value="construction">Construction</Option>

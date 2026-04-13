@@ -35,6 +35,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import AIContentAssistant from '../AIContentAssistant';
+import { useTranslation } from 'react-i18next';
 
 const { TextArea } = Input;
 
@@ -116,8 +117,8 @@ const SortableItem: React.FC<{ service: Service; onEdit: () => void; onDelete: (
               title="Supprimer ce service ?"
               description="Cette action est irréversible."
               onConfirm={onDelete}
-              okText="Supprimer"
-              cancelText="Annuler"
+              okText={t('common.delete')}
+              cancelText={t('common.cancel')}
               okButtonProps={{ danger: true }}
             >
               <Button
@@ -135,6 +136,7 @@ const SortableItem: React.FC<{ service: Service; onEdit: () => void; onDelete: (
 };
 
 export const ServicesManager: React.FC<ServicesManagerProps> = ({ websiteId, siteName, industry }) => {
+  const { t } = useTranslation();
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -314,11 +316,11 @@ export const ServicesManager: React.FC<ServicesManagerProps> = ({ websiteId, sit
             <Input placeholder="ThunderboltOutlined" />
           </Form.Item>
 
-          <Form.Item label="Titre" name="title" rules={[{ required: true }]}>
+          <Form.Item label={t('fields.title')} name="title" rules={[{ required: true }]}>
             <Input placeholder="Panneaux Photovoltaïques" />
           </Form.Item>
 
-          <Form.Item label="Description" name="description">
+          <Form.Item label={t('fields.description')} name="description">
             <TextArea rows={2} placeholder="Description courte et accrocheuse" />
           </Form.Item>
 
@@ -341,7 +343,7 @@ export const ServicesManager: React.FC<ServicesManagerProps> = ({ websiteId, sit
             <Input placeholder="/contact" />
           </Form.Item>
 
-          <Form.Item label="Actif" name="isActive" valuePropName="checked">
+          <Form.Item label={t('fields.active')} name="isActive" valuePropName="checked">
             <Switch />
           </Form.Item>
 

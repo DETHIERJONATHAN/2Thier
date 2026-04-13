@@ -63,6 +63,7 @@ import {
   getCachedGoogleIcon,
   debounce
 } from '../../utils/organizationOptimizations';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text } = Typography;
 
@@ -177,6 +178,7 @@ interface GoogleWorkspaceConfig {
 }
 
 const OrganizationsAdminPageNew: React.FC = () => {
+  const { t } = useTranslation();
   // 🔐 HOOKS AUTHENTIFIÉS
   const { api } = useAuthenticatedApi();
   const { user, refreshModules } = useAuth();
@@ -1181,7 +1183,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
                   description={`L'organisation sera ${record.status === 'ACTIVE' ? 'désactivée' : 'activée'}.`}
                   onConfirm={() => handleToggleOrganizationStatus(record.id, record.name, record.status)}
                   okText={record.status === 'ACTIVE' ? 'Désactiver' : 'Activer'}
-                  cancelText="Annuler"
+                  cancelText={t('common.cancel')}
                 >
                   {ab(record.status === 'ACTIVE' ? '⛔' : '✅', record.status === 'ACTIVE' ? 'Désactiver' : 'Activer', () => {}, { bg: record.status === 'ACTIVE' ? '#fff2f0' : '#f6ffed', color: record.status === 'ACTIVE' ? FB.red : FB.green })}
                 </Popconfirm>
@@ -1196,7 +1198,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
                   description="Cette action est irréversible et supprimera toutes les données associées."
                   onConfirm={() => handleDeleteOrganization(record.id, record.name)}
                   okText="🗑️ Supprimer"
-                  cancelText="Annuler"
+                  cancelText={t('common.cancel')}
                   okButtonProps={{ danger: true }}
                 >
                   {ab('🗑️', 'Supprimer', () => {}, { danger: true })}
@@ -1250,7 +1252,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
             title={`${organization.status === 'ACTIVE' ? 'Désactiver' : 'Activer'} cette organisation ?`}
             onConfirm={() => handleToggleOrganizationStatus(organization.id, organization.name, organization.status)}
             okText={organization.status === 'ACTIVE' ? 'Désactiver' : 'Activer'}
-            cancelText="Annuler"
+            cancelText={t('common.cancel')}
           >
             <button style={btnStyle}>
               <PoweroffOutlined /> {organization.status === 'ACTIVE' ? 'Désactiver' : 'Activer'}
@@ -1260,8 +1262,8 @@ const OrganizationsAdminPageNew: React.FC = () => {
             title="Supprimer cette organisation ?"
             description="Cette action est irréversible."
             onConfirm={() => handleDeleteOrganization(organization.id, organization.name)}
-            okText="Supprimer"
-            cancelText="Annuler"
+            okText={t('common.delete')}
+            cancelText={t('common.cancel')}
             okButtonProps={{ danger: true }}
           >
             <button style={dangerBtn}>
@@ -1530,7 +1532,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
             </Form.Item>
             <Form.Item
               name="website"
-              label="Site web"
+              label={t('fields.website')}
             >
               <Input placeholder="exemple.com (https:// sera ajouté automatiquement)" />
             </Form.Item>
@@ -1538,7 +1540,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
 
           <Form.Item
             name="description"
-            label="Description"
+            label={t('fields.description')}
             rules={[{ max: 500, message: 'Maximum 500 caractères' }]}
           >
             <Input.TextArea 
@@ -1550,13 +1552,13 @@ const OrganizationsAdminPageNew: React.FC = () => {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <Form.Item
               name="phone"
-              label="Téléphone"
+              label={t('fields.phone')}
             >
               <Input placeholder="+32 123 456 789" />
             </Form.Item>
             <Form.Item
               name="address"
-              label="Adresse"
+              label={t('fields.address')}
               rules={[{ max: 200, message: 'Maximum 200 caractères' }]}
             >
               <Input placeholder="Adresse complète" />
@@ -1601,7 +1603,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
             </Form.Item>
             <Form.Item
               name="website"
-              label="Site web"
+              label={t('fields.website')}
             >
               <Input placeholder="exemple.com (https:// sera ajouté automatiquement)" />
             </Form.Item>
@@ -1609,7 +1611,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
 
           <Form.Item
             name="description"
-            label="Description"
+            label={t('fields.description')}
             rules={[{ max: 500, message: 'Maximum 500 caractères' }]}
           >
             <Input.TextArea 
@@ -1621,13 +1623,13 @@ const OrganizationsAdminPageNew: React.FC = () => {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <Form.Item
               name="phone"
-              label="Téléphone"
+              label={t('fields.phone')}
             >
               <Input placeholder="+32 123 456 789" />
             </Form.Item>
             <Form.Item
               name="address"
-              label="Adresse"
+              label={t('fields.address')}
               rules={[{ max: 200, message: 'Maximum 200 caractères' }]}
             >
               <Input placeholder="Adresse complète" />

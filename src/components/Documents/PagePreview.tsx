@@ -9,6 +9,7 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { DocumentPage, ModuleInstance } from './types';
 import { getModuleById } from './ModuleRegistry';
 import ModuleRenderer from './ModuleRenderer';
+import { useTranslation } from 'react-i18next';
 
 interface PagePreviewProps {
   page: DocumentPage;
@@ -42,6 +43,7 @@ const PagePreview = ({
   onModuleUpdate,
   onModulesReorder,
 }: PagePreviewProps) => {
+  const { t } = useTranslation();
 
   // Style de la page A4
   const pageStyle = useMemo(() => {
@@ -176,7 +178,7 @@ const PagePreview = ({
 
           <div style={{ width: '1px', backgroundColor: 'rgba(255,255,255,0.3)' }} />
 
-          <Tooltip title="Configurer">
+          <Tooltip title={t('common.configure')}>
             <Button
               type="text"
               size="small"
@@ -202,7 +204,7 @@ const PagePreview = ({
             />
           </Tooltip>
 
-          <Tooltip title="Supprimer">
+          <Tooltip title={t('common.delete')}>
             <Button
               type="text"
               size="small"

@@ -51,6 +51,7 @@ import {
   Tabs,
   // Collapse
 } from 'antd';
+import { useTranslation } from 'react-i18next';
 
 dayjs.locale('fr');
 
@@ -138,6 +139,7 @@ interface Lead {
 
 // --- COMPOSANT PRINCIPAL ---
 const TelnyxPage: React.FC = () => {
+  const { t } = useTranslation();
   const [msgApi, msgCtx] = message.useMessage();
   // const { user } = useAuth();
   const { api } = useAuthenticatedApi();
@@ -1125,8 +1127,8 @@ const TelnyxPage: React.FC = () => {
             </Select>
           </Form.Item>
           
-          <Form.Item name="text" label="Message" rules={[{ required: true, max: 160 }]}>
-            <TextArea rows={4} placeholder="Votre message..." showCount maxLength={160} />
+          <Form.Item name="text" label={t('fields.message')} rules={[{ required: true, max: 160 }]}>
+            <TextArea rows={4} placeholder={t('fields.yourMessagePlaceholder')} showCount maxLength={160} />
           </Form.Item>
           
           <Form.Item name="leadId" label="Lier à un lead">
@@ -1159,7 +1161,7 @@ const TelnyxPage: React.FC = () => {
         width={500}
       >
         <Form form={numberForm} layout="vertical" onFinish={handlePurchaseNumber}>
-          <Form.Item name="country" label="Pays" rules={[{ required: true }]}>
+          <Form.Item name="country" label={t('fields.country')} rules={[{ required: true }]}>
             <Select placeholder="Sélectionner un pays">
               <Option value="FR">🇫🇷 France</Option>
               <Option value="BE">🇧🇪 Belgique</Option>

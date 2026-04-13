@@ -21,6 +21,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import SectionRendererV2 from './SectionRendererV2';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 
@@ -54,6 +55,7 @@ const SortableItem: React.FC<SortableItemProps> = ({
   onToggle,
   viewMode
 }) => {
+  const { t } = useTranslation();
   const {
     attributes,
     listeners,
@@ -117,7 +119,7 @@ const SortableItem: React.FC<SortableItemProps> = ({
                   onClick={() => onToggle(section)}
                 />
               </Tooltip>
-              <Tooltip title="Configurer">
+              <Tooltip title={t('common.configure')}>
                 <Button
                   type="text"
                   size="small"
@@ -125,7 +127,7 @@ const SortableItem: React.FC<SortableItemProps> = ({
                   onClick={() => onEdit(section)}
                 />
               </Tooltip>
-              <Tooltip title="Dupliquer">
+              <Tooltip title={t('common.duplicate')}>
                 <Button
                   type="text"
                   size="small"
@@ -133,7 +135,7 @@ const SortableItem: React.FC<SortableItemProps> = ({
                   onClick={() => onDuplicate(section)}
                 />
               </Tooltip>
-              <Tooltip title="Supprimer">
+              <Tooltip title={t('common.delete')}>
                 <Button
                   type="text"
                   size="small"

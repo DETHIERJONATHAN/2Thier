@@ -3,10 +3,12 @@ import { Card, Typography, Table, Button, Space, Tag, Modal, Form, Input, Switch
 import type { ColumnsType } from 'antd/es/table';
 import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ExperimentOutlined, ReloadOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Paragraph } = Typography;
 
 export default function Devis1minuteAdminDispatch() {
+  const { t } = useTranslation();
   type Rule = { id: string; createdAt: string | Date; event: string; action: string; params?: Record<string, unknown> | null; active: boolean };
   const { api } = useAuthenticatedApi();
   const [rows, setRows] = useState<Rule[]>([]);
@@ -110,7 +112,7 @@ export default function Devis1minuteAdminDispatch() {
         <Table rowKey="id" loading={loading} dataSource={rows} columns={columns} pagination={{ pageSize: 10 }} />
       </Card>
 
-      <Modal open={open} onCancel={() => setOpen(false)} title={editing ? 'Modifier la règle' : 'Nouvelle règle'} onOk={onSubmit} okText="Enregistrer" width={720}>
+      <Modal open={open} onCancel={() => setOpen(false)} title={editing ? 'Modifier la règle' : 'Nouvelle règle'} onOk={onSubmit} okText={t('common.save')} width={720}>
         <Form layout="vertical" form={form}>
           <Form.Item name="event" label="Événement" rules={[{ required: true }]}>
             <Input placeholder="lead_received" />
@@ -121,7 +123,7 @@ export default function Devis1minuteAdminDispatch() {
           <Form.Item name="params" label="Paramètres (JSON)">
             <Input.TextArea rows={8} placeholder='{"conditions": {"source": "landing"}}' />
           </Form.Item>
-          <Form.Item name="active" label="Actif" valuePropName="checked">
+          <Form.Item name="active" label={t('fields.active')} valuePropName="checked">
             <Switch />
           </Form.Item>
         </Form>

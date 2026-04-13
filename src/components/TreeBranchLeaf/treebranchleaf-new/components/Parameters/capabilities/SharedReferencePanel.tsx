@@ -27,6 +27,7 @@ import {
   DeleteOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../../../../../hooks/useAuthenticatedApi';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -66,6 +67,7 @@ const SharedReferencePanel: React.FC<SharedReferencePanelProps> = ({
   onNodeUpdate,
   readOnly = false
 }) => {
+  const { t } = useTranslation();
   const { api } = useAuthenticatedApi();
   
   const [mode, setMode] = useState<'copy' | 'reference'>(
@@ -549,8 +551,8 @@ const SharedReferencePanel: React.FC<SharedReferencePanelProps> = ({
         open={isEditModalOpen}
         onOk={handleSaveEdit}
         onCancel={() => setIsEditModalOpen(false)}
-        okText="Enregistrer"
-        cancelText="Annuler"
+        okText={t('common.save')}
+        cancelText={t('common.cancel')}
       >
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
           <div>
@@ -593,9 +595,9 @@ const SharedReferencePanel: React.FC<SharedReferencePanelProps> = ({
           setIsDeleteModalOpen(false);
           setDeletingReference(null);
         }}
-        okText="Supprimer"
+        okText={t('common.delete')}
         okType="danger"
-        cancelText="Annuler"
+        cancelText={t('common.cancel')}
         okButtonProps={{ danger: true }}
       >
         {deletingReference && (

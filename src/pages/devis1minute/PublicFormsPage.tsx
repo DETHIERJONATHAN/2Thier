@@ -48,6 +48,7 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
 import dayjs from 'dayjs';
 import 'dayjs/locale/fr';
+import { useTranslation } from 'react-i18next';
 
 dayjs.locale('fr');
 
@@ -133,6 +134,7 @@ const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
   form, 
   isEdit = false 
 }) => {
+  const { t } = useTranslation();
   const [antdForm] = Form.useForm();
   const [fields, setFields] = useState<FormField[]>([]);
 
@@ -240,7 +242,7 @@ const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
       onOk={handleSubmit}
       confirmLoading={loading}
       okText={isEdit ? 'Mettre à jour' : 'Créer'}
-      cancelText="Annuler"
+      cancelText={t('common.cancel')}
       width={900}
     >
       <Form form={antdForm} layout="vertical">
@@ -259,7 +261,7 @@ const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
               <Col span={12}>
                 <Form.Item 
                   name="category" 
-                  label="Catégorie" 
+                  label={t('fields.category')} 
                   rules={[{ required: true, message: 'Catégorie requise' }]}
                 >
                   <Select placeholder="Sélectionner une catégorie">
@@ -274,7 +276,7 @@ const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
               </Col>
             </Row>
 
-            <Form.Item name="description" label="Description">
+            <Form.Item name="description" label={t('fields.description')}>
               <TextArea rows={2} placeholder="Description du formulaire..." />
             </Form.Item>
 
@@ -294,7 +296,7 @@ const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
               </Col>
               <Col span={8}>
                 <Form.Item name="campaigns" label="Campagnes associées">
-                  <Select mode="multiple" placeholder="Sélectionner">
+                  <Select mode="multiple" placeholder={t('common.select')}>
                     {/* Options dynamiques depuis l'API */}
                   </Select>
                 </Form.Item>
@@ -303,7 +305,7 @@ const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
 
             <Row gutter={16}>
               <Col span={6}>
-                <Form.Item name="isActive" label="Actif" valuePropName="checked">
+                <Form.Item name="isActive" label={t('fields.active')} valuePropName="checked">
                   <Switch checkedChildren="Oui" unCheckedChildren="Non" />
                 </Form.Item>
               </Col>
@@ -388,7 +390,7 @@ const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                       size="small"
                       icon={<DeleteOutlined />}
                       onClick={() => removeField(index)}
-                      title="Supprimer"
+                      title={t('common.delete')}
                     />
                   </Col>
                 </Row>
@@ -682,7 +684,7 @@ export default function PublicFormsPage() {
               onClick={() => openSubmissions(record)}
             />
           </Tooltip>
-          <Tooltip title="Modifier">
+          <Tooltip title={t('common.edit')}>
             <Button
               size="small"
               icon={<EditOutlined />}

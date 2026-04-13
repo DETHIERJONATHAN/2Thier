@@ -107,6 +107,7 @@ function encodePriority(notes: string | undefined, priority: string | undefined)
 }
 
 export default function AgendaPage({ compact }: { compact?: boolean }) {
+  const { t } = useTranslation();
   const screens = Grid.useBreakpoint();
   const isMobile = compact || !screens.md; // compact = sidebar mode, or <768px viewport
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -936,11 +937,11 @@ export default function AgendaPage({ compact }: { compact?: boolean }) {
           initialValues={{ type: 'rendez-vous', status: 'confirmé', priority: 'normale' }}
           size={isMobile ? 'middle' : undefined}
         >
-          <Form.Item name="title" label="Titre" rules={[{ required: true, message: 'Le titre est obligatoire' }]}>
+          <Form.Item name="title" label={t('fields.title')} rules={[{ required: true, message: 'Le titre est obligatoire' }]}>
             <Input placeholder={isTaskMode ? 'Titre de la tâche' : "Titre de l'événement"} />
           </Form.Item>
 
-          <Form.Item name="description" label="Description">
+          <Form.Item name="description" label={t('fields.description')}>
             <TextArea rows={2} placeholder="Description..." />
           </Form.Item>
 
@@ -965,7 +966,7 @@ export default function AgendaPage({ compact }: { compact?: boolean }) {
 
           <Row gutter={[12, 0]}>
             <Col xs={isTaskMode ? 24 : 12} sm={isTaskMode ? 8 : 12}>
-              <Form.Item name="type" label="Type" rules={[{ required: true }]}>
+              <Form.Item name="type" label={t('fields.type')} rules={[{ required: true }]}>
                 <Select placeholder="Type">
                   <Option value="tache">✅ Tâche</Option>
                   <Option value="rendez-vous">🤝 Rendez-vous</Option>
@@ -982,7 +983,7 @@ export default function AgendaPage({ compact }: { compact?: boolean }) {
             </Col>
             {isTaskMode && (
               <Col xs={12} sm={8}>
-                <Form.Item name="priority" label="Priorité">
+                <Form.Item name="priority" label={t('fields.priority')}>
                   <Select placeholder="Priorité">
                     {TASK_PRIORITIES.map(p => (
                       <Option key={p.value} value={p.value}>{p.label}</Option>
@@ -992,7 +993,7 @@ export default function AgendaPage({ compact }: { compact?: boolean }) {
               </Col>
             )}
             <Col xs={isTaskMode ? 12 : 12} sm={isTaskMode ? 8 : 12}>
-              <Form.Item name="status" label="Statut">
+              <Form.Item name="status" label={t('fields.status')}>
                 <Select placeholder="Statut">
                   {isTaskMode ? (
                     TASK_STATUSES.map(s => <Option key={s.value} value={s.value}>{s.label}</Option>)
@@ -1010,7 +1011,7 @@ export default function AgendaPage({ compact }: { compact?: boolean }) {
             </Col>
           </Row>
 
-          <Form.Item name="notes" label="Notes">
+          <Form.Item name="notes" label={t('fields.notes')}>
             <TextArea rows={2} placeholder="Notes personnelles..." />
           </Form.Item>
 

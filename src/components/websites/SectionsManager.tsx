@@ -44,6 +44,7 @@ import { StatsEditor } from './section-editors/StatsEditor';
 import { ContentEditor } from './section-editors/ContentEditor';
 import { CTAEditor } from './section-editors/CTAEditor';
 import { FooterEditor } from './section-editors/FooterEditor';
+import { useTranslation } from 'react-i18next';
 
 const { Option } = Select;
 
@@ -145,7 +146,7 @@ const SortableItem: React.FC<{
                 onClick={onToggle}
               />
             </Tooltip>
-            <Tooltip title="Dupliquer">
+            <Tooltip title={t('common.duplicate')}>
               <Button
                 type="text"
                 size="small"
@@ -164,8 +165,8 @@ const SortableItem: React.FC<{
                 title="Supprimer cette section ?"
                 description="Cette action est irréversible."
                 onConfirm={onDelete}
-                okText="Supprimer"
-                cancelText="Annuler"
+                okText={t('common.delete')}
+                cancelText={t('common.cancel')}
                 okButtonProps={{ danger: true }}
               >
                 <Button
@@ -184,6 +185,7 @@ const SortableItem: React.FC<{
 };
 
 export const SectionsManager: React.FC<SectionsManagerProps> = ({ websiteId, siteName }) => {
+  const { t } = useTranslation();
   const [sections, setSections] = useState<Section[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);

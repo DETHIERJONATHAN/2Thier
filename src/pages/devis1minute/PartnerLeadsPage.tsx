@@ -43,6 +43,7 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/fr';
+import { useTranslation } from 'react-i18next';
 
 dayjs.extend(relativeTime);
 dayjs.locale('fr');
@@ -95,6 +96,7 @@ const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
   onCancel, 
   onUpdate 
 }) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
 
   useEffect(() => {
@@ -138,7 +140,7 @@ const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
       onCancel={onCancel}
       onOk={handleSubmit}
       okText="Mettre à jour"
-      cancelText="Annuler"
+      cancelText={t('common.cancel')}
       width={800}
     >
       <Form form={form} layout="vertical">
@@ -146,7 +148,7 @@ const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
           <Col span={12}>
             <Form.Item 
               name="status" 
-              label="Statut" 
+              label={t('fields.status')} 
               rules={[{ required: true, message: 'Veuillez sélectionner un statut' }]}
             >
               <Select placeholder="Sélectionner un statut">

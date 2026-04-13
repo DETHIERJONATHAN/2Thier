@@ -3,6 +3,7 @@ import { Card, Button, Space, Popconfirm, Tooltip } from 'antd';
 import { EditOutlined, DeleteOutlined, DragOutlined } from '@ant-design/icons';
 import { useDrop } from 'react-dnd';
 import { LeadStatus } from '../types/leads';
+import { useTranslation } from 'react-i18next';
 
 interface DragDropLeadStatusProps {
   status: LeadStatus;
@@ -17,6 +18,7 @@ const DragDropLeadStatus: React.FC<DragDropLeadStatusProps> = ({
   onDelete,
   onAcceptCallStatus
 }) => {
+  const { t } = useTranslation();
   // Configuration drag & drop - Zone de drop pour les statuts d'appels
   const [{ isOver }, drop] = useDrop({
     accept: 'CALL_STATUS',
@@ -62,8 +64,8 @@ const DragDropLeadStatus: React.FC<DragDropLeadStatusProps> = ({
                 title="Supprimer ce statut ?"
                 description="Cette action est irréversible"
                 onConfirm={() => onDelete(status.id)}
-                okText="Supprimer"
-                cancelText="Annuler"
+                okText={t('common.delete')}
+                cancelText={t('common.cancel')}
                 okType="danger"
               >
                 <Tooltip title="Supprimer ce statut">

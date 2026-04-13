@@ -12,6 +12,7 @@ import {
   CaretDownOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { useTranslation } from 'react-i18next';
 
 const { Text, Title } = Typography;
 const { Option } = Select;
@@ -39,6 +40,7 @@ interface NodeData {
 
 // Icônes selon le type
 const NodeIcon: React.FC<{ type: 'O' | 'O+C' | 'C' }> = ({ type }) => {
+  const { t } = useTranslation();
   switch (type) {
     case 'O':
       return <FileTextOutlined className="text-blue-600 mr-2" />;
@@ -276,7 +278,7 @@ const TreeNode: React.FC<{
 
         {/* Actions (visibles au survol) */}
         <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center space-x-1">
-          <Tooltip title="Modifier">
+          <Tooltip title={t('common.edit')}>
             <Button 
               type="text" 
               size="small"
@@ -300,7 +302,7 @@ const TreeNode: React.FC<{
             />
           </Tooltip>
 
-          <Tooltip title="Supprimer">
+          <Tooltip title={t('common.delete')}>
             <Button 
               type="text" 
               danger
@@ -405,8 +407,8 @@ const NodeEditModal: React.FC<{
       open={isOpen}
       onOk={handleConfirm}
       onCancel={onClose}
-      okText="Confirmer"
-      cancelText="Annuler"
+      okText={t('common.confirm')}
+      cancelText={t('common.cancel')}
       width={600}
     >
       <div className="space-y-6">

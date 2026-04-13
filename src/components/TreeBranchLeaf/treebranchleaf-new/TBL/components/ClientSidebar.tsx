@@ -11,6 +11,7 @@ import {
   HomeOutlined
 } from '@ant-design/icons';
 import DocumentsSection from '../../../../../components/Documents/DocumentsSection';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 
@@ -35,6 +36,7 @@ const ClientSidebar: React.FC<ClientSidebarProps> = ({
   submissionId,
   leadId
 }) => {
+  const { t } = useTranslation();
   // Données mockées (viendront des calculs TreeBranchLeaf)
   const stats = {
     budget: 25000,
@@ -153,7 +155,7 @@ const ClientSidebar: React.FC<ClientSidebarProps> = ({
       </Card>
 
       {/* Actions rapides */}
-      <Card title="Actions" className="shadow-sm">
+      <Card title={t('common.actions')} className="shadow-sm">
         <Space direction="vertical" size="small" className="w-full">
           <button className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded transition-colors text-sm">
             Générer devis PDF

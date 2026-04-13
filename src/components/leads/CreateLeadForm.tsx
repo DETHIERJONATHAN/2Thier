@@ -2,6 +2,7 @@ import React from 'react';
 import { Form, Input, Select, Button, DatePicker, message } from 'antd';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
+import { useTranslation } from 'react-i18next';
 
 interface CreateLeadFormProps {
   onSuccess?: () => void;
@@ -12,6 +13,7 @@ export const CreateLeadForm: React.FC<CreateLeadFormProps> = ({
   onSuccess,
   onCancel
 }) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
   const { api } = useAuthenticatedApi();
   const { currentOrganization } = useAuth();
@@ -71,7 +73,7 @@ export const CreateLeadForm: React.FC<CreateLeadFormProps> = ({
     >
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Form.Item
-          label="Prénom"
+          label={t('fields.firstName')}
           name="firstName"
           rules={[{ required: true, message: 'Le prénom est requis' }]}
         >
@@ -79,7 +81,7 @@ export const CreateLeadForm: React.FC<CreateLeadFormProps> = ({
         </Form.Item>
 
         <Form.Item
-          label="Nom"
+          label={t('fields.name')}
           name="lastName"
           rules={[{ required: true, message: 'Le nom est requis' }]}
         >
@@ -89,7 +91,7 @@ export const CreateLeadForm: React.FC<CreateLeadFormProps> = ({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Form.Item
-          label="Email"
+          label={t('fields.email')}
           name="email"
           rules={[
             { type: 'email', message: 'Email invalide' },
@@ -100,7 +102,7 @@ export const CreateLeadForm: React.FC<CreateLeadFormProps> = ({
         </Form.Item>
 
         <Form.Item
-          label="Téléphone"
+          label={t('fields.phone')}
           name="phone"
           rules={[{ required: true, message: 'Le téléphone est requis' }]}
         >
@@ -109,7 +111,7 @@ export const CreateLeadForm: React.FC<CreateLeadFormProps> = ({
       </div>
 
       <Form.Item
-        label="Entreprise"
+        label={t('fields.company')}
         name="company"
         rules={[{ required: true, message: 'L\'entreprise est requise' }]}
       >
@@ -118,7 +120,7 @@ export const CreateLeadForm: React.FC<CreateLeadFormProps> = ({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Form.Item
-          label="Source"
+          label={t('fields.source')}
           name="source"
         >
           <Select>
@@ -133,7 +135,7 @@ export const CreateLeadForm: React.FC<CreateLeadFormProps> = ({
         </Form.Item>
 
         <Form.Item
-          label="Site web"
+          label={t('fields.website')}
           name="website"
         >
           <Input placeholder="Site web de l'entreprise" />
@@ -141,7 +143,7 @@ export const CreateLeadForm: React.FC<CreateLeadFormProps> = ({
       </div>
 
       <Form.Item
-        label="Notes"
+        label={t('fields.notes')}
         name="notes"
       >
         <Input.TextArea rows={4} placeholder="Notes importantes sur ce lead..." />

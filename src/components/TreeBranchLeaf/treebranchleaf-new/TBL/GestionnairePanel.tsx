@@ -14,6 +14,7 @@ import { EditOutlined, UndoOutlined, SaveOutlined, CheckCircleOutlined, Fullscre
 import { useAuthenticatedApi } from '../../../../hooks/useAuthenticatedApi';
 import TableFullscreenEditor, { type TableConfig } from '../components/Parameters/capabilities/TableFullscreenEditor';
 import * as XLSX from 'xlsx';
+import { useTranslation } from 'react-i18next';
 
 const { Text, Title } = Typography;
 
@@ -71,6 +72,7 @@ interface GestionnairePanelProps {
 }
 
 const GestionnairePanel: React.FC<GestionnairePanelProps> = ({ open, onClose, treeId, onOverrideSaved }) => {
+  const { t } = useTranslation();
   const { api } = useAuthenticatedApi();
   const [loading, setLoading] = useState(false);
   const [variables, setVariables] = useState<ExposedVariable[]>([]);
@@ -578,8 +580,8 @@ const GestionnairePanel: React.FC<GestionnairePanelProps> = ({ open, onClose, tr
                             <Popconfirm
                               title="Revenir à la valeur de base TBL ?"
                               onConfirm={() => handleRevertVariable(v)}
-                              okText="Oui"
-                              cancelText="Non"
+                              okText={t('common.yes')}
+                              cancelText={t('common.no')}
                             >
                               <Tooltip title="Revenir à la valeur de base">
                                 <Button
@@ -671,8 +673,8 @@ const GestionnairePanel: React.FC<GestionnairePanelProps> = ({ open, onClose, tr
                           title="Revenir aux données de base TBL ?"
                           onConfirm={(e) => { e?.stopPropagation(); handleRevertTable(t); }}
                           onCancel={(e) => e?.stopPropagation()}
-                          okText="Oui"
-                          cancelText="Non"
+                          okText={t('common.yes')}
+                          cancelText={t('common.no')}
                         >
                           <Button
                             size="small"
@@ -753,8 +755,8 @@ const GestionnairePanel: React.FC<GestionnairePanelProps> = ({ open, onClose, tr
                           title="Retirer cette constante du Gestionnaire ?"
                           description="Le nombre sera remis tel quel dans la formule."
                           onConfirm={() => handleDeleteConstant(c)}
-                          okText="Supprimer"
-                          cancelText="Non"
+                          okText={t('common.delete')}
+                          cancelText={t('common.no')}
                           okButtonProps={{ danger: true }}
                         >
                           <Tooltip title="Retirer du Gestionnaire">
@@ -819,8 +821,8 @@ const GestionnairePanel: React.FC<GestionnairePanelProps> = ({ open, onClose, tr
                             <Popconfirm
                               title={`Revenir à la valeur de base (${c.originalValue}) ?`}
                               onConfirm={() => handleRevertConstant(c)}
-                              okText="Oui"
-                              cancelText="Non"
+                              okText={t('common.yes')}
+                              cancelText={t('common.no')}
                             >
                               <Tooltip title="Revenir à la valeur de base">
                                 <Button

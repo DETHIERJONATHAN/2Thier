@@ -7,6 +7,7 @@ import { Button, Input, Popconfirm, Tooltip } from 'antd';
 import { PlusOutlined, DeleteOutlined, EditOutlined, CopyOutlined } from '@ant-design/icons';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { DocumentPage } from './types';
+import { useTranslation } from 'react-i18next';
 
 interface PageTabsProps {
   pages: DocumentPage[];
@@ -29,6 +30,7 @@ const PageTabs = ({
   onPageDuplicate,
   onPagesReorder,
 }: PageTabsProps) => {
+  const { t } = useTranslation();
   const [editingPageId, setEditingPageId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   
@@ -210,7 +212,7 @@ const PageTabs = ({
                               }}
                             />
                           </Tooltip>
-                          <Tooltip title="Dupliquer">
+                          <Tooltip title={t('common.duplicate')}>
                             <Button
                               type="text"
                               size="small"
@@ -236,11 +238,11 @@ const PageTabs = ({
                                 onPageDelete(page.id);
                               }}
                               onCancel={(e) => e?.stopPropagation()}
-                              okText="Supprimer"
-                              cancelText="Annuler"
+                              okText={t('common.delete')}
+                              cancelText={t('common.cancel')}
                               okButtonProps={{ danger: true }}
                             >
-                              <Tooltip title="Supprimer">
+                              <Tooltip title={t('common.delete')}>
                                 <Button
                                   type="text"
                                   size="small"

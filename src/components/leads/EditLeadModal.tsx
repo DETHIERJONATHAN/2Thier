@@ -4,6 +4,7 @@ import { UserOutlined, MailOutlined, PhoneOutlined, HomeOutlined, GlobalOutlined
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useLeadStatuses } from '../../hooks/useLeadStatuses';
 import type { Lead } from '../../types/leads';
+import { useTranslation } from 'react-i18next';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -34,6 +35,7 @@ const EditLeadModal: React.FC<EditLeadModalProps> = ({
   onClose,
   onLeadUpdated
 }) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
@@ -157,7 +159,7 @@ const EditLeadModal: React.FC<EditLeadModalProps> = ({
           <Row gutter={16}>
             <Col xs={24} sm={12}>
               <Form.Item
-                label="Prénom"
+                label={t('fields.firstName')}
                 name="firstName"
                 rules={[{ required: true, message: 'Le prénom est requis' }]}
               >
@@ -169,7 +171,7 @@ const EditLeadModal: React.FC<EditLeadModalProps> = ({
             </Col>
             <Col xs={24} sm={12}>
               <Form.Item
-                label="Nom"
+                label={t('fields.name')}
                 name="lastName"
                 rules={[{ required: true, message: 'Le nom est requis' }]}
               >
@@ -184,7 +186,7 @@ const EditLeadModal: React.FC<EditLeadModalProps> = ({
           <Row gutter={16}>
             <Col xs={24} sm={12}>
               <Form.Item
-                label="Email"
+                label={t('fields.email')}
                 name="email"
                 rules={[
                   { required: true, message: 'L\'email est requis' },
@@ -199,7 +201,7 @@ const EditLeadModal: React.FC<EditLeadModalProps> = ({
             </Col>
             <Col xs={24} sm={12}>
               <Form.Item
-                label="Téléphone"
+                label={t('fields.phone')}
                 name="phone"
               >
                 <Input 
@@ -213,7 +215,7 @@ const EditLeadModal: React.FC<EditLeadModalProps> = ({
           <Row gutter={16}>
             <Col xs={24} sm={12}>
               <Form.Item
-                label="Société"
+                label={t('fields.company')}
                 name="company"
               >
                 <Input 
@@ -224,7 +226,7 @@ const EditLeadModal: React.FC<EditLeadModalProps> = ({
             </Col>
             <Col xs={24} sm={12}>
               <Form.Item
-                label="Source"
+                label={t('fields.source')}
                 name="source"
               >
                 <Select placeholder="Source du lead">
@@ -240,7 +242,7 @@ const EditLeadModal: React.FC<EditLeadModalProps> = ({
 
           {leadStatuses.length > 0 && (
             <Form.Item
-              label="Statut"
+              label={t('fields.status')}
               name="statusId"
             >
               <Select placeholder="Choisir un statut" allowClear>
@@ -279,7 +281,7 @@ const EditLeadModal: React.FC<EditLeadModalProps> = ({
           </Row>
 
           <Form.Item
-            label="Notes"
+            label={t('fields.notes')}
             name="notes"
           >
             <TextArea 

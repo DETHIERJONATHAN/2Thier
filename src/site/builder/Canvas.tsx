@@ -17,6 +17,7 @@ import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-
 import { CSS } from '@dnd-kit/utilities';
 import type { SectionInstance } from '../schemas/types';
 import { getSectionSchema } from '../schemas';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text } = Typography;
 
@@ -65,6 +66,7 @@ const SortableSectionCard: React.FC<SortableSectionCardProps> = ({
   onToggle,
   onLock
 }) => {
+  const { t } = useTranslation();
   const {
     attributes,
     listeners,
@@ -150,7 +152,7 @@ const SortableSectionCard: React.FC<SortableSectionCardProps> = ({
               />
             </Tooltip>
 
-            <Tooltip title="Éditer">
+            <Tooltip title={t('common.edit')}>
               <Button
                 type="text"
                 size="small"
@@ -160,7 +162,7 @@ const SortableSectionCard: React.FC<SortableSectionCardProps> = ({
               />
             </Tooltip>
 
-            <Tooltip title="Dupliquer">
+            <Tooltip title={t('common.duplicate')}>
               <Button
                 type="text"
                 size="small"
@@ -180,7 +182,7 @@ const SortableSectionCard: React.FC<SortableSectionCardProps> = ({
               />
             </Tooltip>
 
-            <Tooltip title="Supprimer">
+            <Tooltip title={t('common.delete')}>
               <Button
                 type="text"
                 size="small"

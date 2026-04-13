@@ -34,6 +34,7 @@ import {
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import dayjs from 'dayjs';
 import 'dayjs/locale/fr';
+import { useTranslation } from 'react-i18next';
 
 dayjs.locale('fr');
 
@@ -85,6 +86,7 @@ const PurchaseModal: React.FC<PurchaseModalProps> = ({
   loading, 
   packs 
 }) => {
+  const { t } = useTranslation();
   const [selectedPack, setSelectedPack] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<string>('card');
 
@@ -111,7 +113,7 @@ const PurchaseModal: React.FC<PurchaseModalProps> = ({
       onOk={handleConfirm}
       confirmLoading={loading}
       okText="Procéder au paiement"
-      cancelText="Annuler"
+      cancelText={t('common.cancel')}
       width={800}
     >
       <div className="space-y-4">

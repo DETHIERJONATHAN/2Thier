@@ -41,6 +41,7 @@ import SectionsManager from '../../components/websites/SectionsManager';
 import { NoCodeBuilder } from '../../site'; // 🔥 NOUVEAU SYSTÈME UNIVERSEL
 import ThemeManager from '../../components/websites/ThemeManager';
 import CloudRunDomainSelector from '../../components/websites/CloudRunDomainSelector';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -80,6 +81,7 @@ interface Website {
 }
 
 export const WebsitesAdminPage: React.FC = () => {
+  const { t } = useTranslation();
   const [websites, setWebsites] = useState<Website[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -423,7 +425,7 @@ export const WebsitesAdminPage: React.FC = () => {
 
                 <Col xs={24} md={8}>
                   <Form.Item
-                    label="Actif"
+                    label={t('fields.active')}
                     name="isActive"
                     valuePropName="checked"
                     initialValue={true}
@@ -549,9 +551,9 @@ export const WebsitesAdminPage: React.FC = () => {
           setDeleteModalVisible(false);
           setWebsiteToDelete(null);
         }}
-        okText="Supprimer"
+        okText={t('common.delete')}
         okType="danger"
-        cancelText="Annuler"
+        cancelText={t('common.cancel')}
         confirmLoading={loading}
       >
         {websiteToDelete && (

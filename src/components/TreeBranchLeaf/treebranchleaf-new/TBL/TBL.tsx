@@ -63,6 +63,7 @@ import { useTBLSave, type TBLFormData } from './hooks/useTBLSave';
 import { buildMirrorKeys } from './utils/mirrorNormalization';
 import type { TBLLead } from '../../lead-integration/types/lead-types';
 import { useTBLSwipeNavigation } from './hooks/useTBLSwipeNavigation';
+import { useTranslation } from 'react-i18next';
 
 // 🚀 LAZY IMPORTS - Composants chargés uniquement quand nécessaires (modals, panels dev)
 const DocumentsSection = lazy(() => import('../../../Documents/DocumentsSection'));
@@ -94,6 +95,7 @@ interface TBLProps {
 const TBL: React.FC<TBLProps> = ({ 
   treeId
 }) => {
+  const { t } = useTranslation();
   const formatAddressValue = useCallback((value: unknown): string => {
     if (!value) return '';
     if (typeof value === 'string') return value;
@@ -4783,7 +4785,7 @@ const TBL: React.FC<TBLProps> = ({
           </Form.Item>
 
           <Form.Item
-            label="Notes"
+            label={t('fields.notes')}
             name="notes"
           >
             <Input.TextArea 
@@ -5483,7 +5485,7 @@ const TBL: React.FC<TBLProps> = ({
           <Form.Item name="subject" label="Sujet" rules={[{ required: true, message: 'Sujet requis' }]}>
             <Input placeholder="Sujet de l'email" />
           </Form.Item>
-          <Form.Item name="body" label="Message" rules={[{ required: true, message: 'Message requis' }]}>
+          <Form.Item name="body" label={t('fields.message')} rules={[{ required: true, message: 'Message requis' }]}>
             <Input.TextArea rows={8} placeholder="Contenu de l'email..." />
           </Form.Item>
         </Form>

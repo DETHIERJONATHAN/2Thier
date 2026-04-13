@@ -22,6 +22,7 @@ import {
   DeleteOutlined,
   MobileOutlined,
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 
 interface PeppolConfigData {
   enabled: boolean;
@@ -76,6 +77,7 @@ interface ApiResponse<T = unknown> {
 }
 
 const PeppolSettings: React.FC = () => {
+  const { t } = useTranslation();
   const { currentOrganization } = useAuth();
   const { api } = useAuthenticatedApi();
 
@@ -980,7 +982,7 @@ const PeppolSettings: React.FC = () => {
         onOk={handleCompleteMigration}
         confirmLoading={migrating}
         okText="Lancer la migration"
-        cancelText="Annuler"
+        cancelText={t('common.cancel')}
       >
         <div style={{ marginBottom: 16 }}>
           <p>
@@ -1023,7 +1025,7 @@ const PeppolSettings: React.FC = () => {
         confirmLoading={deregistering}
         okText="Confirmer la désinscription"
         okButtonProps={{ danger: true }}
-        cancelText="Annuler"
+        cancelText={t('common.cancel')}
       >
         <Alert
           type="warning"

@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Card, Descriptions, Tag, Avatar, Button, Spin } from 'antd';
 import { EditOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
+import { useTranslation } from 'react-i18next';
 
 interface LeadInfoProps {
   leadId?: string;
 }
 
 export const LeadInfo: React.FC<LeadInfoProps> = ({ leadId }) => {
+  const { t } = useTranslation();
   const { api } = useAuthenticatedApi();
   const [lead, setLead] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -60,16 +62,16 @@ export const LeadInfo: React.FC<LeadInfoProps> = ({ leadId }) => {
       }
     >
       <Descriptions column={2} size="small">
-        <Descriptions.Item label="Email">
+        <Descriptions.Item label={t('fields.email')}>
           {lead.email}
         </Descriptions.Item>
-        <Descriptions.Item label="Téléphone">
+        <Descriptions.Item label={t('fields.phone')}>
           {lead.phone || 'Non renseigné'}
         </Descriptions.Item>
-        <Descriptions.Item label="Source">
+        <Descriptions.Item label={t('fields.source')}>
           <Tag color="blue">{lead.source}</Tag>
         </Descriptions.Item>
-        <Descriptions.Item label="Statut">
+        <Descriptions.Item label={t('fields.status')}>
           <Tag color="green">{lead.status}</Tag>
         </Descriptions.Item>
         <Descriptions.Item label="Commercial assigné">
@@ -78,10 +80,10 @@ export const LeadInfo: React.FC<LeadInfoProps> = ({ leadId }) => {
         <Descriptions.Item label="Date de création">
           {new Date(lead.createdAt).toLocaleDateString()}
         </Descriptions.Item>
-        <Descriptions.Item label="Adresse" span={2}>
+        <Descriptions.Item label={t('fields.address')} span={2}>
           {lead.address || 'Non renseignée'}
         </Descriptions.Item>
-        <Descriptions.Item label="Notes" span={2}>
+        <Descriptions.Item label={t('fields.notes')} span={2}>
           {lead.notes || 'Aucune note'}
         </Descriptions.Item>
       </Descriptions>

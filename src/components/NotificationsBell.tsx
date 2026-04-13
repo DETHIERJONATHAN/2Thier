@@ -12,6 +12,7 @@ import {
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { setNotificationBadgeCount } from '../lib/pwaBadge';
 import { useBookmarks, Bookmark } from '../hooks/useBookmarks';
+import { useTranslation } from 'react-i18next';
 
 interface NotificationItem {
   id: string;
@@ -83,6 +84,7 @@ function cfg(type: string) {
 }
 
 const NotificationsBell = () => {
+  const { t } = useTranslation();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [tab, setTab] = useState<TabFilter>('all');
@@ -327,7 +329,7 @@ const NotificationsBell = () => {
                   </div>
                 </Tooltip>
               )}
-              <Tooltip title="Supprimer">
+              <Tooltip title={t('common.delete')}>
                 <div
                   onClick={e => { e.stopPropagation(); deleteNotification(notif.id); }}
                   style={{

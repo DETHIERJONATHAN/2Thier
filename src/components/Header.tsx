@@ -8,9 +8,11 @@ import { FaExchangeAlt, FaSearch, FaChevronDown } from 'react-icons/fa';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { useAIAssistant } from './CallModule/hooks/useAIAssistant';
 import { FiZap, FiMic, FiSend, FiVolume2, FiStopCircle } from 'react-icons/fi';
+import { useTranslation } from 'react-i18next';
 
 // Assistant IA étendu: suggestions + chat texte + mode vocal (reconnaissance & synthèse navigateur)
 const AssistantAmeliorationIA: React.FC = () => {
+  const { t } = useTranslation();
   const { api } = useAuthenticatedApi();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -464,7 +466,7 @@ const Header: React.FC = () => {
           <div className="relative">
             <input
               type="text"
-              placeholder="Rechercher..."
+              placeholder={t('common.searchPlaceholder')}
               className="w-full bg-white/10 border border-white/20 rounded-full py-1.5 pl-10 pr-4 text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-white/30 focus:bg-white/20"
               onClick={() => setSearchOpen(true)}
             />

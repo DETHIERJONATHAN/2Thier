@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Form, Input, Modal, Select, Space, Typography, message, Tabs, Switch, Card, List, Divider, Tag, Popconfirm } from 'antd';
 import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, ArrowUpOutlined, ArrowDownOutlined, CopyOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
+import { useTranslation } from 'react-i18next';
 
 const { Option } = Select;
 
@@ -51,6 +52,7 @@ const ContactFormSelector: React.FC<ContactFormSelectorProps> = ({
   allowCreate = true,
   placeholder = 'Sélectionnez un formulaire'
 }) => {
+  const { t } = useTranslation();
   const { api } = useAuthenticatedApi();
   const stableApi = useMemo(() => api, [api]);
 
@@ -483,7 +485,7 @@ const ContactFormSelector: React.FC<ContactFormSelectorProps> = ({
                     size="small"
                     type="text"
                     icon={<CopyOutlined />}
-                    title="Dupliquer"
+                    title={t('common.duplicate')}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleDuplicateForm(formSummary.id);
@@ -493,7 +495,7 @@ const ContactFormSelector: React.FC<ContactFormSelectorProps> = ({
                     size="small"
                     type="text"
                     icon={<EditOutlined />}
-                    title="Modifier"
+                    title={t('common.edit')}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleEditForm(formSummary.id);
@@ -507,15 +509,15 @@ const ContactFormSelector: React.FC<ContactFormSelectorProps> = ({
                       handleDeleteForm(formSummary.id);
                     }}
                     onCancel={(e) => e?.stopPropagation()}
-                    okText="Supprimer"
-                    cancelText="Annuler"
+                    okText={t('common.delete')}
+                    cancelText={t('common.cancel')}
                   >
                     <Button
                       size="small"
                       type="text"
                       danger
                       icon={<DeleteOutlined />}
-                      title="Supprimer"
+                      title={t('common.delete')}
                       onClick={(e) => e.stopPropagation()}
                     />
                   </Popconfirm>
@@ -564,7 +566,7 @@ const ContactFormSelector: React.FC<ContactFormSelectorProps> = ({
         title={isEditMode ? "Modifier le formulaire" : "Créer un formulaire"}
         open={createModalOpen}
         okText={isEditMode ? "Mettre à jour" : "Créer"}
-        cancelText="Annuler"
+        cancelText={t('common.cancel')}
         onCancel={() => {
           setCreateModalOpen(false);
           setEditingFields([...defaultFields]);
@@ -589,11 +591,11 @@ const ContactFormSelector: React.FC<ContactFormSelectorProps> = ({
                 <Input placeholder="Formulaire contact" />
               </Form.Item>
 
-              <Form.Item label="Catégorie" name="category">
+              <Form.Item label={t('fields.category')} name="category">
                 <Input placeholder="contact" />
               </Form.Item>
 
-              <Form.Item label="Description" name="description">
+              <Form.Item label={t('fields.description')} name="description">
                 <Input.TextArea rows={2} placeholder="Description rapide" />
               </Form.Item>
             </Tabs.TabPane>
@@ -638,8 +640,8 @@ const ContactFormSelector: React.FC<ContactFormSelectorProps> = ({
                         <Popconfirm
                           title="Supprimer ce champ ?"
                           onConfirm={() => handleDeleteField(index)}
-                          okText="Oui"
-                          cancelText="Non"
+                          okText={t('common.yes')}
+                          cancelText={t('common.no')}
                         >
                           <Button 
                             size="small" 
@@ -728,8 +730,8 @@ const ContactFormSelector: React.FC<ContactFormSelectorProps> = ({
       <Modal
         title={editingFieldIndex !== null ? "Modifier le champ" : "Ajouter un champ"}
         open={fieldModalOpen}
-        okText="Enregistrer"
-        cancelText="Annuler"
+        okText={t('common.save')}
+        cancelText={t('common.cancel')}
         onCancel={() => {
           setFieldModalOpen(false);
           fieldForm.resetFields();

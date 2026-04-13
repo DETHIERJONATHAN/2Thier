@@ -38,6 +38,7 @@ import { getErrorMessage, getErrorResponseDetails } from '../../utils/errorHandl
 import { LeadStatus } from '../../types/leads';
 import SortableCallStatus from '../../components/SortableCallStatus';
 import SortableLeadStatus from '../../components/SortableLeadStatus';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -97,6 +98,7 @@ interface LeadMapping {
  * - Modèles d'emails
  */
 const LeadsSettingsPage = () => {
+  const { t } = useTranslation();
   console.log('[LeadsSettingsPage] 🚀 Composant chargé');
   const { api } = useAuthenticatedApi();
   
@@ -845,8 +847,8 @@ const LeadsSettingsPage = () => {
                         title="Supprimer ce mapping ?"
                         description="Cette action est irréversible. Êtes-vous sûr ?"
                         onConfirm={() => handleDeleteMapping(mapping.id)}
-                        okText="Supprimer"
-                        cancelText="Annuler"
+                        okText={t('common.delete')}
+                        cancelText={t('common.cancel')}
                         okButtonProps={{ danger: true }}
                       >
                         <Button
@@ -1107,8 +1109,8 @@ const LeadsSettingsPage = () => {
                   <Popconfirm
                     title="Supprimer ce modèle ?"
                     onConfirm={() => template.id && handleDeleteEmailTemplate(template.id)}
-                    okText="Oui"
-                    cancelText="Non"
+                    okText={t('common.yes')}
+                    cancelText={t('common.no')}
                   >
                     <Button icon={<DeleteOutlined />} danger>
                       Supprimer
@@ -1155,13 +1157,13 @@ const LeadsSettingsPage = () => {
         onOk={handleStatusOk}
         onCancel={() => setIsStatusModalVisible(false)}
         okText="Sauvegarder"
-        cancelText="Annuler"
+        cancelText={t('common.cancel')}
       >
         <Form form={statusForm} layout="vertical">
           <Form.Item name="name" label="Nom du statut" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="color" label="Couleur" rules={[{ required: true }]}>
+          <Form.Item name="color" label={t('fields.color')} rules={[{ required: true }]}>
             <Input type="color" />
           </Form.Item>
           <Form.Item name="order" label="Ordre" rules={[{ required: true }]}>
@@ -1181,7 +1183,7 @@ const LeadsSettingsPage = () => {
           callStatusForm.resetFields();
         }}
         okText="Sauvegarder"
-        cancelText="Annuler"
+        cancelText={t('common.cancel')}
         width={600}
       >
         <Form form={callStatusForm} layout="vertical">
@@ -1198,7 +1200,7 @@ const LeadsSettingsPage = () => {
             </Col>
           </Row>
           
-          <Form.Item name="description" label="Description">
+          <Form.Item name="description" label={t('fields.description')}>
             <Input.TextArea 
               placeholder="Description du statut d'appel..." 
               rows={2}
@@ -1207,7 +1209,7 @@ const LeadsSettingsPage = () => {
           
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item name="color" label="Couleur" rules={[{ required: true, message: 'La couleur est requise' }]}>
+              <Form.Item name="color" label={t('fields.color')} rules={[{ required: true, message: 'La couleur est requise' }]}>
                 <Input type="color" />
               </Form.Item>
             </Col>
@@ -1247,7 +1249,7 @@ const LeadsSettingsPage = () => {
         onOk={handleSourceOk}
         onCancel={() => setIsSourceModalVisible(false)}
         okText="Sauvegarder"
-        cancelText="Annuler"
+        cancelText={t('common.cancel')}
       >
         <Form form={sourceForm} layout="vertical">
           <Form.Item name="name" label="Nom de la source" rules={[{ required: true }]}>
@@ -1275,7 +1277,7 @@ const LeadsSettingsPage = () => {
         onOk={handleEmailOk}
         onCancel={() => setIsEmailModalVisible(false)}
         okText="Sauvegarder"
-        cancelText="Annuler"
+        cancelText={t('common.cancel')}
         width={900}
       >
         <Form form={emailForm} layout="vertical">
@@ -1426,7 +1428,7 @@ const LeadsSettingsPage = () => {
           mappingForm.resetFields();
         }}
         okText="Sauvegarder"
-        cancelText="Annuler"
+        cancelText={t('common.cancel')}
       >
         <Form form={mappingForm} layout="vertical">
           <Form.Item name="callStatusId" label="Statut d'appel" rules={[{ required: true }]}>
@@ -1461,11 +1463,11 @@ const LeadsSettingsPage = () => {
             </Select>
           </Form.Item>
           
-          <Form.Item name="priority" label="Priorité" rules={[{ required: true }]}>
+          <Form.Item name="priority" label={t('fields.priority')} rules={[{ required: true }]}>
             <InputNumber min={1} max={100} style={{ width: '100%' }} />
           </Form.Item>
           
-          <Form.Item name="description" label="Description">
+          <Form.Item name="description" label={t('fields.description')}>
             <Input.TextArea rows={3} placeholder="Description de cette règle de mapping..." />
           </Form.Item>
         </Form>

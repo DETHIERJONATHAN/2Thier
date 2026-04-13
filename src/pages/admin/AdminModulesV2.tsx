@@ -84,6 +84,7 @@ import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -276,6 +277,7 @@ const DraggableModule: React.FC<{
 
 // 🎯 COMPOSANT PRINCIPAL V2
 const AdminModulesV2: React.FC = () => {
+  const { t } = useTranslation();
   // 📊 ÉTATS PRINCIPAUX
   const [categories, setCategories] = useState<CategoryData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1307,7 +1309,7 @@ const AdminModulesV2: React.FC = () => {
 
             <Form.Item
               name="description"
-              label="Description"
+              label={t('fields.description')}
             >
               <TextArea rows={3} placeholder="Description de la catégorie..." />
             </Form.Item>
@@ -1356,7 +1358,7 @@ const AdminModulesV2: React.FC = () => {
               <Col span={12}>
                 <Form.Item
                   name="iconColor"
-                  label="Couleur"
+                  label={t('fields.color')}
                   initialValue="#1890ff"
                 >
                   <ColorPicker showText />
@@ -1377,7 +1379,7 @@ const AdminModulesV2: React.FC = () => {
               <Col span={12}>
                 <Form.Item
                   name="active"
-                  label="Statut"
+                  label={t('fields.status')}
                   valuePropName="checked"
                   initialValue={true}
                 >
@@ -1443,7 +1445,7 @@ const AdminModulesV2: React.FC = () => {
 
             <Form.Item
               name="description"
-              label="Description"
+              label={t('fields.description')}
             >
               <TextArea rows={3} placeholder="Description du module..." />
             </Form.Item>
@@ -1458,7 +1460,7 @@ const AdminModulesV2: React.FC = () => {
 
             <Form.Item
               name="categoryId"
-              label="Catégorie"
+              label={t('fields.category')}
               rules={[{ required: true, message: 'La catégorie est requise' }]}
             >
               <Select placeholder="Sélectionner une catégorie">
@@ -1526,7 +1528,7 @@ const AdminModulesV2: React.FC = () => {
               <Col span={12}>
                 <Form.Item
                   name="active"
-                  label="Statut"
+                  label={t('fields.status')}
                   valuePropName="checked"
                   initialValue={true}
                 >

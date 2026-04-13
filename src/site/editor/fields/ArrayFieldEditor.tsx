@@ -58,6 +58,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { FieldDefinition } from '../../schemas/types';
 import FieldRenderer from './FieldRenderer';
+import { useTranslation } from 'react-i18next';
 
 /**
  * 🔧 Props de l'ArrayFieldEditor
@@ -117,6 +118,7 @@ const SortableItem: React.FC<SortableItemProps> = ({
   formValues,
   parentName = []
 }) => {
+  const { t } = useTranslation();
   console.log('🔥 [SortableItem] Item', index, '- parentName reçu:', parentName, 'typeof:', typeof parentName, 'isArray:', Array.isArray(parentName));
   
   const {
@@ -163,7 +165,7 @@ const SortableItem: React.FC<SortableItemProps> = ({
             ),
             extra: (
               <Space size="small" onClick={(e) => e.stopPropagation()}>
-                <Tooltip title="Dupliquer">
+                <Tooltip title={t('common.duplicate')}>
                   <Button
                     type="text"
                     size="small"
@@ -174,8 +176,8 @@ const SortableItem: React.FC<SortableItemProps> = ({
                 <Popconfirm
                   title="Supprimer cet item ?"
                   onConfirm={() => onDelete(index)}
-                  okText="Supprimer"
-                  cancelText="Annuler"
+                  okText={t('common.delete')}
+                  cancelText={t('common.cancel')}
                 >
                   <Button
                     type="text"

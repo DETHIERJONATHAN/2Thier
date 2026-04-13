@@ -4,6 +4,7 @@
  */
 import React, { useEffect } from 'react';
 import { Modal, Input, Select, DatePicker, Form } from 'antd';
+import { useTranslation } from 'react-i18next';
 
 interface TaskFromMessageProps {
   open: boolean;
@@ -33,6 +34,7 @@ export const TaskFromMessage: React.FC<TaskFromMessageProps> = ({
   messageContent,
   participants,
 }) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
 
   useEffect(() => {
@@ -67,8 +69,8 @@ export const TaskFromMessage: React.FC<TaskFromMessageProps> = ({
       title="📋 Créer une tâche"
       onCancel={onClose}
       onOk={handleOk}
-      okText="Créer"
-      cancelText="Annuler"
+      okText={t('common.create')}
+      cancelText={t('common.cancel')}
       destroyOnClose
     >
       <Form form={form} layout="vertical" className="mt-4">
@@ -82,7 +84,7 @@ export const TaskFromMessage: React.FC<TaskFromMessageProps> = ({
 
         <Form.Item
           name="assigneeId"
-          label="Assigné à"
+          label={t('fields.assignedTo')}
           rules={[{ required: true, message: 'Sélectionnez un responsable' }]}
         >
           <Select
@@ -99,7 +101,7 @@ export const TaskFromMessage: React.FC<TaskFromMessageProps> = ({
         </Form.Item>
 
         <div className="flex gap-3">
-          <Form.Item name="priority" label="Priorité" className="flex-1">
+          <Form.Item name="priority" label={t('fields.priority')} className="flex-1">
             <Select options={PRIORITY_OPTIONS} />
           </Form.Item>
 

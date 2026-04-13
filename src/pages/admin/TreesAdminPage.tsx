@@ -15,6 +15,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 const { Panel } = Collapse;
@@ -135,6 +136,7 @@ interface RoleData {
 // Composant principal
 // ============================================================
 export default function TreesAdminPage() {
+  const { t } = useTranslation();
   const { api } = useAuthenticatedApi();
   const { isSuperAdmin } = useAuth();
   const { message: messageApi } = App.useApp();
@@ -362,7 +364,7 @@ export default function TreesAdminPage() {
                 fetchTreeDetail(record.id);
               }
             }}
-            title="Dupliquer"
+            title={t('common.duplicate')}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: 'none', background: FB.btnGray, color: FB.text, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
           ><span>📋</span><span>Dupliquer</span></button>
         </div>
@@ -586,8 +588,8 @@ export default function TreesAdminPage() {
                                 e?.stopPropagation();
                                 handleRemoveAccess(selectedTree.id, access.organizationId);
                               }}
-                              okText="Oui"
-                              cancelText="Non"
+                              okText={t('common.yes')}
+                              cancelText={t('common.no')}
                             >
                               <button
                                 onClick={(e) => e.stopPropagation()}
@@ -632,7 +634,7 @@ export default function TreesAdminPage() {
         }}
         onOk={() => shareForm.submit()}
         okText="Partager"
-        cancelText="Annuler"
+        cancelText={t('common.cancel')}
       >
         <Form
           form={shareForm}
@@ -679,7 +681,7 @@ export default function TreesAdminPage() {
         }}
         onOk={() => duplicateForm.submit()}
         okText="Dupliquer"
-        cancelText="Annuler"
+        cancelText={t('common.cancel')}
       >
         <Form
           form={duplicateForm}

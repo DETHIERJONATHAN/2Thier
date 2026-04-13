@@ -31,6 +31,7 @@ import {
   AppstoreOutlined,
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -61,6 +62,7 @@ interface UpdateTreeForm extends CreateTreeForm {
 }
 
 const TreeBranchLeafListPage: React.FC = () => {
+  const { t } = useTranslation();
   const { api } = useAuthenticatedApi();
   const { message } = App.useApp();
   const navigate = useNavigate();
@@ -295,7 +297,7 @@ const TreeBranchLeafListPage: React.FC = () => {
               onClick={() => openEditModal(record)}
             />
           </Tooltip>
-          <Tooltip title="Dupliquer">
+          <Tooltip title={t('common.duplicate')}>
             <Button
               type="text"
               icon={<CopyOutlined />}
@@ -306,11 +308,11 @@ const TreeBranchLeafListPage: React.FC = () => {
             title="Supprimer cet arbre"
             description="Êtes-vous sûr de vouloir supprimer cet arbre ? Cette action est irréversible."
             onConfirm={() => handleDeleteTree(record.id)}
-            okText="Supprimer"
-            cancelText="Annuler"
+            okText={t('common.delete')}
+            cancelText={t('common.cancel')}
             okType="danger"
           >
-            <Tooltip title="Supprimer">
+            <Tooltip title={t('common.delete')}>
               <Button
                 type="text"
                 icon={<DeleteOutlined />}
@@ -406,7 +408,7 @@ const TreeBranchLeafListPage: React.FC = () => {
 
           <Form.Item
             name="description"
-            label="Description"
+            label={t('fields.description')}
           >
             <Input.TextArea
               placeholder="Description détaillée de l'arbre..."
@@ -426,7 +428,7 @@ const TreeBranchLeafListPage: React.FC = () => {
             <Col span={12}>
               <Form.Item
                 name="color"
-                label="Couleur"
+                label={t('fields.color')}
               >
                 <ColorPicker showText />
               </Form.Item>
@@ -476,7 +478,7 @@ const TreeBranchLeafListPage: React.FC = () => {
 
           <Form.Item
             name="description"
-            label="Description"
+            label={t('fields.description')}
           >
             <Input.TextArea
               placeholder="Description détaillée de l'arbre..."
@@ -496,7 +498,7 @@ const TreeBranchLeafListPage: React.FC = () => {
             <Col span={8}>
               <Form.Item
                 name="color"
-                label="Couleur"
+                label={t('fields.color')}
               >
                 <ColorPicker showText />
               </Form.Item>
@@ -504,7 +506,7 @@ const TreeBranchLeafListPage: React.FC = () => {
             <Col span={8}>
               <Form.Item
                 name="status"
-                label="Statut"
+                label={t('fields.status')}
               >
                 <Select>
                   <Option value="draft">Brouillon</Option>

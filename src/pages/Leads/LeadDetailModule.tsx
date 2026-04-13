@@ -80,6 +80,7 @@ interface LeadDetailModuleProps {
 }
 
 export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDetailModuleProps = {}): React.ReactElement {
+  const { t } = useTranslation();
   const { leadId: urlLeadId } = useParams<{ leadId: string }>();
   const navigate = useNavigate();
   const { api } = useAuthenticatedApi();
@@ -585,12 +586,12 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
                     styles={{ body: { padding: isMobile ? '16px' : '24px' } }}
                   >
                     <Descriptions column={1} bordered size={isMobile ? 'middle' : 'small'}>
-                      <Descriptions.Item label="Nom">{displayName || 'N/A'}</Descriptions.Item>
-                      <Descriptions.Item label="Email">{displayEmail || 'N/A'}</Descriptions.Item>
-                      <Descriptions.Item label="Téléphone">{displayPhone || 'N/A'}</Descriptions.Item>
-                      <Descriptions.Item label="Société">{displayCompany || 'Particulier'}</Descriptions.Item>
-                      <Descriptions.Item label="Adresse">{displayAddress || 'N/A'}</Descriptions.Item>
-                      <Descriptions.Item label="Source">
+                      <Descriptions.Item label={t('fields.name')}>{displayName || 'N/A'}</Descriptions.Item>
+                      <Descriptions.Item label={t('fields.email')}>{displayEmail || 'N/A'}</Descriptions.Item>
+                      <Descriptions.Item label={t('fields.phone')}>{displayPhone || 'N/A'}</Descriptions.Item>
+                      <Descriptions.Item label={t('fields.company')}>{displayCompany || 'Particulier'}</Descriptions.Item>
+                      <Descriptions.Item label={t('fields.address')}>{displayAddress || 'N/A'}</Descriptions.Item>
+                      <Descriptions.Item label={t('fields.source')}>
                         <Tag color="blue">{displaySource}</Tag>
                       </Descriptions.Item>
                     </Descriptions>
@@ -617,7 +618,7 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
                       <Descriptions.Item label="Dernière action">
                         {lead?.lastContactDate ? dayjs(lead.lastContactDate).format('DD/MM/YYYY HH:mm') : 'Aucune'}
                       </Descriptions.Item>
-                      <Descriptions.Item label="Prochain suivi">
+                      <Descriptions.Item label={t('fields.nextFollowUp')}>
                         {lead?.nextFollowUpDate ? dayjs(lead.nextFollowUpDate).format('DD/MM/YYYY') : 'À définir'}
                       </Descriptions.Item>
                     </Descriptions>
@@ -830,8 +831,8 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
         open={isNoteModalOpen}
         onOk={handleAddNote}
         onCancel={() => setIsNoteModalOpen(false)}
-        okText="Enregistrer"
-        cancelText="Annuler"
+        okText={t('common.save')}
+        cancelText={t('common.cancel')}
         width={isMobile ? '100%' : 520}
         style={isMobile ? { top: 12, padding: '0 12px' } : undefined}
       >

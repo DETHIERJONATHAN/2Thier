@@ -32,6 +32,7 @@ import {
   ClockCircleOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -81,6 +82,7 @@ interface LandingPageStats {
 }
 
 export default function LandingPagesPage() {
+  const { t } = useTranslation();
   const { api } = useAuthenticatedApi();
   
   const [landingPages, setLandingPages] = useState<LandingPage[]>([]);
@@ -299,7 +301,7 @@ export default function LandingPagesPage() {
             />
           </Tooltip>
           
-          <Tooltip title="Modifier">
+          <Tooltip title={t('common.edit')}>
             <Button
               size="small"
               icon={<EditOutlined />}
@@ -349,8 +351,8 @@ export default function LandingPagesPage() {
             title="Supprimer cette landing page ?"
             description="Cette action est irréversible."
             onConfirm={() => handleDelete(record.id)}
-            okText="Supprimer"
-            cancelText="Annuler"
+            okText={t('common.delete')}
+            cancelText={t('common.cancel')}
           >
             <Button
               size="small"
@@ -479,7 +481,7 @@ export default function LandingPagesPage() {
         }}
         onOk={() => form.submit()}
         okText={editingPage ? 'Mettre à jour' : 'Créer'}
-        cancelText="Annuler"
+        cancelText={t('common.cancel')}
         width={800}
       >
         <Form
@@ -490,7 +492,7 @@ export default function LandingPagesPage() {
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
-                label="Titre"
+                label={t('fields.title')}
                 name="title"
                 rules={[{ required: true, message: 'Le titre est requis' }]}
               >
@@ -512,7 +514,7 @@ export default function LandingPagesPage() {
           </Row>
 
           <Form.Item
-            label="Description"
+            label={t('fields.description')}
             name="description"
           >
             <TextArea rows={3} placeholder="Description de la landing page" />
@@ -568,7 +570,7 @@ export default function LandingPagesPage() {
           </Form.Item>
 
           <Form.Item
-            label="Statut"
+            label={t('fields.status')}
             name="status"
             initialValue="DRAFT"
           >

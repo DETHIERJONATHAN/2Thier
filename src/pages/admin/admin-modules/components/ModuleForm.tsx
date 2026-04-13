@@ -5,6 +5,7 @@ import IconPicker from '../components/shared/IconPicker';
 import IconRenderer from '../components/shared/IconRenderer';
 import { useAuth } from '../../../../auth/useAuth';
 import { ModuleWithStatus } from '../types';
+import { useTranslation } from 'react-i18next';
 
 // ── FB Tokens + Toggle ──
 const FBToggle = ({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) => {
@@ -34,6 +35,7 @@ export function ModuleForm({ initial, onSave, onCancel }:{
   onSave: (data: ModuleFormData) => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const { isSuperAdmin, currentOrganization } = useAuth();
   const [form, setForm] = useState<ModuleFormData>({
   key: '', label: '', feature: '', icon: '', iconColor: '#1890ff', route: '', description: '', page: '', order: 0, active: true, placement: 'sidebar', tabColor: '', tabIcon: '',
@@ -101,7 +103,7 @@ export function ModuleForm({ initial, onSave, onCancel }:{
       {form.categoryId && (
         <input type="hidden" value={form.categoryId} />
       )}
-      <Form.Item label="Description" className="m-0">
+      <Form.Item label={t('fields.description')} className="m-0">
         <Input.TextArea value={form.description} onChange={e=>setForm(f=>({...f, description:e.target.value}))} rows={3} />
       </Form.Item>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">

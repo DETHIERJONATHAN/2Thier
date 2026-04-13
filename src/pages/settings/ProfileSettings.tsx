@@ -89,7 +89,7 @@ const ProfileSettings: React.FC = () => {
   const [vatNumber, setVatNumber] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [language, setLanguageState] = useState('fr');
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   useEffect(() => {
     if (user) {
@@ -241,15 +241,15 @@ const ProfileSettings: React.FC = () => {
         <div style={{ fontSize: 16, fontWeight: 700, color: FB.text, marginBottom: 16 }}>Informations personnelles</div>
 
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '0 20px' }}>
-          <FBInput icon={<UserOutlined />} label="Prénom" value={firstName} onChange={setFirstName} placeholder="Prénom" />
-          <FBInput icon={<UserOutlined />} label="Nom" value={lastName} onChange={setLastName} placeholder="Nom" />
+          <FBInput icon={<UserOutlined />} label={t('fields.firstName')} value={firstName} onChange={setFirstName} placeholder="Prénom" />
+          <FBInput icon={<UserOutlined />} label={t('fields.name')} value={lastName} onChange={setLastName} placeholder={t('fields.name')} />
         </div>
 
-        <FBInput icon={<HomeOutlined />} label="Adresse" value={address} onChange={setAddress} placeholder="Adresse complète" />
+        <FBInput icon={<HomeOutlined />} label={t('fields.address')} value={address} onChange={setAddress} placeholder="Adresse complète" />
 
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '0 20px' }}>
-          <FBInput icon={<BankOutlined />} label="Numéro de TVA" value={vatNumber} onChange={setVatNumber} placeholder="BE0000.000.000" />
-          <FBInput icon={<PhoneOutlined />} label="Téléphone" value={phoneNumber} onChange={setPhoneNumber} placeholder="+32 470 00 00 00" />
+          <FBInput icon={<BankOutlined />} label={t('fields.vatNumber')} value={vatNumber} onChange={setVatNumber} placeholder="BE0000.000.000" />
+          <FBInput icon={<PhoneOutlined />} label={t('fields.phone')} value={phoneNumber} onChange={setPhoneNumber} placeholder="+32 470 00 00 00" />
         </div>
 
         {/* Language selector */}

@@ -18,6 +18,7 @@ import { useAuth } from '../../auth/useAuth';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 
 import { SF, FB } from '../../components/zhiive/ZhiiveTheme';
+import { useTranslation } from 'react-i18next';
 
 // ── Responsive Hook ──
 function useScreenSize() {
@@ -354,6 +355,7 @@ export default function SocialSettingsAdminPage() {
 
   // ═══ LIVE PREVIEW COMPONENT ═══
   const LivePreview = () => {
+  const { t } = useTranslation();
     if (!settings) return null;
     const enabledApps = [
       settings.wallEnabled && 'Wall',
@@ -547,7 +549,7 @@ export default function SocialSettingsAdminPage() {
               description="Réinitialiser TOUS les paramètres aux valeurs par défaut ?"
               onConfirm={resetAll}
               okText="Reset tout"
-              cancelText="Annuler"
+              cancelText={t('common.cancel')}
             >
               <Button
                 icon={<DeleteOutlined />}
@@ -1063,7 +1065,7 @@ export default function SocialSettingsAdminPage() {
               children: (
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                    <Popconfirm title="Reset cette section ?" onConfirm={() => resetSection('wax')} okText="Reset" cancelText="Annuler">
+                    <Popconfirm title="Reset cette section ?" onConfirm={() => resetSection('wax')} okText="Reset" cancelText={t('common.cancel')}>
                       <Button size="small" icon={<UndoOutlined />}>Reset section</Button>
                     </Popconfirm>
                   </div>
@@ -1100,7 +1102,7 @@ export default function SocialSettingsAdminPage() {
               children: (
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                    <Popconfirm title="Reset cette section ?" onConfirm={() => resetSection('nectar')} okText="Reset" cancelText="Annuler">
+                    <Popconfirm title="Reset cette section ?" onConfirm={() => resetSection('nectar')} okText="Reset" cancelText={t('common.cancel')}>
                       <Button size="small" icon={<UndoOutlined />}>Reset section</Button>
                     </Popconfirm>
                   </div>
@@ -1145,7 +1147,7 @@ export default function SocialSettingsAdminPage() {
               children: (
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                    <Popconfirm title="Reset cette section ?" onConfirm={() => resetSection('whisper')} okText="Reset" cancelText="Annuler">
+                    <Popconfirm title="Reset cette section ?" onConfirm={() => resetSection('whisper')} okText="Reset" cancelText={t('common.cancel')}>
                       <Button size="small" icon={<UndoOutlined />}>Reset section</Button>
                     </Popconfirm>
                   </div>
@@ -1170,7 +1172,7 @@ export default function SocialSettingsAdminPage() {
               children: (
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                    <Popconfirm title="Reset cette section ?" onConfirm={() => resetSection('moderation')} okText="Reset" cancelText="Annuler">
+                    <Popconfirm title="Reset cette section ?" onConfirm={() => resetSection('moderation')} okText="Reset" cancelText={t('common.cancel')}>
                       <Button size="small" icon={<UndoOutlined />}>Reset section</Button>
                     </Popconfirm>
                   </div>
@@ -1244,7 +1246,7 @@ export default function SocialSettingsAdminPage() {
               children: (
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                    <Popconfirm title="Reset cette section ?" onConfirm={() => resetSection('business')} okText="Reset" cancelText="Annuler">
+                    <Popconfirm title="Reset cette section ?" onConfirm={() => resetSection('business')} okText="Reset" cancelText={t('common.cancel')}>
                       <Button size="small" icon={<UndoOutlined />}>Reset section</Button>
                     </Popconfirm>
                   </div>
@@ -1303,7 +1305,7 @@ export default function SocialSettingsAdminPage() {
               children: (
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                    <Popconfirm title="Reset cette section ?" onConfirm={() => resetSection('rgpd')} okText="Reset" cancelText="Annuler">
+                    <Popconfirm title="Reset cette section ?" onConfirm={() => resetSection('rgpd')} okText="Reset" cancelText={t('common.cancel')}>
                       <Button size="small" icon={<UndoOutlined />}>Reset section</Button>
                     </Popconfirm>
                   </div>

@@ -4,12 +4,14 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { Invitation } from '../../types';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { useTranslation } from 'react-i18next';
 
 interface PendingInvitationsTableProps {
   shouldRefresh: boolean;
 }
 
 const PendingInvitationsTable: React.FC<PendingInvitationsTableProps> = ({ shouldRefresh }) => {
+  const { t } = useTranslation();
   const { api } = useAuthenticatedApi();
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -91,8 +93,8 @@ const PendingInvitationsTable: React.FC<PendingInvitationsTableProps> = ({ shoul
           <Popconfirm
             title="Voulez-vous vraiment annuler cette invitation ?"
             onConfirm={() => handleCancel(record.id)}
-            okText="Oui"
-            cancelText="Non"
+            okText={t('common.yes')}
+            cancelText={t('common.no')}
           >
             <Tooltip title="Annuler l'invitation">
               <Button danger icon={<DeleteOutlined />} />

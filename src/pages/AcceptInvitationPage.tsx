@@ -4,11 +4,13 @@ import { useAuth } from '../auth/useAuth';
 import { Button, Card, Form, Input, Spin, Typography, Alert } from 'antd';
 import { MailOutlined } from '@ant-design/icons';
 import { NotificationManager, NotificationsContainer } from '../components/Notifications';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text } = Typography;
 
 // Ce composant sera utilisé pour finaliser l'inscription d'un utilisateur invité.
 export default function AcceptInvitationPage() {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user: authenticatedUser } = useAuth();
@@ -158,16 +160,16 @@ export default function AcceptInvitationPage() {
         )}
 
         <Form form={form} layout="vertical" onFinish={handleAccept}>
-          <Form.Item label="Prénom" name="firstName" rules={[{ required: true, message: 'Le prénom est requis.' }]}>
+          <Form.Item label={t('fields.firstName')} name="firstName" rules={[{ required: true, message: 'Le prénom est requis.' }]}>
             <Input />
           </Form.Item>
-          <Form.Item label="Nom" name="lastName" rules={[{ required: true, message: 'Le nom est requis.' }]}>
+          <Form.Item label={t('fields.name')} name="lastName" rules={[{ required: true, message: 'Le nom est requis.' }]}>
             <Input />
           </Form.Item>
-          <Form.Item label="Email">
+          <Form.Item label={t('fields.email')}>
             <Input value={invitation.email} disabled />
           </Form.Item>
-          <Form.Item label="Mot de passe" name="password" rules={[{ required: true, message: 'Le mot de passe est requis.' }, { min: 8, message: '8 caractères minimum.'}]}>
+          <Form.Item label={t('fields.password')} name="password" rules={[{ required: true, message: 'Le mot de passe est requis.' }, { min: 8, message: '8 caractères minimum.'}]}>
             <Input.Password />
           </Form.Item>
           <Form.Item>

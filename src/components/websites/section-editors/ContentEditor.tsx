@@ -10,6 +10,7 @@ import type { UploadFile } from 'antd';
 import { AIAssistant } from '../AIAssistant';
 import { GridLayoutEditor } from '../GridLayoutEditor';
 import { SectionHeaderEditor } from '../SectionHeaderEditor';
+import { useTranslation } from 'react-i18next';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -21,6 +22,7 @@ interface ContentEditorProps {
 }
 
 export const ContentEditor: React.FC<ContentEditorProps> = ({ section, onSave, onCancel }) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
       const [gridLayout, setGridLayout] = useState<any>(null);
   const [sectionHeader, setSectionHeader] = useState<any>(null);
@@ -126,7 +128,7 @@ export const ContentEditor: React.FC<ContentEditorProps> = ({ section, onSave, o
         <Input placeholder="Ex: Section À propos" />
       </Form.Item>
 
-      <Form.Item label="Titre" name="title">
+      <Form.Item label={t('fields.title')} name="title">
         <Input placeholder="Pourquoi choisir 2Thier ?"
           suffix={
             <Button
@@ -160,7 +162,7 @@ export const ContentEditor: React.FC<ContentEditorProps> = ({ section, onSave, o
          />
       </Form.Item>
 
-      <Form.Item label="Description" name="description">
+      <Form.Item label={t('fields.description')} name="description">
         <TextArea rows={4} placeholder="Texte principal de la section..."
           suffix={
             <Button
@@ -207,13 +209,13 @@ export const ContentEditor: React.FC<ContentEditorProps> = ({ section, onSave, o
               style={{ width: 60 }}
             />
             <Input
-              placeholder="Titre"
+              placeholder={t('fields.title')}
               value={column.title}
               onChange={(e) => handleColumnChange(index, 'title', e.target.value)}
               style={{ width: 200 }}
             />
             <TextArea
-              placeholder="Description"
+              placeholder={t('fields.description')}
               value={column.description}
               onChange={(e) => handleColumnChange(index, 'description', e.target.value)}
               style={{ width: 300 }}

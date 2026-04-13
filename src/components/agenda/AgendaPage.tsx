@@ -9,6 +9,7 @@ import listPlugin from '@fullcalendar/list';
 import frLocale from '@fullcalendar/core/locales/fr';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import './AgendaPage.css';
+import { useTranslation } from 'react-i18next';
 
 const { Title } = Typography;
 const { TextArea } = Input;
@@ -54,6 +55,7 @@ interface EventType {
 }
 
 const AgendaPage: React.FC = () => {
+  const { t } = useTranslation();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [eventTypes, setEventTypes] = useState<EventType[]>([]);
   const [loading, setLoading] = useState(false);
@@ -350,13 +352,13 @@ const AgendaPage: React.FC = () => {
         >
           <Form.Item
             name="title"
-            label="Titre"
+            label={t('fields.title')}
             rules={[{ required: true, message: 'Le titre est obligatoire' }]}
           >
             <Input placeholder="Titre de l'événement" />
           </Form.Item>
 
-          <Form.Item name="description" label="Description">
+          <Form.Item name="description" label={t('fields.description')}>
             <TextArea rows={3} placeholder="Description de l'événement" />
           </Form.Item>
 
@@ -386,7 +388,7 @@ const AgendaPage: React.FC = () => {
             <Col span={12}>
               <Form.Item
                 name="type"
-                label="Type"
+                label={t('fields.type')}
                 rules={[{ required: true, message: 'Le type est obligatoire' }]}
               >
                 <Select placeholder="Sélectionner un type">
@@ -399,7 +401,7 @@ const AgendaPage: React.FC = () => {
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="status" label="Statut">
+              <Form.Item name="status" label={t('fields.status')}>
                 <Select placeholder="Statut de l'événement">
                   <Option value="confirmé">Confirmé</Option>
                   <Option value="en attente">En attente</Option>
@@ -413,7 +415,7 @@ const AgendaPage: React.FC = () => {
             <Input placeholder="Lieu de l'événement" />
           </Form.Item>
 
-          <Form.Item name="notes" label="Notes">
+          <Form.Item name="notes" label={t('fields.notes')}>
             <TextArea rows={3} placeholder="Notes supplémentaires" />
           </Form.Item>
 

@@ -27,6 +27,7 @@ import {
 } from '@dnd-kit/sortable';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useTranslation } from 'react-i18next';
 
 const { Text, Title } = Typography;
 
@@ -143,8 +144,8 @@ const SortableStatusRow: React.FC<{
           title="Supprimer ce statut ?"
           description={status._count?.Chantier ? 'Des chantiers utilisent ce statut !' : undefined}
           onConfirm={() => onDelete(status.id)}
-          okText="Supprimer"
-          cancelText="Annuler"
+          okText={t('common.delete')}
+          cancelText={t('common.cancel')}
           okButtonProps={{ danger: true }}
         >
           <Button size="small" danger icon={<DeleteOutlined />} />
@@ -156,6 +157,7 @@ const SortableStatusRow: React.FC<{
 
 // ═══ Main Settings Page ═══
 const ChantierSettingsPage: React.FC<{ onBack?: () => void; onWorkflowSettings?: () => void }> = ({ onBack, onWorkflowSettings }) => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const goBack = onBack || (() => navigate('/chantiers'));
   const goToWorkflow = onWorkflowSettings || (() => navigate('/chantiers/settings/workflow'));

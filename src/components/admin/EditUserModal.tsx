@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Modal, Form, Select, Button, message, Input } from 'antd';
 import { z } from 'zod';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { useTranslation } from 'react-i18next';
 
 // Types locaux pour éviter les conflits d'import
 interface User {
@@ -69,6 +70,7 @@ interface EditUserModalProps {
 }
 
 const EditUserModal: React.FC<EditUserModalProps> = ({ open, onCancel, onSuccess, user, roles }) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
   const { api } = useAuthenticatedApi();
   const [loading, setLoading] = React.useState(false);
@@ -177,7 +179,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ open, onCancel, onSuccess
       <Form form={form} onFinish={handleUpdate} layout="vertical">
         <Form.Item
           name="firstName"
-          label="Prénom"
+          label={t('fields.firstName')}
           rules={[
             { required: true, message: 'Veuillez saisir le prénom.' },
             { max: 50, message: 'Le prénom ne peut pas dépasser 50 caractères.' }
@@ -210,7 +212,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ open, onCancel, onSuccess
 
         <Form.Item
           name="phoneNumber"
-          label="Numéro de téléphone"
+          label={t('fields.phoneNumber')}
         >
           <Input placeholder="+32 123 456 789" />
         </Form.Item>
@@ -227,7 +229,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ open, onCancel, onSuccess
 
         <Form.Item
           name="vatNumber"
-          label="Numéro de TVA"
+          label={t('fields.vatNumber')}
         >
           <Input placeholder="BE0123456789" />
         </Form.Item>

@@ -2115,7 +2115,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
           endTime: dayjs().add(2, 'hour').startOf('hour'),
           title: `RDV - ${convName}`,
         }}>
-          <Form.Item name="title" label="Titre" rules={[{ required: true }]}>
+          <Form.Item name="title" label={t('fields.title')} rules={[{ required: true }]}>
             <Input placeholder="Titre de l'événement" />
           </Form.Item>
           <Form.Item name="date" label="Date" rules={[{ required: true }]}>

@@ -58,6 +58,7 @@ import type {
   TreeBranchLeafRegistry as TreeBranchLeafRegistryType,
   NodeTypeKey
 } from '../../types';
+import { useTranslation } from 'react-i18next';
 
 const EMPTY_SUBTAB_LIST: string[] = [];
 
@@ -201,8 +202,8 @@ const SortableSubTabTag: React.FC<{
             console.log('🗑️ [SortableSubTabTag] Suppression confirmée:', label);
             onRemove(label);
           }}
-          okText="Supprimer"
-          cancelText="Annuler"
+          okText={t('common.delete')}
+          cancelText={t('common.cancel')}
           okButtonProps={{ danger: true }}
         >
           <button
@@ -403,6 +404,7 @@ const getLazyAppearancePanel = (panelKey: string): LazyAppearanceComponent | nul
 const lazyCapPanelCache = new Map<string, React.LazyExoticComponent<React.ComponentType<Record<string, unknown>>>>();
 
 const Parameters: React.FC<ParametersProps> = (props) => {
+  const { t } = useTranslation();
   const { tree, selectedNode, nodes = [], panelState, registry, onNodeUpdate, refreshTree, onDeleteNode, onSelectNodeId, onExpandNodeId, onNodeMetadataUpdated } = props;
   
   // Log to verify callback is provided
@@ -1741,7 +1743,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
               title="Délier et supprimer les références partagées ?"
               description="Les liens vers les références partagées seront supprimés dans cette sous-arborescence. Les copies -1 orphelines seront supprimées."
               okText="Oui, nettoyer"
-              cancelText="Annuler"
+              cancelText={t('common.cancel')}
               onConfirm={async () => {
                 if (!selectedNode?.id) return;
                 try {
@@ -1765,8 +1767,8 @@ const Parameters: React.FC<ParametersProps> = (props) => {
             <Popconfirm
               title="Supprimer ce nœud ?"
               description={!!(selectedNode?.metadata as Record<string, unknown>)?.isProtected ? "Ce nœud est protégé. Désactivez d'abord le mode protégé." : "Cette action supprimera également ses enfants."}
-              okText="Supprimer"
-              cancelText="Annuler"
+              okText={t('common.delete')}
+              cancelText={t('common.cancel')}
               okButtonProps={{ danger: true }}
               onConfirm={handleDeleteSelected}
               disabled={!selectedNode || props.readOnly || !!(selectedNode?.metadata as Record<string, unknown>)?.isProtected}
@@ -2991,8 +2993,8 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                                     </div>
                                     <Popconfirm
                                       title="Supprimer cette copie ?"
-                                      okText="Supprimer"
-                                      cancelText="Annuler"
+                                      okText={t('common.delete')}
+                                      cancelText={t('common.cancel')}
                                       okButtonProps={{ danger: true }}
                                       onConfirm={async () => {
                                         try {

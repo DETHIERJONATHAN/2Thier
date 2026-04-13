@@ -1,5 +1,6 @@
 import { Modal, Form, Select, InputNumber, ColorPicker, Space, Divider } from 'antd';
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export type FieldStyle = {
   // Styles texte
@@ -54,6 +55,7 @@ const FONT_FAMILIES = [
 ];
 
 const StyleEditorModal = ({ open, onClose, onSave, initialStyle, fieldLabel, fieldName }: StyleEditorModalProps) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
   const [previewStyle, setPreviewStyle] = useState<FieldStyle>(initialStyle || {});
   const [isDragging, setIsDragging] = useState(false);
@@ -150,7 +152,7 @@ const StyleEditorModal = ({ open, onClose, onSave, initialStyle, fieldLabel, fie
       onOk={handleSave}
       width={700}
       okText="Appliquer"
-      cancelText="Annuler"
+      cancelText={t('common.cancel')}
     >
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
         {/* Formulaire */}

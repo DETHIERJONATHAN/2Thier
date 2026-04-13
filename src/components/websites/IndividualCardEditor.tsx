@@ -44,6 +44,7 @@ import {
 import { ColorInput } from '../common/ColorInput';
 import { ImageUploader } from './ImageUploader';
 import { AIAssistant } from './AIAssistant';
+import { useTranslation } from 'react-i18next';
 
 const { TextArea } = Input;
 const { Title, Text } = Typography;
@@ -217,6 +218,7 @@ export const IndividualCardEditor: React.FC<IndividualCardEditorProps> = ({
   sectionType = 'services',
   totalCards = 6,
 }) => {
+  const { t } = useTranslation();
   const [localConfig, setLocalConfig] = useState<IndividualCardConfig>(config);
   const [showAI, setShowAI] = useState(false);
   const [aiContext, setAIContext] = useState<string>('');
@@ -342,7 +344,7 @@ export const IndividualCardEditor: React.FC<IndividualCardEditorProps> = ({
                         </Form.Item>
                       </Col>
                       <Col span={8}>
-                        <Form.Item label="Couleur">
+                        <Form.Item label={t('fields.color')}>
                           <ColorInput
                             value={localConfig.header?.titleColor}
                             onChange={(color) => updateConfig('header.titleColor', color)}
@@ -408,7 +410,7 @@ export const IndividualCardEditor: React.FC<IndividualCardEditorProps> = ({
                           </Form.Item>
                         </Col>
                         <Col span={6}>
-                          <Form.Item label="Couleur">
+                          <Form.Item label={t('fields.color')}>
                             <ColorInput
                               value={localConfig.header?.badge?.color}
                               onChange={(color) => updateConfig('header.badge.color', color)}
@@ -514,7 +516,7 @@ export const IndividualCardEditor: React.FC<IndividualCardEditorProps> = ({
                     </Form.Item>
                   </Col>
                   <Col span={8}>
-                    <Form.Item label="Couleur">
+                    <Form.Item label={t('fields.color')}>
                       <ColorInput
                         value={localConfig.content?.titleColor}
                         onChange={(color) => updateConfig('content.titleColor', color)}
@@ -524,7 +526,7 @@ export const IndividualCardEditor: React.FC<IndividualCardEditorProps> = ({
                 </Row>
 
                 {/* DESCRIPTION */}
-                <Form.Item label="Description">
+                <Form.Item label={t('fields.description')}>
                   <TextArea
                     value={localConfig.content?.description}
                     onChange={(e) => updateConfig('content.description', e.target.value)}
@@ -556,7 +558,7 @@ export const IndividualCardEditor: React.FC<IndividualCardEditorProps> = ({
                     </Form.Item>
                   </Col>
                   <Col span={12}>
-                    <Form.Item label="Couleur">
+                    <Form.Item label={t('fields.color')}>
                       <ColorInput
                         value={localConfig.content?.descriptionColor}
                         onChange={(color) => updateConfig('content.descriptionColor', color)}
@@ -744,7 +746,7 @@ export const IndividualCardEditor: React.FC<IndividualCardEditorProps> = ({
                       </Form.Item>
                     </Col>
                     <Col span={8}>
-                      <Form.Item label="Couleur">
+                      <Form.Item label={t('fields.color')}>
                         <ColorInput
                           value={localConfig.style?.border?.color}
                           onChange={(color) => updateConfig('style.border.color', color)}

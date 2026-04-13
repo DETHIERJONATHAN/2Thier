@@ -11,6 +11,7 @@
 import React from 'react';
 import { Row, Col, Typography, Card, Form, Input, Button, Space } from 'antd';
 import { MailOutlined, PhoneOutlined, EnvironmentOutlined, SendOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Paragraph, Text } = Typography;
 const { TextArea } = Input;
@@ -37,6 +38,7 @@ interface ContactRendererProps {
 }
 
 export const ContactRenderer: React.FC<ContactRendererProps> = ({ content }) => {
+  const { t } = useTranslation();
   const {
     title = 'Contactez-nous',
     subtitle = 'Notre équipe est à votre disposition',
@@ -98,20 +100,20 @@ export const ContactRenderer: React.FC<ContactRendererProps> = ({ content }) => 
                 <Form layout="vertical" size="large">
                   <Row gutter={16}>
                     <Col xs={24} sm={12}>
-                      <Form.Item label="Nom" name="name">
+                      <Form.Item label={t('fields.name')} name="name">
                         <Input placeholder="Votre nom" />
                       </Form.Item>
                     </Col>
                     <Col xs={24} sm={12}>
-                      <Form.Item label="Email" name="email">
+                      <Form.Item label={t('fields.email')} name="email">
                         <Input placeholder="votre@email.com" type="email" />
                       </Form.Item>
                     </Col>
                   </Row>
-                  <Form.Item label="Téléphone" name="phone">
+                  <Form.Item label={t('fields.phone')} name="phone">
                     <Input placeholder="+32 xxx xx xx xx" />
                   </Form.Item>
-                  <Form.Item label="Message" name="message">
+                  <Form.Item label={t('fields.message')} name="message">
                     <TextArea rows={4} placeholder="Comment pouvons-nous vous aider ?" />
                   </Form.Item>
                   <Form.Item>

@@ -26,6 +26,7 @@ import {
 import PartenairesSection from '../../components/devis1minute/PartenairesSection';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Paragraph, Text } = Typography;
 const { TextArea } = Input;
@@ -100,6 +101,7 @@ const platformStats = {
 };
 
 export default function LandingPage() {
+  const { t } = useTranslation();
   const [msgApi, msgCtx] = message.useMessage();
   const [form] = Form.useForm();
   const { api } = useAuthenticatedApi();
@@ -606,7 +608,7 @@ export default function LandingPage() {
               <Col span={12}>
                 <Form.Item
                   name="firstName"
-                  label="Prénom"
+                  label={t('fields.firstName')}
                   rules={[{ required: true, message: 'Votre prénom' }]}
                 >
                   <Input size="large" />
@@ -615,7 +617,7 @@ export default function LandingPage() {
               <Col span={12}>
                 <Form.Item
                   name="lastName" 
-                  label="Nom"
+                  label={t('fields.name')}
                   rules={[{ required: true, message: 'Votre nom' }]}
                 >
                   <Input size="large" />
@@ -639,7 +641,7 @@ export default function LandingPage() {
               <Col span={8}>
                 <Form.Item
                   name="phone"
-                  label="Téléphone"
+                  label={t('fields.phone')}
                   rules={[{ required: true, message: 'Numéro requis' }]}
                 >
                   <Input size="large" placeholder="06 12 34 56 78" />
@@ -648,7 +650,7 @@ export default function LandingPage() {
               <Col span={8}>
                 <Form.Item
                   name="email"
-                  label="Email"
+                  label={t('fields.email')}
                   rules={[
                     { required: true, message: 'Email requis' },
                     { type: 'email', message: 'Email invalide' }

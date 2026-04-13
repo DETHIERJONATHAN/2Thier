@@ -46,6 +46,7 @@ import type {
   NodeTypeKey,
   CapabilityKey
 } from '../../types';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 
@@ -181,6 +182,7 @@ const StructureComponent: React.FC<StructureProps> = ({
   onOpenNodeSettings,
   onMoveNodeToRoot
 }) => {
+  const { t } = useTranslation();
   // 🐛 DEBUG: Logs optimisés pour éviter les re-rendus excessifs
   const _debugData = useMemo(() => ({
     tree: tree?.label || 'aucun arbre',
@@ -492,7 +494,7 @@ const StructureComponent: React.FC<StructureProps> = ({
         <Space style={{ width: '100%', justifyContent: 'space-between' }}>
           {/* Recherche */}
           <Input
-            placeholder="Rechercher..."
+            placeholder={t('common.searchPlaceholder')}
             prefix={<SearchOutlined />}
             value={searchQuery}
             onChange={(e) => handleSearch(e.target.value)}
@@ -579,7 +581,7 @@ const StructureComponent: React.FC<StructureProps> = ({
                 </div>
               )}
             >
-              <Tooltip title="Filtres">
+              <Tooltip title={t('common.filters')}>
                 <Badge count={activeFiltersCount} size="small">
                   <Button
                     type="text"

@@ -49,6 +49,7 @@ import {
 import NodeTreeSelector, { NodeTreeSelectorValue } from '../TreeBranchLeaf/treebranchleaf-new/components/Parameters/shared/NodeTreeSelector';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { ColorPicker } from 'antd';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 
@@ -162,6 +163,7 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
   treeId: _treeId,
   nodeId,
 }) => {
+  const { t } = useTranslation();
   const { api } = useAuthenticatedApi();
   
   // États
@@ -566,10 +568,10 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
       width: 150,
       render: (_: unknown, record: PricingLine, index: number) => (
         <Space size={4}>
-          <Tooltip title="Éditer">
+          <Tooltip title={t('common.edit')}>
             <Button size="small" icon={<EditOutlined />} onClick={() => handleEditLine(record)} />
           </Tooltip>
-          <Tooltip title="Dupliquer">
+          <Tooltip title={t('common.duplicate')}>
             <Button size="small" icon={<CopyOutlined />} onClick={() => handleDuplicateLine(record)} />
           </Tooltip>
           <Tooltip title="Monter">
@@ -591,8 +593,8 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
           <Popconfirm
             title="Supprimer cette ligne ?"
             onConfirm={() => handleDeleteLine(record.id)}
-            okText="Oui"
-            cancelText="Non"
+            okText={t('common.yes')}
+            cancelText={t('common.no')}
           >
             <Button size="small" icon={<DeleteOutlined />} danger />
           </Popconfirm>
@@ -715,8 +717,8 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
         onOk={handleSaveLine}
         onCancel={() => { setEditModalOpen(false); setCurrentLine(null); setLabelParts([]); form.resetFields(); }}
         width={600}
-        okText="Enregistrer"
-        cancelText="Annuler"
+        okText={t('common.save')}
+        cancelText={t('common.cancel')}
       >
         <Form form={form} layout="vertical">
           <Form.Item name="type" label="Type de ligne">

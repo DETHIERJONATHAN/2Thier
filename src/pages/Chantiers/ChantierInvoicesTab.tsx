@@ -13,6 +13,7 @@ import { SF } from '../../components/zhiive/ZhiiveTheme';
 import { useAuth } from '../../auth/useAuth';
 import { useChantierStatuses } from '../../hooks/useChantierStatuses';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 
@@ -90,6 +91,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 };
 
 const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isValidated, onChantierStatusChanged, onValidationChanged }) => {
+  const { t } = useTranslation();
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, [apiHook.api]);
   const { isSuperAdmin, userRole } = useAuth();
@@ -795,7 +797,7 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
         style={{ maxWidth: 500, top: 20 }}
       >
         <Form form={form} layout="vertical">
-          <Form.Item name="type" label="Type" rules={[{ required: true }]} initialValue="CUSTOM">
+          <Form.Item name="type" label={t('fields.type')} rules={[{ required: true }]} initialValue="CUSTOM">
             <Select options={INVOICE_TYPES.map(t => ({ value: t.value, label: t.label }))} />
           </Form.Item>
           <Form.Item name="label" label="Label" rules={[{ required: true, message: 'Label requis' }]}>
@@ -819,7 +821,7 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
           <Form.Item name="dueDate" label="Échéance">
             <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="notes" label="Notes">
+          <Form.Item name="notes" label={t('fields.notes')}>
             <Input.TextArea rows={2} placeholder="Notes internes..." />
           </Form.Item>
         </Form>

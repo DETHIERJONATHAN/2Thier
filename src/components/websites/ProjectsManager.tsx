@@ -36,6 +36,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import AIContentAssistant from '../AIContentAssistant';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
 
 const { TextArea } = Input;
 
@@ -125,8 +126,8 @@ const SortableItem: React.FC<{ project: Project; onEdit: () => void; onDelete: (
               title="Supprimer ce projet ?"
               description="Cette action est irréversible."
               onConfirm={onDelete}
-              okText="Supprimer"
-              cancelText="Annuler"
+              okText={t('common.delete')}
+              cancelText={t('common.cancel')}
               okButtonProps={{ danger: true }}
             >
               <Button
@@ -144,6 +145,7 @@ const SortableItem: React.FC<{ project: Project; onEdit: () => void; onDelete: (
 };
 
 export const ProjectsManager: React.FC<ProjectsManagerProps> = ({ websiteId, siteName, industry }) => {
+  const { t } = useTranslation();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -334,7 +336,7 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({ websiteId, sit
             <Input placeholder="projet-bruxelles-2024" />
           </Form.Item>
 
-          <Form.Item label="Titre" name="title" rules={[{ required: true }]}>
+          <Form.Item label={t('fields.title')} name="title" rules={[{ required: true }]}>
             <Input placeholder="Installation 10kWc à Bruxelles" />
           </Form.Item>
 
@@ -362,7 +364,7 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({ websiteId, sit
             <Switch />
           </Form.Item>
 
-          <Form.Item label="Actif" name="isActive" valuePropName="checked">
+          <Form.Item label={t('fields.active')} name="isActive" valuePropName="checked">
             <Switch />
           </Form.Item>
 

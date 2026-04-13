@@ -32,8 +32,10 @@ import {
   NotificationManager,
 } from '../../../components/Notifications';
 import { SortableSection } from './components/SortableSection';
+import { useTranslation } from 'react-i18next';
 
 export default function AdminModulesPage() {
+  const { t } = useTranslation();
   const {
     sections,
     modules,
@@ -544,8 +546,8 @@ export default function AdminModulesPage() {
             })
             .catch(() => {});
         }}
-        okText="Enregistrer"
-        cancelText="Annuler"
+        okText={t('common.save')}
+        cancelText={t('common.cancel')}
         destroyOnHidden
         forceRender
         styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}
@@ -588,8 +590,8 @@ export default function AdminModulesPage() {
             })
             .catch(() => {});
         }}
-        okText="Créer"
-        cancelText="Annuler"
+        okText={t('common.create')}
+        cancelText={t('common.cancel')}
         destroyOnHidden
         forceRender
         styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}
@@ -617,8 +619,8 @@ export default function AdminModulesPage() {
         open={isDeleteModalVisible}
         onOk={handleConfirmDelete}
         onCancel={handleCancelDelete}
-        okText="Supprimer"
-        cancelText="Annuler"
+        okText={t('common.delete')}
+        cancelText={t('common.cancel')}
         okType="danger"
       >
         {moduleToDelete && (

@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi'; // Utiliser le hook pour la cohérence
+import { useTranslation } from 'react-i18next';
 
 export default function InscriptionMultiEtapes({ onSwitchToLogin }: { onSwitchToLogin?: () => void; }) {
+  const { t } = useTranslation();
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -68,7 +70,7 @@ export default function InscriptionMultiEtapes({ onSwitchToLogin }: { onSwitchTo
       <input
         type="text"
         name="lastName"
-        placeholder="Nom"
+        placeholder={t('fields.name')}
         value={form.lastName}
         onChange={handleChange}
         className="w-full mb-2 p-2 border rounded"
@@ -78,7 +80,7 @@ export default function InscriptionMultiEtapes({ onSwitchToLogin }: { onSwitchTo
       <input
         type="email"
         name="email"
-        placeholder="Email"
+        placeholder={t('fields.email')}
         value={form.email}
         onChange={handleChange}
         className="w-full mb-2 p-2 border rounded"

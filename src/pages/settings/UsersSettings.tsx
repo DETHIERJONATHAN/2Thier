@@ -16,6 +16,7 @@ import {
   CloseOutlined,
   LoadingOutlined,
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 
 const useScreenSize = () => {
   const [w, setW] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
@@ -73,6 +74,7 @@ interface UserRow {
 }
 
 const UsersSettings: React.FC = () => {
+  const { t } = useTranslation();
   const { currentOrganization } = useAuth();
   const { api } = useAuthenticatedApi();
   const { isMobile } = useScreenSize();
@@ -397,7 +399,7 @@ const UsersSettings: React.FC = () => {
                 <div style={{ marginBottom: 14 }}>
                   <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 6 }}>Nom</label>
                   <input value={inviteLastName} onChange={e => setInviteLastName(e.target.value)}
-                    placeholder="Nom"
+                    placeholder={t('fields.name')}
                     style={{ width: '100%', border: '1px solid ' + FB.border, borderRadius: 6, padding: '10px 12px', fontSize: 15, color: FB.text, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
                 </div>
               </div>

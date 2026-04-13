@@ -3,6 +3,7 @@ import { Card, Button, Space, Popconfirm, Tooltip } from 'antd';
 import { EditOutlined, DeleteOutlined, DragOutlined } from '@ant-design/icons';
 import { useDrag, useDrop } from 'react-dnd';
 import { LeadStatus } from '../types/leads';
+import { useTranslation } from 'react-i18next';
 
 interface SortableLeadStatusProps {
   status: LeadStatus;
@@ -29,6 +30,7 @@ const SortableLeadStatus: React.FC<SortableLeadStatusProps> = ({
   onAcceptCallStatus,
   onDragEnd
 }) => {
+  const { t } = useTranslation();
   // Ref pour combiner drag et drop - DOIT être déclaré AVANT son utilisation
   const ref = React.useRef<HTMLDivElement>(null);
 
@@ -127,8 +129,8 @@ const SortableLeadStatus: React.FC<SortableLeadStatusProps> = ({
                 title="Supprimer ce statut ?"
                 description="Cette action est irréversible"
                 onConfirm={() => onDelete(status.id)}
-                okText="Supprimer"
-                cancelText="Annuler"
+                okText={t('common.delete')}
+                cancelText={t('common.cancel')}
                 okType="danger"
               >
                 <Tooltip title="Supprimer ce statut">

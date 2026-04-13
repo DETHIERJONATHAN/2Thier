@@ -5,6 +5,7 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, TeamOutlined, AppstoreOutli
 import { useAuth } from '../../auth/useAuth';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { NotificationManager } from '../../components/Notifications';
+import { useTranslation } from 'react-i18next';
 
 // ── Facebook Design Tokens ──
 // ── FBToggle (identique à UsersAdminPageNew) ──
@@ -192,7 +193,7 @@ function RoleFormModal({
         <Form.Item name="label" label="Label" rules={[{ required: true, message: 'Veuillez entrer un label' }]}>
           <Input placeholder="Nom affiché (ex: Administrateur, Manager)" />
         </Form.Item>
-        <Form.Item name="description" label="Description">
+        <Form.Item name="description" label={t('fields.description')}>
           <Input.TextArea placeholder="Description du rôle (optionnel)" autoSize={{ minRows: 2, maxRows: 4 }} />
         </Form.Item>
         {isSuperAdmin && (
@@ -509,6 +510,7 @@ function ModulesModal({ role, open, onClose }: { role: Role; open: boolean; onCl
 }
 
 export default function RolesAdminPage() {
+  const { t } = useTranslation();
   const { isSuperAdmin, selectedOrganization } = useAuth();
   const organizationId = selectedOrganization?.id;
   const { api, isLoading } = useAuthenticatedApi();

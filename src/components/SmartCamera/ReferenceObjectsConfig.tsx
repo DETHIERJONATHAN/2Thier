@@ -21,6 +21,7 @@ import {
   WindowsOutlined, DashOutlined
 } from '@ant-design/icons';
 import { useSmartCameraConfig, ReferenceObject } from '../../hooks/useSmartCameraConfig';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 
@@ -39,6 +40,7 @@ const OBJECT_TYPE_ICONS: Record<string, React.ReactNode> = {
 };
 
 export const ReferenceObjectsConfig: React.FC<Props> = ({ visible, onClose, nodeId }) => {
+  const { t } = useTranslation();
   const { config, saveConfig, loading } = useSmartCameraConfig(nodeId);
   const [form] = Form.useForm();
   const [objects, setObjects] = useState<ReferenceObject[]>([]);
@@ -168,7 +170,7 @@ export const ReferenceObjectsConfig: React.FC<Props> = ({ visible, onClose, node
                 renderItem={(obj, idx) => (
                   <List.Item
                     actions={[
-                      <Tooltip title="Supprimer" key="delete">
+                      <Tooltip title={t('common.delete')} key="delete">
                         <Button 
                           icon={<DeleteOutlined />} 
                           danger 

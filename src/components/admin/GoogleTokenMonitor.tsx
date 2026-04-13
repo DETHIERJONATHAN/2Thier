@@ -28,6 +28,7 @@ import {
   HistoryOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -69,6 +70,7 @@ interface RefreshHistoryEntry {
 }
 
 const GoogleTokenMonitor: React.FC<GoogleTokenMonitorProps> = ({ organizationId }) => {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [schedulerStatus, setSchedulerStatus] = useState<SchedulerStatus | null>(null);
   const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(null);
@@ -434,7 +436,7 @@ const GoogleTokenMonitor: React.FC<GoogleTokenMonitorProps> = ({ organizationId 
       )}
 
       {/* Actions */}
-      <Card title="Actions">
+      <Card title={t('common.actions')}>
         <Space>
           <Button
             type="primary"

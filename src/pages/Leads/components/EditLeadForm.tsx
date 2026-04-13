@@ -3,6 +3,7 @@ import { Form, Input, Select, Button, DatePicker, message } from 'antd';
 import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
 import type { Lead } from '../../../types/lead';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
 
 interface EditLeadFormProps {
   lead: Lead;
@@ -28,6 +29,7 @@ export const EditLeadForm: React.FC<EditLeadFormProps> = ({
   onSuccess,
   onCancel
 }) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm<LeadFormData>();
   const { api } = useAuthenticatedApi();
   const [loading, setLoading] = React.useState(false);
@@ -79,7 +81,7 @@ export const EditLeadForm: React.FC<EditLeadFormProps> = ({
     >
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Form.Item
-          label="Prénom"
+          label={t('fields.firstName')}
           name="firstName"
           rules={[{ required: true, message: 'Le prénom est requis' }]}
         >
@@ -87,7 +89,7 @@ export const EditLeadForm: React.FC<EditLeadFormProps> = ({
         </Form.Item>
 
         <Form.Item
-          label="Nom"
+          label={t('fields.name')}
           name="lastName"
           rules={[{ required: true, message: 'Le nom est requis' }]}
         >
@@ -97,7 +99,7 @@ export const EditLeadForm: React.FC<EditLeadFormProps> = ({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Form.Item
-          label="Email"
+          label={t('fields.email')}
           name="email"
           rules={[
             { type: 'email', message: 'Email invalide' },
@@ -108,7 +110,7 @@ export const EditLeadForm: React.FC<EditLeadFormProps> = ({
         </Form.Item>
 
         <Form.Item
-          label="Téléphone"
+          label={t('fields.phone')}
           name="phone"
           rules={[{ required: true, message: 'Le téléphone est requis' }]}
         >
@@ -117,7 +119,7 @@ export const EditLeadForm: React.FC<EditLeadFormProps> = ({
       </div>
 
       <Form.Item
-        label="Entreprise"
+        label={t('fields.company')}
         name="company"
         rules={[{ required: true, message: 'L\'entreprise est requise' }]}
       >
@@ -126,7 +128,7 @@ export const EditLeadForm: React.FC<EditLeadFormProps> = ({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Form.Item
-          label="Source"
+          label={t('fields.source')}
           name="source"
         >
           <Select>
@@ -141,7 +143,7 @@ export const EditLeadForm: React.FC<EditLeadFormProps> = ({
         </Form.Item>
 
         <Form.Item
-          label="Site web"
+          label={t('fields.website')}
           name="website"
         >
           <Input placeholder="Site web de l'entreprise" />
@@ -149,14 +151,14 @@ export const EditLeadForm: React.FC<EditLeadFormProps> = ({
       </div>
 
       <Form.Item
-        label="Notes"
+        label={t('fields.notes')}
         name="notes"
       >
         <Input.TextArea rows={4} placeholder="Notes importantes sur ce lead..." />
       </Form.Item>
 
       <Form.Item
-        label="Prochain suivi"
+        label={t('fields.nextFollowUp')}
         name="nextFollowUpDate"
       >
         <DatePicker 

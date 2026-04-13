@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, Table, Button, Space, Input, Tag, Modal, Form, Select, InputNumber, message, Tooltip, Empty } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined, UploadOutlined, SearchOutlined, TableOutlined, EyeOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import { useTranslation } from 'react-i18next';
 
 interface TableauData {
   id: string;
@@ -16,6 +17,7 @@ interface TableauData {
 }
 
 const GestionTableauxPage: React.FC = () => {
+  const { t } = useTranslation();
   const [tableaux, setTableaux] = useState<TableauData[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -150,21 +152,21 @@ const GestionTableauxPage: React.FC = () => {
               onClick={() => handleViewTableau(record)}
             />
           </Tooltip>
-          <Tooltip title="Modifier">
+          <Tooltip title={t('common.edit')}>
             <Button
               type="text"
               icon={<EditOutlined />}
               onClick={() => handleEditTableau(record)}
             />
           </Tooltip>
-          <Tooltip title="Exporter">
+          <Tooltip title={t('common.export')}>
             <Button
               type="text"
               icon={<DownloadOutlined />}
               onClick={() => handleExportTableau(record)}
             />
           </Tooltip>
-          <Tooltip title="Supprimer">
+          <Tooltip title={t('common.delete')}>
             <Button
               type="text"
               danger
@@ -319,8 +321,8 @@ const GestionTableauxPage: React.FC = () => {
           setIsModalVisible(false);
           form.resetFields();
         }}
-        okText="Enregistrer"
-        cancelText="Annuler"
+        okText={t('common.save')}
+        cancelText={t('common.cancel')}
         width={600}
       >
         <Form
@@ -342,7 +344,7 @@ const GestionTableauxPage: React.FC = () => {
 
           <Form.Item
             name="description"
-            label="Description"
+            label={t('fields.description')}
           >
             <Input.TextArea 
               rows={3}
@@ -370,7 +372,7 @@ const GestionTableauxPage: React.FC = () => {
 
           <Form.Item
             name="category"
-            label="Catégorie"
+            label={t('fields.category')}
             rules={[{ required: true, message: 'La catégorie est requise' }]}
           >
             <Select
@@ -381,7 +383,7 @@ const GestionTableauxPage: React.FC = () => {
 
           <Form.Item
             name="isActive"
-            label="Statut"
+            label={t('fields.status')}
             valuePropName="checked"
           >
             <input type="checkbox" className="mr-2" />

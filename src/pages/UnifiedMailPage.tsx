@@ -1754,7 +1754,7 @@ document.querySelectorAll('img').forEach(function(img) {
         </Form.Item>
 
         {/* Corps du message (éditeur riche) */}
-        <Form.Item label="Message" style={{ marginBottom: 8 }}>
+        <Form.Item label={t('fields.message')} style={{ marginBottom: 8 }}>
           <div style={{ border: '1px solid #d9d9d9', borderRadius: 6, overflow: 'hidden' }}>
             <style>{`
               .compose-quill .ql-container { min-height: ${isMobile ? '150px' : '220px'}; max-height: 400px; overflow-y: auto; font-size: 14px; }
@@ -1906,7 +1906,7 @@ document.querySelectorAll('img').forEach(function(img) {
           <div style={{ backgroundColor: '#f8f9fa', borderBottom: '1px solid #e0e0e0', padding: '6px 8px', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, width: '100%' }}>
             <Input
               ref={searchInputRef}
-              placeholder="Rechercher..."
+              placeholder={t('common.searchPlaceholder')}
               prefix={<SearchOutlined style={{ color: '#999' }} />}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}

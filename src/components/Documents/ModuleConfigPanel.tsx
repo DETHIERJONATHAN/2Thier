@@ -11,6 +11,7 @@ import NodeTreeSelector, { NodeTreeSelectorValue } from '../TreeBranchLeaf/treeb
 import ConditionEditorModal, { ConditionalConfig } from './ConditionEditorModal';
 import PricingLinesEditor, { PricingLine } from './PricingLinesEditor';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { useTranslation } from 'react-i18next';
 
 const { TextArea } = Input;
 
@@ -83,6 +84,7 @@ const ModuleConfigPanel = ({
   onDuplicate,
   tblNodeId,
 }: ModuleConfigPanelProps) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
   const { api } = useAuthenticatedApi();
   const moduleDef = getModuleById(moduleInstance.moduleId);
@@ -1071,7 +1073,7 @@ const ModuleConfigPanel = ({
                         <Tag color="blue" style={{ flex: 1, margin: 0, padding: '4px 8px', fontSize: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           🌳 {boundRef}
                         </Tag>
-                        <Tooltip title="Supprimer">
+                        <Tooltip title={t('common.delete')}>
                           <Button
                             size="small"
                             danger

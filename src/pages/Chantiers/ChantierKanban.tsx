@@ -67,6 +67,7 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
 import { useTeams } from '../../hooks/useTeams';
 import type { Chantier, ChantierStatus, Team, Technician } from '../../types/chantier';
+import { useTranslation } from 'react-i18next';
 
 // ─── Configuration MultiBackend ───
 const HTML5toTouch = {
@@ -92,6 +93,7 @@ const TEAM_DRAG_TYPE = 'TEAM';
 
 // 🎯 Custom Drag Layer — affiche "En déplacement..." pendant le drag (comme les Leads)
 const CustomDragLayer: React.FC = () => {
+  const { t } = useTranslation();
   const { isDragging, currentOffset } = useDragLayer((monitor) => ({
     currentOffset: monitor.getSourceClientOffset(),
     isDragging: monitor.isDragging(),
@@ -799,7 +801,7 @@ const TeamDragItem: React.FC<TeamDragItemProps> = ({ team, isSelected, onClick, 
           <button
             onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
             style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 11, color: '#8c8c8c', padding: 4, minWidth: 28, minHeight: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            title="Détails"
+            title={t('common.details')}
           >
             {expanded ? '▲' : '▼'}
           </button>
@@ -840,7 +842,7 @@ const TeamDragItem: React.FC<TeamDragItemProps> = ({ team, isSelected, onClick, 
             </button>
           )}
           {onDelete && (
-            <Popconfirm title="Supprimer cette équipe ?" onConfirm={onDelete} okText="Oui" cancelText="Non">
+            <Popconfirm title="Supprimer cette équipe ?" onConfirm={onDelete} okText={t('common.yes')} cancelText={t('common.no')}>
               <button style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#ff4d4f', fontSize: 10, padding: '2px 0', marginTop: 2, display: 'flex', alignItems: 'center', gap: 3 }}>
                 <DeleteOutlined /> Supprimer l'équipe
               </button>
@@ -2025,8 +2027,8 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
         onCancel={() => setTeamModalOpen(false)}
         onOk={handleCreateTeam}
         confirmLoading={creatingTeam}
-        okText="Créer"
-        cancelText="Annuler"
+        okText={t('common.create')}
+        cancelText={t('common.cancel')}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div>
@@ -2067,8 +2069,8 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
         title={<span><PlusOutlined style={{ marginRight: 8 }} />Ajouter un membre à {teams.find(t => t.id === addMemberTeamId)?.name}</span>}
         onCancel={() => { setAddMemberTeamId(null); setAddMemberTechId(''); }}
         onOk={handleAddMember}
-        okText="Ajouter"
-        cancelText="Annuler"
+        okText={t('common.add')}
+        cancelText={t('common.cancel')}
         okButtonProps={{ disabled: !addMemberTechId }}
       >
         <Select
@@ -2114,8 +2116,8 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
             message.error(err?.message || 'Erreur création');
           }
         }}
-        okText="Créer"
-        cancelText="Annuler"
+        okText={t('common.create')}
+        cancelText={t('common.cancel')}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div>
@@ -2137,7 +2139,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
             </div>
             <div style={{ flex: 1 }}>
               <label style={{ fontSize: 12, fontWeight: 500 }}>Nom</label>
-              <Input value={techFormData.lastName} onChange={e => setTechFormData(d => ({ ...d, lastName: e.target.value }))} placeholder="Nom" />
+              <Input value={techFormData.lastName} onChange={e => setTechFormData(d => ({ ...d, lastName: e.target.value }))} placeholder={t('fields.name')} />
             </div>
           </div>
           {techFormData.type === 'SUBCONTRACTOR' && (
@@ -2256,8 +2258,8 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
             message.error(err?.message || 'Erreur');
           }
         }}
-        okText="Ajouter"
-        cancelText="Annuler"
+        okText={t('common.add')}
+        cancelText={t('common.cancel')}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div>

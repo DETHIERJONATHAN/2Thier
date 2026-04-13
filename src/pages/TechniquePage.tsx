@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Card, Row, Col, Statistic, Table, Button, Space, Tag, Modal, Form, Input, Select } from 'antd';
 import { ToolOutlined, BugOutlined, CheckCircleOutlined, ClockCircleOutlined, ExclamationCircleOutlined, PlusOutlined } from '@ant-design/icons';
 import PageHeader from '../components/PageHeader';
+import { useTranslation } from 'react-i18next';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -20,6 +21,7 @@ interface Ticket {
 }
 
 const TechniquePage: React.FC = () => {
+  const { t } = useTranslation();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [form] = Form.useForm();
 
@@ -326,8 +328,8 @@ const TechniquePage: React.FC = () => {
         open={isModalVisible}
         onOk={handleModalOk}
         onCancel={handleModalCancel}
-        okText="Créer"
-        cancelText="Annuler"
+        okText={t('common.create')}
+        cancelText={t('common.cancel')}
         width={600}
       >
         <Form form={form} layout="vertical">
@@ -342,7 +344,7 @@ const TechniquePage: React.FC = () => {
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="type" label="Type" rules={[{ required: true }]}>
+              <Form.Item name="type" label={t('fields.type')} rules={[{ required: true }]}>
                 <Select placeholder="Type de ticket">
                   <Option value="Bug">Bug</Option>
                   <Option value="Demande">Demande</Option>
@@ -354,7 +356,7 @@ const TechniquePage: React.FC = () => {
           </Row>
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item name="priorite" label="Priorité" rules={[{ required: true }]}>
+              <Form.Item name="priorite" label={t('fields.priority')} rules={[{ required: true }]}>
                 <Select placeholder="Sélectionner priorité">
                   <Option value="Faible">Faible</Option>
                   <Option value="Normale">Normale</Option>
@@ -364,7 +366,7 @@ const TechniquePage: React.FC = () => {
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="assigneA" label="Assigné à" rules={[{ required: true }]}>
+              <Form.Item name="assigneA" label={t('fields.assignedTo')} rules={[{ required: true }]}>
                 <Select placeholder="Sélectionner technicien">
                   <Option value="jean">Jean Technicien</Option>
                   <Option value="marie">Marie Admin</Option>

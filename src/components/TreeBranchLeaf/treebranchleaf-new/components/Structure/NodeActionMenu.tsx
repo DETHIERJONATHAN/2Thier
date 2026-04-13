@@ -19,6 +19,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import type { TreeNode } from '../../types';
+import { useTranslation } from 'react-i18next';
 
 interface DependencyInfo {
   dependentNodeId: string;
@@ -79,6 +80,7 @@ export const NodeActionMenu: React.FC<NodeActionMenuProps> = ({
   onMoveToRoot,
   onToggleExpand
 }) => {
+  const { t } = useTranslation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -496,7 +498,7 @@ export const NodeActionMenu: React.FC<NodeActionMenuProps> = ({
         onCancel={cancelDelete}
         onOk={confirmDelete}
         okText={depResult?.hasDependencies ? '⚠️ Supprimer quand même' : 'Supprimer'}
-        cancelText="Annuler"
+        cancelText={t('common.cancel')}
         okButtonProps={{
           danger: true,
           disabled: deleteLoading,

@@ -29,6 +29,7 @@ import PageBuilder from '../components/Documents/PageBuilder';
 import ThemeEditorModal from '../components/Documents/ThemeEditorModal';
 import { TemplateSelector } from '../components/Documents/TemplateSelector';
 import { DocumentTemplate as PrebuiltTemplate, instantiateTemplate } from '../components/Documents/DocumentTemplates';
+import { useTranslation } from 'react-i18next';
 
 const { TabPane } = Tabs;
 const { TextArea } = Input;
@@ -64,6 +65,7 @@ interface TBLTree {
 }
 
 const DocumentTemplatesPage = () => {
+  const { t } = useTranslation();
   const { api } = useAuthenticatedApi();
   
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
@@ -542,8 +544,8 @@ const DocumentTemplatesPage = () => {
         open={!!deleteConfirm}
         onCancel={() => setDeleteConfirm(null)}
         onOk={() => deleteConfirm && handleDeleteTemplate(deleteConfirm.id)}
-        okText="Supprimer"
-        cancelText="Annuler"
+        okText={t('common.delete')}
+        cancelText={t('common.cancel')}
         okButtonProps={{ danger: true, loading: deleting }}
         centered
       >
@@ -630,7 +632,7 @@ const DocumentTemplatesPage = () => {
             label="📌 Document par défaut"
             tooltip="Les documents par défaut (page d'entrée, conditions générales, etc.) sont toujours proposés lors de la génération du PDF, indépendamment des produits sélectionnés."
           >
-            <Select placeholder="Sélectionner">
+            <Select placeholder={t('common.select')}>
               <Select.Option value={true}>✅ Oui — Document indépendant (page d'entrée, conditions, etc.)</Select.Option>
               <Select.Option value={false}>❌ Non</Select.Option>
             </Select>
@@ -657,7 +659,7 @@ const DocumentTemplatesPage = () => {
 
           <Form.Item
             name="description"
-            label="Description"
+            label={t('fields.description')}
           >
             <TextArea 
               rows={3} 
@@ -680,9 +682,9 @@ const DocumentTemplatesPage = () => {
 
           <Form.Item
             name="isActive"
-            label="Statut"
+            label={t('fields.status')}
           >
-            <Select placeholder="Sélectionner">
+            <Select placeholder={t('common.select')}>
               <Select.Option value={true}>✅ Actif</Select.Option>
               <Select.Option value={false}>❌ Inactif</Select.Option>
             </Select>

@@ -10,6 +10,7 @@ import type { UploadFile } from 'antd';
 import { AIAssistant } from '../AIAssistant';
 import { GridLayoutEditor } from '../GridLayoutEditor';
 import { SectionHeaderEditor } from '../SectionHeaderEditor';
+import { useTranslation } from 'react-i18next';
 
 const { TextArea } = Input;
 
@@ -20,6 +21,7 @@ interface CTAEditorProps {
 }
 
 export const CTAEditor: React.FC<CTAEditorProps> = ({ section, onSave, onCancel }) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
       const [gridLayout, setGridLayout] = useState<any>(null);
   const [sectionHeader, setSectionHeader] = useState<any>(null);
@@ -119,7 +121,7 @@ export const CTAEditor: React.FC<CTAEditorProps> = ({ section, onSave, onCancel 
         <Input placeholder="Ex: CTA Principal" />
       </Form.Item>
 
-      <Form.Item label="Titre" name="title" rules={[{ required: true }]}>
+      <Form.Item label={t('fields.title')} name="title" rules={[{ required: true }]}>
         <Input placeholder="Prêt à passer à l'avenir vert ?"
           suffix={
             <Button
@@ -136,7 +138,7 @@ export const CTAEditor: React.FC<CTAEditorProps> = ({ section, onSave, onCancel 
          />
       </Form.Item>
 
-      <Form.Item label="Description" name="description">
+      <Form.Item label={t('fields.description')} name="description">
         <TextArea rows={2} placeholder="Obtenez votre devis personnalisé..."
           suffix={
             <Button

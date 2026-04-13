@@ -13,6 +13,7 @@ import { useModuleNavigation } from '../../contexts/WallNavigationContext';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
 import dayjs, { Dayjs } from 'dayjs';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -94,6 +95,7 @@ const EVENT_STATUSES: Record<string, { label: string; color: string; badgeStatus
 };
 
 const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chantierLabel, leadId, submissionId, canEdit: canEditProp }) => {
+  const { t } = useTranslation();
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, [apiHook.api]);
   const { isSuperAdmin, userRole } = useAuth();
@@ -881,12 +883,12 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
           )}
 
           {editingEvent && (
-            <Form.Item name="status" label="Statut">
+            <Form.Item name="status" label={t('fields.status')}>
               <Select options={Object.entries(EVENT_STATUSES).map(([k, v]) => ({ value: k, label: v.label }))} />
             </Form.Item>
           )}
 
-          <Form.Item name="notes" label="Notes">
+          <Form.Item name="notes" label={t('fields.notes')}>
             <Input.TextArea rows={2} placeholder="Détails de l'événement..." />
           </Form.Item>
 

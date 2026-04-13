@@ -9,6 +9,7 @@ import { DeleteOutlined, DragOutlined, SettingOutlined, EyeInvisibleOutlined, Co
 import { DocumentPage, ModuleInstance } from './types';
 import { getModuleById } from './ModuleRegistry';
 import ModuleRenderer from './ModuleRenderer';
+import { useTranslation } from 'react-i18next';
 
 // Taille de la grille en pixels (pour A4 à 96dpi: 794 x 1123 px)
 const GRID_SIZE = 20; // Taille d'une cellule de grille
@@ -65,6 +66,7 @@ const GridPagePreview = ({
   onModuleDuplicate,
   onModuleUpdate,
 }: GridPagePreviewProps) => {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const [draggingModule, setDraggingModule] = useState<string | null>(null);
   const [resizingModule, setResizingModule] = useState<string | null>(null);
@@ -364,7 +366,7 @@ const GridPagePreview = ({
 
             <div style={{ width: '1px', backgroundColor: 'rgba(255,255,255,0.5)' }} />
 
-            <Tooltip title="Configurer">
+            <Tooltip title={t('common.configure')}>
               <div
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
@@ -401,7 +403,7 @@ const GridPagePreview = ({
               </div>
             </Tooltip>
 
-            <Tooltip title="Dupliquer">
+            <Tooltip title={t('common.duplicate')}>
               <div
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
@@ -419,7 +421,7 @@ const GridPagePreview = ({
               </div>
             </Tooltip>
 
-            <Tooltip title="Supprimer">
+            <Tooltip title={t('common.delete')}>
               <div
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={(e) => {

@@ -29,6 +29,7 @@ import {
 import { Autocomplete, useJsApiLoader } from '@react-google-maps/api';
 import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
 import type { LeadCreatorModalProps, CreateLeadData, TBLLead } from './types/lead-types';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -87,6 +88,7 @@ const LeadCreatorModalAdvanced: React.FC<LeadCreatorModalPropsExtended> = ({
   mode = 'create',
   initialLead
 }) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
@@ -512,7 +514,7 @@ const LeadCreatorModalAdvanced: React.FC<LeadCreatorModalPropsExtended> = ({
           <Col span={24}>
             <Form.Item
               name="company"
-              label="Entreprise"
+              label={t('fields.company')}
             >
               <Input
                 prefix={<BankOutlined />}
@@ -672,7 +674,7 @@ const LeadCreatorModalAdvanced: React.FC<LeadCreatorModalPropsExtended> = ({
         {/* Section Détails commerciaux (source / site / suivi) */}
         <Row gutter={16}>
           <Col span={8}>
-            <Form.Item name="source" label="Source">
+            <Form.Item name="source" label={t('fields.source')}>
               <Select allowClear placeholder="Sélectionnez la source">
                 <Option value="manual">Ajout manuel</Option>
                 <Option value="website">Site web</Option>
@@ -685,12 +687,12 @@ const LeadCreatorModalAdvanced: React.FC<LeadCreatorModalPropsExtended> = ({
             </Form.Item>
           </Col>
           <Col span={8}>
-            <Form.Item name="website" label="Site web">
+            <Form.Item name="website" label={t('fields.website')}>
               <Input prefix={<GlobalOutlined />} placeholder="Site web de l'entreprise" maxLength={120} />
             </Form.Item>
           </Col>
           <Col span={8}>
-            <Form.Item name="nextFollowUpDate" label="Prochain suivi">
+            <Form.Item name="nextFollowUpDate" label={t('fields.nextFollowUp')}>
               <DatePicker className="w-full" format="DD/MM/YYYY" />
             </Form.Item>
           </Col>
@@ -738,7 +740,7 @@ const LeadCreatorModalAdvanced: React.FC<LeadCreatorModalPropsExtended> = ({
           <Col span={12}>
             <Form.Item
               name="email"
-              label="Email"
+              label={t('fields.email')}
               rules={[
                 { type: 'email', message: 'Format email invalide' }
               ]}
@@ -768,7 +770,7 @@ const LeadCreatorModalAdvanced: React.FC<LeadCreatorModalPropsExtended> = ({
         {/* Section Notes */}
         <Form.Item
           name="notes"
-          label="Notes"
+          label={t('fields.notes')}
         >
           <TextArea
             rows={3}

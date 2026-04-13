@@ -39,11 +39,13 @@ import ChantierInvoicesTab from './ChantierInvoicesTab';
 import ChantierEventsTab from './ChantierEventsTab';
 import ChantierHistoryTab from './ChantierHistoryTab';
 import ChantierPointageTab from './ChantierPointageTab';
+import { useTranslation } from 'react-i18next';
 
 const { TextArea } = Input;
 const { Text, Title } = Typography;
 
 const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }> = ({ chantierId: propId, onBack }) => {
+  const { t } = useTranslation();
   const params = useParams<{ id: string }>();
   const id = propId || params.id;
   const navigate = useNavigate();
@@ -531,7 +533,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                     chantier.customLabel || <Text type="secondary">—</Text>
                   )}
                 </Descriptions.Item>
-                <Descriptions.Item label="Statut">
+                <Descriptions.Item label={t('fields.status')}>
                   {editing ? (
                     <Select
                       value={editForm.statusId}
@@ -604,7 +606,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                       format="DD/MM/YYYY"
                       size="small"
                       style={{ width: '100%' }}
-                      placeholder="Sélectionner"
+                      placeholder={t('common.select')}
                     />
                   ) : (
                     chantier.plannedDate
@@ -620,7 +622,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                       format="DD/MM/YYYY"
                       size="small"
                       style={{ width: '100%' }}
-                      placeholder="Sélectionner"
+                      placeholder={t('common.select')}
                     />
                   ) : (
                     chantier.deliveryDate
@@ -636,7 +638,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                       format="DD/MM/YYYY"
                       size="small"
                       style={{ width: '100%' }}
-                      placeholder="Sélectionner"
+                      placeholder={t('common.select')}
                     />
                   ) : (
                     chantier.receptionDate
@@ -652,7 +654,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                       format="DD/MM/YYYY"
                       size="small"
                       style={{ width: '100%' }}
-                      placeholder="Sélectionner"
+                      placeholder={t('common.select')}
                     />
                   ) : (
                     chantier.completedDate
@@ -672,7 +674,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
             {/* Colonne droite - Équipe & Client */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {/* Client */}
-              <Card title="Client" size="small">
+              <Card title={t('fields.client')} size="small">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
                   <Avatar size={40} icon={<UserOutlined />} style={{ backgroundColor: '#1890ff' }}>
                     {clientName.charAt(0).toUpperCase()}
@@ -733,7 +735,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                       </Descriptions.Item>
                     )}
                     {genDoc.title && (
-                      <Descriptions.Item label="Titre">{genDoc.title}</Descriptions.Item>
+                      <Descriptions.Item label={t('fields.title')}>{genDoc.title}</Descriptions.Item>
                     )}
                     {canSeePrices && (quoteData.totalHT || quoteData.totalTTC) && (
                       <>
@@ -757,7 +759,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                       </>
                     )}
                     {genDoc.status && (
-                      <Descriptions.Item label="Statut">
+                      <Descriptions.Item label={t('fields.status')}>
                         <Tag color={genDoc.status === 'SIGNED' ? 'green' : genDoc.status === 'SENT' ? 'blue' : 'default'}>
                           {genDoc.status === 'SIGNED' ? 'Signé' : genDoc.status === 'SENT' ? 'Envoyé' : genDoc.status}
                         </Tag>
@@ -922,7 +924,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
           </div>
 
           {/* Notes */}
-          <Card title="Notes" size="small" style={{ marginTop: '16px' }}>
+          <Card title={t('fields.notes')} size="small" style={{ marginTop: '16px' }}>
             {editing ? (
               <TextArea
                 rows={4}
@@ -1054,10 +1056,10 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                     <Text type="secondary">🔒 Réservé</Text>
                   )}
                 </Descriptions.Item>
-                <Descriptions.Item label="Adresse">
+                <Descriptions.Item label={t('fields.address')}>
                   {displayAddress || <Text type="secondary">—</Text>}
                 </Descriptions.Item>
-                <Descriptions.Item label="Statut">
+                <Descriptions.Item label={t('fields.status')}>
                   <Tag color={statusColor}>{statusName}</Tag>
                 </Descriptions.Item>
                 {chantier.customLabel && (

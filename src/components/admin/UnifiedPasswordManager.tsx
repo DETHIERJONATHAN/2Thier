@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { Card, Button, Typography, Table, Input, Form, Modal, Space, Tag, message } from 'antd';
 import { UserOutlined, LockOutlined, KeyOutlined, MailOutlined, PhoneOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -14,6 +15,7 @@ interface UnifiedPasswordModalProps {
 
 // Composant pour le modal de définition du mot de passe unifié
 const UnifiedPasswordModal: React.FC<UnifiedPasswordModalProps> = ({ open, onClose, userId, userName }) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const api = useAuthenticatedApi();
@@ -63,7 +65,7 @@ const UnifiedPasswordModal: React.FC<UnifiedPasswordModalProps> = ({ open, onClo
       <Form form={form} layout="vertical" onFinish={handleSetPassword}>
         <Form.Item
           name="password"
-          label="Mot de passe"
+          label={t('fields.password')}
           rules={[{ required: true, message: 'Veuillez saisir un mot de passe' }]}
         >
           <Input.Password prefix={<LockOutlined />} placeholder="Mot de passe" />

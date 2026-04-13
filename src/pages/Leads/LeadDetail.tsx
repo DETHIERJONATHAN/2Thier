@@ -22,6 +22,7 @@ import { unwrapApiData } from '../../utils/apiResponse';
 import { LEAD_STATUSES, LEAD_SOURCES } from './LeadsConfig';
 import type { Lead, LeadApiResponse } from '../../types/leads';
 import LeadGagneTab from './components/LeadGagneTab';
+import { useTranslation } from 'react-i18next';
 
 const { TabPane } = Tabs;
 
@@ -40,6 +41,7 @@ export default function LeadDetail({
   onEmail, 
   onSchedule 
 }: LeadDetailProps = {}) {
+  const { t } = useTranslation();
   const { leadId: urlLeadId } = useParams<{ leadId: string }>();
   const navigate = useNavigate();
   const { api, isLoading } = useAuthenticatedApi();
@@ -524,7 +526,7 @@ export default function LeadDetail({
 
               {/* Section notes complètes si nécessaire */}
             {lead.data?.notes && (
-              <Card title="Notes" className="mt-4" size="small">
+              <Card title={t('fields.notes')} className="mt-4" size="small">
                 <p className="whitespace-pre-wrap">{lead.data.notes}</p>
               </Card>
             )}

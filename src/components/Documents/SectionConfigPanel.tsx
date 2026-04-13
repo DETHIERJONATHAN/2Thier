@@ -7,6 +7,7 @@ import ConditionEditorModal, { ConditionalConfig } from './ConditionEditorModal'
 import StyleEditorModal, { FieldStyle } from './StyleEditorModal';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { getVariantsForSection } from '../../data/sectionStyleVariants';
+import { useTranslation } from 'react-i18next';
 
 const { TextArea } = Input;
 
@@ -36,6 +37,7 @@ const SECTION_TYPE_LABELS: Record<string, string> = {
 };
 
 const SectionConfigPanel = ({ section, onUpdate, onDelete }: SectionConfigPanelProps) => {
+  const { t } = useTranslation();
   const { api } = useAuthenticatedApi();
   const [form] = Form.useForm();
   const [selectorOpen, setSelectorOpen] = useState(false);
@@ -656,16 +658,16 @@ const SectionConfigPanel = ({ section, onUpdate, onDelete }: SectionConfigPanelP
       case 'CONTACT_INFO':
         return (
           <>
-            <Form.Item name="showAddress" label="Adresse" valuePropName="checked">
+            <Form.Item name="showAddress" label={t('fields.address')} valuePropName="checked">
               <Switch defaultChecked />
             </Form.Item>
-            <Form.Item name="showPhone" label="Téléphone" valuePropName="checked">
+            <Form.Item name="showPhone" label={t('fields.phone')} valuePropName="checked">
               <Switch defaultChecked />
             </Form.Item>
-            <Form.Item name="showEmail" label="Email" valuePropName="checked">
+            <Form.Item name="showEmail" label={t('fields.email')} valuePropName="checked">
               <Switch defaultChecked />
             </Form.Item>
-            <Form.Item name="showWebsite" label="Site web" valuePropName="checked">
+            <Form.Item name="showWebsite" label={t('fields.website')} valuePropName="checked">
               <Switch defaultChecked />
             </Form.Item>
             <Form.Item name="showSocial" label="Réseaux sociaux" valuePropName="checked">

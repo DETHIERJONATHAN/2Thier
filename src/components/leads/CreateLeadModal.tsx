@@ -3,6 +3,7 @@ import { Modal, Form, Input, Select, Button, message, Row, Col } from 'antd';
 import { UserOutlined, MailOutlined, PhoneOutlined, HomeOutlined, GlobalOutlined, LinkedinOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useLeadStatuses } from '../../hooks/useLeadStatuses';
+import { useTranslation } from 'react-i18next';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -31,6 +32,7 @@ const CreateLeadModal: React.FC<CreateLeadModalProps> = ({
   onClose,
   onLeadCreated
 }) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const { api } = useAuthenticatedApi();
@@ -124,7 +126,7 @@ const CreateLeadModal: React.FC<CreateLeadModalProps> = ({
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item
-              label="Prénom"
+              label={t('fields.firstName')}
               name="firstName"
               rules={[{ required: true, message: 'Le prénom est requis' }]}
             >
@@ -136,7 +138,7 @@ const CreateLeadModal: React.FC<CreateLeadModalProps> = ({
           </Col>
           <Col span={12}>
             <Form.Item
-              label="Nom"
+              label={t('fields.name')}
               name="lastName"
               rules={[{ required: true, message: 'Le nom est requis' }]}
             >
@@ -151,7 +153,7 @@ const CreateLeadModal: React.FC<CreateLeadModalProps> = ({
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item
-              label="Email"
+              label={t('fields.email')}
               name="email"
               rules={[
                 { required: true, message: 'L\'email est requis' },
@@ -166,7 +168,7 @@ const CreateLeadModal: React.FC<CreateLeadModalProps> = ({
           </Col>
           <Col span={12}>
             <Form.Item
-              label="Téléphone"
+              label={t('fields.phone')}
               name="phone"
             >
               <Input 
@@ -180,7 +182,7 @@ const CreateLeadModal: React.FC<CreateLeadModalProps> = ({
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item
-              label="Société"
+              label={t('fields.company')}
               name="company"
               rules={[{ required: true, message: 'La société est requise' }]}
             >
@@ -192,7 +194,7 @@ const CreateLeadModal: React.FC<CreateLeadModalProps> = ({
           </Col>
           <Col span={12}>
             <Form.Item
-              label="Source"
+              label={t('fields.source')}
               name="source"
               rules={[{ required: true, message: 'La source est requise' }]}
             >
@@ -249,7 +251,7 @@ const CreateLeadModal: React.FC<CreateLeadModalProps> = ({
         </Row>
 
         <Form.Item
-          label="Notes"
+          label={t('fields.notes')}
           name="notes"
         >
           <TextArea 

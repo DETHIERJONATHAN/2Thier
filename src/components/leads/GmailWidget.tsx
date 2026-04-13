@@ -19,6 +19,7 @@ import {
   UserOutlined,
   PaperClipOutlined
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 
 interface EmailSentData {
   type: 'email';
@@ -52,6 +53,7 @@ const GmailWidget: React.FC<GmailWidgetProps> = ({
   leadId,
   onEmailSent 
 }) => {
+  const { t } = useTranslation();
   const [emails, setEmails] = useState<EmailThread[]>([]);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -242,12 +244,12 @@ const GmailWidget: React.FC<GmailWidgetProps> = ({
 
           <Form.Item
             name="body"
-            label="Message"
+            label={t('fields.message')}
             rules={[{ required: true, message: 'Veuillez saisir un message' }]}
           >
             <Input.TextArea 
               rows={8} 
-              placeholder="Votre message..."
+              placeholder={t('fields.yourMessagePlaceholder')}
             />
           </Form.Item>
 

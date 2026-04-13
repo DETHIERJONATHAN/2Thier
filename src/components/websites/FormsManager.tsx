@@ -55,6 +55,7 @@ import {
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import QuestionsManagerModal from './QuestionsManager';
 import type { ColumnsType } from 'antd/es/table';
+import { useTranslation } from 'react-i18next';
 
 const { Title: _Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -130,6 +131,7 @@ interface FormsManagerProps {
 
 // ==================== COMPOSANT PRINCIPAL ====================
 const FormsManager: React.FC<FormsManagerProps> = ({ websiteId }) => {
+  const { t } = useTranslation();
   // API authentifiée (stabilisée)
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, [apiHook]);
@@ -404,14 +406,14 @@ const FormsManager: React.FC<FormsManagerProps> = ({ websiteId }) => {
               Étapes
             </Button>
           </Tooltip>
-          <Tooltip title="Modifier">
+          <Tooltip title={t('common.edit')}>
             <Button
               size="small"
               icon={<EditOutlined />}
               onClick={() => handleEditForm(record)}
             />
           </Tooltip>
-          <Tooltip title="Prévisualiser">
+          <Tooltip title={t('common.preview')}>
             <Button
               size="small"
               icon={<EyeOutlined />}
@@ -422,11 +424,11 @@ const FormsManager: React.FC<FormsManagerProps> = ({ websiteId }) => {
             title="Supprimer ce formulaire ?"
             description="Cette action est irréversible"
             onConfirm={() => handleDeleteForm(record.id)}
-            okText="Supprimer"
-            cancelText="Annuler"
+            okText={t('common.delete')}
+            cancelText={t('common.cancel')}
             okButtonProps={{ danger: true }}
           >
-            <Tooltip title="Supprimer">
+            <Tooltip title={t('common.delete')}>
               <Button
                 size="small"
                 danger
@@ -545,7 +547,7 @@ const FormsManager: React.FC<FormsManagerProps> = ({ websiteId }) => {
             <Col span={6}>
               <Form.Item
                 name="isActive"
-                label="Actif"
+                label={t('fields.active')}
                 valuePropName="checked"
               >
                 <Switch />
@@ -796,7 +798,7 @@ const StepsManagerModal: React.FC<StepsManagerModalProps> = ({
               Champs
             </Button>
           </Tooltip>
-          <Tooltip title="Modifier">
+          <Tooltip title={t('common.edit')}>
             <Button
               size="small"
               icon={<EditOutlined />}
@@ -806,8 +808,8 @@ const StepsManagerModal: React.FC<StepsManagerModalProps> = ({
           <Popconfirm
             title="Supprimer cette étape ?"
             onConfirm={() => handleDeleteStep(record.id)}
-            okText="Supprimer"
-            cancelText="Annuler"
+            okText={t('common.delete')}
+            cancelText={t('common.cancel')}
             okButtonProps={{ danger: true }}
           >
             <Button size="small" danger icon={<DeleteOutlined />} />
@@ -1118,7 +1120,7 @@ const FieldsManagerModal: React.FC<FieldsManagerModalProps> = ({
       width: 120,
       render: (_, record: FormField) => (
         <Space>
-          <Tooltip title="Modifier">
+          <Tooltip title={t('common.edit')}>
             <Button
               size="small"
               icon={<EditOutlined />}
@@ -1128,8 +1130,8 @@ const FieldsManagerModal: React.FC<FieldsManagerModalProps> = ({
           <Popconfirm
             title="Supprimer ce champ ?"
             onConfirm={() => handleDeleteField(record.id)}
-            okText="Supprimer"
-            cancelText="Annuler"
+            okText={t('common.delete')}
+            cancelText={t('common.cancel')}
             okButtonProps={{ danger: true }}
           >
             <Button size="small" danger icon={<DeleteOutlined />} />

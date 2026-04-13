@@ -28,6 +28,7 @@ import {
   StarOutlined,
   ToolOutlined
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Paragraph, Text } = Typography;
 const { TextArea } = Input;
@@ -35,6 +36,7 @@ const { Step } = Steps;
 const { Option } = Select;
 
 const DevenirPartenairePage: React.FC = () => {
+  const { t } = useTranslation();
   const [currentStep, setCurrentStep] = useState(0);
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
@@ -90,7 +92,7 @@ const DevenirPartenairePage: React.FC = () => {
           <Row gutter={[24, 24]}>
             <Col span={12}>
               <Form.Item
-                label="Prénom"
+                label={t('fields.firstName')}
                 name="prenom"
                 rules={[{ required: true, message: 'Prénom requis' }]}
               >
@@ -99,7 +101,7 @@ const DevenirPartenairePage: React.FC = () => {
             </Col>
             <Col span={12}>
               <Form.Item
-                label="Nom"
+                label={t('fields.name')}
                 name="nom"
                 rules={[{ required: true, message: 'Nom requis' }]}
               >
@@ -108,7 +110,7 @@ const DevenirPartenairePage: React.FC = () => {
             </Col>
             <Col span={12}>
               <Form.Item
-                label="Téléphone"
+                label={t('fields.phone')}
                 name="telephone"
                 rules={[{ required: true, message: 'Téléphone requis' }]}
               >
@@ -117,7 +119,7 @@ const DevenirPartenairePage: React.FC = () => {
             </Col>
             <Col span={12}>
               <Form.Item
-                label="Email"
+                label={t('fields.email')}
                 name="email"
                 rules={[
                   { required: true, message: 'Email requis' },

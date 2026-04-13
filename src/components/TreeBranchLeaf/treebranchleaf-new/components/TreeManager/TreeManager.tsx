@@ -32,6 +32,7 @@ import {
 import type { TreeBranchLeafTree } from '../../types';
 
 import './TreeManager.css';
+import { useTranslation } from 'react-i18next';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -78,6 +79,7 @@ const TreeManager: React.FC<TreeManagerProps> = ({
   onSave,
   onPreview
 }) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm<CreateTreeFormValues>();
   const [editForm] = Form.useForm<UpdateTreeFormValues>();
 
@@ -397,8 +399,8 @@ const TreeManager: React.FC<TreeManagerProps> = ({
             form.resetFields();
           }}
           onOk={() => form.submit()}
-          okText="Créer"
-          cancelText="Annuler"
+          okText={t('common.create')}
+          cancelText={t('common.cancel')}
         >
           <Form
             form={form}
@@ -414,12 +416,12 @@ const TreeManager: React.FC<TreeManagerProps> = ({
               <Input placeholder="Mon arbre de décision" />
             </Form.Item>
 
-            <Form.Item name="description" label="Description">
+            <Form.Item name="description" label={t('fields.description')}>
               <TextArea rows={3} placeholder="Description de l'arbre..." />
             </Form.Item>
 
             <div style={{ display: 'flex', gap: 12 }}>
-              <Form.Item name="category" label="Catégorie" style={{ flex: 1 }}>
+              <Form.Item name="category" label={t('fields.category')} style={{ flex: 1 }}>
                 <Select>
                   <Option value="formulaire">📋 Formulaire</Option>
                   <Option value="diagnostic">🩺 Diagnostic</Option>
@@ -430,7 +432,7 @@ const TreeManager: React.FC<TreeManagerProps> = ({
                 </Select>
               </Form.Item>
 
-              <Form.Item name="color" label="Couleur">
+              <Form.Item name="color" label={t('fields.color')}>
                 <ColorPicker showText format="hex" disabled={readOnly} />
               </Form.Item>
             </div>
@@ -457,7 +459,7 @@ const TreeManager: React.FC<TreeManagerProps> = ({
           }}
           onOk={() => editForm.submit()}
           okText="Sauvegarder"
-          cancelText="Annuler"
+          cancelText={t('common.cancel')}
         >
           <Form form={editForm} layout="vertical" onFinish={handleUpdate}>
             <Form.Item
@@ -468,12 +470,12 @@ const TreeManager: React.FC<TreeManagerProps> = ({
               <Input />
             </Form.Item>
 
-            <Form.Item name="description" label="Description">
+            <Form.Item name="description" label={t('fields.description')}>
               <TextArea rows={3} />
             </Form.Item>
 
             <div style={{ display: 'flex', gap: 12 }}>
-              <Form.Item name="category" label="Catégorie" style={{ flex: 1 }}>
+              <Form.Item name="category" label={t('fields.category')} style={{ flex: 1 }}>
                 <Select>
                   <Option value="formulaire">📋 Formulaire</Option>
                   <Option value="diagnostic">🩺 Diagnostic</Option>
@@ -484,7 +486,7 @@ const TreeManager: React.FC<TreeManagerProps> = ({
                 </Select>
               </Form.Item>
 
-              <Form.Item name="status" label="Statut">
+              <Form.Item name="status" label={t('fields.status')}>
                 <Select>
                   <Option value="draft">🚧 Brouillon</Option>
                   <Option value="published">✅ Publié</Option>
@@ -494,7 +496,7 @@ const TreeManager: React.FC<TreeManagerProps> = ({
             </div>
 
             <div style={{ display: 'flex', gap: 12 }}>
-              <Form.Item name="color" label="Couleur">
+              <Form.Item name="color" label={t('fields.color')}>
                 <ColorPicker showText format="hex" disabled={readOnly} />
               </Form.Item>
 
@@ -517,8 +519,8 @@ const TreeManager: React.FC<TreeManagerProps> = ({
           open
           onCancel={() => setDeleteModalVisible(false)}
           onOk={handleDelete}
-          okText="Supprimer"
-          cancelText="Annuler"
+          okText={t('common.delete')}
+          cancelText={t('common.cancel')}
           okButtonProps={{ danger: true }}
         >
           <Paragraph>

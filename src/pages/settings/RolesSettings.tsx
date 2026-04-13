@@ -17,6 +17,7 @@ import {
   RightOutlined,
   CheckOutlined,
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 
 const useScreenSize = () => {
   const [w, setW] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
@@ -130,6 +131,7 @@ interface Module {
 }
 
 const RolesSettings: React.FC = () => {
+  const { t } = useTranslation();
   const { currentOrganization } = useAuth();
   const { api } = useAuthenticatedApi();
   const { isMobile } = useScreenSize();
@@ -351,7 +353,7 @@ const RolesSettings: React.FC = () => {
                     cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}><SafetyCertificateOutlined style={{ fontSize: 16, color: FB.blue }} /></button>
 
-                  <button onClick={() => !isProtected && openForm(role)} title="Modifier" disabled={isProtected} style={{
+                  <button onClick={() => !isProtected && openForm(role)} title={t('common.edit')} disabled={isProtected} style={{
                     width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'transparent',
                     cursor: isProtected ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
                     opacity: isProtected ? 0.4 : 1,
@@ -379,7 +381,7 @@ const RolesSettings: React.FC = () => {
                       </div>
                     )}
                     <button onClick={() => !isProtected && setDeleteConfirm(deleteConfirm === role.id ? null : role.id)}
-                      disabled={isProtected} title="Supprimer" style={{
+                      disabled={isProtected} title={t('common.delete')} style={{
                         width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'transparent',
                         cursor: isProtected ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
                         opacity: isProtected ? 0.4 : 1,

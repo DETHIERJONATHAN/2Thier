@@ -4,6 +4,7 @@ import { LinkOutlined, AimOutlined, DeleteOutlined, SelectOutlined, PictureOutli
 import { useAuthenticatedApi } from '../../../../../../hooks/useAuthenticatedApi';
 import { useDebouncedCallback } from '../../../hooks/useDebouncedCallback';
 import NodeTreeSelector, { NodeTreeSelectorValue } from '../shared/NodeTreeSelector';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text } = Typography;
 
@@ -27,6 +28,7 @@ interface LinkPanelProps {
 }
 
 const LinkPanel: React.FC<LinkPanelProps> = ({ treeId, nodeId, value, onChange, readOnly }) => {
+  const { t } = useTranslation();
   const { api } = useAuthenticatedApi();
   const [config, setConfig] = useState<LinkConfigValue>(() => ({
     targetTreeId: (value as LinkConfigValue)?.targetTreeId,
@@ -314,8 +316,8 @@ const LinkPanel: React.FC<LinkPanelProps> = ({ treeId, nodeId, value, onChange, 
                 title="Supprimer le lien ?"
                 description="Cette action supprime la configuration du lien."
                 onConfirm={handleDeleteLink}
-                okText="Supprimer"
-                cancelText="Annuler"
+                okText={t('common.delete')}
+                cancelText={t('common.cancel')}
                 okButtonProps={{ danger: true }}
                 disabled={readOnly}
               >

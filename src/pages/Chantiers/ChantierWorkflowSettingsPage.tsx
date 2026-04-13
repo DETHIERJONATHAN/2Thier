@@ -10,6 +10,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useChantierStatuses } from '../../hooks/useChantierStatuses';
+import { useTranslation } from 'react-i18next';
 
 const { Text, Title } = Typography;
 
@@ -69,6 +70,7 @@ const INVOICE_TYPES = [
 ];
 
 const ChantierWorkflowSettingsPage: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const goBack = onBack || (() => navigate('/chantiers/settings'));
   const apiHook = useAuthenticatedApi();
@@ -486,10 +488,10 @@ const ChantierWorkflowSettingsPage: React.FC<{ onBack?: () => void }> = ({ onBac
         <Form form={transForm} layout="vertical">
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <Form.Item name="fromStatusId" label="De (statut source)" rules={[{ required: true }]} style={{ flex: '1 1 180px', minWidth: 0 }}>
-              <Select options={statusOptions} placeholder="Sélectionner..." />
+              <Select options={statusOptions} placeholder={t('common.selectPlaceholder')} />
             </Form.Item>
             <Form.Item name="toStatusId" label="Vers (statut cible)" rules={[{ required: true }]} style={{ flex: '1 1 180px', minWidth: 0 }}>
-              <Select options={statusOptions} placeholder="Sélectionner..." />
+              <Select options={statusOptions} placeholder={t('common.selectPlaceholder')} />
             </Form.Item>
           </div>
           <Form.Item name="triggerType" label="Déclencheur" rules={[{ required: true }]}>
@@ -508,7 +510,7 @@ const ChantierWorkflowSettingsPage: React.FC<{ onBack?: () => void }> = ({ onBac
             <Form.Item name="sendEmail" label="Envoyer email" valuePropName="checked">
               <Switch />
             </Form.Item>
-            <Form.Item name="isActive" label="Actif" valuePropName="checked">
+            <Form.Item name="isActive" label={t('fields.active')} valuePropName="checked">
               <Switch />
             </Form.Item>
           </div>
@@ -526,7 +528,7 @@ const ChantierWorkflowSettingsPage: React.FC<{ onBack?: () => void }> = ({ onBac
         styles={{ body: { maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' } }}
       >
         <Form form={templForm} layout="vertical">
-          <Form.Item name="type" label="Type" rules={[{ required: true }]}>
+          <Form.Item name="type" label={t('fields.type')} rules={[{ required: true }]}>
             <Select options={INVOICE_TYPES} />
           </Form.Item>
           <Form.Item name="label" label="Label" rules={[{ required: true, message: 'Label requis' }]}>
@@ -536,7 +538,7 @@ const ChantierWorkflowSettingsPage: React.FC<{ onBack?: () => void }> = ({ onBac
             <Select
               options={[{ value: null as unknown, label: '— Global (aucun statut) —' }, ...statusOptions]}
               allowClear
-              placeholder="Sélectionner..."
+              placeholder={t('common.selectPlaceholder')}
             />
           </Form.Item>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -551,7 +553,7 @@ const ChantierWorkflowSettingsPage: React.FC<{ onBack?: () => void }> = ({ onBac
             <Form.Item name="isRequired" label="Requis pour passer au statut suivant" valuePropName="checked">
               <Switch />
             </Form.Item>
-            <Form.Item name="isActive" label="Actif" valuePropName="checked">
+            <Form.Item name="isActive" label={t('fields.active')} valuePropName="checked">
               <Switch />
             </Form.Item>
           </div>

@@ -96,7 +96,7 @@ const WebBrowserPanel: React.FC<WebBrowserPanelProps> = ({ url, onClose }) => {
         </Tooltip>
 
         {/* Refresh */}
-        <Tooltip title="Actualiser">
+        <Tooltip title={t('common.refresh')}>
           <div
             onClick={handleRefresh}
             style={{

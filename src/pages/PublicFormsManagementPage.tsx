@@ -22,6 +22,7 @@ import {
   EyeOutlined,
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
+import { useTranslation } from 'react-i18next';
 
 const { TextArea } = Input;
 const { TabPane } = Tabs;
@@ -54,6 +55,7 @@ interface PublicForm {
 }
 
 const PublicFormsManagementPage: React.FC = () => {
+  const { t } = useTranslation();
   const { api } = useAuthenticatedApi();
   const [forms, setForms] = useState<PublicForm[]>([]);
   const [loading, setLoading] = useState(false);
@@ -256,17 +258,17 @@ const PublicFormsManagementPage: React.FC = () => {
             icon={<EditOutlined />}
             size="small"
             onClick={() => openModal(record)}
-            title="Éditer"
+            title={t('common.edit')}
           />
           <Popconfirm
             title="Supprimer ce formulaire ?"
             description="Cette action est irréversible"
             onConfirm={() => handleDelete(record.id)}
-            okText="Supprimer"
-            cancelText="Annuler"
+            okText={t('common.delete')}
+            cancelText={t('common.cancel')}
             okButtonProps={{ danger: true }}
           >
-            <Button icon={<DeleteOutlined />} size="small" danger title="Supprimer" />
+            <Button icon={<DeleteOutlined />} size="small" danger title={t('common.delete')} />
           </Popconfirm>
         </Space>
       ),
@@ -308,8 +310,8 @@ const PublicFormsManagementPage: React.FC = () => {
           form.resetFields();
         }}
         width={800}
-        okText="Enregistrer"
-        cancelText="Annuler"
+        okText={t('common.save')}
+        cancelText={t('common.cancel')}
         confirmLoading={loading}
       >
         <Form form={form} layout="vertical">
@@ -323,7 +325,7 @@ const PublicFormsManagementPage: React.FC = () => {
                 <Input placeholder="Ex: Formulaire de contact" />
               </Form.Item>
 
-              <Form.Item name="description" label="Description">
+              <Form.Item name="description" label={t('fields.description')}>
                 <TextArea
                   rows={2}
                   placeholder="Description courte du formulaire (optionnel)"
@@ -332,7 +334,7 @@ const PublicFormsManagementPage: React.FC = () => {
 
               <Form.Item
                 name="category"
-                label="Catégorie"
+                label={t('fields.category')}
                 rules={[{ required: true, message: 'La catégorie est requise' }]}
               >
                 <Select>

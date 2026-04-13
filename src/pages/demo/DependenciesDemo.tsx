@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import DynamicFormField from '../../components/dependencies/DynamicFormField';
+import { useTranslation } from 'react-i18next';
 
 /**
  * Page de démonstration du système de dépendances
@@ -7,6 +8,7 @@ import DynamicFormField from '../../components/dependencies/DynamicFormField';
  * grâce aux règles de dépendance
  */
 const DependenciesDemo = () => {
+  const { t } = useTranslation();
   // État pour stocker les valeurs du formulaire
   const [formValues, setFormValues] = useState({
     type_client: '',
@@ -88,7 +90,7 @@ const DependenciesDemo = () => {
               
               <DynamicFormField
                 id="pays"
-                label="Pays"
+                label={t('fields.country')}
                 type="select"
                 options={paysOptions}
                 required

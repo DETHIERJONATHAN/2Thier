@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { Card, Button, Typography, Divider, Tooltip, message, Input, Modal, Select, Switch } from 'antd';
 import { PlusOutlined, DeleteOutlined, DragOutlined, EditOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { useTranslation } from 'react-i18next';
 
 const { Text, Title } = Typography;
 const { Option } = Select;
@@ -296,8 +297,8 @@ const FieldConfigModal: React.FC<{
       open={isOpen}
       onOk={handleConfirm}
       onCancel={onClose}
-      okText="Confirmer"
-      cancelText="Annuler"
+      okText={t('common.confirm')}
+      cancelText={t('common.cancel')}
     >
       <div className="space-y-4">
         <div>
@@ -468,6 +469,7 @@ interface GenealogyNewProps {
 }
 
 const GenealogyNew: React.FC<GenealogyNewProps> = ({ fieldId, onTreeChange }) => {
+  const { t } = useTranslation();
   const [draggedType, setDraggedType] = useState<'option' | 'option-with-field' | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<number | null>(null);
   const [dragOverCell, setDragOverCell] = useState<string | null>(null);

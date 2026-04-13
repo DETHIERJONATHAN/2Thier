@@ -27,6 +27,7 @@ import {
   CheckCircleOutlined,
   ExclamationCircleOutlined
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text } = Typography;
 
@@ -47,6 +48,7 @@ interface GoogleVoiceUserManagerProps {
 }
 
 const GoogleVoiceUserManager: React.FC<GoogleVoiceUserManagerProps> = ({ onUserCreated }) => {
+  const { t } = useTranslation();
   const [users, setUsers] = useState<GoogleVoiceUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -184,8 +186,8 @@ const GoogleVoiceUserManager: React.FC<GoogleVoiceUserManagerProps> = ({ onUserC
           <Form.Item label="Numéro de destination" name="toNumber">
             <Input placeholder="+32..." />
           </Form.Item>
-          <Form.Item label="Message" name="message">
-            <Input.TextArea rows={3} placeholder="Votre message..." />
+          <Form.Item label={t('fields.message')} name="message">
+            <Input.TextArea rows={3} placeholder={t('fields.yourMessagePlaceholder')} />
           </Form.Item>
         </Form>
       ),

@@ -64,6 +64,7 @@ import {
 } from '../../utils/homographyUtils';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { CoordinateGrid } from './CoordinateGrid';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -154,6 +155,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
   mobileFullscreen = false,
   // 🎨 VISUALISATION DEBUG APRILTAG supprimée (V10 only)
 }) => {
+  const { t } = useTranslation();
   // Refs
   const stageRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -3604,7 +3606,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
             {/* Options avancées supprimées (homographie toujours active) */}
             
             {/* Actions workflow */}
-            <Card size="small" title="Actions">
+            <Card size="small" title={t('common.actions')}>
               <Space wrap>
                 {/* 🔒 BOUTON FERMER - Toujours visible pour sortir */}
                 {onCancel && (
@@ -3756,7 +3758,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
             <Divider type="vertical" />
 
             {/* Undo/Redo */}
-            <Tooltip title="Annuler">
+            <Tooltip title={t('common.cancel')}>
               <Button
                 icon={<UndoOutlined />}
                 onClick={undo}

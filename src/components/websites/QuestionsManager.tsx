@@ -49,6 +49,7 @@ import {
 } from '@ant-design/icons';
 import NodeTreeSelector, { NodeTreeSelectorValue } from '../TreeBranchLeaf/treebranchleaf-new/components/Parameters/shared/NodeTreeSelector';
 import type { ColumnsType } from 'antd/es/table';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 
@@ -134,6 +135,7 @@ interface OptionsEditorProps {
 }
 
 const OptionsEditor: React.FC<OptionsEditorProps> = ({ value = [], onChange, formId: _formId, tblRootNodeId }) => {
+  const { t } = useTranslation();
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
   const [nodeTreeSelectorOpen, setNodeTreeSelectorOpen] = useState(false);
   const [selectedOptionIndex, setSelectedOptionIndex] = useState<number | null>(null);
@@ -779,7 +781,7 @@ const QuestionsManagerModal: React.FC<QuestionsManagerModalProps> = ({
               onClick={() => handleManageNavigation(record)}
             />
           </Tooltip>
-          <Tooltip title="Modifier">
+          <Tooltip title={t('common.edit')}>
             <Button
               size="small"
               icon={<EditOutlined />}
@@ -800,8 +802,8 @@ const QuestionsManagerModal: React.FC<QuestionsManagerModalProps> = ({
           <Popconfirm
             title="Supprimer cette question ?"
             onConfirm={() => handleDeleteQuestion(record.id)}
-            okText="Supprimer"
-            cancelText="Annuler"
+            okText={t('common.delete')}
+            cancelText={t('common.cancel')}
             okButtonProps={{ danger: true }}
           >
             <Button size="small" danger icon={<DeleteOutlined />} />
@@ -1010,7 +1012,7 @@ const QuestionsManagerModal: React.FC<QuestionsManagerModalProps> = ({
           >
             <Select
               allowClear
-              placeholder="Sélectionner..."
+              placeholder={t('common.selectPlaceholder')}
               showSearch
               optionFilterProp="children"
               options={questions
@@ -1069,7 +1071,7 @@ const QuestionsManagerModal: React.FC<QuestionsManagerModalProps> = ({
           >
             <Select
               allowClear
-              placeholder="Sélectionner..."
+              placeholder={t('common.selectPlaceholder')}
               showSearch
               optionFilterProp="children"
               options={questions

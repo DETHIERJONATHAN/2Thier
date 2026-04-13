@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Table, Button, message, Tag, Popconfirm, Space } from 'antd';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { Role } from '../../types'; // Assumant que Role est dans vos types
+import { useTranslation } from 'react-i18next';
 
 // Définition du type pour une invitation
 interface Invitation {
@@ -18,6 +19,7 @@ interface InvitationsListProps {
 }
 
 const InvitationsList: React.FC<InvitationsListProps> = ({ refreshKey }) => {
+  const { t } = useTranslation();
   const { api } = useAuthenticatedApi();
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -103,7 +105,7 @@ const InvitationsList: React.FC<InvitationsListProps> = ({ refreshKey }) => {
               title="Êtes-vous sûr de vouloir révoquer cette invitation ?"
               onConfirm={() => handleRevokeInvitation(record.id)}
               okText="Oui, révoquer"
-              cancelText="Non"
+              cancelText={t('common.no')}
             >
               <Button size="small" danger>Révoquer</Button>
             </Popconfirm>

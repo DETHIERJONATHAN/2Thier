@@ -29,6 +29,7 @@ import {
   ExclamationCircleOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 
@@ -67,6 +68,7 @@ interface DocumentsSectionProps {
 }
 
 const DocumentsSection = ({ submissionId, leadId, treeId, onLoadDevis, onDeleteDevis }: DocumentsSectionProps) => {
+  const { t } = useTranslation();
   const { api } = useAuthenticatedApi();
   
   const [documents, setDocuments] = useState<GeneratedDocument[]>([]);
@@ -681,10 +683,10 @@ const DocumentsSection = ({ submissionId, leadId, treeId, onLoadDevis, onDeleteD
             <div className="space-y-4">
               {/* Informations générales */}
               <Descriptions bordered size="small" column={2}>
-                <Descriptions.Item label="Type">
+                <Descriptions.Item label={t('fields.type')}>
                   {getTypeIcon(previewData.type)} {previewData.type}
                 </Descriptions.Item>
-                <Descriptions.Item label="Statut">
+                <Descriptions.Item label={t('fields.status')}>
                   {getStatusTag(previewData.status)}
                 </Descriptions.Item>
                 <Descriptions.Item label="Numéro">
@@ -712,7 +714,7 @@ const DocumentsSection = ({ submissionId, leadId, treeId, onLoadDevis, onDeleteD
 
               {/* Lead */}
               {previewData.lead && (
-                <Card size="small" title="Client">
+                <Card size="small" title={t('fields.client')}>
                   <Space direction="vertical" size="small">
                     <Text strong>
                       {previewData.lead.firstName} {previewData.lead.lastName}

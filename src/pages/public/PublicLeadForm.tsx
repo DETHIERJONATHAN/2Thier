@@ -10,6 +10,7 @@ import {
   MailOutlined,
   RocketOutlined
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Paragraph, Text } = Typography;
 const { TextArea } = Input;
@@ -59,6 +60,7 @@ const publicCategories = [
 ];
 
 export default function PublicLeadForm() {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState<Partial<PublicLeadFormData>>({});
@@ -309,7 +311,7 @@ export default function PublicLeadForm() {
               <Col span={12}>
                 <Form.Item
                   name="firstName"
-                  label="Prénom"
+                  label={t('fields.firstName')}
                   rules={[{ required: true, message: 'Votre prénom' }]}
                 >
                   <Input size="large" prefix={<UserOutlined />} />
@@ -318,7 +320,7 @@ export default function PublicLeadForm() {
               <Col span={12}>
                 <Form.Item
                   name="lastName"
-                  label="Nom"
+                  label={t('fields.name')}
                   rules={[{ required: true, message: 'Votre nom' }]}
                 >
                   <Input size="large" prefix={<UserOutlined />} />
@@ -342,7 +344,7 @@ export default function PublicLeadForm() {
               <Col span={12}>
                 <Form.Item
                   name="phone"
-                  label="Téléphone"
+                  label={t('fields.phone')}
                   rules={[{ required: true, message: 'Numéro requis' }]}
                 >
                   <Input size="large" prefix={<PhoneOutlined />} placeholder="06 12 34 56 78" />

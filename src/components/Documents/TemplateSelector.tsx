@@ -19,6 +19,7 @@ import {
   DocumentTemplate,
   getTemplatesByCategory,
 } from './DocumentTemplates';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text, Paragraph } = Typography;
 const { TabPane } = Tabs;
@@ -86,7 +87,7 @@ const TemplateCard: React.FC<{
       
       <div style={{ textAlign: 'center' }}>
         <Tag color="blue">{template.modules.length} modules</Tag>
-        <Tooltip title="Prévisualiser">
+        <Tooltip title={t('common.preview')}>
           <Button 
             type="text" 
             size="small" 
@@ -268,6 +269,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
   onClose,
   onSelectTemplate,
 }) => {
+  const { t } = useTranslation();
   const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
   const [isBlankSelected, setIsBlankSelected] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState<DocumentTemplate | null>(null);

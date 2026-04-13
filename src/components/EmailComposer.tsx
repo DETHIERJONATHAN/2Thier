@@ -15,6 +15,7 @@ import { Modal, Form, Input, Button, message, Space, Tooltip, Upload, Collapse }
 import { SaveOutlined, SendOutlined, LoadingOutlined, CloseOutlined, UploadOutlined } from '@ant-design/icons';
 import { useDrafts, CreateDraftData, DraftData } from '../hooks/useDrafts';
 import SimpleHtmlEditor from './SimpleHtmlEditor';
+import { useTranslation } from 'react-i18next';
 
 interface EmailComposerProps {
   open: boolean;
@@ -39,6 +40,7 @@ export const EmailComposer: React.FC<EmailComposerProps> = ({
   editingDraft,
   prefilledData
 }) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
   const [sending, setSending] = useState(false);
   const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
@@ -394,7 +396,7 @@ export const EmailComposer: React.FC<EmailComposerProps> = ({
 
           {/* Zone de message */}
           <Form.Item
-            label="Message"
+            label={t('fields.message')}
             name="body"
             style={{ marginBottom: '24px' }}
           >

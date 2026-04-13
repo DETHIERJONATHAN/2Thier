@@ -2,8 +2,10 @@ import React from 'react';
 import { Card, Descriptions, Tag, Alert, Button } from 'antd';
 import { useAuth } from '../../auth/useAuth';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { useTranslation } from 'react-i18next';
 
 const AuthDebugPage: React.FC = () => {
+  const { t } = useTranslation();
   const { user, organizations, currentOrganization, permissions, modules, loading, isSuperAdmin, userRole } = useAuth();
   const { api } = useAuthenticatedApi();
 
@@ -43,8 +45,8 @@ const AuthDebugPage: React.FC = () => {
       <Card title="👤 Utilisateur connecté" style={{ marginBottom: 16 }}>
         {user ? (
           <Descriptions bordered column={1}>
-            <Descriptions.Item label="Email">{user.email}</Descriptions.Item>
-            <Descriptions.Item label="Nom">{user.firstName} {user.lastName}</Descriptions.Item>
+            <Descriptions.Item label={t('fields.email')}>{user.email}</Descriptions.Item>
+            <Descriptions.Item label={t('fields.name')}>{user.firstName} {user.lastName}</Descriptions.Item>
             <Descriptions.Item label="ID">{user.id}</Descriptions.Item>
             <Descriptions.Item label="Super Admin">
               <Tag color={isSuperAdmin ? 'red' : 'default'}>
@@ -64,9 +66,9 @@ const AuthDebugPage: React.FC = () => {
       <Card title="🏢 Organisation courante" style={{ marginBottom: 16 }}>
         {currentOrganization ? (
           <Descriptions bordered column={1}>
-            <Descriptions.Item label="Nom">{currentOrganization.name}</Descriptions.Item>
+            <Descriptions.Item label={t('fields.name')}>{currentOrganization.name}</Descriptions.Item>
             <Descriptions.Item label="ID">{currentOrganization.id}</Descriptions.Item>
-            <Descriptions.Item label="Statut">
+            <Descriptions.Item label={t('fields.status')}>
               <Tag color="green">{currentOrganization.status}</Tag>
             </Descriptions.Item>
           </Descriptions>

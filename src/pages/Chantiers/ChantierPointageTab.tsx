@@ -15,6 +15,7 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import PointageClockIn from './PointageClockIn';
 import { STATUS_LABELS, POINTAGE_STATUS_OPTIONS } from './pointageConstants';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 
@@ -86,6 +87,7 @@ function formatDuration(minutes: number | null): string {
 }
 
 const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, chantierName, chantierLatitude, chantierLongitude, geoFenceRadius }) => {
+  const { t } = useTranslation();
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, [apiHook.api]);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
@@ -325,7 +327,7 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, c
       width: 50,
       render: (_: unknown, r: TimeEntry) => (
         <Space size={4}>
-          <Popconfirm title="Supprimer ce pointage ?" onConfirm={() => handleDelete(r.id)} okText="Oui" cancelText="Non">
+          <Popconfirm title="Supprimer ce pointage ?" onConfirm={() => handleDelete(r.id)} okText={t('common.yes')} cancelText={t('common.no')}>
             <Button danger size="small" icon={<DeleteOutlined />} style={{ fontSize: 10 }} />
           </Popconfirm>
         </Space>
@@ -451,7 +453,7 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, c
                       </Text>
                       {r.Technician.type === 'SUBCONTRACTOR' && <Tag style={{ fontSize: 9, lineHeight: '14px', padding: '0 3px' }} color="default">🏢 ST</Tag>}
                     </div>
-                    <Popconfirm title="Supprimer ?" onConfirm={() => handleDelete(r.id)} okText="Oui" cancelText="Non">
+                    <Popconfirm title="Supprimer ?" onConfirm={() => handleDelete(r.id)} okText={t('common.yes')} cancelText={t('common.no')}>
                       <Button danger size="small" icon={<DeleteOutlined />} style={{ minWidth: 32, minHeight: 32 }} />
                     </Popconfirm>
                   </div>

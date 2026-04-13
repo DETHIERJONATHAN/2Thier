@@ -2,6 +2,7 @@ import { Modal, Form, Input, ColorPicker, Upload, Button, Switch, message } from
 import { UploadOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import type { Color } from 'antd/es/color-picker';
+import { useTranslation } from 'react-i18next';
 
 interface ThemeEditorModalProps {
   visible: boolean;
@@ -11,6 +12,7 @@ interface ThemeEditorModalProps {
 }
 
 const ThemeEditorModal = ({ visible, onClose, onSave, initialTheme }: ThemeEditorModalProps) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
 
@@ -194,7 +196,7 @@ const ThemeEditorModal = ({ visible, onClose, onSave, initialTheme }: ThemeEdito
 
           <Form.Item
             name="isActive"
-            label="Actif"
+            label={t('fields.active')}
             valuePropName="checked"
           >
             <Switch />

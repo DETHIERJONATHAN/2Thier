@@ -12,11 +12,13 @@ import { getErrorMessage } from '../../utils/errorHandling';
 // Types
 import { Lead } from '../../types/leads';
 import { LEAD_SOURCES } from './LeadsConfig';
+import { useTranslation } from 'react-i18next';
 
 /**
  * Liste principale des leads avec fonctionnalités de filtre et recherche
  */
 export default function LeadsList() {
+  const { t } = useTranslation();
   // Navigation
   const navigate = useNavigate();
 
@@ -330,7 +332,7 @@ export default function LeadsList() {
                     <th className="px-3 md:px-6 py-3 text-left">
                       <ColumnFilter 
                         column="status" 
-                        label="Statut" 
+                        label={t('fields.status')} 
                         onSort={(col) => {
                           if (sortColumn === col) {
                             setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -378,7 +380,7 @@ export default function LeadsList() {
                     <th className="hidden lg:table-cell px-3 md:px-6 py-3 text-left">
                       <ColumnFilter 
                         column="assignedTo" 
-                        label="Assigné à" 
+                        label={t('fields.assignedTo')} 
                         onSort={(col) => {
                           if (sortColumn === col) {
                             setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -394,7 +396,7 @@ export default function LeadsList() {
                     <th className="hidden lg:table-cell px-3 md:px-6 py-3 text-left">
                       <ColumnFilter 
                         column="source" 
-                        label="Source" 
+                        label={t('fields.source')} 
                         onSort={(col) => {
                           if (sortColumn === col) {
                             setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');

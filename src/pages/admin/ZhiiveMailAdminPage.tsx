@@ -30,6 +30,7 @@ import {
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
 import { SF } from '../../components/zhiive/ZhiiveTheme';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -102,6 +103,7 @@ interface PostalMessage {
 // ═══ Composant principal ═════════════════════════════════════
 
 const ZhiiveMailAdminPage: React.FC = () => {
+  const { t } = useTranslation();
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook, []);
   const { isSuperAdmin } = useAuth();
@@ -329,7 +331,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
                     <Space>
                       <Tag color={serverOverview.suppressions > 0 ? 'red' : 'green'}>{serverOverview.suppressions}</Tag>
                       {serverOverview.suppressions > 0 && (
-                        <Popconfirm title="Vider la liste de suppression ?" onConfirm={handleClearSuppressions} okText="Vider" cancelText="Annuler">
+                        <Popconfirm title="Vider la liste de suppression ?" onConfirm={handleClearSuppressions} okText="Vider" cancelText={t('common.cancel')}>
                           <Button size="small" icon={<ClearOutlined />} danger>Vider</Button>
                         </Popconfirm>
                       )}
@@ -461,7 +463,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
       extra={
         <Space>
           <Button icon={<ReloadOutlined />} onClick={fetchStatus} size="small">Rafraîchir</Button>
-          <Popconfirm title="Provisionner @zhiive.com pour tous les utilisateurs sans compte ?" onConfirm={handleProvisionAll} okText="Provisionner" cancelText="Annuler">
+          <Popconfirm title="Provisionner @zhiive.com pour tous les utilisateurs sans compte ?" onConfirm={handleProvisionAll} okText="Provisionner" cancelText={t('common.cancel')}>
             <Button type="primary" icon={<ThunderboltOutlined />} loading={provisionLoading} style={{ background: SF.primary, borderColor: SF.primary }} size="small">
               Provisionner tous
             </Button>
@@ -489,7 +491,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
             render: (_: unknown, r: EmailAccount) => (
               <Space>
                 <Tooltip title="Modifier l'adresse"><Button size="small" icon={<EditOutlined />} onClick={() => { setEditEmail(r.emailAddress); setEditModal({ visible: true, account: r }); }} /></Tooltip>
-                <Popconfirm title="Supprimer ce compte email ?" onConfirm={() => handleDelete(r.id)} okText="Supprimer" cancelText="Annuler">
+                <Popconfirm title="Supprimer ce compte email ?" onConfirm={() => handleDelete(r.id)} okText={t('common.delete')} cancelText={t('common.cancel')}>
                   <Button size="small" danger icon={<DeleteOutlined />} />
                 </Popconfirm>
               </Space>
@@ -544,10 +546,10 @@ const ZhiiveMailAdminPage: React.FC = () => {
 
       <Card size="small" title={<><PoweroffOutlined /> Actions serveur</>}>
         <Space>
-          <Popconfirm title="Vider les suppressions ?" onConfirm={handleClearSuppressions} okText="Vider" cancelText="Annuler">
+          <Popconfirm title="Vider les suppressions ?" onConfirm={handleClearSuppressions} okText="Vider" cancelText={t('common.cancel')}>
             <Button icon={<ClearOutlined />}>Vider suppressions ({serverOverview?.suppressions || 0})</Button>
           </Popconfirm>
-          <Popconfirm title="Redémarrer les containers Postal ?" onConfirm={handleRestartPostal} okText="Redémarrer" cancelText="Annuler">
+          <Popconfirm title="Redémarrer les containers Postal ?" onConfirm={handleRestartPostal} okText="Redémarrer" cancelText={t('common.cancel')}>
             <Button icon={<PoweroffOutlined />} danger>Redémarrer Postal</Button>
           </Popconfirm>
         </Space>
@@ -585,7 +587,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
         ]}
       />
 
-      <Modal title="Modifier l'adresse email" open={editModal.visible} onOk={handleEdit} onCancel={() => setEditModal({ visible: false, account: null })} okText="Enregistrer" cancelText="Annuler">
+      <Modal title="Modifier l'adresse email" open={editModal.visible} onOk={handleEdit} onCancel={() => setEditModal({ visible: false, account: null })} okText={t('common.save')} cancelText={t('common.cancel')}>
         {editModal.account && (
           <div>
             <Text type="secondary">Utilisateur : {editModal.account.user?.firstName} {editModal.account.user?.lastName}</Text>

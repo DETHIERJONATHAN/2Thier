@@ -30,6 +30,7 @@ import {
   FireOutlined
 } from '@ant-design/icons';
 import '../styles/global-premium.css';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;
@@ -41,6 +42,7 @@ const { Option } = Select;
  */
 
 const PremiumTestPage: React.FC = () => {
+  const { t } = useTranslation();
   const [modalVisible, setModalVisible] = useState(false);
   const [form] = Form.useForm();
 
@@ -267,12 +269,12 @@ const PremiumTestPage: React.FC = () => {
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item label="Email" name="email">
+              <Form.Item label={t('fields.email')} name="email">
                 <Input placeholder="votre@email.com" size="large" />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item label="Téléphone" name="phone">
+              <Form.Item label={t('fields.phone')} name="phone">
                 <Input placeholder="+32 4XX XX XX XX" size="large" />
               </Form.Item>
             </Col>

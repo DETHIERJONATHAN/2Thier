@@ -3,6 +3,7 @@ import { Modal, Form, Input, DatePicker, Select, Button, Space, message, TimePic
 import { CalendarOutlined, UserOutlined, ProjectOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useCalendarIntegration, CalendarEvent } from '../services/CalendarIntegrationService';
+import { useTranslation } from 'react-i18next';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -30,6 +31,7 @@ const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
   leadId,
   prefilledData
 }) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const { createProjectMeeting, createLeadMeeting } = useCalendarIntegration();
@@ -151,7 +153,7 @@ const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
         </Form.Item>
 
         <Form.Item
-          label="Description"
+          label={t('fields.description')}
           name="description"
         >
           <TextArea 

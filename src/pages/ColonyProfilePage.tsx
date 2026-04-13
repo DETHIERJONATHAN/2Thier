@@ -10,6 +10,7 @@ import {
   UserOutlined,
 } from '@ant-design/icons';
 import { WallPostCard, WallPostData } from './DashboardPageUnified';
+import { useTranslation } from 'react-i18next';
 
 /* ═══ FB Colors ═══ */
 const ORG_COLOR = SF.primary;
@@ -61,6 +62,7 @@ interface ColonyProfile {
    COLONY PROFILE PAGE
    ═══════════════════════════════════════════════════════════════ */
 const ColonyProfilePage: React.FC = () => {
+  const { t } = useTranslation();
   const { orgId } = useParams<{ orgId: string }>();
   const { user, currentOrganization } = useAuth();
   const { api } = useAuthenticatedApi();
@@ -226,7 +228,7 @@ const ColonyProfilePage: React.FC = () => {
             <div>
               {/* Description */}
               {colony.description && (
-                <FBCard title="Description">
+                <FBCard title={t('fields.description')}>
                   <p style={{ fontSize: 15, color: FB.text, lineHeight: 1.5, margin: 0 }}>{colony.description}</p>
                 </FBCard>
               )}
@@ -257,7 +259,7 @@ const ColonyProfilePage: React.FC = () => {
 
             <div>
               {/* Résumé */}
-              <FBCard title="Résumé">
+              <FBCard title={t('common.summary')}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div style={{ background: FB.bg, borderRadius: 8, padding: 20, textAlign: 'center' }}>
                     <TeamOutlined style={{ fontSize: 28, color: ORG_COLOR }} />

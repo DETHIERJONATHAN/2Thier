@@ -2,6 +2,7 @@ import { Modal, Form, ColorPicker, Select, InputNumber, Input, Space, Divider, U
 import { PictureOutlined, UploadOutlined } from '@ant-design/icons';
 import { useState, useEffect } from 'react';
 import type { Color } from 'antd/es/color-picker';
+import { useTranslation } from 'react-i18next';
 
 export type DocumentGlobalTheme = {
   // Couleurs générales
@@ -62,6 +63,7 @@ const THEME_PRESETS = [
 ];
 
 const DocumentGlobalThemeEditor = ({ open, onClose, onSave, initialTheme }: DocumentGlobalThemeEditorProps) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
   const [selectedPreset, setSelectedPreset] = useState<string>('modern');
 
@@ -116,7 +118,7 @@ const DocumentGlobalThemeEditor = ({ open, onClose, onSave, initialTheme }: Docu
       onOk={handleSave}
       width={900}
       okText="Appliquer"
-      cancelText="Annuler"
+      cancelText={t('common.cancel')}
     >
       <div style={{ maxHeight: '70vh', overflowY: 'auto', paddingRight: '10px' }}>
         <Form

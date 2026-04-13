@@ -3,6 +3,7 @@ import { Card, ColorPicker, Divider, Form, Input, InputNumber, Select, Switch, T
 import { UploadOutlined } from '@ant-design/icons';
 import { useDebouncedCallback } from '../../../../hooks/useDebouncedCallback';
 import { TooltipRichEditor } from '../../../../../../common/TooltipRichEditor';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text } = Typography;
 
@@ -76,6 +77,7 @@ const DEFAULT_CONFIG: Record<string, unknown> = {
 };
 
 const UniversalPanel: React.FC<UniversalPanelProps> = ({ value = {}, onChange, readOnly }) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
   const [uploadFileList, setUploadFileList] = useState<any[]>([]);
   const normalizedValues = useMemo(() => {
@@ -860,7 +862,7 @@ const UniversalPanel: React.FC<UniversalPanelProps> = ({ value = {}, onChange, r
 
         <Divider orientation="left">Tooltip d'aide</Divider>
         <div style={GRID_STYLE}>
-          <Form.Item name="helpTooltipType" label="Type">
+          <Form.Item name="helpTooltipType" label={t('fields.type')}>
             <Select
               options={[
                 { value: 'none', label: 'Aucun' },

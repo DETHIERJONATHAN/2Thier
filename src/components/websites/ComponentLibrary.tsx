@@ -17,6 +17,7 @@ import {
   ThunderboltOutlined,
   FireOutlined
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 
@@ -38,6 +39,7 @@ interface ComponentItem {
 const ComponentLibrary: React.FC<{
   onSelectComponent: (component: ComponentItem) => void;
 }> = ({ onSelectComponent }) => {
+  const { t } = useTranslation();
   const [searchTerm, setSearchTerm] = useState('');
 
   // 🎨 DÉFINITION DE TOUS LES COMPOSANTS DISPONIBLES
@@ -627,7 +629,7 @@ const ComponentLibrary: React.FC<{
 
         {/* BARRE DE RECHERCHE */}
         <Input
-          placeholder="Rechercher..."
+          placeholder={t('common.searchPlaceholder')}
           prefix={<SearchOutlined />}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}

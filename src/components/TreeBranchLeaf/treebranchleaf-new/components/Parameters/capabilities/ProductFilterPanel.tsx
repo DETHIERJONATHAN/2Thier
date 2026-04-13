@@ -19,6 +19,7 @@ import {
 } from '@dnd-kit/sortable';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 
@@ -342,8 +343,8 @@ const SortableProductTag: React.FC<{
             title="Supprimer cette option ?"
             description={`Supprimer « ${option.label} » des produits ?`}
             onConfirm={() => onRemove(option.value)}
-            okText="Supprimer"
-            cancelText="Annuler"
+            okText={t('common.delete')}
+            cancelText={t('common.cancel')}
             okButtonProps={{ danger: true }}
           >
             <span
@@ -392,6 +393,7 @@ interface ProductFilterPanelProps {
 }
 
 const ProductFilterPanel: React.FC<ProductFilterPanelProps> = ({ treeId, nodeId, onNodeUpdate, readOnly }) => {
+  const { t } = useTranslation();
   const { api } = useAuthenticatedApi();
 
   const [loading, setLoading] = useState(false);

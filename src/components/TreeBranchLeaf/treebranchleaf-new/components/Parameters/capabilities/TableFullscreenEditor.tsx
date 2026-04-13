@@ -23,6 +23,7 @@ import {
   ArrowLeftOutlined,
   ArrowRightOutlined,
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 
@@ -158,6 +159,7 @@ const TableFullscreenEditor: React.FC<TableFullscreenEditorProps> = ({
   readOnly = false,
   tableName,
 }) => {
+  const { t } = useTranslation();
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -434,8 +436,8 @@ const TableFullscreenEditor: React.FC<TableFullscreenEditorProps> = ({
                         title={`Supprimer la colonne "${col}" ?`}
                         description="Toutes les données de cette colonne seront perdues."
                         onConfirm={() => removeColumn(cIdx)}
-                        okText="Supprimer"
-                        cancelText="Annuler"
+                        okText={t('common.delete')}
+                        cancelText={t('common.cancel')}
                         okButtonProps={{ danger: true }}
                       >
                         <Button
@@ -517,8 +519,8 @@ const TableFullscreenEditor: React.FC<TableFullscreenEditorProps> = ({
                             title={`Supprimer la ligne ${dataIndex} ?`}
                             description={`"${label}" sera supprimée définitivement.`}
                             onConfirm={() => removeRow(rowIndex)}
-                            okText="Supprimer"
-                            cancelText="Annuler"
+                            okText={t('common.delete')}
+                            cancelText={t('common.cancel')}
                             okButtonProps={{ danger: true }}
                           >
                             <Button

@@ -3,6 +3,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { Table, Button, Space, Modal, message, Typography, Tag, Tooltip } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, ExportOutlined, ImportOutlined, EyeOutlined, LockOutlined } from '@ant-design/icons';
 import { useAuth } from '../auth/useAuth';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text } = Typography;
 
@@ -61,6 +62,7 @@ const TableauPermissions: React.FC<TableauPermissionsProps> = ({
   context,
   readOnly = false
 }) => {
+  const { t } = useTranslation();
   const { user } = useAuth();
   
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
@@ -269,7 +271,7 @@ const TableauPermissions: React.FC<TableauPermissionsProps> = ({
               )}
               
               {canEditRow && (
-                <Tooltip title="Modifier">
+                <Tooltip title={t('common.edit')}>
                   <Button 
                     type="text" 
                     icon={<EditOutlined />} 
@@ -280,7 +282,7 @@ const TableauPermissions: React.FC<TableauPermissionsProps> = ({
               )}
               
               {canDeleteRow && (
-                <Tooltip title="Supprimer">
+                <Tooltip title={t('common.delete')}>
                   <Button 
                     type="text" 
                     icon={<DeleteOutlined />} 

@@ -49,6 +49,7 @@ import {
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import dayjs from 'dayjs';
 import 'dayjs/locale/fr';
+import { useTranslation } from 'react-i18next';
 
 dayjs.locale('fr');
 
@@ -105,6 +106,7 @@ const CampaignForm: React.FC<CampaignFormProps> = ({
   campaign, 
   isEdit = false 
 }) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
 
   useEffect(() => {
@@ -148,7 +150,7 @@ const CampaignForm: React.FC<CampaignFormProps> = ({
       onOk={handleSubmit}
       confirmLoading={loading}
       okText={isEdit ? 'Mettre à jour' : 'Créer'}
-      cancelText="Annuler"
+      cancelText={t('common.cancel')}
       width={800}
     >
       <Form form={form} layout="vertical">
@@ -167,7 +169,7 @@ const CampaignForm: React.FC<CampaignFormProps> = ({
               <Col span={12}>
                 <Form.Item 
                   name="category" 
-                  label="Catégorie" 
+                  label={t('fields.category')} 
                   rules={[{ required: true, message: 'Catégorie requise' }]}
                 >
                   <Select placeholder="Sélectionner une catégorie">
@@ -184,7 +186,7 @@ const CampaignForm: React.FC<CampaignFormProps> = ({
               </Col>
             </Row>
 
-            <Form.Item name="description" label="Description">
+            <Form.Item name="description" label={t('fields.description')}>
               <TextArea 
                 rows={3}
                 placeholder="Décrivez votre campagne et son objectif..."
@@ -628,21 +630,21 @@ export default function LeadGenerationPage() {
               onClick={() => handleToggleCampaignStatus(record)}
             />
           </Tooltip>
-          <Tooltip title="Modifier">
+          <Tooltip title={t('common.edit')}>
             <Button
               size="small"
               icon={<EditOutlined />}
               onClick={() => openEditModal(record)}
             />
           </Tooltip>
-          <Tooltip title="Dupliquer">
+          <Tooltip title={t('common.duplicate')}>
             <Button
               size="small"
               icon={<CopyOutlined />}
               onClick={() => handleDuplicateCampaign(record)}
             />
           </Tooltip>
-          <Tooltip title="Détails">
+          <Tooltip title={t('common.details')}>
             <Button
               size="small"
               icon={<BarChartOutlined />}
@@ -795,9 +797,9 @@ export default function LeadGenerationPage() {
           <div className="space-y-4">
             <Card title="Informations générales" size="small">
               <Descriptions column={1} size="small">
-                <Descriptions.Item label="Nom">{selectedCampaign.name}</Descriptions.Item>
-                <Descriptions.Item label="Catégorie">{selectedCampaign.category}</Descriptions.Item>
-                <Descriptions.Item label="Description">{selectedCampaign.description || 'Aucune description'}</Descriptions.Item>
+                <Descriptions.Item label={t('fields.name')}>{selectedCampaign.name}</Descriptions.Item>
+                <Descriptions.Item label={t('fields.category')}>{selectedCampaign.category}</Descriptions.Item>
+                <Descriptions.Item label={t('fields.description')}>{selectedCampaign.description || 'Aucune description'}</Descriptions.Item>
                 <Descriptions.Item label="Zones ciblées">
                   {selectedCampaign.targetPostalCodes.map(code => (
                     <Tag key={code} className="mb-1">{code}</Tag>

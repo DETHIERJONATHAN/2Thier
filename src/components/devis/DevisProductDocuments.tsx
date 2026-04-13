@@ -32,6 +32,7 @@ import {
   BookOutlined, ToolOutlined
 } from '@ant-design/icons';
 import { useProductDocuments, ProductDocument, DOCUMENT_CATEGORIES } from '../../hooks/useProductDocuments';
+import { useTranslation } from 'react-i18next';
 
 const { Text, Title } = Typography;
 const { Panel } = Collapse;
@@ -84,6 +85,7 @@ const DevisProductDocuments: React.FC<DevisProductDocumentsProps> = ({
   attachedDocumentIds = [],
   compact = false
 }) => {
+  const { t } = useTranslation();
   const productDocs = useProductDocuments();
   const [grouped, setGrouped] = useState<Record<string, ProductDocument[]>>({});
   const [allDocuments, setAllDocuments] = useState<ProductDocument[]>([]);
@@ -206,7 +208,7 @@ const DevisProductDocuments: React.FC<DevisProductDocumentsProps> = ({
               <List.Item
                 className={`px-2 rounded ${isAttached ? 'bg-green-50' : ''}`}
                 actions={[
-                  <Tooltip key="dl" title="Télécharger">
+                  <Tooltip key="dl" title={t('common.download')}>
                     <Button
                       type="text"
                       size="small"
@@ -323,7 +325,7 @@ const DevisProductDocuments: React.FC<DevisProductDocumentsProps> = ({
                         isAttached ? 'bg-green-50' : isSelected ? 'bg-blue-50' : ''
                       }`}
                       actions={[
-                        <Tooltip key="dl" title="Télécharger">
+                        <Tooltip key="dl" title={t('common.download')}>
                           <Button
                             type="text"
                             size="small"

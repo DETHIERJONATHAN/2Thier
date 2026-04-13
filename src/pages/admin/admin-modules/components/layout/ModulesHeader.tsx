@@ -2,6 +2,7 @@ import { SF, FB } from '../../../../../components/zhiive/ZhiiveTheme';
 import React from 'react';
 import { Input, Button, Tooltip, Badge } from 'antd';
 import { ReloadOutlined, AppstoreOutlined, CheckCircleOutlined, RocketOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 
 // ── Facebook Design Tokens ──
 type ModulesHeaderProps = {
@@ -22,6 +23,7 @@ type ModulesHeaderProps = {
 };
 
 export default function ModulesHeader(props: ModulesHeaderProps) {
+  const { t } = useTranslation();
 	const {
 		categoriesCount,
 		totalModules,
@@ -113,7 +115,7 @@ export default function ModulesHeader(props: ModulesHeaderProps) {
 							onChange={(e) => onOrderFilterChange(e.target.value)}
 							style={{ maxWidth: 200 }}
 						/>
-						<button onClick={onRefresh} title="Actualiser" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: 'none', background: FB.btnGray, color: FB.text, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+						<button onClick={onRefresh} title={t('common.refresh')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: 'none', background: FB.btnGray, color: FB.text, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
 							<span>🔄</span><span>Actualiser</span>
 						</button>
 					</div>

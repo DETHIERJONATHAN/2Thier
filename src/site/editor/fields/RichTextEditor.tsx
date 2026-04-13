@@ -28,6 +28,7 @@ import {
   LinkOutlined,
   BgColorsOutlined
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 
 const { TextArea } = Input;
 
@@ -46,6 +47,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
   value = '',
   onChange
 }) => {
+  const { t } = useTranslation();
   const [selection, setSelection] = useState<{ start: number; end: number } | null>(null);
   
   const wrapSelection = (tag: string) => {
@@ -100,7 +102,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
             }}
           />
         </Tooltip>
-        <Tooltip title="Couleur">
+        <Tooltip title={t('fields.color')}>
           <Button
             size="small"
             icon={<BgColorsOutlined />}

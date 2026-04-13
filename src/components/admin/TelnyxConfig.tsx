@@ -30,6 +30,7 @@ import {
   CloudUploadOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -130,6 +131,7 @@ const TelnyxConfig: React.FC<TelnyxConfigProps> = ({
   organizationId,
   organizationName
 }) => {
+  const { t } = useTranslation();
   const { api } = useAuthenticatedApi();
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -1070,7 +1072,7 @@ const TelnyxConfig: React.FC<TelnyxConfigProps> = ({
         width={500}
       >
         <Form form={numberForm} layout="vertical" onFinish={handlePurchaseNumber}>
-          <Form.Item name="country" label="Pays" rules={[{ required: true }]}>
+          <Form.Item name="country" label={t('fields.country')} rules={[{ required: true }]}>
             <Select placeholder="Sélectionner un pays">
               <Option value="BE">🇧🇪 Belgique</Option>
               <Option value="FR">🇫🇷 France</Option>
@@ -1188,7 +1190,7 @@ const TelnyxConfig: React.FC<TelnyxConfigProps> = ({
             <Col span={12}>
               <Form.Item 
                 name="priority" 
-                label="Priorité" 
+                label={t('fields.priority')} 
                 initialValue={1}
                 rules={[{ required: true, message: 'Priorité requise' }]}
               >

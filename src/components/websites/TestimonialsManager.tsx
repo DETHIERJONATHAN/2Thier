@@ -37,6 +37,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import AIContentAssistant from '../AIContentAssistant';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
 
 const { TextArea } = Input;
 
@@ -127,8 +128,8 @@ const SortableItem: React.FC<{ testimonial: Testimonial; onEdit: () => void; onD
               title="Supprimer ce témoignage ?"
               description="Cette action est irréversible."
               onConfirm={onDelete}
-              okText="Supprimer"
-              cancelText="Annuler"
+              okText={t('common.delete')}
+              cancelText={t('common.cancel')}
               okButtonProps={{ danger: true }}
             >
               <Button
@@ -146,6 +147,7 @@ const SortableItem: React.FC<{ testimonial: Testimonial; onEdit: () => void; onD
 };
 
 export const TestimonialsManager: React.FC<TestimonialsManagerProps> = ({ websiteId, siteName, industry }) => {
+  const { t } = useTranslation();
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -357,7 +359,7 @@ export const TestimonialsManager: React.FC<TestimonialsManagerProps> = ({ websit
             <Switch />
           </Form.Item>
 
-          <Form.Item label="Actif" name="isActive" valuePropName="checked">
+          <Form.Item label={t('fields.active')} name="isActive" valuePropName="checked">
             <Switch />
           </Form.Item>
 

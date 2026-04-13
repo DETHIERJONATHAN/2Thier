@@ -55,6 +55,7 @@ import {
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
 import { useModuleCategories } from '../../hooks/useModuleCategories'; // âœ… Nouveau hook categories
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text } = Typography;
 const { Panel } = Collapse;
@@ -151,6 +152,7 @@ interface MetadataResponse {
 
 // Composant pour rendre une icÃ´ne Ã  partir de son nom
 const IconRenderer: React.FC<{ iconName: string; style?: React.CSSProperties }> = ({ iconName, style }) => {
+  const { t } = useTranslation();
   const iconMap: Record<string, React.ComponentType> = {
     AppstoreOutlined,
     FormOutlined,
@@ -639,8 +641,8 @@ const AdminModulesPageDynamic: React.FC = () => {
             title="Supprimer ce module ?"
             description="Cette action est irrÃ©versible."
             onConfirm={() => handleDeleteModule(module)}
-            okText="Supprimer"
-            cancelText="Annuler"
+            okText={t('common.delete')}
+            cancelText={t('common.cancel')}
             okType="danger"
           >
             <Button icon={<DeleteOutlined />} size="small" danger />
@@ -848,7 +850,7 @@ const AdminModulesPageDynamic: React.FC = () => {
                               deleteSection(section.sectionName);
                             }}
                             okText="Oui, supprimer"
-                            cancelText="Annuler"
+                            cancelText={t('common.cancel')}
                           >
                             <Button
                               type="text"
@@ -1075,7 +1077,7 @@ const AdminModulesPageDynamic: React.FC = () => {
             <Input placeholder="ex: Mon Super Module" />
           </Form.Item>
 
-          <Form.Item label="Description" name="description">
+          <Form.Item label={t('fields.description')} name="description">
             <TextArea rows={2} placeholder="Description du module..." />
           </Form.Item>
 
@@ -1152,7 +1154,7 @@ const AdminModulesPageDynamic: React.FC = () => {
               </Form.Item>
             </Col>
             <Col span={8}>
-              <Form.Item label="Actif" name="active" valuePropName="checked">
+              <Form.Item label={t('fields.active')} name="active" valuePropName="checked">
                 <Switch />
               </Form.Item>
             </Col>

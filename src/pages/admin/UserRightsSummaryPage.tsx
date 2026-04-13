@@ -22,6 +22,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
+import { useTranslation } from 'react-i18next';
 
 const { Text, Paragraph } = Typography;
 
@@ -163,6 +164,7 @@ interface RightsSummary {
 }
 
 const UserRightsSummaryPage: React.FC = () => {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const { api } = useAuthenticatedApi();
   
@@ -1151,7 +1153,7 @@ const UserRightsSummaryPage: React.FC = () => {
                           <Text type="secondary">Non renseigné</Text>
                         )}
                       </Descriptions.Item>
-                      <Descriptions.Item label="Description">
+                      <Descriptions.Item label={t('fields.description')}>
                         {rightsSummary.organizationInfo.description ? (
                           <Paragraph ellipsis={{ rows: 2, expandable: true }}>
                             {rightsSummary.organizationInfo.description}

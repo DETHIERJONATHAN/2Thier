@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Modal, Table, Button, Select, message as antdMessage, Popconfirm, Space, Tag } from 'antd';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { useTranslation } from 'react-i18next';
 
 interface UserOrganization {
   id: string;
@@ -50,6 +51,7 @@ const UserOrganizationsModal: React.FC<UserOrganizationsModalProps> = ({
   onSuccess,
   user,
 }) => {
+  const { t } = useTranslation();
   const { api } = useAuthenticatedApi();
   const [msgApi, msgCtx] = antdMessage.useMessage();
   const [userOrganizations, setUserOrganizations] = useState<UserOrganization[]>([]);
@@ -217,8 +219,8 @@ const UserOrganizationsModal: React.FC<UserOrganizationsModalProps> = ({
         <Popconfirm
           title="Êtes-vous sûr de vouloir retirer cet utilisateur de cette organisation ?"
           onConfirm={() => handleRemoveFromOrganization(record.id)}
-          okText="Oui"
-          cancelText="Annuler"
+          okText={t('common.yes')}
+          cancelText={t('common.cancel')}
           disabled={userOrganizations.length <= 1}
         >
           <Button

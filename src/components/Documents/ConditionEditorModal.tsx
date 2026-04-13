@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Modal, Form, Select, Input, Space, Button, message, Radio, Divider, Alert, Typography } from 'antd';
 import { PlusOutlined, DeleteOutlined, InfoCircleOutlined, NodeIndexOutlined } from '@ant-design/icons';
 import NodeTreeSelector, { NodeTreeSelectorValue } from '../TreeBranchLeaf/treebranchleaf-new/components/Parameters/shared/NodeTreeSelector';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 
@@ -44,6 +45,7 @@ const OPERATORS = [
 ];
 
 const ConditionEditorModal = ({ open, onClose, onSave, initialConfig, nodeId }: ConditionEditorModalProps) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
   const [rules, setRules] = useState<ConditionRule[]>(initialConfig?.rules || []);
   const [selectorOpen, setSelectorOpen] = useState(false);
@@ -167,8 +169,8 @@ const ConditionEditorModal = ({ open, onClose, onSave, initialConfig, nodeId }: 
         onCancel={onClose}
         onOk={handleSave}
         width={800}
-        okText="Enregistrer"
-        cancelText="Annuler"
+        okText={t('common.save')}
+        cancelText={t('common.cancel')}
       >
         <Form form={form} layout="vertical">
           <Form.Item

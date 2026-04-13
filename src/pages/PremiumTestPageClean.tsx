@@ -30,6 +30,7 @@ import {
   InfoCircleOutlined,
   ExclamationCircleOutlined
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -44,6 +45,7 @@ const { Option } = Select;
  */
 
 const PremiumTestPageClean: React.FC = () => {
+  const { t } = useTranslation();
   const [modalVisible, setModalVisible] = useState(false);
   const [form] = Form.useForm();
 
@@ -243,23 +245,23 @@ const PremiumTestPageClean: React.FC = () => {
             <Form form={form} layout="vertical">
               <Row gutter={16}>
                 <Col span={12}>
-                  <Form.Item label="Prénom" name="firstName">
+                  <Form.Item label={t('fields.firstName')} name="firstName">
                     <Input placeholder="Entrez le prénom" />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="Nom" name="lastName">
+                  <Form.Item label={t('fields.name')} name="lastName">
                     <Input placeholder="Entrez le nom" />
                   </Form.Item>
                 </Col>
               </Row>
-              <Form.Item label="Email" name="email">
+              <Form.Item label={t('fields.email')} name="email">
                 <Input prefix={<MailOutlined className="text-gray-400" />} placeholder="email@exemple.com" />
               </Form.Item>
-              <Form.Item label="Téléphone" name="phone">
+              <Form.Item label={t('fields.phone')} name="phone">
                 <Input prefix={<PhoneOutlined className="text-gray-400" />} placeholder="01 23 45 67 89" />
               </Form.Item>
-              <Form.Item label="Statut" name="status">
+              <Form.Item label={t('fields.status')} name="status">
                 <Select placeholder="Sélectionnez un statut">
                   <Option value="prospect">Prospect</Option>
                   <Option value="client">Client</Option>

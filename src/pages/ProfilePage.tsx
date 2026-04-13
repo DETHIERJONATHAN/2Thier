@@ -23,6 +23,7 @@ import HiveLiveTimeline from '../components/zhiive/HiveLiveTimeline';
    ═══════════════════════════════════════════════════════════════ */
 import { SF, FB } from '../components/zhiive/ZhiiveTheme';
 import { useSocialIdentity } from '../contexts/SocialIdentityContext';
+import { useTranslation } from 'react-i18next';
 const ORG_COLOR = SF.primary;
 
 /* ═══════════════════════════════════════════════════════════════
@@ -177,6 +178,7 @@ const PhotoCell: React.FC<{
    PROFILE PAGE
    ═══════════════════════════════════════════════════════════════ */
 const ProfilePage = () => {
+  const { t } = useTranslation();
   const { user, loading: userLoading, refetchUser, isSuperAdmin, currentOrganization, organizations, selectOrganization } = useAuth();
   const { api } = useAuthenticatedApi();
   const navigate = useNavigate();
@@ -987,7 +989,7 @@ const ProfilePage = () => {
               width: isMobile ? '100%' : 360, flexShrink: 0, alignSelf: 'flex-start',
             }}>
               {colonyData.description && (
-                <FBCard title="Description">
+                <FBCard title={t('fields.description')}>
                   <p style={{ fontSize: 15, color: FB.text, lineHeight: 1.5, margin: 0 }}>{colonyData.description}</p>
                 </FBCard>
               )}
@@ -1025,7 +1027,7 @@ const ProfilePage = () => {
 
             {/* RIGHT: Summary + members preview + publications */}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <FBCard title="Résumé">
+              <FBCard title={t('common.summary')}>
                 <div style={{
                   display: 'grid',
                   gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
@@ -1292,7 +1294,7 @@ const ProfilePage = () => {
               </FBCard>
 
               {/* Résumé */}
-              <FBCard title="Résumé">
+              <FBCard title={t('common.summary')}>
                 <div style={{
                   display: 'grid',
                   gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
@@ -1884,7 +1886,7 @@ const ProfilePage = () => {
           <Input placeholder="Ex: Rue de la Loi 16, 1000 Bruxelles" />
         </Form.Item>
         <Form.Item
-          label="Numéro de TVA"
+          label={t('fields.vatNumber')}
           name="vatNumber"
           rules={[
             { required: true, message: 'Le numéro de TVA est requis' },
@@ -1894,7 +1896,7 @@ const ProfilePage = () => {
           <Input placeholder="Ex: BE0123456789" />
         </Form.Item>
         <Form.Item
-          label="Téléphone"
+          label={t('fields.phone')}
           name="phone"
           rules={[
             { required: true, message: 'Le téléphone est requis' },

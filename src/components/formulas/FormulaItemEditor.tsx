@@ -11,6 +11,7 @@ import CollapsiblePanel from './CollapsiblePanel';
 import { validateFormula, getAPIHeaders } from '../../utils/formulaValidator';
 import { Tooltip, Button, Dropdown, Space, Card, Popconfirm } from 'antd';
 import { DeleteOutlined, DownOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 
 interface FormulaItemEditorProps {
   formula: Formula;
@@ -34,6 +35,7 @@ const FormulaItemEditor: React.FC<FormulaItemEditorProps> = ({
   onDelete,
   onUpdate
 }) => {
+  const { t } = useTranslation();
   // Utiliser les nouvelles props ou retomber sur les anciennes pour la rétrocompatibilité
   const isFormulaOpen = isExpanded !== undefined ? isExpanded : isOpen;
   const toggleFormula = onToggleExpand || onToggleOpen;
@@ -174,8 +176,8 @@ const FormulaItemEditor: React.FC<FormulaItemEditorProps> = ({
       extra={
         <Popconfirm
           title="Supprimer cette formule ?"
-          okText="Oui"
-          cancelText="Non"
+          okText={t('common.yes')}
+          cancelText={t('common.no')}
           onConfirm={() => { onDelete(); }}
         >
           <Button size="small" danger icon={<DeleteOutlined />} onClick={e=>e.stopPropagation()} />

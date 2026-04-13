@@ -36,6 +36,7 @@ import { DocumentPage, ModuleInstance, DocumentTemplateConfig, EditorState } fro
 import { getModuleById } from './ModuleRegistry';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useUserPreference } from '../../hooks/useUserPreference';
+import { useTranslation } from 'react-i18next';
 
 interface PageBuilderProps {
   templateId: string;
@@ -45,6 +46,7 @@ interface PageBuilderProps {
 }
 
 const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilderProps) => {
+  const { t } = useTranslation();
   const { api } = useAuthenticatedApi();
   const [savedCustomBgs] = useUserPreference<Array<{ id: string; name: string; rawSvg: string }>>('customBackgrounds', []);
   
@@ -932,7 +934,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
           {/* Undo/Redo - seulement desktop */}
           {!isMobile && (
             <>
-              <Tooltip title="Annuler">
+              <Tooltip title={t('common.cancel')}>
                 <Button icon={<UndoOutlined />} disabled size={isMobile ? 'small' : 'middle'} />
               </Tooltip>
               <Tooltip title="Rétablir">
@@ -988,7 +990,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
             </>
           )}
 
-          <Tooltip title="Prévisualiser">
+          <Tooltip title={t('common.preview')}>
             <Button 
               icon={<EyeOutlined />} 
               onClick={() => setPreviewMode(true)}
@@ -1539,7 +1541,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
           setTemplateConfirmModalOpen(false);
         }}
         okText="Remplacer"
-        cancelText="Annuler"
+        cancelText={t('common.cancel')}
         okButtonProps={{ danger: true }}
       >
         <p>Cette action va remplacer tous les modules de la page actuelle par ceux du template sélectionné.</p>

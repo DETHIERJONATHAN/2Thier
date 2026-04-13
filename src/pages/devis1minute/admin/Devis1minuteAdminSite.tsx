@@ -3,10 +3,12 @@ import { Card, Typography, Table, Button, Space, Tag, Modal, Form, Input, Switch
 import type { ColumnsType } from 'antd/es/table';
 import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ShareAltOutlined, ReloadOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Paragraph } = Typography;
 
 export default function Devis1minuteAdminSite() {
+  const { t } = useTranslation();
   type Landing = {
     id: string; title: string; slug: string; description?: string; status: string;
     views: number; conversions: number; conversionRate: number; createdAt: string | Date; updatedAt: string | Date;
@@ -116,12 +118,12 @@ export default function Devis1minuteAdminSite() {
         <Table scroll={{ x: "max-content" }} rowKey="id" loading={loading} dataSource={rows} columns={columns} pagination={{ pageSize: 10 }} />
       </Card>
 
-      <Modal open={open} onCancel={() => setOpen(false)} onOk={onSubmit} title={editing ? 'Modifier la page' : 'Nouvelle page'} okText="Enregistrer">
+      <Modal open={open} onCancel={() => setOpen(false)} onOk={onSubmit} title={editing ? 'Modifier la page' : 'Nouvelle page'} okText={t('common.save')}>
         <Form form={form} layout="vertical">
-          <Form.Item name="title" label="Titre" rules={[{ required: true }]}>
+          <Form.Item name="title" label={t('fields.title')} rules={[{ required: true }]}>
             <Input placeholder="Titre de la landing" />
           </Form.Item>
-          <Form.Item name="description" label="Description">
+          <Form.Item name="description" label={t('fields.description')}>
             <Input.TextArea rows={4} />
           </Form.Item>
           <Card size="small" className="mb-4" title="SEO">

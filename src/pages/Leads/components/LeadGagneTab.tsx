@@ -6,6 +6,7 @@ import { useAuth } from '../../../auth/useAuth';
 import { useChantiersByLead } from '../../../hooks/useChantiers';
 import { renderProductIcon } from '../../../components/TreeBranchLeaf/treebranchleaf-new/components/Parameters/capabilities/ProductFilterPanel';
 import type { Chantier, ProductOption } from '../../../types/chantier';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 const { Dragger } = Upload;
@@ -52,6 +53,7 @@ interface LeadGagneTabProps {
  * Chaîne de données : Chantier → GeneratedDocument → TreeBranchLeafSubmission → données TBL complètes
  */
 const LeadGagneTab: React.FC<LeadGagneTabProps> = ({ leadId, organizationId: _organizationId, leadData: _leadData }) => {
+  const { t } = useTranslation();
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, [apiHook.api]);
   const { userRole, isSuperAdmin } = useAuth();
@@ -481,11 +483,11 @@ const LeadGagneTab: React.FC<LeadGagneTabProps> = ({ leadId, organizationId: _or
                       title="Supprimer ce chantier ?"
                       description="Cette action est irréversible."
                       onConfirm={() => handleDeleteChantier(c.id)}
-                      okText="Supprimer"
-                      cancelText="Annuler"
+                      okText={t('common.delete')}
+                      cancelText={t('common.cancel')}
                       okButtonProps={{ danger: true }}
                     >
-                      <Tooltip title="Supprimer">
+                      <Tooltip title={t('common.delete')}>
                         <DeleteOutlined 
                           style={{ 
                             color: '#ff4d4f', 
