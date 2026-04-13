@@ -1,6 +1,6 @@
 // src/plugins/ModuleAgenda/AgendaPage.tsx
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Card, Button, Modal, Form, Input, DatePicker, Select, Switch, message, Space, Typography, Row, Col, Checkbox, Tag, Badge, List, Tooltip, Dropdown, Segmented, Drawer, Grid } from 'antd';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { Button, Modal, Form, Input, DatePicker, Select, Switch, message, Space, Typography, Row, Col, Checkbox, Tag, Badge, List, Tooltip, Dropdown, Segmented, Drawer, Grid } from 'antd';
 import { PlusOutlined, CalendarOutlined, CheckSquareOutlined, PhoneOutlined, ToolOutlined } from '@ant-design/icons';
 import FullCalendar from '@fullcalendar/react';
 import { CalendarApi } from '@fullcalendar/core';
@@ -12,6 +12,8 @@ import frLocale from '@fullcalendar/core/locales/fr';
 import dayjs from 'dayjs';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { SF } from '../../components/zhiive/ZhiiveTheme';
+import { useTranslation } from 'react-i18next';
+
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -320,7 +322,7 @@ export default function AgendaPage({ compact }: { compact?: boolean }) {
   const handleEventDelete = async (eventId: string) => {
     try {
       await api.delete(`/api/calendar/events/${eventId}`);
-      message.success('Supprimé avec succès');
+      message.success(t('messages.deleteSuccess'));
       setModalVisible(false);
       setEditingEvent(null);
       fetchEvents();
@@ -540,7 +542,7 @@ export default function AgendaPage({ compact }: { compact?: boolean }) {
   );
 
   return (
-    <div className="agenda-page" style={{ padding: isMobile ? 0 : 24, maxWidth: '100%', overflow: 'hidden' }}>
+    <div className="agenda-page" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', backgroundColor: '#fff' }}>
       {/* === MOBILE CSS FullCalendar === */}
       {isMobile && (
         <style>{`
@@ -653,191 +655,119 @@ export default function AgendaPage({ compact }: { compact?: boolean }) {
             background: ${SF.primary}; color: #fff; border-radius: 50%; width: 22px; height: 22px;
             display: flex; align-items: center; justify-content: center; font-size: 12px;
           }
-          .agenda-page > .ant-card { border-radius: 12px !important; box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important; border: 1px solid ${SF.border} !important; }
-          .agenda-page > .ant-card > .ant-card-body { padding: 0 !important; }
+
         `}</style>
       )}
 
-      <Card
-        bodyStyle={{ padding: isMobile ? 0 : 0 }}
-        style={{ borderRadius: isMobile ? 0 : undefined, border: isMobile ? 'none' : undefined, maxWidth: '100%', overflow: 'hidden' }}
-      >
-        {/* === HEADER === */}
-        {isMobile ? (
-          // ------- MOBILE: single-line header with filters -------
-          <>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              height: 44,
-              padding: '0 4px',
-              borderBottom: '1px solid #f0f0f0',
-              background: '#fff',
-              position: 'sticky' as const,
-              top: 0,
-              zIndex: 10,
-              gap: 3,
-              maxWidth: '100%',
-              overflow: 'hidden',
-            }}>
-              {/* Left: title */}
-              <CalendarOutlined style={{ color: SF.primary, fontSize: 14, flexShrink: 0 }} />
-              <span style={{ fontWeight: 700, fontSize: 13, flexShrink: 0 }}>Agenda</span>
+      {/* === UNIFIED HEADER (48px — même hauteur que Mail/Search) === */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        height: 48,
+        padding: '0 12px',
+        borderBottom: `1px solid ${SF.border}`,
+        background: SF.cardBg,
+        flexShrink: 0,
+        position: 'sticky' as const,
+        top: 0,
+        zIndex: 10,
+        gap: isMobile ? 6 : 12,
+      }}>
+        {/* Left: icon + title */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <CalendarOutlined style={{ fontSize: 16, color: SF.primary }} />
+          <span style={{ fontSize: 16, fontWeight: 600, color: SF.text }}>Agenda</span>
+        </div>
 
-              {/* Center: filter pills — icons only to save space */}
-              <div style={{ flex: 1, display: 'flex', justifyContent: 'center', gap: 3, overflow: 'hidden' }}>
-                <Tooltip title="RDV"><div
-                  className={`mf ${showEvents ? 'on' : 'off'}`}
-                  style={showEvents ? { background: SF.emerald } : {}}
-                  onClick={() => setShowEvents(!showEvents)}
-                ><CalendarOutlined style={{ fontSize: 11 }} /></div></Tooltip>
-                <Tooltip title="Tâches"><div
-                  className={`mf ${showTasks ? 'on' : 'off'}`}
-                  style={showTasks ? { background: '#722ed1' } : {}}
-                  onClick={() => setShowTasks(!showTasks)}
-                ><CheckSquareOutlined style={{ fontSize: 11 }} /></div></Tooltip>
-                <Tooltip title="Sites"><div
-                  className={`mf ${showChantier ? 'on' : 'off'}`}
-                  style={showChantier ? { background: '#e67e22' } : {}}
-                  onClick={() => setShowChantier(!showChantier)}
-                ><ToolOutlined style={{ fontSize: 11 }} /></div></Tooltip>
-                <Tooltip title="Appels"><div
-                  className={`mf ${showCalls ? 'on' : 'off'}`}
-                  style={showCalls ? { background: '#3498db' } : {}}
-                  onClick={() => setShowCalls(!showCalls)}
-                ><PhoneOutlined style={{ fontSize: 11 }} /></div></Tooltip>
-              </div>
-
-              {/* Right: tasks badge + add button */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                <div
-                  onClick={() => setTaskDrawerOpen(true)}
-                  style={{ position: 'relative', cursor: 'pointer', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                >
-                  <CheckSquareOutlined style={{ fontSize: 18, color: '#722ed1' }} />
-                  {pendingTasks.length > 0 && (
-                    <Badge
-                      count={pendingTasks.length}
-                      size="small"
-                      style={{ backgroundColor: '#722ed1', position: 'absolute', top: -4, right: -6, fontSize: 9 }}
-                    />
-                  )}
-                </div>
-                <Dropdown
-                  menu={{
-                    items: [
-                      { key: 'event', icon: <CalendarOutlined />, label: 'Événement', onClick: openNewEvent },
-                      { key: 'task', icon: <CheckSquareOutlined />, label: 'Tâche', onClick: openNewTask },
-                    ],
-                  }}
-                  trigger={['click']}
-                >
-                  <div style={{
-                    width: 28, height: 28, borderRadius: 8,
-                    background: SF.primary, color: '#fff',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    cursor: 'pointer', fontSize: 16,
-                    boxShadow: `0 2px 6px ${SF.primary}50`,
-                  }}>
-                    <PlusOutlined />
-                  </div>
-                </Dropdown>
-              </div>
-            </div>
-
-            {/* ------- MOBILE TABS ------- */}
-            <div className="mobile-segment">
-              <Segmented
-                block
-                value={mobileView}
-                onChange={(val) => setMobileView(val as 'calendar' | 'tasks')}
-                options={[
-                  { value: 'calendar', icon: <CalendarOutlined />, label: 'Calendrier' },
-                  { value: 'tasks', icon: <CheckSquareOutlined />, label: `Tâches (${pendingTasks.length})` },
-                ]}
-                style={{ marginBottom: 0 }}
-              />
-            </div>
-          </>
-        ) : (
-          // ------- DESKTOP HEADER -------
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '12px 16px 12px',
-            borderBottom: `1px solid ${SF.border}`,
-            background: '#fff',
-            gap: 12,
-            flexWrap: 'wrap',
-          }}>
-            {/* Left: title */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{
-                width: 34, height: 34, borderRadius: 10,
-                background: `linear-gradient(135deg, ${SF.primary}20, ${SF.primary}10)`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                border: `1.5px solid ${SF.primary}30`,
-              }}>
-                <CalendarOutlined style={{ color: SF.primary, fontSize: 16 }} />
-              </div>
-              <span style={{ fontWeight: 800, fontSize: 18, color: SF.text, letterSpacing: -0.3 }}>Agenda</span>
-            </div>
-
-            {/* Right: filter pills + add */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              {[
-                { key: 'events', icon: <CalendarOutlined />, label: 'RDV', color: SF.emerald, active: showEvents, toggle: () => setShowEvents(!showEvents) },
-                { key: 'tasks', icon: <CheckSquareOutlined />, label: 'Tâches', color: '#722ed1', active: showTasks, toggle: () => setShowTasks(!showTasks) },
-                { key: 'chantier', icon: <ToolOutlined />, label: 'Sites', color: '#e67e22', active: showChantier, toggle: () => setShowChantier(!showChantier) },
-                { key: 'calls', icon: <PhoneOutlined />, label: 'Appels', color: '#3498db', active: showCalls, toggle: () => setShowCalls(!showCalls) },
-              ].map(f => (
-                <Tooltip key={f.key} title={f.label}>
-                  <div
-                    onClick={f.toggle}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 5,
-                      padding: '0 12px', height: 30, borderRadius: 15, cursor: 'pointer',
-                      fontSize: 12, fontWeight: 600, transition: 'all 0.18s',
-                      background: f.active ? f.color + '15' : SF.bg,
-                      color: f.active ? f.color : SF.textSecondary,
-                      border: `1.5px solid ${f.active ? f.color + '50' : SF.border}`,
-                    }}
-                  >
-                    {f.icon}
-                    <span>{f.label}</span>
-                  </div>
-                </Tooltip>
-              ))}
-
-              <div style={{ width: 1, height: 20, background: SF.border, margin: '0 2px' }} />
-
-              <Dropdown
-                menu={{
-                  items: [
-                    { key: 'event', icon: <CalendarOutlined />, label: 'Événement', onClick: openNewEvent },
-                    { key: 'task', icon: <CheckSquareOutlined />, label: 'Tâche', onClick: openNewTask },
-                  ],
+        {/* Center: filter pills */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: isMobile ? 4 : 6, overflow: 'hidden' }}>
+          {[
+            { key: 'events', icon: <CalendarOutlined />, label: 'RDV', color: SF.emerald, active: showEvents, toggle: () => setShowEvents(!showEvents) },
+            { key: 'tasks', icon: <CheckSquareOutlined />, label: 'Tâches', color: '#722ed1', active: showTasks, toggle: () => setShowTasks(!showTasks) },
+            { key: 'chantier', icon: <ToolOutlined />, label: 'Sites', color: '#e67e22', active: showChantier, toggle: () => setShowChantier(!showChantier) },
+            { key: 'calls', icon: <PhoneOutlined />, label: 'Appels', color: '#3498db', active: showCalls, toggle: () => setShowCalls(!showCalls) },
+          ].map(f => (
+            <Tooltip key={f.key} title={f.label}>
+              <div
+                onClick={f.toggle}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: isMobile ? 0 : 5,
+                  padding: isMobile ? '0 8px' : '0 12px', height: 30, borderRadius: 15, cursor: 'pointer',
+                  fontSize: 12, fontWeight: 600, transition: 'all 0.18s',
+                  background: f.active ? f.color + '15' : SF.bg,
+                  color: f.active ? f.color : SF.textSecondary,
+                  border: `1.5px solid ${f.active ? f.color + '50' : SF.border}`,
                 }}
-                trigger={['click']}
               >
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '0 14px', height: 30, borderRadius: 15, cursor: 'pointer',
-                  background: SF.primary, color: '#fff',
-                  fontWeight: 700, fontSize: 13,
-                  boxShadow: `0 2px 8px ${SF.primary}40`,
-                  transition: 'all 0.18s',
-                }}>
-                  <PlusOutlined style={{ fontSize: 13 }} />
-                  <span>Nouveau</span>
-                </div>
-              </Dropdown>
-            </div>
-          </div>
-        )}
+                {React.cloneElement(f.icon, { style: { fontSize: isMobile ? 12 : 13 } })}
+                {!isMobile && <span>{f.label}</span>}
+              </div>
+            </Tooltip>
+          ))}
+        </div>
 
-        {/* === CONTENU PRINCIPAL === */}
+        {/* Right: tasks badge + add */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          {isMobile && (
+            <div
+              onClick={() => setTaskDrawerOpen(true)}
+              style={{ position: 'relative', cursor: 'pointer', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <CheckSquareOutlined style={{ fontSize: 18, color: '#722ed1' }} />
+              {pendingTasks.length > 0 && (
+                <Badge
+                  count={pendingTasks.length}
+                  size="small"
+                  style={{ backgroundColor: '#722ed1', position: 'absolute', top: -4, right: -6, fontSize: 9 }}
+                />
+              )}
+            </div>
+          )}
+          <Dropdown
+            menu={{
+              items: [
+                { key: 'event', icon: <CalendarOutlined />, label: 'Événement', onClick: openNewEvent },
+                { key: 'task', icon: <CheckSquareOutlined />, label: 'Tâche', onClick: openNewTask },
+              ],
+            }}
+            trigger={['click']}
+          >
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: isMobile ? '0' : '0 12px',
+              width: isMobile ? 30 : undefined, height: 30, borderRadius: isMobile ? 8 : 15,
+              cursor: 'pointer',
+              background: SF.primary, color: '#fff',
+              fontWeight: 600, fontSize: 12,
+              justifyContent: 'center',
+              boxShadow: `0 2px 6px ${SF.primary}40`,
+              transition: 'all 0.18s',
+            }}>
+              <PlusOutlined style={{ fontSize: 12 }} />
+              {!isMobile && <span>Nouveau</span>}
+            </div>
+          </Dropdown>
+        </div>
+      </div>
+
+      {/* Mobile tabs (below header) */}
+      {isMobile && (
+        <div className="mobile-segment">
+          <Segmented
+            block
+            value={mobileView}
+            onChange={(val) => setMobileView(val as 'calendar' | 'tasks')}
+            options={[
+              { value: 'calendar', icon: <CalendarOutlined />, label: 'Calendrier' },
+              { value: 'tasks', icon: <CheckSquareOutlined />, label: `Tâches (${pendingTasks.length})` },
+            ]}
+            style={{ marginBottom: 0 }}
+          />
+        </div>
+      )}
+
+      {/* === CONTENU PRINCIPAL === */}
+      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
         {isMobile ? (
           // Mobile layout
           <>
@@ -950,7 +880,7 @@ export default function AgendaPage({ compact }: { compact?: boolean }) {
           </div>
           </div>
         )}
-      </Card>
+      </div>
 
       {/* Drawer tâches mobile */}
       {isMobile && (
@@ -1149,14 +1079,14 @@ export default function AgendaPage({ compact }: { compact?: boolean }) {
             {isMobile ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <Button type="primary" htmlType="submit" block size="large" style={{ borderRadius: 8, height: 44 }}>
-                  {editingEvent ? 'Enregistrer' : (isTaskMode ? 'Créer la tâche' : 'Créer l\'événement')}
+                  {editingEvent ? t('common.save') : (isTaskMode ? 'Créer la tâche' : 'Créer l\'événement')}
                 </Button>
                 {editingEvent && (
                   <Button danger block size="large" style={{ borderRadius: 8, height: 44 }} onClick={() => Modal.confirm({
-                    title: 'Supprimer',
+                    title: t('common.delete'),
                     content: 'Êtes-vous sûr ? Cette action est irréversible.',
-                    okText: 'Supprimer',
-                    cancelText: 'Annuler',
+                    okText: t('common.delete'),
+                    cancelText: t('common.cancel'),
                     onOk: () => handleEventDelete(editingEvent.id)
                   })}>
                     Supprimer
@@ -1167,14 +1097,14 @@ export default function AgendaPage({ compact }: { compact?: boolean }) {
             ) : (
               <Space wrap>
                 <Button type="primary" htmlType="submit">
-                  {editingEvent ? 'Enregistrer' : (isTaskMode ? 'Créer la tâche' : 'Créer l\'événement')}
+                  {editingEvent ? t('common.save') : (isTaskMode ? 'Créer la tâche' : 'Créer l\'événement')}
                 </Button>
                 {editingEvent && (
                   <Button danger onClick={() => Modal.confirm({
-                    title: 'Supprimer',
+                    title: t('common.delete'),
                     content: 'Êtes-vous sûr ? Cette action est irréversible.',
-                    okText: 'Supprimer',
-                    cancelText: 'Annuler',
+                    okText: t('common.delete'),
+                    cancelText: t('common.cancel'),
                     onOk: () => handleEventDelete(editingEvent.id)
                   })}>
                     Supprimer

@@ -43,6 +43,8 @@ import {
 import { usePostalMailService } from '../hooks/usePostalMailService';
 import { useAuth } from '../auth/useAuth';
 import type { FormattedGmailMessage, GmailMessage, GmailLabel } from '../hooks/useGmailService';
+import { useTranslation } from 'react-i18next';
+
 
 const { Sider } = Layout;
 const { Text } = Typography;
@@ -308,6 +310,7 @@ const SYSTEM_FOLDERS: Record<string, FolderConfig> = {
 // ═══════════════════════════════════════════════════════════════
 
 const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
+  const { t } = useTranslation();
   // ─── Contexte auth ───
   const { currentOrganization } = useAuth();
   // ─── Service Postal (boîte @zhiive.com) ───
@@ -706,18 +709,20 @@ const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
     <div className="flex flex-col h-full">
       {/* Bouton Nouveau message (desktop uniquement, sur mobile il est dans la toolbar) */}
       {!isMobile && (
-        <div className="p-4 pb-2">
+        <div style={{ padding: '12px 12px 8px' }}>
           <Button
             type="primary"
             icon={<EditOutlined />}
             onClick={() => handleCompose('new')}
-            size="large"
             block
             style={{
-              borderRadius: 16,
-              height: 48,
-              fontWeight: 500,
-              boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+              borderRadius: 15,
+              height: 30,
+              fontWeight: 600,
+              fontSize: 12,
+              padding: '0 12px',
+              boxShadow: 'none',
+              lineHeight: '28px',
             }}
           >
             Nouveau message
@@ -808,7 +813,7 @@ const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
 
       {/* ─── Colonne centrale : actions ─── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, overflow: 'hidden' }}>
-        <Tooltip title="Rechercher">
+        <Tooltip title={t('common.search')}>
           <Button
             type="text"
             size="small"
@@ -827,7 +832,7 @@ const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
             onChange={handleSelectAll}
           />
         </Tooltip>
-        <Tooltip title="Sélectionner">
+        <Tooltip title={t('common.select')}>
           <Button type="text" size="small" icon={<CaretDownOutlined />} style={{ minWidth: 20, padding: '0 2px' }} />
         </Tooltip>
 
@@ -846,7 +851,7 @@ const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
           </Space>
         ) : (
           <Space size={2}>
-            <Tooltip title="Actualiser">
+            <Tooltip title={t('common.refresh')}>
               <Button type="text" size="small" icon={<ReloadOutlined />} onClick={() => loadMessages(currentLabelId, searchQuery)} loading={isLoading} />
             </Tooltip>
             <Tooltip title="Synchroniser">
@@ -891,7 +896,7 @@ const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
       {isLoading && messages.length === 0 ? (
         <div className="p-4">
           {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} style={{ padding: '10px 16px', borderBottom: '1px solid #f0f0f0', display: 'flex', gap: 12, alignItems: 'center' }}>
+            <div key={`skeleton-${i}`} style={{ padding: '10px 16px', borderBottom: '1px solid #f0f0f0', display: 'flex', gap: 12, alignItems: 'center' }}>
               <Skeleton.Avatar active size={40} />
               <Skeleton active title={{ width: '40%' }} paragraph={{ rows: 1, width: ['90%'] }} />
             </div>
@@ -1074,7 +1079,7 @@ const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
                           style={{ color: '#5f6368' }}
                         />
                       </Tooltip>
-                      <Tooltip title="Supprimer">
+                      <Tooltip title={t('common.delete')}>
                         <Button
                           type="text"
                           size="small"
@@ -1275,7 +1280,7 @@ document.querySelectorAll('img').forEach(function(img) {
               <Tooltip title="Transférer">
                 <Button type="text" icon={<ShareAltOutlined />} onClick={() => handleCompose('forward', selectedMessage)} size="small" />
               </Tooltip>
-              <Tooltip title="Supprimer">
+              <Tooltip title={t('common.delete')}>
                 <Button type="text" icon={<DeleteOutlined />} onClick={() => handleDeleteMessage(selectedMessage.id)} danger size="small" />
               </Tooltip>
             </div>
@@ -1514,7 +1519,7 @@ document.querySelectorAll('img').forEach(function(img) {
                         </div>
                       </div>
                       {/* Bouton télécharger */}
-                      <Tooltip title="Télécharger">
+                      <Tooltip title={t('common.download')}>
                         <Button
                           type="text"
                           size="small"
@@ -1571,7 +1576,7 @@ document.querySelectorAll('img').forEach(function(img) {
             <div style={{ flex: 1 }} />
             <Tooltip title="Répondre"><Button type="text" icon={<RollbackOutlined />} onClick={() => handleCompose('reply', selectedMessage)} size="small" /></Tooltip>
             <Tooltip title="Transférer"><Button type="text" icon={<ShareAltOutlined />} onClick={() => handleCompose('forward', selectedMessage)} size="small" /></Tooltip>
-            <Tooltip title="Supprimer"><Button type="text" icon={<DeleteOutlined />} onClick={() => handleDeleteMessage(selectedMessage.id)} danger size="small" /></Tooltip>
+            <Tooltip title={t('common.delete')}><Button type="text" icon={<DeleteOutlined />} onClick={() => handleDeleteMessage(selectedMessage.id)} danger size="small" /></Tooltip>
           </div>
           {detailContent}
         </Drawer>
@@ -1665,7 +1670,7 @@ document.querySelectorAll('img').forEach(function(img) {
                 onClick={() => {
                   const url = prompt('URL de l\'image :');
                   if (url) {
-                    setComposeBody(prev => prev + `<img src="${url}" style="max-width:100%;" />`);
+                    setComposeBody(prev => prev + `<img loading="lazy" src="${url}" style="max-width:100%;" />`);
                   }
                 }}
               />
@@ -1682,7 +1687,7 @@ document.querySelectorAll('img').forEach(function(img) {
             <span style={{ fontSize: 11, color: '#5f6368' }}>
               Zhiive Mail
             </span>
-            <Tooltip title="Annuler">
+            <Tooltip title={t('common.cancel')}>
               <Button
                 type="text"
                 icon={<DeleteOutlined />}
@@ -1777,7 +1782,7 @@ document.querySelectorAll('img').forEach(function(img) {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {composeAttachments.map((file, idx) => (
                 <div
-                  key={idx}
+                  key={`item-${idx}`}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -1801,7 +1806,7 @@ document.querySelectorAll('img').forEach(function(img) {
                     </div>
                     <div style={{ fontSize: 11, color: '#80868b' }}>{formatFileSize(file.size)}</div>
                   </div>
-                  <Tooltip title="Supprimer">
+                  <Tooltip title={t('common.delete')}>
                     <Button
                       type="text"
                       size="small"
@@ -2105,7 +2110,7 @@ document.querySelectorAll('img').forEach(function(img) {
 
           if (isImage) {
             return (
-              <img
+              <img loading="lazy"
                 src={previewAttachment.url}
                 alt={previewAttachment.filename}
                 style={{ maxWidth: '100%', maxHeight: '75vh', objectFit: 'contain' }}
