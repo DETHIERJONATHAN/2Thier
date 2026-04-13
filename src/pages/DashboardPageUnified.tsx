@@ -3438,8 +3438,9 @@ export default function DashboardPageUnified() {
               if (isFreeUser && tabId === 'stats') return null;
               const panelStyle: React.CSSProperties = {
                 flex: "0 0 100%", width: "100%", scrollSnapAlign: "start",
-                overflowY: tabId === 'reels' ? "hidden" : "auto",
+                overflowY: tabId === 'reels' || tabId === 'wax' ? "hidden" : "auto",
                 padding: tabId === 'mur' || tabId === 'stats' ? "4px 8px" : undefined,
+                ...(tabId === 'wax' ? { display: 'flex', flexDirection: 'column' as const } : {}),
               };
               if (tabId === 'mur') {
                 return (

@@ -319,11 +319,20 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
     };
   }, [reorderTabs]);
 
+  // Auto-scroll header tabs to keep the active tab visible on mobile
+  useEffect(() => {
+    if (!isMobile || !containerRef.current) return;
+    const activeTab = orderedTabs[mobilePanel];
+    if (!activeTab) return;
+    const el = tabRefs.current.get(activeTab.id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  }, [mobilePanel, isMobile, orderedTabs]);
+
   return (
     <>
     <style>{`.zhiive-tabs-scroll::-webkit-scrollbar{display:none}`}</style>
     <div ref={containerRef} className="zhiive-tabs-scroll" style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: isMobile ? 0 : 2,
+      display: 'flex', alignItems: 'center', justifyContent: isMobile ? 'flex-start' : 'center', gap: isMobile ? 0 : 2,
       flex: 1,
       overflowX: 'auto', overflowY: 'hidden',
       scrollbarWidth: 'none',
@@ -369,6 +378,7 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
             }}
           >
             <tab.icon style={{ fontSize: isMobile ? 20 : 17, color: (isActive || hoveredTab === tab.id) ? tab.color : '#ffffff', transition: 'color 0.2s' }} />
+            {isMobile && <span style={{ fontSize: 8, color: isActive ? tab.color : '#ffffffaa', marginTop: 1, transition: 'color 0.2s', lineHeight: 1 }}>{tab.label}</span>}
             {!isMobile && <span style={{ fontSize: 13, color: isActive ? '#fff' : hoveredTab === tab.id ? '#fff' : SF.textLightMuted, transition: 'color 0.2s' }}>{tab.label}</span>}
           </div>
         );

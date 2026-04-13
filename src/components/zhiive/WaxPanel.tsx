@@ -1612,7 +1612,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
   }, [routeAlerts, speakInstruction, bearingAlongRoute, advanceSteps, stopNavigation, camera3DCenter, isSuperAdmin, t]);
 
   return (
-    <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden', background: SF.dark, width: '100%', maxWidth: '100%' }}>
+    <div style={{ flex: 1, minHeight: 0, height: '100%', position: 'relative', overflow: 'hidden', background: SF.dark, width: '100%', maxWidth: '100%' }}>
       {/* CSS for glow animation + mobile */}
       <style>{`
         @keyframes waxGlow {
