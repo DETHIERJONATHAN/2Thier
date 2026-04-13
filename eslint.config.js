@@ -33,10 +33,17 @@ export default tseslint.config(
       'no-prototype-builtins': 'off',
       'prefer-const': 'off',
       'no-useless-escape': 'off',
+      'no-console': ['warn', { allow: ['warn', 'error'] }],
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true },
       ],
+    },
+  },
+  {
+    files: ['src/lib/logger.ts', 'src/utils/consoleFilter.ts'],
+    rules: {
+      'no-console': 'off',
     },
   },
 );
