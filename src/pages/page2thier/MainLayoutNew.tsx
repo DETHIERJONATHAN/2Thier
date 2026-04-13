@@ -182,12 +182,11 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
         // Deduplicate nectar (in case both flow and universe were returned)
         const seen = new Set<string>();
         const dedupedTabs = tabs.filter(t => { if (seen.has(t.id)) return false; seen.add(t.id); return true; });
-        // Ensure 'search' tab is always present (it's a built-in app, not from API)
-        if (!dedupedTabs.find(t => t.id === 'search')) {
-          const statsIdx = dedupedTabs.findIndex(t => t.id === 'stats');
-          const searchTab = { id: 'search', label: 'Search', icon: SearchOutlined as React.ComponentType<{ style?: React.CSSProperties }>, color: '#A29BFE' };
-          if (statsIdx >= 0) dedupedTabs.splice(statsIdx, 0, searchTab);
-          else dedupedTabs.push(searchTab);
+        // Merge with built-in fallback tabs — API may not return all tabs (e.g. wax, arena, mail, agenda, search)
+        for (const fallback of SF_TAB_CONFIG_FALLBACK) {
+          if (!dedupedTabs.find(t => t.id === fallback.id)) {
+            dedupedTabs.push(fallback);
+          }
         }
         if (dedupedTabs.length > 0) setDynamicTabs(dedupedTabs);
       } catch (err) {
