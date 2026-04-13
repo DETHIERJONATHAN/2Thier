@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import { db } from '../../lib/database';
-import { logger } from '../lib/logger';
+import { logger } from '../../lib/logger';
 
 const router = express.Router({ mergeParams: true });
 const prisma = db;

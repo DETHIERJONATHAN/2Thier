@@ -3,7 +3,7 @@ import { db } from '../../lib/database';
 import type { Request, Response } from 'express';
 import * as mockFormulas from '../../global-mock-formulas.js';
 import { evaluateFormula } from '../../utils/formulaEvaluator';
-import { logger } from '../lib/logger';
+import { logger } from '../../lib/logger';
 
 // Interface pour les requêtes avec paramètres fusionnés
 interface MergedParamsRequest extends Request {
