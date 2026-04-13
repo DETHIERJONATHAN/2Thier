@@ -16,6 +16,7 @@ import PointageClockIn from './PointageClockIn';
 import { STATUS_LABELS, POINTAGE_STATUS_OPTIONS } from './pointageConstants';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Text } = Typography;
 
@@ -136,7 +137,7 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, c
       const res = await api.get(`/api/teams/time-entries?chantierId=${chantierId}`) as unknown;
       setEntries(res.data || []);
     } catch (err) {
-      console.error('[Pointage] Erreur:', err);
+      logger.error('[Pointage] Erreur:', err);
     } finally {
       setLoading(false);
     }
@@ -151,7 +152,7 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, c
       );
       setTechnicians(eligible);
     } catch (err) {
-      console.error('[Pointage] Erreur fetch technicians:', err);
+      logger.error('[Pointage] Erreur fetch technicians:', err);
     }
   }, [api]);
 

@@ -11,6 +11,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
+import { logger } from '../lib/logger';
 
 type UseUserPreferenceReturn<T> = [
   T,
@@ -60,7 +61,7 @@ export function useUserPreference<T>(
       try {
         await api.put(`/user-preferences/${keyRef.current}`, { value: newVal });
       } catch (err) {
-        console.error(`[useUserPreference] Failed to save '${keyRef.current}':`, err);
+        logger.error(`[useUserPreference] Failed to save '${keyRef.current}':`, err);
         setError('Erreur de sauvegarde');
       }
     }, 300);

@@ -11,16 +11,17 @@
 
 import { db } from '../lib/database';
 import fetch from 'node-fetch';
+import { logger } from '../lib/logger';
 
 const prisma = db;
 const API_BASE = 'http://localhost:4000/api';
 
 async function testDisplayField(nodeId: string, treeId: string) {
-  console.log(`\n🔍 Test du champ d'affichage: ${nodeId}`);
+  logger.debug(`\n🔍 Test du champ d'affichage: ${nodeId}`);
 
   try {
     // 1. Vérifier la base de données directement
-    console.log('   📊 1. Vérification base de données...');
+    logger.debug('   📊 1. Vérification base de données...');
     
     const node = await prisma.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
@@ -36,18 +37,18 @@ async function testDisplayField(nodeId: string, treeId: string) {
     });
 
     if (!node) {
-      console.log('   ❌ Nœud non trouvé dans la base');
+      logger.debug('   ❌ Nœud non trouvé dans la base');
       return;
     }
 
-    console.log(`      ✅ Nœud trouvé: ${node.label}`);
-    console.log(`      💾 calculatedValue: ${node.calculatedValue || '(vide)'}`);
-    console.log(`      📅 calculatedAt: ${node.calculatedAt || '(jamais)'}`);
-    console.log(`      🔧 calculatedBy: ${node.calculatedBy || '(inconnu)'}`);
-    console.log(`      🔗 Variables liées: ${node.linkedVariableIds.length}`);
+    logger.debug(`      ✅ Nœud trouvé: ${node.label}`);
+    logger.debug(`      💾 calculatedValue: ${node.calculatedValue || '(vide)'}`);
+    logger.debug(`      📅 calculatedAt: ${node.calculatedAt || '(jamais)'}`);
+    logger.debug(`      🔧 calculatedBy: ${node.calculatedBy || '(inconnu)'}`);
+    logger.debug(`      🔗 Variables liées: ${node.linkedVariableIds.length}`);
 
     // 2. Vérifier les données de soumission
-    console.log('   📋 2. Vérification données de soumission...');
+    logger.debug('   📋 2. Vérification données de soumission...');
     
     const submissionData = await prisma.treeBranchLeafSubmissionData.findMany({
       where: { nodeId },
@@ -67,39 +68,39 @@ async function testDisplayField(nodeId: string, treeId: string) {
 
     if (submissionData.length > 0) {
       const data = submissionData[0];
-      console.log(`      ✅ Dernière donnée de soumission:`);
-      console.log(`         Valeur: ${data.value || '(vide)'}`);
-      console.log(`         OperationResult: ${data.operationResult ? 'PRÉSENT' : '(vide)'}`);
+      logger.debug(`      ✅ Dernière donnée de soumission:`);
+      logger.debug(`         Valeur: ${data.value || '(vide)'}`);
+      logger.debug(`         OperationResult: ${data.operationResult ? 'PRÉSENT' : '(vide)'}`);
       if (data.operationResult) {
-        console.log(`         Contenu: ${JSON.stringify(data.operationResult).substring(0, 200)}...`);
+        logger.debug(`         Contenu: ${JSON.stringify(data.operationResult).substring(0, 200)}...`);
       }
-      console.log(`         Source: ${data.operationSource || '(vide)'}`);
-      console.log(`         Résolu: ${data.lastResolved || '(jamais)'}`);
+      logger.debug(`         Source: ${data.operationSource || '(vide)'}`);
+      logger.debug(`         Résolu: ${data.lastResolved || '(jamais)'}`);
     } else {
-      console.log('      ❌ Aucune donnée de soumission');
+      logger.debug('      ❌ Aucune donnée de soumission');
     }
 
     // 3. Tester l'API de récupération
-    console.log('   🌐 3. Test API calculated-value...');
+    logger.debug('   🌐 3. Test API calculated-value...');
     
     try {
       const response = await fetch(`${API_BASE}/tree-nodes/${treeId}/${nodeId}/calculated-value`);
-      console.log(`      Status: ${response.status}`);
+      logger.debug(`      Status: ${response.status}`);
       
       if (response.ok) {
         const result = await response.json();
-        console.log(`      ✅ API répond: ${JSON.stringify(result, null, 2)}`);
+        logger.debug(`      ✅ API répond: ${JSON.stringify(result, null, 2)}`);
       } else {
         const error = await response.text();
-        console.log(`      ❌ API erreur: ${error}`);
+        logger.debug(`      ❌ API erreur: ${error}`);
       }
     } catch (apiError) {
-      console.log(`      ❌ Erreur connexion API: ${apiError}`);
+      logger.debug(`      ❌ Erreur connexion API: ${apiError}`);
     }
 
     // 4. Tester les variables liées
     if (node.linkedVariableIds.length > 0) {
-      console.log('   🔗 4. Vérification variables liées...');
+      logger.debug('   🔗 4. Vérification variables liées...');
       
       for (const varId of node.linkedVariableIds) {
         const variable = await prisma.treeBranchLeafNodeVariable.findUnique({
@@ -116,22 +117,22 @@ async function testDisplayField(nodeId: string, treeId: string) {
         });
 
         if (variable) {
-          console.log(`      📊 Variable: ${variable.displayName} (${variable.exposedKey})`);
-          console.log(`         Type: ${variable.sourceType}`);
-          console.log(`         Valeur fixe: ${variable.fixedValue || '(vide)'}`);
-          console.log(`         Nœud sélectionné: ${variable.selectedNodeId || '(aucun)'}`);
-          console.log(`         Référence source: ${variable.sourceRef || '(aucune)'}`);
+          logger.debug(`      📊 Variable: ${variable.displayName} (${variable.exposedKey})`);
+          logger.debug(`         Type: ${variable.sourceType}`);
+          logger.debug(`         Valeur fixe: ${variable.fixedValue || '(vide)'}`);
+          logger.debug(`         Nœud sélectionné: ${variable.selectedNodeId || '(aucun)'}`);
+          logger.debug(`         Référence source: ${variable.sourceRef || '(aucune)'}`);
         }
       }
     }
 
   } catch (error) {
-    console.log(`   ❌ Erreur pendant le test: ${error}`);
+    logger.debug(`   ❌ Erreur pendant le test: ${error}`);
   }
 }
 
 async function testCopyField(originalNodeId: string, copyNodeId: string, _treeId: string) {
-  console.log(`\n📋 Test de copie: ${originalNodeId} → ${copyNodeId}`);
+  logger.debug(`\n📋 Test de copie: ${originalNodeId} → ${copyNodeId}`);
 
   try {
     // Comparer l'original et la copie
@@ -147,49 +148,49 @@ async function testCopyField(originalNodeId: string, copyNodeId: string, _treeId
     ]);
 
     if (!original || !copy) {
-      console.log('   ❌ Original ou copie non trouvé(e)');
+      logger.debug('   ❌ Original ou copie non trouvé(e)');
       return;
     }
 
-    console.log(`   📊 Original: ${original.label} → calculatedValue: ${original.calculatedValue || '(vide)'}`);
-    console.log(`   📋 Copie: ${copy.label} → calculatedValue: ${copy.calculatedValue || '(vide)'}`);
+    logger.debug(`   📊 Original: ${original.label} → calculatedValue: ${original.calculatedValue || '(vide)'}`);
+    logger.debug(`   📋 Copie: ${copy.label} → calculatedValue: ${copy.calculatedValue || '(vide)'}`);
 
     const meta = copy.metadata as unknown;
-    console.log(`   🔗 Métadonnées copie: sourceTemplateId=${meta?.sourceTemplateId}, copiedFromNodeId=${meta?.copiedFromNodeId}`);
+    logger.debug(`   🔗 Métadonnées copie: sourceTemplateId=${meta?.sourceTemplateId}, copiedFromNodeId=${meta?.copiedFromNodeId}`);
 
     // Vérifier si les valeurs sont synchronisées
     if (original.calculatedValue === copy.calculatedValue) {
-      console.log('   ✅ Les valeurs sont synchronisées');
+      logger.debug('   ✅ Les valeurs sont synchronisées');
     } else {
-      console.log('   ❌ Les valeurs ne sont PAS synchronisées');
-      console.log('      → La copie devrait hériter de la valeur de l\'original');
+      logger.debug('   ❌ Les valeurs ne sont PAS synchronisées');
+      logger.debug('      → La copie devrait hériter de la valeur de l\'original');
     }
 
     // Vérifier les variables liées
-    console.log(`   🔗 Variables liées - Original: ${original.linkedVariableIds.length}, Copie: ${copy.linkedVariableIds.length}`);
+    logger.debug(`   🔗 Variables liées - Original: ${original.linkedVariableIds.length}, Copie: ${copy.linkedVariableIds.length}`);
 
   } catch (error) {
-    console.log(`   ❌ Erreur pendant le test de copie: ${error}`);
+    logger.debug(`   ❌ Erreur pendant le test de copie: ${error}`);
   }
 }
 
 async function main() {
-  console.log('🧪 === TEST AFFICHAGE EN TEMPS RÉEL ===\n');
+  logger.debug('🧪 === TEST AFFICHAGE EN TEMPS RÉEL ===\n');
 
   try {
     // 1. Trouver des exemples concrets
-    console.log('🔍 1. Recherche d\'exemples concrets...');
+    logger.debug('🔍 1. Recherche d\'exemples concrets...');
     
     const tree = await prisma.treeBranchLeafTree.findFirst({
       orderBy: { createdAt: 'desc' }
     });
 
     if (!tree) {
-      console.log('❌ Aucun arbre trouvé');
+      logger.debug('❌ Aucun arbre trouvé');
       return;
     }
 
-    console.log(`✅ Arbre sélectionné: ${tree.name} (${tree.id})`);
+    logger.debug(`✅ Arbre sélectionné: ${tree.name} (${tree.id})`);
 
     // 2. Chercher des nœuds avec des valeurs calculées
     const nodesWithValues = await prisma.treeBranchLeafNode.findMany({
@@ -204,7 +205,7 @@ async function main() {
       take: 3
     });
 
-    console.log(`\n📊 ${nodesWithValues.length} nœuds avec valeurs trouvés`);
+    logger.debug(`\n📊 ${nodesWithValues.length} nœuds avec valeurs trouvés`);
 
     // 3. Tester chaque nœud
     for (const node of nodesWithValues) {
@@ -212,7 +213,7 @@ async function main() {
     }
 
     // 4. Chercher des exemples de copies
-    console.log('\n📋 4. Recherche de copies...');
+    logger.debug('\n📋 4. Recherche de copies...');
     
     const allNodes = await prisma.treeBranchLeafNode.findMany({
       where: { treeId: tree.id },
@@ -224,7 +225,7 @@ async function main() {
       return meta?.sourceTemplateId || meta?.copiedFromNodeId;
     });
 
-    console.log(`📋 ${copies.length} copies trouvées`);
+    logger.debug(`📋 ${copies.length} copies trouvées`);
 
     for (const copy of copies.slice(0, 2)) { // Tester les 2 premières
       const meta = copy.metadata as unknown;
@@ -236,7 +237,7 @@ async function main() {
     }
 
     // 5. Test d'une soumission si elle existe
-    console.log('\n📝 5. Test avec soumission existante...');
+    logger.debug('\n📝 5. Test avec soumission existante...');
     
     const submission = await prisma.treeBranchLeafSubmission.findFirst({
       where: { treeId: tree.id },
@@ -244,13 +245,13 @@ async function main() {
     });
 
     if (submission) {
-      console.log(`✅ Soumission trouvée: ${submission.id}`);
+      logger.debug(`✅ Soumission trouvée: ${submission.id}`);
       
       const dataCount = await prisma.treeBranchLeafSubmissionData.count({
         where: { submissionId: submission.id }
       });
       
-      console.log(`   📊 ${dataCount} enregistrements de données`);
+      logger.debug(`   📊 ${dataCount} enregistrements de données`);
 
       const withResults = await prisma.treeBranchLeafSubmissionData.count({
         where: { 
@@ -259,16 +260,16 @@ async function main() {
         }
       });
 
-      console.log(`   🎯 ${withResults} avec operationResult`);
+      logger.debug(`   🎯 ${withResults} avec operationResult`);
     } else {
-      console.log('   ❌ Aucune soumission trouvée');
+      logger.debug('   ❌ Aucune soumission trouvée');
     }
 
   } catch (error) {
-    console.error('❌ Erreur pendant les tests:', error);
+    logger.error('❌ Erreur pendant les tests:', error);
   } finally {
     await prisma.$disconnect();
   }
 }
 
-main().catch(console.error);
+main().catch(logger.error);

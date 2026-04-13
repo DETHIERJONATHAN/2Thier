@@ -1,6 +1,7 @@
 import { StateCreator } from 'zustand';
 import { CRMState } from './types';
 import { fetchWithAuth } from './api';
+import { logger } from '../../lib/logger';
 
 export interface ValidationSlice {
   // Actions pour les validations
@@ -27,7 +28,7 @@ export const createValidationSlice: StateCreator<
 > = (set, get) => ({
   createValidation: async (fieldId, validationData) => {
     try {
-      console.log(`[CRMStore][createValidation] Creating validation for field ${fieldId}:`, validationData);
+      logger.debug(`[CRMStore][createValidation] Creating validation for field ${fieldId}:`, validationData);
       
       const res = await fetchWithAuth(`/api/fields/${fieldId}/validations`, {
         method: 'POST',
@@ -41,7 +42,7 @@ export const createValidationSlice: StateCreator<
       }
       
       const updatedValidations = await res.json();
-      console.log(`[CRMStore][createValidation] Received validations:`, updatedValidations);
+      logger.debug(`[CRMStore][createValidation] Received validations:`, updatedValidations);
       
       // Mise à jour du state
       set(state => {
@@ -73,14 +74,14 @@ export const createValidationSlice: StateCreator<
       
       return newValidation || null;
     } catch (err: unknown) {
-      console.error('[CRMStore][createValidation] Error:', err);
+      logger.error('[CRMStore][createValidation] Error:', err);
       throw err;
     }
   },
   
   updateValidation: async (validationId, data) => {
     const stateBeforeUpdate = get();
-    console.log(`[CRMStore][updateValidation] Updating validation ${validationId}:`, data);
+    logger.debug(`[CRMStore][updateValidation] Updating validation ${validationId}:`, data);
     
     // Trouver le field qui contient cette validation
     let fieldId: string | undefined;
@@ -101,7 +102,7 @@ export const createValidationSlice: StateCreator<
     });
     
     if (!fieldId || !originalValidation) {
-      console.error(`[CRMStore][updateValidation] Validation ${validationId} not found in any field`);
+      logger.error(`[CRMStore][updateValidation] Validation ${validationId} not found in any field`);
       throw new Error("Validation non trouvée");
     }
     
@@ -162,9 +163,9 @@ export const createValidationSlice: StateCreator<
         return { blocks: newBlocks };
       });
       
-      console.log(`[CRMStore][updateValidation] Validation updated successfully`);
+      logger.debug(`[CRMStore][updateValidation] Validation updated successfully`);
     } catch (err: unknown) {
-      console.error('[CRMStore][updateValidation] Error:', err);
+      logger.error('[CRMStore][updateValidation] Error:', err);
       // Rollback en cas d'erreur
       set({ blocks: stateBeforeUpdate.blocks });
       throw err;
@@ -173,7 +174,7 @@ export const createValidationSlice: StateCreator<
   
   deleteValidation: async (validationId) => {
     const stateBeforeUpdate = get();
-    console.log(`[CRMStore][deleteValidation] Deleting validation ${validationId}`);
+    logger.debug(`[CRMStore][deleteValidation] Deleting validation ${validationId}`);
     
     // Trouver le field qui contient cette validation
     let fieldId: string | undefined;
@@ -189,7 +190,7 @@ export const createValidationSlice: StateCreator<
     });
     
     if (!fieldId) {
-      console.error(`[CRMStore][deleteValidation] Validation ${validationId} not found in any field`);
+      logger.error(`[CRMStore][deleteValidation] Validation ${validationId} not found in any field`);
       throw new Error("Validation non trouvée");
     }
     
@@ -243,9 +244,9 @@ export const createValidationSlice: StateCreator<
         return { blocks: newBlocks };
       });
       
-      console.log(`[CRMStore][deleteValidation] Validation deleted successfully`);
+      logger.debug(`[CRMStore][deleteValidation] Validation deleted successfully`);
     } catch (err: unknown) {
-      console.error('[CRMStore][deleteValidation] Error:', err);
+      logger.error('[CRMStore][deleteValidation] Error:', err);
       // Rollback en cas d'erreur
       set({ blocks: stateBeforeUpdate.blocks });
       throw err;
@@ -267,7 +268,7 @@ export const createValidationSlice: StateCreator<
   },
   
   reorderValidations: async (fieldId, oldIndex, newIndex) => {
-    console.log(`[CRMStore][reorderValidations] Reordering validations for field ${fieldId} from ${oldIndex} to ${newIndex}`);
+    logger.debug(`[CRMStore][reorderValidations] Reordering validations for field ${fieldId} from ${oldIndex} to ${newIndex}`);
     let fieldToUpdate: unknown | undefined;
     let reorderedValidations: unknown[] | undefined;
     const stateBeforeUpdate = get();
@@ -303,9 +304,9 @@ export const createValidationSlice: StateCreator<
           throw new Error(err.error || "Erreur lors de la mise à jour de l'ordre des validations");
         }
         
-        console.log(`[CRMStore][reorderValidations] Validation order updated successfully`);
+        logger.debug(`[CRMStore][reorderValidations] Validation order updated successfully`);
       } catch (err: unknown) {
-        console.error('[CRMStore][reorderValidations] API error:', err);
+        logger.error('[CRMStore][reorderValidations] API error:', err);
         // Rollback en cas d'erreur
         set({ blocks: stateBeforeUpdate.blocks });
         throw err;

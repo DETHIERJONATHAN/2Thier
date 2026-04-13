@@ -13,6 +13,7 @@ import {
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { useAuth } from '../auth/useAuth';
 import { FB, SF } from '../components/zhiive/ZhiiveTheme';
+import { logger } from '../lib/logger';
 
 const useScreenSize = () => {
   const [w, setW] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
@@ -57,7 +58,7 @@ export default function MyCommercialLinks() {
       setForms(response.forms);
       setUserSlug(response.userSlug);
     } catch (error) {
-      console.error('Erreur:', error);
+      logger.error('Erreur:', error);
       message.error('Impossible de charger vos liens commerciaux');
     } finally { setLoading(false); }
   };

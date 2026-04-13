@@ -34,6 +34,7 @@ import {
 import dayjs from 'dayjs';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Title } = Typography;
 const { Option } = Select;
@@ -66,7 +67,7 @@ export default function LeadsHomePage({
   const isMobile = !screens.md;
   
   // 🔍 DEBUG: Vérifier les props reçues en détail
-  console.log('[LeadsHomePage] 📦 Props reçues:', {
+  logger.debug('[LeadsHomePage] 📦 Props reçues:', {
     onViewLead: typeof onViewLead,
     onCallLead: typeof onCallLead,
     onEmailLead: typeof onEmailLead,
@@ -79,16 +80,16 @@ export default function LeadsHomePage({
   });
   
   // 🚨 URGENT DEBUG: Tester directement les callbacks
-  console.log('[LeadsHomePage] 🧪 TEST DIRECT DES CALLBACKS:');
-  console.log('[LeadsHomePage] 🧪 onViewLead:', onViewLead);
-  console.log('[LeadsHomePage] 🧪 onCallLead:', onCallLead);
-  console.log('[LeadsHomePage] 🧪 onEmailLead:', onEmailLead);
-  console.log('[LeadsHomePage] 🧪 onScheduleLead:', onScheduleLead);
+  logger.debug('[LeadsHomePage] 🧪 TEST DIRECT DES CALLBACKS:');
+  logger.debug('[LeadsHomePage] 🧪 onViewLead:', onViewLead);
+  logger.debug('[LeadsHomePage] 🧪 onCallLead:', onCallLead);
+  logger.debug('[LeadsHomePage] 🧪 onEmailLead:', onEmailLead);
+  logger.debug('[LeadsHomePage] 🧪 onScheduleLead:', onScheduleLead);
   
   if (onCallLead) {
-    console.log('[LeadsHomePage] ✅ onCallLead existe et est valide');
+    logger.debug('[LeadsHomePage] ✅ onCallLead existe et est valide');
   } else {
-    console.log('[LeadsHomePage] ❌ onCallLead est NULL/UNDEFINED!');
+    logger.debug('[LeadsHomePage] ❌ onCallLead est NULL/UNDEFINED!');
   }
   // Navigation et hooks
   const navigate = useNavigate();
@@ -144,7 +145,7 @@ export default function LeadsHomePage({
 
   // 🔍 Recherche intelligente avec IA
   const smartSearch = useMemo(() => {
-    console.log('[LeadsHomePage] 🔍 Smart search - searchTerm:', searchTerm, 'leads:', leads.length);
+    logger.debug('[LeadsHomePage] 🔍 Smart search - searchTerm:', searchTerm, 'leads:', leads.length);
     if (!searchTerm) return leads;
     
     const term = searchTerm.toLowerCase();
@@ -164,8 +165,8 @@ export default function LeadsHomePage({
   // 📊 Filtrage dynamique
   const filteredLeads = useMemo(() => {
     let result = smartSearch;
-    console.log('[LeadsHomePage] 🔍 Début filtrage - smartSearch:', result.length);
-    console.log('[LeadsHomePage] 🔍 Filtres actifs:', { 
+    logger.debug('[LeadsHomePage] 🔍 Début filtrage - smartSearch:', result.length);
+    logger.debug('[LeadsHomePage] 🔍 Filtres actifs:', { 
       statusFilter: statusFilter.length, 
       sourceFilter, 
       commercialFilter, 
@@ -176,21 +177,21 @@ export default function LeadsHomePage({
     if (statusFilter.length > 0) {
       const beforeCount = result.length;
       result = result.filter(lead => statusFilter.includes(lead.status));
-      console.log('[LeadsHomePage] 🔍 Après filtre statut:', result.length, 'avant:', beforeCount);
+      logger.debug('[LeadsHomePage] 🔍 Après filtre statut:', result.length, 'avant:', beforeCount);
     }
     
     // Filtre par source
     if (sourceFilter) {
       const beforeCount = result.length;
       result = result.filter(lead => lead.source === sourceFilter);
-      console.log('[LeadsHomePage] 🔍 Après filtre source:', result.length, 'avant:', beforeCount);
+      logger.debug('[LeadsHomePage] 🔍 Après filtre source:', result.length, 'avant:', beforeCount);
     }
     
     // Filtre par commercial
     if (commercialFilter) {
       const beforeCount = result.length;
       result = result.filter(lead => lead.assignedTo === commercialFilter);
-      console.log('[LeadsHomePage] 🔍 Après filtre commercial:', result.length, 'avant:', beforeCount);
+      logger.debug('[LeadsHomePage] 🔍 Après filtre commercial:', result.length, 'avant:', beforeCount);
     }
     
     // Filtre par date
@@ -200,16 +201,16 @@ export default function LeadsHomePage({
         const leadDate = dayjs(lead.createdAt);
         return leadDate.isAfter(dateRange[0]) && leadDate.isBefore(dateRange[1]);
       });
-      console.log('[LeadsHomePage] 🔍 Après filtre date:', result.length, 'avant:', beforeCount);
+      logger.debug('[LeadsHomePage] 🔍 Après filtre date:', result.length, 'avant:', beforeCount);
     }
     
-    console.log('[LeadsHomePage] 🔍 Leads filtrés FINAL:', result.length, 'sur', smartSearch.length);
+    logger.debug('[LeadsHomePage] 🔍 Leads filtrés FINAL:', result.length, 'sur', smartSearch.length);
     return result;
   }, [smartSearch, statusFilter, sourceFilter, commercialFilter, dateRange]);
 
   // 🤖 SYSTÈME D'IA APPROFONDI - Analyse des leads réels
   const aiAnalysis = useMemo(() => {
-    console.log('[IA] 🧠 Analyse approfondie des leads...', leads.length, 'leads');
+    logger.debug('[IA] 🧠 Analyse approfondie des leads...', leads.length, 'leads');
     
     if (leads.length === 0) {
       return {
@@ -344,7 +345,7 @@ export default function LeadsHomePage({
       });
     }
 
-    console.log('[IA] 🧠 Analyse terminée:', {
+    logger.debug('[IA] 🧠 Analyse terminée:', {
       alertes: alerts.length,
       critiques: criticalCount,
       retards: overdueCount,
@@ -362,53 +363,53 @@ export default function LeadsHomePage({
   }, [leads]);
 
   // 📱 Actions rapides sur chaque lead - avec garde
-  console.log('[LeadsHomePage] 🏗️ Création des handlers avec les props actuelles...');
-  console.log('[LeadsHomePage] 🏗️ onCallLead actuel:', typeof onCallLead, onCallLead);
+  logger.debug('[LeadsHomePage] 🏗️ Création des handlers avec les props actuelles...');
+  logger.debug('[LeadsHomePage] 🏗️ onCallLead actuel:', typeof onCallLead, onCallLead);
   
   const handleCallLead = useCallback((lead: Lead) => {
-    console.log('[LeadsHomePage] 📞 handleCallLead appelé, onCallLead:', typeof onCallLead);
-    console.log('[LeadsHomePage] 📞 onCallLead valeur:', onCallLead);
-    console.log('[LeadsHomePage] 📞 lead.id:', lead.id);
+    logger.debug('[LeadsHomePage] 📞 handleCallLead appelé, onCallLead:', typeof onCallLead);
+    logger.debug('[LeadsHomePage] 📞 onCallLead valeur:', onCallLead);
+    logger.debug('[LeadsHomePage] 📞 lead.id:', lead.id);
     if (openInline) {
       setSelectedLead(lead);
       setIsCallModalOpen(true);
       return;
     }
     if (typeof onCallLead === 'function') {
-      console.log('[LeadsHomePage] 📞 Appel de onCallLead avec:', lead.id);
+      logger.debug('[LeadsHomePage] 📞 Appel de onCallLead avec:', lead.id);
       onCallLead(lead.id);
-      console.log('[LeadsHomePage] 📞 onCallLead executé avec succès');
+      logger.debug('[LeadsHomePage] 📞 onCallLead executé avec succès');
     } else {
-      console.error('[LeadsHomePage] ❌ onCallLead n\'est pas une fonction:', onCallLead);
+      logger.error('[LeadsHomePage] ❌ onCallLead n\'est pas une fonction:', onCallLead);
       message.error('Erreur : fonction d\'appel non disponible');
     }
   }, [onCallLead, openInline]);
   
-  console.log('[LeadsHomePage] ✅ handleCallLead créé:', typeof handleCallLead);
+  logger.debug('[LeadsHomePage] ✅ handleCallLead créé:', typeof handleCallLead);
 
   const handleEmailLead = useCallback((lead: Lead) => {
-    console.log('[LeadsHomePage] 📧 handleEmailLead appelé, onEmailLead:', typeof onEmailLead);
-    console.log('[LeadsHomePage] 📧 onEmailLead valeur:', onEmailLead);
-    console.log('[LeadsHomePage] 📧 lead.id:', lead.id);
+    logger.debug('[LeadsHomePage] 📧 handleEmailLead appelé, onEmailLead:', typeof onEmailLead);
+    logger.debug('[LeadsHomePage] 📧 onEmailLead valeur:', onEmailLead);
+    logger.debug('[LeadsHomePage] 📧 lead.id:', lead.id);
     if (openInline) {
       setSelectedLead(lead);
       setIsEmailModalOpen(true);
       return;
     }
     if (typeof onEmailLead === 'function') {
-      console.log('[LeadsHomePage] 📧 Appel de onEmailLead avec:', lead.id);
+      logger.debug('[LeadsHomePage] 📧 Appel de onEmailLead avec:', lead.id);
       onEmailLead(lead.id);
-      console.log('[LeadsHomePage] 📧 onEmailLead executé avec succès');
+      logger.debug('[LeadsHomePage] 📧 onEmailLead executé avec succès');
     } else {
-      console.error('[LeadsHomePage] ❌ onEmailLead n\'est pas une fonction:', onEmailLead);
+      logger.error('[LeadsHomePage] ❌ onEmailLead n\'est pas une fonction:', onEmailLead);
       message.error('Erreur : fonction d\'email non disponible');
     }
   }, [onEmailLead, openInline]);
   
-  console.log('[LeadsHomePage] ✅ handleEmailLead créé:', typeof handleEmailLead);
+  logger.debug('[LeadsHomePage] ✅ handleEmailLead créé:', typeof handleEmailLead);
 
   const handleScheduleMeeting = useCallback((lead: Lead) => {
-    console.log('[LeadsHomePage] 📅 handleScheduleMeeting appelé, onScheduleLead:', typeof onScheduleLead);
+    logger.debug('[LeadsHomePage] 📅 handleScheduleMeeting appelé, onScheduleLead:', typeof onScheduleLead);
     if (openInline) {
       setSelectedLead(lead);
       setIsAgendaModalOpen(true);
@@ -417,13 +418,13 @@ export default function LeadsHomePage({
     if (typeof onScheduleLead === 'function') {
       onScheduleLead(lead.id);
     } else {
-      console.error('[LeadsHomePage] ❌ onScheduleLead n\'est pas une fonction:', onScheduleLead);
+      logger.error('[LeadsHomePage] ❌ onScheduleLead n\'est pas une fonction:', onScheduleLead);
       message.error('Erreur : fonction de planification non disponible');
     }
   }, [onScheduleLead, openInline]);
 
   const handleViewDetails = useCallback((lead: Lead) => {
-    console.log('[LeadsHomePage] 👁️ handleViewDetails appelé, onViewLead:', typeof onViewLead);
+    logger.debug('[LeadsHomePage] 👁️ handleViewDetails appelé, onViewLead:', typeof onViewLead);
     if (openInline) {
       setSelectedLead(lead);
       setIsDetailsModalOpen(true);
@@ -432,7 +433,7 @@ export default function LeadsHomePage({
     if (typeof onViewLead === 'function') {
       onViewLead(lead.id);
     } else {
-      console.error('[LeadsHomePage] ❌ onViewLead n\'est pas une fonction:', onViewLead);
+      logger.error('[LeadsHomePage] ❌ onViewLead n\'est pas une fonction:', onViewLead);
       message.error('Erreur : fonction de visualisation non disponible');
     }
   }, [onViewLead, openInline]);
@@ -446,41 +447,41 @@ export default function LeadsHomePage({
   const fetchLeads = useCallback(async () => {
     // Attendre que l'organisation soit définie pour les utilisateurs normaux
     if (!currentOrganization && !isSuperAdmin) {
-      console.log('[LeadsHomePage] ⏳ En attente de la définition de l\'organisation...');
+      logger.debug('[LeadsHomePage] ⏳ En attente de la définition de l\'organisation...');
       return;
     }
     
     setLoading(true);
     try {
-      console.log('[LeadsHomePage] 📊 Récupération des leads...');
+      logger.debug('[LeadsHomePage] 📊 Récupération des leads...');
       
       const response = await api.get('/api/leads');
-      console.log('[LeadsHomePage] 📊 Réponse API complète:', response);
-      console.log('[LeadsHomePage] 📊 Type de response:', typeof response);
-      console.log('[LeadsHomePage] 📊 Keys de response:', Object.keys(response || {}));
-      console.log('[LeadsHomePage] 📊 Array.isArray(response):', Array.isArray(response));
-      console.log('[LeadsHomePage] 📊 response.data existe:', !!response?.data);
-      console.log('[LeadsHomePage] 📊 Array.isArray(response.data):', Array.isArray(response?.data));
+      logger.debug('[LeadsHomePage] 📊 Réponse API complète:', response);
+      logger.debug('[LeadsHomePage] 📊 Type de response:', typeof response);
+      logger.debug('[LeadsHomePage] 📊 Keys de response:', Object.keys(response || {}));
+      logger.debug('[LeadsHomePage] 📊 Array.isArray(response):', Array.isArray(response));
+      logger.debug('[LeadsHomePage] 📊 response.data existe:', !!response?.data);
+      logger.debug('[LeadsHomePage] 📊 Array.isArray(response.data):', Array.isArray(response?.data));
       
       // Essayer différentes structures
       let leadsData: Lead[] = [];
       if (response?.success && Array.isArray(response.data)) {
-        console.log('[LeadsHomePage] 📊 Structure: {success: true, data: [...]}');
+        logger.debug('[LeadsHomePage] 📊 Structure: {success: true, data: [...]}');
         leadsData = response.data;
       } else if (Array.isArray(response)) {
-        console.log('[LeadsHomePage] 📊 Structure: tableau direct (fallback)');
+        logger.debug('[LeadsHomePage] 📊 Structure: tableau direct (fallback)');
         leadsData = response;
       } else {
-        console.log('[LeadsHomePage] 📊 Structure inconnue, réponse:', response);
+        logger.debug('[LeadsHomePage] 📊 Structure inconnue, réponse:', response);
         leadsData = [];
       }
       
-      console.log('[LeadsHomePage] 📊 Leads reçus:', leadsData.length);
-      console.log('[LeadsHomePage] 📊 Structure premier lead:', leadsData[0]);
+      logger.debug('[LeadsHomePage] 📊 Leads reçus:', leadsData.length);
+      logger.debug('[LeadsHomePage] 📊 Structure premier lead:', leadsData[0]);
       
       // Transformer les données Prisma pour la compatibilité avec l'interface
       const transformedLeads = leadsData.map(lead => {
-        console.log('[LeadsHomePage] 📊 Traitement lead:', lead.id, lead);
+        logger.debug('[LeadsHomePage] 📊 Traitement lead:', lead.id, lead);
         
         return {
           ...lead,
@@ -499,11 +500,11 @@ export default function LeadsHomePage({
         };
       });
       
-      console.log('[LeadsHomePage] 📊 Leads transformés:', transformedLeads);
+      logger.debug('[LeadsHomePage] 📊 Leads transformés:', transformedLeads);
       setLeads(transformedLeads);
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error, 'Erreur lors du chargement des leads');
-      console.error('[LeadsHomePage] ❌ Erreur lors du chargement des leads:', errorMessage, error);
+      logger.error('[LeadsHomePage] ❌ Erreur lors du chargement des leads:', errorMessage, error);
       NotificationManager.error(errorMessage);
     } finally {
       setLoading(false);
@@ -514,7 +515,7 @@ export default function LeadsHomePage({
   useEffect(() => {
     // Attendre que l'utilisateur ET l'organisation soient définis
     if (user && (currentOrganization || isSuperAdmin)) {
-      console.log('[LeadsHomePage] 🚀 Chargement des leads...', { 
+      logger.debug('[LeadsHomePage] 🚀 Chargement des leads...', { 
         user: user.email, 
         org: currentOrganization?.name || 'Vue globale',
         isSuperAdmin,
@@ -637,9 +638,9 @@ export default function LeadsHomePage({
             size="small" 
             icon={<PhoneOutlined />} 
             onClick={() => {
-              console.log(`[LeadsHomePage] 📞 BOUTON APPEL CLIQUÉ - TIMESTAMP: ${Date.now()}`);
-              console.log('[LeadsHomePage] 📞 Lead pour appel:', lead);
-              console.log('[LeadsHomePage] 📞 handleCallLead fonction:', typeof handleCallLead);
+              logger.debug(`[LeadsHomePage] 📞 BOUTON APPEL CLIQUÉ - TIMESTAMP: ${Date.now()}`);
+              logger.debug('[LeadsHomePage] 📞 Lead pour appel:', lead);
+              logger.debug('[LeadsHomePage] 📞 handleCallLead fonction:', typeof handleCallLead);
               handleCallLead(lead);
             }}
             title="Appeler"
@@ -648,9 +649,9 @@ export default function LeadsHomePage({
             size="small" 
             icon={<MailOutlined />} 
             onClick={() => {
-              console.log(`[LeadsHomePage] 📧 BOUTON EMAIL CLIQUÉ - TIMESTAMP: ${Date.now()}`);
-              console.log('[LeadsHomePage] 📧 Lead pour email:', lead);
-              console.log('[LeadsHomePage] 📧 handleEmailLead fonction:', typeof handleEmailLead);
+              logger.debug(`[LeadsHomePage] 📧 BOUTON EMAIL CLIQUÉ - TIMESTAMP: ${Date.now()}`);
+              logger.debug('[LeadsHomePage] 📧 Lead pour email:', lead);
+              logger.debug('[LeadsHomePage] 📧 handleEmailLead fonction:', typeof handleEmailLead);
               handleEmailLead(lead);
             }}
             title="Envoyer un email"
@@ -659,9 +660,9 @@ export default function LeadsHomePage({
             size="small" 
             icon={<CalendarOutlined />} 
             onClick={() => {
-              console.log(`[LeadsHomePage] 📅 BOUTON CALENDRIER CLIQUÉ - TIMESTAMP: ${Date.now()}`);
-              console.log('[LeadsHomePage] 📅 Lead pour RDV:', lead);
-              console.log('[LeadsHomePage] 📅 handleScheduleMeeting fonction:', typeof handleScheduleMeeting);
+              logger.debug(`[LeadsHomePage] 📅 BOUTON CALENDRIER CLIQUÉ - TIMESTAMP: ${Date.now()}`);
+              logger.debug('[LeadsHomePage] 📅 Lead pour RDV:', lead);
+              logger.debug('[LeadsHomePage] 📅 handleScheduleMeeting fonction:', typeof handleScheduleMeeting);
               handleScheduleMeeting(lead);
             }}
             title="Planifier RDV"
@@ -676,9 +677,9 @@ export default function LeadsHomePage({
             size="small" 
             icon={<EyeOutlined />} 
             onClick={() => {
-              console.log(`[LeadsHomePage] 👁️ BOUTON VOIR DÉTAILS CLIQUÉ - TIMESTAMP: ${Date.now()}`);
-              console.log('[LeadsHomePage] 👁️ Lead pour détails:', lead);
-              console.log('[LeadsHomePage] 👁️ handleViewDetails fonction:', typeof handleViewDetails);
+              logger.debug(`[LeadsHomePage] 👁️ BOUTON VOIR DÉTAILS CLIQUÉ - TIMESTAMP: ${Date.now()}`);
+              logger.debug('[LeadsHomePage] 👁️ Lead pour détails:', lead);
+              logger.debug('[LeadsHomePage] 👁️ handleViewDetails fonction:', typeof handleViewDetails);
               handleViewDetails(lead);
             }}
             title="Voir détails"
@@ -873,7 +874,7 @@ export default function LeadsHomePage({
         scroll={{ x: isMobile ? 900 : 1200 }}
         onChange={(pagination, filters, sorter) => {
           // TODO: Gérer le tri côté serveur
-          console.log('Table change:', { pagination, filters, sorter });
+          logger.debug('Table change:', { pagination, filters, sorter });
         }}
       />
 

@@ -1,3 +1,4 @@
+import { logger } from '../lib/logger';
 /**
  * Peppol Bridge — Odoo JSON-RPC Client
  * 
@@ -225,7 +226,7 @@ export class PeppolBridge {
         });
         return;
       } catch (e1) {
-        console.warn(`[PeppolBridge] try_loading('be') échoué:`, (e1 as Error).message);
+        logger.warn(`[PeppolBridge] try_loading('be') échoué:`, (e1 as Error).message);
       }
 
       // Méthode 2: Odoo 16 — via res.config.settings
@@ -252,14 +253,14 @@ export class PeppolBridge {
           return;
         }
       } catch (e2) {
-        console.warn(`[PeppolBridge] res.config.settings chart échoué:`, (e2 as Error).message);
+        logger.warn(`[PeppolBridge] res.config.settings chart échoué:`, (e2 as Error).message);
       }
 
       // Méthode 3: Fallback — copier les comptes essentiels depuis la company principale
       await this.copyEssentialAccounts(odooCompanyId);
 
     } catch (e) {
-      console.error(`[PeppolBridge] Erreur installation plan comptable pour company ${odooCompanyId}:`, e);
+      logger.error(`[PeppolBridge] Erreur installation plan comptable pour company ${odooCompanyId}:`, e);
       // Ne pas bloquer — on essaiera de créer des comptes à la volée lors de l'envoi
     }
 
@@ -281,7 +282,7 @@ export class PeppolBridge {
     }>;
 
     if (sourceAccounts.length === 0) {
-      console.warn('[PeppolBridge] Aucun compte source trouvé pour copie');
+      logger.warn('[PeppolBridge] Aucun compte source trouvé pour copie');
       return;
     }
 
@@ -307,7 +308,7 @@ export class PeppolBridge {
         created++;
       } catch (e) {
         // Peut échouer si le code existe déjà pour cette company
-        console.warn(`[PeppolBridge] Skip compte ${acc.code}: ${(e as Error).message?.substring(0, 80)}`);
+        logger.warn(`[PeppolBridge] Skip compte ${acc.code}: ${(e as Error).message?.substring(0, 80)}`);
       }
     }
 
@@ -375,7 +376,7 @@ export class PeppolBridge {
       } finally {
         // 5. TOUJOURS restaurer l'admin sur company 1
         await this.call('res.users', 'write', [[adminUid], { company_id: 1 }]).catch(e =>
-          console.error('[PeppolBridge] Erreur restauration admin company:', e)
+          logger.error('[PeppolBridge] Erreur restauration admin company:', e)
         );
       }
     }
@@ -417,7 +418,7 @@ export class PeppolBridge {
       return { success: true };
     } finally {
       await this.call('res.users', 'write', [[adminUid], { company_id: 1 }]).catch(e =>
-        console.error('[PeppolBridge] Erreur restauration admin company:', e)
+        logger.error('[PeppolBridge] Erreur restauration admin company:', e)
       );
     }
   }
@@ -462,7 +463,7 @@ export class PeppolBridge {
       return { status: state };
     } finally {
       await this.call('res.users', 'write', [[adminUid], { company_id: 1 }]).catch(e =>
-        console.error('[PeppolBridge] Erreur restauration admin company:', e)
+        logger.error('[PeppolBridge] Erreur restauration admin company:', e)
       );
     }
   }
@@ -477,7 +478,7 @@ export class PeppolBridge {
     try {
       await this.call('ir.cron', 'method_direct_trigger', [[20]]);
     } catch (e) {
-      console.warn('[PeppolBridge] Cron Peppol trigger échoué (non bloquant):', (e as Error).message?.substring(0, 100));
+      logger.warn('[PeppolBridge] Cron Peppol trigger échoué (non bloquant):', (e as Error).message?.substring(0, 100));
     }
 
     const company = await this.call('res.company', 'read', [
@@ -520,7 +521,7 @@ export class PeppolBridge {
 
       return undefined;
     } catch (e) {
-      console.warn('[PeppolBridge] Erreur recherche compte:', e);
+      logger.warn('[PeppolBridge] Erreur recherche compte:', e);
       return undefined;
     }
   }
@@ -578,7 +579,7 @@ export class PeppolBridge {
           }]) as number;
           groupMap.set(tg.name, newId);
         } catch (e) {
-          console.warn(`[PeppolBridge]   ⚠️ Tax group '${tg.name}' création échouée:`, (e as Error).message?.substring(0, 100));
+          logger.warn(`[PeppolBridge]   ⚠️ Tax group '${tg.name}' création échouée:`, (e as Error).message?.substring(0, 100));
         }
       }
     }
@@ -592,7 +593,7 @@ export class PeppolBridge {
 
       const taxGroupId = groupMap.get(tax.groupName);
       if (!taxGroupId) {
-        console.warn(`[PeppolBridge]   ⚠️ Pas de tax group '${tax.groupName}' pour la taxe '${tax.name}', skip`);
+        logger.warn(`[PeppolBridge]   ⚠️ Pas de tax group '${tax.groupName}' pour la taxe '${tax.name}', skip`);
         continue;
       }
 
@@ -606,7 +607,7 @@ export class PeppolBridge {
           tax_group_id: taxGroupId,
         }]) as number;
       } catch (e) {
-        console.warn(`[PeppolBridge]   ⚠️ Taxe '${tax.name}' création échouée:`, (e as Error).message?.substring(0, 100));
+        logger.warn(`[PeppolBridge]   ⚠️ Taxe '${tax.name}' création échouée:`, (e as Error).message?.substring(0, 100));
       }
     }
 
@@ -646,7 +647,7 @@ export class PeppolBridge {
 
       return true;
     } catch (e) {
-      console.error(`[PeppolBridge] ❌ Wizard Peppol échoué pour facture ${odooInvoiceId}:`, (e as Error).message);
+      logger.error(`[PeppolBridge] ❌ Wizard Peppol échoué pour facture ${odooInvoiceId}:`, (e as Error).message);
       return false;
     }
   }
@@ -734,7 +735,7 @@ export class PeppolBridge {
         taxCache.set(percent, ids);
         return ids;
       } catch (e) {
-        console.warn(`[PeppolBridge] Impossible de trouver la taxe TVA ${percent}%:`, e);
+        logger.warn(`[PeppolBridge] Impossible de trouver la taxe TVA ${percent}%:`, e);
         return [];
       }
     };
@@ -744,7 +745,7 @@ export class PeppolBridge {
     for (const line of invoice.lines) {
       const lineTaxIds = await findTaxForPercent(line.taxPercent);
       if (lineTaxIds.length === 0) {
-        console.warn(`[PeppolBridge] ⚠️ Aucune taxe trouvée pour ${line.taxPercent}% — UBL requiert au minimum une taxe par ligne !`);
+        logger.warn(`[PeppolBridge] ⚠️ Aucune taxe trouvée pour ${line.taxPercent}% — UBL requiert au minimum une taxe par ligne !`);
       }
       invoiceLines.push([0, 0, {
         name: line.description,
@@ -772,7 +773,7 @@ export class PeppolBridge {
     // 4. Envoyer via Peppol — utiliser le wizard Odoo 17 (la SEULE méthode qui fonctionne)
     const wizardSuccess = await this.sendViaWizard(odooInvoiceId, odooCompanyId);
     if (!wizardSuccess) {
-      console.error(`[PeppolBridge] ❌ L'envoi Peppol via wizard a échoué pour facture ${odooInvoiceId}. Le cron auto-retry prendra le relais.`);
+      logger.error(`[PeppolBridge] ❌ L'envoi Peppol via wizard a échoué pour facture ${odooInvoiceId}. Le cron auto-retry prendra le relais.`);
     }
 
     // 5. Récupérer le message ID Peppol
@@ -822,9 +823,9 @@ export class PeppolBridge {
     } catch (error) {
       const msg = (error as Error).message;
       if (msg.includes('Private methods')) {
-        console.warn(`[PeppolBridge] ⚠️ _peppol_get_new_documents est privé (Odoo 17) — les crons internes Odoo gèrent le download. On continue avec la lecture des factures existantes.`);
+        logger.warn(`[PeppolBridge] ⚠️ _peppol_get_new_documents est privé (Odoo 17) — les crons internes Odoo gèrent le download. On continue avec la lecture des factures existantes.`);
       } else {
-        console.error(`[PeppolBridge] ❌ Erreur fetch incoming documents company ${odooCompanyId}:`, msg);
+        logger.error(`[PeppolBridge] ❌ Erreur fetch incoming documents company ${odooCompanyId}:`, msg);
       }
       return false;
     }
@@ -887,7 +888,7 @@ export class PeppolBridge {
           if (p.vat) partnerVatMap[p.id] = p.vat;
         }
       } catch (err) {
-        console.warn(`[PeppolBridge] ⚠️ Could not fetch partner VATs:`, (err as Error).message);
+        logger.warn(`[PeppolBridge] ⚠️ Could not fetch partner VATs:`, (err as Error).message);
       }
     }
 
@@ -995,7 +996,7 @@ export class PeppolBridge {
 
     const newState = updated[0]?.account_peppol_proxy_state;
 
-    console.log(`[PeppolBridge] Deregistered company ${odooCompanyId}: ${previousState} → ${newState}`);
+    logger.debug(`[PeppolBridge] Deregistered company ${odooCompanyId}: ${previousState} → ${newState}`);
 
     return { success: !newState || newState === 'not_registered', previousState };
   }

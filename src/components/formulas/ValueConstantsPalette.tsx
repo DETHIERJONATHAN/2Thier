@@ -3,6 +3,7 @@ import type { FormulaItem } from '../../store/slices/types';
 import type { Formula } from '../../store/slices/types';
 import { validateFormula, getAPIHeaders } from '../../utils/formulaValidator';
 import { Input, Select, Button, Tooltip, Space, Tag } from 'antd';
+import { logger } from '../../lib/logger';
 
 interface ValueConstantsPaletteProps {
   formulaId?: string;
@@ -95,7 +96,7 @@ const ValueConstantsPalette: React.FC<ValueConstantsPaletteProps> = memo(({ form
       document.dispatchEvent(new CustomEvent('formula-updated', { detail: { formulaId, isEssential: true, action: 'add' } }));
       setTimeout(()=> setFeedback(''), 1500);
     })
-    .catch(e=>{ setFeedback('Erreur API'); console.error('[ValueConstantsPalette] Erreur ajout constante', e); })
+    .catch(e=>{ setFeedback('Erreur API'); logger.error('[ValueConstantsPalette] Erreur ajout constante', e); })
     .finally(()=> setIsSaving(false));
   }, [isSaving, formulaId, formula, rawValue, resolveValueType, destination, targetCondId, condItems]);
 

@@ -19,6 +19,7 @@
 import { useAuthenticatedApi } from './useAuthenticatedApi';
 import { useState, useCallback, useMemo, useRef } from 'react';
 import type { FormattedGmailMessage, GmailLabel } from './useGmailService';
+import { logger } from '../lib/logger';
 
 export const usePostalMailService = () => {
   const { api } = useAuthenticatedApi();
@@ -37,7 +38,7 @@ export const usePostalMailService = () => {
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string; error?: string } }; message?: string };
       const errorMsg = error.response?.data?.error || error.response?.data?.message || error.message || 'Erreur inconnue';
-      console.error('[usePostalMailService] ❌ Erreur API:', errorMsg);
+      logger.error('[usePostalMailService] ❌ Erreur API:', errorMsg);
       setError(errorMsg);
       return null;
     } finally {

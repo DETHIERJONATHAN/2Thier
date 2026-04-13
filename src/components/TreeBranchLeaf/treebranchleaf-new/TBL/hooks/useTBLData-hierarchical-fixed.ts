@@ -10,6 +10,7 @@ import {
   type TBLTab,
   type TBLTree
 } from './useTBLDataPrismaComplete';
+import { logger } from '../../../../../lib/logger';
 
 export interface UseTBLDataHierarchicalParams {
   tree_id: string | number;
@@ -43,7 +44,7 @@ const diagEnabled = () => {
 
 const ddiag = (...args: unknown[]) => {
   if (diagEnabled()) {
-    console.log('[TBL_DIAG]', ...args);
+    logger.debug('[TBL_DIAG]', ...args);
   }
 };
 
@@ -169,7 +170,7 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
         setRawNodes(nodes);
       }
     } catch (err) {
-      console.error('❌ [useTBLDataHierarchicalFixed] fetch error:', err);
+      logger.error('❌ [useTBLDataHierarchicalFixed] fetch error:', err);
       setError(err instanceof Error ? err.message : 'Erreur inconnue');
     } finally {
       if (!silent) setLoading(false);
@@ -239,19 +240,19 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
       ddiag('SubTabs update received → refetch', detail);
       // Debug in dev: log event and try to fetch and validate the node metadata is present
       try {
-        if (process.env.NODE_ENV === 'development') console.log('[useTBLDataHierarchicalFixed] tbl-subtabs-updated event detail:', detail);
+        if (process.env.NODE_ENV === 'development') logger.debug('[useTBLDataHierarchicalFixed] tbl-subtabs-updated event detail:', detail);
         await fetchData();
         // Give the transform a short moment to recompute
         await new Promise(r => setTimeout(r, 120));
         const nid = detail.nodeId as string | undefined;
         if (nid) {
           const found = rawNodesRef.current.find(n => n.id === nid) as unknown | undefined;
-          if (process.env.NODE_ENV === 'development') console.log('[useTBLDataHierarchicalFixed] After refetch - node found for detail.nodeId:', { nid, found });
+          if (process.env.NODE_ENV === 'development') logger.debug('[useTBLDataHierarchicalFixed] After refetch - node found for detail.nodeId:', { nid, found });
         } else {
-          if (process.env.NODE_ENV === 'development') console.log('[useTBLDataHierarchicalFixed] After refetch - no nodeId in detail; rawNodes length:', rawNodesRef.current.length);
+          if (process.env.NODE_ENV === 'development') logger.debug('[useTBLDataHierarchicalFixed] After refetch - no nodeId in detail; rawNodes length:', rawNodesRef.current.length);
         }
       } catch (e) {
-        console.error('[useTBLDataHierarchicalFixed] Error during subTabs update handling:', e);
+        logger.error('[useTBLDataHierarchicalFixed] Error during subTabs update handling:', e);
       }
     };
     window.addEventListener('tbl-subtabs-updated', handleSubTabsUpdate);
@@ -267,7 +268,7 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
         const { node, treeId: eventTreeId } = customEvent.detail || {};
         if (!node) return;
         if (!matchesCurrentTreeId(eventTreeId)) return;
-        if (process.env.NODE_ENV === 'development') console.log('🔔 [useTBLDataHierarchicalFixed] tbl-node-updated detail:', { nodeId: node.id, metadata: node.metadata });
+        if (process.env.NODE_ENV === 'development') logger.debug('🔔 [useTBLDataHierarchicalFixed] tbl-node-updated detail:', { nodeId: node.id, metadata: node.metadata });
         // Merge node in locally
         setRawNodes(prev => {
           const idx = prev.findIndex(n => n.id === node.id);
@@ -285,7 +286,7 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
           setFormDataVersion(v => v + 1);
         }
       } catch (e) {
-        console.error('❌ [useTBLDataHierarchicalFixed] handleNodeUpdated error', e);
+        logger.error('❌ [useTBLDataHierarchicalFixed] handleNodeUpdated error', e);
       }
     };
     window.addEventListener('tbl-node-updated', handleNodeUpdated);
@@ -311,7 +312,7 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
           const rawDuplicated = Array.isArray((detail as unknown)?.duplicated) ? (detail as any).duplicated : [];
           const source = (detail as unknown)?.source || null;
           const suppressReload = Boolean((detail as unknown)?.suppressReload);
-          console.log(`[Hierarchical][evt:${debugEventId}] tbl-repeater-updated detail:`, { source, suppressReload, duplicateIds, rawDuplicatedCount: rawDuplicated.length, inlineNodesCount: inlineNodes.length, inlineNodeIds: inlineNodes.map(n => n && n.id), detail });
+          logger.debug(`[Hierarchical][evt:${debugEventId}] tbl-repeater-updated detail:`, { source, suppressReload, duplicateIds, rawDuplicatedCount: rawDuplicated.length, inlineNodesCount: inlineNodes.length, inlineNodeIds: inlineNodes.map(n => n && n.id), detail });
         } catch { /* ignore */ }
 
         if (detail?.suppressReload) {
@@ -428,11 +429,11 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
                       if (n.parentId && removed.has(n.parentId)) {
                         const nodeSuffix = String(n.id).match(/-(\d+)$/)?.[1];
                         if (nodeSuffix && deletedSuffixes.has(nodeSuffix)) {
-                            if (debugEnabled) console.log('🔧 [OPTIMISTIC-REMOVE] caused by parent suffix match (deletingIds)', { nodeId: n.id, parentId: n.parentId, suffix: nodeSuffix });
+                            if (debugEnabled) logger.debug('🔧 [OPTIMISTIC-REMOVE] caused by parent suffix match (deletingIds)', { nodeId: n.id, parentId: n.parentId, suffix: nodeSuffix });
                             removed.add(n.id);
                           added = true;
                         } else if (!nodeSuffix) {
-                            if (debugEnabled) console.log('🔧 [OPTIMISTIC-REMOVE] caused by parent base node (no suffix)', { nodeId: n.id, parentId: n.parentId });
+                            if (debugEnabled) logger.debug('🔧 [OPTIMISTIC-REMOVE] caused by parent base node (no suffix)', { nodeId: n.id, parentId: n.parentId });
                             removed.add(n.id);
                           added = true;
                         }
@@ -457,7 +458,7 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
                         meta.repeaterParentId === eventRepeaterId ||
                         meta.repeatScopeId === eventRepeaterId
                       ) {
-                        if (debugEnabled) console.log('🔧 [OPTIMISTIC-REMOVE] display node caught by repeater+suffix match', { nodeId: n.id, suffix: nodeSuffix, repeaterId: eventRepeaterId });
+                        if (debugEnabled) logger.debug('🔧 [OPTIMISTIC-REMOVE] display node caught by repeater+suffix match', { nodeId: n.id, suffix: nodeSuffix, repeaterId: eventRepeaterId });
                         removed.add(n.id);
                       }
                     }
@@ -465,7 +466,7 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
                   if (removed.size === 0) return prev;
                   if (typeof window !== 'undefined' && (window as any).localStorage && localStorage.getItem('TBL_DEBUG_DELETE') === '1') {
                     const removedList = Array.from(removed);
-                    console.log('[OPTIMISTIC-REMOVE] Final removed (optimistic):', { count: removedList.length, list: removedList });
+                    logger.debug('[OPTIMISTIC-REMOVE] Final removed (optimistic):', { count: removedList.length, list: removedList });
                   }
                   return prev.filter(n => !removed.has(n.id));
                 });
@@ -759,7 +760,7 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
     try {
       createAutomaticMirrors(transformedTabs, nodesSource);
     } catch (error) {
-      console.error('[useTBLDataHierarchicalFixed] Impossible de créer les mirrors automatiques:', error);
+      logger.error('[useTBLDataHierarchicalFixed] Impossible de créer les mirrors automatiques:', error);
     }
   }, [transformedTabs, rawNodes]);
 
@@ -774,7 +775,7 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
       await api.post(`/api/treebranchleaf/nodes/${nodeId}/value`, { value });
       await fetchData();
     } catch (err) {
-      console.error('❌ [useTBLDataHierarchicalFixed] updateNodeValue error:', err);
+      logger.error('❌ [useTBLDataHierarchicalFixed] updateNodeValue error:', err);
     }
   }, [api, fetchData]);
 
@@ -783,7 +784,7 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
       await api.put(`/api/treebranchleaf/${nodeId}/visibility`, {});
       await fetchData();
     } catch (err) {
-      console.error('❌ [useTBLDataHierarchicalFixed] toggleNodeVisibility error:', err);
+      logger.error('❌ [useTBLDataHierarchicalFixed] toggleNodeVisibility error:', err);
     }
   }, [api, fetchData]);
 
@@ -792,7 +793,7 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
       await api.post(`/api/treebranchleaf/${nodeId}/options`, { option });
       await fetchData();
     } catch (err) {
-      console.error('❌ [useTBLDataHierarchicalFixed] addOption error:', err);
+      logger.error('❌ [useTBLDataHierarchicalFixed] addOption error:', err);
     }
   }, [api, fetchData]);
 
@@ -801,7 +802,7 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
       await api.delete(`/api/treebranchleaf/${nodeId}/options/${encodeURIComponent(option)}`);
       await fetchData();
     } catch (err) {
-      console.error('❌ [useTBLDataHierarchicalFixed] deleteOption error:', err);
+      logger.error('❌ [useTBLDataHierarchicalFixed] deleteOption error:', err);
     }
   }, [api, fetchData]);
 

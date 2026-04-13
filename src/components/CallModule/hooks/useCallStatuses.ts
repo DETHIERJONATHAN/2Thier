@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
+import { logger } from '../../../lib/logger';
 
 export interface CallStatus {
   id?: string;
@@ -25,14 +26,14 @@ export const useCallStatuses = () => {
 
   // � Récupération des statuts depuis l'API uniquement
   const fetchCallStatuses = useCallback(async () => {
-    console.log('🔍 [DEBUG] useCallStatuses - fetchCallStatuses called');
+    logger.debug('🔍 [DEBUG] useCallStatuses - fetchCallStatuses called');
     try {
       setLoading(true);
       setError(null);
       
       // Récupération depuis les paramètres UNIQUEMENT
       const response = await api.get('/api/settings/call-statuses');
-      console.log('🔍 [DEBUG] useCallStatuses - API response:', response);
+      logger.debug('🔍 [DEBUG] useCallStatuses - API response:', response);
       
       if (response && Array.isArray(response)) {
         // Transformer les statuts pour compatibilité avec le Select
@@ -43,15 +44,15 @@ export const useCallStatuses = () => {
         }));
         
         setCallStatuses(transformedStatuses);
-        console.log(`✅ ${transformedStatuses.length} statuts d'appels chargés depuis les paramètres`, transformedStatuses);
+        logger.debug(`✅ ${transformedStatuses.length} statuts d'appels chargés depuis les paramètres`, transformedStatuses);
       } else {
         // Aucun statut trouvé
-        console.warn('⚠️ Aucun statut d\'appel configuré dans les paramètres');
+        logger.warn('⚠️ Aucun statut d\'appel configuré dans les paramètres');
         setCallStatuses([]);
         setError('Aucun statut d\'appel configuré. Veuillez configurer les statuts dans les paramètres.');
       }
     } catch (error) {
-      console.error('❌ Erreur lors de la récupération des statuts d\'appels:', error);
+      logger.error('❌ Erreur lors de la récupération des statuts d\'appels:', error);
       setCallStatuses([]);
       setError('Impossible de charger les statuts d\'appels. Vérifiez votre connexion et les paramètres.');
     } finally {
@@ -93,7 +94,7 @@ export const useCallStatuses = () => {
 
   // 🎬 Chargement initial - NE SE DÉCLENCHE QU'UNE FOIS
   useEffect(() => {
-    console.log('🔍 [DEBUG] useCallStatuses - useEffect mount, fetching statuses');
+    logger.debug('🔍 [DEBUG] useCallStatuses - useEffect mount, fetching statuses');
     fetchCallStatuses();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Dépendances vides volontairement pour ne charger qu'une fois

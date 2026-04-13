@@ -10,6 +10,7 @@ import frLocale from '@fullcalendar/core/locales/fr';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import './AgendaPage.css';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Title } = Typography;
 const { TextArea } = Input;
@@ -84,7 +85,7 @@ const AgendaPage: React.FC = () => {
       const response = await api.get(`/api/calendar/events?${params.toString()}`);
       setEvents(response);
     } catch (error) {
-      console.error('[Agenda] Erreur lors de la récupération des événements:', error);
+      logger.error('[Agenda] Erreur lors de la récupération des événements:', error);
       message.error('Erreur lors du chargement des événements');
     } finally {
       setLoading(false);
@@ -97,7 +98,7 @@ const AgendaPage: React.FC = () => {
       const response = await api.get('/api/calendar/types');
       setEventTypes(response);
     } catch (error) {
-      console.error('[Agenda] Erreur lors de la récupération des types:', error);
+      logger.error('[Agenda] Erreur lors de la récupération des types:', error);
     }
   }, [api]);
 
@@ -166,7 +167,7 @@ const AgendaPage: React.FC = () => {
       form.resetFields();
       fetchEvents();
     } catch (error) {
-      console.error('[Agenda] Erreur lors de la sauvegarde:', error);
+      logger.error('[Agenda] Erreur lors de la sauvegarde:', error);
       message.error('Erreur lors de la sauvegarde');
     }
   };
@@ -178,7 +179,7 @@ const AgendaPage: React.FC = () => {
       message.success('Événement supprimé avec succès');
       fetchEvents();
     } catch (error) {
-      console.error('[Agenda] Erreur lors de la suppression:', error);
+      logger.error('[Agenda] Erreur lors de la suppression:', error);
       message.error('Erreur lors de la suppression');
     }
   };

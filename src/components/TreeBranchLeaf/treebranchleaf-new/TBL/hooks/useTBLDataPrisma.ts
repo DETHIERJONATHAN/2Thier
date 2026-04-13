@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
+import { logger } from '../../../../../lib/logger';
 
 /**
  * 🌳 INTERFACE PRISMA EXACTE - TreeBranchLeafNode
@@ -300,7 +301,7 @@ export const useTBLDataPrisma = ({ treeId }: UseTBLDataPrismaParams): UseTBLData
    * Respecte EXACTEMENT toutes les colonnes Prisma
    */
   const createTBLFieldFromNode = useCallback((node: TreeBranchLeafNode): TBLField => {
-    // console.log(...) // ✨ Log réduit - objet de debug
+    // logger.debug(...) // ✨ Log réduit - objet de debug
 
     // Icône depuis metadata
     let icon = '📋'; // Icône par défaut
@@ -334,12 +335,12 @@ export const useTBLDataPrisma = ({ treeId }: UseTBLDataPrismaParams): UseTBLData
       setLoading(true);
       setError(null);
 
-      // console.log('📡 [fetchAndTransformData] Début récupération:', { treeId }); // ✨ Log réduit
+      // logger.debug('📡 [fetchAndTransformData] Début récupération:', { treeId }); // ✨ Log réduit
 
       // Récupérer tous les nœuds de l'arbre
       const nodes = await api.get(`/api/treebranchleaf/trees/${treeId}/nodes`) as TreeBranchLeafNode[];
       
-      // console.log(...) // ✨ Log réduit - objet de debug
+      // logger.debug(...) // ✨ Log réduit - objet de debug
 
         // Icône de l'onglet depuis metadata
         let tabIcon = '📄'; // Icône par défaut
@@ -365,7 +366,7 @@ export const useTBLDataPrisma = ({ treeId }: UseTBLDataPrismaParams): UseTBLData
         tabs: tabs.sort((a, b) => a.order - b.order),
       };
 
-      // console.log(...) // ✨ Log réduit
+      // logger.debug(...) // ✨ Log réduit
 
       // {
         // treeName,
@@ -378,7 +379,7 @@ export const useTBLDataPrisma = ({ treeId }: UseTBLDataPrismaParams): UseTBLData
       setTree(transformedTree);
 
     } catch (err) {
-      console.error('❌ [fetchAndTransformData] Erreur:', err);
+      logger.error('❌ [fetchAndTransformData] Erreur:', err);
       setError(err instanceof Error ? err.message : 'Erreur inconnue');
     } finally {
       setLoading(false);

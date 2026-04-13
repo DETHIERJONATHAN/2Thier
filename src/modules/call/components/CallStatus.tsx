@@ -3,6 +3,7 @@ import { Card, Select, Button, Space, message } from 'antd';
 import { SaveOutlined, CalendarOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
+import { logger } from '../../../lib/logger';
 
 // (Réécriture propre : le fichier original était corrompu en haut)
 const { Option } = Select;
@@ -57,7 +58,7 @@ export const CallStatus: React.FC<CallStatusProps> = ({ leadId, onCallCompleted 
           })));
         }
       } catch (e) {
-        console.warn('[CallStatus] Fallback statuts d\'appel (API indisponible):', e);
+        logger.warn('[CallStatus] Fallback statuts d\'appel (API indisponible):', e);
         if (!cancelled) setCallStatusOptions(FALLBACK_CALL_STATUS_OPTIONS);
       }
     })();
@@ -72,7 +73,7 @@ export const CallStatus: React.FC<CallStatusProps> = ({ leadId, onCallCompleted 
       const response = await api.get(`/api/settings/call-status-mapping/${callStatusValue}`);
       return response.data?.recommendedStatus || null;
     } catch (error) {
-      console.error('❌ [CallStatus] Erreur récupération mapping:', error);
+      logger.error('❌ [CallStatus] Erreur récupération mapping:', error);
       return null;
     }
   }, [api]);
@@ -81,12 +82,12 @@ export const CallStatus: React.FC<CallStatusProps> = ({ leadId, onCallCompleted 
   useEffect(() => {
     const loadLeadStatuses = async () => {
       try {
-        console.log('🔄 [CallStatus] Chargement des statuts de leads...');
+        logger.debug('🔄 [CallStatus] Chargement des statuts de leads...');
         const statuses = await api.get('/api/settings/lead-statuses');
         setLeadStatuses(statuses);
-        console.log('✅ [CallStatus] Statuts chargés:', statuses.length);
+        logger.debug('✅ [CallStatus] Statuts chargés:', statuses.length);
       } catch (error) {
-        console.error('❌ [CallStatus] Erreur chargement statuts:', error);
+        logger.error('❌ [CallStatus] Erreur chargement statuts:', error);
         message.error('Erreur lors du chargement des statuts');
       }
     };
@@ -103,7 +104,7 @@ export const CallStatus: React.FC<CallStatusProps> = ({ leadId, onCallCompleted 
           const matchingStatus = leadStatuses.find(ls => ls.name === recommendedStatus);
           if (matchingStatus) {
             setLeadStatus(matchingStatus.id);
-            console.log(`🎯 [CallStatus] Auto-sélection: ${callStatus} → ${recommendedStatus}`);
+            logger.debug(`🎯 [CallStatus] Auto-sélection: ${callStatus} → ${recommendedStatus}`);
           }
         }
       }
@@ -125,7 +126,7 @@ export const CallStatus: React.FC<CallStatusProps> = ({ leadId, onCallCompleted 
     setLoading(true);
     
     try {
-      console.log('💾 [CallStatus] Sauvegarde:', { callStatus, leadStatus, leadId });
+      logger.debug('💾 [CallStatus] Sauvegarde:', { callStatus, leadStatus, leadId });
       
       // 1. Sauvegarder l'historique d'appel
       const callHistory = {
@@ -145,7 +146,7 @@ export const CallStatus: React.FC<CallStatusProps> = ({ leadId, onCallCompleted 
           callHistory: callHistory
         });
         
-        console.log('✅ [CallStatus] Lead mis à jour avec succès');
+        logger.debug('✅ [CallStatus] Lead mis à jour avec succès');
       }
 
       // 3. Callback pour notifier le parent
@@ -165,7 +166,7 @@ export const CallStatus: React.FC<CallStatusProps> = ({ leadId, onCallCompleted 
       }
       
     } catch (error) {
-      console.error('❌ [CallStatus] Erreur sauvegarde:', error);
+      logger.error('❌ [CallStatus] Erreur sauvegarde:', error);
       message.error('Erreur lors de la sauvegarde');
     } finally {
       setLoading(false);

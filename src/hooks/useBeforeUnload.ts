@@ -19,6 +19,7 @@
 
 import { useEffect } from 'react';
 import { useBlocker } from 'react-router-dom';
+import { logger } from '../lib/logger';
 
 export interface UseBeforeUnloadOptions {
   /** Active la protection (ex: dirty === true) */
@@ -59,10 +60,10 @@ export function useBeforeUnload(
           // Note: Les appels async dans beforeunload sont souvent annulés
           // Utilisez plutôt navigator.sendBeacon pour garantir l'envoi
           options.onAutoSave().catch(err => {
-            console.error('[useBeforeUnload] Échec sauvegarde auto:', err);
+            logger.error('[useBeforeUnload] Échec sauvegarde auto:', err);
           });
         } catch (error) {
-          console.error('[useBeforeUnload] Erreur sauvegarde auto:', error);
+          logger.error('[useBeforeUnload] Erreur sauvegarde auto:', error);
         }
       }
 

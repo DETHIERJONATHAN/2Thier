@@ -4,6 +4,7 @@ import { UserOutlined, MailOutlined, PhoneOutlined, HomeOutlined, GlobalOutlined
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useLeadStatuses } from '../../hooks/useLeadStatuses';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -41,7 +42,7 @@ const CreateLeadModal: React.FC<CreateLeadModalProps> = ({
   const handleSubmit = async (values: CreateLeadFormData) => {
     try {
       setLoading(true);
-      console.log('[CreateLeadModal] Données du formulaire:', values);
+      logger.debug('[CreateLeadModal] Données du formulaire:', values);
 
       // Préparer les données pour l'API
       const leadData = {
@@ -69,11 +70,11 @@ const CreateLeadModal: React.FC<CreateLeadModalProps> = ({
         }
       };
 
-      console.log('[CreateLeadModal] Envoi vers API:', leadData);
+      logger.debug('[CreateLeadModal] Envoi vers API:', leadData);
 
       // Appeler l'API de création
       const response = await api.post('/api/leads', leadData);
-      console.log('[CreateLeadModal] Réponse API:', response);
+      logger.debug('[CreateLeadModal] Réponse API:', response);
 
       message.success('Lead créé avec succès !');
       form.resetFields();
@@ -82,7 +83,7 @@ const CreateLeadModal: React.FC<CreateLeadModalProps> = ({
 
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
-      console.error('[CreateLeadModal] Erreur lors de la création:', error);
+      logger.error('[CreateLeadModal] Erreur lors de la création:', error);
       message.error(`Erreur lors de la création du lead: ${errorMessage}`);
     } finally {
       setLoading(false);

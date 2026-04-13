@@ -42,6 +42,7 @@ import {
   LoadingOutlined,
   HomeOutlined
 } from '@ant-design/icons';
+import { logger } from '../../lib/logger';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -312,7 +313,7 @@ const PublicFormRenderer: React.FC = () => {
         });
         setValues(defaults);
       } catch (err) {
-        console.error('Erreur chargement formulaire:', err);
+        logger.error('Erreur chargement formulaire:', err);
         setError('Impossible de charger le formulaire');
       } finally {
         setLoading(false);
@@ -444,7 +445,7 @@ const PublicFormRenderer: React.FC = () => {
       setSubmitted(true);
       message.success('Formulaire envoyé avec succès !');
     } catch (err) {
-      console.error('Erreur soumission:', err);
+      logger.error('Erreur soumission:', err);
       message.error('Une erreur est survenue. Veuillez réessayer.');
     } finally {
       setSubmitting(false);

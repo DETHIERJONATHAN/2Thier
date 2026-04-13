@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import useCRMStore from '../../store';
 import FormulaireLayout from './FormulaireLayout';
+import { logger } from '../../lib/logger';
 
 interface TreeBranchLeafNode {
   id: string;
@@ -23,10 +24,10 @@ const TreeBranchLeafWrapper: React.FC = () => {
       if (!treeId) return;
 
       try {
-        console.log('🔄 [TreeBranchLeafWrapper] Chargement de l\'arbre:', treeId);
+        logger.debug('🔄 [TreeBranchLeafWrapper] Chargement de l\'arbre:', treeId);
         
         const response = await api.get(`/api/treebranchleaf-v2/trees/${treeId}`);
-        console.log('✅ [TreeBranchLeafWrapper] Arbre reçu:', response);
+        logger.debug('✅ [TreeBranchLeafWrapper] Arbre reçu:', response);
 
         // Transformer l'arbre TreeBranchLeaf en format Block pour FormulaireLayout
         const adaptedBlock = {
@@ -62,13 +63,13 @@ const TreeBranchLeafWrapper: React.FC = () => {
           }]
         };
 
-        console.log('🔄 [TreeBranchLeafWrapper] Bloc adapté:', adaptedBlock);
+        logger.debug('🔄 [TreeBranchLeafWrapper] Bloc adapté:', adaptedBlock);
 
         // Injecter le bloc adapté dans le store CRM
         setBlocks([adaptedBlock]);
 
       } catch (error) {
-        console.error('❌ [TreeBranchLeafWrapper] Erreur:', error);
+        logger.error('❌ [TreeBranchLeafWrapper] Erreur:', error);
       }
     };
 

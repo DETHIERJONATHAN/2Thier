@@ -288,7 +288,7 @@ const PremiumTestPageClean: React.FC = () => {
               {/* Barres de progression épurées */}
               <div className="border-l-4 border-blue-500 pl-4 py-2">
                 <Text className="text-sm text-gray-600 mb-2 block">Objectif Mensuel</Text>
-                <Progress percent={75} strokeColor=SF.blue />
+                <Progress percent={75} strokeColor={SF.blue} />
               </div>
               
               <div className="border-l-4 border-green-500 pl-4 py-2">
@@ -298,7 +298,7 @@ const PremiumTestPageClean: React.FC = () => {
               
               <div className="border-l-4 border-orange-500 pl-4 py-2">
                 <Text className="text-sm text-gray-600 mb-2 block">Performance Équipe</Text>
-                <Progress percent={84} strokeColor=SF.amber />
+                <Progress percent={84} strokeColor={SF.amber} />
               </div>
 
               {/* Actions rapides */}

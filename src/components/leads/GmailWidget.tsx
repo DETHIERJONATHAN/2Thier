@@ -20,6 +20,7 @@ import {
   PaperClipOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 interface EmailSentData {
   type: 'email';
@@ -73,7 +74,7 @@ const GmailWidget: React.FC<GmailWidgetProps> = ({
       const response = await api.api.get(`/api/gmail/search?q=from:${encodeURIComponent(leadEmail)} OR to:${encodeURIComponent(leadEmail)}`);
       setEmails(response.messages || []);
     } catch (error) {
-      console.error('Erreur lors du chargement des emails:', error);
+      logger.error('Erreur lors du chargement des emails:', error);
       // Emails simulés pour la démo - en attendant la connexion API
       setEmails([
         {
@@ -137,7 +138,7 @@ const GmailWidget: React.FC<GmailWidgetProps> = ({
       }
       
     } catch (error) {
-      console.error('Erreur lors de l\'envoi email:', error);
+      logger.error('Erreur lors de l\'envoi email:', error);
       message.error('❌ Erreur lors de l\'envoi de l\'email');
     } finally {
       setSending(false);

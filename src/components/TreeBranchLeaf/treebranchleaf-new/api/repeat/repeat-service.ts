@@ -2,6 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 import { buildBlueprintForRepeater, type RepeatBlueprint } from './repeat-blueprint-builder.js';
 import { createInstantiationPlan, type RepeatInstantiationPlan } from './repeat-instantiator.js';
 import { computeTemplateCopySuffixMax, createSuffixAllocator } from './utils/suffix-utils.js';
+import { logger } from '../../../../../lib/logger';
 
 export interface RepeatDuplicationOptions {
   suffix?: string | number;
@@ -188,7 +189,7 @@ export async function executeRepeatDuplication(
       operations
     };
   } catch (error) {
-    console.error(`[repeat-service] Ã¢ÂÅ’ ERROR in executeRepeatDuplication:`, error instanceof Error ? error.stack : String(error));
+    logger.error(`[repeat-service] Ã¢ÂÅ’ ERROR in executeRepeatDuplication:`, error instanceof Error ? error.stack : String(error));
     throw error;
   }
 }

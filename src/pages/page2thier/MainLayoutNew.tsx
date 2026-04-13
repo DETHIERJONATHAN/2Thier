@@ -27,6 +27,7 @@ import { ActiveIdentityProvider, useActiveIdentity } from '../../contexts/Active
 import { SocialIdentityProvider, useSocialIdentity } from '../../contexts/SocialIdentityContext';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import PWAInstallPrompt from '../../components/PWAInstallPrompt';
+import { logger } from '../../lib/logger';
 
 const { Header, Content } = Layout;
 
@@ -89,6 +90,19 @@ const FlowWaveIcon = (props: unknown) => <Icon component={FlowWaveSvg} {...props
 const UniverseIcon = (props: unknown) => <Icon component={UniverseSvg} {...props} />;
 const WaxMapIcon = (props: unknown) => <Icon component={WaxMapSvg} {...props} />;
 
+// 🏟️ Arena icon: trophy/cup
+const ArenaSvg = () => (
+  <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6 9H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2" />
+    <path d="M18 9h2a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-2" />
+    <path d="M6 3h12v6a6 6 0 0 1-12 0V3z" />
+    <path d="M9 15v2a3 3 0 0 0 6 0v-2" />
+    <path d="M8 21h8" />
+    <path d="M12 17v4" />
+  </svg>
+);
+const ArenaIcon = (props: unknown) => <Icon component={ArenaSvg} {...props} />;
+
 // ── Friends icon: camera with user inside ──
 const FriendsIcon: React.FC<{ style?: React.CSSProperties }> = ({ style }) => (
   <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '1em', height: '1em', ...style }}>
@@ -112,6 +126,8 @@ const TAB_ICON_MAP: Record<string, React.ComponentType<{ style?: React.CSSProper
   'calendar': CalendarOutlined,
   'bar-chart': BarChartOutlined,
   'search': SearchOutlined,
+  'arena': ArenaIcon,
+  'trophy': ArenaIcon,
 };
 
 // ── Static fallback (used until API loads) ──
@@ -121,6 +137,7 @@ const SF_TAB_CONFIG_FALLBACK: { id: string; label: string; icon: React.Component
   { id: 'explore', label: 'Friends', icon: FriendsIcon, color: '#00CEC9' },
   { id: 'reels', label: 'Reels', icon: ClapperboardIcon, color: '#e84393' },
   { id: 'mur', label: 'Hive', icon: WallIcon, color: '#F5A623' },
+  { id: 'arena', label: 'Arena', icon: ArenaIcon, color: '#E84393' },
   { id: 'mail', label: 'Mail', icon: MailOutlined, color: '#00B894' },
   { id: 'agenda', label: 'Agenda', icon: CalendarOutlined, color: '#0984E3' },
   { id: 'search', label: 'Search', icon: SearchOutlined, color: '#A29BFE' },
@@ -173,7 +190,7 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
         }
         if (dedupedTabs.length > 0) setDynamicTabs(dedupedTabs);
       } catch (err) {
-        console.error('[ZhiiveHeader] swipe-tabs fetch error:', err);
+        logger.error('[ZhiiveHeader] swipe-tabs fetch error:', err);
       }
     };
     fetchSwipeTabs();

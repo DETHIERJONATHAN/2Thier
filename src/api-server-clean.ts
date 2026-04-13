@@ -72,6 +72,9 @@ import invoicesRouter from './routes/invoices';
 // 💰 ROUTES DÉPENSES (scan tickets IA + suivi comptable)
 import expensesRouter from './routes/expenses';
 
+// 🏟️ ROUTES ARENA (Tournois & Championnats multi-sports)
+import arenaRouter from './routes/arena';
+
 // 🌐 MIDDLEWARE DÉTECTION SITES VITRINES AUTOMATIQUE
 import { detectWebsite, websiteInterceptor } from './middleware/websiteDetection';
 import { renderWebsite } from './middleware/websiteRenderer';
@@ -93,17 +96,17 @@ import {
 // 🛡️ Console suppression en production
 if (process.env.NODE_ENV === 'production') {
   const noop = () => {};
-  console.log = noop;
-  console.debug = noop;
-  console.info = noop;
+  logger.debug = noop;
+  logger.debug = noop;
+  logger.info = noop;
 }
 
 // 🎯 LOG IMMÉDIAT - Confirme que le fichier est chargé par Node.js
-console.log('🎬 [BOOTSTRAP] api-server-clean.cjs loaded at', new Date().toISOString());
-console.log('🎬 [BOOTSTRAP] PORT env:', process.env.PORT || '(not set, using 8080)');
-console.log('🎬 [BOOTSTRAP] NODE_ENV:', process.env.NODE_ENV || 'development');
+logger.debug('🎬 [BOOTSTRAP] api-server-clean.cjs loaded at', new Date().toISOString());
+logger.debug('🎬 [BOOTSTRAP] PORT env:', process.env.PORT || '(not set, using 8080)');
+logger.debug('🎬 [BOOTSTRAP] NODE_ENV:', process.env.NODE_ENV || 'development');
 
-console.log('🚀 [API-SERVER-CLEAN] Démarrage du serveur CRM...');
+logger.debug('🚀 [API-SERVER-CLEAN] Démarrage du serveur CRM...');
 
 // 🔒 INITIALISATION LOGGING SÉCURISÉ ENTERPRISE
 logSecurityEvent('SERVER_STARTUP', {
@@ -119,7 +122,7 @@ const app = express();
 app.set('trust proxy', 1);
 
 const port = Number(process.env.PORT || 8080); // Cloud Run utilise le PORT 8080 par défaut
-console.log('🎯 [BOOTSTRAP] Server will listen on port:', port);
+logger.debug('🎯 [BOOTSTRAP] Server will listen on port:', port);
 
 // 📦 Métadonnées build (injectées par le script de déploiement)
 const BUILD_VERSION = process.env.BUILD_VERSION || 'dev-local';
@@ -259,7 +262,7 @@ app.use(cors({
     if (isAllowed) {
       callback(null, true);
     } else {
-      console.warn(`🚫 [CORS] Origin bloqué: ${origin}`);
+      logger.warn(`🚫 [CORS] Origin bloqué: ${origin}`);
       callback(null, false);
     }
   },
@@ -298,7 +301,7 @@ app.use(fileUpload({
   abortOnLimit: true,
   responseOnLimit: 'Fichier trop volumineux (max 100 Mo)',
 }));
-console.log('✅ [FileUpload] Middleware configuré (100MB max)');
+logger.debug('✅ [FileUpload] Middleware configuré (100MB max)');
 
 // 🔐 Configuration Session avec sécurité Enterprise
 const sessionSecret = process.env.SESSION_SECRET || (process.env.NODE_ENV === 'production' ? (() => { throw new Error('SESSION_SECRET requis en production'); })() : 'crm-dev-secret-2024');
@@ -329,7 +332,7 @@ app.use(session({
   }),
 }));
 
-console.log('✅ [ENTERPRISE-SECURITY] Configuration sécurité niveau Enterprise activée');
+logger.debug('✅ [ENTERPRISE-SECURITY] Configuration sécurité niveau Enterprise activée');
 
 // 📸 Rediriger /uploads/* vers Google Cloud Storage (dev ET production)
 const GCS_BUCKET_NAME = process.env.GCS_BUCKET || 'crm-2thier-uploads';
@@ -337,16 +340,16 @@ app.use('/uploads', (req, res) => {
   const gcsUrl = `https://storage.googleapis.com/${GCS_BUCKET_NAME}${req.path}`;
   res.redirect(301, gcsUrl);
 });
-console.log('📸 [UPLOADS] Redirection /uploads/* → GCS bucket', GCS_BUCKET_NAME);
+logger.debug('📸 [UPLOADS] Redirection /uploads/* → GCS bucket', GCS_BUCKET_NAME);
 
 // Configuration Passport
-console.log('🔧 [API-SERVER-CLEAN] Configuration Passport...');
+logger.debug('🔧 [API-SERVER-CLEAN] Configuration Passport...');
 app.use(passport.initialize());
 app.use(passport.session());
-console.log('✅ [API-SERVER-CLEAN] Passport configuré');
+logger.debug('✅ [API-SERVER-CLEAN] Passport configuré');
 
 // Routes API - Utilisation du système existant complet
-console.log('🔧 [API-SERVER-CLEAN] Configuration des routes...');
+logger.debug('🔧 [API-SERVER-CLEAN] Configuration des routes...');
 // Limiteur spécialisé auth uniquement sur bloc /api/auth
 app.use('/api/auth', authRateLimit);
 app.use('/api', apiRouter); // Utilise TOUTES les routes existantes !
@@ -381,11 +384,12 @@ app.use('/api/calendar', calendarRouter); // 📅 AGENDA / CALENDRIER / TÂCHES
 app.use('/api/peppol', peppolRouter); // 📨 PEPPOL e-FACTURATION (Odoo Bridge)
 app.use('/api/invoices', invoicesRouter); // 🧾 FACTURES UNIFIÉES (standalone + chantier + incoming)
 app.use('/api/expenses', expensesRouter); // 💰 DÉPENSES (scan tickets IA + suivi)
+app.use('/api/arena', arenaRouter); // 🏟️ ARENA — Tournois & Championnats multi-sports
 // ⚠️ SUPPRIMÉ - Déjà monté via apiRouter ligne 249: app.use('/api/treebranchleaf', tableRoutesNewRouter);
 const repeatRouter = createRepeatRouter(prisma);
 app.use('/api/treebranchleaf/repeat', repeatRouter); // 🔁 Compatibilité historique
 app.use('/api/repeat', repeatRouter); // 🔁 Nouveau point d'entrée stabilisé pour le frontend
-console.log('✅ [API-SERVER-CLEAN] Routes configurées');
+logger.debug('✅ [API-SERVER-CLEAN] Routes configurées');
 
 app.get('/health', (_req, res) => {
   res.json({
@@ -416,7 +420,7 @@ if (process.env.NODE_ENV === 'production') {
   const distDir = path.resolve(process.cwd(), 'dist');
   const indexHtml = path.join(distDir, 'index.html');
   if (fs.existsSync(indexHtml)) {
-    console.log('🗂️ [STATIC] Distribution front détectée, activation du serveur statique');
+    logger.debug('🗂️ [STATIC] Distribution front détectée, activation du serveur statique');
     
     // ⚡ CRITIQUE: Servir UNIQUEMENT /assets/* pour ne PAS intercepter la route racine /
     // Cela permet à websiteInterceptor de gérer / pour les sites vitrines
@@ -462,7 +466,7 @@ if (process.env.NODE_ENV === 'production') {
           res.setHeader('Content-Type', mimeTypes[ext]);
         }
         res.setHeader('Cache-Control', 'public, max-age=86400'); // 1 jour
-        console.log(`📁 [STATIC] Serving: ${req.path}`);
+        logger.debug(`📁 [STATIC] Serving: ${req.path}`);
         return res.sendFile(filePath);
       }
       next();
@@ -519,7 +523,7 @@ if (process.env.NODE_ENV === 'production') {
             { src: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }
           ]
         };
-        console.log(`📱 [MANIFEST] Dynamique pour ${site.domain} → ${site.name}`);
+        logger.debug(`📱 [MANIFEST] Dynamique pour ${site.domain} → ${site.name}`);
       }
 
       res.setHeader('Content-Type', 'application/manifest+json');
@@ -577,16 +581,16 @@ if (process.env.NODE_ENV === 'production') {
     app.get(/^(?!\/api\/|\/assets\/).*/, (req: unknown, res, _next) => {
       // � SI UN SITE VITRINE A ÉTÉ DÉTECTÉ, LE RENDRE EN SSR
       if (req.isWebsiteRoute === true && req.websiteData) {
-        console.log(`🎨 [WEBSITE-RENDER] Rendu SSR pour: ${req.websiteData.name} (${req.hostname})`);
+        logger.debug(`🎨 [WEBSITE-RENDER] Rendu SSR pour: ${req.websiteData.name} (${req.hostname})`);
         return renderWebsite(req, res);
       }
       
       // 📱 SINON, SERVIR LE CRM REACT
-      console.log(`📱 [CRM-SPA] Serving React app for: ${req.hostname}${req.url}`);
+      logger.debug(`📱 [CRM-SPA] Serving React app for: ${req.hostname}${req.url}`);
       res.sendFile(indexHtml);
     });
   } else {
-    console.warn('⚠️ [STATIC] Aucun build front trouvé (dist/index.html manquant)');
+    logger.warn('⚠️ [STATIC] Aucun build front trouvé (dist/index.html manquant)');
   }
 }
 
@@ -658,14 +662,15 @@ app.use(errorHandler);
 import { initializeTreeBranchLeafSync } from './components/TreeBranchLeaf/treebranchleaf-new/api/sync-variable-hook';
 import { connectDatabase } from './lib/database';
 import { startPeppolCronJobs } from './cron/peppol-status-checker';
+import { logger } from './lib/logger';
 
 // 🎯 FONCTION PRINCIPALE DE DÉMARRAGE
 async function startServer() {
   try {
     // 🔌 ÉTAPE 1: Connexion à la base de données AVANT le serveur HTTP
-    console.log('🔌 [STARTUP] Connexion à la base de données...');
+    logger.debug('🔌 [STARTUP] Connexion à la base de données...');
     await connectDatabase();
-    console.log('✅ [STARTUP] Base de données connectée');
+    logger.debug('✅ [STARTUP] Base de données connectée');
 
     // 🐝 Auto-ensure swipe modules exist (wax, nectar, etc.)
     try {
@@ -690,11 +695,11 @@ async function startServer() {
               updatedAt: new Date(),
             },
           });
-          console.log(`🐝 [BOOTSTRAP] Module '${m.key}' créé (placement=${m.placement})`);
+          logger.debug(`🐝 [BOOTSTRAP] Module '${m.key}' créé (placement=${m.placement})`);
         }
       }
     } catch (e) {
-      console.warn('⚠️ [BOOTSTRAP] Erreur auto-ensure modules:', e);
+      logger.warn('⚠️ [BOOTSTRAP] Erreur auto-ensure modules:', e);
     }
 
     // 🚀 ÉTAPE 2: Démarrage du serveur HTTP + Socket.io
@@ -702,7 +707,7 @@ async function startServer() {
     
     // 🔌 Initialisation Socket.io
     const io = initializeSocketIO(httpServer);
-    console.log('🔌 [SOCKET.IO] WebSocket server attached to HTTP server');
+    logger.debug('🔌 [SOCKET.IO] WebSocket server attached to HTTP server');
     
     const server = httpServer.listen(port, '0.0.0.0', () => {
       logSecurityEvent('SERVER_READY', {
@@ -719,29 +724,29 @@ async function startServer() {
         ]
       }, 'info');
 
-      console.log(`🎉 [API-SERVER-CLEAN] Serveur CRM démarré avec succès sur http://0.0.0.0:${port}`);
-      console.log(`🛡️ [ENTERPRISE-SECURITY] Sécurité niveau 100% activée`);
+      logger.debug(`🎉 [API-SERVER-CLEAN] Serveur CRM démarré avec succès sur http://0.0.0.0:${port}`);
+      logger.debug(`🛡️ [ENTERPRISE-SECURITY] Sécurité niveau 100% activée`);
       
       // 🔄 Synchronisation automatique des sourceRef TreeBranchLeaf
       // ⚠️ DÉSACTIVÉ EN PRODUCTION pour éviter les crashes mémoire
       // Cette synchronisation charge tous les nodes en mémoire
       if (process.env.NODE_ENV !== 'production') {
-        console.log('🔄 [TREEBRANCHLEAF] Synchronisation des sourceRef...');
+        logger.debug('🔄 [TREEBRANCHLEAF] Synchronisation des sourceRef...');
         initializeTreeBranchLeafSync().catch(err => {
-          console.error('⚠️  [TREEBRANCHLEAF] Erreur lors de la synchronisation:', err);
+          logger.error('⚠️  [TREEBRANCHLEAF] Erreur lors de la synchronisation:', err);
         });
       } else {
-        console.log('⏭️ [TREEBRANCHLEAF] Synchronisation désactivée en production (optimisation mémoire)');
+        logger.debug('⏭️ [TREEBRANCHLEAF] Synchronisation désactivée en production (optimisation mémoire)');
       }
-      console.log(`📋 [API-SERVER-CLEAN] Endpoints disponibles:`);
-      console.log(`   - Health: http://localhost:${port}/api/health`);
-      console.log(`   - Auth Me: http://localhost:${port}/api/auth/me`);
-      console.log(`   - Auth Login: http://localhost:${port}/api/auth/login`);
-      console.log(`   - Notifications: http://localhost:${port}/api/notifications`);
-      console.log(`   - Modules: http://localhost:${port}/api/modules/all`);
-      console.log(`   - Blocks: http://localhost:${port}/api/blocks`);
-      console.log(`   - Auto Google Auth (POST): http://localhost:${port}/api/auto-google-auth/connect`);
-      console.log(`   - Auto Google Status (GET): http://localhost:${port}/api/auto-google-auth/status`);
+      logger.debug(`📋 [API-SERVER-CLEAN] Endpoints disponibles:`);
+      logger.debug(`   - Health: http://localhost:${port}/api/health`);
+      logger.debug(`   - Auth Me: http://localhost:${port}/api/auth/me`);
+      logger.debug(`   - Auth Login: http://localhost:${port}/api/auth/login`);
+      logger.debug(`   - Notifications: http://localhost:${port}/api/notifications`);
+      logger.debug(`   - Modules: http://localhost:${port}/api/modules/all`);
+      logger.debug(`   - Blocks: http://localhost:${port}/api/blocks`);
+      logger.debug(`   - Auto Google Auth (POST): http://localhost:${port}/api/auto-google-auth/connect`);
+      logger.debug(`   - Auto Google Status (GET): http://localhost:${port}/api/auto-google-auth/status`);
 
       // 🔄 Démarrage des jobs cron Peppol (vérification statuts)
       startPeppolCronJobs();
@@ -781,35 +786,35 @@ async function startServer() {
           });
 
           if (expiredCount > 0 || deletedPins.count > 0) {
-            console.log(`🕯️ [WAX-CLEANUP] ${expiredCount} messages expired, ${deletedPins.count} pins deleted`);
+            logger.debug(`🕯️ [WAX-CLEANUP] ${expiredCount} messages expired, ${deletedPins.count} pins deleted`);
           }
         } catch (err) {
-          console.error('⚠️ [WAX-CLEANUP] Error:', err);
+          logger.error('⚠️ [WAX-CLEANUP] Error:', err);
         }
       }, 5 * 60 * 1000); // every 5 minutes
     });
 
     return server;
   } catch (error) {
-    console.error('❌ [STARTUP] Erreur fatale au démarrage:', error);
+    logger.error('❌ [STARTUP] Erreur fatale au démarrage:', error);
     process.exit(1);
   }
 }
 
 // �️ GRACEFUL SHUTDOWN — CSRF origin checking is handled by CORS middleware above
 async function gracefulShutdown(signal: string) {
-  console.log(`\n🛑 [SHUTDOWN] Signal ${signal} reçu. Fermeture propre en cours...`);
+  logger.debug(`\n🛑 [SHUTDOWN] Signal ${signal} reçu. Fermeture propre en cours...`);
   try {
     if (globalServer) {
-      globalServer.close(() => console.log('✅ [SHUTDOWN] Serveur HTTP fermé (plus de nouvelles connexions)'));
+      globalServer.close(() => logger.debug('✅ [SHUTDOWN] Serveur HTTP fermé (plus de nouvelles connexions)'));
     }
     const { db } = await import('./lib/database');
     await db.$disconnect();
-    console.log('✅ [SHUTDOWN] Connexion base de données fermée');
-    console.log('👋 [SHUTDOWN] Arrêt propre terminé.');
+    logger.debug('✅ [SHUTDOWN] Connexion base de données fermée');
+    logger.debug('👋 [SHUTDOWN] Arrêt propre terminé.');
     process.exit(0);
   } catch (err) {
-    console.error('❌ [SHUTDOWN] Erreur:', err);
+    logger.error('❌ [SHUTDOWN] Erreur:', err);
     process.exit(1);
   }
 }
@@ -819,13 +824,13 @@ let globalServer: ReturnType<typeof import('http').createServer> | null = null;
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 process.on('uncaughtException', (err) => {
-  console.error('💥 [UNCAUGHT] Exception non gérée:', err);
+  logger.error('💥 [UNCAUGHT] Exception non gérée:', err);
   gracefulShutdown('uncaughtException');
 });
 
 // 🚀 Lancement du serveur
 startServer().then(server => { globalServer = server; }).catch(err => {
-  console.error('❌ [FATAL] Impossible de démarrer le serveur:', err);
+  logger.error('❌ [FATAL] Impossible de démarrer le serveur:', err);
   process.exit(1);
 });
 

@@ -24,6 +24,7 @@ import {
   CopyOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { logger } from '../../lib/logger';
 
 interface MeetEvent {
   id: string;
@@ -74,7 +75,7 @@ const MeetWidget: React.FC<MeetWidgetProps> = ({
       const response = await api.api.get(`/meet/events?leadId=${leadId}`);
       setMeetings(response.meetings || []);
     } catch (error) {
-      console.error('Erreur lors du chargement des réunions:', error);
+      logger.error('Erreur lors du chargement des réunions:', error);
       // Réunions simulées pour la démo
       setMeetings([
         {
@@ -160,7 +161,7 @@ const MeetWidget: React.FC<MeetWidgetProps> = ({
       }
       
     } catch (error) {
-      console.error('Erreur lors de la création de la réunion:', error);
+      logger.error('Erreur lors de la création de la réunion:', error);
       message.error('Erreur lors de la création de la réunion');
     } finally {
       setCreating(false);

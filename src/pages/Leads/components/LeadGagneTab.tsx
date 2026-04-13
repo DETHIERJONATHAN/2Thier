@@ -7,6 +7,7 @@ import { useChantiersByLead } from '../../../hooks/useChantiers';
 import { renderProductIcon } from '../../../components/TreeBranchLeaf/treebranchleaf-new/components/Parameters/capabilities/ProductFilterPanel';
 import type { Chantier, ProductOption } from '../../../types/chantier';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../../lib/logger';
 
 const { Text } = Typography;
 const { Dragger } = Upload;
@@ -79,7 +80,7 @@ const LeadGagneTab: React.FC<LeadGagneTabProps> = ({ leadId, organizationId: _or
       const docs = Array.isArray(response) ? response : (response?.data || response?.documents || []);
       setGeneratedDocs(docs);
     } catch (err) {
-      console.error('[LeadGagneTab] Erreur chargement GeneratedDocuments:', err);
+      logger.error('[LeadGagneTab] Erreur chargement GeneratedDocuments:', err);
       setGeneratedDocs([]);
     } finally {
       setLoadingDocs(false);
@@ -126,7 +127,7 @@ const LeadGagneTab: React.FC<LeadGagneTabProps> = ({ leadId, organizationId: _or
 
       setProductOptions(allOptions);
     } catch (err) {
-      console.error('[LeadGagneTab] Erreur chargement produits:', err);
+      logger.error('[LeadGagneTab] Erreur chargement produits:', err);
       setProductOptions([]);
     } finally {
       setLoadingProducts(false);
@@ -182,7 +183,7 @@ const LeadGagneTab: React.FC<LeadGagneTabProps> = ({ leadId, organizationId: _or
         throw new Error(response?.message || 'Erreur inconnue');
       }
     } catch (err) {
-      console.error('[LeadGagneTab] Erreur upload:', err);
+      logger.error('[LeadGagneTab] Erreur upload:', err);
       message.error('Erreur lors de la création du chantier');
     } finally {
       setUploadingProduct(null);
@@ -231,7 +232,7 @@ const LeadGagneTab: React.FC<LeadGagneTabProps> = ({ leadId, organizationId: _or
         throw new Error(response?.message || 'Erreur inconnue');
       }
     } catch (err) {
-      console.error('[LeadGagneTab] Erreur upload générique:', err);
+      logger.error('[LeadGagneTab] Erreur upload générique:', err);
       message.error('Erreur lors de la création du chantier');
     } finally {
       setUploadingProduct(null);
@@ -254,7 +255,7 @@ const LeadGagneTab: React.FC<LeadGagneTabProps> = ({ leadId, organizationId: _or
         throw new Error(response?.message || 'Erreur');
       }
     } catch (err) {
-      console.error('[LeadGagneTab] Erreur suppression:', err);
+      logger.error('[LeadGagneTab] Erreur suppression:', err);
       message.error('Erreur lors de la suppression du chantier');
     } finally {
       setDeletingId(null);

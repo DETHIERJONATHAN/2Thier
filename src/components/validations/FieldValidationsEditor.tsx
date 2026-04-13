@@ -4,6 +4,7 @@ import ValidationRuleEditor from './ValidationRuleEditor';
 import { PlusCircleIcon } from '@heroicons/react/24/outline';
 import { validationRules } from '../../config/validationRules';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { logger } from '../../lib/logger';
 
 interface FieldValidationsEditorProps {
   fieldId: string;
@@ -20,7 +21,7 @@ const FieldValidationsEditor: React.FC<FieldValidationsEditorProps> = ({ fieldId
     setLoading(true);
     setError(null);
     try {
-      console.log(`[FieldValidationsEditor] Chargement des validations pour le champ: ${fieldId}`);
+      logger.debug(`[FieldValidationsEditor] Chargement des validations pour le champ: ${fieldId}`);
       
       // Charger les validations depuis l'API (via hook unifié pour gérer les headers auth/org)
       const validationsResponse = await get<{ success?: boolean; data?: Validation[] } | Validation[]>(`/api/fields/${fieldId}/validations`);
@@ -28,12 +29,12 @@ const FieldValidationsEditor: React.FC<FieldValidationsEditorProps> = ({ fieldId
       
       if ((validationsResponse as { success?: boolean; data?: Validation[] }).success && Array.isArray((validationsResponse as { data?: Validation[] }).data)) {
         validationsData = (validationsResponse as { data: Validation[] }).data;
-        console.log(`[FieldValidationsEditor] ${validationsData.length} validations chargées depuis l'API`);
+        logger.debug(`[FieldValidationsEditor] ${validationsData.length} validations chargées depuis l'API`);
       } else if (Array.isArray(validationsResponse)) {
         validationsData = validationsResponse as Validation[];
-        console.log(`[FieldValidationsEditor] ${validationsData.length} validations (tableau brut) chargées depuis l'API`);
+        logger.debug(`[FieldValidationsEditor] ${validationsData.length} validations (tableau brut) chargées depuis l'API`);
       } else {
-        console.log(`[FieldValidationsEditor] Aucune validation trouvée, utilisation des données de test`);
+        logger.debug(`[FieldValidationsEditor] Aucune validation trouvée, utilisation des données de test`);
         // En développement, si aucune donnée n'est trouvée, utiliser des données simulées
         validationsData = [
           {
@@ -61,17 +62,17 @@ const FieldValidationsEditor: React.FC<FieldValidationsEditorProps> = ({ fieldId
         const fieldsResponseData = await get<{ success?: boolean; data?: Field[] } | Field[]>(`/fields`);
         if ((fieldsResponseData as { success?: boolean; data?: Field[] }).success && Array.isArray((fieldsResponseData as { data?: Field[] }).data)) {
           fieldsData = (fieldsResponseData as { data: Field[] }).data;
-          console.log(`[FieldValidationsEditor] ${fieldsData.length} champs chargés depuis l'API`);
+          logger.debug(`[FieldValidationsEditor] ${fieldsData.length} champs chargés depuis l'API`);
         } else if (Array.isArray(fieldsResponseData)) {
           fieldsData = fieldsResponseData as Field[];
-          console.log(`[FieldValidationsEditor] ${fieldsData.length} champs (tableau brut) chargés depuis l'API`);
+          logger.debug(`[FieldValidationsEditor] ${fieldsData.length} champs (tableau brut) chargés depuis l'API`);
         }
       } catch {
         // On tombera sur les mocks plus bas
       }
       
       if (fieldsData.length === 0) {
-        console.log(`[FieldValidationsEditor] Utilisation de champs simulés`);
+        logger.debug(`[FieldValidationsEditor] Utilisation de champs simulés`);
         fieldsData = [
           {
             id: 'field-1',
@@ -104,7 +105,7 @@ const FieldValidationsEditor: React.FC<FieldValidationsEditorProps> = ({ fieldId
       setAllFields(fieldsData.filter((f) => f.id !== fieldId));
     } catch (err) {
       setError('Impossible de charger les données de validation.');
-      console.error(err);
+      logger.error(err);
     } finally {
       setLoading(false);
     }
@@ -141,7 +142,7 @@ const FieldValidationsEditor: React.FC<FieldValidationsEditorProps> = ({ fieldId
       setValidations(prev => [...prev, createdValidation]);
     } catch (err) {
       setError("Impossible d'ajouter la règle.");
-      console.error(err);
+      logger.error(err);
     }
   };
 
@@ -153,37 +154,37 @@ const FieldValidationsEditor: React.FC<FieldValidationsEditorProps> = ({ fieldId
     setValidations(prev => prev.filter(v => v.id !== validationId));
     
     try {
-      console.log(`[FieldValidationsEditor] Suppression de la validation: ${validationId}`);
+      logger.debug(`[FieldValidationsEditor] Suppression de la validation: ${validationId}`);
       
       // Si c'est un ID temporaire, pas besoin d'appeler l'API
       if (validationId.startsWith('temp-')) {
-        console.log(`[FieldValidationsEditor] ID temporaire, pas d'appel API pour la suppression`);
+        logger.debug(`[FieldValidationsEditor] ID temporaire, pas d'appel API pour la suppression`);
         return; // Sortir de la fonction puisque la mise à jour UI est déjà faite
       }
       
       // Vérifier si c'est un ID de validation de test (avec le préfixe prisma-valid)
       if (validationId.startsWith('prisma-valid-')) {
-        console.log(`[FieldValidationsEditor] ID de test, pas d'appel API pour la suppression`);
+        logger.debug(`[FieldValidationsEditor] ID de test, pas d'appel API pour la suppression`);
         return; // Sortir de la fonction puisque la mise à jour UI est déjà faite
       }
       
   const result = await del<{ success?: boolean }>(`/api/validations/${validationId}`);
-      console.log(`[FieldValidationsEditor] Réponse de suppression:`, result);
+      logger.debug(`[FieldValidationsEditor] Réponse de suppression:`, result);
       
       if (!result.success) {
         // Si le serveur indique un échec malgré un code HTTP 200
-        console.error(`[FieldValidationsEditor] La suppression a échoué côté serveur:`, result);
+        logger.error(`[FieldValidationsEditor] La suppression a échoué côté serveur:`, result);
         setValidations(originalValidations);
         throw new Error('Échec de la suppression côté serveur');
       }
       
       // Suppression réussie
-      console.log(`[FieldValidationsEditor] Validation ${validationId} supprimée avec succès`);
+      logger.debug(`[FieldValidationsEditor] Validation ${validationId} supprimée avec succès`);
     } catch (err) {
       // Gérer toutes les erreurs (réseau, serveur, etc.)
       setError("Impossible de supprimer la règle.");
       setValidations(originalValidations);
-      console.error("[FieldValidationsEditor] Erreur lors de la suppression:", err);
+      logger.error("[FieldValidationsEditor] Erreur lors de la suppression:", err);
     }
   };
 
@@ -196,13 +197,13 @@ const FieldValidationsEditor: React.FC<FieldValidationsEditorProps> = ({ fieldId
     try {
       // Si c'est un ID temporaire, on ne fait pas d'appel API
       if (updatedValidation.id.startsWith('temp-') || updatedValidation.id.startsWith('prisma-valid-')) {
-        console.log(`[FieldValidationsEditor] Mise à jour locale uniquement pour ID temporaire: ${updatedValidation.id}`);
+        logger.debug(`[FieldValidationsEditor] Mise à jour locale uniquement pour ID temporaire: ${updatedValidation.id}`);
         return;
       }
       
       // Débounce la mise à jour API (peut être implémenté avec un hook useDebounce)
       // Pour l'instant, on fait un appel immédiat
-      console.log(`[FieldValidationsEditor] Mise à jour de la validation ${updatedValidation.id}`, updatedValidation);
+      logger.debug(`[FieldValidationsEditor] Mise à jour de la validation ${updatedValidation.id}`, updatedValidation);
       
   const result = await patch<{ success?: boolean }>(`/api/validations/${updatedValidation.id}`, updatedValidation);
       
@@ -210,9 +211,9 @@ const FieldValidationsEditor: React.FC<FieldValidationsEditorProps> = ({ fieldId
         throw new Error('La mise à jour a échoué côté serveur');
       }
       
-      console.log(`[FieldValidationsEditor] Validation ${updatedValidation.id} mise à jour avec succès`);
+      logger.debug(`[FieldValidationsEditor] Validation ${updatedValidation.id} mise à jour avec succès`);
     } catch (err) {
-      console.error('[FieldValidationsEditor] Erreur lors de la mise à jour:', err);
+      logger.error('[FieldValidationsEditor] Erreur lors de la mise à jour:', err);
       setError('Impossible de mettre à jour la règle.');
       // On pourrait recharger les validations pour s'assurer que l'état UI est cohérent
       // Mais on choisit de garder l'optimistic update pour une meilleure UX

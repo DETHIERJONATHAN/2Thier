@@ -20,6 +20,7 @@ import {
   MutedOutlined
 } from '@ant-design/icons';
 import type { Lead, CallState } from '../types/CallTypes';
+import { logger } from '../../../lib/logger';
 
 const { Title, Text } = Typography;
 
@@ -49,7 +50,7 @@ export const TelnyxInterface: React.FC<TelnyxInterfaceProps> = ({
     const callDuration = Math.floor(callState.duration / 60);
     const callSeconds = callState.duration % 60;
     
-    console.log('[TelnyxInterface] 🔍 Vérification numéro:', {
+    logger.debug('[TelnyxInterface] 🔍 Vérification numéro:', {
       leadId: lead.id,
       rootPhone: lead.phone,
       dataPhone: lead.data?.phone,

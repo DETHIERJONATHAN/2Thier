@@ -9,6 +9,7 @@ import { EmailComposer } from '../../components/EmailComposer';
 import CallModule from './CallModule';
 import CalendarWidget from '../../components/leads/CalendarWidget';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { logger } from '../../lib/logger';
 
 const LazyLeadsSettingsPage = lazy(() => import('./LeadsSettingsPage'));
 
@@ -72,7 +73,7 @@ const LeadsKanbanWrapper: React.FC = () => {
       message.success('Lead supprimé avec succès');
       setRefreshTrigger(prev => prev + 1);
     } catch (error) {
-      console.error('Erreur lors de la suppression:', error);
+      logger.error('Erreur lors de la suppression:', error);
       message.error('Erreur lors de la suppression du lead');
     }
   };
@@ -194,7 +195,7 @@ const LeadsKanbanWrapper: React.FC = () => {
           open={isEmailModuleOpen}
           onClose={() => setIsEmailModuleOpen(false)}
           onSent={() => {
-            console.log('Email envoyé pour le lead', selectedLeadId);
+            logger.debug('Email envoyé pour le lead', selectedLeadId);
             setIsEmailModuleOpen(false);
             // Déclencher rafraîchissement du Kanban
             setRefreshTrigger(prev => prev + 1);
@@ -219,7 +220,7 @@ const LeadsKanbanWrapper: React.FC = () => {
             leadEmail=""
             leadName=""
             onEventCreated={(eventData) => {
-              console.log('Événement créé:', eventData);
+              logger.debug('Événement créé:', eventData);
               setIsCalendarOpen(false);
               setRefreshTrigger(prev => prev + 1);
             }}

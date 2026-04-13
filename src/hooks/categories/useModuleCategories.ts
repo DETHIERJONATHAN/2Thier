@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../auth/useAuth';
 import { useAuthenticatedApi } from '../useAuthenticatedApi';
 import { message } from 'antd';
+import { logger } from '../../lib/logger';
 
 // ✅ Interface pour les Categories de modules (Prisma)
 export interface ModuleCategory {
@@ -142,7 +143,7 @@ export const useModuleCategories = () => {
     if (!currentOrganization?.id || !api) return;
 
     try {
-      console.log(`📦 [useModuleCategories] Création de ${defaultCategories.length} Categories par défaut...`);
+      logger.debug(`📦 [useModuleCategories] Création de ${defaultCategories.length} Categories par défaut...`);
 
       const createdCategories: ModuleCategory[] = [];
 
@@ -156,20 +157,20 @@ export const useModuleCategories = () => {
 
           if (response?.success && response.data) {
             createdCategories.push(response.data);
-            console.log(`✅ Category "${categoryData.name}" créée`);
+            logger.debug(`✅ Category "${categoryData.name}" créée`);
           }
         } catch (error) {
-          console.warn(`⚠️ Erreur création category "${categoryData.name}":`, error);
+          logger.warn(`⚠️ Erreur création category "${categoryData.name}":`, error);
         }
       }
 
       if (createdCategories.length > 0) {
-        console.log(`✅ [useModuleCategories] ${createdCategories.length} Categories créées avec succès`);
+        logger.debug(`✅ [useModuleCategories] ${createdCategories.length} Categories créées avec succès`);
         setCategories(createdCategories.sort((a, b) => a.order - b.order));
         message.success(`${createdCategories.length} Categories initialisées avec succès`);
       }
     } catch (error) {
-      console.error('❌ [useModuleCategories] Erreur lors de l\'initialisation des Categories:', error);
+      logger.error('❌ [useModuleCategories] Erreur lors de l\'initialisation des Categories:', error);
       setError('Erreur lors de l\'initialisation des categories');
     }
   }, [currentOrganization?.id, api]);
@@ -184,26 +185,26 @@ export const useModuleCategories = () => {
     try {
       setLoading(true);
       setError(null);
-      console.log('🔄 [useModuleCategories] Chargement Categories depuis Prisma...');
+      logger.debug('🔄 [useModuleCategories] Chargement Categories depuis Prisma...');
       
       // ✅ Utiliser les routes admin-modules/categories existantes
       const response = await api.get(`/admin-modules/categories?organizationId=${currentOrganization.id}`);
       
       if (response?.success && Array.isArray(response.data) && response.data.length > 0) {
-        console.log(`✅ [useModuleCategories] ${response.data.length} Categories trouvées dans Prisma`);
-        console.log(`✅ Categories: ${response.data.map((c: ModuleCategory) => c.name).join(', ')}`);
+        logger.debug(`✅ [useModuleCategories] ${response.data.length} Categories trouvées dans Prisma`);
+        logger.debug(`✅ Categories: ${response.data.map((c: ModuleCategory) => c.name).join(', ')}`);
         
         setCategories(response.data.sort((a: ModuleCategory, b: ModuleCategory) => a.order - b.order));
       } else {
-        console.log('📝 [useModuleCategories] Aucune Category trouvée, création des categories par défaut...');
+        logger.debug('📝 [useModuleCategories] Aucune Category trouvée, création des categories par défaut...');
         await initializeDefaultCategories();
       }
     } catch (error) {
-      console.error('❌ [useModuleCategories] Erreur lors du chargement des Categories:', error);
+      logger.error('❌ [useModuleCategories] Erreur lors du chargement des Categories:', error);
       setError('Erreur lors du chargement des categories');
       
       // Fallback : créer les categories par défaut
-      console.log('⚠️ [useModuleCategories] Tentative de création des categories par défaut');
+      logger.debug('⚠️ [useModuleCategories] Tentative de création des categories par défaut');
       await initializeDefaultCategories();
     } finally {
       setLoading(false);
@@ -213,12 +214,12 @@ export const useModuleCategories = () => {
   // ✅ Charger les modules (compatible avec ModulesAdminPage.tsx)
   const loadModules = useCallback(async () => {
     if (!currentOrganization?.id || !api) {
-      console.warn('Pas d\'organisation courante, impossible de charger les modules');
+      logger.warn('Pas d\'organisation courante, impossible de charger les modules');
       return;
     }
 
     try {
-      console.log('🔄 [useModuleCategories] Chargement des modules...');
+      logger.debug('🔄 [useModuleCategories] Chargement des modules...');
       const response = await api.get(`/admin-modules?organizationId=${currentOrganization.id}`);
       
       if (response?.success && response.data?.sections) {
@@ -227,11 +228,11 @@ export const useModuleCategories = () => {
           section.modules || []
         );
         
-        console.log(`✅ [useModuleCategories] ${allModules.length} modules chargés`);
+        logger.debug(`✅ [useModuleCategories] ${allModules.length} modules chargés`);
         setModules(allModules);
       }
     } catch (error) {
-      console.error('❌ [useModuleCategories] Erreur lors du chargement des modules:', error);
+      logger.error('❌ [useModuleCategories] Erreur lors du chargement des modules:', error);
     }
   }, [currentOrganization?.id, api]);
 
@@ -240,10 +241,10 @@ export const useModuleCategories = () => {
     if (!api) return;
 
     try {
-      console.log(`🔄 [useModuleCategories] Toggle Category ${categoryId}...`);
+      logger.debug(`🔄 [useModuleCategories] Toggle Category ${categoryId}...`);
       const category = categories.find(c => c.id === categoryId);
       if (!category) {
-        console.error(`❌ [useModuleCategories] Category ${categoryId} introuvable`);
+        logger.error(`❌ [useModuleCategories] Category ${categoryId} introuvable`);
         return;
       }
 
@@ -253,7 +254,7 @@ export const useModuleCategories = () => {
       });
 
       if (response?.success) {
-        console.log(`✅ [useModuleCategories] Category ${categoryId} ${newActiveStatus ? 'activée' : 'désactivée'}`);
+        logger.debug(`✅ [useModuleCategories] Category ${categoryId} ${newActiveStatus ? 'activée' : 'désactivée'}`);
         setCategories(prev => prev.map(c => 
           c.id === categoryId 
             ? { ...c, active: newActiveStatus }
@@ -262,7 +263,7 @@ export const useModuleCategories = () => {
         message.success(`Category ${newActiveStatus ? 'activée' : 'désactivée'} avec succès`);
       }
     } catch (error) {
-      console.error('❌ [useModuleCategories] Erreur lors du toggle Category:', error);
+      logger.error('❌ [useModuleCategories] Erreur lors du toggle Category:', error);
       message.error('Erreur lors de la mise à jour de la category');
     }
   }, [categories, api]);
@@ -272,16 +273,16 @@ export const useModuleCategories = () => {
     if (!api) return;
 
     try {
-      console.log(`🗑️ [useModuleCategories] Suppression Category ${categoryId}...`);
+      logger.debug(`🗑️ [useModuleCategories] Suppression Category ${categoryId}...`);
       const response = await api.delete(`/admin-modules/categories/${categoryId}`);
       
       if (response?.success) {
-        console.log(`✅ [useModuleCategories] Category ${categoryId} supprimée`);
+        logger.debug(`✅ [useModuleCategories] Category ${categoryId} supprimée`);
         setCategories(prev => prev.filter(c => c.id !== categoryId));
         message.success('Category supprimée avec succès');
       }
     } catch (error) {
-      console.error('❌ [useModuleCategories] Erreur lors de la suppression Category:', error);
+      logger.error('❌ [useModuleCategories] Erreur lors de la suppression Category:', error);
       message.error('Erreur lors de la suppression de la category');
     }
   }, [api]);
@@ -305,7 +306,7 @@ export const useModuleCategories = () => {
       }
     } catch (error) {
       message.error('Erreur lors de l\'ajout de la category');
-      console.error(error);
+      logger.error(error);
     }
   }, [api, loadCategories, categories.length, currentOrganization?.id]);
 
@@ -327,7 +328,7 @@ export const useModuleCategories = () => {
         message.success('Nom de la category mis à jour');
       }
     } catch (error) {
-      console.error('Erreur lors de la mise à jour du nom:', error);
+      logger.error('Erreur lors de la mise à jour du nom:', error);
       message.error('Erreur lors de la mise à jour du nom');
     }
   }, [api]);
@@ -349,9 +350,9 @@ export const useModuleCategories = () => {
           order: index + 1
         });
       }
-      console.log('✅ Ordre des categories sauvegardé');
+      logger.debug('✅ Ordre des categories sauvegardé');
     } catch (error) {
-      console.error('Erreur lors de la sauvegarde de l\'ordre:', error);
+      logger.error('Erreur lors de la sauvegarde de l\'ordre:', error);
       // Recharger en cas d'erreur
       loadCategories();
     }

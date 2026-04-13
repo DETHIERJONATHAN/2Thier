@@ -17,6 +17,7 @@ import {
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
 import { FB, SF } from '../../components/zhiive/ZhiiveTheme';
+import { logger } from '../../lib/logger';
 
 const useScreenSize = () => {
   const [w, setW] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
@@ -117,7 +118,7 @@ const OrganizationEmailSettings: React.FC = () => {
         setUsers(response.data.filter((u: UserEmailData) => u.organization.id === selectedOrganization.id));
       } else { throw new Error(response.message || 'Erreur'); }
     } catch (error) {
-      console.error('Erreur chargement:', error);
+      logger.error('Erreur chargement:', error);
       message.error('Erreur lors du chargement des utilisateurs');
       setUsers([]);
     } finally { setLoading(false); }

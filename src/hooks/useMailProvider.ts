@@ -21,6 +21,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
+import { logger } from '../lib/logger';
 
 /** Fournisseurs de messagerie supportés */
 export type MailProviderType = 'gmail' | 'yandex' | 'postal' | 'imap' | 'none';
@@ -69,7 +70,7 @@ export const useMailProvider = (): MailProviderInfo => {
           setEmail(data?.email || null);
         }
       } catch (err) {
-        console.error('[useMailProvider] ❌ Erreur détection provider:', err);
+        logger.error('[useMailProvider] ❌ Erreur détection provider:', err);
         if (!cancelled) {
           setError('Impossible de détecter le fournisseur de messagerie');
           setProvider('none');

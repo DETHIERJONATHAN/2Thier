@@ -29,6 +29,7 @@ import {
   InverseConditionInfo
 } from '../hooks/useTBLBatchData';
 import { setBatchNodeDataCache } from '../hooks/useTBLDataPrismaComplete';
+import { logger } from '../../../../../lib/logger';
 
 // Interface du contexte
 interface TBLBatchContextValue {
@@ -124,7 +125,7 @@ export const TBLBatchProvider: React.FC<TBLBatchProviderProps> = ({
   useEffect(() => {
     if (isReady && treeId && batchData?.dataByNode) {
       setBatchNodeDataCache(treeId, batchData.dataByNode);
-      console.log(`🚀 [TBLBatchProvider] Cache node-data synchronisé (${Object.keys(batchData.dataByNode).length} nodes)`);
+      logger.debug(`🚀 [TBLBatchProvider] Cache node-data synchronisé (${Object.keys(batchData.dataByNode).length} nodes)`);
     }
   }, [isReady, treeId, batchData?.dataByNode]);
 

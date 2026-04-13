@@ -45,6 +45,7 @@ import type {
   DropTargetData,
   NodeTypeKey
 } from './types';
+import { logger } from '../../../lib/logger';
 
 const { Content } = Layout;
 
@@ -134,7 +135,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
     //   ids: (trees || []).slice(0, 10).map((t) => t.id)
     // });
     // if (prevTreesSignatureRef.current !== signature) {
-    //   // console.log('🌿 [TreeBranchLeafEditor] trees prop changed', {
+    //   // logger.debug('🌿 [TreeBranchLeafEditor] trees prop changed', {
     //   //   previous: prevTreesSignatureRef.current,
     //   //   next: signature,
     //   //   treesSample: (trees || []).slice(0, 3)
@@ -144,7 +145,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
   // }, [trees]);
 
   // useEffect(() => {
-    // console.log('🌿 [TreeBranchLeafEditor] selectedTree changed', {
+    // logger.debug('🌿 [TreeBranchLeafEditor] selectedTree changed', {
     //   selectedTreeId: selectedTree?.id,
     //   name: selectedTree?.name
     // });
@@ -180,7 +181,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
           return { ...prev, selectedNode: merged };
         });
       } catch (e) {
-        console.error('❌ [TreeBranchLeafEditor] handleNodeUpdated error:', e);
+        logger.error('❌ [TreeBranchLeafEditor] handleNodeUpdated error:', e);
       }
     };
     
@@ -201,7 +202,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
       }
       return created as TreeBranchLeafTree;
     } catch (error) {
-      console.error('❌ Erreur création arbre:', error);
+      logger.error('❌ Erreur création arbre:', error);
       return null;
     }
   }, [api, onTreeChange]);
@@ -217,7 +218,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
       }
       return updated as TreeBranchLeafTree;
     } catch (error) {
-      console.error('❌ Erreur mise à jour arbre:', error);
+      logger.error('❌ Erreur mise à jour arbre:', error);
       return null;
     }
   }, [api, onTreeChange, selectedTree]);
@@ -234,7 +235,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
       }
       return true;
     } catch (error) {
-      console.error('❌ Erreur suppression arbre:', error);
+      logger.error('❌ Erreur suppression arbre:', error);
       return false;
     }
   }, [api, onTreeChange, selectedTree]);
@@ -245,7 +246,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
     position: 'before' | 'after' | 'child' = 'child'
   ): Promise<boolean> => {
     if (!selectedTree) {
-      console.error('❌ Aucun arbre sélectionné');
+      logger.error('❌ Aucun arbre sélectionné');
       return false;
     }
 
@@ -256,7 +257,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
       const targetNode = currentFlat.find(n => n.id === targetId);
       
       if (!draggedNode || !targetNode) {
-        console.error('❌ Nœud source ou cible introuvable');
+        logger.error('❌ Nœud source ou cible introuvable');
         return false;
       }
       
@@ -282,7 +283,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
           const isSelectBranch = newParent.type === 'branch' && newParent.parentId !== null;
           
           if (!isSelectField && !isSelectBranch) {
-            console.error('❌ Les options ne peuvent être déplacées que sous des champs SELECT ou des branches de niveau 2+');
+            logger.error('❌ Les options ne peuvent être déplacées que sous des champs SELECT ou des branches de niveau 2+');
             return false;
           }
         }
@@ -291,13 +292,13 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
         // Sous des branches, d'autres champs, sections, etc.
         // La seule restriction: pas sous les options SELECT
         if (newParent && newParent.type?.startsWith('leaf_') && newParent.subType === 'SELECT') {
-          console.error('❌ Les champs ne peuvent pas être déplacés sous une option SELECT');
+          logger.error('❌ Les champs ne peuvent pas être déplacés sous une option SELECT');
           return false;
         }
       } else if (draggedNode.type === 'branch') {
         // Les branches peuvent être sous l'arbre ou une autre branche
         if (newParent && !(newParent.type === 'tree' || newParent.type === 'branch')) {
-          console.error('❌ Les branches ne peuvent être déplacées que sous l\'arbre ou une autre branche');
+          logger.error('❌ Les branches ne peuvent être déplacées que sous l\'arbre ou une autre branche');
           return false;
         }
       }
@@ -384,35 +385,35 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
           targetId,
           position
         });
-        console.log('✅ DROP RÉUSSI !');
+        logger.debug('✅ DROP RÉUSSI !');
         
         // 🔄 IMPORTANT: Recharger les données pour avoir les orders corrects du serveur
         // Le backend réindexe tous les siblings, l'optimiste ne le fait pas complètement
         const updatedNodes = await api.get(`/api/treebranchleaf/trees/${selectedTree.id}/nodes`);
         if (updatedNodes) {
           onNodesUpdate(updatedNodes);
-          console.log('🔄 Données rechargées après déplacement');
+          logger.debug('🔄 Données rechargées après déplacement');
         }
       } catch (patchError: unknown) {
         // Tentative de fallback avec PUT
-        console.warn('⚠️ PATCH échoué, tentative PUT fallback');
+        logger.warn('⚠️ PATCH échoué, tentative PUT fallback');
         
         try {
           await api.put(`/api/treebranchleaf/trees/${selectedTree.id}/nodes/${nodeId}`, {
             targetId,
             position
           });
-          console.log('✅ DROP RÉUSSI (via PUT) !');
+          logger.debug('✅ DROP RÉUSSI (via PUT) !');
           
           // 🔄 Recharger aussi après PUT
           const updatedNodes = await api.get(`/api/treebranchleaf/trees/${selectedTree.id}/nodes`);
           if (updatedNodes) {
             onNodesUpdate(updatedNodes);
-            console.log('🔄 Données rechargées après déplacement (PUT)');
+            logger.debug('🔄 Données rechargées après déplacement (PUT)');
           }
         } catch (putError: unknown) {
           // 🔄 ROLLBACK : Les deux appels ont échoué, restaurer l'état précédent
-          console.error('❌ Échec serveur, rollback de la mise à jour optimiste');
+          logger.error('❌ Échec serveur, rollback de la mise à jour optimiste');
           onNodesUpdate(previousNodes);
           
           // Extraire et afficher le message d'erreur du serveur (tester plusieurs formats)
@@ -425,11 +426,11 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
             patchError?.message ||
             'Déplacement invalide';
           
-          console.error(`\n❌❌❌ ERREUR DE DÉPLACEMENT ❌❌❌`);
-          console.error(`Message: ${errorMessage}`);
-          console.error(`Details PATCH:`, patchError);
-          console.error(`Details PUT:`, putError);
-          console.error(`❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌\n`);
+          logger.error(`\n❌❌❌ ERREUR DE DÉPLACEMENT ❌❌❌`);
+          logger.error(`Message: ${errorMessage}`);
+          logger.error(`Details PATCH:`, patchError);
+          logger.error(`Details PUT:`, putError);
+          logger.error(`❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌\n`);
           
           return false;
         }
@@ -463,10 +464,10 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
         return nextState;
       });
       
-      console.log('✅ [TreeBranchLeafEditor] Élément déplacé avec succès');
+      logger.debug('✅ [TreeBranchLeafEditor] Élément déplacé avec succès');
       return true;
     } catch (error) {
-      console.error('❌ Erreur déplacement nœud:', error);
+      logger.error('❌ Erreur déplacement nœud:', error);
       return false;
     }
   }, [selectedTree, api, onNodesUpdate]);
@@ -481,13 +482,13 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
   };
 
   const createNode = useCallback(async (data: CreateNodePayload): Promise<TreeBranchLeafNode | null> => {
-    // console.log(...) // ✨ Log réduit - objet de debug
+    // logger.debug(...) // ✨ Log réduit - objet de debug
     if (!selectedTree) {
-      console.error('❌ Aucun arbre sélectionné (createNode)');
+      logger.error('❌ Aucun arbre sélectionné (createNode)');
       return null;
     }
     try {
-      console.log('[TreeBranchLeafEditor] createNode ▶️ POST', {
+      logger.debug('[TreeBranchLeafEditor] createNode ▶️ POST', {
         treeId: selectedTree.id,
         type: data.type,
         parentId: data.parentId,
@@ -495,15 +496,15 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
       });
       const newNode = await api.post(`/api/treebranchleaf/trees/${selectedTree.id}/nodes`, data);
       if (newNode) {
-        console.log('[TreeBranchLeafEditor] createNode ✅ POST ok', {
+        logger.debug('[TreeBranchLeafEditor] createNode ✅ POST ok', {
           id: newNode.id,
           type: newNode.type,
           parentId: newNode.parentId
         });
         // Recharger les données depuis l'API
-        console.log('[TreeBranchLeafEditor] createNode ▶️ GET nodes', { treeId: selectedTree.id });
+        logger.debug('[TreeBranchLeafEditor] createNode ▶️ GET nodes', { treeId: selectedTree.id });
         const updatedNodes = await api.get(`/api/treebranchleaf/trees/${selectedTree.id}/nodes`);
-        console.log('[TreeBranchLeafEditor] createNode ✅ GET nodes', {
+        logger.debug('[TreeBranchLeafEditor] createNode ✅ GET nodes', {
           count: (updatedNodes || []).length
         });
         onNodesUpdate(updatedNodes || []);
@@ -515,7 +516,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
             expanded.add(data.parentId);
             // 🔥 AUTO-EXPAND NOUVEAU NŒUD : Ajouter aussi le nouveau nœud pour qu'il puisse avoir des enfants visibles
             expanded.add(newNode.id);
-            console.log('[TreeBranchLeafEditor] createNode 🔁 expand parent + nouveau nœud', {
+            logger.debug('[TreeBranchLeafEditor] createNode 🔁 expand parent + nouveau nœud', {
               parentId: data.parentId,
               newNodeId: newNode.id,
               expandedCount: expanded.size
@@ -527,16 +528,16 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
             expanded.add(newNode.id);
             next = { ...next, expandedNodes: expanded };
           }
-          console.log('[TreeBranchLeafEditor] createNode 🎯 select node', { id: newNode.id });
+          logger.debug('[TreeBranchLeafEditor] createNode 🎯 select node', { id: newNode.id });
           return { ...next, selectedNode: newNode };
         });
-        // console.log('✅ Nœud créé et arbre rechargé'); // ✨ Log réduit
+        // logger.debug('✅ Nœud créé et arbre rechargé'); // ✨ Log réduit
         return newNode;
       }
       
       return null;
     } catch (error) {
-      console.error('❌ Erreur création nœud:', error);
+      logger.error('❌ Erreur création nœud:', error);
       return null;
     }
   }, [selectedTree, api, onNodesUpdate]);
@@ -560,9 +561,9 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
   }, []);
   
   const activateCapability = useCallback(async (nodeId: string, capability: string) => {
-    // console.log('⚡ activateCapability:', { nodeId, capability }); // ✨ Log réduit
+    // logger.debug('⚡ activateCapability:', { nodeId, capability }); // ✨ Log réduit
     if (!selectedTree) {
-      console.error('❌ Aucun arbre sélectionné (activateCapability)');
+      logger.error('❌ Aucun arbre sélectionné (activateCapability)');
       return;
     }
     const flagMap: Record<string, string> = {
@@ -606,7 +607,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
   }, [api, onNodesUpdate, selectedTree, propNodes]);
   
   const updateNode = useCallback(async (node: Partial<TreeBranchLeafNode> & { id: string }): Promise<TreeBranchLeafNode | null> => {
-    // console.log('🔄 updateNode:', { node }); // ✨ Log réduit
+    // logger.debug('🔄 updateNode:', { node }); // ✨ Log réduit
     if (!selectedTree) return null;
     try {
       try {
@@ -646,7 +647,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
       
       return updated || null;
     } catch (error) {
-      console.error('❌ updateNode error:', error);
+      logger.error('❌ updateNode error:', error);
       return null;
     }
   }, [api, onNodesUpdate, selectedTree]);
@@ -656,10 +657,10 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
   // =============================================================================
   
   const editNodeLabel = useCallback(async (node: TreeBranchLeafNode, newLabel: string): Promise<void> => {
-    // console.log('✏️ editNodeLabel:', { nodeId: node.id, newLabel }); // ✨ Log réduit
+    // logger.debug('✏️ editNodeLabel:', { nodeId: node.id, newLabel }); // ✨ Log réduit
     
     if (!selectedTree) {
-      console.error('❌ Aucun arbre sélectionné');
+      logger.error('❌ Aucun arbre sélectionné');
       return;
     }
 
@@ -687,9 +688,9 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
           }
           return prev;
         });
-        // console.log('✅ Nœud renommé via PATCH'); // ✨ Log réduit
+        // logger.debug('✅ Nœud renommé via PATCH'); // ✨ Log réduit
       } catch {
-        // console.warn('⚠️ PATCH renommage a échoué, tentative via PUT...'); // ✨ Log réduit
+        // logger.warn('⚠️ PATCH renommage a échoué, tentative via PUT...'); // ✨ Log réduit
         try {
           const updated = await api.put(`/api/treebranchleaf/trees/${selectedTree.id}/nodes/${node.id}`, { label: newLabel });
           
@@ -704,21 +705,21 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
               return prev;
             });
           }
-          // console.log('✅ Nœud renommé via PUT'); // ✨ Log réduit
+          // logger.debug('✅ Nœud renommé via PUT'); // ✨ Log réduit
         } catch (e2) {
-          console.error('❌ Erreur renommage nœud (PUT):', e2);
+          logger.error('❌ Erreur renommage nœud (PUT):', e2);
           throw e2;
         }
       }
     } catch (error) {
-      console.error('❌ Erreur générale renommage:', error);
+      logger.error('❌ Erreur générale renommage:', error);
       throw error;
     }
   }, [selectedTree, api, onNodesUpdate]);
   
   const duplicateNode = useCallback(async (node: TreeBranchLeafNode): Promise<void> => {
     if (!selectedTree) {
-      console.error('❌ Aucun arbre sélectionné');
+      logger.error('❌ Aucun arbre sélectionné');
       return;
     }
 
@@ -748,16 +749,16 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
         });
       }
     } catch (error) {
-      console.error('❌ Erreur duplication (deep-copy):', error);
+      logger.error('❌ Erreur duplication (deep-copy):', error);
       throw error;
     }
   }, [selectedTree, api, onNodesUpdate]);
   
   const deleteNode = useCallback(async (node: TreeBranchLeafNode): Promise<void> => {
-    // console.log('🗑️ deleteNode:', { nodeId: node.id }); // ✨ Log réduit
+    // logger.debug('🗑️ deleteNode:', { nodeId: node.id }); // ✨ Log réduit
     
     if (!selectedTree) {
-      console.error('❌ Aucun arbre sélectionné');
+      logger.error('❌ Aucun arbre sélectionné');
       return;
     }
 
@@ -783,18 +784,18 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
         }));
       }
       
-      // console.log('✅ Nœud supprimé et arbre rechargé'); // ✨ Log réduit
+      // logger.debug('✅ Nœud supprimé et arbre rechargé'); // ✨ Log réduit
     } catch (error) {
-      console.error('❌ Erreur suppression nœud:', error);
+      logger.error('❌ Erreur suppression nœud:', error);
       throw error;
     }
   }, [selectedTree, api, onNodesUpdate, propNodes, uiState.selectedNode?.id]);
   
   const moveNodeUp = useCallback(async (node: TreeBranchLeafNode): Promise<void> => {
-    // console.log('⬆️ moveNodeUp:', { nodeId: node.id }); // ✨ Log réduit
+    // logger.debug('⬆️ moveNodeUp:', { nodeId: node.id }); // ✨ Log réduit
     
     if (!selectedTree) {
-      console.error('❌ Aucun arbre sélectionné');
+      logger.error('❌ Aucun arbre sélectionné');
       return;
     }
 
@@ -827,18 +828,18 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
         const refreshed = (updatedNodes || []).find((n: TreeBranchLeafNode) => n.id === prev.selectedNode!.id);
         return refreshed ? { ...prev, selectedNode: refreshed } : prev;
       });
-      // console.log('✅ Nœud déplacé vers le haut'); // ✨ Log réduit
+      // logger.debug('✅ Nœud déplacé vers le haut'); // ✨ Log réduit
     } catch (error) {
-      console.error('❌ Erreur déplacement nœud:', error);
+      logger.error('❌ Erreur déplacement nœud:', error);
       throw error;
     }
   }, [selectedTree, api, onNodesUpdate]);
   
   const moveNodeDown = useCallback(async (node: TreeBranchLeafNode): Promise<void> => {
-    // console.log('⬇️ moveNodeDown:', { nodeId: node.id }); // ✨ Log réduit
+    // logger.debug('⬇️ moveNodeDown:', { nodeId: node.id }); // ✨ Log réduit
     
     if (!selectedTree) {
-      console.error('❌ Aucun arbre sélectionné');
+      logger.error('❌ Aucun arbre sélectionné');
       return;
     }
 
@@ -871,9 +872,9 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
         const refreshed = (updatedNodes || []).find((n: TreeBranchLeafNode) => n.id === prev.selectedNode!.id);
         return refreshed ? { ...prev, selectedNode: refreshed } : prev;
       });
-      // console.log('✅ Nœud déplacé vers le bas'); // ✨ Log réduit
+      // logger.debug('✅ Nœud déplacé vers le bas'); // ✨ Log réduit
     } catch (error) {
-      console.error('❌ Erreur déplacement nœud:', error);
+      logger.error('❌ Erreur déplacement nœud:', error);
       throw error;
     }
   }, [selectedTree, api, onNodesUpdate]);
@@ -881,7 +882,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
   // Déplacer un nœud directement à la racine (fin de liste)
   const moveNodeToRoot = useCallback(async (node: TreeBranchLeafNode): Promise<void> => {
     if (!selectedTree) {
-      console.error('❌ Aucun arbre sélectionné');
+      logger.error('❌ Aucun arbre sélectionné');
       return;
     }
     try {
@@ -897,18 +898,18 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
         return refreshed ? { ...prev, selectedNode: refreshed } : prev;
       });
       // Option: ouvrir automatiquement le nœud déplacé (pas nécessaire ici)
-      // console.log('✅ Nœud déplacé à la racine');
+      // logger.debug('✅ Nœud déplacé à la racine');
     } catch (error) {
-      console.error('❌ Erreur déplacement à la racine:', error);
+      logger.error('❌ Erreur déplacement à la racine:', error);
       throw error;
     }
   }, [selectedTree, api, onNodesUpdate]);
   
   const toggleNodeVisibility = useCallback(async (node: TreeBranchLeafNode): Promise<void> => {
-    // console.log('👁️ toggleNodeVisibility:', { nodeId: node.id, currentVisibility: node.isVisible }); // ✨ Log réduit
+    // logger.debug('👁️ toggleNodeVisibility:', { nodeId: node.id, currentVisibility: node.isVisible }); // ✨ Log réduit
     
     if (!selectedTree) {
-      console.error('❌ Aucun arbre sélectionné');
+      logger.error('❌ Aucun arbre sélectionné');
       return;
     }
 
@@ -935,9 +936,9 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
             return prev;
           });
         }
-        // console.log('✅ Visibilité modifiée via PATCH'); // ✨ Log réduit
+        // logger.debug('✅ Visibilité modifiée via PATCH'); // ✨ Log réduit
       } catch {
-        // console.warn('⚠️ PATCH visibilité a échoué, tentative via PUT...'); // ✨ Log réduit
+        // logger.warn('⚠️ PATCH visibilité a échoué, tentative via PUT...'); // ✨ Log réduit
         // Fallback PUT si PATCH indisponible
         const updated = await api.put(`/api/treebranchleaf/trees/${selectedTree.id}/nodes/${node.id}`, {
           isVisible: !node.isVisible
@@ -953,16 +954,16 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
             return prev;
           });
         }
-        // console.log('✅ Visibilité modifiée via PUT'); // ✨ Log réduit
+        // logger.debug('✅ Visibilité modifiée via PUT'); // ✨ Log réduit
       }
     } catch (error) {
-      console.error('❌ Erreur modification visibilité:', error);
+      logger.error('❌ Erreur modification visibilité:', error);
       throw error;
     }
   }, [selectedTree, api, onNodesUpdate]);
   
   const openNodeSettings = useCallback((node: TreeBranchLeafNode): void => {
-    // console.log('⚙️ openNodeSettings:', { nodeId: node.id }); // ✨ Log réduit
+    // logger.debug('⚙️ openNodeSettings:', { nodeId: node.id }); // ✨ Log réduit
     // Sélectionner le nœud pour ouvrir ses paramètres dans la colonne de droite
     setUIState(prev => ({
       ...prev,
@@ -979,7 +980,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
   }, [isDesktop]);
   
   const deactivateCapability = useCallback(async (nodeId: string, capability: string) => {
-    // console.log('🛑 deactivateCapability:', { nodeId, capability }); // ✨ Log réduit
+    // logger.debug('🛑 deactivateCapability:', { nodeId, capability }); // ✨ Log réduit
     if (!selectedTree) return;
     const flagMap: Record<string, string> = {
       data: 'hasData',
@@ -1118,7 +1119,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
 
       return canBeChildOf(sourceNodeType, parentNode.type);
     } catch (e) {
-      console.warn('[validateHierarchicalDrop] Exception', e);
+      logger.warn('[validateHierarchicalDrop] Exception', e);
       return false;
       return false;
     }
@@ -1296,7 +1297,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
           const meta = payload.metadata || {};
           meta.subTab = detectedSubTab;
           payload.metadata = meta;
-          console.log(`📂 [DnD] Auto-affectation sous-onglet "${detectedSubTab}" au nouveau nœud`);
+          logger.debug(`📂 [DnD] Auto-affectation sous-onglet "${detectedSubTab}" au nouveau nœud`);
         }
 
         // Appel de la fonction centralisée
@@ -1306,19 +1307,19 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
         if (detectedSubTab && newNode) {
           const newMeta = { ...(newNode.metadata || {}), subTab: detectedSubTab };
           await updateNode({ id: newNode.id, metadata: newMeta } as Partial<TreeBranchLeafNode> & { id: string });
-          console.log(`📂 [DnD] Sous-onglet "${detectedSubTab}" persisté via PUT pour nœud ${newNode.id}`);
+          logger.debug(`📂 [DnD] Sous-onglet "${detectedSubTab}" persisté via PUT pour nœud ${newNode.id}`);
         }
 
         if (newNode && (targetData.position === 'before' || targetData.position === 'after') && targetData.nodeId) {
           // Le rechargement dans createNode a déjà la bonne position, mais un moveNode peut forcer l'ordre si le backend ne le gère pas à la création.
           // Pour l'instant, on fait confiance au rechargement. On pourrait ajouter un moveNode ici si nécessaire.
-          console.log('Repositionnement géré par le rechargement des données.');
+          logger.debug('Repositionnement géré par le rechargement des données.');
         }
 
       } else if (draggedItem.type === 'node') {
         // ... (logique de déplacement existante)
         if (!draggedItem.data?.id) {
-          console.error('❌ Source sans ID');
+          logger.error('❌ Source sans ID');
           return;
         }
 
@@ -1355,8 +1356,8 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
         );
 
         if (success) {
-          console.log('✅ [TreeBranchLeafEditor] Élément déplacé avec succès');
-          console.log('✅ DROP RÉUSSI !');
+          logger.debug('✅ [TreeBranchLeafEditor] Élément déplacé avec succès');
+          logger.debug('✅ DROP RÉUSSI !');
 
           // 🎯 Mettre à jour le sous-onglet du nœud déplacé
           const movedNode = nodeMap.get(String(draggedItem.data.id));
@@ -1367,21 +1368,21 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
             if (moveDetectedSubTab && moveDetectedSubTab !== currentSubTabStr) {
               // Déplacé dans un sous-onglet différent → mettre à jour
               const newMeta = { ...(movedNode.metadata || {}), subTab: moveDetectedSubTab };
-              console.log(`📂 [DnD] Auto-affectation sous-onglet "${moveDetectedSubTab}" au nœud déplacé`);
+              logger.debug(`📂 [DnD] Auto-affectation sous-onglet "${moveDetectedSubTab}" au nœud déplacé`);
               await updateNode({ id: movedNode.id, metadata: newMeta } as Partial<TreeBranchLeafNode> & { id: string });
             } else if (!moveDetectedSubTab && currentSubTab) {
               // Déplacé hors d'un sous-onglet → retirer le sous-onglet
               const newMeta = { ...(movedNode.metadata || {}), subTab: null };
-              console.log(`📂 [DnD] Retrait sous-onglet du nœud déplacé (hors sous-onglet)`);
+              logger.debug(`📂 [DnD] Retrait sous-onglet du nœud déplacé (hors sous-onglet)`);
               await updateNode({ id: movedNode.id, metadata: newMeta } as Partial<TreeBranchLeafNode> & { id: string });
             }
           }
         } else {
-          console.error('❌ [TreeBranchLeafEditor] Échec du déplacement');
+          logger.error('❌ [TreeBranchLeafEditor] Échec du déplacement');
         }
       }
     } catch (error) {
-      console.error(`💥 ERREUR DANS DROP:`, error);
+      logger.error(`💥 ERREUR DANS DROP:`, error);
     } finally {
       setDraggedItem(null);
       setHoveredTarget(null);
@@ -1420,7 +1421,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
           (window as any).__TBL_SELECTED_FULL = full;
         }
       } catch (e) {
-        if (!cancelled) console.warn('[TreeBranchLeafEditor] ⚠️ Échec chargement analyse complète', e);
+        if (!cancelled) logger.warn('[TreeBranchLeafEditor] ⚠️ Échec chargement analyse complète', e);
       }
     }, 300);
     return () => { cancelled = true; clearTimeout(timer); };
@@ -1652,7 +1653,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
       const updatedNodes = await api.get(`/api/treebranchleaf/trees/${selectedTree.id}/nodes`);
       onNodesUpdate(updatedNodes || []);
     } catch (e) {
-      console.warn('⚠️ [TreeBranchLeafEditor] refreshTree a échoué:', e);
+      logger.warn('⚠️ [TreeBranchLeafEditor] refreshTree a échoué:', e);
     }
   }, [selectedTree, api, onNodesUpdate]);
 

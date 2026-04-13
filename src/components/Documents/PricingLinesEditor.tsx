@@ -50,6 +50,7 @@ import NodeTreeSelector, { NodeTreeSelectorValue } from '../TreeBranchLeaf/treeb
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { ColorPicker } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Text } = Typography;
 
@@ -209,7 +210,7 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
         setSelectedTreeNodeId(filteredTrees[0].nodeId);
       }
     } catch (error) {
-      console.error('Erreur chargement arbres:', error);
+      logger.error('Erreur chargement arbres:', error);
     }
   }, [api, selectedTreeNodeId]);
 
@@ -333,7 +334,7 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
         // ✅ Auto-corriger le type en 'repeater' si des sources @repeat sont détectées
         if (updatedLine.type !== 'repeater') {
           updatedLine.type = 'repeater';
-          console.log(`[PricingLinesEditor] Type auto-corrigé en 'repeater' (repeaterId: ${repId})`);
+          logger.debug(`[PricingLinesEditor] Type auto-corrigé en 'repeater' (repeaterId: ${repId})`);
         }
       }
 

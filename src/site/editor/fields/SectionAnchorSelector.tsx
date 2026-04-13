@@ -41,6 +41,7 @@ import {
   MenuOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
+import { logger } from '../../../lib/logger';
 
 const { Option } = Select;
 
@@ -100,12 +101,12 @@ const SectionAnchorSelector: React.FC<SectionAnchorSelectorProps> = ({
 
   // 🔍 DEBUG: Log complet à chaque rendu
   useEffect(() => {
-    console.log('🔍 [SectionAnchorSelector] RENDU:');
-    console.log('  - websiteId prop:', websiteId);
-    console.log('  - typeof websiteId:', typeof websiteId);
-    console.log('  - !!websiteId:', !!websiteId);
-    console.log('  - value:', value);
-    console.log('  - placeholder:', placeholder);
+    logger.debug('🔍 [SectionAnchorSelector] RENDU:');
+    logger.debug('  - websiteId prop:', websiteId);
+    logger.debug('  - typeof websiteId:', typeof websiteId);
+    logger.debug('  - !!websiteId:', !!websiteId);
+    logger.debug('  - value:', value);
+    logger.debug('  - placeholder:', placeholder);
     
     // Sauvegarder dans window pour inspection
     (window as any).lastSectionAnchorSelectorProps = {
@@ -128,13 +129,13 @@ const SectionAnchorSelector: React.FC<SectionAnchorSelectorProps> = ({
    */
   const fetchSections = useCallback(async () => {
     if (!websiteId) {
-      console.warn('⚠️ [SectionAnchorSelector] Pas de websiteId fourni');
+      logger.warn('⚠️ [SectionAnchorSelector] Pas de websiteId fourni');
       return;
     }
 
     setLoading(true);
     try {
-      console.log('📡 [SectionAnchorSelector] Chargement sections pour websiteId:', websiteId);
+      logger.debug('📡 [SectionAnchorSelector] Chargement sections pour websiteId:', websiteId);
       const response = await stableApi.get(`/api/website-sections/${websiteId}`);
       
       // Filtrer seulement les sections actives et les trier
@@ -142,10 +143,10 @@ const SectionAnchorSelector: React.FC<SectionAnchorSelectorProps> = ({
         .filter((s: Section) => s.isActive)
         .sort((a: Section, b: Section) => a.displayOrder - b.displayOrder);
       
-      console.log('✅ [SectionAnchorSelector] Sections chargées:', activeSections.length);
+      logger.debug('✅ [SectionAnchorSelector] Sections chargées:', activeSections.length);
       setSections(activeSections);
     } catch (error) {
-      console.error('❌ [SectionAnchorSelector] Erreur chargement sections:', error);
+      logger.error('❌ [SectionAnchorSelector] Erreur chargement sections:', error);
       setSections([]);
     } finally {
       setLoading(false);

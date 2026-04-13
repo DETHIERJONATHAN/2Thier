@@ -170,6 +170,7 @@ import { DeleteOutlined, PlusOutlined, LinkOutlined, InfoCircleOutlined, Downloa
 import NodeTreeSelector, { NodeTreeSelectorValue } from '../shared/NodeTreeSelector';
 import TableFullscreenEditor from './TableFullscreenEditor';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../../../../../lib/logger';
 
 const { Title, Text } = Typography;
 
@@ -399,7 +400,7 @@ type NormalizedTableInstanceResponse = {
 };
 
 const normalizedToInstance = (raw: NormalizedTableInstanceResponse): TableInstance => {
-  console.log('🔍 [normalizedToInstance] RAW DATA:', {
+  logger.debug('🔍 [normalizedToInstance] RAW DATA:', {
     columns: raw.columns,
     rowsType: Array.isArray(raw.rows) ? 'array' : typeof raw.rows,
     rowsLength: Array.isArray(raw.rows) ? raw.rows.length : 0,
@@ -413,15 +414,15 @@ const normalizedToInstance = (raw: NormalizedTableInstanceResponse): TableInstan
   // ✅ Les `rows` contiennent les lignes complètes (chaque ligne = array de cellules)
   let fullRows = Array.isArray(raw.rows) ? raw.rows : [];
 
-  console.log('🔍 [normalizedToInstance] FULL ROWS:', fullRows.slice(0, 3));
+  logger.debug('🔍 [normalizedToInstance] FULL ROWS:', fullRows.slice(0, 3));
 
   // 🛠️ DÉTECTION ET RECONSTRUCTION si les rows sont corrompues (strings au lieu d'arrays)
   const firstRow = fullRows[0];
   const isCorrupted = typeof firstRow === 'string'; // Si c'est un string, c'est corrompu !
   
   if (isCorrupted) {
-    console.warn('🚨 [normalizedToInstance] ROWS CORROMPUES DÉTECTÉES ! Reconstruction...');
-    console.log('🚨 [normalizedToInstance] Ancien format (strings):', fullRows.slice(0, 3));
+    logger.warn('🚨 [normalizedToInstance] ROWS CORROMPUES DÉTECTÉES ! Reconstruction...');
+    logger.debug('🚨 [normalizedToInstance] Ancien format (strings):', fullRows.slice(0, 3));
     
     // Reconstruire les rows complètes à partir des colonnes + matrix
     const reconstructed: (string | number | null)[][] = [];
@@ -438,7 +439,7 @@ const normalizedToInstance = (raw: NormalizedTableInstanceResponse): TableInstan
     }
     
     fullRows = reconstructed;
-    console.log('✅ [normalizedToInstance] ROWS RECONSTRUITES:', fullRows.slice(0, 3));
+    logger.debug('✅ [normalizedToInstance] ROWS RECONSTRUITES:', fullRows.slice(0, 3));
   }
 
   // ✅ IMPORTANT : TOUTES les lignes doivent être traitées, y compris la première !
@@ -461,7 +462,7 @@ const normalizedToInstance = (raw: NormalizedTableInstanceResponse): TableInstan
     return []; // Si ce n'est pas un array, retourner vide
   });
 
-  console.log('🔍 [normalizedToInstance] EXTRACTED:', {
+  logger.debug('🔍 [normalizedToInstance] EXTRACTED:', {
     rowLabels: rowLabels.slice(0, 3),
     matrixRows: matrix.length,
     firstMatrixRow: matrix[0],
@@ -512,7 +513,7 @@ const instanceToConfig = (instance?: TableInstance | null): TableConfig => {
     fullRows.push([label, ...rowData]);
   }
   
-  console.log('🔄 [instanceToConfig] Full rows reconstruites:', fullRows.slice(0, 3));
+  logger.debug('🔄 [instanceToConfig] Full rows reconstruites:', fullRows.slice(0, 3));
 
   return {
     type: (instance.type as 'columns' | 'matrix') || 'matrix',
@@ -597,7 +598,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
         setGestionnaireExposed(!!found);
         setGestionnaireLabel(found?.gestionnaireLabel || '');
       } catch (err) {
-        console.warn('[TablePanel] Failed to load gestionnaire state:', err);
+        logger.warn('[TablePanel] Failed to load gestionnaire state:', err);
       }
     })();
     return () => { cancelled = true; };
@@ -616,7 +617,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
   const updateTableCapability = useCallback(
     async (fieldId: string | null | undefined, payload: Record<string, unknown>) => {
       if (!isPhysicalNodeId(fieldId)) {
-        console.log('[TablePanel] Skipping capability update for virtual field:', fieldId);
+        logger.debug('[TablePanel] Skipping capability update for virtual field:', fieldId);
         return;
       }
       await api.put(`/api/treebranchleaf/nodes/${fieldId}/capabilities/table`, payload);
@@ -630,7 +631,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
   // Fonction de sauvegarde debounced
   const debouncedSave = useDebouncedCallback(async (config: TableConfig) => {
     if (!activeId || activeId.startsWith('temp_')) {
-      console.log('ðŸ—‚ï¸ TablePanel: Sauvegarde ignorÃ©e (instance temporaire ou inexistante)', { activeId });
+      logger.debug('ðŸ—‚ï¸ TablePanel: Sauvegarde ignorÃ©e (instance temporaire ou inexistante)', { activeId });
       return;
     }
     
@@ -644,11 +645,11 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
         meta: config.meta || {}
       };
       
-      console.log('ðŸ—‚ï¸ TablePanel: Sauvegarde tableau', { activeId, type: config.type, cols: config.columns.length });
+      logger.debug('ðŸ—‚ï¸ TablePanel: Sauvegarde tableau', { activeId, type: config.type, cols: config.columns.length });
       await api.put(`/api/treebranchleaf/nodes/${nodeId}/tables/${activeId}`, apiData);
-      console.log('ðŸ—‚ï¸ TablePanel: âœ… Tableau sauvegardÃ© avec succÃ¨s');
+      logger.debug('ðŸ—‚ï¸ TablePanel: âœ… Tableau sauvegardÃ© avec succÃ¨s');
     } catch (error) {
-      console.error('ðŸ—‚ï¸ TablePanel: âŒ Erreur sauvegarde:', error);
+      logger.error('ðŸ—‚ï¸ TablePanel: âŒ Erreur sauvegarde:', error);
       message.error('Erreur lors de la sauvegarde du tableau');
     }
   }, 1000);
@@ -697,7 +698,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
           setNodeTreeId(info.treeId);
         }
       } catch (error) {
-        console.error('ðŸ—‚ï¸ TablePanel: Impossible de rÃ©cupÃ©rer le treeId du nÅ“ud', error);
+        logger.error('ðŸ—‚ï¸ TablePanel: Impossible de rÃ©cupÃ©rer le treeId du nÅ“ud', error);
       }
     })();
 
@@ -752,7 +753,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
         const allOptions = [...leadFields, ...options];
         
         setFieldOptions(allOptions);
-        console.log('ðŸ” [TablePanel] fieldOptions chargÃ©es:', { 
+        logger.debug('ðŸ” [TablePanel] fieldOptions chargÃ©es:', { 
           count: options.length, 
           firstThree: options.slice(0, 3),
           allLabels: options.map(o => o.label),
@@ -760,7 +761,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
           inclinaisonPresent: options.some(o => o.label.toLowerCase().includes('inclin'))
         });
       } catch (error) {
-        console.error('ðŸ—‚ï¸ TablePanel: Erreur rÃ©cupÃ©ration champs disponibles', error);
+        logger.error('ðŸ—‚ï¸ TablePanel: Erreur rÃ©cupÃ©ration champs disponibles', error);
       } finally {
         if (!cancelled) setFieldsLoading(false);
       }
@@ -783,24 +784,24 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
           : [];
         if (cancelled) return;
 
-        console.log('ðŸ—‚ï¸ TablePanel: Instances chargÃ©es:', tables.length);
+        logger.debug('ðŸ—‚ï¸ TablePanel: Instances chargÃ©es:', tables.length);
         setInstances(tables);
 
         if (!tables.length) {
           //  PAS de création automatique : l'utilisateur doit créer la table manuellement
-          console.log(' TablePanel: Aucune instance trouvée');
+          logger.debug(' TablePanel: Aucune instance trouvée');
           setActiveId(null);
           return;
         }
 
         const hasActive = activeId ? tables.some((table) => table.id === activeId) : false;
         if (!hasActive) {
-          console.log('ðŸ—‚ï¸ TablePanel: SÃ©lection premiÃ¨re instance:', tables[0].id);
+          logger.debug('ðŸ—‚ï¸ TablePanel: SÃ©lection premiÃ¨re instance:', tables[0].id);
           setActiveId(tables[0].id);
         }
       } catch (error) {
         if (!cancelled) {
-          console.error('ðŸ—‚ï¸ TablePanel: Erreur chargement instances:', error);
+          logger.error('ðŸ—‚ï¸ TablePanel: Erreur chargement instances:', error);
           message.error('Impossible de charger les instances de tableaux');
         }
       }
@@ -827,7 +828,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
     // 🚀 OPTIMISATION : Pour les TRÈS gros tableaux (>10000 lignes), ne pas afficher le contenu
     if (rowCount > 10000) {
       setIsLoadingTable(true);
-      console.log(`🗂️ TablePanel: ⚠️ Tableau TRÈS volumineux (${rowCount} lignes) - Affichage limité`);
+      logger.debug(`🗂️ TablePanel: ⚠️ Tableau TRÈS volumineux (${rowCount} lignes) - Affichage limité`);
       
       // Ne charger QUE les métadonnées, pas le contenu complet
       setTimeout(() => {
@@ -839,17 +840,17 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
           meta: { ...instance?.meta, isTooBig: true, fullRowCount: rowCount }
         });
         setIsLoadingTable(false);
-        console.log(`🗂️ TablePanel: ✅ Métadonnées chargées (${rowCount} lignes masquées)`);
+        logger.debug(`🗂️ TablePanel: ✅ Métadonnées chargées (${rowCount} lignes masquées)`);
       }, 500);
     } else if (rowCount > 1000) {
       setIsLoadingTable(true);
-      console.log(`🗂️ TablePanel: ⏳ Chargement d'un gros tableau (${rowCount} lignes)...`);
+      logger.debug(`🗂️ TablePanel: ⏳ Chargement d'un gros tableau (${rowCount} lignes)...`);
       
       // Utiliser setTimeout avec délai plus long pour permettre à React de rendre l'indicateur
       setTimeout(() => {
         setCfg(instanceToConfig(instance));
         setIsLoadingTable(false);
-        console.log(`🗂️ TablePanel: ✅ Tableau chargé (${rowCount} lignes)`);
+        logger.debug(`🗂️ TablePanel: ✅ Tableau chargé (${rowCount} lignes)`);
       }, 500);
     } else {
       setCfg(instanceToConfig(instance));
@@ -952,7 +953,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
         };
         
         const nextCfg: TableConfig = { ...prevCfg, meta: nextMeta };
-        console.log('[updateLookupConfig] Calling debouncedSave');
+        logger.debug('[updateLookupConfig] Calling debouncedSave');
         debouncedSave(nextCfg);
         return nextCfg;
       });
@@ -971,7 +972,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
         const suffixedCol = `${col}-1`;
         const suffixedExists = columnOptions.some((opt) => opt.value === suffixedCol);
         if (suffixedExists) {
-          console.log(`[ÉTAPE 4] Normalisation: "${col}" → "${suffixedCol}"`);
+          logger.debug(`[ÉTAPE 4] Normalisation: "${col}" → "${suffixedCol}"`);
           return suffixedCol;
         }
       }
@@ -1003,19 +1004,19 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
           },
         };
         
-        console.log(`[ÉTAPE 4] 🔥 Sauvegarde IMMÉDIATE displayColumn="${normalizedDisplayColumns.normalized[0]}"`);
+        logger.debug(`[ÉTAPE 4] 🔥 Sauvegarde IMMÉDIATE displayColumn="${normalizedDisplayColumns.normalized[0]}"`);
         
         // PUT direct pour sauvegarder SEULEMENT la meta (pas les colonnes/lignes)
         await api.put(`/api/treebranchleaf/nodes/${nodeId}/tables/${activeId}`, {
           meta: updatedMeta,
         });
         
-        console.log('[ÉTAPE 4] ✅ Meta sauvegardée avec displayColumn normalisé');
+        logger.debug('[ÉTAPE 4] ✅ Meta sauvegardée avec displayColumn normalisé');
         
         // Rafraîchir le cache batch après sauvegarde
         tblBatch.refresh();
       } catch (error) {
-        console.error('[ÉTAPE 4] ❌ Erreur sauvegarde meta:', error);
+        logger.error('[ÉTAPE 4] ❌ Erreur sauvegarde meta:', error);
       }
     };
     
@@ -1097,7 +1098,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
         conditions
       });
     } catch (error) {
-      console.error('Erreur évaluation conditions:', error);
+      logger.error('Erreur évaluation conditions:', error);
     } finally {
       setEvaluationLoading(false);
     }
@@ -1382,7 +1383,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
       });
       setLookupValue(res?.value ?? null);
     } catch (error) {
-      console.error('ðŸ—‚ï¸ TablePanel: Erreur lookup matrice', error);
+      logger.error('ðŸ—‚ï¸ TablePanel: Erreur lookup matrice', error);
       setLookupValue(undefined);
     }
   }, [api, nodeId, testCol, testRow, activeId]);
@@ -1479,7 +1480,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
       setCfg(instanceToConfig(savedInstance));
       message.success('Tableau crÃ©Ã©');
     } catch (error) {
-      console.error('ðŸ—‚ï¸ TablePanel: Erreur crÃ©ation instance:', error);
+      logger.error('ðŸ—‚ï¸ TablePanel: Erreur crÃ©ation instance:', error);
       message.error('Impossible de crÃ©er le tableau');
       setInstances((prev) => prev.filter((item) => item.id !== tempId));
 
@@ -1542,7 +1543,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
       setCfg(instanceToConfig(savedInstance));
       message.success(`Vue "${viewName}" créée (données partagées)`);
     } catch (error) {
-      console.error('🔗 TablePanel: Erreur création vue:', error);
+      logger.error('🔗 TablePanel: Erreur création vue:', error);
       message.error('Impossible de créer la vue');
       setInstances(prev => prev.filter(item => item.id !== tempId));
     }
@@ -1596,13 +1597,13 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
             currentTable: null,
           });
         } catch (capError) {
-          console.warn('🗂️ TablePanel: Avertissement capability cleanup:', capError);
+          logger.warn('🗂️ TablePanel: Avertissement capability cleanup:', capError);
         }
       }
       
       message.success(instances.length > 1 ? 'Instance supprimée' : 'Tableau supprimé');
     } catch (error) {
-      console.error('🗂️ TablePanel: Erreur suppression instance:', error);
+      logger.error('🗂️ TablePanel: Erreur suppression instance:', error);
       message.error('Impossible de supprimer l\'instance');
     }
   }, [activeId, instances, api, nodeId, debouncedSave, debouncedSaveSelectConfig, updateTableCapability]);
@@ -1652,7 +1653,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
       XLSX.writeFile(workbook, `${sanitizedName}.xlsx`);
       message.success('✅ Fichier Excel téléchargé !');
     } catch (error) {
-      console.error('❌ Erreur export Excel:', error);
+      logger.error('❌ Erreur export Excel:', error);
       message.error('Impossible de télécharger le fichier');
     }
   }, [cfg]);
@@ -1661,25 +1662,25 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
   const handleFileChosen = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) {
-      console.log('🗂️ TablePanel: Pas de fichier sélectionné');
+      logger.debug('🗂️ TablePanel: Pas de fichier sélectionné');
       return;
     }
     
-    console.log('🗂️ TablePanel: 📂 Début import fichier:', file.name);
+    logger.debug('🗂️ TablePanel: 📂 Début import fichier:', file.name);
     
     try {
-      console.log('🗂️ TablePanel: 📖 Lecture du fichier...');
+      logger.debug('🗂️ TablePanel: 📖 Lecture du fichier...');
       const data = await file.arrayBuffer();
-      console.log('🗂️ TablePanel: ✅ Fichier lu, taille:', data.byteLength);
+      logger.debug('🗂️ TablePanel: ✅ Fichier lu, taille:', data.byteLength);
       
       const workbook = XLSX.read(data, { type: 'array' });
-      console.log('🗂️ TablePanel: 📊 Workbook parsé, feuilles:', workbook.SheetNames);
+      logger.debug('🗂️ TablePanel: 📊 Workbook parsé, feuilles:', workbook.SheetNames);
       
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as (string | number | null)[][];
       
-      console.log('🗂️ TablePanel: 📋 Données extraites:', jsonData.length, 'lignes');
+      logger.debug('🗂️ TablePanel: 📋 Données extraites:', jsonData.length, 'lignes');
       
       if (jsonData.length === 0) {
         message.warning('Le fichier est vide');
@@ -1750,22 +1751,22 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
         },
       };
       
-      console.log('🗂️ TablePanel: ========================================');
-      console.log('🗂️ TablePanel: 📊 CONFIG CRÉÉE');
-      console.log('🗂️ TablePanel: Type:', next.type);
-      console.log('🗂️ TablePanel: Colonnes:', next.columns.length, next.columns);
-      console.log('🗂️ TablePanel: Lignes (rows):', next.rows?.length, next.rows?.slice(0, 10), '...');
-      console.log('🗂️ TablePanel: Data (matrix):', next.data.length, 'lignes');
-      console.log('🗂️ TablePanel: 📋 Lookup config initiale:', next.meta.lookup);
-      console.log('🗂️ TablePanel: Data[0]:', next.data[0]);
-      console.log('🗂️ TablePanel: Data[dernière]:', next.data[next.data.length - 1]);
-      console.log('🗂️ TablePanel: ========================================');
+      logger.debug('🗂️ TablePanel: ========================================');
+      logger.debug('🗂️ TablePanel: 📊 CONFIG CRÉÉE');
+      logger.debug('🗂️ TablePanel: Type:', next.type);
+      logger.debug('🗂️ TablePanel: Colonnes:', next.columns.length, next.columns);
+      logger.debug('🗂️ TablePanel: Lignes (rows):', next.rows?.length, next.rows?.slice(0, 10), '...');
+      logger.debug('🗂️ TablePanel: Data (matrix):', next.data.length, 'lignes');
+      logger.debug('🗂️ TablePanel: 📋 Lookup config initiale:', next.meta.lookup);
+      logger.debug('🗂️ TablePanel: Data[0]:', next.data[0]);
+      logger.debug('🗂️ TablePanel: Data[dernière]:', next.data[next.data.length - 1]);
+      logger.debug('🗂️ TablePanel: ========================================');
       
       setCfg(next);
       
       // ✅ Si instance temporaire, créer d'abord puis MAJ, sinon sauvegarder directement
       if (!activeId || activeId.startsWith('temp_')) {
-        console.log('🗂️ TablePanel: 🎯 Instance temporaire détectée, création puis import...');
+        logger.debug('🗂️ TablePanel: 🎯 Instance temporaire détectée, création puis import...');
         setIsImporting(true);
         try {
           const payload = {
@@ -1777,17 +1778,17 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
             meta: next.meta || {},
           };
           
-          console.log('🗂️ TablePanel: 📤 PAYLOAD:', payload.name, '|', payload.columns.length, 'cols |', payload.rows.length, 'rows');
+          logger.debug('🗂️ TablePanel: 📤 PAYLOAD:', payload.name, '|', payload.columns.length, 'cols |', payload.rows.length, 'rows');
           
-          console.log('🗂️ TablePanel: 🚀 Envoi POST vers /api/treebranchleaf/nodes/' + nodeId + '/tables');
+          logger.debug('🗂️ TablePanel: 🚀 Envoi POST vers /api/treebranchleaf/nodes/' + nodeId + '/tables');
           const created = await api.post(`/api/treebranchleaf/nodes/${nodeId}/tables`, payload);
-          console.log('🗂️ TablePanel: ✅ RÉPONSE SERVEUR REÇUE:', created);
+          logger.debug('🗂️ TablePanel: ✅ RÉPONSE SERVEUR REÇUE:', created);
           const savedInstance = normalizedToInstance(created as NormalizedTableInstanceResponse);
-          console.log('[IMPORT] ✅ Instance sauvegardée, ID:', savedInstance.id);
+          logger.debug('[IMPORT] ✅ Instance sauvegardée, ID:', savedInstance.id);
 
           // Mettre à jour la liste des instances et l'ID actif.
           // L'useEffect [activeId, instances] se chargera de mettre à jour cfg.
-          console.log('[IMPORT] 🔄 Mise à jour de la liste des instances et de l\'ID actif.');
+          logger.debug('[IMPORT] 🔄 Mise à jour de la liste des instances et de l\'ID actif.');
           setInstances((prev) => {
             const newInstances = prev.filter(item => item.id !== activeId);
             newInstances.push(savedInstance);
@@ -1796,9 +1797,9 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
           setActiveId(savedInstance.id);
           
           message.success('Tableau importé et sélectionné avec succès !');
-          console.log('🎉 Import terminé, l\'interface va se mettre à jour.');
+          logger.debug('🎉 Import terminé, l\'interface va se mettre à jour.');
         } catch (error) {
-          console.error('🗂️ TablePanel: Erreur création instance import:', error);
+          logger.error('🗂️ TablePanel: Erreur création instance import:', error);
           message.error('Erreur lors de la création du tableau importé');
         } finally {
           setIsImporting(false);
@@ -1808,7 +1809,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
         message.success(`Fichier importÃ©: ${jsonData.length - 1} lignes, ${next.columns.length} colonnes`);
       }
     } catch (error) {
-      console.error('ðŸ—‚ï¸ TablePanel: Erreur import fichier:', error);
+      logger.error('ðŸ—‚ï¸ TablePanel: Erreur import fichier:', error);
       message.error('Erreur lors de l\'import du fichier');
     }
     
@@ -1885,7 +1886,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
               try {
                 await api.put(`/api/treebranchleaf/nodes/${nodeId}/tables/${activeId}`, { name });
               } catch (error) {
-                console.error('ðŸ—‚ï¸ TablePanel: Erreur mise Ã  jour nom:', error);
+                logger.error('ðŸ—‚ï¸ TablePanel: Erreur mise Ã  jour nom:', error);
               }
             }
           }}
@@ -1935,7 +1936,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                     capabilityId: activeId,
                     exposed: false,
                     label: null,
-                  }).catch((err: unknown) => console.error('[Gestionnaire] Failed to unexpose table:', err));
+                  }).catch((err: unknown) => logger.error('[Gestionnaire] Failed to unexpose table:', err));
                 }
               }
             }}
@@ -2083,11 +2084,11 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                       size="small"
                       checked={lookupConfig.columnLookupEnabled === true}
                       onChange={async (checked) => {
-                        console.log('[TablePanel] Toggle lookup COLONNE:', checked);
+                        logger.debug('[TablePanel] Toggle lookup COLONNE:', checked);
                         
                         if (!checked) {
                           // DESACTIVATION : nettoyer TOUS les champs pour ce tableau
-                          console.log('[TablePanel] Desactivation lookup COLONNE - nettoyage complet');
+                          logger.debug('[TablePanel] Desactivation lookup COLONNE - nettoyage complet');
                           const fieldsToDisable: string[] = [];
                           
                           // 1. Champ dans lookupConfig.selectors
@@ -2104,18 +2105,18 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                             !fieldsToDisable.includes(f.id) // Éviter les doublons
                           );
                           orphanFields.forEach(f => {
-                            console.log(`[TablePanel] Orphelin COLONNE détecté: ${f.label} (${f.id})`);
+                            logger.debug(`[TablePanel] Orphelin COLONNE détecté: ${f.label} (${f.id})`);
                             fieldsToDisable.push(f.id);
                           });
                           
-                          console.log(`[TablePanel] Champs a desactiver: ${fieldsToDisable.length}`, fieldsToDisable);
+                          logger.debug(`[TablePanel] Champs a desactiver: ${fieldsToDisable.length}`, fieldsToDisable);
                           
                           // Désactiver tous les champs
                           for (const fieldId of fieldsToDisable) {
                             try {
                               await updateTableCapability(fieldId, { enabled: false });
                             } catch (error) {
-                              console.error(`Erreur desactivation ${fieldId}:`, error);
+                              logger.error(`Erreur desactivation ${fieldId}:`, error);
                             }
                           }
                           
@@ -2157,11 +2158,11 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                       size="small"
                       checked={lookupConfig.rowLookupEnabled === true}
                       onChange={async (checked) => {
-                        console.log('[TablePanel] Toggle lookup LIGNE:', checked);
+                        logger.debug('[TablePanel] Toggle lookup LIGNE:', checked);
                         
                         if (!checked) {
                           // DESACTIVATION : nettoyer TOUS les champs pour ce tableau
-                          console.log('[TablePanel] Desactivation lookup LIGNE - nettoyage complet');
+                          logger.debug('[TablePanel] Desactivation lookup LIGNE - nettoyage complet');
                           const fieldsToDisable: string[] = [];
                           
                           // 1. Champ dans lookupConfig.selectors
@@ -2174,7 +2175,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                           
                           // 🔍 DEBUG: Afficher TOUS les champs avec table active
                           const fieldsWithTable = allFields.filter(f => f.capabilities?.table?.enabled === true);
-                          console.log('[TablePanel] 🔍 DEBUG Champs avec table active:', fieldsWithTable.map(f => ({
+                          logger.debug('[TablePanel] 🔍 DEBUG Champs avec table active:', fieldsWithTable.map(f => ({
                             label: f.label,
                             id: f.id,
                             activeId: f.capabilities?.table?.activeId,
@@ -2189,18 +2190,18 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                             !fieldsToDisable.includes(f.id) // Éviter les doublons
                           );
                           orphanFields.forEach(f => {
-                            console.log(`[TablePanel] Orphelin LIGNE détecté: ${f.label} (${f.id})`);
+                            logger.debug(`[TablePanel] Orphelin LIGNE détecté: ${f.label} (${f.id})`);
                             fieldsToDisable.push(f.id);
                           });
                           
-                          console.log(`[TablePanel] Champs a desactiver: ${fieldsToDisable.length}`, fieldsToDisable);
+                          logger.debug(`[TablePanel] Champs a desactiver: ${fieldsToDisable.length}`, fieldsToDisable);
                           
                           // Désactiver tous les champs
                           for (const fieldId of fieldsToDisable) {
                             try {
                               await updateTableCapability(fieldId, { enabled: false });
                             } catch (error) {
-                              console.error(`Erreur desactivation ${fieldId}:`, error);
+                              logger.error(`Erreur desactivation ${fieldId}:`, error);
                             }
                           }
                           
@@ -2368,7 +2369,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                     await updateTableCapability(value, payload);
                                     message.success('Champ transformé en liste !');
                                   } catch (error) {
-                                    console.error('Erreur activation capacité:', error);
+                                    logger.error('Erreur activation capacité:', error);
                                     message.error('Erreur activation de la capacité Table');
                                   }
                                 })();
@@ -3891,7 +3892,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                       });
                                       message.success('Champ ligne activé !');
                                     } catch (error) {
-                                      console.error('Erreur rowFieldId:', error);
+                                      logger.error('Erreur rowFieldId:', error);
                                     }
                                   })();
                                 }
@@ -5805,7 +5806,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                   });
                   message.success('✅ Champ ligne sélectionné et activé !');
                 } catch (error) {
-                  console.error('Erreur activation champ ligne:', error);
+                  logger.error('Erreur activation champ ligne:', error);
                   message.error('Erreur lors de l\'activation du champ ligne');
                 }
               })();
@@ -5922,7 +5923,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
             setShowGestionnaireModal(false);
             message.success('Tableau exposé dans le Gestionnaire');
           } catch (err) {
-            console.error('[Gestionnaire] Failed to expose table:', err);
+            logger.error('[Gestionnaire] Failed to expose table:', err);
             message.error('Erreur lors de l\'exposition du tableau');
           }
         }}

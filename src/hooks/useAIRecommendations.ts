@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
+import { logger } from '../lib/logger';
 
 export interface AIRecommendation {
   datetime: string;
@@ -33,7 +34,7 @@ export const useAIRecommendations = (lead: unknown, selectedDate: unknown) => {
       setAiRecommendations(response.recommendations || []);
       return response.recommendations;
     } catch (error) {
-      console.error('[useAIRecommendations] Erreur lors de la récupération des recommandations:', error);
+      logger.error('[useAIRecommendations] Erreur lors de la récupération des recommandations:', error);
       return [];
     } finally {
       setLoading(false);

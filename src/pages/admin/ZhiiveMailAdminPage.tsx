@@ -31,6 +31,7 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
 import { SF } from '../../components/zhiive/ZhiiveTheme';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -135,7 +136,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
       setStatus(statusData);
       setAccounts(accountsData || []);
     } catch (e: unknown) {
-      console.error('Fetch status error:', e);
+      logger.error('Fetch status error:', e);
     }
   }, [api]);
 
@@ -144,7 +145,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
       const data = await api.api.get('/api/zhiivemail/server-overview');
       setServerOverview(data);
     } catch (e: unknown) {
-      console.error('Fetch server-overview error:', e);
+      logger.error('Fetch server-overview error:', e);
     }
   }, [api]);
 
@@ -153,7 +154,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
       const data = await api.api.get('/api/zhiivemail/postal-stats');
       setPostalStats(data);
     } catch (e: unknown) {
-      console.error('Fetch postal-stats error:', e);
+      logger.error('Fetch postal-stats error:', e);
     }
   }, [api]);
 
@@ -162,7 +163,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
       const data = await api.api.get('/api/zhiivemail/postal-messages?limit=100');
       setPostalMessages(data || []);
     } catch (e: unknown) {
-      console.error('Fetch postal-messages error:', e);
+      logger.error('Fetch postal-messages error:', e);
     }
   }, [api]);
 
@@ -177,7 +178,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
       setPostalCredentials(credentials || []);
       setPostalRoutes(routes || []);
     } catch (e: unknown) {
-      console.error('Fetch infrastructure error:', e);
+      logger.error('Fetch infrastructure error:', e);
     }
   }, [api]);
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
+import { logger } from '../lib/logger';
 
 // Types de résultats (alignés avec l'API backend)
 export interface TblResultItem {
@@ -250,7 +251,7 @@ export function useTblSubmission(options: UseTblSubmissionOptions = {}): UseTblS
       setAvailableDrafts(drafts);
       return drafts;
     } catch (error) {
-      console.error('[useTblSubmission] Erreur checkForDrafts:', error);
+      logger.error('[useTblSubmission] Erreur checkForDrafts:', error);
       return [];
     }
   }, [api, initialLeadId, treeId]);
@@ -282,9 +283,9 @@ export function useTblSubmission(options: UseTblSubmissionOptions = {}): UseTblS
       });
       setResults(Array.isArray(previewResponse.data?.results) ? previewResponse.data.results : []);
       
-      console.log('✅ [useTblSubmission] Brouillon restauré:', draftStageId);
+      logger.debug('✅ [useTblSubmission] Brouillon restauré:', draftStageId);
     } catch (error) {
-      console.error('[useTblSubmission] Erreur restoreDraft:', error);
+      logger.error('[useTblSubmission] Erreur restoreDraft:', error);
       setError('Erreur lors de la restauration du brouillon');
     } finally {
       setLoading(false);
@@ -308,10 +309,10 @@ export function useTblSubmission(options: UseTblSubmissionOptions = {}): UseTblS
         if (drafts.length > 0 && !stageId) {
           // Il y a des brouillons disponibles - on pourrait afficher une modal
           // Pour l'instant, on les stocke juste dans availableDrafts
-          console.log('📋 [useTblSubmission] Brouillons disponibles:', drafts.length);
+          logger.debug('📋 [useTblSubmission] Brouillons disponibles:', drafts.length);
         }
       } catch (error) {
-        console.error('[useTblSubmission] Erreur vérification brouillons:', error);
+        logger.error('[useTblSubmission] Erreur vérification brouillons:', error);
       }
     };
 

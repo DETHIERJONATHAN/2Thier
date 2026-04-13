@@ -7,6 +7,7 @@ import InteractivePDFPreview from './InteractivePDFPreview';
 import DocumentGlobalThemeEditor, { DocumentGlobalTheme } from './DocumentGlobalThemeEditor';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { SF } from '../zhiive/ZhiiveTheme';
+import { logger } from '../../lib/logger';
 
 interface Section {
   id: string;
@@ -57,7 +58,7 @@ const DocumentTemplateEditor = ({ templateId, onSave, onClose }: DocumentTemplat
       const response = await api.get(`/api/documents/templates/${templateId}/sections`);
       setSections(response || []);
     } catch (error) {
-      console.error('Erreur chargement sections:', error);
+      logger.error('Erreur chargement sections:', error);
     }
   };
 
@@ -102,7 +103,7 @@ const DocumentTemplateEditor = ({ templateId, onSave, onClose }: DocumentTemplat
       setSections(newSections);
       message.success('Section supprimée');
     } catch (error) {
-      console.error('Erreur lors de la suppression de la section:', error);
+      logger.error('Erreur lors de la suppression de la section:', error);
       message.error('Erreur lors de la suppression de la section');
     }
   };
@@ -147,7 +148,7 @@ const DocumentTemplateEditor = ({ templateId, onSave, onClose }: DocumentTemplat
       message.success('Template sauvegardé avec succès');
       onSave();
     } catch (error) {
-      console.error('Erreur sauvegarde:', error);
+      logger.error('Erreur sauvegarde:', error);
       message.error('Erreur lors de la sauvegarde');
     } finally {
       setLoading(false);

@@ -25,6 +25,7 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { NotificationManager } from '../../components/Notifications';
 import type { Lead } from '../../types/leads';
 import { getErrorMessage } from '../../utils/errorHandling';
+import { logger } from '../../lib/logger';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -157,7 +158,7 @@ export default function EmailModule({ leadId: propLeadId, onClose, autoFillType 
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error, 'Erreur lors du chargement du lead');
       NotificationManager.error(errorMessage);
-      console.error('[EmailModule] ❌ Erreur fetchLeadDetail:', errorMessage, error);
+      logger.error('[EmailModule] ❌ Erreur fetchLeadDetail:', errorMessage, error);
       handleClose();
     } finally {
       setLoading(false);
@@ -209,7 +210,7 @@ export default function EmailModule({ leadId: propLeadId, onClose, autoFillType 
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error, 'Erreur lors de la génération IA');
       NotificationManager.error(errorMessage);
-      console.error('[EmailModule] ❌ Erreur génération IA:', errorMessage, error);
+      logger.error('[EmailModule] ❌ Erreur génération IA:', errorMessage, error);
     } finally {
       setIsGeneratingAI(false);
     }
@@ -254,7 +255,7 @@ export default function EmailModule({ leadId: propLeadId, onClose, autoFillType 
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error, 'Erreur lors de l\'envoi de l\'email');
       NotificationManager.error(errorMessage);
-      console.error('[EmailModule] ❌ Erreur envoi email:', errorMessage, error);
+      logger.error('[EmailModule] ❌ Erreur envoi email:', errorMessage, error);
     } finally {
       setSending(false);
     }

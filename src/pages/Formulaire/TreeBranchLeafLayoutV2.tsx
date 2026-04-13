@@ -33,6 +33,7 @@ import {
 import {
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable';
+import { logger } from '../../lib/logger';
 
 const { Title, Text } = Typography;
 
@@ -406,7 +407,7 @@ const NodeParameters: React.FC<NodeParametersProps> = ({
 
 // Layout principal TreeBranchLeaf V2
 const TreeBranchLeafLayoutV2: React.FC = () => {
-  console.log('🌟 [TreeBranchLeaf] Composant TreeBranchLeafLayoutV2 chargé !');
+  logger.debug('🌟 [TreeBranchLeaf] Composant TreeBranchLeafLayoutV2 chargé !');
   const { id: treeId } = useParams<{ id: string }>();
   const { api } = useAuthenticatedApi();
   const [tree, setTree] = useState<TreeBranchLeafTree | null>(null);
@@ -424,11 +425,11 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
   const fetchTree = useCallback(async () => {
     try {
       setLoading(true);
-      console.log('🔄 [TreeBranchLeafV2] Initialisation composant TreeBranchLeaf');
+      logger.debug('🔄 [TreeBranchLeafV2] Initialisation composant TreeBranchLeaf');
       
       if (!treeId) {
         // Pas d'ID spécifique, créer un arbre par défaut pour la démo
-        console.log('📋 [TreeBranchLeafV2] Pas d\'ID d\'arbre, création arbre par défaut');
+        logger.debug('📋 [TreeBranchLeafV2] Pas d\'ID d\'arbre, création arbre par défaut');
         const defaultTree = {
           id: 'default-tree',
           name: 'Arbre de démonstration',
@@ -440,10 +441,10 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
         return;
       }
 
-      console.log('🔄 [TreeBranchLeafV2] Chargement de l\'arbre:', treeId);
+      logger.debug('🔄 [TreeBranchLeafV2] Chargement de l\'arbre:', treeId);
       
       const response = await api.get(`/api/treebranchleaf-v2/trees/${treeId}`);
-      console.log('✅ [TreeBranchLeafV2] Réponse API reçue:', response);
+      logger.debug('✅ [TreeBranchLeafV2] Réponse API reçue:', response);
       
       // L'API retourne une structure hiérarchique avec des Children imbriqués
       // Nous devons d'abord aplatir cette structure en liste de nœuds
@@ -501,11 +502,11 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
         ...response,
         Nodes: buildHierarchy(),
       };
-      console.log('🌳 [TreeBranchLeafV2] Arbre construit:', treeData);
+      logger.debug('🌳 [TreeBranchLeafV2] Arbre construit:', treeData);
       
       setTree(treeData);
     } catch (error) {
-      console.error('❌ [TreeBranchLeafV2] Erreur lors du chargement:', error);
+      logger.error('❌ [TreeBranchLeafV2] Erreur lors du chargement:', error);
     } finally {
       setLoading(false);
     }
@@ -516,7 +517,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
   }, [fetchTree]);
 
   const handleDragEnd = (event: DragEndEvent) => {
-    console.log('🎯 [TreeBranchLeafV2] Drag end:', event);
+    logger.debug('🎯 [TreeBranchLeafV2] Drag end:', event);
     // TODO: Implémenter la logique de drag & drop
   };
 
@@ -617,7 +618,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
                 tree={tree}
                 selectedNode={selectedNode}
                 onSelectNode={setSelectedNode}
-                onDropItem={(item, targetNodeId) => console.log('Drop:', item, 'on:', targetNodeId)}
+                onDropItem={(item, targetNodeId) => logger.debug('Drop:', item, 'on:', targetNodeId)}
               />
             </Card>
           </Col>
@@ -655,7 +656,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
             >
               <PropertiesPanel
                 selectedNode={selectedNode}
-                onUpdateNode={(nodeId, updates) => console.log('Update node:', nodeId, updates)}
+                onUpdateNode={(nodeId, updates) => logger.debug('Update node:', nodeId, updates)}
               />
             </Card>
           </Col>

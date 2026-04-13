@@ -49,6 +49,7 @@ import { isCopyFromRepeater } from '../utils/isCopyFromRepeater';
 import { useTBLBatchOptional } from '../contexts/TBLBatchContext';
 import { preSeedCalculatedValues } from '../../../../../hooks/useNodeCalculatedValue';
 import { SF } from '../../../../zhiive/ZhiiveTheme';
+import { logger } from '../../../../../lib/logger';
 
 const { Text } = Typography;
 const { Panel } = Collapse;
@@ -1520,7 +1521,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   
   // ✅ CRITIQUE: Mémoiser le handleFieldChange pour éviter les re-rendus
   const handleFieldChange = useCallback((fieldId: string, value: unknown, fieldLabel?: string) => {
-    console.log(`🟦🟦🟦 [TBLSectionRenderer] handleFieldChange LOCAL appelé: fieldId=${fieldId}, value=${value}, label=${fieldLabel}`);
+    logger.debug(`🟦🟦🟦 [TBLSectionRenderer] handleFieldChange LOCAL appelé: fieldId=${fieldId}, value=${value}, label=${fieldLabel}`);
     onChange(fieldId, value);
     
     // Synchronisation miroir
@@ -1549,7 +1550,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
 
   // Handler to delete a full copy group (used by delete button)
   const handleDeleteCopyGroup = useCallback(async (f: TBLField) => {
-    console.log('🗑️ [DELETE COPY GROUP] *** CALLBACK APPELÉ ***', { fieldId: f.id, fieldLabel: f.label });
+    logger.debug('🗑️ [DELETE COPY GROUP] *** CALLBACK APPELÉ ***', { fieldId: f.id, fieldLabel: f.label });
     try {
       // ========================================================================
       // 🔧 ÉTAPE 1: Trouver le repeaterId en remontant l'arbre complet
@@ -1596,7 +1597,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           for (const tid of allTemplateIds) {
             descendants.add(tid);
           }
-          console.log('🔧 [getRepeaterDescendantIds] templateNodeIds du repeater:', allTemplateIds.length);
+          logger.debug('🔧 [getRepeaterDescendantIds] templateNodeIds du repeater:', allTemplateIds.length);
         }
         
         // 2. BFS depuis les templates pour trouver leurs descendants (sous-champs, display, etc.)
@@ -1684,7 +1685,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       if (!repeaterId) {
         const meta = (f as any).metadata || {};
         repeaterId = meta.duplicatedFromRepeater || meta.repeaterParentId;
-        console.log('🗑️ [DELETE COPY GROUP] Fallback 1 (metadata duplicatedFromRepeater/repeaterParentId):', repeaterId);
+        logger.debug('🗑️ [DELETE COPY GROUP] Fallback 1 (metadata duplicatedFromRepeater/repeaterParentId):', repeaterId);
       }
       
       // Fallback 2: Chercher le nœud RAW dans allNodes et vérifier metadata.duplicatedFromRepeater
@@ -1693,7 +1694,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         if (rawNode) {
           const rawMeta: unknown = rawNode.metadata || {};
           repeaterId = rawMeta.duplicatedFromRepeater || rawMeta.repeaterParentId;
-          console.log('🗑️ [DELETE COPY GROUP] Fallback 2 (raw node metadata):', repeaterId);
+          logger.debug('🗑️ [DELETE COPY GROUP] Fallback 2 (raw node metadata):', repeaterId);
         }
       }
       
@@ -1704,7 +1705,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           const parent = allNodes.find((n: Record<string, unknown>) => n.id === node.parentId);
           if (parent?.type === 'branch_repeater' || parent?.type === 'leaf_repeater') {
             repeaterId = parent.id;
-            console.log('🗑️ [DELETE COPY GROUP] Fallback 3 (parent is repeater):', repeaterId);
+            logger.debug('🗑️ [DELETE COPY GROUP] Fallback 3 (parent is repeater):', repeaterId);
           }
         }
       }
@@ -1726,7 +1727,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           const allTemplateIds = [...new Set([...templateIds, ...colTemplateIds])];
           if (allTemplateIds.includes(baseId)) {
             repeaterId = node.id;
-            console.log('🗑️ [DELETE COPY GROUP] Fallback 4 (reverse lookup templateNodeIds):', repeaterId, 'templates:', allTemplateIds);
+            logger.debug('🗑️ [DELETE COPY GROUP] Fallback 4 (reverse lookup templateNodeIds):', repeaterId, 'templates:', allTemplateIds);
             break;
           }
         }
@@ -1737,16 +1738,16 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         const baseId = f.id.replace(/-\d+$/, '');
         repeaterId = findRepeaterAncestor(baseId);
         if (repeaterId) {
-          console.log('🗑️ [DELETE COPY GROUP] Fallback 5a (tree walk from baseId):', repeaterId);
+          logger.debug('🗑️ [DELETE COPY GROUP] Fallback 5a (tree walk from baseId):', repeaterId);
         } else {
           repeaterId = findRepeaterAncestor(f.id);
           if (repeaterId) {
-            console.log('🗑️ [DELETE COPY GROUP] Fallback 5b (tree walk from copiedId):', repeaterId);
+            logger.debug('🗑️ [DELETE COPY GROUP] Fallback 5b (tree walk from copiedId):', repeaterId);
           }
         }
       }
       
-      console.log('🗑️ [DELETE COPY GROUP] repeaterId FINAL=', repeaterId);
+      logger.debug('🗑️ [DELETE COPY GROUP] repeaterId FINAL=', repeaterId);
 
       // 🔧 FIX: Construire un Set de "template IDs" valides pour CE repeater
       // Seuls les champs dont le baseId est un descendant du repeater seront supprimés
@@ -1754,14 +1755,14 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       let repeaterTemplateIds: Set<string> | null = null;
       if (repeaterId) {
         repeaterTemplateIds = getRepeaterDescendantIds(repeaterId);
-        console.log('🔧 [DELETE COPY GROUP] repeaterTemplateIds:', repeaterTemplateIds.size, 'descendants');
+        logger.debug('🔧 [DELETE COPY GROUP] repeaterTemplateIds:', repeaterTemplateIds.size, 'descendants');
       } else {
         // Dernier recours: si on n'a pas trouvé le repeater, on restreint au baseId seul
         // pour éviter de supprimer des champs d'autres repeaters
         const baseId = f.id?.replace(/-\d+$/, '');
         if (baseId) {
           repeaterTemplateIds = new Set([baseId]);
-          console.warn('⚠️ [DELETE COPY GROUP] repeaterId inconnu, scope restreint au baseId seul:', baseId);
+          logger.warn('⚠️ [DELETE COPY GROUP] repeaterId inconnu, scope restreint au baseId seul:', baseId);
         }
       }
 
@@ -1787,7 +1788,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       const legacyIndex = legacyMatch ? parseInt(legacyMatch[1], 10) : null;
       const effectiveIndex = instanceIndex ?? legacyIndex;
       if (effectiveIndex == null) {
-        console.warn('⚠️ [DELETE COPY GROUP] Impossible de déterminer l\'index de copie, suppression annulée.', { repeaterId, label });
+        logger.warn('⚠️ [DELETE COPY GROUP] Impossible de déterminer l\'index de copie, suppression annulée.', { repeaterId, label });
         return;
       }
 
@@ -1947,7 +1948,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             await new Promise(r => setTimeout(r, DELAY_MS * (retry + 1)));
             return deleteWithRetry(node, retry + 1);
           }
-          console.warn('❌ [DELETE FAIL]', { nodeId: node.id, status, error: err?.message });
+          logger.warn('❌ [DELETE FAIL]', { nodeId: node.id, status, error: err?.message });
           return { status: 'failed', id: node.id, serverDeletedIds: [] };
         }
       };
@@ -1967,17 +1968,17 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       }
 
       dlog('🗑️ [DELETE COPY GROUP] Suppression terminée - Total IDs supprimés:', globalSuccessIds.length);
-      console.log('🟢🟢🟢 [POST-DELETE] Après boucle de suppression - globalSuccessIds:', globalSuccessIds.length);
+      logger.debug('🟢🟢🟢 [POST-DELETE] Après boucle de suppression - globalSuccessIds:', globalSuccessIds.length);
 
       // 🔄 SYNC BIDIRECTIONNEL: Suppression = -1 sur le champ source
       // On cherche le repeater qui a un countSourceNodeId configuré dans metadata.repeater
       // et on fait -1 sur ce champ (minimum 1)
       try {
-        console.log('🔄🔄🔄 [SYNC DELETE] Recherche repeater avec countSourceNodeId dans allNodes:', allNodes?.length || 0, 'nodes');
+        logger.debug('🔄🔄🔄 [SYNC DELETE] Recherche repeater avec countSourceNodeId dans allNodes:', allNodes?.length || 0, 'nodes');
         
         // 🔍 DEBUG: Lister tous les repeaters trouvés
         const allRepeaters = (allNodes || []).filter((n: Record<string, unknown>) => n.type === 'branch_repeater' || n.type === 'leaf_repeater');
-        console.log('🔄🔄🔄 [SYNC DELETE] Repeaters dans allNodes:', allRepeaters.map((r: Record<string, unknown>) => ({
+        logger.debug('🔄🔄🔄 [SYNC DELETE] Repeaters dans allNodes:', allRepeaters.map((r: Record<string, unknown>) => ({
           id: r.id,
           type: r.type,
           hasMetadata: !!r.metadata,
@@ -1990,7 +1991,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           (n: unknown) => (n.type === 'branch_repeater' || n.type === 'leaf_repeater') && n.metadata?.repeater?.countSourceNodeId
         );
         
-        console.log('🔄🔄🔄 [SYNC DELETE] Repeater trouvé:', repeaterWithSync ? {
+        logger.debug('🔄🔄🔄 [SYNC DELETE] Repeater trouvé:', repeaterWithSync ? {
           id: repeaterWithSync.id,
           countSourceNodeId: repeaterWithSync.metadata?.repeater?.countSourceNodeId
         } : 'AUCUN');
@@ -2001,7 +2002,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           // 🔒 PROTECTION: Empêcher le preload de se déclencher pendant le sync
           if (typeof window !== 'undefined') {
             window.__TBL_SKIP_PRELOAD_UNTIL = Date.now() + 2000; // Skip pendant 2 secondes
-            console.log(`🔒 [SYNC DELETE] Preload désactivé temporairement jusqu'à ${new Date(window.__TBL_SKIP_PRELOAD_UNTIL).toISOString()}`);
+            logger.debug(`🔒 [SYNC DELETE] Preload désactivé temporairement jusqu'à ${new Date(window.__TBL_SKIP_PRELOAD_UNTIL).toISOString()}`);
           }
           
           // 🔧 FIX: Utiliser section.fields ou allNodes (fields n'existait pas dans ce scope!)
@@ -2010,11 +2011,11 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           const currentValue = parseInt(String(currentField?.value || currentField?.defaultValue || '1'), 10);
           const newValue = Math.max(1, currentValue - 1); // MINIMUM 1 !
           
-          console.log(`🔄 [SYNC] Repeater ${repeaterWithSync.id}: champ ${countSourceNodeId} = ${currentValue} → ${newValue}`);
+          logger.debug(`🔄 [SYNC] Repeater ${repeaterWithSync.id}: champ ${countSourceNodeId} = ${currentValue} → ${newValue}`);
           onChange(countSourceNodeId, String(newValue));
         }
       } catch (syncErr) {
-        console.warn('⚠️ [SYNC] Erreur:', syncErr);
+        logger.warn('⚠️ [SYNC] Erreur:', syncErr);
       }
 
       // ✨ MISE À JOUR LOCALE SANS RECHARGEMENT
@@ -2058,7 +2059,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         dlog('⚠️ [DELETE COPY GROUP] Impossible de dispatch final tbl-repeater-updated (silent)');
       }
     } catch (error) {
-      console.error('❌ [DELETE COPY GROUP] Erreur lors de la suppression de la copie:', error);
+      logger.error('❌ [DELETE COPY GROUP] Erreur lors de la suppression de la copie:', error);
     }
   }, [api, allNodes, section, treeId, dlog, resolveEventTreeId, onChange]);
   
@@ -2703,7 +2704,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 });
               }
             } catch (e) {
-              console.warn('[REPEATER COPY INJECTION] Échec injection conditionnels pour copie', { fieldId: f.id, error: e });
+              logger.warn('[REPEATER COPY INJECTION] Échec injection conditionnels pour copie', { fieldId: f.id, error: e });
             }
           });
 
@@ -3007,7 +3008,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 }
               }
             } catch (e) {
-              console.warn('⚠️ [CASCADER PATCH] Échec reconstruction selectedValue:', e);
+              logger.warn('⚠️ [CASCADER PATCH] Échec reconstruction selectedValue:', e);
             }
           }
 
@@ -3478,7 +3479,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 }
               }
             } catch (e) {
-              console.warn('⚠️ [SECTION RENDERER] Reconstruction conditionalFields échouée:', e);
+              logger.warn('⚠️ [SECTION RENDERER] Reconstruction conditionalFields échouée:', e);
             }
           }
           
@@ -4319,7 +4320,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           if (f?.nodeId) return String(f.nodeId);
           if (f?.id) return String(f.id);
         } catch (e) {
-          console.warn('[resolveBackendNodeId] Erreur résolution nodeId:', e);
+          logger.warn('[resolveBackendNodeId] Erreur résolution nodeId:', e);
         }
         return undefined;
       };
@@ -4445,7 +4446,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             // Log agressif UNIQUE par champ (limité via ref ? simplif: log à chaque rendu si debug actif)
             const diag = (() => { try { return localStorage.getItem('TBL_DIAG') === '1'; } catch { return false; } })();
             if (diag) {
-              console.warn('[TBL][MIRROR][MISS]', {
+              logger.warn('[TBL][MIRROR][MISS]', {
                 label: field.label,
                 triedMirrorKey: mirrorKey,
                 variantKeys,
@@ -4455,7 +4456,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             }
           }
         } catch (e) {
-          console.warn('[MIRROR][VARIANT][ERROR]', e);
+          logger.warn('[MIRROR][VARIANT][ERROR]', e);
         }
       }
       
@@ -4570,7 +4571,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           }
         }
       } catch (e) {
-        console.warn('⚠️ [PREFERENCE] Erreur lors de la vérification priorité formule vs donnée:', e);
+        logger.warn('⚠️ [PREFERENCE] Erreur lors de la vérification priorité formule vs donnée:', e);
       }
       
   // ✨ PRIORITÉ 1: Capacité Data avec instances PEUPLÉES (données dynamiques depuis TreeBranchLeafNodeVariable)
@@ -4668,7 +4669,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 fallbackValue: effectiveMirrorValue ?? rawValue
               });
             }
-            console.warn('ℹ️ [DATA VARIABLE] Aucune instanceId trouvée pour variable – affichage placeholder');
+            logger.warn('ℹ️ [DATA VARIABLE] Aucune instanceId trouvée pour variable – affichage placeholder');
             return '---';
           }
           
@@ -5626,7 +5627,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                               
                               // 🚫 PROTECTION: Empêcher les double-clics (via Ref pour immédiateté)
                               if (isRepeatingRef.current[repeaterParentId]) {
-                                console.warn('⚠️ [REPEATER] Clic ignoré: opération déjà en cours (ref check)');
+                                logger.warn('⚠️ [REPEATER] Clic ignoré: opération déjà en cours (ref check)');
                                 return;
                               }
                               
@@ -5653,7 +5654,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                     try {
                                       templateNodeIds = JSON.parse(templateNodeIds);
                                     } catch (e) {
-                                      console.error('❌ [COPY-API] Impossible de parser repeater_templateNodeIds:', e);
+                                      logger.error('❌ [COPY-API] Impossible de parser repeater_templateNodeIds:', e);
                                       templateNodeIds = [];
                                     }
                                   } else {
@@ -5667,7 +5668,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                 }
                                 
                                 if (templateNodeIds.length === 0) {
-                                  console.error('❌ [COPY-API] Aucun template trouvé dans le repeater');
+                                  logger.error('❌ [COPY-API] Aucun template trouvé dans le repeater');
                                   if (isTBLDebugEnabled()) tblLog('🔍 [COPY-API] parentField:', parentField);
                                   return;
                                 }
@@ -5683,7 +5684,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                   const newCount = instanceCount + 1;
                                   onChange(instanceCountKey, newCount);
                                 } catch (e) {
-                                  console.warn('⚠️ [REPEATER] Échec optimistic add instance', e);
+                                  logger.warn('⚠️ [REPEATER] Échec optimistic add instance', e);
                                 }
 
                                 // Appel à l'API de copie (opération asynchrone en arrière-plan)
@@ -5698,12 +5699,12 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                 
                                 // 🎯🎯🎯 DEBUG: Afficher les infos de triggers dans la console frontend
                                 if (response?.debug?.triggersFix) {
-                                  console.log('🎯🎯🎯 [REPEAT-EXECUTOR DEBUG] Infos triggers/subType:');
+                                  logger.debug('🎯🎯🎯 [REPEAT-EXECUTOR DEBUG] Infos triggers/subType:');
                                   response.debug.triggersFix.forEach((item: unknown, idx: number) => {
-                                    console.log(`  [${idx}] ${item.label} (${item.nodeId})`);
-                                    console.log(`      originalSubType: "${item.originalSubType}" → appliedSubType: "${item.appliedSubType}"`);
-                                    console.log(`      originalTriggers:`, item.originalTriggers);
-                                    console.log(`      suffixedTriggers:`, item.suffixedTriggers);
+                                    logger.debug(`  [${idx}] ${item.label} (${item.nodeId})`);
+                                    logger.debug(`      originalSubType: "${item.originalSubType}" → appliedSubType: "${item.appliedSubType}"`);
+                                    logger.debug(`      originalTriggers:`, item.originalTriggers);
+                                    logger.debug(`      suffixedTriggers:`, item.suffixedTriggers);
                                   });
                                 }
                                 
@@ -5720,19 +5721,19 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                     if (isTBLDebugEnabled()) tblLog('🔄 [COPY-API] Batch data refresh déclenché après repeat');
                                   }
                                 } catch (batchRefreshErr) {
-                                  console.warn('⚠️ [COPY-API] Batch refresh failed (silent):', batchRefreshErr);
+                                  logger.warn('⚠️ [COPY-API] Batch refresh failed (silent):', batchRefreshErr);
                                 }
                                 
                                 // �🔄 SYNC BIDIRECTIONNELLE: Mettre à jour le champ source si configuré
                                 try {
-                                  console.log(`🔍 [SYNC DEBUG ADD] parentField.id=${parentField?.id}`);
-                                  console.log(`🔍 [SYNC DEBUG ADD] parentField.repeater_countSourceNodeId:`, parentField?.repeater_countSourceNodeId);
+                                  logger.debug(`🔍 [SYNC DEBUG ADD] parentField.id=${parentField?.id}`);
+                                  logger.debug(`🔍 [SYNC DEBUG ADD] parentField.repeater_countSourceNodeId:`, parentField?.repeater_countSourceNodeId);
                                   const countSourceNodeId = parentField?.repeater_countSourceNodeId;
                                   if (countSourceNodeId) {
                                     // 🔒 PROTECTION: Empêcher le preload de se déclencher pendant le sync
                                     if (typeof window !== 'undefined') {
                                       window.__TBL_SKIP_PRELOAD_UNTIL = Date.now() + 2000; // Skip pendant 2 secondes
-                                      console.log(`🔒 [SYNC BIDIRECTIONNELLE] Preload désactivé temporairement jusqu'à ${new Date(window.__TBL_SKIP_PRELOAD_UNTIL).toISOString()}`);
+                                      logger.debug(`🔒 [SYNC BIDIRECTIONNELLE] Preload désactivé temporairement jusqu'à ${new Date(window.__TBL_SKIP_PRELOAD_UNTIL).toISOString()}`);
                                     }
                                     
                                     // Compter les copies existantes (nœuds avec rootOriginalId = repeaterParentId)
@@ -5741,11 +5742,11 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                     ).length;
                                     // Total = 1 (original) + copies existantes + 1 (nouvelle copie)
                                     const newTotal = 1 + existingCopiesCount + 1;
-                                    console.log(`🔄 [SYNC BIDIRECTIONNELLE] Mise à jour champ source ${countSourceNodeId}: ${newTotal}`);
+                                    logger.debug(`🔄 [SYNC BIDIRECTIONNELLE] Mise à jour champ source ${countSourceNodeId}: ${newTotal}`);
                                     onChange(countSourceNodeId, String(newTotal));
                                   }
                                 } catch (syncErr) {
-                                  console.warn('⚠️ [SYNC BIDIRECTIONNELLE] Erreur mise à jour champ source:', syncErr);
+                                  logger.warn('⚠️ [SYNC BIDIRECTIONNELLE] Erreur mise à jour champ source:', syncErr);
                                 }
                                 
                                 // ✅ Réponse reçue. On n'appelle PAS TBL_FORCE_REFRESH pour éviter le rechargement
@@ -5850,18 +5851,18 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                           }
                                         }));
                                       } catch (bgErr) {
-                                        console.warn('⚠️ [COPY-API] Background sync failed (silent):', bgErr);
+                                        logger.warn('⚠️ [COPY-API] Background sync failed (silent):', bgErr);
                                       }
                                     }, 800); // Délai suffisant pour que l'UI soit stable
                                   } catch (e) { 
-                                    console.warn('⚠️ [COPY-API] Local retransform dispatch failed:', e);
+                                    logger.warn('⚠️ [COPY-API] Local retransform dispatch failed:', e);
                                   }
                                 } catch (e) {
-                                  console.warn('⚠️ [COPY-API] Impossible de dispatch tbl-repeater-updated (silent)', e);
-                                  console.warn('⚠️ [COPY-API] Error details:', { error: e, response });
+                                  logger.warn('⚠️ [COPY-API] Impossible de dispatch tbl-repeater-updated (silent)', e);
+                                  logger.warn('⚠️ [COPY-API] Error details:', { error: e, response });
                                 }
                               } catch (error) {
-                                console.error('❌ [COPY-API] Erreur lors de la copie:', error);
+                                logger.error('❌ [COPY-API] Erreur lors de la copie:', error);
                                 optimisticOk = false;
                               } finally {
                                 // 🔓 Réactiver le bouton après l'opération (succès ou échec)
@@ -5881,7 +5882,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                     const newCount = Math.max(0, (formData[instanceCountKey] as number || 1) - 1);
                                     onChange(instanceCountKey, newCount);
                                   } catch (e) {
-                                    console.warn('⚠️ [COPY-API] Impossible d’annuler l’instance localement', e);
+                                    logger.warn('⚠️ [COPY-API] Impossible d’annuler l’instance localement', e);
                                   }
                                 }
                             } else if (isRemoveInstanceButton) {

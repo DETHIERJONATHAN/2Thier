@@ -1,3 +1,4 @@
+import { logger } from './lib/logger';
 /**
  * Fichier de mocks global pour les formules - ÃƒÂ  utiliser en dÃƒÂ©veloppement uniquement
  * Version amÃƒÂ©liorÃƒÂ©e avec une meilleure gestion des donnÃƒÂ©es et des logs dÃƒÂ©taillÃƒÂ©s
@@ -62,7 +63,7 @@ const logOperation = (operation: string, fieldId: string, formulaId: string | nu
 export const getFormulasForField = (fieldId: string): unknown[] => {
   try {
     if (!fieldId) {
-      console.error('[MOCK] Erreur: fieldId est undefined ou null');
+      logger.error('[MOCK] Erreur: fieldId est undefined ou null');
       logOperation('getFormulasForField', 'unknown', null, 'error', 'fieldId manquant');
       return [];
     }
@@ -75,7 +76,7 @@ export const getFormulasForField = (fieldId: string): unknown[] => {
     
     const storedData = global._globalFormulasStore.get(fieldId);
     if (!storedData) {
-      console.warn('[MOCK] DonnÃƒÂ©es manquantes aprÃƒÂ¨s vÃƒÂ©rification, crÃƒÂ©ation d\'un tableau vide');
+      logger.warn('[MOCK] DonnÃƒÂ©es manquantes aprÃƒÂ¨s vÃƒÂ©rification, crÃƒÂ©ation d\'un tableau vide');
       global._globalFormulasStore.set(fieldId, []);
       return [];
     }
@@ -89,7 +90,7 @@ export const getFormulasForField = (fieldId: string): unknown[] => {
     // Effectuer une copie profonde pour ÃƒÂ©viter toute modification accidentelle
     return JSON.parse(JSON.stringify(storedData));
   } catch (error: unknown) {
-    console.error('[MOCK] Erreur lors de la rÃƒÂ©cupÃƒÂ©ration des formules pour le champ ' + fieldId + ':', error);
+    logger.error('[MOCK] Erreur lors de la rÃƒÂ©cupÃƒÂ©ration des formules pour le champ ' + fieldId + ':', error);
     logOperation('getFormulasForField', fieldId, null, 'error', error.message || String(error));
     return [];
   }
@@ -101,7 +102,7 @@ export const getFormulasForField = (fieldId: string): unknown[] => {
 export const updateFormula = (fieldId: string, formulaId: string, data: unknown): any => {
   try {
     if (!fieldId || !formulaId) {
-      console.error('[MOCK] Erreur: fieldId ou formulaId manquant');
+      logger.error('[MOCK] Erreur: fieldId ou formulaId manquant');
       logOperation('updateFormula', fieldId || 'unknown', formulaId || null, 'error', 'ParamÃƒÂ¨tres manquants');
       return null;
     }
@@ -148,7 +149,7 @@ export const updateFormula = (fieldId: string, formulaId: string, data: unknown)
       const backupCopy = JSON.parse(JSON.stringify(sortedFormulas));
       global._backupFormulasStore.set(fieldId, backupCopy);
     } catch (backupError) {
-      console.error('[MOCK] Ã¢ÂÅ’ Ãƒâ€°chec de la sauvegarde de secours:', backupError);
+      logger.error('[MOCK] Ã¢ÂÅ’ Ãƒâ€°chec de la sauvegarde de secours:', backupError);
     }
     
     
@@ -159,7 +160,7 @@ export const updateFormula = (fieldId: string, formulaId: string, data: unknown)
       // VÃƒÂ©rifier la structure complÃƒÂ¨te pour dÃƒÂ©tecter les anomalies
       storedFormulas.forEach((f: unknown, idx: number) => {
         if (!f.id || !f.sequence) {
-          console.warn(`[MOCK] Ã¢Å¡Â Ã¯Â¸Â Formule #${idx} potentiellement corrompue:`, 
+          logger.warn(`[MOCK] Ã¢Å¡Â Ã¯Â¸Â Formule #${idx} potentiellement corrompue:`, 
             JSON.stringify({id: f.id, hasSequence: !!f.sequence, sequenceType: typeof f.sequence}));
         }
       });
@@ -168,7 +169,7 @@ export const updateFormula = (fieldId: string, formulaId: string, data: unknown)
     // Renvoyer la formule mise ÃƒÂ  jour
     return formula;
   } catch (error: unknown) {
-    console.error('[MOCK] Erreur lors de la mise ÃƒÂ  jour de la formule ' + formulaId + ':', error);
+    logger.error('[MOCK] Erreur lors de la mise ÃƒÂ  jour de la formule ' + formulaId + ':', error);
     logOperation('updateFormula', fieldId, formulaId, 'error', error.message || String(error));
     return null;
   }
@@ -180,7 +181,7 @@ export const updateFormula = (fieldId: string, formulaId: string, data: unknown)
 export const deleteFormula = (fieldId: string, formulaId: string): boolean => {
   try {
     if (!fieldId || !formulaId) {
-      console.error('[MOCK] Erreur: fieldId ou formulaId manquant pour la suppression');
+      logger.error('[MOCK] Erreur: fieldId ou formulaId manquant pour la suppression');
       logOperation('deleteFormula', fieldId || 'unknown', formulaId || null, 'error', 'ParamÃƒÂ¨tres manquants');
       return false;
     }
@@ -198,7 +199,7 @@ export const deleteFormula = (fieldId: string, formulaId: string): boolean => {
     logOperation('deleteFormula', fieldId, formulaId, 'warning', 'Formule non trouvÃƒÂ©e');
     return false;
   } catch (error: unknown) {
-    console.error('[MOCK] Erreur lors de la suppression de la formule ' + formulaId + ':', error);
+    logger.error('[MOCK] Erreur lors de la suppression de la formule ' + formulaId + ':', error);
     logOperation('deleteFormula', fieldId, formulaId, 'error', error.message || String(error));
     return false;
   }
@@ -235,7 +236,7 @@ export const clearStorage = (fieldId?: string) => {
 // Fonction pour forcer le rechargement du store avec systÃƒÂ¨me de secours (utile pour dÃƒÂ©boguer)
 export const forceRefreshStore = (fieldId: string): unknown[] => {
   if (!fieldId) {
-    console.error('[MOCK] Ã¢ÂÅ’ forceRefreshStore - ERREUR: fieldId est vide ou null');
+    logger.error('[MOCK] Ã¢ÂÅ’ forceRefreshStore - ERREUR: fieldId est vide ou null');
     return [];
   }
   
@@ -251,13 +252,13 @@ export const forceRefreshStore = (fieldId: string): unknown[] => {
         formulas = JSON.parse(JSON.stringify(primaryData));
         source = 'principale';
       } else {
-        console.warn(`[MOCK] Ã¢Å¡Â Ã¯Â¸Â La source principale existe mais ne contient pas de donnÃƒÂ©es valides`);
+        logger.warn(`[MOCK] Ã¢Å¡Â Ã¯Â¸Â La source principale existe mais ne contient pas de donnÃƒÂ©es valides`);
       }
     } catch (primaryError) {
-      console.error(`[MOCK] Ã¢ÂÅ’ Erreur lors de l'accÃƒÂ¨s ÃƒÂ  la source principale:`, primaryError);
+      logger.error(`[MOCK] Ã¢ÂÅ’ Erreur lors de l'accÃƒÂ¨s ÃƒÂ  la source principale:`, primaryError);
     }
   } else {
-    console.warn(`[MOCK] Ã¢Å¡Â Ã¯Â¸Â Le champ ${fieldId} n'existe pas dans la source principale`);
+    logger.warn(`[MOCK] Ã¢Å¡Â Ã¯Â¸Â Le champ ${fieldId} n'existe pas dans la source principale`);
   }
   
   // Tentative 2: Si la source principale a ÃƒÂ©chouÃƒÂ©, essayer la source de secours
@@ -271,10 +272,10 @@ export const forceRefreshStore = (fieldId: string): unknown[] => {
         // Restaurer les donnÃƒÂ©es dans le store principal
         global._globalFormulasStore.set(fieldId, JSON.parse(JSON.stringify(formulas)));
       } else {
-        console.warn(`[MOCK] Ã¢Å¡Â Ã¯Â¸Â La source de secours existe mais ne contient pas de donnÃƒÂ©es valides`);
+        logger.warn(`[MOCK] Ã¢Å¡Â Ã¯Â¸Â La source de secours existe mais ne contient pas de donnÃƒÂ©es valides`);
       }
     } catch (backupError) {
-      console.error(`[MOCK] Ã¢ÂÅ’ Erreur lors de l'accÃƒÂ¨s ÃƒÂ  la source de secours:`, backupError);
+      logger.error(`[MOCK] Ã¢ÂÅ’ Erreur lors de l'accÃƒÂ¨s ÃƒÂ  la source de secours:`, backupError);
     }
   }
   

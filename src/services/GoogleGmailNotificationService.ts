@@ -14,6 +14,7 @@ import UniversalNotificationService from './UniversalNotificationService';
 import { prisma } from '../lib/prisma';
 
 import { googleOAuthConfig, isGoogleOAuthConfigured } from '../auth/googleConfig';
+import { logger } from '../lib/logger';
 
 interface EmailAnalysis {
   priority: 'low' | 'medium' | 'high' | 'urgent';
@@ -81,7 +82,7 @@ export class GoogleGmailNotificationService {
       this.isWatching = true;
 
     } catch (error) {
-      console.error('❌ [GmailNotification] Erreur démarrage surveillance:', error);
+      logger.error('❌ [GmailNotification] Erreur démarrage surveillance:', error);
     }
   }
 
@@ -144,7 +145,7 @@ export class GoogleGmailNotificationService {
       }
 
     } catch (error) {
-      console.error(`❌ [GmailNotification] Erreur watch pour ${userToken.userId}:`, error);
+      logger.error(`❌ [GmailNotification] Erreur watch pour ${userToken.userId}:`, error);
     }
   }
 
@@ -168,7 +169,7 @@ export class GoogleGmailNotificationService {
       });
 
       if (!userToken) {
-        console.warn(`⚠️ [GmailNotification] Utilisateur non trouvé pour ${emailAddress}`);
+        logger.warn(`⚠️ [GmailNotification] Utilisateur non trouvé pour ${emailAddress}`);
         return;
       }
 
@@ -176,7 +177,7 @@ export class GoogleGmailNotificationService {
       await this.fetchNewEmails(userToken, historyId);
 
     } catch (error) {
-      console.error('❌ [GmailNotification] Erreur traitement webhook:', error);
+      logger.error('❌ [GmailNotification] Erreur traitement webhook:', error);
     }
   }
 
@@ -235,7 +236,7 @@ export class GoogleGmailNotificationService {
       });
 
     } catch (error) {
-      console.error(`❌ [GmailNotification] Erreur récupération emails pour ${userToken.userId}:`, error);
+      logger.error(`❌ [GmailNotification] Erreur récupération emails pour ${userToken.userId}:`, error);
     }
   }
 
@@ -303,7 +304,7 @@ export class GoogleGmailNotificationService {
 
 
     } catch (error) {
-      console.error(`❌ [GmailNotification] Erreur traitement email ${messageId}:`, error);
+      logger.error(`❌ [GmailNotification] Erreur traitement email ${messageId}:`, error);
     }
   }
 
@@ -376,7 +377,7 @@ export class GoogleGmailNotificationService {
       };
 
     } catch (error) {
-      console.error('❌ [GmailNotification] Erreur analyse IA:', error);
+      logger.error('❌ [GmailNotification] Erreur analyse IA:', error);
       return {
         priority: 'medium',
         category: 'autre',
@@ -455,7 +456,7 @@ export class GoogleGmailNotificationService {
       }
 
     } catch (error) {
-      console.error('❌ [GmailNotification] Erreur création notification intelligente:', error);
+      logger.error('❌ [GmailNotification] Erreur création notification intelligente:', error);
     }
   }
 
@@ -515,7 +516,7 @@ export class GoogleGmailNotificationService {
 
 
     } catch (error) {
-      console.error('❌ [GmailNotification] Erreur création lead automatique:', error);
+      logger.error('❌ [GmailNotification] Erreur création lead automatique:', error);
     }
   }
 
@@ -543,7 +544,7 @@ export class GoogleGmailNotificationService {
         activeWatches: this.activeWatches.size
       };
     } catch (error) {
-      console.error('❌ [GmailNotification] Erreur stats:', error);
+      logger.error('❌ [GmailNotification] Erreur stats:', error);
       return { totalToday: 0, byUser: [], activeWatches: 0 };
     }
   }

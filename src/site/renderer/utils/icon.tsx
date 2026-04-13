@@ -7,6 +7,7 @@
 
 import React from 'react';
 import * as AntIcons from '@ant-design/icons';
+import { logger } from '../../../lib/logger';
 
 export type IconFieldValue =
   | string
@@ -144,7 +145,7 @@ export const renderIconNode = (
         );
       }
       // Si l'icône n'existe pas, ne pas rendre de fallback
-      console.warn(`[Icon] Icône Ant Design introuvable: ${resolved.iconName}`);
+      logger.warn(`[Icon] Icône Ant Design introuvable: ${resolved.iconName}`);
       return null;
     }
     default:

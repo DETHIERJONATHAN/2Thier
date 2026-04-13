@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
 import { message } from 'antd';
+import { logger } from '../lib/logger';
 
 export interface DraftData {
   draftId: string;
@@ -48,7 +49,7 @@ export const useDrafts = () => {
     setLoading(true);
     try {
       const response = await api.get('/api/google-auth/gmail/drafts');
-      console.log('[useDrafts] 📋 Réponse complète API:', response);
+      logger.debug('[useDrafts] 📋 Réponse complète API:', response);
       
       // Gérer différents formats de réponse
       let draftsData = null;
@@ -60,7 +61,7 @@ export const useDrafts = () => {
         draftsData = response;
       }
       
-      console.log('[useDrafts] 📋 Données brouillons extraites:', draftsData);
+      logger.debug('[useDrafts] 📋 Données brouillons extraites:', draftsData);
       
       if (draftsData && Array.isArray(draftsData)) {
         // Convertir les dates
@@ -68,14 +69,14 @@ export const useDrafts = () => {
           ...draft,
           date: new Date(draft.date)
         }));
-        console.log('[useDrafts] ✅ Brouillons formatés:', formattedDrafts);
+        logger.debug('[useDrafts] ✅ Brouillons formatés:', formattedDrafts);
         setDrafts(formattedDrafts);
       } else {
-        console.log('[useDrafts] ⚠️ Aucun brouillon trouvé ou format invalide');
+        logger.debug('[useDrafts] ⚠️ Aucun brouillon trouvé ou format invalide');
         setDrafts([]);
       }
     } catch (error) {
-      console.error('[useDrafts] Erreur lors de la récupération des brouillons:', error);
+      logger.error('[useDrafts] Erreur lors de la récupération des brouillons:', error);
       message.error('Erreur lors de la récupération des brouillons');
       setDrafts([]);
     } finally {
@@ -96,7 +97,7 @@ export const useDrafts = () => {
         
         // Vérifier que les champs obligatoires sont présents
         if (!draftData.to || !draftData.subject) {
-          console.error('[useDrafts] ❌ Destinataire ou sujet manquant:', { to: draftData.to, subject: draftData.subject });
+          logger.error('[useDrafts] ❌ Destinataire ou sujet manquant:', { to: draftData.to, subject: draftData.subject });
           throw new Error('Destinataire et sujet requis');
         }
         
@@ -114,14 +115,14 @@ export const useDrafts = () => {
           formData.append(`attachments`, file);
         });
         
-        console.log('[useDrafts] 📎 Sauvegarde avec pièces jointes:', draftData.attachments.length);
-        console.log('[useDrafts] 📄 Données FormData:', {
+        logger.debug('[useDrafts] 📎 Sauvegarde avec pièces jointes:', draftData.attachments.length);
+        logger.debug('[useDrafts] 📄 Données FormData:', {
           to: draftData.to,
           subject: draftData.subject,
           body: draftData.body.substring(0, 50) + '...'
         });
-        console.log('[useDrafts] 🔧 FormData instance check:', formData instanceof FormData);
-        console.log('[useDrafts] 🔧 FormData entries:', Array.from(formData.entries()).map(([key, value]) => 
+        logger.debug('[useDrafts] 🔧 FormData instance check:', formData instanceof FormData);
+        logger.debug('[useDrafts] 🔧 FormData entries:', Array.from(formData.entries()).map(([key, value]) => 
           `${key}: ${value instanceof File ? `File(${value.name})` : value}`
         ));
         
@@ -135,7 +136,7 @@ export const useDrafts = () => {
         
         if (response?.success || response?.data?.success) {
           const data = response?.data?.data || response?.data;
-          console.log('[useDrafts] ✅ Brouillon avec PJ sauvegardé:', data);
+          logger.debug('[useDrafts] ✅ Brouillon avec PJ sauvegardé:', data);
           
           // Rafraîchir la liste des brouillons si c'est un nouveau brouillon
           if (!draftData.draftId) {
@@ -147,17 +148,17 @@ export const useDrafts = () => {
             messageId: data?.messageId
           };
         } else {
-          console.error('[useDrafts] ❌ Échec sauvegarde avec PJ:', response);
+          logger.error('[useDrafts] ❌ Échec sauvegarde avec PJ:', response);
           return null;
         }
       } else {
         // Pas de pièces jointes, utiliser JSON classique
-        console.log('[useDrafts] 💾 Auto-sauvegarde en cours...');
+        logger.debug('[useDrafts] 💾 Auto-sauvegarde en cours...');
         const response = await api.post('/api/google-auth/gmail/drafts', draftData);
         
         if (response?.success || response?.data?.success) {
           const data = response?.data?.data || response?.data;
-          console.log('[useDrafts] ✅ Brouillon sauvegardé:', data);
+          logger.debug('[useDrafts] ✅ Brouillon sauvegardé:', data);
           
           // Rafraîchir la liste des brouillons si c'est un nouveau brouillon
           if (!draftData.draftId) {
@@ -169,12 +170,12 @@ export const useDrafts = () => {
             messageId: data?.messageId
           };
         } else {
-          console.error('[useDrafts] ❌ Échec sauvegarde:', response);
+          logger.error('[useDrafts] ❌ Échec sauvegarde:', response);
           return null;
         }
       }
     } catch (error) {
-      console.error('[useDrafts] Erreur lors de la sauvegarde:', error);
+      logger.error('[useDrafts] Erreur lors de la sauvegarde:', error);
       message.error('Erreur lors de la sauvegarde du brouillon');
       return null;
     } finally {
@@ -193,7 +194,7 @@ export const useDrafts = () => {
 
     // Programmer une nouvelle sauvegarde
     autoSaveTimerRef.current = setTimeout(async () => {
-      console.log('[useDrafts] 💾 Auto-sauvegarde en cours...');
+      logger.debug('[useDrafts] 💾 Auto-sauvegarde en cours...');
       await saveDraft(draftData);
     }, delayMs);
   }, [saveDraft]);
@@ -208,7 +209,7 @@ export const useDrafts = () => {
       autoSaveTimerRef.current = null;
     }
 
-    console.log('[useDrafts] 🚨 Sauvegarde immédiate (fermeture)...');
+    logger.debug('[useDrafts] 🚨 Sauvegarde immédiate (fermeture)...');
     return await saveDraft(draftData);
   }, [saveDraft]);
 
@@ -218,7 +219,7 @@ export const useDrafts = () => {
   const deleteDraft = useCallback(async (draftId: string): Promise<boolean> => {
     try {
       const response = await api.delete(`/api/google-auth/gmail/drafts/${draftId}`);
-      console.log('[useDrafts] 🗑️ Réponse suppression:', response);
+      logger.debug('[useDrafts] 🗑️ Réponse suppression:', response);
       
       // Gérer différents formats de réponse
       const success = response?.success || response?.data?.success;
@@ -230,7 +231,7 @@ export const useDrafts = () => {
       }
       return false;
     } catch (error) {
-      console.error('[useDrafts] Erreur lors de la suppression:', error);
+      logger.error('[useDrafts] Erreur lors de la suppression:', error);
       message.error('Erreur lors de la suppression du brouillon');
       return false;
     }
@@ -241,7 +242,7 @@ export const useDrafts = () => {
    */
   const sendEmail = useCallback(async (emailData: CreateDraftData): Promise<boolean> => {
     try {
-      console.log('[useDrafts] 📤 Envoi direct email avec pièces jointes:', emailData.attachments?.length || 0);
+      logger.debug('[useDrafts] 📤 Envoi direct email avec pièces jointes:', emailData.attachments?.length || 0);
       
       // Validation des champs obligatoires
       if (!emailData.to?.trim()) {
@@ -268,7 +269,7 @@ export const useDrafts = () => {
           formData.append(`attachments`, file);
         });
         
-        console.log('[useDrafts] 📎 Envoi avec FormData et', emailData.attachments.length, 'pièces jointes');
+        logger.debug('[useDrafts] 📎 Envoi avec FormData et', emailData.attachments.length, 'pièces jointes');
         
         // Envoyer à l'endpoint d'envoi direct avec pièces jointes
         response = await api.post('/api/google-auth/gmail/send', formData);
@@ -283,11 +284,11 @@ export const useDrafts = () => {
           bcc: emailData.bcc
         };
         
-        console.log('[useDrafts] 📧 Envoi JSON sans pièces jointes');
+        logger.debug('[useDrafts] 📧 Envoi JSON sans pièces jointes');
         response = await api.post('/api/google-auth/gmail/send', jsonData);
       }
       
-      console.log('[useDrafts] 📤 Réponse envoi direct:', response);
+      logger.debug('[useDrafts] 📤 Réponse envoi direct:', response);
       
       // Gérer différents formats de réponse
       const success = response?.success || response?.data?.success;
@@ -299,7 +300,7 @@ export const useDrafts = () => {
       }
       return false;
     } catch (error) {
-      console.error('[useDrafts] Erreur lors de l\'envoi direct:', error);
+      logger.error('[useDrafts] Erreur lors de l\'envoi direct:', error);
       message.error('Erreur lors de l\'envoi de l\'email');
       return false;
     }
@@ -311,7 +312,7 @@ export const useDrafts = () => {
   const sendDraft = useCallback(async (draftId: string): Promise<boolean> => {
     try {
       const response = await api.post(`/api/google-auth/gmail/drafts/${draftId}/send`);
-      console.log('[useDrafts] 📤 Réponse envoi:', response);
+      logger.debug('[useDrafts] 📤 Réponse envoi:', response);
       
       // Gérer différents formats de réponse
       const success = response?.success || response?.data?.success;
@@ -323,7 +324,7 @@ export const useDrafts = () => {
       }
       return false;
     } catch (error) {
-      console.error('[useDrafts] Erreur lors de l\'envoi:', error);
+      logger.error('[useDrafts] Erreur lors de l\'envoi:', error);
       message.error('Erreur lors de l\'envoi de l\'email');
       return false;
     }

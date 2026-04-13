@@ -13,6 +13,7 @@
 
 import { type PrismaClient } from '@prisma/client';
 import type { DuplicationContext } from '../../registry/repeat-id-registry.js';
+import { logger } from '../../../../../../lib/logger';
 
 /**
  * Options pour le recalcul des valeurs
@@ -137,7 +138,7 @@ export async function recalculateValuesAfterCopy(
         nodeId: node.id,
         error: errorMsg
       });
-      console.error(`Ã¢ÂÅ’ [RECALCULATE] Erreur pour ${node.label || node.id}:`, errorMsg);
+      logger.error(`Ã¢ÂÅ’ [RECALCULATE] Erreur pour ${node.label || node.id}:`, errorMsg);
     }
   }
 

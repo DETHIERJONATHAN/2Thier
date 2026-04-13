@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Tag, Tooltip } from 'antd';
 import { useAuthenticatedApi } from '../../../../../../hooks/useAuthenticatedApi';
 import { NODE_THEMES } from '../../../shared/hierarchyRules';
+import { logger } from '../../../../../../lib/logger';
 
 export type TokenChipProps = {
   token: string;
@@ -41,7 +42,7 @@ const baseTokenKind = (rawToken: string) => {
   const token = normalizeToken(rawToken);
   
   // 🔍 DEBUG pour comprendre la classification
-  // console.log(...) // ✨ Log réduit
+  // logger.debug(...) // ✨ Log réduit
 
   // {
 
@@ -49,7 +50,7 @@ const baseTokenKind = (rawToken: string) => {
   
   // ⚠️ IMPORTANT: Vérifier les formules EN PREMIER, même si elles sont wrappées dans @value.
   if (token.includes('node-formula:')) {
-    // console.log('✅ baseTokenKind: Identifié comme nodeFormula (contient node-formula:)'); // ✨ Log réduit
+    // logger.debug('✅ baseTokenKind: Identifié comme nodeFormula (contient node-formula:)'); // ✨ Log réduit
     return 'nodeFormula' as const;
   }
   
@@ -84,7 +85,7 @@ export const TokenChip: React.FC<TokenChipProps> = ({ token, onRemove, onDoubleC
       try {
         // ⚠️ DEBUG: Log pour identifier le problème des formules
         if (normToken.includes('node-formula:')) {
-          // console.log(...) // ✨ Log réduit
+          // logger.debug(...) // ✨ Log réduit
 
           // {
 
@@ -99,7 +100,7 @@ export const TokenChip: React.FC<TokenChipProps> = ({ token, onRemove, onDoubleC
           
           // ⚠️ PROTECTION: Ne pas traiter les formules comme des nœuds
           if (id.startsWith('node-formula:')) {
-            console.error('🚨 TokenChip ERREUR - Formule traitée comme nœud:', { id, kind, normToken, rawToken: token });
+            logger.error('🚨 TokenChip ERREUR - Formule traitée comme nœud:', { id, kind, normToken, rawToken: token });
             if (!cancelled) { 
               setColor('red'); 
               setLabel('Erreur: Formule orpheline'); 
@@ -134,7 +135,7 @@ export const TokenChip: React.FC<TokenChipProps> = ({ token, onRemove, onDoubleC
         }
         if (kind === 'nodeFormula') {
           const id = normToken.slice('node-formula:'.length);
-          // console.log(...) // ✨ Log réduit
+          // logger.debug(...) // ✨ Log réduit
 
           // {
             // token,
@@ -149,7 +150,7 @@ export const TokenChip: React.FC<TokenChipProps> = ({ token, onRemove, onDoubleC
           // Vérifier le cache d'abord
           if (formulaMetaCache[`node-formula:${id}`]) {
             const cached = formulaMetaCache[`node-formula:${id}`];
-            // console.log('📋 TokenChip - Cache hit:', cached); // ✨ Log réduit
+            // logger.debug('📋 TokenChip - Cache hit:', cached); // ✨ Log réduit
             if (!cancelled) { 
               setLabel(cached.name);
             }
@@ -158,11 +159,11 @@ export const TokenChip: React.FC<TokenChipProps> = ({ token, onRemove, onDoubleC
           
           // Charger directement depuis l'endpoint des formules réutilisables
           try {
-            // console.log('🌐 TokenChip - Chargement API formule:', id); // ✨ Log réduit
+            // logger.debug('🌐 TokenChip - Chargement API formule:', id); // ✨ Log réduit
             const formulasRes = await api.get('/api/treebranchleaf/reusables/formulas') as { 
               items?: Array<{ id: string; name: string; nodeLabel?: string }> 
             };
-            // console.log(...) // ✨ Log réduit
+            // logger.debug(...) // ✨ Log réduit
 
             // {
               // formulasRes,
@@ -172,21 +173,21 @@ export const TokenChip: React.FC<TokenChipProps> = ({ token, onRemove, onDoubleC
             const formula = formulasRes?.items?.find(f => f.id === id);
             if (formula && !cancelled) {
               const displayName = `${formula.name}${formula.nodeLabel ? ` (${formula.nodeLabel})` : ''}`;
-              // console.log('✅ TokenChip - Formule trouvée:', { formula, displayName }); // ✨ Log réduit
+              // logger.debug('✅ TokenChip - Formule trouvée:', { formula, displayName }); // ✨ Log réduit
               formulaMetaCache[`node-formula:${id}`] = { name: displayName };
               setLabel(displayName);
               setIcon('🧮');
               setColor('purple');
             } else if (!cancelled) {
               const fallbackName = `Formule — ${id.slice(0, 8)}...`;
-              // console.log('⚠️ TokenChip - Formule non trouvée, fallback:', fallbackName); // ✨ Log réduit
+              // logger.debug('⚠️ TokenChip - Formule non trouvée, fallback:', fallbackName); // ✨ Log réduit
               formulaMetaCache[`node-formula:${id}`] = { name: fallbackName };
               setLabel(fallbackName);
               setIcon('🧮');
               setColor('orange');
             }
           } catch {
-            // console.warn(`❌ TokenChip - Erreur lors du chargement de la formule ${id}:`, error); // ✨ Log réduit
+            // logger.warn(`❌ TokenChip - Erreur lors du chargement de la formule ${id}:`, error); // ✨ Log réduit
             if (!cancelled) {
               const fallbackName = `Formule — ${id.slice(0, 8)}...`;
               formulaMetaCache[`node-formula:${id}`] = { name: fallbackName };
@@ -294,7 +295,7 @@ export const TokenChip: React.FC<TokenChipProps> = ({ token, onRemove, onDoubleC
   }, [api, normToken, kind, token]);
   useEffect(() => {
     if (kind === 'nodeFormula') {
-      // console.log(...) // ✨ Log réduit
+      // logger.debug(...) // ✨ Log réduit
 
       // {
         // kind,

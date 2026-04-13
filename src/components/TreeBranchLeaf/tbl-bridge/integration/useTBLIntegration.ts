@@ -11,6 +11,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { TBLBridge, TBLElement, type TreeBranchLeafNode } from '../index';
+import { logger } from '../../../../lib/logger';
 
 interface TBLIntegrationConfig {
   enableAutoGeneration: boolean;      // Génération automatique des codes TBL
@@ -80,7 +81,7 @@ export function useTBLIntegration(config: Partial<TBLIntegrationConfig> = {}): U
   // 🔧 Fonction de log stable
   const log = useCallback((message: string) => {
     if (fullConfig.debugMode) {
-      console.log(`[TBL Integration] ${message}`);
+      logger.debug(`[TBL Integration] ${message}`);
     }
   }, [fullConfig.debugMode]);
 
@@ -363,7 +364,7 @@ export function useTBLIntegration(config: Partial<TBLIntegrationConfig> = {}): U
  * 
  *   // Récupérer le code TBL d'un nœud
  *   const tblCode = tblIntegration.getTBLCode(nodeId);
- *   console.log(`Code TBL: ${tblCode}`); // "62-prix-total"
+ *   logger.debug(`Code TBL: ${tblCode}`); // "62-prix-total"
  * 
  *   return <TreeBranchLeafEditor />;
  * }

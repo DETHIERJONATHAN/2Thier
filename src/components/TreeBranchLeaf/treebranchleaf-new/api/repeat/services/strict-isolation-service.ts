@@ -6,6 +6,7 @@
  */
 
 import { type PrismaClient } from '@prisma/client';
+import { logger } from '../../../../../../lib/logger';
 
 export interface IsolationResult {
   /** Nœuds isolés avec succès */
@@ -105,7 +106,7 @@ export async function enforceStrictIsolation(
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       result.errors.push({ nodeId, error: errorMsg });
-      console.error(`❌ [ISOLATION] Erreur pour ${nodeId}:`, errorMsg);
+      logger.error(`❌ [ISOLATION] Erreur pour ${nodeId}:`, errorMsg);
     }
   }
 

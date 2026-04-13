@@ -45,6 +45,7 @@ import { ContentEditor } from './section-editors/ContentEditor';
 import { CTAEditor } from './section-editors/CTAEditor';
 import { FooterEditor } from './section-editors/FooterEditor';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Option } = Select;
 
@@ -90,7 +91,7 @@ const SortableItem: React.FC<{
   onDuplicate: () => void;
 }> = ({ section, onEdit, onDelete, onToggle, onDuplicate }) => {
   // DEBUG : Vérifier si la prop section change
-  console.log(`🎯 SortableItem render - Section ${section.id}:`, section.name, 'isActive:', section.isActive);
+  logger.debug(`🎯 SortableItem render - Section ${section.id}:`, section.name, 'isActive:', section.isActive);
   
   const {
     attributes,
@@ -208,10 +209,10 @@ export const SectionsManager: React.FC<SectionsManagerProps> = ({ websiteId, sit
   const fetchSections = async () => {
     setLoading(true);
     try {
-      console.log('📡 Fetching sections for websiteId:', websiteId);
+      logger.debug('📡 Fetching sections for websiteId:', websiteId);
       const response = await api.get(`/api/website-sections/${websiteId}`);
-      console.log('📦 Sections reçues:', response);
-      console.log('📋 Détail section 2 (Hero):', response.find((s: Section) => s.id === 2));
+      logger.debug('📦 Sections reçues:', response);
+      logger.debug('📋 Détail section 2 (Hero):', response.find((s: Section) => s.id === 2));
       
       // FORCER une nouvelle référence pour chaque objet section
       const freshSections = Array.isArray(response) 
@@ -221,7 +222,7 @@ export const SectionsManager: React.FC<SectionsManagerProps> = ({ websiteId, sit
       setSections(freshSections);
       setRefreshKey(prev => prev + 1); // FORCER le re-render complet
     } catch (error) {
-      console.error('❌ Erreur chargement sections:', error);
+      logger.error('❌ Erreur chargement sections:', error);
       message.error('Erreur lors du chargement des sections');
     } finally {
       setLoading(false);
@@ -244,7 +245,7 @@ export const SectionsManager: React.FC<SectionsManagerProps> = ({ websiteId, sit
         });
         message.success('Ordre mis à jour');
       } catch (error) {
-        console.error('Erreur réorganisation:', error);
+        logger.error('Erreur réorganisation:', error);
         message.error('Erreur lors de la réorganisation');
         fetchSections();
       }
@@ -268,7 +269,7 @@ export const SectionsManager: React.FC<SectionsManagerProps> = ({ websiteId, sit
       message.success('Section supprimée');
       fetchSections();
     } catch (error) {
-      console.error('Erreur suppression:', error);
+      logger.error('Erreur suppression:', error);
       message.error('Erreur lors de la suppression');
     }
   };
@@ -276,7 +277,7 @@ export const SectionsManager: React.FC<SectionsManagerProps> = ({ websiteId, sit
   const handleToggle = async (section: Section) => {
     try {
       const newIsActive = !section.isActive;
-      console.log('🔄 Toggle section:', section.id, 'isActive:', section.isActive, '→', newIsActive);
+      logger.debug('🔄 Toggle section:', section.id, 'isActive:', section.isActive, '→', newIsActive);
       
       // 1. UPDATE OPTIMISTE IMMÉDIAT (UI se met à jour instantanément)
       setSections(prevSections => 
@@ -291,15 +292,15 @@ export const SectionsManager: React.FC<SectionsManagerProps> = ({ websiteId, sit
       const response = await api.put(`/api/website-sections/${section.id}`, {
         isActive: newIsActive
       });
-      console.log('✅ Réponse API:', response);
+      logger.debug('✅ Réponse API:', response);
       
       // 3. Recharger pour synchroniser (au cas où)
       await fetchSections();
-      console.log('✅ Sections rechargées');
+      logger.debug('✅ Sections rechargées');
       
       message.success(`Section ${newIsActive ? 'activée' : 'désactivée'}`);
     } catch (error) {
-      console.error('❌ Erreur toggle:', error);
+      logger.error('❌ Erreur toggle:', error);
       // En cas d'erreur, recharger pour annuler l'optimistic update
       fetchSections();
       message.error('Erreur lors de la modification');
@@ -312,7 +313,7 @@ export const SectionsManager: React.FC<SectionsManagerProps> = ({ websiteId, sit
       message.success('Section dupliquée');
       fetchSections();
     } catch (error) {
-      console.error('Erreur duplication:', error);
+      logger.error('Erreur duplication:', error);
       message.error('Erreur lors de la duplication');
     }
   };
@@ -348,7 +349,7 @@ export const SectionsManager: React.FC<SectionsManagerProps> = ({ websiteId, sit
       }
       setModalVisible(false);
     } catch (error) {
-      console.error('Erreur sauvegarde:', error);
+      logger.error('Erreur sauvegarde:', error);
       message.error('Erreur lors de la sauvegarde');
       // En cas d'erreur, recharger pour être sûr
       fetchSections();

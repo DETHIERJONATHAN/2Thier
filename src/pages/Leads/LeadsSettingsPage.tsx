@@ -39,6 +39,7 @@ import { LeadStatus } from '../../types/leads';
 import SortableCallStatus from '../../components/SortableCallStatus';
 import SortableLeadStatus from '../../components/SortableLeadStatus';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -99,7 +100,7 @@ interface LeadMapping {
  */
 const LeadsSettingsPage = () => {
   const { t } = useTranslation();
-  console.log('[LeadsSettingsPage] 🚀 Composant chargé');
+  logger.debug('[LeadsSettingsPage] 🚀 Composant chargé');
   const { api } = useAuthenticatedApi();
   
   // États pour les statuts
@@ -155,7 +156,7 @@ const LeadsSettingsPage = () => {
         api.get('/api/settings/email-templates').catch(() => [])
       ]);
       
-      console.log('📊 Données chargées:', { 
+      logger.debug('📊 Données chargées:', { 
         statuses: statusesRes?.length || 0, 
         callStatuses: callStatusesRes?.length || 0,
         mappings: mappingsRes?.length || 0 // ✨ Log des mappings
@@ -181,7 +182,7 @@ const LeadsSettingsPage = () => {
     } catch (error) {
       const errorMessage = getErrorMessage(error, 'Erreur lors du chargement des paramètres');
       const errorDetails = getErrorResponseDetails(error);
-      console.error('Erreur lors du chargement des paramètres:', {
+      logger.error('Erreur lors du chargement des paramètres:', {
         error,
         status: errorDetails.status,
         data: errorDetails.data,
@@ -210,7 +211,7 @@ const LeadsSettingsPage = () => {
     } catch (error) {
       const errorMessage = getErrorMessage(error, 'Erreur lors de la sauvegarde du statut');
       const errorDetails = getErrorResponseDetails(error);
-      console.error('Erreur lors de la sauvegarde du statut:', {
+      logger.error('Erreur lors de la sauvegarde du statut:', {
         error,
         status: errorDetails.status,
         data: errorDetails.data,
@@ -227,7 +228,7 @@ const LeadsSettingsPage = () => {
     } catch (error) {
       const errorMessage = getErrorMessage(error, 'Erreur lors de la suppression du statut');
       const errorDetails = getErrorResponseDetails(error);
-      console.error('Erreur lors de la suppression du statut:', {
+      logger.error('Erreur lors de la suppression du statut:', {
         error,
         status: errorDetails.status,
         data: errorDetails.data,
@@ -269,7 +270,7 @@ const LeadsSettingsPage = () => {
     } catch (error) {
       const errorMessage = getErrorMessage(error, 'Erreur lors de la sauvegarde du statut d\'appel');
       const errorDetails = getErrorResponseDetails(error);
-      console.error('Erreur lors de la sauvegarde du statut d\'appel:', {
+      logger.error('Erreur lors de la sauvegarde du statut d\'appel:', {
         error,
         status: errorDetails.status,
         data: errorDetails.data,
@@ -290,7 +291,7 @@ const LeadsSettingsPage = () => {
     } catch (error) {
       const errorMessage = getErrorMessage(error, 'Erreur lors de la suppression du statut d\'appel');
       const errorDetails = getErrorResponseDetails(error);
-      console.error('Erreur lors de la suppression du statut d\'appel:', {
+      logger.error('Erreur lors de la suppression du statut d\'appel:', {
         error,
         status: errorDetails.status,
         data: errorDetails.data,
@@ -301,7 +302,7 @@ const LeadsSettingsPage = () => {
 
   const handleUpdateMapping = async (callStatusId: string, leadStatusId: string) => {
     try {
-      console.log('🔗 Création du mapping:', { callStatusId, leadStatusId });
+      logger.debug('🔗 Création du mapping:', { callStatusId, leadStatusId });
       
       // Créer ou mettre à jour le mapping via l'API
       const response = await api.post('/api/settings/call-lead-mappings', {
@@ -310,7 +311,7 @@ const LeadsSettingsPage = () => {
         priority: 1
       });
       
-      console.log('✅ Mapping créé/mis à jour:', response);
+      logger.debug('✅ Mapping créé/mis à jour:', response);
       
       // Recharger les mappings pour mettre à jour l'affichage
       await fetchAllData();
@@ -322,7 +323,7 @@ const LeadsSettingsPage = () => {
       });
       
     } catch (error) {
-      console.error('❌ Erreur lors de la création du mapping:', error);
+      logger.error('❌ Erreur lors de la création du mapping:', error);
       notification.error({
         message: 'Erreur',
         description: 'Impossible de créer la liaison',
@@ -333,7 +334,7 @@ const LeadsSettingsPage = () => {
 
   // 🎯 Gestion de la réorganisation des statuts de leads
   const moveLeadStatus = useCallback(async (dragIndex: number, hoverIndex: number) => {
-    console.log('🚀 [MOVE] moveLeadStatus appelé:', { dragIndex, hoverIndex, statusesLength: statuses.length });
+    logger.debug('🚀 [MOVE] moveLeadStatus appelé:', { dragIndex, hoverIndex, statusesLength: statuses.length });
     
     // Mise à jour immédiate pour le feedback visuel (pas de sauvegarde)
     const draggedStatus = statuses[dragIndex];
@@ -341,13 +342,13 @@ const LeadsSettingsPage = () => {
     newStatuses.splice(dragIndex, 1);
     newStatuses.splice(hoverIndex, 0, draggedStatus);
     
-    console.log('📋 [MOVE] Nouvel ordre:', newStatuses.map(s => ({ id: s.id, name: s.name })));
+    logger.debug('📋 [MOVE] Nouvel ordre:', newStatuses.map(s => ({ id: s.id, name: s.name })));
     setStatuses(newStatuses);
   }, [statuses]);
 
   // 🎯 Sauvegarde de l'ordre des statuts de leads
   const saveLeadStatusOrder = useCallback(async () => {
-    console.log('🎯 [SAVE] saveLeadStatusOrder appelé avec', statuses.length, 'statuts');
+    logger.debug('🎯 [SAVE] saveLeadStatusOrder appelé avec', statuses.length, 'statuts');
     
     try {
       // Recalculer les ordres
@@ -356,13 +357,13 @@ const LeadsSettingsPage = () => {
         order: index
       }));
 
-      console.log('[REORDER] Sauvegarde statuts leads:', updatedStatuses.map(s => ({ id: s.id, name: s.name, order: s.order })));
+      logger.debug('[REORDER] Sauvegarde statuts leads:', updatedStatuses.map(s => ({ id: s.id, name: s.name, order: s.order })));
 
       // Sauvegarder en base
       const dataToSend = {
         statuses: updatedStatuses.map(s => ({ id: s.id, order: s.order }))
       };
-      console.log('[REORDER] 📤 ENVOI vers API:', JSON.stringify(dataToSend, null, 2));
+      logger.debug('[REORDER] 📤 ENVOI vers API:', JSON.stringify(dataToSend, null, 2));
       
       await api.put('/api/settings/lead-statuses/reorder', dataToSend);
 
@@ -371,7 +372,7 @@ const LeadsSettingsPage = () => {
       
       // Vérifier que l'ordre local est correct
       const sortedOrder = updatedStatuses.map(s => ({ id: s.id, name: s.name, order: s.order }));
-      console.log('[REORDER] 📥 ORDRE LOCAL FINAL:', sortedOrder);
+      logger.debug('[REORDER] 📥 ORDRE LOCAL FINAL:', sortedOrder);
       
       notification.success({
         message: 'Ordre mis à jour',
@@ -380,7 +381,7 @@ const LeadsSettingsPage = () => {
       });
 
     } catch (error) {
-      console.error('❌ Erreur lors de la sauvegarde des statuts de leads:', error);
+      logger.error('❌ Erreur lors de la sauvegarde des statuts de leads:', error);
       // ❌ Seulement en cas d'erreur, on recharge les données
       fetchAllData();
       notification.error({
@@ -400,7 +401,7 @@ const LeadsSettingsPage = () => {
         order: index
       }));
 
-      console.log('[REORDER] Sauvegarde statuts appels:', updatedCallStatuses.map(s => ({ id: s.id, name: s.name, order: s.order })));
+      logger.debug('[REORDER] Sauvegarde statuts appels:', updatedCallStatuses.map(s => ({ id: s.id, name: s.name, order: s.order })));
 
       // Sauvegarder en base
       await api.put('/api/settings/call-statuses/reorder', {
@@ -417,7 +418,7 @@ const LeadsSettingsPage = () => {
       });
 
     } catch (error) {
-      console.error('❌ Erreur lors de la sauvegarde des statuts d\'appel:', error);
+      logger.error('❌ Erreur lors de la sauvegarde des statuts d\'appel:', error);
       // Recharger les données en cas d'erreur
       fetchAllData();
       notification.error({
@@ -454,7 +455,7 @@ const LeadsSettingsPage = () => {
       });
 
     } catch (error) {
-      console.error('❌ Erreur lors de la réorganisation des statuts d\'appels:', error);
+      logger.error('❌ Erreur lors de la réorganisation des statuts d\'appels:', error);
       // Recharger les données en cas d'erreur
       await fetchAllData();
       notification.error({
@@ -505,7 +506,7 @@ const LeadsSettingsPage = () => {
       setEditingMapping(null);
       mappingForm.resetFields();
     } catch (error) {
-      console.error('Erreur lors de la création du mapping:', error);
+      logger.error('Erreur lors de la création du mapping:', error);
       notification.error({
         message: 'Erreur',
         description: 'Impossible de créer le mapping'
@@ -535,7 +536,7 @@ const LeadsSettingsPage = () => {
         description: 'La liaison a été supprimée avec succès'
       });
     } catch (error) {
-      console.error('Erreur lors de la suppression:', error);
+      logger.error('Erreur lors de la suppression:', error);
       notification.error({
         message: 'Erreur',
         description: 'Impossible de supprimer le mapping'
@@ -560,7 +561,7 @@ const LeadsSettingsPage = () => {
     } catch (error) {
       const errorMessage = getErrorMessage(error, 'Erreur lors de la sauvegarde de la source');
       const errorDetails = getErrorResponseDetails(error);
-      console.error('Erreur lors de la sauvegarde de la source:', {
+      logger.error('Erreur lors de la sauvegarde de la source:', {
         error,
         status: errorDetails.status,
         data: errorDetails.data,
@@ -590,7 +591,7 @@ const LeadsSettingsPage = () => {
     } catch (error) {
       const errorMessage = getErrorMessage(error, 'Erreur lors de la sauvegarde du modèle');
       const errorDetails = getErrorResponseDetails(error);
-      console.error('Erreur lors de la sauvegarde du modèle:', {
+      logger.error('Erreur lors de la sauvegarde du modèle:', {
         error,
         status: errorDetails.status,
         data: errorDetails.data,

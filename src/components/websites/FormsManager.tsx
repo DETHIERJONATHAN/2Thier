@@ -56,6 +56,7 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import QuestionsManagerModal from './QuestionsManager';
 import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Title: _Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -155,7 +156,7 @@ const FormsManager: React.FC<FormsManagerProps> = ({ websiteId }) => {
       const trees = await api.get('/api/treebranchleaf/trees');
       setTblTrees(trees || []);
     } catch (err) {
-      console.error('Erreur chargement arbres TBL:', err);
+      logger.error('Erreur chargement arbres TBL:', err);
       setTblTrees([]);
     }
   }, [api]);
@@ -167,7 +168,7 @@ const FormsManager: React.FC<FormsManagerProps> = ({ websiteId }) => {
       const response = await api.get(`/api/website-forms/by-website/${websiteId}`);
       setForms(response || []);
     } catch (err) {
-      console.error('Erreur chargement formulaires:', err);
+      logger.error('Erreur chargement formulaires:', err);
       // Si pas de formulaires liés, on affiche une liste vide
       setForms([]);
     } finally {
@@ -684,7 +685,7 @@ const StepsManagerModal: React.FC<StepsManagerModalProps> = ({
       const response = await api.get(`/api/website-forms/${websiteForm.id}/steps`);
       setSteps(response || []);
     } catch (error) {
-      console.error('Erreur chargement étapes:', error);
+      logger.error('Erreur chargement étapes:', error);
       setSteps([]);
     } finally {
       setLoading(false);
@@ -973,7 +974,7 @@ const FieldsManagerModal: React.FC<FieldsManagerModalProps> = ({
       const response = await api.get(`/api/website-forms/steps/${step.id}/fields`);
       setFields(response || []);
     } catch (error) {
-      console.error('Erreur chargement champs:', error);
+      logger.error('Erreur chargement champs:', error);
       setFields([]);
     } finally {
       setLoading(false);

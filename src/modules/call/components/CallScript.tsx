@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Alert, Button, Collapse } from 'antd';
 import { BulbOutlined, SyncOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
+import { logger } from '../../../lib/logger';
 
 // Utiliser l'API items (AntD v5)
 
@@ -28,7 +29,7 @@ export const CallScript: React.FC<CallScriptProps> = ({ leadId }) => {
       });
       setScript(response.data.script);
     } catch (error) {
-      console.error('Erreur génération script:', error);
+      logger.error('Erreur génération script:', error);
       setScript(`
 Bonjour [Nom du lead],
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { NotificationManager } from './Notifications';
 import DirectAddLeadModal from './DirectAddLeadModal';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
+import { logger } from '../lib/logger';
 
 interface Lead {
   id: string;
@@ -44,14 +45,14 @@ export default function DirectLeadsList({ organizationId }: DirectLeadsListProps
         suppressErrorLogForStatuses: [404] // 404 toléré si pas encore implémenté
       });
       if (Array.isArray(data)) {
-        console.log('Leads récupérés (API hook)', data.length);
+        logger.debug('Leads récupérés (API hook)', data.length);
         setLeads(data);
       } else if (data === null) {
         // suppress error scenario
         setLeads([]);
       }
     } catch (err: unknown) {
-      console.error('Erreur lors de la récupération des leads:', err);
+      logger.error('Erreur lors de la récupération des leads:', err);
       setError(err.message || 'Erreur lors de la récupération des leads');
       // En cas d'erreur, utiliser des données vides
       setLeads([]);
@@ -93,7 +94,7 @@ export default function DirectLeadsList({ organizationId }: DirectLeadsListProps
   useEffect(() => {
     // Temporaire: Si on n'a pas encore d'endpoint direct pour lister les leads
     if (error && error.includes('404')) {
-      console.log('Utilisation des données simulées pour la démonstration');
+      logger.debug('Utilisation des données simulées pour la démonstration');
       setLeads([
         {
           id: 'direct-lead-1',

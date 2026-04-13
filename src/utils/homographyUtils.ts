@@ -1,3 +1,4 @@
+import { logger } from '../lib/logger';
 /**
  * 🎯 HOMOGRAPHY UTILS - Correction de perspective mathématique
  * 
@@ -60,7 +61,7 @@ export function computeHomography(
   const normalizedSrc = normalizePoints(srcPoints, srcCentroid, srcScale);
   const normalizedDst = normalizePoints(dstPoints, dstCentroid, dstScale);
   
-  console.log('🔧 [Homography] Normalisation:', {
+  logger.debug('🔧 [Homography] Normalisation:', {
     srcCentroid: `(${srcCentroid[0].toFixed(1)}, ${srcCentroid[1].toFixed(1)})`,
     srcScale: srcScale.toFixed(2),
     dstCentroid: `(${dstCentroid[0].toFixed(1)}, ${dstCentroid[1].toFixed(1)})`,
@@ -97,7 +98,7 @@ export function computeHomography(
   // Estimer l'incertitude basée sur la qualité
   const uncertainty = estimateUncertainty(quality, srcPoints);
 
-  console.log(`📐 [Homography] Matrice calculée, qualité: ${quality.toFixed(1)}%, incertitude: ±${uncertainty.toFixed(1)}%`);
+  logger.debug(`📐 [Homography] Matrice calculée, qualité: ${quality.toFixed(1)}%, incertitude: ±${uncertainty.toFixed(1)}%`);
 
   return {
     matrix: H,
@@ -256,7 +257,7 @@ function solveHomographySystem(A: number[][]): Matrix3x3 {
     // Vérifier si la solution est valide
     const xNorm = Math.sqrt(x.reduce((s, v) => s + v * v, 0));
     if (xNorm < EPSILON || !isFinite(xNorm)) {
-      console.warn('⚠️ [Homography] Itération divergente, arrêt');
+      logger.warn('⚠️ [Homography] Itération divergente, arrêt');
       break;
     }
     
@@ -271,7 +272,7 @@ function solveHomographySystem(A: number[][]): Matrix3x3 {
   // Vérifier que la solution est raisonnable
   const hasNaN = normalized.some(v => !isFinite(v));
   if (hasNaN) {
-    console.warn('⚠️ [Homography] Solution invalide (NaN), retour identité');
+    logger.warn('⚠️ [Homography] Solution invalide (NaN), retour identité');
     return [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
   }
   
@@ -292,7 +293,7 @@ function invertMatrix3x3(M: Matrix3x3): Matrix3x3 {
   const det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
   
   if (Math.abs(det) < 1e-10) {
-    console.warn('⚠️ [Homography] Matrice singulière, retour identité');
+    logger.warn('⚠️ [Homography] Matrice singulière, retour identité');
     return [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
   }
   

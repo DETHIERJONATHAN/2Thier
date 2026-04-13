@@ -19,6 +19,7 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import { linkFormulaToAllNodes } from './universal-linking-system';
 import { rewriteJsonReferences, forceSharedRefSuffixes, forceSharedRefSuffixesInJson, type RewriteMaps } from './repeat/utils/universal-reference-rewriter.js';
+import { logger } from '../../../../lib/logger';
 
 // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // Ã°Å¸â€œâ€¹ TYPES ET INTERFACES
@@ -236,7 +237,7 @@ export async function copyFormulaCapacity(
     });
 
     if (!originalFormula) {
-      console.error(`Ã¢ÂÅ’ Formule introuvable avec id: ${cleanFormulaId}`);
+      logger.error(`Ã¢ÂÅ’ Formule introuvable avec id: ${cleanFormulaId}`);
       return {
         newFormulaId: '',
         nodeId: '',
@@ -318,7 +319,7 @@ export async function copyFormulaCapacity(
         typeof t === 'string' && t.includes('shared-ref') && !/-\d+$/.test(t)
       );
       if (unsuffixed.length > 0) {
-        console.error(`Ã¢ÂÅ’ ALERTE: ${unsuffixed.length} shared-refs TOUJOURS non-suffixÃƒÂ©s:`, unsuffixed);
+        logger.error(`Ã¢ÂÅ’ ALERTE: ${unsuffixed.length} shared-refs TOUJOURS non-suffixÃƒÂ©s:`, unsuffixed);
       } else {
       }
     }
@@ -384,7 +385,7 @@ export async function copyFormulaCapacity(
     try {
       await linkFormulaToAllNodes(prisma, newFormulaId, rewrittenTokens);
     } catch (e) {
-      console.error(`Ã¢ÂÅ’ Erreur LIAISON AUTOMATIQUE:`, (e as Error).message);
+      logger.error(`Ã¢ÂÅ’ Erreur LIAISON AUTOMATIQUE:`, (e as Error).message);
     }
     } // end skipLinking guard
 
@@ -397,7 +398,7 @@ export async function copyFormulaCapacity(
       try {
         await addToNodeLinkedField(prisma, finalOwnerNodeId, 'linkedFormulaIds', [newFormulaId]);
       } catch (e) {
-        console.warn(`Erreur MAJ linkedFormulaIds du proprietaire:`, (e as Error).message);
+        logger.warn(`Erreur MAJ linkedFormulaIds du proprietaire:`, (e as Error).message);
       }
     }
 
@@ -417,7 +418,7 @@ export async function copyFormulaCapacity(
           }
         });
       } catch (e) {
-        console.warn(`Erreur lors de la mise a jour des parametres capacite:`, (e as Error).message);
+        logger.warn(`Erreur lors de la mise a jour des parametres capacite:`, (e as Error).message);
       }
     }
 
@@ -435,7 +436,7 @@ export async function copyFormulaCapacity(
     };
 
   } catch (error) {
-    console.error(`Ã¢ÂÅ’ Erreur lors de la copie de la formule:`, error);
+    logger.error(`Ã¢ÂÅ’ Erreur lors de la copie de la formule:`, error);
     return {
       newFormulaId: '',
       nodeId: '',

@@ -6,6 +6,7 @@ import { AuthOrganization } from './organization';
 import { Permission } from './permissions';
 import { ModuleAccess } from './modules';
 import { AuthContext, type AuthContextType } from './AuthContext';
+import { logger } from '../lib/logger';
 
 // Ajouter une déclaration pour Window
 declare global {
@@ -87,7 +88,7 @@ const staticApi = {
         if (retryAfterMs) {
           error.retryAfterMs = retryAfterMs;
         }
-        console.error(`[staticApi] GET ${url} failed with status ${response.status}`, parsedBody ?? rawText);
+        logger.error(`[staticApi] GET ${url} failed with status ${response.status}`, parsedBody ?? rawText);
         throw error;
     }
     const text = await response.text();
@@ -97,14 +98,14 @@ const staticApi = {
         // 🧹 Vérifier si le serveur demande un nettoyage du cache
         // ⚠️ DÉSACTIVÉ COMPLÈTEMENT pour éviter les déconnexions intempestives
         if (data && data.clearCache === true && data.forceReload === true) {
-          console.warn('🧹 [staticApi] Serveur demande nettoyage automatique du cache - IGNORÉ pour éviter les déconnexions');
+          logger.warn('🧹 [staticApi] Serveur demande nettoyage automatique du cache - IGNORÉ pour éviter les déconnexions');
           // NE PAS FAIRE LE NETTOYAGE AUTOMATIQUE
           // Cette logique causait des déconnexions intempestives
         }
         
         return data;
   } catch {
-    console.warn('[staticApi] Response was not valid JSON.', text);
+    logger.warn('[staticApi] Response was not valid JSON.', text);
         return text;
     }
   },
@@ -141,7 +142,7 @@ const staticApi = {
         if (retryAfterMs) {
           error.retryAfterMs = retryAfterMs;
         }
-        console.error(`[staticApi] POST ${url} failed with status ${response.status}`, parsedBody ?? rawText);
+        logger.error(`[staticApi] POST ${url} failed with status ${response.status}`, parsedBody ?? rawText);
         throw error;
     }
     const text = await response.text();
@@ -150,7 +151,7 @@ const staticApi = {
         // Plus besoin de gérer localStorage pour le token car on utilise les cookies
         return data;
   } catch {
-    console.warn('[staticApi] Response was not valid JSON.', text);
+    logger.warn('[staticApi] Response was not valid JSON.', text);
         return text;
     }
   },
@@ -199,7 +200,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     // Cooldown global si le backend a renvoyé un retryAfter important
     if (!opts?.force && window.__authMeCooldownUntil && now < window.__authMeCooldownUntil) {
-      console.warn('[AuthProvider] fetchMe ignoré (cooldown actif jusqu\'à', new Date(window.__authMeCooldownUntil).toISOString(), ')');
+      logger.warn('[AuthProvider] fetchMe ignoré (cooldown actif jusqu\'à', new Date(window.__authMeCooldownUntil).toISOString(), ')');
       return;
     }
     if (window.__authFetchMeInFlight) {
@@ -226,7 +227,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (apiError?.status === 429) {
             const retryAfterMs = apiError.retryAfterMs ?? baseDelay * Math.pow(2, attempt - 1);
             const seconds = Math.round(retryAfterMs / 1000);
-            console.warn(`[AuthProvider] 429 reçu sur /auth/me – tentative ${attempt}/${maxAttempts}, attente ${retryAfterMs}ms (≈${seconds}s)`);
+            logger.warn(`[AuthProvider] 429 reçu sur /auth/me – tentative ${attempt}/${maxAttempts}, attente ${retryAfterMs}ms (≈${seconds}s)`);
             if (apiError.retryAfterMs && apiError.retryAfterMs > 30_000) {
               // Cooldown long -> inutile de retenter immédiatement
               throw err;
@@ -238,7 +239,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
       if (!res) throw new Error('Impossible de récupérer /auth/me après retries');
-      console.log('[AuthProvider] /auth/me response:', res);
+      logger.debug('[AuthProvider] /auth/me response:', res);
       if (res && res.currentUser) {
         const { currentUser, originalUser: impersonator } = res;
         setUser(currentUser);
@@ -256,11 +257,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (orgsResponse && orgsResponse.success) {
               setOrganizations(orgsResponse.data);
             } else {
-              console.error("[AuthProvider] Échec de la récupération des organisations pour le super-admin.");
+              logger.error("[AuthProvider] Échec de la récupération des organisations pour le super-admin.");
               setOrganizations(currentUser.organizations || []); // Fallback
             }
           } catch (error) {
-            console.error("[AuthProvider] Erreur lors de la récupération des organisations pour le super-admin:", error);
+            logger.error("[AuthProvider] Erreur lors de la récupération des organisations pour le super-admin:", error);
             setOrganizations(currentUser.organizations || []); // Fallback
           }
         } else {
@@ -286,7 +287,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (storedOrgId && storedOrgId !== 'all') {
             const foundOrg = activeOrgs.find((o: { id: string; }) => o.id === storedOrgId);
             if (foundOrg) {
-              console.log('[AuthProvider] Organisation restaurée depuis localStorage:', foundOrg.name);
+              logger.debug('[AuthProvider] Organisation restaurée depuis localStorage:', foundOrg.name);
               orgToSet = { ...foundOrg, role: 'super_admin', permissions: currentUser.permissions || [] };
             }
           }
@@ -303,7 +304,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             );
             
             if (preferredOrg) {
-              console.log('[AuthProvider] Organisation préférée sélectionnée:', preferredOrg.name);
+              logger.debug('[AuthProvider] Organisation préférée sélectionnée:', preferredOrg.name);
               orgToSet = { ...preferredOrg, role: 'super_admin', permissions: currentUser.permissions || [] };
             } else {
               // Fallback: prendre la première organisation ACTIVE de la liste
@@ -368,9 +369,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const now = Date.now();
           // Cooldown anti-boucle (évite tentatives répétées)
           if (window.__googleAutoConnectCooldownUntil && now < window.__googleAutoConnectCooldownUntil) {
-            console.log('[AuthProvider] ⏳ Auto-Google cooldown actif – tentative ignorée');
+            logger.debug('[AuthProvider] ⏳ Auto-Google cooldown actif – tentative ignorée');
           } else if (window.__googleAutoConnectInFlight) {
-            console.log('[AuthProvider] 🔄 Connexion Google auto déjà en cours – ignoré');
+            logger.debug('[AuthProvider] 🔄 Connexion Google auto déjà en cours – ignoré');
           } else {
             // PREMIÈRE VÉRIFICATION : Sommes-nous sur une page de callback Google avec erreur ?
             const currentUrl = window.location.href;
@@ -378,7 +379,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const urlParams = new URLSearchParams(window.location.search);
               const googleError = urlParams.get('google_error');
               if (googleError) {
-                console.warn('[AuthProvider] 🚫 Page de callback Google avec erreur détectée – ARRÊT auto-connect:', googleError);
+                logger.warn('[AuthProvider] 🚫 Page de callback Google avec erreur détectée – ARRÊT auto-connect:', googleError);
                 // Définir un cooldown immédiat de 10 minutes pour cette erreur
                 window.__googleAutoConnectCooldownUntil = now + 600_000;
                 return; // STOP - ne pas tenter la connexion auto
@@ -394,7 +395,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   // Si l'org correspond, on évite de relancer l'auto-connect immédiatement
                   const sameOrg = !info.organizationId || info.organizationId === selectedOrg?.id;
                   if (sameOrg) {
-                    console.log('[AuthProvider] ✅ Auth Google juste complétée – on saute l\'auto-connect');
+                    logger.debug('[AuthProvider] ✅ Auth Google juste complétée – on saute l\'auto-connect');
                     // Définir un petit cooldown pour absorber les relances
                     window.__googleAutoConnectCooldownUntil = now + 60_000;
                     // Nettoyer le marqueur pour ne pas bloquer indéfiniment
@@ -413,7 +414,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               if (errorRaw) {
                 const errorInfo = JSON.parse(errorRaw) as { ts?: number; error?: string; organizationId?: string | null };
                 if (errorInfo?.ts && (now - errorInfo.ts) < 600_000) { // 10 minutes de cooldown après erreur
-                  console.warn('[AuthProvider] 🚫 Erreur Google récente détectée – on évite l\'auto-connect:', errorInfo.error);
+                  logger.warn('[AuthProvider] 🚫 Erreur Google récente détectée – on évite l\'auto-connect:', errorInfo.error);
                   // Définir un cooldown prolongé après erreur
                   window.__googleAutoConnectCooldownUntil = now + 600_000;
                   return; // on ne lance pas la connexion auto
@@ -432,12 +433,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
             window.__googleAutoConnectAttemptCount += 1;
             if (window.__googleAutoConnectAttemptCount > 3) {
-              console.warn('[AuthProvider] 🚫 Trop de tentatives auto Google consécutives – pause forcée');
+              logger.warn('[AuthProvider] 🚫 Trop de tentatives auto Google consécutives – pause forcée');
               window.__googleAutoConnectCooldownUntil = now + 900_000; // 15 min
               return;
             }
 
-            console.log('[AuthProvider] 🚀 Tentative de connexion automatique à Google pour:', currentUser.id);
+            logger.debug('[AuthProvider] 🚀 Tentative de connexion automatique à Google pour:', currentUser.id);
             window.__googleAutoConnectInFlight = true;
             
             // On utilise l'endpoint 'connect' qui nous donnera une réponse directe
@@ -445,7 +446,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               userId: currentUser.id,
               organizationId: selectedOrg?.id || undefined
             }).then((response: { needsManualAuth?: boolean; authUrl?: string; isConnected?: boolean } ) => { // réponse typée minimalement
-              console.log('[AuthProvider] ✅ Réponse de /auto-google-auth/connect:', response);
+              logger.debug('[AuthProvider] ✅ Réponse de /auto-google-auth/connect:', response);
               
               // Définir un cooldown en fonction du résultat
               if (response.needsManualAuth) {
@@ -467,12 +468,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const hasRecentError = sessionStorage.getItem('google_auth_error');
                 
                 if (googleError || hasRecentError) {
-                  console.warn('[AuthProvider] 🚫 REDIRECTION BLOQUÉE - Erreur Google détectée, évite la boucle');
+                  logger.warn('[AuthProvider] 🚫 REDIRECTION BLOQUÉE - Erreur Google détectée, évite la boucle');
                   window.__googleAutoConnectCooldownUntil = Date.now() + 600_000; // 10 min
                   return;
                 }
                 
-                console.log('[AuthProvider] 🔐 Redirection vers Google pour autorisation...');
+                logger.debug('[AuthProvider] 🔐 Redirection vers Google pour autorisation...');
                 msgApi.info("Redirection vers Google pour l'autorisation...", 3);
                 window.__googleAutoConnectAttemptCount = 0;
                 // On attend un court instant pour que le message soit visible
@@ -482,16 +483,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   if (!finalCheck && !sessionStorage.getItem('google_auth_error')) {
                     window.location.href = response.authUrl;
                   } else {
-                    console.warn('[AuthProvider] 🚫 REDIRECTION ANNULÉE au dernier moment');
+                    logger.warn('[AuthProvider] 🚫 REDIRECTION ANNULÉE au dernier moment');
                   }
                 }, 2000);
               } else if (response.isConnected) {
-                console.log('[AuthProvider] ✅ Connexion Google déjà active.');
+                logger.debug('[AuthProvider] ✅ Connexion Google déjà active.');
                 window.__googleAutoConnectAttemptCount = 0;
                 // On peut optionnellement rafraîchir l'état si nécessaire
               }
             }).catch((error: unknown) => {
-              console.warn('[AuthProvider] ❌ Erreur lors de la tentative de connexion automatique Google:', error);
+              logger.warn('[AuthProvider] ❌ Erreur lors de la tentative de connexion automatique Google:', error);
               // En cas d'erreur, mettre un cooldown pour éviter le spam
               window.__googleAutoConnectCooldownUntil = Date.now() + 30_000;
             }).finally(() => {
@@ -509,12 +510,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const retryAfterMs = apiError.retryAfterMs ?? 60_000;
         window.__authMeCooldownUntil = Date.now() + retryAfterMs;
         const seconds = Math.round(retryAfterMs / 1000);
-        console.warn(`[AuthProvider] Cooldown activé suite à un 429: ${seconds}s`);
+        logger.warn(`[AuthProvider] Cooldown activé suite à un 429: ${seconds}s`);
         msgApi.warning(`Trop de tentatives. Réessayez dans ${seconds > 60 ? `${Math.ceil(seconds / 60)} minutes` : `${seconds} secondes`}.`, seconds > 60 ? 5 : 3);
         // ✅ IMPORTANT: ne pas déconnecter l'utilisateur sur 429 (limite/anti-spam)
         return;
       }
-      console.error("Erreur fetchMe:", e);
+      logger.error("Erreur fetchMe:", e);
       // ✅ Ne déconnecter que sur une vraie erreur d'auth
       if (apiError?.status === 401 || apiError?.status === 403) {
         setUser(null);
@@ -544,13 +545,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const login = async (email: string, password: string): Promise<unknown> => {
       if (window.__authLoginInFlight) {
-        console.log('[AuthProvider] Login déjà en cours – appel ignoré');
+        logger.debug('[AuthProvider] Login déjà en cours – appel ignoré');
         return;
       }
       window.__authLoginInFlight = true;
       try {
         const loginResponse = await staticApi.post('/auth/login', { email, password });
-        console.log('[AuthProvider] ✅ Login réussi, réponse:', loginResponse);
+        logger.debug('[AuthProvider] ✅ Login réussi, réponse:', loginResponse);
         
         // 🔐 Utiliser DIRECTEMENT les données du login pour initialiser l'état
         // Cela rend le login indépendant du cookie (robuste en Codespaces)
@@ -571,14 +572,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             localStorage.setItem('organizationId', activeOrg.id);
           }
           setLoading(false);
-          console.log('[AuthProvider] ✅ État utilisateur initialisé depuis la réponse du login');
+          logger.debug('[AuthProvider] ✅ État utilisateur initialisé depuis la réponse du login');
         }
         
         // Rafraîchir en arrière-plan via fetchMe pour récupérer les données complètes
         // (toutes les organisations pour super-admin, modules, etc.)
         // Ne bloque PAS le login si le cookie ne fonctionne pas
         fetchMe({ force: true }).catch((err: unknown) => {
-          console.warn('[AuthProvider] ⚠️ fetchMe après login a échoué (données du login utilisées en fallback):', (err as Error)?.message);
+          logger.warn('[AuthProvider] ⚠️ fetchMe après login a échoué (données du login utilisées en fallback):', (err as Error)?.message);
         });
         
         return loginResponse;
@@ -618,7 +619,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // Appeler l'API de déconnexion pour nettoyer le cookie côté serveur
       staticApi.post('/logout', {}).catch(err => {
-        console.warn('Erreur lors de la déconnexion côté serveur:', err);
+        logger.warn('Erreur lors de la déconnexion côté serveur:', err);
       });
       
       // Nettoyage des données d'usurpation d'identité si présentes
@@ -640,7 +641,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       delete window.__lastModulesKey;
       delete window.lastModulesFetch;
       
-      console.log('[AuthProvider] Déconnexion effectuée, toutes les données d\'authentification ont été supprimées');
+      logger.debug('[AuthProvider] Déconnexion effectuée, toutes les données d\'authentification ont été supprimées');
     };
 
     const setImpersonation = async (targetUser: AuthUser, organization: AuthOrganization) => {
@@ -649,7 +650,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Plus besoin de gérer le token manuellement, il est dans les cookies httpOnly
           await fetchMe(); // Refresh all data from the new token
       } catch (error) {
-          console.error("Erreur lors de l'usurpation d'identité:", error);
+          logger.error("Erreur lors de l'usurpation d'identité:", error);
       }
     };
 
@@ -662,27 +663,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           logout();
           // Idéalement, il faudrait rafraîchir la session de l'admin original
       } catch (error) {
-          console.error("Erreur lors de l'arrêt de l'usurpation:", error);
+          logger.error("Erreur lors de l'arrêt de l'usurpation:", error);
       }
     };
 
     const selectOrganization = async (organizationId: string | null) => {
       if (user?.role !== 'super_admin') {
-        console.warn("selectOrganization n'est pertinent que pour les Super Admins.");
+        logger.warn("selectOrganization n'est pertinent que pour les Super Admins.");
         // Pour les utilisateurs normaux, le changement se fait via l'API et un refresh complet.
         // On pourrait vouloir garder la logique de post ici si nécessaire.
         try {
           await staticApi.post('/users/me/current-organization', { organizationId });
           await fetchMe();
         } catch (error) {
-          console.error("Erreur lors du changement d'organisation pour un utilisateur standard:", error);
+          logger.error("Erreur lors du changement d'organisation pour un utilisateur standard:", error);
         }
         return;
 
   }
 
       // Logique simplifiée pour le Super Admin
-      console.log(`[AuthProvider] SuperAdmin change d'organisation vers : ${organizationId}`);
+      logger.debug(`[AuthProvider] SuperAdmin change d'organisation vers : ${organizationId}`);
       
       if (organizationId === 'all' || organizationId === null) {
         const globalOrg: AuthOrganization = {
@@ -705,7 +706,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
           localStorage.setItem('organizationId', organizationId);
         } else {
-          console.error(`[AuthProvider] Tentative de sélection d'une organisation non trouvée: ${organizationId}`);
+          logger.error(`[AuthProvider] Tentative de sélection d'une organisation non trouvée: ${organizationId}`);
           // Fallback vers la vue globale en cas d'erreur
           const globalOrg: AuthOrganization = {
             id: 'all',
@@ -725,7 +726,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Pas besoin de `fetchMe()` qui recharge tout lourdement.
       // Si le backend a besoin de connaître la dernière organisation consultée, on peut ajouter :
       staticApi.post('/users/me/current-organization', { organizationId }).catch(error => {
-        console.warn("Échec de la synchronisation de l'organisation avec le backend:", error);
+        logger.warn("Échec de la synchronisation de l'organisation avec le backend:", error);
       });
     };
 
@@ -735,7 +736,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (user?.role === 'super_admin' || originalUser?.role === 'super_admin') {
         if (!loggedPermsRef.current.has(permission)) {
           loggedPermsRef.current.add(permission);
-          console.log('[AuthProvider] 👑 SuperAdmin (once) permission auto:', permission);
+          logger.debug('[AuthProvider] 👑 SuperAdmin (once) permission auto:', permission);
         }
         return true;
       }
@@ -752,20 +753,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Premier fetch au montage uniquement - avec protection single-flight
       if (window.__authFetchMeInFlight) {
-        console.log('[AuthProvider] 🛡️ fetchMe déjà en cours au montage, ignoré');
+        logger.debug('[AuthProvider] 🛡️ fetchMe déjà en cours au montage, ignoré');
         return;
       }
       
-      console.log('[AuthProvider] 🚀 Premier fetch au montage');
+      logger.debug('[AuthProvider] 🚀 Premier fetch au montage');
       fetchMe({ force: true }).catch((error) => {
-        console.log('[AuthProvider] Aucune session existante trouvée au démarrage:', error);
+        logger.debug('[AuthProvider] Aucune session existante trouvée au démarrage:', error);
         setLoading(false);
         window.__authFetchMeInFlight = false;
       });
       
       // Cleanup pour éviter les fuites
       return () => {
-        console.log('[AuthProvider] 🧹 Cleanup effect fetchMe');
+        logger.debug('[AuthProvider] 🧹 Cleanup effect fetchMe');
       };
     }, [fetchMe]);
 
@@ -777,7 +778,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Protection absolue contre les boucles - vérifier les flags globaux
       const now = Date.now();
       if (!force && window.lastModulesFetch && (now - window.lastModulesFetch) < 3000) {
-        console.log('[AuthProvider] 🛡️ Protection anti-boucle: appel ignoré (< 3s)');
+        logger.debug('[AuthProvider] 🛡️ Protection anti-boucle: appel ignoré (< 3s)');
         return true;
       }
       window.lastModulesFetch = now;
@@ -813,11 +814,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           feature: module.feature || module.key || module.name
         }));
         
-        console.log('[AuthProvider] ✅ Modules actifs chargés:', mappedModules.length);
+        logger.debug('[AuthProvider] ✅ Modules actifs chargés:', mappedModules.length);
         setModules(mappedModules);
         return true;
       } catch (error) {
-        console.error("Erreur lors de la récupération des modules:", error);
+        logger.error("Erreur lors de la récupération des modules:", error);
         setModules([]);
         return false;
       }
@@ -828,7 +829,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const cacheKey = `${user?.id || 'no-user'}-${currentOrganization?.id || 'no-org'}-${isSuperAdmin}`;
 
       if (!user?.id || !currentOrganization?.id || !fetchModulesRef.current) {
-        console.log('[AuthProvider] ⏸️ Pas de user/org pour charger les modules');
+        logger.debug('[AuthProvider] ⏸️ Pas de user/org pour charger les modules');
         return;
       }
 
@@ -836,14 +837,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const lastKeyMatches = window.__lastModulesKey === cacheKey;
 
       if (modulesLoaded && lastKeyMatches) {
-        console.log('[AuthProvider] 🛡️ Modules déjà chargés pour cette combinaison, ignoré');
+        logger.debug('[AuthProvider] 🛡️ Modules déjà chargés pour cette combinaison, ignoré');
         return;
       }
 
       let isCancelled = false;
       const forceFetch = !modulesLoaded;
 
-      console.log('[AuthProvider] 📦 Chargement modules pour:', cacheKey, forceFetch ? '(force initial)' : '(rafraîchissement)');
+      logger.debug('[AuthProvider] 📦 Chargement modules pour:', cacheKey, forceFetch ? '(force initial)' : '(rafraîchissement)');
       fetchModulesRef.current(forceFetch).then(success => {
         if (isCancelled) return;
         if (success) {
@@ -877,7 +878,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // 🔄 Écouter les événements de mise à jour des modules
     useEffect(() => {
       const handleModulesUpdated = (event: CustomEvent) => {
-        console.log('[AuthProvider] 🔄 Événement modulesUpdated reçu:', event.detail);
+        logger.debug('[AuthProvider] 🔄 Événement modulesUpdated reçu:', event.detail);
         refreshModules();
       };
 

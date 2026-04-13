@@ -1,3 +1,4 @@
+import { logger } from '../lib/logger';
 // Utilitaires centralisés de debug (activation: localStorage.DEBUG_VERBOSE = "1")
 export const isVerbose = (): boolean => {
   try {
@@ -10,13 +11,13 @@ export const isVerbose = (): boolean => {
 // Log contrôlé
 export const dlog = (...args: unknown[]) => {
   if (isVerbose()) {
-    console.log('[VERBOSE]', ...args);
+    logger.debug('[VERBOSE]', ...args);
   }
 };
 
-// Warn contrôlé (toujours affiché si verbose, sinon passe à travers console.warn standard)
+// Warn contrôlé (toujours affiché si verbose, sinon passe à travers logger.warn standard)
 export const dwarn = (...args: unknown[]) => {
   if (isVerbose()) {
-    console.warn('[VERBOSE]', ...args);
+    logger.warn('[VERBOSE]', ...args);
   }
 };

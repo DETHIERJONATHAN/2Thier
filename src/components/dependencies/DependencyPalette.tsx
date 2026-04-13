@@ -1,5 +1,6 @@
 import { useCallback, memo } from 'react';
 import { DependencyAction } from '../../utils/dependencyFunctions';
+import { logger } from '../../lib/logger';
 
 // Liste des actions de dépendance disponibles
 const DEPENDENCY_ACTIONS = [
@@ -144,11 +145,11 @@ interface DependencyPaletteProps {
 const DependencyPalette = memo(({ fieldId, onAddDependency }: DependencyPaletteProps) => {
     const handleAddDependency = useCallback((dependencyType: string) => {
         if (!fieldId) {
-            console.error(`[DependencyPalette] ❌ Impossible d'ajouter la dépendance: fieldId manquant`);
+            logger.error(`[DependencyPalette] ❌ Impossible d'ajouter la dépendance: fieldId manquant`);
             return;
         }
         
-        console.log(`[DependencyPalette] ➕ Ajout de la dépendance "${dependencyType}" pour le champ ${fieldId}`);
+        logger.debug(`[DependencyPalette] ➕ Ajout de la dépendance "${dependencyType}" pour le champ ${fieldId}`);
         
         // Si un callback est fourni, l'utiliser
         if (onAddDependency) {
@@ -180,7 +181,7 @@ const DependencyPalette = memo(({ fieldId, onAddDependency }: DependencyPaletteP
                             draggable="true"
                             title={action.label}
                             onDragStart={(e) => {
-                                console.log(`[DEPENDENCY_DRAG] Starting drag for action: ${action.value}`);
+                                logger.debug(`[DEPENDENCY_DRAG] Starting drag for action: ${action.value}`);
                                 const data = {
                                     type: 'dependency-action',
                                     id: action.value,
@@ -216,7 +217,7 @@ const DependencyPalette = memo(({ fieldId, onAddDependency }: DependencyPaletteP
                             draggable="true"
                             title={action.label}
                             onDragStart={(e) => {
-                                console.log(`[DEPENDENCY_DRAG] Starting drag for action: ${action.value}`);
+                                logger.debug(`[DEPENDENCY_DRAG] Starting drag for action: ${action.value}`);
                                 const data = {
                                     type: 'dependency-action',
                                     id: action.value,
@@ -252,7 +253,7 @@ const DependencyPalette = memo(({ fieldId, onAddDependency }: DependencyPaletteP
                             draggable="true"
                             title={action.label}
                             onDragStart={(e) => {
-                                console.log(`[DEPENDENCY_DRAG] Starting drag for action: ${action.value}`);
+                                logger.debug(`[DEPENDENCY_DRAG] Starting drag for action: ${action.value}`);
                                 const data = {
                                     type: 'dependency-action',
                                     id: action.value,
@@ -288,7 +289,7 @@ const DependencyPalette = memo(({ fieldId, onAddDependency }: DependencyPaletteP
                             draggable="true"
                             title={action.label}
                             onDragStart={(e) => {
-                                console.log(`[DEPENDENCY_DRAG] Starting drag for action: ${action.value}`);
+                                logger.debug(`[DEPENDENCY_DRAG] Starting drag for action: ${action.value}`);
                                 const data = {
                                     type: 'dependency-action',
                                     id: action.value,
@@ -324,7 +325,7 @@ const DependencyPalette = memo(({ fieldId, onAddDependency }: DependencyPaletteP
                             draggable="true"
                             title={condition.label}
                             onDragStart={(e) => {
-                                console.log(`[DEPENDENCY_DRAG] Starting drag for condition: ${condition.value}`);
+                                logger.debug(`[DEPENDENCY_DRAG] Starting drag for condition: ${condition.value}`);
                                 const data = {
                                     type: 'dependency-condition',
                                     id: condition.value,
@@ -360,7 +361,7 @@ const DependencyPalette = memo(({ fieldId, onAddDependency }: DependencyPaletteP
                             draggable="true"
                             title={test.label}
                             onDragStart={(e) => {
-                                console.log(`[DEPENDENCY_DRAG] Starting drag for test: ${test.value}`);
+                                logger.debug(`[DEPENDENCY_DRAG] Starting drag for test: ${test.value}`);
                                 const data = {
                                     type: 'dependency-test',
                                     id: test.value,

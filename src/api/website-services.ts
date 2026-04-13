@@ -5,6 +5,7 @@
 
 import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
+import { logger } from '../lib/logger';
 
 const router = Router();
 const prisma = db;
@@ -28,7 +29,7 @@ router.get('/website-services/:websiteId', async (req: Request, res: Response) =
 
     res.json(services);
   } catch (error) {
-    console.error('Error fetching services:', error);
+    logger.error('Error fetching services:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -68,7 +69,7 @@ router.post('/website-services', async (req: Request, res: Response) => {
 
     res.json(service);
   } catch (error) {
-    console.error('Error creating service:', error);
+    logger.error('Error creating service:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -98,7 +99,7 @@ router.put('/website-services/:id', async (req: Request, res: Response) => {
 
     res.json(service);
   } catch (error) {
-    console.error('Error updating service:', error);
+    logger.error('Error updating service:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -117,7 +118,7 @@ router.delete('/website-services/:id', async (req: Request, res: Response) => {
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Error deleting service:', error);
+    logger.error('Error deleting service:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -146,7 +147,7 @@ router.post('/website-services/reorder', async (req: Request, res: Response) => 
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Error reordering services:', error);
+    logger.error('Error reordering services:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

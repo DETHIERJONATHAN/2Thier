@@ -7,6 +7,7 @@
 
 import { useCallback, useMemo, useRef } from 'react';
 import { useAuthenticatedApi } from '@hooks/useAuthenticatedApi';
+import { logger } from '../../../../lib/logger';
 
 interface OptimizedApiHook {
   api: {
@@ -47,7 +48,7 @@ export const useOptimizedApi = (): OptimizedApiHook => {
     if (method === 'get') {
       const cached = cache.current.get(cacheKey);
       if (cached && isValidCache(cached.timestamp)) {
-        // console.log(`📋 useOptimizedApi: Cache hit pour ${url}`); // ✨ Log réduit
+        // logger.debug(`📋 useOptimizedApi: Cache hit pour ${url}`); // ✨ Log réduit
         return cached.data;
       }
     }
@@ -55,12 +56,12 @@ export const useOptimizedApi = (): OptimizedApiHook => {
     // Vérifier si un appel identique est déjà en cours
     const existingCall = pendingCalls.current.get(cacheKey);
     if (existingCall) {
-      // console.log(`⏳ useOptimizedApi: Appel en cours pour ${url}, réutilisation`); // ✨ Log réduit
+      // logger.debug(`⏳ useOptimizedApi: Appel en cours pour ${url}, réutilisation`); // ✨ Log réduit
       return existingCall;
     }
     
     // Créer le nouvel appel
-    // console.log(`🚀 useOptimizedApi: Nouvel appel ${method.toUpperCase()} ${url}`); // ✨ Log réduit
+    // logger.debug(`🚀 useOptimizedApi: Nouvel appel ${method.toUpperCase()} ${url}`); // ✨ Log réduit
     loadingRef.current = true;
     
     const apiCall = (async () => {
@@ -103,11 +104,11 @@ export const useOptimizedApi = (): OptimizedApiHook => {
           }
         }
         
-        // console.log(`✅ useOptimizedApi: Succès ${method.toUpperCase()} ${url}`); // ✨ Log réduit
+        // logger.debug(`✅ useOptimizedApi: Succès ${method.toUpperCase()} ${url}`); // ✨ Log réduit
         return result;
         
       } catch (error) {
-        console.error(`❌ useOptimizedApi: Erreur ${method.toUpperCase()} ${url}`, error);
+        logger.error(`❌ useOptimizedApi: Erreur ${method.toUpperCase()} ${url}`, error);
         throw error;
       } finally {
         // Nettoyer la map des appels en cours
@@ -133,7 +134,7 @@ export const useOptimizedApi = (): OptimizedApiHook => {
   const clearCache = useCallback(() => {
     cache.current.clear();
     pendingCalls.current.clear();
-    // console.log('🗑️ useOptimizedApi: Cache vidé'); // ✨ Log réduit
+    // logger.debug('🗑️ useOptimizedApi: Cache vidé'); // ✨ Log réduit
   }, []);
   
   return {

@@ -86,6 +86,7 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
 import { useTranslation } from 'react-i18next';
 import { SF } from '../../components/zhiive/ZhiiveTheme';
+import { logger } from '../../lib/logger';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -225,7 +226,7 @@ const DraggableCategory: React.FC<{
     accept: ['CATEGORY', 'MODULE'],
     drop: (item: { id: string; type: string; data: CategoryData | ModuleDataV2 }) => {
       // Logique de drop pour réorganisation
-      console.log('📦 Drop sur catégorie:', category.name, 'Item:', item);
+      logger.debug('📦 Drop sur catégorie:', category.name, 'Item:', item);
     },
     collect: (monitor) => ({
       isOver: monitor.isOver(),
@@ -308,7 +309,7 @@ const AdminModulesV2: React.FC = () => {
   const loadCategories = useCallback(async () => {
     try {
       setLoading(true);
-      console.log('[ADMIN-V2] 🔄 Chargement système Category...');
+      logger.debug('[ADMIN-V2] 🔄 Chargement système Category...');
 
       const params = new URLSearchParams();
       if (selectedOrganization?.id) {
@@ -316,20 +317,20 @@ const AdminModulesV2: React.FC = () => {
       }
 
       const response = await api.get(`/api/admin-modules-v2?${params.toString()}`);
-      console.log('[ADMIN-V2] 📨 Réponse API complète:', response);
-      console.log('[ADMIN-V2] 📨 response.success:', response.success);
-      console.log('[ADMIN-V2] 📨 response.data:', response.data);
-      console.log('[ADMIN-V2] 📨 response.data?.categories:', response.data?.categories);
+      logger.debug('[ADMIN-V2] 📨 Réponse API complète:', response);
+      logger.debug('[ADMIN-V2] 📨 response.success:', response.success);
+      logger.debug('[ADMIN-V2] 📨 response.data:', response.data);
+      logger.debug('[ADMIN-V2] 📨 response.data?.categories:', response.data?.categories);
 
       if (response.success && response.data?.categories) {
         setCategories(response.data.categories);
-        console.log('[ADMIN-V2] ✅ Categories chargées:', response.data.categories.length);
+        logger.debug('[ADMIN-V2] ✅ Categories chargées:', response.data.categories.length);
       } else {
-        console.error('[ADMIN-V2] ❌ Réponse API invalide');
+        logger.error('[ADMIN-V2] ❌ Réponse API invalide');
         message.error('Erreur lors du chargement des catégories');
       }
     } catch (error) {
-      console.error('[ADMIN-V2] ❌ Erreur chargement:', error);
+      logger.error('[ADMIN-V2] ❌ Erreur chargement:', error);
       message.error('Erreur de communication avec le serveur');
     } finally {
       setLoading(false);
@@ -343,7 +344,7 @@ const AdminModulesV2: React.FC = () => {
   // 🆕 CRÉATION DE CATÉGORIE
   const handleCreateCategory = async (values: Partial<CategoryData>) => {
     try {
-      console.log('[ADMIN-V2] 🆕 Création catégorie:', values);
+      logger.debug('[ADMIN-V2] 🆕 Création catégorie:', values);
       
       const response = await api.post('/api/admin-modules-v2/categories', {
         ...values,
@@ -359,7 +360,7 @@ const AdminModulesV2: React.FC = () => {
         message.error(response.error || 'Erreur lors de la création');
       }
     } catch (error) {
-      console.error('[ADMIN-V2] ❌ Erreur création catégorie:', error);
+      logger.error('[ADMIN-V2] ❌ Erreur création catégorie:', error);
       message.error('Erreur lors de la création de la catégorie');
     }
   };
@@ -369,7 +370,7 @@ const AdminModulesV2: React.FC = () => {
     if (!editingCategory) return;
 
     try {
-      console.log('[ADMIN-V2] ✏️ Modification catégorie:', editingCategory.id, values);
+      logger.debug('[ADMIN-V2] ✏️ Modification catégorie:', editingCategory.id, values);
       
       const response = await api.put(`/api/admin-modules-v2/categories/${editingCategory.id}`, values);
 
@@ -383,7 +384,7 @@ const AdminModulesV2: React.FC = () => {
         message.error(response.error || 'Erreur lors de la modification');
       }
     } catch (error) {
-      console.error('[ADMIN-V2] ❌ Erreur modification catégorie:', error);
+      logger.error('[ADMIN-V2] ❌ Erreur modification catégorie:', error);
       message.error('Erreur lors de la modification de la catégorie');
     }
   };
@@ -391,7 +392,7 @@ const AdminModulesV2: React.FC = () => {
   // 🗑️ SUPPRESSION DE CATÉGORIE
   const handleDeleteCategory = async (categoryId: string) => {
     try {
-      console.log('[ADMIN-V2] 🗑️ Suppression catégorie:', categoryId);
+      logger.debug('[ADMIN-V2] 🗑️ Suppression catégorie:', categoryId);
       
       const response = await api.delete(`/api/admin-modules-v2/categories/${categoryId}`);
 
@@ -402,7 +403,7 @@ const AdminModulesV2: React.FC = () => {
         message.error(response.error || 'Erreur lors de la suppression');
       }
     } catch (error) {
-      console.error('[ADMIN-V2] ❌ Erreur suppression catégorie:', error);
+      logger.error('[ADMIN-V2] ❌ Erreur suppression catégorie:', error);
       message.error('Erreur lors de la suppression de la catégorie');
     }
   };
@@ -410,7 +411,7 @@ const AdminModulesV2: React.FC = () => {
   // 🆕 CRÉATION DE MODULE
   const handleCreateModule = async (values: Partial<ModuleDataV2>) => {
     try {
-      console.log('[ADMIN-V2] 🆕 Création module:', values);
+      logger.debug('[ADMIN-V2] 🆕 Création module:', values);
       
       const response = await api.post('/api/admin-modules-v2/modules', {
         ...values,
@@ -426,7 +427,7 @@ const AdminModulesV2: React.FC = () => {
         message.error(response.error || 'Erreur lors de la création');
       }
     } catch (error) {
-      console.error('[ADMIN-V2] ❌ Erreur création module:', error);
+      logger.error('[ADMIN-V2] ❌ Erreur création module:', error);
       message.error('Erreur lors de la création du module');
     }
   };
@@ -436,7 +437,7 @@ const AdminModulesV2: React.FC = () => {
     if (!editingModule) return;
 
     try {
-      console.log('[ADMIN-V2] ✏️ Modification module:', editingModule.id, values);
+      logger.debug('[ADMIN-V2] ✏️ Modification module:', editingModule.id, values);
       
       const response = await api.put(`/api/admin-modules-v2/modules/${editingModule.id}`, values);
 
@@ -450,7 +451,7 @@ const AdminModulesV2: React.FC = () => {
         message.error(response.error || 'Erreur lors de la modification');
       }
     } catch (error) {
-      console.error('[ADMIN-V2] ❌ Erreur modification module:', error);
+      logger.error('[ADMIN-V2] ❌ Erreur modification module:', error);
       message.error('Erreur lors de la modification du module');
     }
   };
@@ -458,7 +459,7 @@ const AdminModulesV2: React.FC = () => {
   // 🗑️ SUPPRESSION DE MODULE
   const handleDeleteModule = async (moduleId: string) => {
     try {
-      console.log('[ADMIN-V2] 🗑️ Suppression module:', moduleId);
+      logger.debug('[ADMIN-V2] 🗑️ Suppression module:', moduleId);
       
       const response = await api.delete(`/api/admin-modules-v2/modules/${moduleId}`);
 
@@ -469,7 +470,7 @@ const AdminModulesV2: React.FC = () => {
         message.error(response.error || 'Erreur lors de la suppression');
       }
     } catch (error) {
-      console.error('[ADMIN-V2] ❌ Erreur suppression module:', error);
+      logger.error('[ADMIN-V2] ❌ Erreur suppression module:', error);
       message.error('Erreur lors de la suppression du module');
     }
   };
@@ -482,7 +483,7 @@ const AdminModulesV2: React.FC = () => {
     }
 
     try {
-      console.log('[ADMIN-V2] 🔄 Toggle module status:', { moduleId, organizationId: selectedOrganization.id, active: !currentStatus });
+      logger.debug('[ADMIN-V2] 🔄 Toggle module status:', { moduleId, organizationId: selectedOrganization.id, active: !currentStatus });
       
       const response = await api.post(`/api/admin-modules-v2/modules/${moduleId}/organization/${selectedOrganization.id}/status`, {
         active: !currentStatus
@@ -504,7 +505,7 @@ const AdminModulesV2: React.FC = () => {
         message.error(response.error || 'Erreur lors du changement de statut');
       }
     } catch (error) {
-      console.error('[ADMIN-V2] ❌ Erreur toggle module status:', error);
+      logger.error('[ADMIN-V2] ❌ Erreur toggle module status:', error);
       message.error('Erreur lors du changement de statut du module');
     }
   };
@@ -517,7 +518,7 @@ const AdminModulesV2: React.FC = () => {
     }
 
     try {
-      console.log('[ADMIN-V2] 🔄 Toggle category status:', { categoryId, organizationId: selectedOrganization.id, active: !currentStatus });
+      logger.debug('[ADMIN-V2] 🔄 Toggle category status:', { categoryId, organizationId: selectedOrganization.id, active: !currentStatus });
       
       const response = await api.post(`/api/admin-modules-v2/categories/${categoryId}/organization/${selectedOrganization.id}/status`, {
         active: !currentStatus
@@ -536,7 +537,7 @@ const AdminModulesV2: React.FC = () => {
         message.error(response.error || 'Erreur lors du changement de statut');
       }
     } catch (error) {
-      console.error('[ADMIN-V2] ❌ Erreur toggle category status:', error);
+      logger.error('[ADMIN-V2] ❌ Erreur toggle category status:', error);
       message.error('Erreur lors du changement de statut de la catégorie');
     }
   };
@@ -544,7 +545,7 @@ const AdminModulesV2: React.FC = () => {
   // 🔄 RÉORGANISATION DRAG & DROP
   const handleReorder = async (type: 'categories' | 'modules', items: CategoryData[] | ModuleDataV2[]) => {
     try {
-      console.log('[ADMIN-V2] 🔄 Réorganisation:', type, items.length);
+      logger.debug('[ADMIN-V2] 🔄 Réorganisation:', type, items.length);
       
       const response = await api.post('/api/admin-modules-v2/reorder', {
         type,
@@ -562,7 +563,7 @@ const AdminModulesV2: React.FC = () => {
         message.error(response.error || 'Erreur lors de la réorganisation');
       }
     } catch (error) {
-      console.error('[ADMIN-V2] ❌ Erreur réorganisation:', error);
+      logger.error('[ADMIN-V2] ❌ Erreur réorganisation:', error);
       message.error('Erreur lors de la réorganisation');
     }
   };

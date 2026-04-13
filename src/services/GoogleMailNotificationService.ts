@@ -18,6 +18,7 @@ import { EventEmitter } from 'events';
 import { prisma } from '../lib/prisma';
 
 import { googleOAuthConfig } from '../auth/googleConfig';
+import { logger } from '../lib/logger';
 
 // 🧠 INTERFACE ANALYSE IA EMAIL
 interface EmailAIAnalysis {
@@ -80,7 +81,7 @@ export class GoogleMailNotificationService extends EventEmitter {
       // Récupérer les tokens Google de l'utilisateur
       const googleTokens = await this.getGoogleTokens(userId);
       if (!googleTokens) {
-        console.warn(`⚠️ [GoogleMail] Pas de tokens Google pour: ${userId}`);
+        logger.warn(`⚠️ [GoogleMail] Pas de tokens Google pour: ${userId}`);
         return;
       }
 
@@ -130,7 +131,7 @@ export class GoogleMailNotificationService extends EventEmitter {
       });
 
     } catch (error) {
-      console.error(`❌ [GoogleMail] Erreur surveillance: ${userId}`, error);
+      logger.error(`❌ [GoogleMail] Erreur surveillance: ${userId}`, error);
       throw error;
     }
   }
@@ -170,7 +171,7 @@ export class GoogleMailNotificationService extends EventEmitter {
 
 
     } catch (error) {
-      console.error('❌ [GoogleMail] Erreur traitement IA:', error);
+      logger.error('❌ [GoogleMail] Erreur traitement IA:', error);
     }
   }
 
@@ -197,7 +198,7 @@ Body: ${email.textContent || email.snippet}
       return analysis;
 
     } catch (error) {
-      console.error('❌ [GoogleMail] Erreur analyse IA:', error);
+      logger.error('❌ [GoogleMail] Erreur analyse IA:', error);
       
       // Analyse de fallback
       return {

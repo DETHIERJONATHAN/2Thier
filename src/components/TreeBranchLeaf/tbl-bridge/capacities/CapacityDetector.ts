@@ -1,3 +1,4 @@
+import { logger } from '../../../../lib/logger';
 /**
  * 🧠 DÉTECTEUR INTELLIGENT DES CAPACITÉS TBL - VERSION CORRIGÉE
  * 
@@ -445,15 +446,15 @@ export const getRecommendations = CapacityDetector.getRecommendations;
  * ```typescript
  * // 1. Détecter la capacité d'un nœud
  * const analysis = CapacityDetector.detectCapacity(node);
- * console.log(`Capacité: ${analysis.capacity}, Confiance: ${analysis.confidence}%`);
+ * logger.debug(`Capacité: ${analysis.capacity}, Confiance: ${analysis.confidence}%`);
  * 
  * // 2. Analyser un lot de nœuds
  * const stats = CapacityDetector.analyzeCapacities(nodes);
- * console.log(`${stats.capacities['2']} formules, ${stats.capacities['3']} conditions`);
+ * logger.debug(`${stats.capacities['2']} formules, ${stats.capacities['3']} conditions`);
  * 
  * // 3. Obtenir des recommandations
  * const rec = CapacityDetector.getRecommendations(node);
- * console.log(rec.recommendation);
+ * logger.debug(rec.recommendation);
  * ```
  */
 

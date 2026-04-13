@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ValidationItem } from './types';
+import { logger } from '../../lib/logger';
 
 interface FormulasSelectorProps {
   fieldId: string;
@@ -43,7 +44,7 @@ const FormulasSelector: React.FC<FormulasSelectorProps> = ({ fieldId, onSelectFo
         setFormulas(mockFormulas);
       } catch (err: unknown) {
         setError(err.message || 'Erreur lors du chargement des formules');
-        console.error('Erreur de chargement des formules:', err);
+        logger.error('Erreur de chargement des formules:', err);
       } finally {
         setLoading(false);
       }

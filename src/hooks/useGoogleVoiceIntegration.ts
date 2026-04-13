@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { message } from 'antd';
+import { logger } from '../lib/logger';
 
 export const useGoogleVoiceIntegration = () => {
   const api = useAuthenticatedApi();
@@ -32,7 +33,7 @@ export const useGoogleVoiceIntegration = () => {
       message.success('Appel initié avec succès');
       return response.callRecord;
     } catch (error) {
-      console.error('Erreur lors de l\'appel:', error);
+      logger.error('Erreur lors de l\'appel:', error);
       message.error('Erreur lors de l\'initiation de l\'appel');
       throw error;
     }
@@ -67,7 +68,7 @@ export const useGoogleVoiceIntegration = () => {
       message.success('SMS envoyé avec succès');
       return response.smsMessage;
     } catch (error) {
-      console.error('Erreur lors de l\'envoi SMS:', error);
+      logger.error('Erreur lors de l\'envoi SMS:', error);
       message.error('Erreur lors de l\'envoi du SMS');
       throw error;
     }
@@ -79,7 +80,7 @@ export const useGoogleVoiceIntegration = () => {
       const response = await api.api.get(`/leads/${leadId}/voice-history`);
       return response.activities || [];
     } catch (error) {
-      console.error('Erreur lors de la récupération de l\'historique:', error);
+      logger.error('Erreur lors de la récupération de l\'historique:', error);
       return [];
     }
   }, [api]);
@@ -94,7 +95,7 @@ export const useGoogleVoiceIntegration = () => {
         isConfigured: response.isConfigured
       };
     } catch (error) {
-      console.error('Erreur lors de la récupération du statut Voice:', error);
+      logger.error('Erreur lors de la récupération du statut Voice:', error);
       return {
         hasVoiceNumber: false,
         voiceNumber: null,
@@ -112,7 +113,7 @@ export const useGoogleVoiceIntegration = () => {
         timestamp: new Date().toISOString()
       });
     } catch (error) {
-      console.error('Erreur lors de la finalisation de l\'appel:', error);
+      logger.error('Erreur lors de la finalisation de l\'appel:', error);
     }
   }, [api]);
 
@@ -127,7 +128,7 @@ export const useGoogleVoiceIntegration = () => {
 
       message.success('Notes d\'appel sauvegardées');
     } catch (error) {
-      console.error('Erreur lors de la sauvegarde des notes:', error);
+      logger.error('Erreur lors de la sauvegarde des notes:', error);
       message.error('Erreur lors de la sauvegarde des notes');
     }
   }, [api]);

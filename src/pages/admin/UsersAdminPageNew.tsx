@@ -9,6 +9,7 @@ import UserOrganizationsModal from '../../components/admin/UserOrganizationsModa
 import UserGoogleWorkspaceModal from '../../components/admin/UserGoogleWorkspaceModal';
 import UserTelnyxModal from '../../components/admin/UserTelnyxModal';
 import { User, Role, UserService, Organization } from '../../types';
+import { logger } from '../../lib/logger';
 
 type UiInvitation = {
   id: string;
@@ -343,7 +344,7 @@ const UsersAdminPageNew: React.FC = () => {
       msgApi.success(`Utilisateur ${user.email} supprimé avec succès`);
       await fetchAllData();
     } catch (e: unknown) {
-      console.error('Erreur lors de la suppression:', e);
+      logger.error('Erreur lors de la suppression:', e);
       type AxiosErrorLike = { response?: { data?: { message?: string } } };
       const err = e as AxiosErrorLike;
       msgApi.error(err.response?.data?.message ?? "Erreur lors de la suppression de l'utilisateur");
@@ -387,7 +388,7 @@ const UsersAdminPageNew: React.FC = () => {
         await fetchAllData();
       }
     } catch (e) {
-      console.error('Erreur attach user to org:', e);
+      logger.error('Erreur attach user to org:', e);
       msgApi.error("Impossible d'ajouter l'utilisateur à l'organisation.");
     }
   };

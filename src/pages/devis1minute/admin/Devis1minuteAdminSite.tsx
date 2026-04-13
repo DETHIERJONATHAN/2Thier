@@ -4,6 +4,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ShareAltOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../../lib/logger';
 
 const { Title, Paragraph } = Typography;
 
@@ -26,7 +27,7 @@ export default function Devis1minuteAdminSite() {
       const res = await api.get<{ success: boolean; data: Landing[] }>("/api/landing-pages");
       setRows(res?.data || []);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       message.error("Impossible de charger les landings");
     } finally { setLoading(false); }
   }, [api]);
@@ -84,7 +85,7 @@ export default function Devis1minuteAdminSite() {
         message.success('Créée');
       }
       setOpen(false); load();
-    } catch (e) { console.error(e); message.error('Enregistrement échoué'); }
+    } catch (e) { logger.error(e); message.error('Enregistrement échoué'); }
   };
 
   const columns: ColumnsType<Landing> = useMemo(() => ([

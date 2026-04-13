@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { Form, Input, Button, Typography, Alert, Divider } from 'antd';
 import { MailOutlined, LockOutlined, RocketOutlined, TeamOutlined, SafetyOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
+import { logger } from '../lib/logger';
 
 const { Title, Text } = Typography;
 
@@ -42,7 +43,7 @@ export default function Connexion() {
         navigate('/dashboard');
       }
     } catch (err: unknown) {
-      console.error('[Connexion] Erreur lors du login:', err);
+      logger.error('[Connexion] Erreur lors du login:', err);
       // Détecter l'erreur email non vérifié (403 avec emailNotVerified)
       if (err?.emailNotVerified || err?.status === 403 || (err?.body as unknown)?.emailNotVerified) {
         setEmailNotVerified(true);

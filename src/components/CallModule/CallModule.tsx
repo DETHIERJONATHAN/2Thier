@@ -39,6 +39,7 @@ import { CallNotesForm } from './components/CallNotesForm';
 // 📋 Types
 import type { Lead } from '../../types/leads';
 import type { CallModuleProps } from './types/CallTypes';
+import { logger } from '../../lib/logger';
 
 const { Title, Text } = Typography;
 
@@ -61,7 +62,7 @@ export const CallModule: React.FC<CallModuleProps> = ({
   
   // 🎣 Hooks métier spécialisés
   const callLogic = useCallLogic(leadId, lead, () => {
-    console.log('[CallModule] 🎉 Appel terminé avec succès');
+    logger.debug('[CallModule] 🎉 Appel terminé avec succès');
     // Optionnel: fermer le module après un appel réussi
   });
   
@@ -93,19 +94,19 @@ export const CallModule: React.FC<CallModuleProps> = ({
     const loadLead = async () => {
       try {
         setIsLoading(true);
-        console.log('[CallModule] 📊 Chargement lead:', leadId);
+        logger.debug('[CallModule] 📊 Chargement lead:', leadId);
         
         const response = await api.get<{ success: boolean, data: Lead }>(`/api/leads/${leadId}`);
         
         if (response.success && response.data) {
           setLead(response.data);
-          console.log('[CallModule] ✅ Lead chargé:', response.data.firstName, response.data.lastName);
+          logger.debug('[CallModule] ✅ Lead chargé:', response.data.firstName, response.data.lastName);
         } else {
           throw new Error('Lead non trouvé');
         }
         
       } catch (error: unknown) {
-        console.error('[CallModule] ❌ Erreur chargement lead:', error);
+        logger.error('[CallModule] ❌ Erreur chargement lead:', error);
         const errorMessage = error instanceof Error ? error.message : 'Erreur de chargement';
         setError(errorMessage);
         
@@ -124,13 +125,13 @@ export const CallModule: React.FC<CallModuleProps> = ({
     if (callLogic.callState.status === CALL_STATUSES.MEETING_SCHEDULED) {
       // Force l'affichage du calendrier quand statut = RDV fixé
       if (!googleCalendar.calendarState.isVisible) {
-        console.log('[CallModule] 📅 Affichage automatique du Smart Calendar - RDV fixé');
+        logger.debug('[CallModule] 📅 Affichage automatique du Smart Calendar - RDV fixé');
         googleCalendar.toggleCalendar();
       }
     } else {
       // Cache le calendrier si on change pour un autre statut
       if (googleCalendar.calendarState.isVisible) {
-        console.log('[CallModule] 📅 Masquage automatique du Smart Calendar - Statut changé');
+        logger.debug('[CallModule] 📅 Masquage automatique du Smart Calendar - Statut changé');
         googleCalendar.toggleCalendar();
       }
     }

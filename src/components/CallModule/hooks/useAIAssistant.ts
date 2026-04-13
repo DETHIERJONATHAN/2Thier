@@ -18,6 +18,7 @@ import type {
   GlobalCodeAnalysis,
   CodeBatchItemSummary
 } from '../types/CallTypes';
+import { logger } from '../../../lib/logger';
 
 // Types pour la reconnaissance vocale
 interface SpeechRecognitionEvent extends Event {
@@ -136,7 +137,7 @@ export const useAIAssistant = (
         const data = env?.data ?? env;
         if (!cancelled) leadContextRef.current = data;
       } catch (e) {
-        console.warn('[useAIAssistant] Contexte lead indisponible:', (e as Error).message);
+        logger.warn('[useAIAssistant] Contexte lead indisponible:', (e as Error).message);
         if (!cancelled) leadContextRef.current = null;
       }
     }
@@ -146,7 +147,7 @@ export const useAIAssistant = (
 
   // �💬 Fonction pour générer une réponse IA avec Gemini
   const generateResponse = useCallback(async (userMessage: string): Promise<ChatGenResult> => {
-    console.log('[useAIAssistant] 🚀 Génération réponse Gemini pour:', userMessage);
+    logger.debug('[useAIAssistant] 🚀 Génération réponse Gemini pour:', userMessage);
     
     try {
   setIsAnalyzing(true);
@@ -167,7 +168,7 @@ export const useAIAssistant = (
         analysis: currentAnalysis || undefined
       });
       
-      console.log('[useAIAssistant] 📋 Structure réponse complète:', response);
+      logger.debug('[useAIAssistant] 📋 Structure réponse complète:', response);
       
       // Gérer la structure de réponse de l'API
   const apiEnvelope = response.data || response;
@@ -196,7 +197,7 @@ export const useAIAssistant = (
             }
           }
         } catch (parseError) {
-          console.warn('[useAIAssistant] ⚠️ Erreur parsing JSON Gemini:', parseError);
+          logger.warn('[useAIAssistant] ⚠️ Erreur parsing JSON Gemini:', parseError);
           // Garder la réponse originale si le parsing échoue
         }
       }
@@ -230,7 +231,7 @@ export const useAIAssistant = (
 Mon avis: appelle-le maintenant. L’objectif est de qualifier le besoin, le délai et le budget, puis proposer un RDV si c’est sérieux. Tu peux ouvrir avec: « ${callScript} »`;
         }
 
-        console.log('[useAIAssistant] ✅ Réponse IA reçue mode=', meta.mode, 'endpoint=', meta.endpoint);
+        logger.debug('[useAIAssistant] ✅ Réponse IA reçue mode=', meta.mode, 'endpoint=', meta.endpoint);
         if (apiData.analysis) {
           try { setCodeAnalysis(apiData.analysis as CodeAutoAnalysis); } catch {/* ignore */}
         }
@@ -260,12 +261,12 @@ Mon avis: appelle-le maintenant. L’objectif est de qualifier le besoin, le dé
         setMessages(prev => [...prev, aiMessage]);
   return { aiResponse, meta: meta as Record<string, unknown>, raw: apiData };
       } else {
-        console.warn('[useAIAssistant] ⚠️ Structure réponse inattendue:', apiData);
+        logger.warn('[useAIAssistant] ⚠️ Structure réponse inattendue:', apiData);
         throw new Error('Aucune réponse valide de l\'API Gemini');
       }
       
     } catch (error) {
-      console.error('[useAIAssistant] ❌ Erreur API Gemini:', error);
+      logger.error('[useAIAssistant] ❌ Erreur API Gemini:', error);
       
       // Message d'erreur simple si Gemini n'est pas disponible
       const errorMessage: AIChatMessage = {
@@ -311,16 +312,16 @@ Mon avis: appelle-le maintenant. L’objectif est de qualifier le besoin, le dé
   const clearChat = useCallback((): void => {
     setMessages([]);
     setCurrentAnalysis(null);
-    console.log('[useAIAssistant] Chat vidé');
+    logger.debug('[useAIAssistant] Chat vidé');
   }, []);
 
   // 🎤 Fonction pour démarrer l'écoute vocale
   const startListening = useCallback(() => {
-    console.log('[useAIAssistant] 🎤 Démarrage de l\'écoute vocale...');
+    logger.debug('[useAIAssistant] 🎤 Démarrage de l\'écoute vocale...');
     
     // Vérifier si le navigateur supporte la reconnaissance vocale
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      console.warn('[useAIAssistant] ⚠️ Reconnaissance vocale non supportée');
+      logger.warn('[useAIAssistant] ⚠️ Reconnaissance vocale non supportée');
       
       // Message d'erreur pour l'utilisateur
       const errorMessage: AIChatMessage = {
@@ -358,7 +359,7 @@ Mon avis: appelle-le maintenant. L’objectif est de qualifier le besoin, le dé
       // Quand on reçoit un résultat
       recognition.onresult = (event: SpeechRecognitionEvent) => {
         const transcript = event.results[0][0].transcript;
-        console.log('[useAIAssistant] 🎤 Texte reconnu:', transcript);
+        logger.debug('[useAIAssistant] 🎤 Texte reconnu:', transcript);
         
         // Envoyer automatiquement le message reconnu à l'IA
         if (transcript.trim()) {
@@ -370,7 +371,7 @@ Mon avis: appelle-le maintenant. L’objectif est de qualifier le besoin, le dé
       
       // Gestion des erreurs
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        console.error('[useAIAssistant] ❌ Erreur reconnaissance vocale:', event.error);
+        logger.error('[useAIAssistant] ❌ Erreur reconnaissance vocale:', event.error);
         setIsListening(false);
         
         let errorMsg = "Erreur de reconnaissance vocale.";
@@ -404,12 +405,12 @@ Mon avis: appelle-le maintenant. L’objectif est de qualifier le besoin, le dé
       
       // Quand l'écoute se termine
       recognition.onend = () => {
-        console.log('[useAIAssistant] 🎤 Fin de l\'écoute vocale');
+        logger.debug('[useAIAssistant] 🎤 Fin de l\'écoute vocale');
         setIsListening(false);
       };
       
     } catch (error) {
-      console.error('[useAIAssistant] ❌ Erreur initialisation reconnaissance vocale:', error);
+      logger.error('[useAIAssistant] ❌ Erreur initialisation reconnaissance vocale:', error);
       setIsListening(false);
       
       const errorMessage: AIChatMessage = {
@@ -463,7 +464,7 @@ Mon avis: appelle-le maintenant. L’objectif est de qualifier le besoin, le dé
       ];
       
     } catch (error) {
-      console.error('[useAIAssistant] ❌ Erreur suggestions Gemini:', error);
+      logger.error('[useAIAssistant] ❌ Erreur suggestions Gemini:', error);
       
       return [
         'Écouter activement le prospect',
@@ -484,10 +485,10 @@ Mon avis: appelle-le maintenant. L’objectif est de qualifier le besoin, le dé
     let directOk = true;
     try {
       await api.get('/api/ai/code/analyze', { params: { path: targetPath } });
-      console.log('[useAIAssistant] ✅ Analyse directe OK pour', targetPath);
+      logger.debug('[useAIAssistant] ✅ Analyse directe OK pour', targetPath);
     } catch (err) {
       directOk = false;
-      console.warn('[useAIAssistant] ⚠️ Analyse directe échouée, fallback via chat pour', targetPath, err);
+      logger.warn('[useAIAssistant] ⚠️ Analyse directe échouée, fallback via chat pour', targetPath, err);
     }
     try {
       // Optionnel: récupérer un contexte minimal pour enrichir l'analyse fallback
@@ -522,10 +523,10 @@ Mon avis: appelle-le maintenant. L’objectif est de qualifier le besoin, le dé
     let directOk = true;
     try {
       await api.get('/api/ai/code/feature/analyze', { params: { feature } });
-      console.log('[useAIAssistant] ✅ Analyse feature directe OK pour', feature);
+      logger.debug('[useAIAssistant] ✅ Analyse feature directe OK pour', feature);
     } catch (err) {
       directOk = false;
-      console.warn('[useAIAssistant] ⚠️ Analyse feature directe échouée, fallback via chat pour', feature, err);
+      logger.warn('[useAIAssistant] ⚠️ Analyse feature directe échouée, fallback via chat pour', feature, err);
     }
     try {
       let ctxSummary: unknown = null;
@@ -591,7 +592,7 @@ Mon avis: appelle-le maintenant. L’objectif est de qualifier le besoin, le dé
         topFiles
       });
     } catch (e) {
-      console.warn('[useAIAssistant] analyse workspace quick échouée:', (e as Error).message);
+      logger.warn('[useAIAssistant] analyse workspace quick échouée:', (e as Error).message);
       setGlobalAnalysis(null);
       // Fournir un fallback textuel via chat pour au moins afficher un extrait
       try {

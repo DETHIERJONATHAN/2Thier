@@ -4,6 +4,7 @@ import { Table, Button, Space, Modal, message, Typography, Tag, Tooltip } from '
 import { EditOutlined, DeleteOutlined, PlusOutlined, ExportOutlined, ImportOutlined, EyeOutlined, LockOutlined } from '@ant-design/icons';
 import { useAuth } from '../auth/useAuth';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../lib/logger';
 
 const { Title, Text } = Typography;
 
@@ -140,7 +141,7 @@ const TableauPermissions: React.FC<TableauPermissionsProps> = ({
     }
     
     // Logique de modification
-    console.log('Modification ligne:', record);
+    logger.debug('Modification ligne:', record);
     message.info('Fonction d\'édition à implémenter');
   }, [hasContextualPermission]);
 

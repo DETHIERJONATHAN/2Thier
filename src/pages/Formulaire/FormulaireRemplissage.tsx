@@ -1,5 +1,6 @@
 // Composant de remplissage de formulaire (FormulaireRemplissage) - preview dynamique du formulaire
 import { useState, useEffect } from 'react';
+import { logger } from '../../lib/logger';
 
 // Ajout des types nécessaires qui étaient implicitement dans crmStore ou utilisés
 // Ces types devraient idéalement être importés depuis un fichier de types partagé si disponible
@@ -255,7 +256,7 @@ const FormulaireRemplissage: React.FC<FormulaireRemplissageProps> = ({ formDefin
                             return tokens;
                           }
                         } catch (e) {
-                          console.error("Erreur de parsing de la formule JSON:", e);
+                          logger.error("Erreur de parsing de la formule JSON:", e);
                           return [{ type: 'unknown', value: str }]; // Erreur de parsing
                         }
                         return [{ type: 'unknown', value: str }]; // Fallback si pas un array

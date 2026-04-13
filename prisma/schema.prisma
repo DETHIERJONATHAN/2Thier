@@ -1167,6 +1167,9 @@ model Organization {
 
   // Messenger Quick Replies
   QuickReplyTemplates        QuickReplyTemplate[]
+
+  // Arena — Tournois & Championnats
+  ArenaTournaments           ArenaTournament[]
 }
 
 model OrganizationModuleStatus {
@@ -2378,6 +2381,12 @@ model User {
   TasksCreated                                        MessageTask[]        @relation("TaskCreator")
   QuickReplyTemplates                                 QuickReplyTemplate[] @relation("QuickReplyUser")
 
+  // Arena — Tournois & Championnats
+  ArenaTournamentsCreated                             ArenaTournament[]    @relation("ArenaTournamentCreator")
+  ArenaPlayerEntries                                  ArenaPlayerEntry[]   @relation("ArenaPlayerEntryUser")
+  ArenaTeamMemberships                                ArenaTeamMember[]    @relation("ArenaTeamMemberUser")
+  ArenaScoresSubmitted                                ArenaMatchScore[]    @relation("ArenaScoreSubmitter")
+
   @@index([organizationId, commercialSlug])
 }
 
@@ -3122,6 +3131,15 @@ enum NotificationType {
   FRIEND_REQUEST_ACCEPTED
   // Peppol
   PEPPOL_INVOICE_DELIVERED
+  // Arena — Tournois & Championnats
+  ARENA_TOURNAMENT_CREATED
+  ARENA_TOURNAMENT_STARTED
+  ARENA_TOURNAMENT_COMPLETED
+  ARENA_MATCH_SCHEDULED
+  ARENA_MATCH_SCORE_UPDATED
+  ARENA_ROUND_COMPLETED
+  ARENA_REGISTRATION_CONFIRMED
+  ARENA_REGISTRATION_RECEIVED
 }
 
 enum OperationSource {
@@ -5118,4 +5136,244 @@ model Expense {
   @@index([organizationId, status])
   @@index([organizationId, expenseDate])
   @@index([organizationId, createdAt])
+}
+
+// ═══════════════════════════════════════════════════════
+// ARENA MODULE — Tournois & Championnats multi-sports
+// ═══════════════════════════════════════════════════════
+
+enum ArenaTournamentStatus {
+  DRAFT
+  REGISTRATION_OPEN
+  REGISTRATION_CLOSED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ArenaTournamentFormat {
+  RANDOM_DRAW       // Mêlée / tirage aléatoire (pétanque conviviale)
+  ROUND_ROBIN       // Poules (chaque équipe joue contre toutes les autres)
+  SINGLE_ELIMINATION // Élimination directe
+  DOUBLE_ELIMINATION // Double élimination (2 chances)
+  SWISS             // Système suisse (appariement par niveau)
+  CHAMPIONSHIP      // Championnat / saison complète
+}
+
+enum ArenaTeamType {
+  SOLO         // 1v1
+  DOUBLETTE    // 2v2
+  TRIPLETTE    // 3v3
+  QUADRETTE    // 4v4
+  CUSTOM       // Taille personnalisée
+}
+
+enum ArenaMatchStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  FORFEIT
+}
+
+enum ArenaEntryStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  WITHDRAWN
+}
+
+model ArenaTournament {
+  id               String                  @id @default(cuid())
+  organizationId   String
+  creatorId        String
+  name             String
+  description      String?
+  sport            String                  @default("petanque") // petanque, football, volleyball, tennis, custom...
+  format           ArenaTournamentFormat   @default(RANDOM_DRAW)
+  status           ArenaTournamentStatus   @default(DRAFT)
+  teamType         ArenaTeamType           @default(DOUBLETTE)
+  playersPerTeam   Int                     @default(2)
+  maxTeams         Int?
+  maxPlayers       Int?
+  pointsToWin      Int                     @default(13) // ex: 13 points en pétanque
+  nbRounds         Int                     @default(5)
+  allowMixedTeams  Boolean                 @default(true)  // Doublettes + triplettes dans le même tournoi
+  withCourts       Boolean                 @default(true)   // Assignation de terrains
+  courtsCount      Int?                    // Nombre de terrains disponibles
+  location         String?
+  startsAt         DateTime?
+  endsAt           DateTime?
+  rules            String?                 // Règles spécifiques en texte libre
+  currentRound     Int                     @default(0)
+  isPublic         Boolean                 @default(true)   // Visible par tous ou seulement les membres
+  settings         Json?                   // Config sport-specific (ex: { "allowDraws": true, "tiebreaker": "goal_difference" })
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  Organization     Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  Creator          User                    @relation("ArenaTournamentCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  Rounds           ArenaRound[]
+  Matches          ArenaMatch[]
+  TeamEntries      ArenaTeamEntry[]
+  PlayerEntries    ArenaPlayerEntry[]
+  Courts           ArenaCourt[]
+  Standings        ArenaStanding[]
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([creatorId])
+  @@index([startsAt])
+}
+
+model ArenaRound {
+  id             String          @id @default(cuid())
+  tournamentId   String
+  roundNumber    Int
+  name           String?         // "Tour 1", "Quart de finale", "Demi-finale", "Finale"
+  status         ArenaMatchStatus @default(SCHEDULED)
+  startsAt       DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime        @default(now())
+
+  Tournament     ArenaTournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  Matches        ArenaMatch[]
+
+  @@unique([tournamentId, roundNumber])
+  @@index([tournamentId])
+}
+
+model ArenaMatch {
+  id             String          @id @default(cuid())
+  tournamentId   String
+  roundId        String
+  courtId        String?
+  matchNumber    Int             // Numéro du match dans le tour
+  team1Id        String?         // Peut être null si TBD (bracket)
+  team2Id        String?
+  score1         Int?
+  score2         Int?
+  winnerId       String?         // ID de l'équipe gagnante
+  status         ArenaMatchStatus @default(SCHEDULED)
+  scheduledAt    DateTime?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  notes          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  Tournament     ArenaTournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  Round          ArenaRound      @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  Court          ArenaCourt?     @relation(fields: [courtId], references: [id], onDelete: SetNull)
+  Team1          ArenaTeamEntry? @relation("ArenaMatchTeam1", fields: [team1Id], references: [id], onDelete: SetNull)
+  Team2          ArenaTeamEntry? @relation("ArenaMatchTeam2", fields: [team2Id], references: [id], onDelete: SetNull)
+  Winner         ArenaTeamEntry? @relation("ArenaMatchWinner", fields: [winnerId], references: [id], onDelete: SetNull)
+  Scores         ArenaMatchScore[]
+
+  @@index([tournamentId])
+  @@index([roundId])
+  @@index([courtId])
+  @@index([team1Id])
+  @@index([team2Id])
+}
+
+model ArenaMatchScore {
+  id           String   @id @default(cuid())
+  matchId      String
+  submitterId  String   // Qui a soumis le score
+  score1       Int
+  score2       Int
+  isValidated  Boolean  @default(false) // Validé par l'organisateur
+  createdAt    DateTime @default(now())
+
+  Match        ArenaMatch @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  Submitter    User       @relation("ArenaScoreSubmitter", fields: [submitterId], references: [id], onDelete: Cascade)
+
+  @@index([matchId])
+}
+
+model ArenaTeamEntry {
+  id             String          @id @default(cuid())
+  tournamentId   String
+  name           String
+  captainId      String?         // Référence vers ArenaTeamMember
+  status         ArenaEntryStatus @default(PENDING)
+  seed           Int?            // Position de tête de série
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  Tournament     ArenaTournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  Members        ArenaTeamMember[]
+  MatchesAsTeam1 ArenaMatch[]    @relation("ArenaMatchTeam1")
+  MatchesAsTeam2 ArenaMatch[]    @relation("ArenaMatchTeam2")
+  MatchesWon     ArenaMatch[]    @relation("ArenaMatchWinner")
+  Standing       ArenaStanding?
+
+  @@index([tournamentId])
+  @@index([tournamentId, status])
+}
+
+model ArenaTeamMember {
+  id          String         @id @default(cuid())
+  teamEntryId String
+  userId      String
+  isCaptain   Boolean        @default(false)
+  createdAt   DateTime       @default(now())
+
+  TeamEntry   ArenaTeamEntry @relation(fields: [teamEntryId], references: [id], onDelete: Cascade)
+  User        User           @relation("ArenaTeamMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamEntryId, userId])
+  @@index([userId])
+}
+
+model ArenaPlayerEntry {
+  id             String          @id @default(cuid())
+  tournamentId   String
+  userId         String
+  status         ArenaEntryStatus @default(PENDING)
+  createdAt      DateTime        @default(now())
+
+  Tournament     ArenaTournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  User           User            @relation("ArenaPlayerEntryUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, userId])
+  @@index([tournamentId])
+}
+
+model ArenaCourt {
+  id           String          @id @default(cuid())
+  tournamentId String
+  name         String          // "Terrain 1", "Terrain A"...
+  location     String?
+  isAvailable  Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+
+  Tournament   ArenaTournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  Matches      ArenaMatch[]
+
+  @@unique([tournamentId, name])
+  @@index([tournamentId])
+}
+
+model ArenaStanding {
+  id             String          @id @default(cuid())
+  tournamentId   String
+  teamEntryId    String          @unique  // 1 standing par équipe
+  rank           Int             @default(0)
+  played         Int             @default(0)
+  won            Int             @default(0)
+  drawn          Int             @default(0)
+  lost           Int             @default(0)
+  pointsFor      Int             @default(0)
+  pointsAgainst  Int             @default(0)
+  bonusPoints    Int             @default(0)
+  totalPoints    Int             @default(0) // Calculé: won * pointsPerWin + drawn * pointsPerDraw + bonus
+  updatedAt      DateTime        @updatedAt
+
+  Tournament     ArenaTournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  TeamEntry      ArenaTeamEntry  @relation(fields: [teamEntryId], references: [id], onDelete: Cascade)
+
+  @@index([tournamentId])
+  @@index([tournamentId, totalPoints(sort: Desc)])
 }

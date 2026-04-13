@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { FieldDependency } from "../../store/slices/types";
 import { validateDependency, getAPIHeaders, evaluateDependency } from '../../utils/dependencyValidator';
+import { logger } from '../../lib/logger';
 
 interface DependencyEvaluatorProps {
   dependency: FieldDependency;
@@ -16,7 +17,7 @@ const DependencyEvaluator: React.FC<DependencyEvaluatorProps> = ({ dependency })
   useEffect(() => {
     const fetchFields = async () => {
       try {
-        console.log(`[DependencyEvaluator] 🔍 Récupération des champs pour la dépendance ${dependency.id}`);
+        logger.debug(`[DependencyEvaluator] 🔍 Récupération des champs pour la dépendance ${dependency.id}`);
 
         // Collecter tous les IDs de champs utilisés dans la dépendance
         const fieldIds = new Set<string>();
@@ -36,7 +37,7 @@ const DependencyEvaluator: React.FC<DependencyEvaluatorProps> = ({ dependency })
         
         // Si aucun champ n'est utilisé, on s'arrête là
         if (fieldIds.size === 0) {
-          console.log(`[DependencyEvaluator] ℹ️ Aucun champ utilisé dans la dépendance ${dependency.id}`);
+          logger.debug(`[DependencyEvaluator] ℹ️ Aucun champ utilisé dans la dépendance ${dependency.id}`);
           return;
         }
         
@@ -59,7 +60,7 @@ const DependencyEvaluator: React.FC<DependencyEvaluatorProps> = ({ dependency })
               });
             })
             .catch(error => {
-              console.error(`[DependencyEvaluator] ❌ ${error.message}`);
+              logger.error(`[DependencyEvaluator] ❌ ${error.message}`);
               // Ajouter une entrée minimale pour ce champ
               fieldsData.push({
                 id: fieldId,
@@ -72,7 +73,7 @@ const DependencyEvaluator: React.FC<DependencyEvaluatorProps> = ({ dependency })
         // Attendre que toutes les requêtes soient terminées
         await Promise.all(promises);
         
-        console.log(`[DependencyEvaluator] ✅ ${fieldsData.length} champs récupérés`);
+        logger.debug(`[DependencyEvaluator] ✅ ${fieldsData.length} champs récupérés`);
         setFieldsInfo(fieldsData);
         
         // Initialiser les valeurs de test
@@ -97,7 +98,7 @@ const DependencyEvaluator: React.FC<DependencyEvaluatorProps> = ({ dependency })
         setTestValues(initialTestValues);
         
       } catch (error) {
-        console.error(`[DependencyEvaluator] ❌ Erreur lors de la récupération des champs:`, error);
+        logger.error(`[DependencyEvaluator] ❌ Erreur lors de la récupération des champs:`, error);
       }
     };
 
@@ -115,10 +116,10 @@ const DependencyEvaluator: React.FC<DependencyEvaluatorProps> = ({ dependency })
     setIsEvaluating(true);
     try {
       const evaluationResult = evaluateDependency(dependency, testValues);
-      console.log(`[DependencyEvaluator] 🧪 Résultat de l'évaluation:`, evaluationResult);
+      logger.debug(`[DependencyEvaluator] 🧪 Résultat de l'évaluation:`, evaluationResult);
       setResult(evaluationResult);
     } catch (error) {
-      console.error(`[DependencyEvaluator] ❌ Erreur lors de l'évaluation:`, error);
+      logger.error(`[DependencyEvaluator] ❌ Erreur lors de l'évaluation:`, error);
       setResult({
         result: 'error',
         details: error

@@ -69,6 +69,7 @@ import { useTeams } from '../../hooks/useTeams';
 import type { Chantier, ChantierStatus, Team, Technician } from '../../types/chantier';
 import { useTranslation } from 'react-i18next';
 import { SF } from '../../components/zhiive/ZhiiveTheme';
+import { logger } from '../../lib/logger';
 
 // ─── Configuration MultiBackend ───
 const HTML5toTouch = {
@@ -944,7 +945,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
           setAllowedTargets(response.data);
         }
       } catch (err) {
-        console.warn('[Kanban] Impossible de charger les transitions autorisées:', err);
+        logger.warn('[Kanban] Impossible de charger les transitions autorisées:', err);
         // En cas d'erreur, on garde tout ouvert (backward compatible)
       }
     };

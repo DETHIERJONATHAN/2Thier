@@ -29,6 +29,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -91,7 +92,7 @@ const GoogleTokenMonitor: React.FC<GoogleTokenMonitorProps> = ({ organizationId 
 
       window.location.href = authUrl;
     } catch (error) {
-      console.error('[GoogleTokenMonitor] Erreur démarrage OAuth:', error);
+      logger.error('[GoogleTokenMonitor] Erreur démarrage OAuth:', error);
       message.error('Erreur lors du démarrage de la connexion Google');
     }
   }, [api, organizationId]);
@@ -113,7 +114,7 @@ const GoogleTokenMonitor: React.FC<GoogleTokenMonitorProps> = ({ organizationId 
         setTokenInfo(tokenResponse.data);
       }
     } catch (error) {
-      console.error('Erreur chargement données monitoring:', error);
+      logger.error('Erreur chargement données monitoring:', error);
       message.error('Erreur lors du chargement des données');
     }
     setLoading(false);
@@ -127,7 +128,7 @@ const GoogleTokenMonitor: React.FC<GoogleTokenMonitorProps> = ({ organizationId 
         setRefreshHistory(response.data);
       }
     } catch (error) {
-      console.error('Erreur chargement historique:', error);
+      logger.error('Erreur chargement historique:', error);
     }
   }, [api, organizationId]);
 
@@ -144,7 +145,7 @@ const GoogleTokenMonitor: React.FC<GoogleTokenMonitorProps> = ({ organizationId 
         message.error(response.message || 'Erreur lors du changement de statut');
       }
     } catch (error) {
-      console.error('Erreur toggle scheduler:', error);
+      logger.error('Erreur toggle scheduler:', error);
       message.error('Erreur lors du changement de statut du scheduler');
     }
   };
@@ -161,7 +162,7 @@ const GoogleTokenMonitor: React.FC<GoogleTokenMonitorProps> = ({ organizationId 
         message.error(response.message || 'Erreur lors du refresh');
       }
     } catch (error) {
-      console.error('Erreur refresh forcé:', error);
+      logger.error('Erreur refresh forcé:', error);
       message.error('Erreur lors du refresh forcé');
     }
   };

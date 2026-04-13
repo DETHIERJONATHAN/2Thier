@@ -20,6 +20,7 @@
  */
 
 import { PrismaClient, Prisma } from '@prisma/client';
+import { logger } from '../../../../lib/logger';
 
 // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // Ã°Å¸â€œâ€¹ TYPES
@@ -412,7 +413,7 @@ async function getNodeLinkedField(
     if (Array.isArray(value)) return value.filter(Boolean);
     return [];
   } catch (e) {
-    console.warn(`Ã¢Å¡Â Ã¯Â¸Â Impossible de lire ${field} pour nÃ…â€œud ${nodeId}:`, (e as Error).message);
+    logger.warn(`Ã¢Å¡Â Ã¯Â¸Â Impossible de lire ${field} pour nÃ…â€œud ${nodeId}:`, (e as Error).message);
     return [];
   }
 }
@@ -600,7 +601,7 @@ export async function linkConditionToAllNodes(
       successCount++;
     } catch (e) {
       errorCount++;
-      console.error(`   Ã¢ÂÅ’ ${nodeId} Ã¢â€ â€™ Ãƒâ€°CHEC:`, (e as Error).message);
+      logger.error(`   Ã¢ÂÅ’ ${nodeId} Ã¢â€ â€™ Ãƒâ€°CHEC:`, (e as Error).message);
     }
   }
   
@@ -630,7 +631,7 @@ export async function linkFormulaToAllNodes(
       successCount++;
     } catch (e) {
       errorCount++;
-      console.error(`   Ã¢ÂÅ’ ${nodeId} Ã¢â€ â€™ Ãƒâ€°CHEC:`, (e as Error).message);
+      logger.error(`   Ã¢ÂÅ’ ${nodeId} Ã¢â€ â€™ Ãƒâ€°CHEC:`, (e as Error).message);
     }
   }
   
@@ -675,7 +676,7 @@ export async function linkTableToAllNodes(
       successCount++;
     } catch (e) {
       errorCount++;
-      console.error(`   ✗ ${nodeId} ECHEC:`, (e as Error).message);
+      logger.error(`   ✗ ${nodeId} ECHEC:`, (e as Error).message);
     }
   }
   
@@ -709,13 +710,13 @@ export async function linkVariableToAllCapacityNodes(
         successCount++;
       } catch (e) {
         errorCount++;
-        console.error(`   Ã¢ÂÅ’ ${nodeId} Ã¢â€ â€™ Ãƒâ€°CHEC:`, (e as Error).message);
+        logger.error(`   Ã¢ÂÅ’ ${nodeId} Ã¢â€ â€™ Ãƒâ€°CHEC:`, (e as Error).message);
       }
     }
     
     
   } catch (e) {
-    console.error(`   Ã¢ÂÅ’ Erreur lors de la liaison variable:`, (e as Error).message);
+    logger.error(`   Ã¢ÂÅ’ Erreur lors de la liaison variable:`, (e as Error).message);
   }
   
 }
@@ -757,7 +758,7 @@ export async function unlinkCapacityFromAllNodes(
     try {
       await removeFromNodeLinkedField(client, nodeId, field, [capacityId]);
     } catch (e) {
-      console.error(`   Ã¢ÂÅ’ ${nodeId} Ã¢â€ â€™ Ãƒâ€°CHEC:`, (e as Error).message);
+      logger.error(`   Ã¢ÂÅ’ ${nodeId} Ã¢â€ â€™ Ãƒâ€°CHEC:`, (e as Error).message);
     }
   }
   

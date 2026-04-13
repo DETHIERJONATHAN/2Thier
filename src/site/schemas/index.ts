@@ -30,6 +30,7 @@ import processSchema from './process.schema';
 import projectsSchema from './projects.schema';
 import aboutSchema from './about.schema';
 import contactSchema from './contact.schema';
+import { logger } from '../../lib/logger';
 
 /**
  * 🗂️ Registre complet des schémas
@@ -75,7 +76,7 @@ export const sectionRegistry: SectionSchemaRegistry = {
  * ```typescript
  * const schema = getSectionSchema('hero');
  * if (schema) {
- *   console.log(schema.name); // "🚀 Hero Section"
+ *   logger.debug(schema.name); // "🚀 Hero Section"
  * }
  * ```
  */
@@ -92,7 +93,7 @@ export function getSectionSchema(type: string): SectionSchema | undefined {
  * ```typescript
  * const schemas = getAllSchemas();
  * schemas.forEach(schema => {
- *   console.log(`${schema.icon} ${schema.name}`);
+ *   logger.debug(`${schema.icon} ${schema.name}`);
  * });
  * ```
  */
@@ -158,8 +159,8 @@ export function sectionExists(type: string): boolean {
  * @example
  * ```typescript
  * const stats = getRegistryStats();
- * console.log(`${stats.total} sections disponibles`);
- * console.log(`${stats.aiEnabled} avec AI`);
+ * logger.debug(`${stats.total} sections disponibles`);
+ * logger.debug(`${stats.aiEnabled} avec AI`);
  * ```
  */
 export function getRegistryStats() {

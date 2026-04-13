@@ -13,6 +13,7 @@
 import { useCallback, useState } from 'react';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { message } from 'antd';
+import { logger } from '../../../lib/logger';
 
 interface BatchResult {
   success: boolean;
@@ -53,7 +54,7 @@ export const useBatchLeads = (): UseBatchLeadsReturn => {
       message.success(result.message || `${result.count} lead(s) mis à jour`);
       return result;
     } catch (error: unknown) {
-      console.error('[BatchLeads] ❌ Erreur updateStatus:', error);
+      logger.error('[BatchLeads] ❌ Erreur updateStatus:', error);
       message.error(error.response?.data?.error || 'Erreur lors de la mise à jour');
       return null;
     } finally {
@@ -83,7 +84,7 @@ export const useBatchLeads = (): UseBatchLeadsReturn => {
       message.success(result.message || `${result.count} lead(s) assigné(s)`);
       return result;
     } catch (error: unknown) {
-      console.error('[BatchLeads] ❌ Erreur assignTo:', error);
+      logger.error('[BatchLeads] ❌ Erreur assignTo:', error);
       message.error(error.response?.data?.error || 'Erreur lors de l\'assignation');
       return null;
     } finally {
@@ -111,7 +112,7 @@ export const useBatchLeads = (): UseBatchLeadsReturn => {
       message.success(result.message || `${result.count} lead(s) supprimé(s)`);
       return result;
     } catch (error: unknown) {
-      console.error('[BatchLeads] ❌ Erreur deleteMany:', error);
+      logger.error('[BatchLeads] ❌ Erreur deleteMany:', error);
       message.error(error.response?.data?.error || 'Erreur lors de la suppression');
       return null;
     } finally {

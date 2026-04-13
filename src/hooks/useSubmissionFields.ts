@@ -6,7 +6,7 @@
  * const { fields, lead, loading, error } = useSubmissionFields(submissionId);
  * 
  * // Accéder aux données du lead
- * console.log(lead?.firstName, lead?.lastName, lead?.email);
+ * logger.debug(lead?.firstName, lead?.lastName, lead?.email);
  * 
  * // Accéder aux champs par nom/label
  * const prenom = fields?.['Prénom']?.value;
@@ -17,6 +17,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
+import { logger } from '../lib/logger';
 
 export interface SubmissionField {
   nodeId: string;
@@ -78,16 +79,16 @@ export function useSubmissionFields(submissionId: string | null | undefined) {
       setError(null);
       
       try {
-        console.log(`[useSubmissionFields] 🔍 Chargement des champs pour soumission: ${submissionId}`);
+        logger.debug(`[useSubmissionFields] 🔍 Chargement des champs pour soumission: ${submissionId}`);
         const response = await api.get(`/api/treebranchleaf/submissions/${submissionId}/fields`);
         
         if (cancelled) return;
         
         setData(response as SubmissionFieldsResponse);
-        console.log(`[useSubmissionFields] ✅ ${response.totalFields} champs chargés`);
+        logger.debug(`[useSubmissionFields] ✅ ${response.totalFields} champs chargés`);
       } catch (err) {
         if (cancelled) return;
-        console.error('[useSubmissionFields] ❌ Erreur:', err);
+        logger.error('[useSubmissionFields] ❌ Erreur:', err);
         setError(err as Error);
       } finally {
         if (!cancelled) {

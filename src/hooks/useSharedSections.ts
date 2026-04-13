@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/useAuth';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
+import { logger } from '../lib/logger';
 
 export interface SharedSection {
   id: string;
@@ -59,7 +60,7 @@ export const useSharedSections = () => {
         throw new Error('Aucune catégorie trouvée dans la réponse API ou réponse vide');
       }
     } catch (error) {
-      console.error('❌ [useSharedSections] Erreur lors du chargement:', error);
+      logger.error('❌ [useSharedSections] Erreur lors du chargement:', error);
       setError('Impossible de charger les catégories depuis la base de données');
       
       // Fallback: catégories vides plutôt que du code en dur
@@ -84,7 +85,7 @@ export const useSharedSections = () => {
       // Recharger les sections pour refléter les changements
       await loadSections();
     } catch (error) {
-      console.error('❌ Erreur lors de la mise à jour de la catégorie:', error);
+      logger.error('❌ Erreur lors de la mise à jour de la catégorie:', error);
     }
   }, [api, currentOrganization?.id, loadSections]);
 
@@ -118,7 +119,7 @@ export const useSharedSections = () => {
       // Recharger les sections
       await loadSections();
     } catch (error) {
-      console.error('❌ Erreur lors de l\'ajout de la catégorie:', error);
+      logger.error('❌ Erreur lors de l\'ajout de la catégorie:', error);
     }
   }, [api, currentOrganization?.id, loadSections]);
 
@@ -140,7 +141,7 @@ export const useSharedSections = () => {
         await loadSections();
       }
     } catch (error) {
-      console.error('❌ Erreur lors du toggle de la catégorie:', error);
+      logger.error('❌ Erreur lors du toggle de la catégorie:', error);
     }
   }, [api, currentOrganization?.id, sections, loadSections]);
 
@@ -162,7 +163,7 @@ export const useSharedSections = () => {
         await loadSections();
       }
     } catch (error) {
-      console.error('❌ Erreur lors de la suppression de la catégorie:', error);
+      logger.error('❌ Erreur lors de la suppression de la catégorie:', error);
     }
   }, [api, currentOrganization?.id, sections, loadSections]);
 

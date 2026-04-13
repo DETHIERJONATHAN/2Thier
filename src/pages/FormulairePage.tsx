@@ -4,6 +4,7 @@ import { FormOutlined, EditOutlined, FileTextOutlined, CalendarOutlined, Branche
 import { useNavigate } from 'react-router-dom';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { useAuth } from '../auth/useAuth';
+import { logger } from '../lib/logger';
 
 const { Title, Text } = Typography;
 
@@ -36,14 +37,14 @@ const FormulairePage: React.FC = () => {
       setLoading(true);
       const orgId = currentOrganization?.id;
       if (!orgId) {
-        console.error('Aucune organisation sélectionnée');
+        logger.error('Aucune organisation sélectionnée');
         return;
       }
 
       const response = await api.get(`/api/blocks?organizationId=${orgId}`);
       setBlocks(response || []);
     } catch (error) {
-      console.error('Erreur lors du chargement des formulaires:', error);
+      logger.error('Erreur lors du chargement des formulaires:', error);
     } finally {
       setLoading(false);
     }

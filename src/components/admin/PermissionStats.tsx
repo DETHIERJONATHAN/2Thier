@@ -1,6 +1,7 @@
 import React from 'react';
 import { Card, Progress, Space, Typography, Row, Col, Statistic } from 'antd';
 import { CheckCircleOutlined, ExclamationCircleOutlined, LockOutlined } from '@ant-design/icons';
+import { logger } from '../../lib/logger';
 
 const { Title, Text } = Typography;
 
@@ -54,7 +55,7 @@ const PermissionStats: React.FC<PermissionStatsProps> = ({
 
   // Debug pour voir les calculs CORRIGÉS (une seule fois)
   if (selectedRole?.label === 'Super Admin') {
-    console.log('[DEBUG] PermissionStats CORRIGÉ:', {
+    logger.debug('[DEBUG] PermissionStats CORRIGÉ:', {
       totalModules,
       totalPossiblePermissions,
       allPermissions: permissions.length,

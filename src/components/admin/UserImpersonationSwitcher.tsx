@@ -3,6 +3,7 @@ import { OrganizationContext } from '../../context/OrganizationContext';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { UserContext } from '../../context/UserContext';
 import { toast } from 'react-toastify';
+import { logger } from '../../lib/logger';
 
 // Cette interface correspond à la structure de la réponse de l'API pour un utilisateur
 interface UserFromApi {
@@ -64,7 +65,7 @@ const UserImpersonationSwitcher = () => {
           }
         })
         .catch(error => {
-          console.error('Erreur lors de la récupération des utilisateurs pour l\'impersonation:', error);
+          logger.error('Erreur lors de la récupération des utilisateurs pour l\'impersonation:', error);
           toast.error('Échec de la récupération des utilisateurs.');
           setUsers([]);
         });

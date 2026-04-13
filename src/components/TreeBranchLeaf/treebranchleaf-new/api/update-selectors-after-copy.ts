@@ -6,6 +6,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { logger } from '../../../../lib/logger';
 
 /**
  * Mise ÃƒÂ  jour POST-COPIE des selectors avec les nouvelles tables copiÃƒÂ©es
@@ -93,12 +94,12 @@ export async function updateSelectorsAfterTableCopy(
             }
           });
         } catch (e) {
-          console.warn(`   Ã¢Å¡Â Ã¯Â¸Â Erreur MAJ selector ${selectorId}:`, (e as Error).message);
+          logger.warn(`   Ã¢Å¡Â Ã¯Â¸Â Erreur MAJ selector ${selectorId}:`, (e as Error).message);
         }
       }
     }
 
   } catch (e) {
-    console.warn(`Ã¢Å¡Â Ã¯Â¸Â [UPDATE-SELECTORS] Erreur:`, (e as Error).message);
+    logger.warn(`Ã¢Å¡Â Ã¯Â¸Â [UPDATE-SELECTORS] Erreur:`, (e as Error).message);
   }
 }

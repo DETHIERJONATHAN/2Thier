@@ -5,6 +5,7 @@
 
 import { Router, Request, Response } from 'express';
 import { authenticateToken } from '../middleware/auth';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -54,7 +55,7 @@ router.get('/cloud-run-domains', authenticateToken, async (req: Request, res: Re
     });
 
   } catch (error: unknown) {
-    console.error('❌ [CloudRunDomains] Erreur:', error);
+    logger.error('❌ [CloudRunDomains] Erreur:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la récupération des domaines Cloud Run',
       details: error.message 
@@ -93,7 +94,7 @@ router.post('/cloud-run-domains/verify', authenticateToken, async (req: Request,
     });
 
   } catch (error: unknown) {
-    console.error('❌ [CloudRunDomains] Erreur vérification:', error);
+    logger.error('❌ [CloudRunDomains] Erreur vérification:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la vérification du domaine',
       details: error.message 
@@ -130,7 +131,7 @@ async function checkDomainReachability(domain: string): Promise<boolean> {
       req.end();
     });
   } catch (error) {
-    console.error('❌ Erreur lors de la vérification du domaine:', error);
+    logger.error('❌ Erreur lors de la vérification du domaine:', error);
     return false;
   }
 }

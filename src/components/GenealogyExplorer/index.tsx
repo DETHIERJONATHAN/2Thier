@@ -13,6 +13,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Text, Title } = Typography;
 const { Option } = Select;
@@ -95,7 +96,7 @@ function useExplorerData(fieldId: string) {
         setTree(buildHierarchy(convertedTree));
       }
     } catch (error) {
-      console.error('Erreur chargement arbre:', error);
+      logger.error('Erreur chargement arbre:', error);
     } finally {
       setLoading(false);
     }
@@ -124,7 +125,7 @@ function useExplorerData(fieldId: string) {
         await loadTree();
       }
     } catch (error) {
-      console.error('Erreur création nœud:', error);
+      logger.error('Erreur création nœud:', error);
     }
   }, [api, fieldId, tree.length, loadTree]);
 
@@ -133,7 +134,7 @@ function useExplorerData(fieldId: string) {
       await api.put(`/api/option-nodes/${id}`, updates);
       await loadTree();
     } catch (error) {
-      console.error('Erreur mise à jour nœud:', error);
+      logger.error('Erreur mise à jour nœud:', error);
     }
   }, [api, loadTree]);
 
@@ -142,7 +143,7 @@ function useExplorerData(fieldId: string) {
       await api.delete(`/api/option-nodes/${id}`);
       await loadTree();
     } catch (error) {
-      console.error('Erreur suppression nœud:', error);
+      logger.error('Erreur suppression nœud:', error);
     }
   }, [api, loadTree]);
 
@@ -650,7 +651,7 @@ const GenealogyExplorer: React.FC<GenealogyExplorerProps> = ({ fieldId, onTreeCh
       setDragState({ draggedType: null, dragOverNode: null });
       
     } catch (error) {
-      console.error('Erreur lors du drop:', error);
+      logger.error('Erreur lors du drop:', error);
     }
   };
 

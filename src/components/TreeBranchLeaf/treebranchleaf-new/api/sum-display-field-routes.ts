@@ -13,6 +13,7 @@ import { Router, Request } from 'express';
 import { Prisma } from '@prisma/client';
 import { db } from '../../../../lib/database';
 import { randomUUID } from 'crypto';
+import { logger } from '../../../../lib/logger';
 
 const prisma = db;
 
@@ -74,7 +75,7 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
       const originalTriggerNodeIds = originalMetadata.triggerNodeIds as string[] | undefined;
       const originalSubType = node.subType; // 'display' si c'est un champ display
 
-      // console.log('🎯 [SUM-DISPLAY] Nœud original:', {
+      // logger.debug('🎯 [SUM-DISPLAY] Nœud original:', {
         // nodeId,
         // subType: originalSubType,
         // triggerNodeIds: originalTriggerNodeIds,
@@ -97,7 +98,7 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
       if (!mainVariable) {
         // 🛡️ AUTO-CREATE: Créer la variable automatiquement si elle n'existe pas
         // Cela arrive quand l'utilisateur a désactivé/réactivé la capacité Données
-        // console.log('🛡️ [SUM-DISPLAY] Variable manquante pour nodeId:', nodeId, '- création automatique');
+        // logger.debug('🛡️ [SUM-DISPLAY] Variable manquante pour nodeId:', nodeId, '- création automatique');
         const newId = randomUUID();
         const exposedKey = `var_${nodeId.slice(0, 4)}`;
         // Vérifier que l'exposedKey n'est pas déjà prise
@@ -114,7 +115,7 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
           : null;
         const inheritedSourceType = nodeTableInfo?.hasTable && inheritedSourceRef ? 'tree' : 'fixed';
         
-        // console.log('🎯 [SUM-DISPLAY] Héritage table:', { inheritedSourceRef, inheritedSourceType });
+        // logger.debug('🎯 [SUM-DISPLAY] Héritage table:', { inheritedSourceRef, inheritedSourceType });
         
         mainVariable = await prisma.treeBranchLeafNodeVariable.create({
           data: {
@@ -164,7 +165,7 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
           data: nodeUpdateData
         });
         
-        // console.log('✅ [SUM-DISPLAY] Variable auto-créée:', { id: newId, exposedKey: finalExposedKey });
+        // logger.debug('✅ [SUM-DISPLAY] Variable auto-créée:', { id: newId, exposedKey: finalExposedKey });
       }
 
       // Trouver toutes les copies de cette variable (basÃƒÂ© sur exposedKey avec suffixes)
@@ -201,7 +202,7 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
       });
       // 🎨 HÉRITAGE AUTOMATIQUE DE L'ICÔNE du champ source
       const sourceNodeIcon = node.metadata?.icon || null;
-      // console.log(`[SUM-DISPLAY] 🎨 Icône héritée du champ source "${node.label}": ${sourceNodeIcon || '(aucune)'}`);
+      // logger.debug(`[SUM-DISPLAY] 🎨 Icône héritée du champ source "${node.label}": ${sourceNodeIcon || '(aucune)'}`);
       // Construire la formule de somme : @value.var1 + @value.var1-1 + @value.var1-2 ...
       const sumTokens: string[] = [];
       allCopies.forEach((copy, index) => {
@@ -326,7 +327,7 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
           if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
             // Conflit d'unicitÃƒÂ©: le nÃ…â€œud existe dÃƒÂ©jÃƒÂ , on le met simplement ÃƒÂ  jour
             await prisma.treeBranchLeafNode.update({ where: { id: sumFieldNodeId }, data: sumNodeData });
-            console.warn(`Ã¢Å¡Â Ã¯Â¸Â [SUM DISPLAY] NÃ…â€œud Total dÃƒÂ©jÃƒÂ  existant, mise ÃƒÂ  jour forcÃƒÂ©e: ${sumFieldNodeId}`);
+            logger.warn(`Ã¢Å¡Â Ã¯Â¸Â [SUM DISPLAY] NÃ…â€œud Total dÃƒÂ©jÃƒÂ  existant, mise ÃƒÂ  jour forcÃƒÂ©e: ${sumFieldNodeId}`);
           } else {
             throw err;
           }
@@ -377,7 +378,7 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
         } catch (err) {
           if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
             await prisma.treeBranchLeafNodeVariable.update({ where: { nodeId: sumFieldNodeId }, data: sumVariableData });
-            console.warn(`Ã¢Å¡Â Ã¯Â¸Â [SUM DISPLAY] Variable Total dÃƒÂ©jÃƒÂ  existante, mise ÃƒÂ  jour forcÃƒÂ©e: ${sumFieldNodeId}`);
+            logger.warn(`Ã¢Å¡Â Ã¯Â¸Â [SUM DISPLAY] Variable Total dÃƒÂ©jÃƒÂ  existante, mise ÃƒÂ  jour forcÃƒÂ©e: ${sumFieldNodeId}`);
           } else {
             throw err;
           }
@@ -440,7 +441,7 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
                 ...sumFormulaData
               }
             });
-            console.warn(`⚠️ [SUM DISPLAY] Formule orpheline nettoyée et recréée: ${sumFormulaId}`);
+            logger.warn(`⚠️ [SUM DISPLAY] Formule orpheline nettoyée et recréée: ${sumFormulaId}`);
           } else {
             throw err;
           }
@@ -472,8 +473,8 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
     } catch (error: unknown) {
       const errMsg = error instanceof Error ? error.message : String(error);
       const errStack = error instanceof Error ? error.stack : '';
-      console.error('Ã¢ÂÅ’ [SUM DISPLAY] Erreur:', errMsg);
-      console.error('Ã¢ÂÅ’ [SUM DISPLAY] Stack:', errStack);
+      logger.error('Ã¢ÂÅ’ [SUM DISPLAY] Erreur:', errMsg);
+      logger.error('Ã¢ÂÅ’ [SUM DISPLAY] Stack:', errStack);
       res.status(500).json({ error: 'Erreur lors de la crÃƒÂ©ation du champ Total', details: errMsg });
     }
   });
@@ -561,7 +562,7 @@ export function registerSumDisplayFieldRoutes(router: Router): void {
       return res.json({ success: true });
 
     } catch (error) {
-      console.error('Ã¢ÂÅ’ [SUM DISPLAY] Erreur suppression:', error);
+      logger.error('Ã¢ÂÅ’ [SUM DISPLAY] Erreur suppression:', error);
       res.status(500).json({ error: 'Erreur lors de la suppression du champ Total' });
     }
   });
@@ -641,7 +642,7 @@ export async function updateSumDisplayFieldAfterCopyChange(
 
     const allTriggerNodeIds = Array.from(aggregatedTriggers);
 
-    // console.log('🎯 [SUM UPDATE] Triggers agrégés:', {
+    // logger.debug('🎯 [SUM UPDATE] Triggers agrégés:', {
       // copiesCount: allCopies.length,
       // copyNodeIds,
       // aggregatedTriggers: allTriggerNodeIds
@@ -727,7 +728,7 @@ export async function updateSumDisplayFieldAfterCopyChange(
         for (const sv of submissionValues) {
           newCalculatedValue += parseFloat(String(sv.value)) || 0;
         }
-        // console.log(`🎯 [SUM UPDATE] Valeur recalculée depuis SubmissionData (submission ${latestSubmission.id}): ${newCalculatedValue} (${submissionValues.length} valeurs)`);
+        // logger.debug(`🎯 [SUM UPDATE] Valeur recalculée depuis SubmissionData (submission ${latestSubmission.id}): ${newCalculatedValue} (${submissionValues.length} valeurs)`);
       } else {
         // Pas de soumission → fallback vers calculatedValue (legacy)
         for (const node of allCopyNodes) {
@@ -735,7 +736,7 @@ export async function updateSumDisplayFieldAfterCopyChange(
         }
       }
     } catch (sdErr) {
-      console.warn(`⚠️ [SUM UPDATE] Erreur lecture SubmissionData, fallback calculatedValue:`, (sdErr as Error).message);
+      logger.warn(`⚠️ [SUM UPDATE] Erreur lecture SubmissionData, fallback calculatedValue:`, (sdErr as Error).message);
       for (const node of allCopyNodes) {
         newCalculatedValue += parseFloat(String(node.calculatedValue)) || 0;
       }
@@ -767,10 +768,10 @@ export async function updateSumDisplayFieldAfterCopyChange(
         });
       }
       if (activeSubmissions.length > 0) {
-        // console.log(`🎯 [SUM UPDATE] SubmissionData mis à jour pour ${activeSubmissions.length} soumission(s): ${sumFieldNodeId} = ${newCalculatedValue}`);
+        // logger.debug(`🎯 [SUM UPDATE] SubmissionData mis à jour pour ${activeSubmissions.length} soumission(s): ${sumFieldNodeId} = ${newCalculatedValue}`);
       }
     } catch (sdUpdateErr) {
-      console.warn(`⚠️ [SUM UPDATE] Erreur mise à jour SubmissionData sum-total:`, (sdUpdateErr as Error).message);
+      logger.warn(`⚠️ [SUM UPDATE] Erreur mise à jour SubmissionData sum-total:`, (sdUpdateErr as Error).message);
     }
 
     // Mettre à jour le nœud Total avec formula_instances et formula_tokens
@@ -809,6 +810,6 @@ export async function updateSumDisplayFieldAfterCopyChange(
 
 
   } catch (error) {
-    console.error('Ã¢ÂÅ’ [SUM UPDATE] Erreur mise ÃƒÂ  jour champ Total:', error);
+    logger.error('Ã¢ÂÅ’ [SUM UPDATE] Erreur mise ÃƒÂ  jour champ Total:', error);
   }
 }

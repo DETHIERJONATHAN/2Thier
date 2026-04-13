@@ -13,6 +13,7 @@
 import { useState, useCallback } from 'react';
 import { message, notification } from 'antd';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
+import { logger } from '../lib/logger';
 
 /**
  * Configuration du mapping entre les clés de mesure et les champs cibles
@@ -106,7 +107,7 @@ export function useAIMeasure(options: UseAIMeasureOptions = {}) {
     fieldMappings?: Record<string, string> // Map fieldId -> fieldLabel pour meilleur contexte
   ): Promise<AIMeasureResult | null> => {
     if (!config.enabled) {
-      console.log('[useAIMeasure] Mesure IA désactivée');
+      logger.debug('[useAIMeasure] Mesure IA désactivée');
       return null;
     }
 
@@ -146,7 +147,7 @@ export function useAIMeasure(options: UseAIMeasureOptions = {}) {
         }
       }
       
-      console.log('[useAIMeasure] Préparation requête:', { 
+      logger.debug('[useAIMeasure] Préparation requête:', { 
         mimeType, 
         base64Length: cleanBase64.length,
         measureKeys: config.measureKeys 
@@ -288,7 +289,7 @@ export function useAIMeasure(options: UseAIMeasureOptions = {}) {
     updateField: (fieldId: string, value: unknown) => void
   ) => {
     if (!result.success || !result.measures) {
-      console.warn('[useAIMeasure] Impossible d\'appliquer les résultats:', result.error);
+      logger.warn('[useAIMeasure] Impossible d\'appliquer les résultats:', result.error);
       return 0;
     }
 
@@ -320,7 +321,7 @@ export function useAIMeasure(options: UseAIMeasureOptions = {}) {
         options.onFieldUpdate?.(mapping.targetFieldId, finalValue);
         appliedCount++;
 
-        console.log(`[useAIMeasure] Champ ${mapping.targetFieldId} mis à jour avec: ${finalValue}`);
+        logger.debug(`[useAIMeasure] Champ ${mapping.targetFieldId} mis à jour avec: ${finalValue}`);
       }
     }
 

@@ -20,6 +20,7 @@ import SmartCameraMobile, { type CapturedPhoto } from './SmartCameraMobile';
 import VideoCapture from './VideoCapture';
 import CalibrationMarker from './CalibrationMarker';
 import { analyzePhotos, MultiPhotoAnalysis } from './PhotoAnalyzer';
+import { logger } from '../../lib/logger';
 
 const { Title, Text, Paragraph } = Typography;
 const { Step } = Steps;
@@ -78,14 +79,14 @@ const SmartCaptureFlow: React.FC<SmartCaptureFlowProps> = ({
       // Si on a assez de photos et que le marqueur est détecté, passer directement
       if (!analysisResult.needsMorePhotos || photos.length >= 3) {
         // Appeler onComplete directement pour bypass la page "Capture réussie"
-        console.log('[SmartCaptureFlow] 🚀 Bypass page complete → direct canvas');
+        logger.debug('[SmartCaptureFlow] 🚀 Bypass page complete → direct canvas');
         onComplete(photos, analysisResult);
         onClose();
         return;
       }
       // Sinon rester sur analysis pour feedback
     } catch (err) {
-      console.error('Analysis error:', err);
+      logger.error('Analysis error:', err);
       // En cas d'erreur, aller quand même au canvas avec les photos
       const fallbackAnalysis: MultiPhotoAnalysis = {
         photos: photos.map((p, i) => ({ index: i, usableForMeasurement: true, quality: 80 })),

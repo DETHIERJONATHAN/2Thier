@@ -1,3 +1,4 @@
+import { logger } from '../lib/logger';
 /**
  * 🔧 TBL Debug Utility - Système de logging conditionnel pour TBL
  * 
@@ -44,7 +45,7 @@ export const isTBLDebugEnabled = (): boolean => {
  */
 export const tblLog = (...args: unknown[]): void => {
   if (isTBLDebugEnabled()) {
-    console.log(...args);
+    logger.debug(...args);
   }
 };
 
@@ -53,7 +54,7 @@ export const tblLog = (...args: unknown[]): void => {
  */
 export const tblWarn = (...args: unknown[]): void => {
   if (isTBLDebugEnabled()) {
-    console.warn(...args);
+    logger.warn(...args);
   }
 };
 
@@ -61,7 +62,7 @@ export const tblWarn = (...args: unknown[]): void => {
  * Error conditionnel pour TBL (toujours affiché car critique)
  */
 export const tblError = (...args: unknown[]): void => {
-  console.error(...args);
+  logger.error(...args);
 };
 
 // Exposer les fonctions utilitaires sur window pour debug facile
@@ -69,13 +70,13 @@ if (typeof window !== 'undefined') {
   (window as any).enableTBLDebug = () => {
     localStorage.setItem('TBL_DEBUG', '1');
     debugEnabled = true;
-    console.log('✅ TBL Debug ACTIVÉ - Les logs TBL seront affichés');
+    logger.debug('✅ TBL Debug ACTIVÉ - Les logs TBL seront affichés');
   };
   
   (window as any).disableTBLDebug = () => {
     localStorage.removeItem('TBL_DEBUG');
     debugEnabled = false;
-    console.log('🔇 TBL Debug DÉSACTIVÉ - Les logs TBL sont masqués');
+    logger.debug('🔇 TBL Debug DÉSACTIVÉ - Les logs TBL sont masqués');
   };
   
   (window as any).isTBLDebugEnabled = isTBLDebugEnabled;

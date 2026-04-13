@@ -1,4 +1,5 @@
 import { Formula, SimpleCondition } from '../types/formula';
+import { logger } from '../lib/logger';
 
 /**
  * Évalue une formule avec des valeurs de test
@@ -91,12 +92,12 @@ export const evaluateFormula = (formula: Formula, fieldValues: Record<string, nu
             if (typeof fieldValues[fid] !== 'undefined') rawVal = fieldValues[fid];
             else if (context?.rawValues && Object.prototype.hasOwnProperty.call(context.rawValues, fid)) rawVal = context.rawValues[fid];
           }
-          console.log(`[FormulaEvaluator] 🏷️ Champ "${fid}": rawVal=${rawVal}, typeof=${typeof rawVal}`);
+          logger.debug(`[FormulaEvaluator] 🏷️ Champ "${fid}": rawVal=${rawVal}, typeof=${typeof rawVal}`);
           
           // Si advanced_select stocké comme objet { selection, extra, nodeId }
           if (rawVal && typeof rawVal === 'object') {
             const sel = (rawVal as Record<string, unknown>).selection;
-            console.log(`[FormulaEvaluator] 🔍 Advanced select - selection:${sel}, objet:`, rawVal);
+            logger.debug(`[FormulaEvaluator] 🔍 Advanced select - selection:${sel}, objet:`, rawVal);
             rawVal = typeof sel !== 'undefined' ? sel : rawVal;
           }
           itemRaw = rawVal;
@@ -111,7 +112,7 @@ export const evaluateFormula = (formula: Formula, fieldValues: Record<string, nu
           } else {
             itemValue = 0;
           }
-          console.log(`[FormulaEvaluator] 📊 Champ "${fid}" évalué: ${itemValue} (raw: ${rawVal})`);
+          logger.debug(`[FormulaEvaluator] 📊 Champ "${fid}" évalué: ${itemValue} (raw: ${rawVal})`);
           debugSteps.push({ step: index + 1, operation: `Champ ${fid}`, value: itemValue });
           break; }
         case 'formula_ref': {
@@ -188,12 +189,12 @@ export const evaluateFormula = (formula: Formula, fieldValues: Record<string, nu
                   pass = Boolean(nestedBool.result);
                   condDebugValue = nestedBool.result as number | boolean | string | null;
                 } else {
-                  console.warn(`[FormulaEvaluator] Erreur évaluation condition IF: ${nestedBool.error}`);
+                  logger.warn(`[FormulaEvaluator] Erreur évaluation condition IF: ${nestedBool.error}`);
                   pass = false;
                   condDebugValue = false;
                 }
               } else {
-                console.warn('[FormulaEvaluator] Fonction IF sans condition suffisante');
+                logger.warn('[FormulaEvaluator] Fonction IF sans condition suffisante');
                 pass = false;
                 condDebugValue = false;
               }
@@ -249,13 +250,13 @@ export const evaluateFormula = (formula: Formula, fieldValues: Record<string, nu
           }
           // Étape 1: évaluation de la condition
           debugSteps.push({ step: index + 1, operation: `Condition TEST`, value: condDebugValue });
-          console.log(`[FormulaEvaluator] 🔍 Condition IF évaluée: ${pass} (${condDebugValue})`);
+          logger.debug(`[FormulaEvaluator] 🔍 Condition IF évaluée: ${pass} (${condDebugValue})`);
           
           // Évaluer sous-séquence THEN ou ELSE
           const seqToEval = pass ? (item.then || []) : (item.else || []);
-          console.log(`[FormulaEvaluator] 📝 Branche sélectionnée: ${pass ? 'THEN' : 'ELSE'} (${seqToEval.length} éléments)`);
+          logger.debug(`[FormulaEvaluator] 📝 Branche sélectionnée: ${pass ? 'THEN' : 'ELSE'} (${seqToEval.length} éléments)`);
           if (seqToEval.length > 0) {
-            console.log(`[FormulaEvaluator] 🔢 Séquence à évaluer:`, seqToEval.map(s => `${s.type}:${s.label || s.value}`));
+            logger.debug(`[FormulaEvaluator] 🔢 Séquence à évaluer:`, seqToEval.map(s => `${s.type}:${s.label || s.value}`));
           }
           if (seqToEval.length === 0) {
             // Comportement selon elseBehavior
@@ -268,13 +269,13 @@ export const evaluateFormula = (formula: Formula, fieldValues: Record<string, nu
           } else {
             // Construire une formule temporaire locale
             const temp: Formula = { id: `${formula.id}__cond_${index}`, name: 'cond', sequence: seqToEval, targetProperty: '' };
-            console.log(`[FormulaEvaluator] ⚙️ Évaluation de la branche ${pass ? 'THEN' : 'ELSE'} avec fieldValues:`, Object.keys(fieldValues));
+            logger.debug(`[FormulaEvaluator] ⚙️ Évaluation de la branche ${pass ? 'THEN' : 'ELSE'} avec fieldValues:`, Object.keys(fieldValues));
             const nested = evaluateFormula(temp, fieldValues, { ...context, depth: (context?.depth || 0) + 1 });
-            console.log(`[FormulaEvaluator] 📊 Résultat branche ${pass ? 'THEN' : 'ELSE'}:`, nested);
+            logger.debug(`[FormulaEvaluator] 📊 Résultat branche ${pass ? 'THEN' : 'ELSE'}:`, nested);
             if (!nested.success) throw new Error(`Erreur sous-séquence condition: ${nested.error}`);
             const valNum = typeof nested.result === 'number' ? nested.result : (typeof nested.result === 'boolean' ? (nested.result ? 1 : 0) : 0);
             itemValue = valNum;
-            console.log(`[FormulaEvaluator] ✅ Valeur finale de la condition: ${itemValue}`);
+            logger.debug(`[FormulaEvaluator] ✅ Valeur finale de la condition: ${itemValue}`);
             debugSteps.push({ step: index + 1, operation: `Condition ${pass ? 'THEN' : 'ELSE'} (résultat branche)`, value: valNum });
           }
           itemRaw = itemValue;
@@ -354,7 +355,7 @@ export const evaluateFormula = (formula: Formula, fieldValues: Record<string, nu
       }
 
       // Effectuer l'opération
-      console.log(`[FormulaEvaluator] 🔢 Opération: ${result} ${currentOperator} ${itemValue}`);
+      logger.debug(`[FormulaEvaluator] 🔢 Opération: ${result} ${currentOperator} ${itemValue}`);
     switch (currentOperator) {
         case '+':
       result = (Number(result) || 0) + Number(itemValue);
@@ -369,7 +370,7 @@ export const evaluateFormula = (formula: Formula, fieldValues: Record<string, nu
           if (itemValue === 0) {
             // Enregistrer l'étape avant de lever l'erreur pour diagnostic UI
             debugSteps.push({ step: index + 1, operation: 'Division par 0 (arrêt)', value: null });
-            console.log(`[FormulaEvaluator] ❌ Division par zéro détectée !`);
+            logger.debug(`[FormulaEvaluator] ❌ Division par zéro détectée !`);
             throw new Error('Division par zéro');
           }
       result = (Number(result) || 0) / Number(itemValue);
@@ -402,7 +403,7 @@ export const evaluateFormula = (formula: Formula, fieldValues: Record<string, nu
           throw new Error(`Opérateur non supporté: ${currentOperator}`);
       }
 
-      console.log(`[FormulaEvaluator] ➡️ Résultat après opération: ${result}`);
+      logger.debug(`[FormulaEvaluator] ➡️ Résultat après opération: ${result}`);
       debugSteps.push({ 
         step: index + 1, 
         operation: `${currentOperator} ${itemValue}`, 
@@ -442,7 +443,7 @@ export const testFormula = (
     name?: string;
   }>
 ) => {
-  console.log(`🧪 Test de la formule: ${formula.name || formula.id}`);
+  logger.debug(`🧪 Test de la formule: ${formula.name || formula.id}`);
   
   const results = testCases.map((testCase, index) => {
     const { values, expectedResult, name } = testCase;
@@ -451,21 +452,21 @@ export const testFormula = (
     const testName = name || `Test #${index + 1}`;
     const success = evaluation.success && evaluation.result === expectedResult;
     
-    console.log(`${success ? '✅' : '❌'} ${testName}`);
+    logger.debug(`${success ? '✅' : '❌'} ${testName}`);
     
     if (!success) {
-      console.log(`   Valeurs: ${JSON.stringify(values)}`);
-      console.log(`   Résultat attendu: ${expectedResult}`);
-      console.log(`   Résultat obtenu: ${evaluation.result}`);
+      logger.debug(`   Valeurs: ${JSON.stringify(values)}`);
+      logger.debug(`   Résultat attendu: ${expectedResult}`);
+      logger.debug(`   Résultat obtenu: ${evaluation.result}`);
       if (evaluation.error) {
-        console.log(`   Erreur: ${evaluation.error}`);
+        logger.debug(`   Erreur: ${evaluation.error}`);
       }
     }
     
     // Afficher les étapes de calcul pour le débogage
-    console.log('   Étapes:');
+    logger.debug('   Étapes:');
     evaluation.debug.forEach(step => {
-      console.log(`     ${step.step}. ${step.operation} => ${step.value}`);
+      logger.debug(`     ${step.step}. ${step.operation} => ${step.value}`);
     });
     
     return {
@@ -481,7 +482,7 @@ export const testFormula = (
   
   // Résumé
   const successCount = results.filter(r => r.success).length;
-  console.log(`\n📊 Résumé: ${successCount}/${testCases.length} tests réussis`);
+  logger.debug(`\n📊 Résumé: ${successCount}/${testCases.length} tests réussis`);
   
   return {
     formulaId: formula.id,
@@ -571,29 +572,29 @@ export const formulaTestUI = (formula: Formula, currentValues?: Record<string, n
   // Évaluer avec les valeurs actuelles
   const evaluation = evaluateFormula(formula, defaultValues);
   
-  console.log('='.repeat(50));
-  console.log(`🔎 Test de la formule: ${formula.name || formula.id}`);
-  console.log('='.repeat(50));
-  console.log('\nValeurs actuelles:');
+  logger.debug('='.repeat(50));
+  logger.debug(`🔎 Test de la formule: ${formula.name || formula.id}`);
+  logger.debug('='.repeat(50));
+  logger.debug('\nValeurs actuelles:');
   
   Object.entries(defaultValues).forEach(([fieldId, value]) => {
     const field = fieldsInFormula.find(f => f.id === fieldId);
-    console.log(`- ${field?.label || fieldId}: ${value}`);
+    logger.debug(`- ${field?.label || fieldId}: ${value}`);
   });
   
-  console.log('\nRésultat:');
+  logger.debug('\nRésultat:');
   if (evaluation.success) {
-    console.log(`✅ ${evaluation.result}`);
+    logger.debug(`✅ ${evaluation.result}`);
   } else {
-    console.log(`❌ Erreur: ${evaluation.error}`);
+    logger.debug(`❌ Erreur: ${evaluation.error}`);
   }
   
-  console.log('\nÉtapes de calcul:');
+  logger.debug('\nÉtapes de calcul:');
   evaluation.debug.forEach(step => {
-    console.log(`${step.step}. ${step.operation} => ${step.value}`);
+    logger.debug(`${step.step}. ${step.operation} => ${step.value}`);
   });
   
-  console.log('\n' + '='.repeat(50));
+  logger.debug('\n' + '='.repeat(50));
   
   return {
     formula,

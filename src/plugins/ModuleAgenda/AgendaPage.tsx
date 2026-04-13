@@ -13,6 +13,7 @@ import dayjs from 'dayjs';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { SF } from '../../components/zhiive/ZhiiveTheme';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 
 const { Title, Text } = Typography;
@@ -166,7 +167,7 @@ export default function AgendaPage({ compact }: { compact?: boolean }) {
 
       setEvents([...taggedCalendar, ...taggedChantier, ...taggedTelnyx]);
     } catch (error) {
-      console.error('[Agenda] Erreur lors de la récupération des événements:', error);
+      logger.error('[Agenda] Erreur lors de la récupération des événements:', error);
       message.error('Erreur lors du chargement des événements');
     } finally {
       setLoading(false);
@@ -275,7 +276,7 @@ export default function AgendaPage({ compact }: { compact?: boolean }) {
       message.success(newStatus === 'terminee' ? 'Tâche terminée !' : 'Tâche rouverte');
       fetchEvents();
     } catch (error) {
-      console.error('[Agenda] Erreur toggle tâche:', error);
+      logger.error('[Agenda] Erreur toggle tâche:', error);
       message.error('Erreur lors de la mise à jour');
     }
   };
@@ -315,7 +316,7 @@ export default function AgendaPage({ compact }: { compact?: boolean }) {
       form.resetFields();
       fetchEvents();
     } catch (error) {
-      console.error('[Agenda] Erreur lors de la sauvegarde:', error);
+      logger.error('[Agenda] Erreur lors de la sauvegarde:', error);
       message.error('Erreur lors de la sauvegarde');
     }
   };
@@ -328,7 +329,7 @@ export default function AgendaPage({ compact }: { compact?: boolean }) {
       setEditingEvent(null);
       fetchEvents();
     } catch (error) {
-      console.error('[Agenda] Erreur lors de la suppression:', error);
+      logger.error('[Agenda] Erreur lors de la suppression:', error);
       message.error('Erreur lors de la suppression');
     }
   };

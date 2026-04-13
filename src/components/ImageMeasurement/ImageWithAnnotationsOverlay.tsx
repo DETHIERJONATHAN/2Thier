@@ -14,6 +14,7 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import type { ImageAnnotations } from '../../types/measurement';
 import { SF } from '../zhiive/ZhiiveTheme';
+import { logger } from '../../lib/logger';
 
 interface ImageWithAnnotationsOverlayProps {
   /** URL de l'image source */
@@ -66,7 +67,7 @@ const ImageWithAnnotationsOverlay: React.FC<ImageWithAnnotationsOverlayProps> = 
       onLoad?.();
     };
     img.onerror = () => {
-      console.error('❌ [ImageWithAnnotationsOverlay] Erreur chargement image');
+      logger.error('❌ [ImageWithAnnotationsOverlay] Erreur chargement image');
     };
     img.src = imageUrl;
     

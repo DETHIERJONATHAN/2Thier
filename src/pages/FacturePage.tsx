@@ -19,6 +19,7 @@ import 'dayjs/locale/fr';
 import DOMPurify from 'dompurify';
 import { useTranslation } from 'react-i18next';
 import { FB, SF } from '../components/zhiive/ZhiiveTheme';
+import { logger } from '../lib/logger';
 
 dayjs.extend(relativeTime);
 dayjs.locale('fr');
@@ -332,7 +333,7 @@ const FacturePage: React.FC = () => {
         setPeppolActive(false);
       }
     } catch (err) {
-      console.error('Erreur chargement factures:', err);
+      logger.error('Erreur chargement factures:', err);
     } finally {
       setLoading(false);
     }
@@ -351,7 +352,7 @@ const FacturePage: React.FC = () => {
       if (expRes.success) setExpenses(expRes.data);
       if (statsRes.success) setExpenseStats(statsRes.data);
     } catch (err) {
-      console.error('Erreur chargement dépenses:', err);
+      logger.error('Erreur chargement dépenses:', err);
     } finally {
       setExpensesLoading(false);
     }
@@ -370,7 +371,7 @@ const FacturePage: React.FC = () => {
       const res = await api.get<{ success: boolean; data: MonthlyData[] }>('/api/expenses/monthly?months=6');
       if (res.success) setMonthlyData(res.data);
     } catch (err) {
-      console.error('Erreur chargement données mensuelles:', err);
+      logger.error('Erreur chargement données mensuelles:', err);
     } finally {
       setMonthlyLoading(false);
     }
@@ -396,7 +397,7 @@ const FacturePage: React.FC = () => {
       window.URL.revokeObjectURL(url);
       message.success('Export CSV téléchargé');
     } catch (err) {
-      console.error('Erreur export CSV:', err);
+      logger.error('Erreur export CSV:', err);
       message.error('Erreur lors de l\'export CSV');
     } finally {
       setExportingCsv(false);
@@ -414,7 +415,7 @@ const FacturePage: React.FC = () => {
         if (activeTab === 'expenses' || activeTab === 'accounting') loadExpenses();
       }
     } catch (err) {
-      console.error('Erreur accept incoming:', err);
+      logger.error('Erreur accept incoming:', err);
       message.error('Erreur lors de l\'acceptation');
     } finally {
       setAcceptingInvoiceId(null);
@@ -431,7 +432,7 @@ const FacturePage: React.FC = () => {
         loadData();
       }
     } catch (err) {
-      console.error('Erreur reject incoming:', err);
+      logger.error('Erreur reject incoming:', err);
       message.error('Erreur lors du rejet');
     } finally {
       setRejectingInvoiceId(null);
@@ -448,7 +449,7 @@ const FacturePage: React.FC = () => {
         loadData();
       }
     } catch (err) {
-      console.error('Erreur fetch incoming:', err);
+      logger.error('Erreur fetch incoming:', err);
       message.error('Erreur lors de la récupération des factures');
     } finally {
       setFetchingIncoming(false);
@@ -465,7 +466,7 @@ const FacturePage: React.FC = () => {
         setSelectedExpense(null);
       }
     } catch (err) {
-      console.error('Erreur mark paid:', err);
+      logger.error('Erreur mark paid:', err);
       message.error('Erreur lors du marquage');
     }
   }, [api, message, loadExpenses]);
@@ -521,7 +522,7 @@ const FacturePage: React.FC = () => {
         setShowExpenseForm(true);
       }
     } catch (err) {
-      console.error('Scan error:', err);
+      logger.error('Scan error:', err);
       message.error('Erreur lors du scan');
     } finally {
       setScanning(false);

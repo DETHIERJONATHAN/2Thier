@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { Input, Collapse, Tooltip, Badge, Button, Divider } from 'antd';
 import { SearchOutlined, FileAddOutlined } from '@ant-design/icons';
 import { MODULE_REGISTRY, MODULE_CATEGORIES, ModuleDefinition, ModuleCategory } from './ModuleRegistry';
+import { logger } from '../../lib/logger';
 
 interface ModulePaletteProps {
   onModuleDragStart: (moduleId: string) => void;
@@ -178,7 +179,7 @@ const ModulePalette = ({
               type="primary"
               icon={<FileAddOutlined />}
               onClick={() => {
-                console.log('🎯 [ModulePalette] Bouton template cliqué !');
+                logger.debug('🎯 [ModulePalette] Bouton template cliqué !');
                 onApplyTemplate();
               }}
               block

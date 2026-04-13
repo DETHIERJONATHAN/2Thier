@@ -10,6 +10,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { logger } from '../../../../lib/logger';
 
 interface ConditionEvaluationResult {
   success: boolean;
@@ -50,7 +51,7 @@ export const useConditionEvaluation = (conditionId: string | null): ConditionEva
     // 🚀 OPTIMISATION: Vérifier le cache d'abord
     const cached = conditionCache.get(conditionId);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-      console.log(`🚀 [useConditionEvaluation Legacy] Cache hit pour ${conditionId}`);
+      logger.debug(`🚀 [useConditionEvaluation Legacy] Cache hit pour ${conditionId}`);
       setEvaluation(cached.result);
       return;
     }
@@ -59,7 +60,7 @@ export const useConditionEvaluation = (conditionId: string | null): ConditionEva
       setEvaluation(prev => ({ ...prev, loading: true, error: null }));
       
       try {
-        console.log(`⚠️ [useConditionEvaluation Legacy] Évaluation condition (API): ${conditionId}`);
+        logger.debug(`⚠️ [useConditionEvaluation Legacy] Évaluation condition (API): ${conditionId}`);
         
         const response = await api.post(`/api/tbl/evaluate/condition/${conditionId}`, {
           submissionId: 'df833cac-0b44-4b2b-bb1c-de3878f00182',
@@ -90,7 +91,7 @@ export const useConditionEvaluation = (conditionId: string | null): ConditionEva
           });
         }
       } catch (error: unknown) {
-        console.error(`❌ [useConditionEvaluation Legacy] Erreur:`, error);
+        logger.error(`❌ [useConditionEvaluation Legacy] Erreur:`, error);
         setEvaluation({
           success: false,
           result: null,

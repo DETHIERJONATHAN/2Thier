@@ -17,6 +17,7 @@ import {
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { FB, SF } from '../../components/zhiive/ZhiiveTheme';
+import { logger } from '../../lib/logger';
 
 const useScreenSize = () => {
   const [w, setW] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
@@ -113,7 +114,7 @@ const UsersSettings: React.FC = () => {
       const roleList = Array.isArray(rolesRes) ? rolesRes : rolesRes?.data || rolesRes?.roles || [];
       setRoles(roleList);
     } catch (err) {
-      console.error('Erreur chargement users:', err);
+      logger.error('Erreur chargement users:', err);
       message.error('Erreur lors du chargement des utilisateurs.');
     } finally { setLoading(false); }
   }, [api, orgId]);

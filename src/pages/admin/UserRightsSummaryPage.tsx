@@ -23,6 +23,7 @@ import {
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Text, Paragraph } = Typography;
 
@@ -187,19 +188,19 @@ const UserRightsSummaryPage: React.FC = () => {
   // Vérification des permissions d'accès
   const hasAdminAccess = useMemo(() => {
     if (!user) return false;
-    console.log("[UserRightsSummaryPage] User object:", user);
-    console.log("[UserRightsSummaryPage] user.isSuperAdmin:", user.isSuperAdmin);
-    console.log("[UserRightsSummaryPage] user.role:", (user as { role?: string })?.role);
-    console.log("[UserRightsSummaryPage] user.userRole:", (user as { userRole?: string })?.userRole);
+    logger.debug("[UserRightsSummaryPage] User object:", user);
+    logger.debug("[UserRightsSummaryPage] user.isSuperAdmin:", user.isSuperAdmin);
+    logger.debug("[UserRightsSummaryPage] user.role:", (user as { role?: string })?.role);
+    logger.debug("[UserRightsSummaryPage] user.userRole:", (user as { userRole?: string })?.userRole);
     
     // Vérifier si l'utilisateur est super admin ou admin
     const isSuper = user.isSuperAdmin === true;
     const roleCheck = (user as { role?: string })?.role;
     const userRoleCheck = (user as { userRole?: string })?.userRole;
     
-    console.log("[UserRightsSummaryPage] isSuper:", isSuper);
-    console.log("[UserRightsSummaryPage] roleCheck:", roleCheck);
-    console.log("[UserRightsSummaryPage] userRoleCheck:", userRoleCheck);
+    logger.debug("[UserRightsSummaryPage] isSuper:", isSuper);
+    logger.debug("[UserRightsSummaryPage] roleCheck:", roleCheck);
+    logger.debug("[UserRightsSummaryPage] userRoleCheck:", userRoleCheck);
     
     return isSuper || 
            roleCheck === 'admin' || 
@@ -218,12 +219,12 @@ const UserRightsSummaryPage: React.FC = () => {
     setError(null);
 
     try {
-      console.log("[UserRightsSummaryPage] Fetching initial data...");
-      console.log("[UserRightsSummaryPage] User permissions check - hasAdminAccess:", hasAdminAccess);
+      logger.debug("[UserRightsSummaryPage] Fetching initial data...");
+      logger.debug("[UserRightsSummaryPage] User permissions check - hasAdminAccess:", hasAdminAccess);
       
       // D'abord vérifier l'authentification avec /auth/me
       const authCheck = await api.get('/api/auth/me').catch(err => {
-        console.error("[UserRightsSummaryPage] Auth check failed:", err);
+        logger.error("[UserRightsSummaryPage] Auth check failed:", err);
         return { error: 'Non authentifié', authFailed: true };
       });
       
@@ -236,24 +237,24 @@ const UserRightsSummaryPage: React.FC = () => {
         return;
       }
       
-      console.log("[UserRightsSummaryPage] Auth check successful:", authCheck);
+      logger.debug("[UserRightsSummaryPage] Auth check successful:", authCheck);
       
       const [usersResponse, orgsResponse] = await Promise.all([
         api.get('/api/users').catch(err => {
-          console.error("[UserRightsSummaryPage] Error fetching users:", err);
+          logger.error("[UserRightsSummaryPage] Error fetching users:", err);
           // Extraire le message d'erreur plus précisément
           const errorMsg = err.response?.data?.message || err.message || 'Erreur lors de la récupération des utilisateurs';
           return { error: errorMsg, status: err.response?.status };
         }),
         api.get('/api/organizations').catch(err => {
-          console.error("[UserRightsSummaryPage] Error fetching organizations:", err);
+          logger.error("[UserRightsSummaryPage] Error fetching organizations:", err);
           const errorMsg = err.response?.data?.message || err.message || 'Erreur lors de la récupération des organisations';
           return { error: errorMsg, status: err.response?.status };
         })
       ]);
 
-      console.log("[UserRightsSummaryPage] Users response:", usersResponse);
-      console.log("[UserRightsSummaryPage] Organizations response:", orgsResponse);
+      logger.debug("[UserRightsSummaryPage] Users response:", usersResponse);
+      logger.debug("[UserRightsSummaryPage] Organizations response:", orgsResponse);
 
       // Gestion des erreurs d'accès plus précise
       if (usersResponse?.error || orgsResponse?.error) {
@@ -281,28 +282,28 @@ const UserRightsSummaryPage: React.FC = () => {
       if (Array.isArray(usersResponse)) {
         processedUsers = usersResponse;
         setUsers(usersResponse);
-        console.log(`[UserRightsSummaryPage] ${usersResponse.length} utilisateurs chargés:`, usersResponse);
+        logger.debug(`[UserRightsSummaryPage] ${usersResponse.length} utilisateurs chargés:`, usersResponse);
       } else if (usersResponse?.data && Array.isArray(usersResponse.data)) {
         // Extract data from API response format {success: true, data: [...]}
         processedUsers = usersResponse.data;
         setUsers(usersResponse.data);
-        console.log(`[UserRightsSummaryPage] ${usersResponse.data.length} utilisateurs chargés depuis response.data:`, usersResponse.data);
+        logger.debug(`[UserRightsSummaryPage] ${usersResponse.data.length} utilisateurs chargés depuis response.data:`, usersResponse.data);
       } else {
-        console.warn("[UserRightsSummaryPage] Users response is not an array:", usersResponse);
+        logger.warn("[UserRightsSummaryPage] Users response is not an array:", usersResponse);
         setUsers([]);
       }
 
       if (Array.isArray(orgsResponse)) {
         processedOrganizations = orgsResponse;
         setOrganizations(orgsResponse);
-        console.log(`[UserRightsSummaryPage] ${orgsResponse.length} organisations chargées:`, orgsResponse);
+        logger.debug(`[UserRightsSummaryPage] ${orgsResponse.length} organisations chargées:`, orgsResponse);
       } else if (orgsResponse?.data && Array.isArray(orgsResponse.data)) {
         // Extract data from API response format {success: true, data: [...]}
         processedOrganizations = orgsResponse.data;
         setOrganizations(orgsResponse.data);
-        console.log(`[UserRightsSummaryPage] ${orgsResponse.data.length} organisations chargées depuis response.data:`, orgsResponse.data);
+        logger.debug(`[UserRightsSummaryPage] ${orgsResponse.data.length} organisations chargées depuis response.data:`, orgsResponse.data);
       } else {
-        console.warn("[UserRightsSummaryPage] Organizations response is not an array:", orgsResponse);
+        logger.warn("[UserRightsSummaryPage] Organizations response is not an array:", orgsResponse);
         setOrganizations([]);
       }
 
@@ -311,7 +312,7 @@ const UserRightsSummaryPage: React.FC = () => {
       setFilteredOrganizations(processedOrganizations);
 
     } catch (error) {
-      console.error('[UserRightsSummaryPage] Error fetching initial data:', error);
+      logger.error('[UserRightsSummaryPage] Error fetching initial data:', error);
       setError('Erreur lors du chargement des données. Vérifiez vos permissions d\'administration.');
       setUsers([]);
       setOrganizations([]);
@@ -334,29 +335,29 @@ const UserRightsSummaryPage: React.FC = () => {
     try {
       const summaryResponse = await api.get(`/api/users/${selectedUserId}/rights-summary?organizationId=${selectedOrgId}`);
       
-      console.log("[UserRightsSummaryPage] Rights summary response:", summaryResponse);
+      logger.debug("[UserRightsSummaryPage] Rights summary response:", summaryResponse);
 
       // Extraire les données du format API {success: true, data: {...}}
       let rightsSummaryData;
       if (summaryResponse?.data && typeof summaryResponse.data === 'object') {
         rightsSummaryData = summaryResponse.data;
-        console.log("[UserRightsSummaryPage] Using rights summary from response.data:", rightsSummaryData);
+        logger.debug("[UserRightsSummaryPage] Using rights summary from response.data:", rightsSummaryData);
       } else if (summaryResponse && typeof summaryResponse === 'object') {
         rightsSummaryData = summaryResponse;
-        console.log("[UserRightsSummaryPage] Using rights summary directly:", rightsSummaryData);
+        logger.debug("[UserRightsSummaryPage] Using rights summary directly:", rightsSummaryData);
       } else {
-        console.warn("[UserRightsSummaryPage] Unexpected rights summary response format:", summaryResponse);
+        logger.warn("[UserRightsSummaryPage] Unexpected rights summary response format:", summaryResponse);
         rightsSummaryData = null;
       }
 
-      console.log("[UserRightsSummaryPage] Final rightsSummaryData:", rightsSummaryData);
-      console.log('[UserRightsSummaryPage] 🔍 Structure détaillée des données:');
-      console.log('- userInfo:', rightsSummaryData?.userInfo);
-      console.log('- organizationInfo:', rightsSummaryData?.organizationInfo);
-      console.log('- roles:', rightsSummaryData?.roles);
-      console.log('- permissions structure:', Object.keys(rightsSummaryData?.permissions || {}));
-      console.log('[UserRightsSummaryPage] 📊 Données user complètes:', JSON.stringify(rightsSummaryData?.userInfo, null, 2));
-      console.log('[UserRightsSummaryPage] 🏢 Données org complètes:', JSON.stringify(rightsSummaryData?.organizationInfo, null, 2));
+      logger.debug("[UserRightsSummaryPage] Final rightsSummaryData:", rightsSummaryData);
+      logger.debug('[UserRightsSummaryPage] 🔍 Structure détaillée des données:');
+      logger.debug('- userInfo:', rightsSummaryData?.userInfo);
+      logger.debug('- organizationInfo:', rightsSummaryData?.organizationInfo);
+      logger.debug('- roles:', rightsSummaryData?.roles);
+      logger.debug('- permissions structure:', Object.keys(rightsSummaryData?.permissions || {}));
+      logger.debug('[UserRightsSummaryPage] 📊 Données user complètes:', JSON.stringify(rightsSummaryData?.userInfo, null, 2));
+      logger.debug('[UserRightsSummaryPage] 🏢 Données org complètes:', JSON.stringify(rightsSummaryData?.organizationInfo, null, 2));
       
       // Enrichir les données avec les informations complètes des users et organizations
       if (rightsSummaryData) {
@@ -372,7 +373,7 @@ const UserRightsSummaryPage: React.FC = () => {
             // Enrichir avec plus d'informations si disponibles
             role: fullUserData.role
           };
-          console.log('[UserRightsSummaryPage] ✨ Données user enrichies:', rightsSummaryData.userInfo);
+          logger.debug('[UserRightsSummaryPage] ✨ Données user enrichies:', rightsSummaryData.userInfo);
         }
 
         // Enrichir organizationInfo avec les données complètes de l'organisation
@@ -394,8 +395,8 @@ const UserRightsSummaryPage: React.FC = () => {
             moduleCount: realModuleCount,
             activeModules: fullOrgData.activeModules || realModuleCount
           };
-          console.log('[UserRightsSummaryPage] ✨ Données org enrichies avec statistiques réelles:', rightsSummaryData.organizationInfo);
-          console.log('[UserRightsSummaryPage] 📊 Calculs: modules réels =', realModuleCount, ', utilisateurs réels =', realUserCount);
+          logger.debug('[UserRightsSummaryPage] ✨ Données org enrichies avec statistiques réelles:', rightsSummaryData.organizationInfo);
+          logger.debug('[UserRightsSummaryPage] 📊 Calculs: modules réels =', realModuleCount, ', utilisateurs réels =', realUserCount);
         }
       }
       
@@ -410,7 +411,7 @@ const UserRightsSummaryPage: React.FC = () => {
       }, 100);
 
     } catch (error) {
-      console.error('[UserRightsSummaryPage] Error fetching rights summary:', error);
+      logger.error('[UserRightsSummaryPage] Error fetching rights summary:', error);
       setError('Erreur lors de la récupération du résumé des droits');
       setRightsSummary(null);
     } finally {
@@ -421,12 +422,12 @@ const UserRightsSummaryPage: React.FC = () => {
   // Fonction pour récupérer les organisations d'un utilisateur
   const fetchUserOrganizations = useCallback(async (userId: string) => {
     try {
-      console.log("[UserRightsSummaryPage] Fetching organizations for user:", userId);
+      logger.debug("[UserRightsSummaryPage] Fetching organizations for user:", userId);
       const response = await api.get(`/api/users/${userId}/organizations`);
       
       if (response?.success && Array.isArray(response.data)) {
         const userOrgs = response.data.map((userOrg: { Organization: Organization }) => userOrg.Organization).filter(Boolean);
-        console.log("[UserRightsSummaryPage] User organizations found:", userOrgs);
+        logger.debug("[UserRightsSummaryPage] User organizations found:", userOrgs);
         setFilteredOrganizations(userOrgs);
         
         // Si l'organisation actuellement sélectionnée n'est pas disponible pour cet utilisateur, la déselectionner
@@ -435,13 +436,13 @@ const UserRightsSummaryPage: React.FC = () => {
           setRightsSummary(null);
         }
       } else {
-        console.warn("[UserRightsSummaryPage] No organizations found for user:", userId);
+        logger.warn("[UserRightsSummaryPage] No organizations found for user:", userId);
         setFilteredOrganizations([]);
         setSelectedOrgId(undefined);
         setRightsSummary(null);
       }
     } catch (error) {
-      console.error('[UserRightsSummaryPage] Error fetching user organizations:', error);
+      logger.error('[UserRightsSummaryPage] Error fetching user organizations:', error);
       setFilteredOrganizations([]);
       setSelectedOrgId(undefined);
       setRightsSummary(null);
@@ -450,14 +451,14 @@ const UserRightsSummaryPage: React.FC = () => {
 
   // Fonction pour filtrer les utilisateurs d'une organisation côté client
   const filterUsersByOrganization = useCallback((organizationId: string) => {
-    console.log("[UserRightsSummaryPage] Filtering users for organization:", organizationId);
+    logger.debug("[UserRightsSummaryPage] Filtering users for organization:", organizationId);
     
     // Filtrer les utilisateurs qui ont une association avec cette organisation
     const orgUsers = users.filter(user => 
       user.UserOrganization?.some(userOrg => userOrg.organizationId === organizationId)
     );
     
-    console.log("[UserRightsSummaryPage] Organization users found:", orgUsers);
+    logger.debug("[UserRightsSummaryPage] Organization users found:", orgUsers);
     setFilteredUsers(orgUsers);
     
     // Si l'utilisateur actuellement sélectionné n'est pas disponible pour cette organisation, le déselectionner
@@ -469,7 +470,7 @@ const UserRightsSummaryPage: React.FC = () => {
 
   // Handlers
   const handleUserChange = useCallback((value: string) => {
-    console.log("[UserRightsSummaryPage] User selected:", value);
+    logger.debug("[UserRightsSummaryPage] User selected:", value);
     setSelectedUserId(value);
     setRightsSummary(null);
     
@@ -484,7 +485,7 @@ const UserRightsSummaryPage: React.FC = () => {
   }, [fetchUserOrganizations, organizations]);
 
   const handleOrgChange = useCallback((value: string) => {
-    console.log("[UserRightsSummaryPage] Organization selected:", value);
+    logger.debug("[UserRightsSummaryPage] Organization selected:", value);
     setSelectedOrgId(value);
     setRightsSummary(null);
     
@@ -554,7 +555,7 @@ const UserRightsSummaryPage: React.FC = () => {
     const activeModules = activeModulesEntries.filter(([, modulePerms]) => modulePerms.isActive !== false).length;
     const totalActions = activeModulesEntries.reduce((acc, [, modulePerms]) => acc + (modulePerms.actions?.length || 0), 0);
     
-    console.log('[UserRightsSummaryPage] 📊 Statistiques modules actifs:', {
+    logger.debug('[UserRightsSummaryPage] 📊 Statistiques modules actifs:', {
       totalActiveModules: totalPermissions,
       totalActions,
       activeModulesEntries: activeModulesEntries.map(([key, perms]) => ({
@@ -577,27 +578,27 @@ const UserRightsSummaryPage: React.FC = () => {
       role.toLowerCase().includes('admin') && !role.toLowerCase().includes('super')
     );
     
-    console.log('[UserRightsSummaryPage] 🔐 Calcul sécurité - Rôles détectés:', rightsSummary.roles);
-    console.log('[UserRightsSummaryPage] 🔐 isSuperAdmin:', isSuperAdmin, ', isAdmin:', isAdmin, ', totalActions:', totalActions);
+    logger.debug('[UserRightsSummaryPage] 🔐 Calcul sécurité - Rôles détectés:', rightsSummary.roles);
+    logger.debug('[UserRightsSummaryPage] 🔐 isSuperAdmin:', isSuperAdmin, ', isAdmin:', isAdmin, ', totalActions:', totalActions);
     
     if (isSuperAdmin) {
       securityScore = 100;
-      console.log('[UserRightsSummaryPage] 🔐 Score Super Admin: 100%');
+      logger.debug('[UserRightsSummaryPage] 🔐 Score Super Admin: 100%');
     } else if (isAdmin) {
       securityScore = 80;
-      console.log('[UserRightsSummaryPage] 🔐 Score Admin: 80%');
+      logger.debug('[UserRightsSummaryPage] 🔐 Score Admin: 80%');
     } else if (totalActions > 15) {
       securityScore = 70;
-      console.log('[UserRightsSummaryPage] 🔐 Score Utilisateur avancé (>15 actions): 70%');
+      logger.debug('[UserRightsSummaryPage] 🔐 Score Utilisateur avancé (>15 actions): 70%');
     } else if (totalActions > 10) {
       securityScore = 60;
-      console.log('[UserRightsSummaryPage] 🔐 Score Utilisateur standard (>10 actions): 60%');
+      logger.debug('[UserRightsSummaryPage] 🔐 Score Utilisateur standard (>10 actions): 60%');
     } else if (totalActions > 5) {
       securityScore = 40;
-      console.log('[UserRightsSummaryPage] 🔐 Score Utilisateur basique (>5 actions): 40%');
+      logger.debug('[UserRightsSummaryPage] 🔐 Score Utilisateur basique (>5 actions): 40%');
     } else {
       securityScore = 20;
-      console.log('[UserRightsSummaryPage] 🔐 Score Utilisateur très limité (≤5 actions): 20%');
+      logger.debug('[UserRightsSummaryPage] 🔐 Score Utilisateur très limité (≤5 actions): 20%');
     }
 
     return {
@@ -638,42 +639,42 @@ const UserRightsSummaryPage: React.FC = () => {
   // Options pour les selects
   const userOptions = useMemo(() => {
     const sourceUsers = selectedOrgId ? filteredUsers : users;
-    console.log("[UserRightsSummaryPage] Generating user options from:", selectedOrgId ? 'filtered users' : 'all users', sourceUsers);
+    logger.debug("[UserRightsSummaryPage] Generating user options from:", selectedOrgId ? 'filtered users' : 'all users', sourceUsers);
     
     const options = sourceUsers.map(u => {
-      console.log("[UserRightsSummaryPage] Processing user:", u);
+      logger.debug("[UserRightsSummaryPage] Processing user:", u);
       const displayName = `${u.firstName || ''} ${u.lastName || ''}`.trim();
       const label = displayName 
         ? `${displayName} (${u.email})`
         : u.email;
-      console.log("[UserRightsSummaryPage] Generated label:", label);
+      logger.debug("[UserRightsSummaryPage] Generated label:", label);
       return {
         value: u.id,
         label: label
       };
     });
-    console.log("[UserRightsSummaryPage] Final user options:", options);
+    logger.debug("[UserRightsSummaryPage] Final user options:", options);
     return options;
   }, [users, filteredUsers, selectedOrgId]);
 
   const orgOptions = useMemo(() => {
     const sourceOrgs = selectedUserId ? filteredOrganizations : organizations;
-    console.log("[UserRightsSummaryPage] Generating org options from:", selectedUserId ? 'filtered organizations' : 'all organizations', sourceOrgs);
+    logger.debug("[UserRightsSummaryPage] Generating org options from:", selectedUserId ? 'filtered organizations' : 'all organizations', sourceOrgs);
     
     const options = sourceOrgs.map(org => {
-      console.log("[UserRightsSummaryPage] Processing org:", org);
+      logger.debug("[UserRightsSummaryPage] Processing org:", org);
       return {
         value: org.id,
         label: org.name
       };
     });
-    console.log("[UserRightsSummaryPage] Final org options:", options);
+    logger.debug("[UserRightsSummaryPage] Final org options:", options);
     return options;
   }, [organizations, filteredOrganizations, selectedUserId]);
 
   // N'afficher que pour les utilisateurs connectés et autorisés
   if (!user) {
-    console.log("[UserRightsSummaryPage] No user found, redirecting to login");
+    logger.debug("[UserRightsSummaryPage] No user found, redirecting to login");
     return (
       <div style={{ padding: 24 }}>
         <Alert
@@ -686,11 +687,11 @@ const UserRightsSummaryPage: React.FC = () => {
     );
   }
 
-  console.log("[UserRightsSummaryPage] Current user:", user);
-  console.log("[UserRightsSummaryPage] hasAdminAccess:", hasAdminAccess);
+  logger.debug("[UserRightsSummaryPage] Current user:", user);
+  logger.debug("[UserRightsSummaryPage] hasAdminAccess:", hasAdminAccess);
 
   if (!hasAdminAccess) {
-    console.log("[UserRightsSummaryPage] User has no admin access");
+    logger.debug("[UserRightsSummaryPage] User has no admin access");
     return (
       <div style={{ padding: 24 }}>
         <Alert
@@ -710,11 +711,11 @@ const UserRightsSummaryPage: React.FC = () => {
 
   // Debug simplifié
   if (!user) {
-    console.log("[UserRightsSummaryPage] ❌ Aucun utilisateur connecté");
+    logger.debug("[UserRightsSummaryPage] ❌ Aucun utilisateur connecté");
   } else if (!hasAdminAccess) {
-    console.log("[UserRightsSummaryPage] ❌ Accès admin refusé pour:", user.email);
+    logger.debug("[UserRightsSummaryPage] ❌ Accès admin refusé pour:", user.email);
   } else {
-    console.log("[UserRightsSummaryPage] ✅ Utilisateur admin connecté:", user.email, "| Données:", {
+    logger.debug("[UserRightsSummaryPage] ✅ Utilisateur admin connecté:", user.email, "| Données:", {
       users: users.length,
       orgs: organizations.length,
       selectedUser: selectedUserId,
@@ -796,7 +797,7 @@ const UserRightsSummaryPage: React.FC = () => {
               allowClear
               showSearch
               filterOption={(input, option) => {
-                console.log("[UserRightsSummaryPage] User filterOption - input:", input, "option:", option);
+                logger.debug("[UserRightsSummaryPage] User filterOption - input:", input, "option:", option);
                 return option?.label?.toLowerCase().includes(input.toLowerCase()) ?? false;
               }}
               options={userOptions}
@@ -804,13 +805,13 @@ const UserRightsSummaryPage: React.FC = () => {
               disabled={(selectedOrgId ? filteredUsers.length : users.length) === 0}
               notFoundContent={isFetchingData ? <Spin size="small" /> : selectedOrgId ? "Aucun utilisateur dans cette organisation" : "Aucun utilisateur trouvé"}
               onFocus={() => {
-                console.log("[UserRightsSummaryPage] User Select onFocus - options:", userOptions);
-                console.log("[UserRightsSummaryPage] User options detailed:", JSON.stringify(userOptions, null, 2));
+                logger.debug("[UserRightsSummaryPage] User Select onFocus - options:", userOptions);
+                logger.debug("[UserRightsSummaryPage] User options detailed:", JSON.stringify(userOptions, null, 2));
               }}
               onOpenChange={(open) => {
-                console.log("[UserRightsSummaryPage] User Select dropdown visible:", open, "options:", userOptions);
+                logger.debug("[UserRightsSummaryPage] User Select dropdown visible:", open, "options:", userOptions);
                 if (open) {
-                  console.log("[UserRightsSummaryPage] Dropdown opened - checking options structure:", userOptions.map(opt => ({ value: opt.value, label: opt.label })));
+                  logger.debug("[UserRightsSummaryPage] Dropdown opened - checking options structure:", userOptions.map(opt => ({ value: opt.value, label: opt.label })));
                 }
               }}
               styles={{ popup: { root: { zIndex: 9999 } } }}
@@ -836,7 +837,7 @@ const UserRightsSummaryPage: React.FC = () => {
               allowClear
               showSearch
               filterOption={(input, option) => {
-                console.log("[UserRightsSummaryPage] Org filterOption - input:", input, "option:", option);
+                logger.debug("[UserRightsSummaryPage] Org filterOption - input:", input, "option:", option);
                 return option?.label?.toLowerCase().includes(input.toLowerCase()) ?? false;
               }}
               options={orgOptions}
@@ -844,13 +845,13 @@ const UserRightsSummaryPage: React.FC = () => {
               disabled={(selectedUserId ? filteredOrganizations.length : organizations.length) === 0}
               notFoundContent={isFetchingData ? <Spin size="small" /> : selectedUserId ? "Aucune organisation pour cet utilisateur" : "Aucune organisation trouvée"}
               onFocus={() => {
-                console.log("[UserRightsSummaryPage] Org Select onFocus - options:", orgOptions);
-                console.log("[UserRightsSummaryPage] Org options detailed:", JSON.stringify(orgOptions, null, 2));
+                logger.debug("[UserRightsSummaryPage] Org Select onFocus - options:", orgOptions);
+                logger.debug("[UserRightsSummaryPage] Org options detailed:", JSON.stringify(orgOptions, null, 2));
               }}
               onOpenChange={(open) => {
-                console.log("[UserRightsSummaryPage] Org Select dropdown visible:", open, "options:", orgOptions);
+                logger.debug("[UserRightsSummaryPage] Org Select dropdown visible:", open, "options:", orgOptions);
                 if (open) {
-                  console.log("[UserRightsSummaryPage] Org Dropdown opened - checking options structure:", orgOptions.map(opt => ({ value: opt.value, label: opt.label })));
+                  logger.debug("[UserRightsSummaryPage] Org Dropdown opened - checking options structure:", orgOptions.map(opt => ({ value: opt.value, label: opt.label })));
                 }
               }}
               styles={{ popup: { root: { zIndex: 9999 } } }}
@@ -1230,7 +1231,7 @@ const UserRightsSummaryPage: React.FC = () => {
                     const isExplicitlyActive = modulePerms.isActive !== false;
                     const hasValidActions = modulePerms.actions && modulePerms.actions.length > 0;
                     
-                    console.log(`[UserRightsSummaryPage] Module ${moduleKey}:`, {
+                    logger.debug(`[UserRightsSummaryPage] Module ${moduleKey}:`, {
                       isActive: modulePerms.isActive,
                       isExplicitlyActive,
                       hasValidActions,

@@ -3,6 +3,7 @@ import type { RequestHandler } from 'express';
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import { logSecurityEvent, securityMetrics } from './securityLogger';
+import { logger } from '../lib/logger';
 
 const isCodespaces =
   process.env.CODESPACES === 'true' ||
@@ -290,7 +291,7 @@ export const inputSanitization = (req: Request, res: Response, next: NextFunctio
     try {
       req.body = sanitizeObject(req.body);
     } catch (e) {
-      console.warn('Cannot sanitize req.body:', e);
+      logger.warn('Cannot sanitize req.body:', e);
     }
   }
   

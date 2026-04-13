@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { randomUUID } from 'crypto';
+import { logger } from '../lib/logger';
 
 interface InvitationEmailPayload {
     to: string;
@@ -136,7 +137,7 @@ ${content}
         const smtpPass = process.env.SMTP_PASS;
 
         if (!smtpHost || !smtpUser || !smtpPass) {
-            console.warn('[EmailService] ⚠️ SMTP non configuré (SMTP_HOST, SMTP_USER, SMTP_PASS manquants)');
+            logger.warn('[EmailService] ⚠️ SMTP non configuré (SMTP_HOST, SMTP_USER, SMTP_PASS manquants)');
             return false;
         }
 
@@ -174,7 +175,7 @@ ${content}
 
             return true;
         } catch (error) {
-            console.error('[EmailService] ❌ Erreur SMTP:', error);
+            logger.error('[EmailService] ❌ Erreur SMTP:', error);
             return false;
         }
     }
@@ -199,7 +200,7 @@ ${content}
         if (sentViaSMTP) return;
 
         // 3. Fallback final : log console (dev uniquement)
-        console.warn('[EmailService] ⚠️ Aucun transport email disponible — affichage console uniquement');
+        logger.warn('[EmailService] ⚠️ Aucun transport email disponible — affichage console uniquement');
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
         const acceptUrl = `${frontendUrl}/accept-invitation?token=${payload.token}`;
     }
@@ -222,7 +223,7 @@ ${content}
         if (sent) return;
 
         // 3. Aucun transport — throw pour que l'appelant sache
-        console.error(`[EmailService] ❌ Aucun transport disponible pour envoyer à ${to}`);
+        logger.error(`[EmailService] ❌ Aucun transport disponible pour envoyer à ${to}`);
         throw new Error('Aucun transport email disponible (ni Gmail API, ni SMTP)');
     }
 }

@@ -1,3 +1,4 @@
+import { logger } from '../../../../lib/logger';
 /**
  * 🎯 POINT D'ENTRÉE PRINCIPAL - TBL BRIDGE INTEGRATION
  * 
@@ -51,7 +52,7 @@ export function startTBLIntegration(options: TBLIntegrationOptions = {}): () => 
     syncOnMount = true
   } = options;
 
-  console.log('🚀 [TBL Integration] Démarrage...');
+  logger.debug('🚀 [TBL Integration] Démarrage...');
 
   const cleanupFunctions: (() => void)[] = [];
 
@@ -74,16 +75,16 @@ export function startTBLIntegration(options: TBLIntegrationOptions = {}): () => 
     setTimeout(() => {
       const existingElements = document.querySelectorAll('[data-treebranchleaf-node], [data-node-id]');
       if (existingElements.length > 0 && debugMode) {
-        console.log(`🔄 [TBL Integration] ${existingElements.length} éléments existants détectés`);
+        logger.debug(`🔄 [TBL Integration] ${existingElements.length} éléments existants détectés`);
       }
     }, 1000);
   }
 
-  console.log('✅ [TBL Integration] Démarrage terminé');
+  logger.debug('✅ [TBL Integration] Démarrage terminé');
 
   // Fonction de nettoyage globale
   return () => {
-    console.log('🧹 [TBL Integration] Nettoyage...');
+    logger.debug('🧹 [TBL Integration] Nettoyage...');
     cleanupFunctions.forEach(cleanup => cleanup());
   };
 }

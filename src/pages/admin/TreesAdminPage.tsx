@@ -16,6 +16,7 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
 import { useTranslation } from 'react-i18next';
 import { FB, SF } from '../../components/zhiive/ZhiiveTheme';
+import { logger } from '../../lib/logger';
 
 const { Text } = Typography;
 const { Panel } = Collapse;
@@ -172,7 +173,7 @@ export default function TreesAdminPage() {
         setTrees(Array.isArray(res) ? res : res.data || []);
       }
     } catch (err) {
-      console.error('[TreesAdmin] Erreur chargement arbres:', err);
+      logger.error('[TreesAdmin] Erreur chargement arbres:', err);
       messageApi.error('Erreur lors du chargement des arbres');
     } finally {
       setLoading(false);
@@ -190,7 +191,7 @@ export default function TreesAdminPage() {
         setRoles(data.roles || []);
       }
     } catch (err) {
-      console.error('[TreesAdmin] Erreur chargement détail:', err);
+      logger.error('[TreesAdmin] Erreur chargement détail:', err);
       messageApi.error('Erreur lors du chargement du détail');
     } finally {
       setDetailLoading(false);
@@ -220,7 +221,7 @@ export default function TreesAdminPage() {
       fetchTreeDetail(selectedTree.id);
       fetchTrees();
     } catch (err) {
-      console.error('[TreesAdmin] Erreur partage:', err);
+      logger.error('[TreesAdmin] Erreur partage:', err);
       messageApi.error('Erreur lors du partage');
     }
   }, [selectedTree, stableApi, messageApi, shareForm, fetchTreeDetail, fetchTrees]);
@@ -234,7 +235,7 @@ export default function TreesAdminPage() {
       }
       fetchTrees();
     } catch (err) {
-      console.error('[TreesAdmin] Erreur suppression accès:', err);
+      logger.error('[TreesAdmin] Erreur suppression accès:', err);
       messageApi.error('Erreur lors de la suppression');
     }
   }, [stableApi, messageApi, selectedTree, fetchTreeDetail, fetchTrees]);
@@ -249,7 +250,7 @@ export default function TreesAdminPage() {
       duplicateForm.resetFields();
       fetchTrees();
     } catch (err) {
-      console.error('[TreesAdmin] Erreur duplication:', err);
+      logger.error('[TreesAdmin] Erreur duplication:', err);
       messageApi.error('Erreur lors de la duplication');
     }
   }, [selectedTree, stableApi, messageApi, duplicateForm, fetchTrees]);
@@ -266,7 +267,7 @@ export default function TreesAdminPage() {
         fetchTreeDetail(selectedTree.id);
       }
     } catch (err) {
-      console.error('[TreesAdmin] Erreur update config:', err);
+      logger.error('[TreesAdmin] Erreur update config:', err);
       messageApi.error('Erreur lors de la mise à jour');
     }
   }, [stableApi, messageApi, selectedTree, fetchTreeDetail]);

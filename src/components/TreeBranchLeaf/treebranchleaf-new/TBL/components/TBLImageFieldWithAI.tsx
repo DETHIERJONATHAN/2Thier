@@ -38,6 +38,7 @@ import { ImageMeasurementPreview } from '../../../../ImageMeasurement/ImageMeasu
 import ImageWithAnnotationsOverlay from '../../../../ImageMeasurement/ImageWithAnnotationsOverlay';
 import type { MeasurementResults, ImageAnnotations } from '../../../../../types/measurement';
 import { SF } from '../../../../zhiive/ZhiiveTheme';
+import { logger } from '../../../../../lib/logger';
 
 // Cache mémoire pour les images annotées (remplace sessionStorage — zéro stockage local)
 const imageMemoryCache = new Map<string, string>();
@@ -123,7 +124,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
     if (typeof window !== 'undefined') {
       const wasOpen = imageMemoryCache.get(smartCameraSessionKey);
       if (wasOpen === 'true') {
-        console.log('📱 [TBLImageFieldWithAI] Restauration SmartCamera ouvert depuis cache mémoire');
+        logger.debug('📱 [TBLImageFieldWithAI] Restauration SmartCamera ouvert depuis cache mémoire');
         return true;
       }
     }
@@ -136,7 +137,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
     if (typeof window !== 'undefined') {
       if (showSmartCamera) {
         imageMemoryCache.set(smartCameraSessionKey, 'true');
-        console.log('📱 [TBLImageFieldWithAI] SmartCamera ouvert - sauvegardé en mémoire');
+        logger.debug('📱 [TBLImageFieldWithAI] SmartCamera ouvert - sauvegardé en mémoire');
       } else {
         imageMemoryCache.delete(smartCameraSessionKey);
       }
@@ -184,8 +185,8 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
       }
       return typeof value;
     })();
-    console.log(`📸 [TBLImageFieldWithAI] MOUNTED (nodeId=${nodeId})`);
-    console.log(`   value: ${valueSummary}`);
+    logger.debug(`📸 [TBLImageFieldWithAI] MOUNTED (nodeId=${nodeId})`);
+    logger.debug(`   value: ${valueSummary}`);
   }, [nodeId]);
   
   // Refs pour les inputs file (galerie et caméra)
@@ -229,10 +230,10 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
   const { analyzeImage, applyResults } = useAIMeasure({
     onSuccess: (result) => {
       setLastAIResult(result);
-      console.log('[TBLImageFieldWithAI] Analyse IA réussie:', result);
+      logger.debug('[TBLImageFieldWithAI] Analyse IA réussie:', result);
     },
     onError: (error) => {
-      console.error('[TBLImageFieldWithAI] Erreur analyse IA:', error);
+      logger.error('[TBLImageFieldWithAI] Erreur analyse IA:', error);
     }
   });
   
@@ -266,7 +267,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
    */
   const triggerAIAnalysis = useCallback(async (imageBase64: string) => {
     if (!isAIEnabled || !aiConfig) {
-      console.log('[TBLImageFieldWithAI] IA désactivée ou non configurée');
+      logger.debug('[TBLImageFieldWithAI] IA désactivée ou non configurée');
       return;
     }
     
@@ -301,7 +302,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
         message.success(`📐 ${Object.keys(result.measures).length} mesure(s) extraite(s) par l'IA`);
       }
     } catch (error) {
-      console.error('[TBLImageFieldWithAI] Erreur lors de l\'analyse:', error);
+      logger.error('[TBLImageFieldWithAI] Erreur lors de l\'analyse:', error);
       message.error('Erreur lors de l\'analyse IA de l\'image');
     } finally {
       setIsAnalyzingAI(false);
@@ -378,7 +379,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
       
       // 🔥 NOUVEAU: Si on a des clés de mesure (aiMeasure_keys), utiliser le même traitement que SmartCamera
       if (aiMeasure_keys && aiMeasure_keys.length > 0) {
-        console.log('[TBLImageFieldWithAI] 🔥 Upload avec traitement Métré A4 V10 (même que SmartCamera)');
+        logger.debug('[TBLImageFieldWithAI] 🔥 Upload avec traitement Métré A4 V10 (même que SmartCamera)');
 
         // ✅ Sauvegarder tout de suite la photo dans le brouillon/lead
         if (lastAppliedImageRef.current !== imageDataUrl) {
@@ -421,7 +422,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
           });
           
           if (result.success && result.fusedCorners) {
-            console.log('[TBLImageFieldWithAI] ✅ Analyse Métré A4 V10 terminée (upload)!');
+            logger.debug('[TBLImageFieldWithAI] ✅ Analyse Métré A4 V10 terminée (upload)!');
 
             if (result.fallbackMode === 'largeTagOnly') {
               message.warning({
@@ -461,7 +462,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
             
           } else {
             // Référence non détectée - ouvrir le canvas quand même
-            console.log('[TBLImageFieldWithAI] ⚠️ Métré A4 V10 non détecté (upload)');
+            logger.debug('[TBLImageFieldWithAI] ⚠️ Métré A4 V10 non détecté (upload)');
             message.warning({ 
               content: '⚠️ Métré A4 V10 non détecté - Calibration manuelle', 
               key: 'ultra-fusion' 
@@ -478,7 +479,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
           }
           
         } catch (error: unknown) {
-          console.error('[TBLImageFieldWithAI] ❌ Erreur analyse Métré A4 V10 (upload):', error);
+          logger.error('[TBLImageFieldWithAI] ❌ Erreur analyse Métré A4 V10 (upload):', error);
           message.warning({ content: `Erreur: ${error.message}`, key: 'ultra-fusion' });
           
           const base64Part = imageDataUrl.includes(',') ? imageDataUrl.split(',')[1] : imageDataUrl;
@@ -602,7 +603,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
    * 🔥 Handler pour le SmartCamera (capture multi-photos)
    */
   const handleSmartCapture = useCallback(async (photos: CapturedPhoto[]) => {
-    console.log('[TBLImageFieldWithAI] 📸 Capture IA:', photos.length, 'photos');
+    logger.debug('[TBLImageFieldWithAI] 📸 Capture IA:', photos.length, 'photos');
 
     if (photos.length === 0) {
       message.error('Aucune photo capturée');
@@ -709,7 +710,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
       setIsAnalyzingReference(false);
       setShowMeasurementCanvas(true);
     } catch (error: unknown) {
-      console.error('[TBLImageFieldWithAI] ❌ Erreur analyse Métré A4 V10:', error);
+      logger.error('[TBLImageFieldWithAI] ❌ Erreur analyse Métré A4 V10:', error);
       message.warning({ content: `Erreur: ${error.message}`, key: 'ultra-fusion' });
 
       // En cas d'erreur, ouvrir le canvas quand même
@@ -730,11 +731,11 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
    * Sauvegarde l'image AVEC les annotations pour pouvoir la revoir
    */
   const handleMeasurementsComplete = useCallback((measurements: MeasurementResults, annotations?: ImageAnnotations) => {
-    console.log('═══════════════════════════════════════════════════════════');
-    console.log('[TBLImageFieldWithAI] 🎯 HANDLER MEASUREMENTS COMPLETE APPELÉ');
-    console.log('═══════════════════════════════════════════════════════════');
-    console.log('[TBLImageFieldWithAI] 📐 Mesures extraites:', measurements);
-    console.log('[TBLImageFieldWithAI] 🎯 Annotations reçues:', annotations ? {
+    logger.debug('═══════════════════════════════════════════════════════════');
+    logger.debug('[TBLImageFieldWithAI] 🎯 HANDLER MEASUREMENTS COMPLETE APPELÉ');
+    logger.debug('═══════════════════════════════════════════════════════════');
+    logger.debug('[TBLImageFieldWithAI] 📐 Mesures extraites:', measurements);
+    logger.debug('[TBLImageFieldWithAI] 🎯 Annotations reçues:', annotations ? {
       hasReferenceCorners: !!annotations.referenceCorners,
       hasImageDimensions: !!annotations.imageDimensions,
       hasMeasurementPoints: annotations.measurementPoints?.length || 0
@@ -756,22 +757,22 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
       try {
         const storageKey = annotatedImageStorageKey;
         const imageSize = imageToStore?.length || 0;
-        console.log('[TBLImageFieldWithAI] 💾 SAVE cache mémoire');
-        console.log(`   Clé: ${storageKey}`);
-        console.log(`   Taille image: ${(imageSize / 1024).toFixed(2)}KB`);
+        logger.debug('[TBLImageFieldWithAI] 💾 SAVE cache mémoire');
+        logger.debug(`   Clé: ${storageKey}`);
+        logger.debug(`   Taille image: ${(imageSize / 1024).toFixed(2)}KB`);
         
         imageMemoryCache.set(storageKey, imageToStore);
-        console.log(`   ✅ Vérification: SAUVEGARDÉE`);
+        logger.debug(`   ✅ Vérification: SAUVEGARDÉE`);
         
         // 🔄 Si ce nœud est dupliqué (suffixe -1, -2, etc.), sauvegarder AUSSI dans le nœud original
         if (nodeId.match(/-\d+$/)) {
           const originalNodeId = nodeId.replace(/-\d+$/, '');
           const originalStorageKey = `tbl_image_annot_${originalNodeId}`;
           imageMemoryCache.set(originalStorageKey, imageToStore);
-          console.log(`   🔄 SYNC ORIGINAL: ${originalStorageKey}`);
+          logger.debug(`   🔄 SYNC ORIGINAL: ${originalStorageKey}`);
         }
       } catch (err) {
-        console.error('[TBLImageFieldWithAI] ❌ ERREUR cache mémoire:', err);
+        logger.error('[TBLImageFieldWithAI] ❌ ERREUR cache mémoire:', err);
       }
       
       // 🔧 Envoyer au backend
@@ -800,7 +801,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
       const suffixMatch = nodeId.match(/-(\d+)$/);
       const duplicateSuffix = suffixMatch ? suffixMatch[0] : ''; // "-1", "-2", etc. ou ""
       
-      console.log(`[TBLImageFieldWithAI] 🔄 Détection duplication: nodeId="${nodeId}", suffixe="${duplicateSuffix}"`);
+      logger.debug(`[TBLImageFieldWithAI] 🔄 Détection duplication: nodeId="${nodeId}", suffixe="${duplicateSuffix}"`);
 
       aiMeasure_keys.forEach(mapping => {
         // Accéder à la mesure par clé (string index)
@@ -824,7 +825,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
             : prevValue !== measureValue;
 
           if (hasChanged) {
-            console.log(`[TBLImageFieldWithAI] Application: ${mapping.key} = ${measureValue} → ${actualTargetRef}${duplicateSuffix ? ` (original: ${mapping.targetRef})` : ''}`);
+            logger.debug(`[TBLImageFieldWithAI] Application: ${mapping.key} = ${measureValue} → ${actualTargetRef}${duplicateSuffix ? ` (original: ${mapping.targetRef})` : ''}`);
             onFieldUpdate(actualTargetRef, measureValue);
             nextApplied[actualTargetRef] = measureValue as number | string;
             appliedCount++;
@@ -847,12 +848,12 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
 
   // Copier l'image annotée si ce nœud a été dupliqué (le nouveau nodeId n'a pas de cache)
   useEffect(() => {
-    console.log(`[TBLImageFieldWithAI] 🔍 CHECK duplication (nodeId=${nodeId})`);
+    logger.debug(`[TBLImageFieldWithAI] 🔍 CHECK duplication (nodeId=${nodeId})`);
     
     // Ne chercher que SI la clé courante est vide
     const existing = imageMemoryCache.get(annotatedImageStorageKey);
     if (existing) {
-      console.log('[TBLImageFieldWithAI] ✅ Image déjà présente pour ce nodeId, skip');
+      logger.debug('[TBLImageFieldWithAI] ✅ Image déjà présente pour ce nodeId, skip');
       return;
     }
 
@@ -870,12 +871,12 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
       const sourceValue = imageMemoryCache.get(sourceKey);
       
       if (sourceValue && sourceValue.length > 10000) {
-        console.log(`[TBLImageFieldWithAI] 🔄 DUPLICATION DÉTECTÉE!`);
-        console.log(`   Source: ${sourceKey} (${(sourceValue.length / 1024).toFixed(2)}KB)`);
-        console.log(`   Destination: ${annotatedImageStorageKey}`);
+        logger.debug(`[TBLImageFieldWithAI] 🔄 DUPLICATION DÉTECTÉE!`);
+        logger.debug(`   Source: ${sourceKey} (${(sourceValue.length / 1024).toFixed(2)}KB)`);
+        logger.debug(`   Destination: ${annotatedImageStorageKey}`);
         
         imageMemoryCache.set(annotatedImageStorageKey, sourceValue);
-        console.log(`   ✅ Image copiée avec succès!`);
+        logger.debug(`   ✅ Image copiée avec succès!`);
         setAnnotatedImageUrl(sourceValue);
         setForceRenderKey(k => k + 1);
       }
@@ -884,9 +885,9 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
 
   // 📥 Hydrater l'image annotée depuis le cache mémoire dès que value change
   useEffect(() => {
-    console.log('[TBLImageFieldWithAI] 📥 Hydrate effect START');
-    console.log(`   value type: ${typeof value}`);
-    console.log(`   annotatedImageStorageKey: ${annotatedImageStorageKey}`);
+    logger.debug('[TBLImageFieldWithAI] 📥 Hydrate effect START');
+    logger.debug(`   value type: ${typeof value}`);
+    logger.debug(`   annotatedImageStorageKey: ${annotatedImageStorageKey}`);
 
     // Priority: cache mémoire > value.annotated > value.original > value string
     let nextAnnotated: string | null = null;
@@ -894,37 +895,37 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
     const fromCache = imageMemoryCache.get(annotatedImageStorageKey);
     if (fromCache) {
       nextAnnotated = fromCache;
-      console.log('[TBLImageFieldWithAI] ✅ Image annotée restaurée depuis cache mémoire');
-      console.log(`   Taille: ${(fromCache.length / 1024).toFixed(2)}KB`);
+      logger.debug('[TBLImageFieldWithAI] ✅ Image annotée restaurée depuis cache mémoire');
+      logger.debug(`   Taille: ${(fromCache.length / 1024).toFixed(2)}KB`);
     } else {
-      console.log('[TBLImageFieldWithAI] ⚠️ Cache mémoire vide pour cette clé');
+      logger.debug('[TBLImageFieldWithAI] ⚠️ Cache mémoire vide pour cette clé');
     }
 
     // Si pas en cache, fallback sur value (objet ou string)
     if (!nextAnnotated) {
-      console.log('[TBLImageFieldWithAI] 📥 Fallback sur value...');
+      logger.debug('[TBLImageFieldWithAI] 📥 Fallback sur value...');
       const annotatedFromValue = typeof value === 'object' ? (value as unknown)?.annotated : undefined;
       const originalFromValue = typeof value === 'object' ? (value as unknown)?.original : undefined;
       nextAnnotated = annotatedFromValue || (typeof value === 'string' ? value : originalFromValue);
-      if (annotatedFromValue) console.log('[TBLImageFieldWithAI] ✅ Utilise value.annotated');
-      else if (typeof value === 'string') console.log('[TBLImageFieldWithAI] ✅ Utilise value (string)');
-      else if (originalFromValue) console.log('[TBLImageFieldWithAI] ✅ Utilise value.original');
+      if (annotatedFromValue) logger.debug('[TBLImageFieldWithAI] ✅ Utilise value.annotated');
+      else if (typeof value === 'string') logger.debug('[TBLImageFieldWithAI] ✅ Utilise value (string)');
+      else if (originalFromValue) logger.debug('[TBLImageFieldWithAI] ✅ Utilise value.original');
     }
 
     if (nextAnnotated) {
-      console.log('[TBLImageFieldWithAI] 📥 setAnnotatedImageUrl appelé avec image restaurée');
-      console.log(`   Current state: ${annotatedImageUrl?.substring(0, 50)}`);
-      console.log(`   New value: ${nextAnnotated.substring(0, 50)}`);
+      logger.debug('[TBLImageFieldWithAI] 📥 setAnnotatedImageUrl appelé avec image restaurée');
+      logger.debug(`   Current state: ${annotatedImageUrl?.substring(0, 50)}`);
+      logger.debug(`   New value: ${nextAnnotated.substring(0, 50)}`);
       
       setAnnotatedImageUrl(prev => {
         if (prev === nextAnnotated) {
-          console.log('[TBLImageFieldWithAI] 🔄 Image identique, forçage du re-render via key');
+          logger.debug('[TBLImageFieldWithAI] 🔄 Image identique, forçage du re-render via key');
           setForceRenderKey(k => k + 1);
         }
         return nextAnnotated;
       });
     } else {
-      console.log(`[TBLImageFieldWithAI] ⚠️ Pas d'image à restaurer`);
+      logger.debug(`[TBLImageFieldWithAI] ⚠️ Pas d'image à restaurer`);
     }
   }, [value, annotatedImageStorageKey]);
 
@@ -941,7 +942,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
    * 🆕 Handler pour l'annulation du canvas de mesure
    */
   const handleMeasurementCancel = useCallback(() => {
-    console.log('[TBLImageFieldWithAI] Canvas de mesure annulé');
+    logger.debug('[TBLImageFieldWithAI] Canvas de mesure annulé');
     setShowMeasurementCanvas(false);
     // Optionnel: réouvrir SmartCamera si l'utilisateur veut reprendre des photos
   }, []);
@@ -1096,7 +1097,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
                       setProcessedImageBase64(base64);
                       setIsFromSmartCapture(true);
                       
-                      console.log('[TBLImageFieldWithAI] 📐 Revoir analyse Métré A4 V10:', {
+                      logger.debug('[TBLImageFieldWithAI] 📐 Revoir analyse Métré A4 V10:', {
                         totalPhotos: capturedPhotos.length,
                         bestPhotoHasReference: !!(bestPhoto?.metadata as unknown)?.referenceDetected,
                         hasFusedCorners: !!(bestPhoto?.metadata as unknown)?.fusedCorners
@@ -1442,7 +1443,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
               const bestPhoto = capturedPhotos.find(p => (p.metadata as unknown)?.referenceDetected || (p.metadata as unknown)?.fusedCorners) || capturedPhotos[0];
               const fusedCornersFromMetadata = (bestPhoto?.metadata as unknown)?.fusedCorners;
               if (fusedCornersFromMetadata) {
-                console.log('🎯 [TBLImageFieldWithAI] fusedCorners trouvés et passés à ImageMeasurementPreview:', fusedCornersFromMetadata);
+                logger.debug('🎯 [TBLImageFieldWithAI] fusedCorners trouvés et passés à ImageMeasurementPreview:', fusedCornersFromMetadata);
                 return fusedCornersFromMetadata;
               }
               return undefined;

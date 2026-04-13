@@ -8,6 +8,7 @@ import StyleEditorModal, { FieldStyle } from './StyleEditorModal';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { getVariantsForSection } from '../../data/sectionStyleVariants';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { TextArea } = Input;
 
@@ -89,7 +90,7 @@ const SectionConfigPanel = ({ section, onUpdate, onDelete }: SectionConfigPanelP
           setSelectedTreeNodeId(treesWithNodes[0].nodeId);
         }
       } catch (error) {
-        console.error('Erreur chargement arbres TBL:', error);
+        logger.error('Erreur chargement arbres TBL:', error);
         message.error('Impossible de charger les arbres TBL');
       } finally {
         setLoadingTrees(false);
@@ -127,8 +128,8 @@ const SectionConfigPanel = ({ section, onUpdate, onDelete }: SectionConfigPanelP
 
   const handleValuesChange = (_: unknown, allValues: unknown) => {
     // Mettre à jour immédiatement la section avec les nouvelles valeurs
-    console.log('[SectionConfigPanel] Form values changed:', allValues);
-    console.log('[SectionConfigPanel] Current section before update:', section);
+    logger.debug('[SectionConfigPanel] Form values changed:', allValues);
+    logger.debug('[SectionConfigPanel] Current section before update:', section);
     
     // Sauvegarder les langues actives dans la config
     allValues.activeLanguages = activeLanguages;
@@ -146,7 +147,7 @@ const SectionConfigPanel = ({ section, onUpdate, onDelete }: SectionConfigPanelP
         _fieldStyles: mergedFieldStyles 
       } 
     };
-    console.log('[SectionConfigPanel] Updated section:', updatedSection);
+    logger.debug('[SectionConfigPanel] Updated section:', updatedSection);
     onUpdate(updatedSection);
   };
 
@@ -329,10 +330,10 @@ const SectionConfigPanel = ({ section, onUpdate, onDelete }: SectionConfigPanelP
     listType: 'picture',
     onChange(info) {
       if (info.file.status === 'uploading') {
-        console.log('[Upload] Uploading:', info.file.name);
+        logger.debug('[Upload] Uploading:', info.file.name);
       }
       if (info.file.status === 'done') {
-        console.log('[Upload] Success response:', info.file.response);
+        logger.debug('[Upload] Success response:', info.file.response);
         const imageUrl = info.file.response?.url;
         if (imageUrl) {
           // Mettre à jour le champ du formulaire avec l'URL de l'image
@@ -345,7 +346,7 @@ const SectionConfigPanel = ({ section, onUpdate, onDelete }: SectionConfigPanelP
           message.error('Erreur: URL de l\'image non retournée');
         }
       } else if (info.file.status === 'error') {
-        console.error('[Upload] Error:', info.file.error);
+        logger.error('[Upload] Error:', info.file.error);
         message.error(`Erreur upload ${info.file.name}: ${info.file.error?.message || 'Inconnue'}`);
       }
     },

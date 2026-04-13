@@ -7,6 +7,7 @@ import { evaluateDependency } from '../utils/dependencyValidator';
 import type { FieldDependency as StoreFieldDependency } from '../store/slices/types';
 import { DynamicFormulaEngine } from '../services/DynamicFormulaEngine';
 import { HelpTooltip } from '../components/common/HelpTooltip';
+import { logger } from '../lib/logger';
 
 type FieldOption = { id: string; label: string; value?: string };
 type Field = {
@@ -64,7 +65,7 @@ export default function DevisPage() {
   
   // --- Debug helpers (prix) ---
   const debugEnabled = true; // mettre false pour couper les logs
-  const dbg = useCallback((...args: unknown[]) => { if (debugEnabled) console.log('[DevisDebug]', ...args); }, [debugEnabled]);
+  const dbg = useCallback((...args: unknown[]) => { if (debugEnabled) logger.debug('[DevisDebug]', ...args); }, [debugEnabled]);
 
   // Fonction pour extraire les styles d'un champ
   const getFieldStyles = useCallback((field: Field) => {
@@ -1074,7 +1075,7 @@ export default function DevisPage() {
                       dbg('🧮 Formule dynamique appliquée (async)', k, '=>', v);
                     }
                   } else if (debugEnabled) {
-                    console.warn('[FormulesDynamiques] ⏭️ Skip overwrite (préserver saisie utilisateur >0) pour', k);
+                    logger.warn('[FormulesDynamiques] ⏭️ Skip overwrite (préserver saisie utilisateur >0) pour', k);
                   }
                 }
               });

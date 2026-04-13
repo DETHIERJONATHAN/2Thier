@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { User, LogOut, Building2, Check } from 'lucide-react';
 import { useAuth } from '../auth/useAuth';
+import { logger } from '../lib/logger';
 
 const ProfileMenu = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -23,7 +24,7 @@ const ProfileMenu = () => {
       setShowOrgSelector(false);
       setIsOpen(false);
     } catch (error) {
-      console.error('Erreur lors du changement d\'organisation:', error);
+      logger.error('Erreur lors du changement d\'organisation:', error);
     }
   };
 

@@ -23,6 +23,7 @@ import { LEAD_STATUSES, LEAD_SOURCES } from './LeadsConfig';
 import type { Lead, LeadApiResponse } from '../../types/leads';
 import LeadGagneTab from './components/LeadGagneTab';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { TabPane } = Tabs;
 
@@ -100,7 +101,7 @@ export default function LeadDetail({
       } catch (error: unknown) {
         const errorMessage = getErrorMessage(error, 'Erreur lors du chargement du lead');
         const errorDetails = getErrorResponseDetails(error);
-        console.error('Erreur lors du chargement du lead:', {
+        logger.error('Erreur lors du chargement du lead:', {
           error,
           status: errorDetails.status,
           data: errorDetails.data,
@@ -334,7 +335,7 @@ export default function LeadDetail({
         key: 'duplicate-lead',
         label: 'Dupliquer le lead',
         icon: <CopyOutlined />,
-        onClick: () => console.log('Duplication du lead') // Logique à implémenter
+        onClick: () => logger.debug('Duplication du lead') // Logique à implémenter
       },
       {
         type: 'divider',
@@ -344,7 +345,7 @@ export default function LeadDetail({
         label: 'Supprimer le lead',
         icon: <DeleteOutlined />,
         danger: true,
-        onClick: () => console.log('Suppression du lead') // Logique à implémenter avec confirmation
+        onClick: () => logger.debug('Suppression du lead') // Logique à implémenter avec confirmation
       }
     ]
   };

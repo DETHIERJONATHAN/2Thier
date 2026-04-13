@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
 import type { ChantierStatus } from '../types/chantier';
+import { logger } from '../lib/logger';
 
 /**
  * Hook pour récupérer et gérer les statuts de chantiers
@@ -20,7 +21,7 @@ export function useChantierStatuses() {
       const response = await api.get('/api/chantier-statuses') as { success: boolean; data: ChantierStatus[] };
       setStatuses(response.data || []);
     } catch (err) {
-      console.error('[useChantierStatuses] Erreur:', err);
+      logger.error('[useChantierStatuses] Erreur:', err);
       setError(err instanceof Error ? err.message : 'Erreur inconnue');
       setStatuses([]);
     } finally {
@@ -34,7 +35,7 @@ export function useChantierStatuses() {
       await api.post('/api/chantier-statuses/seed', {});
       await fetchStatuses();
     } catch (err) {
-      console.error('[useChantierStatuses] Erreur seed:', err);
+      logger.error('[useChantierStatuses] Erreur seed:', err);
     }
   }, [api, fetchStatuses]);
 

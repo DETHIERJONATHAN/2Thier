@@ -9,14 +9,15 @@ const verbose = () => (typeof window !== 'undefined' && window.__TBL_VERBOSE__ =
 const diagEnabled = () => {
   try { return localStorage.getItem('TBL_DIAG') === '1'; } catch { return false; }
 };
-const ddiag = (...args: unknown[]) => { if (diagEnabled()) if (verbose()) console.log('[TBL_DIAG]', ...args as unknown); };
+const ddiag = (...args: unknown[]) => { if (diagEnabled()) if (verbose()) logger.debug('[TBL_DIAG]', ...args as unknown); };
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
+import { logger } from '../../../../../lib/logger';
 
 // 🎯 FONCTION: Création automatique des mirrors pour tous les champs TreeBranchLeaf
 export const createAutomaticMirrors = (tabs: TBLTab[], nodes: TreeBranchLeafNode[]): void => {
   try {
     if (typeof window === 'undefined' || !window.TBL_FORM_DATA) {
-      if (verbose()) console.log('🎯 [MIRROR] Initialisation TBL_FORM_DATA...');
+      if (verbose()) logger.debug('🎯 [MIRROR] Initialisation TBL_FORM_DATA...');
       if (typeof window !== 'undefined') {
         window.TBL_FORM_DATA = {};
       }
@@ -42,7 +43,7 @@ export const createAutomaticMirrors = (tabs: TBLTab[], nodes: TreeBranchLeafNode
               window.TBL_FORM_DATA[mirrorKey] = defaultValue;
               mirrorsCreated++;
               
-              if (verbose()) console.log('🎯 [MIRROR][AUTO_CREATE]', { 
+              if (verbose()) logger.debug('🎯 [MIRROR][AUTO_CREATE]', { 
                 mirrorKey, 
                 fieldId: field.id, 
                 fieldLabel: field.label, 
@@ -57,7 +58,7 @@ export const createAutomaticMirrors = (tabs: TBLTab[], nodes: TreeBranchLeafNode
                   const variantKey = `__mirror_data_${v}`;
                   if (!(variantKey in window.TBL_FORM_DATA)) {
                     window.TBL_FORM_DATA[variantKey] = defaultValue;
-                    if (verbose()) console.log('🎯 [MIRROR][AUTO_CREATE_VARIANT]', { 
+                    if (verbose()) logger.debug('🎯 [MIRROR][AUTO_CREATE_VARIANT]', { 
                       variantKey, 
                       from: mirrorKey, 
                       defaultValue 
@@ -65,7 +66,7 @@ export const createAutomaticMirrors = (tabs: TBLTab[], nodes: TreeBranchLeafNode
                   }
                 });
               } catch (e) {
-                console.warn('[MIRROR][VARIANT][ERROR]', e);
+                logger.warn('[MIRROR][VARIANT][ERROR]', e);
               }
             }
           });
@@ -84,7 +85,7 @@ export const createAutomaticMirrors = (tabs: TBLTab[], nodes: TreeBranchLeafNode
           if (!(formulaMirrorKey in window.TBL_FORM_DATA)) {
             const defaultValue = 0; // Les formules retournent généralement des nombres
             window.TBL_FORM_DATA[formulaMirrorKey] = defaultValue;
-            if (verbose()) console.log('🧮 [MIRROR][FORMULA_CREATE]', {
+            if (verbose()) logger.debug('🧮 [MIRROR][FORMULA_CREATE]', {
               mirrorKey: formulaMirrorKey,
               formulaId: node.id,
               formulaLabel: node.label,
@@ -97,7 +98,7 @@ export const createAutomaticMirrors = (tabs: TBLTab[], nodes: TreeBranchLeafNode
           if (!(formulaLabelMirrorKey in window.TBL_FORM_DATA)) {
             const defaultValue = 0;
             window.TBL_FORM_DATA[formulaLabelMirrorKey] = defaultValue;
-            if (verbose()) console.log('🧮 [MIRROR][FORMULA_LABEL_CREATE]', {
+            if (verbose()) logger.debug('🧮 [MIRROR][FORMULA_LABEL_CREATE]', {
               mirrorKey: formulaLabelMirrorKey,
               formulaLabel: node.label,
               defaultValue
@@ -112,7 +113,7 @@ export const createAutomaticMirrors = (tabs: TBLTab[], nodes: TreeBranchLeafNode
                   const formulaVariantKey = variantKey.replace('__mirror_data_', '__mirror_formula_');
                   if (!(formulaVariantKey in window.TBL_FORM_DATA)) {
                     window.TBL_FORM_DATA[formulaVariantKey] = defaultValue;
-                    if (verbose()) console.log('🧮 [MIRROR][FORMULA_VARIANT]', {
+                    if (verbose()) logger.debug('🧮 [MIRROR][FORMULA_VARIANT]', {
                       variantKey: formulaVariantKey,
                       from: formulaLabelMirrorKey,
                       defaultValue
@@ -122,7 +123,7 @@ export const createAutomaticMirrors = (tabs: TBLTab[], nodes: TreeBranchLeafNode
                 }
               });
             } catch (e) {
-              console.warn('[MIRROR][FORMULA_VARIANT][ERROR]', e);
+              logger.warn('[MIRROR][FORMULA_VARIANT][ERROR]', e);
             }
           }
         }
@@ -140,7 +141,7 @@ export const createAutomaticMirrors = (tabs: TBLTab[], nodes: TreeBranchLeafNode
           if (!(conditionMirrorKey in window.TBL_FORM_DATA)) {
             const defaultValue = false; // Les conditions retournent généralement des booléens
             window.TBL_FORM_DATA[conditionMirrorKey] = defaultValue;
-            if (verbose()) console.log('🔀 [MIRROR][CONDITION_CREATE]', {
+            if (verbose()) logger.debug('🔀 [MIRROR][CONDITION_CREATE]', {
               mirrorKey: conditionMirrorKey,
               conditionId: node.id,
               conditionLabel: node.label,
@@ -153,7 +154,7 @@ export const createAutomaticMirrors = (tabs: TBLTab[], nodes: TreeBranchLeafNode
           if (!(conditionLabelMirrorKey in window.TBL_FORM_DATA)) {
             const defaultValue = false;
             window.TBL_FORM_DATA[conditionLabelMirrorKey] = defaultValue;
-            if (verbose()) console.log('🔀 [MIRROR][CONDITION_LABEL_CREATE]', {
+            if (verbose()) logger.debug('🔀 [MIRROR][CONDITION_LABEL_CREATE]', {
               mirrorKey: conditionLabelMirrorKey,
               conditionLabel: node.label,
               defaultValue
@@ -168,7 +169,7 @@ export const createAutomaticMirrors = (tabs: TBLTab[], nodes: TreeBranchLeafNode
                   const conditionVariantKey = variantKey.replace('__mirror_data_', '__mirror_condition_');
                   if (!(conditionVariantKey in window.TBL_FORM_DATA)) {
                     window.TBL_FORM_DATA[conditionVariantKey] = defaultValue;
-                    if (verbose()) console.log('🔀 [MIRROR][CONDITION_VARIANT]', {
+                    if (verbose()) logger.debug('🔀 [MIRROR][CONDITION_VARIANT]', {
                       variantKey: conditionVariantKey,
                       from: conditionLabelMirrorKey,
                       defaultValue
@@ -178,7 +179,7 @@ export const createAutomaticMirrors = (tabs: TBLTab[], nodes: TreeBranchLeafNode
                 }
               });
             } catch (e) {
-              console.warn('[MIRROR][CONDITION_VARIANT][ERROR]', e);
+              logger.warn('[MIRROR][CONDITION_VARIANT][ERROR]', e);
             }
           }
         }
@@ -186,10 +187,10 @@ export const createAutomaticMirrors = (tabs: TBLTab[], nodes: TreeBranchLeafNode
     });
     
     if (mirrorsCreated > 0) {
-      console.log(`🎉 [MIRROR] ${mirrorsCreated} mirrors automatiques créés pour TreeBranchLeaf (données, formules, conditions) !`);
+      logger.debug(`🎉 [MIRROR] ${mirrorsCreated} mirrors automatiques créés pour TreeBranchLeaf (données, formules, conditions) !`);
     }
   } catch (error) {
-    console.error('❌ [MIRROR] Erreur lors de la création automatique des mirrors:', error);
+    logger.error('❌ [MIRROR] Erreur lors de la création automatique des mirrors:', error);
   }
 };
 
@@ -211,7 +212,7 @@ let batchNodeDataTreeId: string | null = null;
 export const setBatchNodeDataCache = (treeId: string, dataByNode: Record<string, unknown>) => {
   batchNodeDataCache = dataByNode;
   batchNodeDataTreeId = treeId;
-  console.log(`🚀 [BATCH_CACHE] Cache node-data mis à jour: ${Object.keys(dataByNode).length} nodes pour tree ${treeId}`);
+  logger.debug(`🚀 [BATCH_CACHE] Cache node-data mis à jour: ${Object.keys(dataByNode).length} nodes pour tree ${treeId}`);
 };
 
 // 🚀 FONCTION OPTIMISÉE: Vérifie si le cache batch est prêt pour ce tree
@@ -278,7 +279,7 @@ const resolveFieldValue = async (
     }
 
     if (variableConfig && Object.keys(variableConfig).length === 0) {
-      console.warn('⚠️ [RESOLVE_VALUE] /data a renvoyé un objet vide pour', node.id, '(hasData flag=', node.hasData, ')');
+      logger.warn('⚠️ [RESOLVE_VALUE] /data a renvoyé un objet vide pour', node.id, '(hasData flag=', node.hasData, ')');
     }
 
   if (verbose()) dlog(`🔍 [RESOLVE_VALUE] Configuration variable normalisée:`, variableConfig);
@@ -350,7 +351,7 @@ const resolveFieldValue = async (
   return result;
 
   } catch (error) {
-    console.error(`❌ [RESOLVE_VALUE] Erreur résolution valeur pour "${node.label}":`, error);
+    logger.error(`❌ [RESOLVE_VALUE] Erreur résolution valeur pour "${node.label}":`, error);
     return { value: (node.defaultValue || node.value || null) as string | number | boolean | null };
   }
 };
@@ -1296,7 +1297,7 @@ const transformPrismaNodeToField = (
               // Récupérer le subtab de la sous-option ou remonter la chaîne
               const subOptionSubTabAssignments = resolveSubTabAssignments(subOption, subOption, nodeLookup);
               
-              // console.log(`🔍 [SUB-OPTION SHARED REF] Sous-option "${subOption.label}" (${subOption.id}):`, {
+              // logger.debug(`🔍 [SUB-OPTION SHARED REF] Sous-option "${subOption.label}" (${subOption.id}):`, {
               //   subOptionSubtab: subOption.subtab,
               //   subOptionParentId: subOption.parentId,
               //   resolvedSubTabs: subOptionSubTabAssignments
@@ -1346,7 +1347,7 @@ const transformPrismaNodeToField = (
           const optionSubTabAssignments = resolveSubTabAssignments(optionNode, optionNode, nodeLookup);
           
           // 🔍 DEBUG: Vérifier la résolution du subtab
-          if (verbose()) console.log(`🔍 [SHARED REF DEBUG] Option "${optionNode.label}" (${optionNode.id}):`, {
+          if (verbose()) logger.debug(`🔍 [SHARED REF DEBUG] Option "${optionNode.label}" (${optionNode.id}):`, {
             optionSubtab: optionNode.subtab,
             optionParentId: optionNode.parentId,
             parentInLookup: optionNode.parentId ? !!nodeLookup.get(optionNode.parentId) : false,
@@ -1550,7 +1551,7 @@ const transformPrismaNodeToField = (
         try {
           templateNodeIds = JSON.parse(templateNodeIds);
         } catch (e) {
-          console.error('❌ [REPEATER] Impossible de parser repeater_templateNodeIds:', e);
+          logger.error('❌ [REPEATER] Impossible de parser repeater_templateNodeIds:', e);
           templateNodeIds = [];
         }
       } else {
@@ -1572,7 +1573,7 @@ const transformPrismaNodeToField = (
       try {
         templateNodeLabels = JSON.parse(templateNodeLabels);
       } catch (e) {
-        console.error('❌ [REPEATER] Impossible de parser repeater_templateNodeLabels:', e);
+        logger.error('❌ [REPEATER] Impossible de parser repeater_templateNodeLabels:', e);
         templateNodeLabels = null;
       }
     }
@@ -2077,7 +2078,7 @@ export const transformNodesToTBLComplete = (
       const uniqueIds = Array.from(new Set(resolvedIds));
       activeSharedReferences.set(node.id, uniqueIds);
       // 🔍 DEBUG: Log quand une option a des shared refs
-      // console.log(`🔗 [SHARED REFS STORED] Option "${node.label}" (${node.id}):`, {
+      // logger.debug(`🔗 [SHARED REFS STORED] Option "${node.label}" (${node.id}):`, {
       //   resolvedIds: uniqueIds,
       //   nodeSubtab: node.subtab,
       //   nodeParentId: node.parentId
@@ -2147,7 +2148,7 @@ export const transformNodesToTBLComplete = (
     });
   });
   
-  if (verbose()) if (verbose()) console.log('🗺️ [TAB MAPPING EARLY] Template → Tab mapping créée:', templateToTabMap.size, 'templates');
+  if (verbose()) if (verbose()) logger.debug('🗺️ [TAB MAPPING EARLY] Template → Tab mapping créée:', templateToTabMap.size, 'templates');
   
   const processNodeRecursively = (nodeId: string, currentLevel: number = 2): TBLField[] => {
     const children = childrenMap.get(nodeId) || [];
@@ -2386,15 +2387,15 @@ export const transformNodesToTBLComplete = (
           
           // 🔍🔍🔍 DIAGNOSTIC FORCE - Sections Devis/PV
           if (sectionData.node.label?.includes('Devis') || sectionData.node.label?.includes('PV')) {
-            console.log(`🔍🔍🔍 [DIAGNOSTIC TRANSFORM SECTION "${sectionData.node.label}"] Field count:`, sectionFieldsFiltered.length);
-            console.log(`🔍🔍🔍 [DIAGNOSTIC TRANSFORM SECTION "${sectionData.node.label}"] Field IDs:`, sectionFieldsFiltered.map(f => f.id));
+            logger.debug(`🔍🔍🔍 [DIAGNOSTIC TRANSFORM SECTION "${sectionData.node.label}"] Field count:`, sectionFieldsFiltered.length);
+            logger.debug(`🔍🔍🔍 [DIAGNOSTIC TRANSFORM SECTION "${sectionData.node.label}"] Field IDs:`, sectionFieldsFiltered.map(f => f.id));
             const panneauInSection = sectionFieldsFiltered.filter(f => 
               f.id === 'f117b34a-d74c-413a-b7c1-4b9290619012' || 
               f.id === 'fb35d781-5b1b-4a2b-869b-ea0b902a444e' ||
               f.id.startsWith('f117b34a-') || 
               f.id.startsWith('fb35d781-')
             );
-            console.log(`🔍🔍🔍 [DIAGNOSTIC TRANSFORM SECTION "${sectionData.node.label}"] Panneau fields found:`, panneauInSection.length, panneauInSection.map(f => ({ id: f.id, label: f.label })));
+            logger.debug(`🔍🔍🔍 [DIAGNOSTIC TRANSFORM SECTION "${sectionData.node.label}"] Panneau fields found:`, panneauInSection.length, panneauInSection.map(f => ({ id: f.id, label: f.label })));
           }
           
           ongletSections.push({
@@ -2535,7 +2536,7 @@ export const transformNodesToTBLComplete = (
   });
   
   // 🔍🔍🔍 DIAGNOSTIC GLOBAL - Tous les champs "Panneau"
-  // if (verbose()) console.log('🔍🔍🔍 [DIAGNOSTIC GLOBAL] Recherche champs Panneau dans fieldsByTab');
+  // if (verbose()) logger.debug('🔍🔍🔍 [DIAGNOSTIC GLOBAL] Recherche champs Panneau dans fieldsByTab');
   // const allFieldsGlobal = Object.values(fieldsByTab).flat();
   // const panneauFieldsGlobal = allFieldsGlobal.filter(f => 
   //   f.label?.includes('Panneau') || f.label?.includes('panneau') ||
@@ -2544,7 +2545,7 @@ export const transformNodesToTBLComplete = (
   //   f.id.startsWith('f117b34a-') || 
   //   f.id.startsWith('fb35d781-')
   // );
-  // if (verbose()) console.log('🔍🔍🔍 [DIAGNOSTIC GLOBAL] Panneau fields trouvés:', panneauFieldsGlobal.length, panneauFieldsGlobal.map(f => ({
+  // if (verbose()) logger.debug('🔍🔍🔍 [DIAGNOSTIC GLOBAL] Panneau fields trouvés:', panneauFieldsGlobal.length, panneauFieldsGlobal.map(f => ({
   //   id: f.id,
   //   label: f.label,
   //   tabId: Object.entries(fieldsByTab).find(([_, fields]) => fields.includes(f))?.[0],
@@ -2556,7 +2557,7 @@ export const transformNodesToTBLComplete = (
 
 // 🎯 HOOK PRINCIPAL
 export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRetransform }: { tree_id: string; disabled?: boolean; triggerRetransform?: number }) => {
-  if (verbose()) console.log('🎯 [TBL DEBUG] useTBLDataPrismaComplete appelé avec tree_id:', tree_id, 'disabled:', disabled, 'triggerRetransform:', triggerRetransform);
+  if (verbose()) logger.debug('🎯 [TBL DEBUG] useTBLDataPrismaComplete appelé avec tree_id:', tree_id, 'disabled:', disabled, 'triggerRetransform:', triggerRetransform);
   
   // ✅ STABILISATION ULTRA CRITIQUE: Utiliser un REF pour que l'API ne change JAMAIS
   const apiHook = useAuthenticatedApi();
@@ -2578,7 +2579,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
         window.__tblEventLog = window.__tblEventLog || [];
         window.__tblEventLog.push({ event: event.type, time: new Date().toISOString(), detail: event.detail });
         if (event.type === 'tbl-node-updated') {
-          if (verbose()) console.log('🌐 [GLOBAL] tbl-node-updated event detected!', event.detail);
+          if (verbose()) logger.debug('🌐 [GLOBAL] tbl-node-updated event detected!', event.detail);
         }
       } catch {
         // noop
@@ -2642,31 +2643,31 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
       const sections = Object.values(sectionsByTab || {}).flat();
       const sectionsWithDisplayAlways = sections.filter(s => !!(s as any).metadata?.displayAlways);
       if (sectionsWithDisplayAlways.length) {
-        if (verbose()) console.log('[TBL Hook - Prisma] Sections with displayAlways found after transform:', sectionsWithDisplayAlways.map(s => ({ id: s.id, title: s.title })));
+        if (verbose()) logger.debug('[TBL Hook - Prisma] Sections with displayAlways found after transform:', sectionsWithDisplayAlways.map(s => ({ id: s.id, title: s.title })));
       } else {
-        if (verbose()) console.log('[TBL Hook - Prisma] No sections with displayAlways after transform');
+        if (verbose()) logger.debug('[TBL Hook - Prisma] No sections with displayAlways after transform');
       }
-    } catch (e) { console.error('[TBL Hook - Prisma] logging transform error', e); }
+    } catch (e) { logger.error('[TBL Hook - Prisma] logging transform error', e); }
   }, [sectionsByTab]);
 
   const fetchData = useCallback(async (options?: FetchOptions) => {
     const silent = options?.silent === true;
-    // console.log removed for performance
+    // logger.debug removed for performance
     if (!tree_id || disabled) return;
 
     try {
       if (!silent) setLoading(true);
       setError(null);
-      // console.log removed for performance
+      // logger.debug removed for performance
       if (verbose()) dlog('📡 [TBL-PRISMA] Récupération données:', { tree_id });
 
       const response = await api.get(`/api/treebranchleaf/trees/${tree_id}/nodes`);
-      // console.log removed for performance
+      // logger.debug removed for performance
       
       // 🔗 DEBUG: Vérifier les nodes avec hasLink AVANT transformation (verbose only)
       if (Array.isArray(response) && verbose()) {
         const nodesWithLink = (response as unknown[]).filter((n: Record<string, unknown>) => n.hasLink === true);
-        console.log(`🔗🔗🔗 [FETCH-DATA RAW] ${nodesWithLink.length} nodes avec hasLink=true reçus de l'API:`, 
+        logger.debug(`🔗🔗🔗 [FETCH-DATA RAW] ${nodesWithLink.length} nodes avec hasLink=true reçus de l'API:`, 
           nodesWithLink.map((n: Record<string, unknown>) => ({ id: n.id, label: n.label, hasLink: n.hasLink, link_targetNodeId: n.link_targetNodeId, link_mode: n.link_mode }))
         );
       }
@@ -2681,7 +2682,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
         updateRawRef.current(filteredResponse);
         if (process.env.NODE_ENV === 'development') {
           const withDisplayAlways = filteredResponse.filter(r => r.metadata && typeof r.metadata === 'object' && (r.metadata as unknown).displayAlways === true);
-          if (verbose()) console.log('🔎 [TBL Hook - Prisma] fetch nodes with displayAlways', withDisplayAlways.map(n => ({ id: n.id, label: n.label }))); 
+          if (verbose()) logger.debug('🔎 [TBL Hook - Prisma] fetch nodes with displayAlways', withDisplayAlways.map(n => ({ id: n.id, label: n.label }))); 
         }
         const formData = (typeof window !== 'undefined' && window.TBL_FORM_DATA) || {};
         const transformedData = transformNodesToTBLComplete(filteredResponse, formData);
@@ -2722,7 +2723,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
                     }
                   }
                 } catch (valueError) {
-                  console.error(`❌ [TBL-PRISMA] Erreur résolution valeur pour "${field.label}":`, valueError);
+                  logger.error(`❌ [TBL-PRISMA] Erreur résolution valeur pour "${field.label}":`, valueError);
                 }
               }
               return field;
@@ -2740,7 +2741,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
             f.id === 'f117b34a-d74c-413a-b7c1-4b9290619012' || f.id === 'fb35d781-5b1b-4a2b-869b-ea0b902a444e' ||
             f.id.startsWith('f117b34a-') || f.id.startsWith('fb35d781-')
           );
-          if (verbose()) console.log('🔍🔍🔍 [DIAGNOSTIC PANNEAU] Tous les champs "Panneau" trouvés:', panneauFields.map(f => ({
+          if (verbose()) logger.debug('🔍🔍🔍 [DIAGNOSTIC PANNEAU] Tous les champs "Panneau" trouvés:', panneauFields.map(f => ({
             id: f.id,
             label: f.label,
             parentId: (f as any).parentId,
@@ -2765,11 +2766,11 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
             
             // 🔍🔍🔍 DIAGNOSTIC pour cette section
             if (process.env.NODE_ENV === 'development' && verbose() && (section.name?.includes('Devis') || section.name?.includes('PV'))) {
-              console.log(`🔍🔍🔍 [DIAGNOSTIC SECTION "${section.name}"] sectionBaseFieldIds:`, sectionBaseFieldIds);
+              logger.debug(`🔍🔍🔍 [DIAGNOSTIC SECTION "${section.name}"] sectionBaseFieldIds:`, sectionBaseFieldIds);
               const panneauInBase = sectionBaseFieldIds.filter(id => 
                 id === 'f117b34a-d74c-413a-b7c1-4b9290619012' || id === 'fb35d781-5b1b-4a2b-869b-ea0b902a444e'
               );
-              console.log(`🔍🔍🔍 [DIAGNOSTIC SECTION "${section.name}"] Panneau fields in base?`, panneauInBase);
+              logger.debug(`🔍🔍🔍 [DIAGNOSTIC SECTION "${section.name}"] Panneau fields in base?`, panneauInBase);
             }
             
             const sectionFieldsResolved = allTabsFields.filter(field => {
@@ -2802,11 +2803,11 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
         setFieldsByTab(resolvedFieldsByTab);
         setSectionsByTab(resolvedSectionsByTab);
       } else {
-        console.error('❌ [TBL-PRISMA] Réponse API invalide:', response);
+        logger.error('❌ [TBL-PRISMA] Réponse API invalide:', response);
         setError('Format de données invalide');
       }
     } catch (err) {
-      console.error('❌ [TBL-PRISMA] Erreur:', err);
+      logger.error('❌ [TBL-PRISMA] Erreur:', err);
       setError(err instanceof Error ? err.message : 'Erreur inconnue');
     } finally {
       if (!silent) setLoading(false);
@@ -2824,7 +2825,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
     
     lastProcessedRetransformRef.current = triggerRetransform;
     
-    if (verbose()) console.log('🔥 [useTBLDataPrismaComplete] Retransform triggered!', { triggerRetransform, rawNodesCount: rawNodes.length });
+    if (verbose()) logger.debug('🔥 [useTBLDataPrismaComplete] Retransform triggered!', { triggerRetransform, rawNodesCount: rawNodes.length });
     
     try {
       const formData = (typeof window !== 'undefined' && window.TBL_FORM_DATA) || {};
@@ -2850,19 +2851,19 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
               f.id.startsWith('fb35d781-')
             );
           if (found.length > 0) {
-            if (verbose()) console.log('🔎 [DIAGNOSTIC SECTION] Panneau fields in section:', { tabId: tabIdDiag, sectionId: sec.id, sectionName: sec.name, fields: found.map(f => ({ id: f.id, label: f.label, parentRepeaterId: (f as any).parentRepeaterId, sourceTemplateId: (f as any).sourceTemplateId || (f as any).metadata?.sourceTemplateId, subTabKey: (f as any).subTabKey, subTabKeys: (f as any).subTabKeys, visible: f.visible })) });
+            if (verbose()) logger.debug('🔎 [DIAGNOSTIC SECTION] Panneau fields in section:', { tabId: tabIdDiag, sectionId: sec.id, sectionName: sec.name, fields: found.map(f => ({ id: f.id, label: f.label, parentRepeaterId: (f as any).parentRepeaterId, sourceTemplateId: (f as any).sourceTemplateId || (f as any).metadata?.sourceTemplateId, subTabKey: (f as any).subTabKey, subTabKeys: (f as any).subTabKeys, visible: f.visible })) });
             }
           });
         });
         resolvedSectionsByTab[tabId] = resolvedSections;
       }
       
-      if (verbose()) console.log('✅ [useTBLDataPrismaComplete] Retransform complete, updating state');
+      if (verbose()) logger.debug('✅ [useTBLDataPrismaComplete] Retransform complete, updating state');
       setTabs(transformedData.tabs);
       setFieldsByTab(transformedData.fieldsByTab);
       setSectionsByTab(resolvedSectionsByTab);
     } catch (err) {
-      console.error('❌ [useTBLDataPrismaComplete] Retransform error:', err);
+      logger.error('❌ [useTBLDataPrismaComplete] Retransform error:', err);
     }
   }, [triggerRetransform, rawNodes]); // 🔧 FIX: Retiré sectionsByTab des dépendances pour éviter la boucle infinie
 
@@ -2902,7 +2903,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
     }
 
     if (missing.length > 0) {
-      console.warn('[TBL Hook] Reconciliation incomplete after retry; attempting targeted merge using full tree');
+      logger.warn('[TBL Hook] Reconciliation incomplete after retry; attempting targeted merge using full tree');
       try {
         const response = await apiRef.current.get(`/api/treebranchleaf/trees/${tree_id}/nodes`);
         let allNodes: TreeBranchLeafNode[] = [];
@@ -2944,21 +2945,21 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
               if (newOnes.length === 0) return prev;
               return [...prev, ...newOnes];
             });
-            if (verbose()) console.log('[TBL Hook] merged nodes from full tree query:', candidates.length);
+            if (verbose()) logger.debug('[TBL Hook] merged nodes from full tree query:', candidates.length);
             // trigger retransform and re-evaluate missing
             setFormDataVersion(v => v + 1);
             await new Promise(r => setTimeout(r, 120));
             missing = getMissing();
           } else {
-            console.warn('[TBL Hook] No candidate nodes found in full tree query. Falling back to full fetch (fetchData)');
+            logger.warn('[TBL Hook] No candidate nodes found in full tree query. Falling back to full fetch (fetchData)');
             fetchDataRef.current();
           }
         } else {
-          console.warn('[TBL Hook] Full tree query returned no nodes, falling back to fetchData()');
+          logger.warn('[TBL Hook] Full tree query returned no nodes, falling back to fetchData()');
           fetchDataRef.current();
         }
       } catch (err) {
-        console.error('[TBL Hook] Failed full tree reconcile query:', err);
+        logger.error('[TBL Hook] Failed full tree reconcile query:', err);
         fetchDataRef.current();
       }
     }
@@ -2966,13 +2967,13 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
 
 
   useEffect(() => {
-    console.log('🔗🔗🔗 [INITIAL-FETCH] useEffect triggered, disabled:', disabled);
+    logger.debug('🔗🔗🔗 [INITIAL-FETCH] useEffect triggered, disabled:', disabled);
     if (disabled) {
       setLoading(false);
       return;
     }
     // 🔥 FIX: Use fetchData directly instead of fetchDataRef which is defined later
-    console.log('🔗🔗🔗 [INITIAL-FETCH] Calling fetchData directly');
+    logger.debug('🔗🔗🔗 [INITIAL-FETCH] Calling fetchData directly');
     fetchData();
   }, [disabled, fetchData]);
 
@@ -2981,19 +2982,19 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
     const currentRawNodes = rawNodesRef.current;
     
     if (!currentRawNodes || currentRawNodes.length === 0) {
-      console.warn('⚠️ [TBL Hook] Pas de données brutes disponibles pour retransformation');
+      logger.warn('⚠️ [TBL Hook] Pas de données brutes disponibles pour retransformation');
       return;
     }
 
     try {
-      if (verbose()) console.log('🔄 [TBL Hook] Retransformation avec formData actuel...', 'rawNodes:', currentRawNodes.length);
-      if (verbose()) console.log('🔍 [TBL Hook] RawNodes IDs:', currentRawNodes.map(n => `${n.id}(${n.label})`).slice(0, 10));
+      if (verbose()) logger.debug('🔄 [TBL Hook] Retransformation avec formData actuel...', 'rawNodes:', currentRawNodes.length);
+      if (verbose()) logger.debug('🔍 [TBL Hook] RawNodes IDs:', currentRawNodes.map(n => `${n.id}(${n.label})`).slice(0, 10));
       
       // ✅ Récupérer formData depuis le global store TBL
       const formData = (typeof window !== 'undefined' && window.TBL_FORM_DATA) || {};
       const transformedData = transformNodesToTBLComplete(currentRawNodes, formData);
       
-      if (verbose()) console.log('🎯 [TBL Hook] Retransformation: transformedData.tabs.length=', transformedData.tabs.length, 'fieldsByTab keys=', Object.keys(transformedData.fieldsByTab).length);
+      if (verbose()) logger.debug('🎯 [TBL Hook] Retransformation: transformedData.tabs.length=', transformedData.tabs.length, 'fieldsByTab keys=', Object.keys(transformedData.fieldsByTab).length);
       
       // 🎯 PHASE 2: Résolution asynchrone des valeurs pour les champs qui en ont besoin
       const resolvedFieldsByTab: Record<string, TBLField[]> = {};
@@ -3032,7 +3033,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
                   }
                 }
               } catch (valueError) {
-                console.error(`❌ [TBL-PRISMA] Erreur résolution valeur pour "${field.label}":`, valueError);
+                logger.error(`❌ [TBL-PRISMA] Erreur résolution valeur pour "${field.label}":`, valueError);
               }
             }
             return field;
@@ -3066,19 +3067,19 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
       try {
         createAutomaticMirrors(resolvedTabs, currentRawNodes);
       } catch (mirrorError) {
-        console.error('⚠️ [TBL Hook] Impossible de créer les mirrors après retransformation:', mirrorError);
+        logger.error('⚠️ [TBL Hook] Impossible de créer les mirrors après retransformation:', mirrorError);
       }
       
-      if (verbose()) console.log('✅ [TBL Hook] Retransformation terminée, mise à jour du state...');
-      if (verbose()) console.log('📊 [TBL Hook] État mis à jour: tabs=', resolvedTabs.length, 'fieldsByTab=', Object.keys(resolvedFieldsByTab).length);
+      if (verbose()) logger.debug('✅ [TBL Hook] Retransformation terminée, mise à jour du state...');
+      if (verbose()) logger.debug('📊 [TBL Hook] État mis à jour: tabs=', resolvedTabs.length, 'fieldsByTab=', Object.keys(resolvedFieldsByTab).length);
       
       setTree({ ...transformedData.tree, tabs: resolvedTabs });
       setTabs(resolvedTabs);
       setFieldsByTab(resolvedFieldsByTab);
       setSectionsByTab(resolvedSectionsByTab);
-      if (verbose()) console.log('✅ [TBL Hook] Retransformation terminée');
+      if (verbose()) logger.debug('✅ [TBL Hook] Retransformation terminée');
     } catch (err) {
-      console.error('❌ [TBL Hook] Erreur lors de la retransformation:', err);
+      logger.error('❌ [TBL Hook] Erreur lors de la retransformation:', err);
     }
   }, [api, tree_id]);
 
@@ -3103,23 +3104,23 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
   const isRetransformingRef = useRef(false);
 
   useEffect(() => {
-    if (verbose()) console.log('🎯 [TBL Hook] Event listener monté/mis à jour. disabled:', disabled, 'tree_id:', tree_id, 'rawNodesRef.current.length:', rawNodesRef.current.length);
+    if (verbose()) logger.debug('🎯 [TBL Hook] Event listener monté/mis à jour. disabled:', disabled, 'tree_id:', tree_id, 'rawNodesRef.current.length:', rawNodesRef.current.length);
     
   const handleFormDataChange = () => {
-      if (verbose()) console.log('🔔 [TBL Hook] Event TBL_FORM_DATA_CHANGED reçu !');
+      if (verbose()) logger.debug('🔔 [TBL Hook] Event TBL_FORM_DATA_CHANGED reçu !');
       
       if (disabled) {
-        if (verbose()) console.log('⚠️ [TBL Hook] Hook désactivé, ignoré');
+        if (verbose()) logger.debug('⚠️ [TBL Hook] Hook désactivé, ignoré');
         return;
       }
       
       if (!tree_id) {
-        if (verbose()) console.log('⚠️ [TBL Hook] Pas de tree_id, ignoré');
+        if (verbose()) logger.debug('⚠️ [TBL Hook] Pas de tree_id, ignoré');
         return;
       }
       
       if (rawNodesRef.current.length === 0) {
-        if (verbose()) console.log('⚠️ [TBL Hook] rawNodes vide, ignoré');
+        if (verbose()) logger.debug('⚠️ [TBL Hook] rawNodes vide, ignoré');
         return;
       }
       
@@ -3138,11 +3139,11 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
       }, 250);
     };
 
-    if (verbose()) console.log('✅ [TBL Hook] Event listener TBL_FORM_DATA_CHANGED attaché');
+    if (verbose()) logger.debug('✅ [TBL Hook] Event listener TBL_FORM_DATA_CHANGED attaché');
     window.addEventListener('TBL_FORM_DATA_CHANGED', handleFormDataChange);
     
     return () => {
-      if (verbose()) console.log('🧹 [TBL Hook] Event listener TBL_FORM_DATA_CHANGED détaché');
+      if (verbose()) logger.debug('🧹 [TBL Hook] Event listener TBL_FORM_DATA_CHANGED détaché');
       window.removeEventListener('TBL_FORM_DATA_CHANGED', handleFormDataChange);
       if (retransformDebounceRef.current) {
         window.clearTimeout(retransformDebounceRef.current);
@@ -3159,7 +3160,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
       
       // Recharger uniquement si c'est notre arbre
   if (!disabled && eventTreeId && String(eventTreeId) === String(tree_id)) {
-        if (verbose()) console.log('🔄 [TBL Hook OLD] Capacité mise à jour détectée, rechargement des données... (debounced)', customEvent.detail);
+        if (verbose()) logger.debug('🔄 [TBL Hook OLD] Capacité mise à jour détectée, rechargement des données... (debounced)', customEvent.detail);
         if (capabilityDebounceRef.current) window.clearTimeout(capabilityDebounceRef.current);
         capabilityDebounceRef.current = window.setTimeout(() => {
           fetchDataRef.current();
@@ -3210,7 +3211,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
 
         setFormDataVersion(v => v + 1);
       } catch (err) {
-        console.error('❌ [TBL Hook] handleNodeUpdated failed:', err);
+        logger.error('❌ [TBL Hook] handleNodeUpdated failed:', err);
       }
     };
 
@@ -3220,7 +3221,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
 
   // 🔄 Écouter les changements de paramètres repeater pour recharger les données
   useEffect(() => {
-    if (verbose()) console.log('🎧🎧🎧 [TBL Hook] Listener tbl-repeater-updated INSTALLÉ', { tree_id, disabled });
+    if (verbose()) logger.debug('🎧🎧🎧 [TBL Hook] Listener tbl-repeater-updated INSTALLÉ', { tree_id, disabled });
 
     const handleRepeaterUpdate = async (event: Event) => {
       const customEvent = event as CustomEvent<{
@@ -3238,7 +3239,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
       const { treeId: eventTreeId, suppressReload } = detail;
 
       if (disabled || !eventTreeId || String(eventTreeId) !== String(tree_id)) {
-        if (verbose()) console.log('🔇 [TBL Hook] Repeater update ignoré (autre arbre ou hook désactivé)', { eventTreeId, tree_id, disabled });
+        if (verbose()) logger.debug('🔇 [TBL Hook] Repeater update ignoré (autre arbre ou hook désactivé)', { eventTreeId, tree_id, disabled });
         return;
       }
 
@@ -3301,7 +3302,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
                           // Debug: log inline node ids merged and basic metadata for diagnostics
                           try {
                             const inlineSummaries = inlineNodes.filter(n => n && n.id).map(n => ({ id: n.id, type: n.type, parentId: n.parentId, metadataSummary: (n.metadata && typeof n.metadata === 'object') ? (n.metadata as unknown).sourceTemplateId || (n.metadata as unknown).copiedFromNodeId || null : null }));
-                            if (verbose()) console.log('[TBL Hook] inline nodes merged (summaries):', inlineSummaries);
+                            if (verbose()) logger.debug('[TBL Hook] inline nodes merged (summaries):', inlineSummaries);
                           } catch { /* noop */ }
                 }
               } catch (err) {
@@ -3507,13 +3508,13 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
                     const nextRes = changed ? Array.from(byId.values()) : prev;
                     // Debug: log parent merge summary
                     try {
-                      if (verbose()) console.log('[TBL Hook] merged parent node(s) into rawNodes:', nodes.map(n => n.id));
+                      if (verbose()) logger.debug('[TBL Hook] merged parent node(s) into rawNodes:', nodes.map(n => n.id));
                     } catch { /* noop */ }
                     return nextRes;
                   });
                 }
               } catch (e) {
-                console.warn('[TBL Hook] Unable to fetch updated parent repeater container', parentId, e);
+                logger.warn('[TBL Hook] Unable to fetch updated parent repeater container', parentId, e);
               }
             }));
           }
@@ -3526,7 +3527,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
             await reconcileRef.current(duplicated);
             ddiag('[TBL Hook] Reconcile done for duplicated ids');
           } catch (e) {
-            console.warn('[TBL Hook] reconcile failed (ignored)', e);
+            logger.warn('[TBL Hook] reconcile failed (ignored)', e);
           }
         }
 
@@ -3536,10 +3537,10 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
         // une retransform REDONDANTE car les IDs étaient déjà supprimés par l'événement optimiste.
         if (rawNodesRef.current.length > 0 && (duplicated.length > 0 || idsActuallyRemoved)) {
           try {
-            if (verbose()) console.log('[TBL Hook] retransform AFTER duplicate reconciled - rawNodes count', rawNodesRef.current.length);
+            if (verbose()) logger.debug('[TBL Hook] retransform AFTER duplicate reconciled - rawNodes count', rawNodesRef.current.length);
             retransformRef.current();
           } catch (err) {
-            console.error('[TBL Hook] retransform after duplication failed:', err);
+            logger.error('[TBL Hook] retransform after duplication failed:', err);
             // If this fails, try a silent fetch as fallback
             fetchDataRef.current({ silent: true });
           }
@@ -3567,7 +3568,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
             };
 
             if (hasIdInTransformed()) {
-              if (verbose()) console.log('[TBL Hook] Duplicated ids found in transformed fields after first retransform');
+              if (verbose()) logger.debug('[TBL Hook] Duplicated ids found in transformed fields after first retransform');
               return;
             }
 
@@ -3575,20 +3576,20 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
               // small delay for server/transform to settle
               await new Promise(r => setTimeout(r, attempt === 1 ? 80 : 120));
               try {
-                console.error(`[TBL Hook] Retry retransform attempt ${attempt}`);
+                logger.error(`[TBL Hook] Retry retransform attempt ${attempt}`);
                 retransformRef.current();
               } catch (err) {
                 ddiag('[TBL Hook] retransform attempt failed', attempt, err);
               }
 
               if (hasIdInTransformed()) {
-                console.error('[TBL Hook] Duplicated ids now present after retries');
+                logger.error('[TBL Hook] Duplicated ids now present after retries');
                 return;
               }
             }
 
             // Still not present → attempt optimistic UI injection for duplicated ids
-            console.warn('[TBL Hook] Duplicated ids not present after retries; attempting optimistic UI injection');
+            logger.warn('[TBL Hook] Duplicated ids not present after retries; attempting optimistic UI injection');
             try {
               const missingIds = duplicatedIds.filter(id => {
                 const t = transformedRef.current;
@@ -3629,12 +3630,12 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
               const newSectionsByTab = { ...(sectionsByTabRef.current || {}) };
               
               // 🎯 DEBUG: Afficher tous les onglets disponibles
-              console.log(`🔍🔍🔍 [INJECTION OPTIMISTE] Onglets disponibles dans sectionsByTab:`, Object.keys(newSectionsByTab));
+              logger.debug(`🔍🔍🔍 [INJECTION OPTIMISTE] Onglets disponibles dans sectionsByTab:`, Object.keys(newSectionsByTab));
               Object.keys(newSectionsByTab).forEach(tabId => {
                 const sections = newSectionsByTab[tabId] || [];
-                console.log(`   - Tab "${tabId}": ${sections.length} sections`);
+                logger.debug(`   - Tab "${tabId}": ${sections.length} sections`);
                 sections.forEach(s => {
-                  console.log(`      • Section "${s.name}" (${s.id}): ${s.fields.length} champs`);
+                  logger.debug(`      • Section "${s.name}" (${s.id}): ${s.fields.length} champs`);
                 });
               });
               
@@ -3649,34 +3650,34 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
                 const parentRepeaterId = node.parentId;
                 let inserted = false;
                 
-                console.log(`🔍 [COPY DEBUG] Processing copy field: "${field.label}", sourceTemplateId="${sourceTemplateId}", parentRepeaterId="${parentRepeaterId}"`);
+                logger.debug(`🔍 [COPY DEBUG] Processing copy field: "${field.label}", sourceTemplateId="${sourceTemplateId}", parentRepeaterId="${parentRepeaterId}"`);
                 
                 // 🎯 DEBUG SPÉCIAL PANNEAU
                 const isPanneauField = field.label?.includes('Panneau') || field.label?.includes('panneau');
                 if (isPanneauField) {
-                  console.log(`🎯🎯🎯 [PANNEAU DEBUG] Champ Panneau détecté: "${field.label}"`);
-                  console.log(`🎯 sourceTemplateId: ${sourceTemplateId}`);
-                  console.log(`🎯 field.id: ${(field as any).id}`);
-                  console.log(`🎯 parentRepeaterId: ${parentRepeaterId}`);
-                  console.log(`🎯 field.metadata:`, node.metadata);
+                  logger.debug(`🎯🎯🎯 [PANNEAU DEBUG] Champ Panneau détecté: "${field.label}"`);
+                  logger.debug(`🎯 sourceTemplateId: ${sourceTemplateId}`);
+                  logger.debug(`🎯 field.id: ${(field as any).id}`);
+                  logger.debug(`🎯 parentRepeaterId: ${parentRepeaterId}`);
+                  logger.debug(`🎯 field.metadata:`, node.metadata);
                 }
                 
                 // Priority 1: Find the ORIGINAL TEMPLATE FIELD in the sections (not the repeater button!)
                 // The copy should go right after the template field, in the SAME section as the template
                 if (sourceTemplateId) {
-                  console.log(`🔍 [COPY PLACEMENT] Looking for template with sourceTemplateId="${sourceTemplateId}" in ${Object.keys(newSectionsByTab).length} tabs`);
+                  logger.debug(`🔍 [COPY PLACEMENT] Looking for template with sourceTemplateId="${sourceTemplateId}" in ${Object.keys(newSectionsByTab).length} tabs`);
                   
                   if (isPanneauField) {
-                    console.log(`🎯🎯🎯 [PANNEAU SEARCH] Recherche de l'original pour "${field.label}"...`);
-                    console.log(`🎯 [PANNEAU SEARCH] Tabs disponibles: [${Object.keys(newSectionsByTab).join(', ')}]`);
+                    logger.debug(`🎯🎯🎯 [PANNEAU SEARCH] Recherche de l'original pour "${field.label}"...`);
+                    logger.debug(`🎯 [PANNEAU SEARCH] Tabs disponibles: [${Object.keys(newSectionsByTab).join(', ')}]`);
                   }
                   
                   for (const tabId of Object.keys(newSectionsByTab)) {
                     const secs = newSectionsByTab[tabId] || [];
                     if (isPanneauField) {
-                      console.log(`🎯 [PANNEAU SEARCH] Tab "${tabId}": ${secs.length} sections`);
+                      logger.debug(`🎯 [PANNEAU SEARCH] Tab "${tabId}": ${secs.length} sections`);
                     } else {
-                      console.log(`🔍 [COPY PLACEMENT] Tab "${tabId}": checking ${secs.length} sections`);
+                      logger.debug(`🔍 [COPY PLACEMENT] Tab "${tabId}": checking ${secs.length} sections`);
                     }
                     
                     for (let si = 0; si < secs.length; si++) {
@@ -3685,13 +3686,13 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
                       const allFieldLabels = section.fields.map(f => (f as any).label);
                       
                       if (isPanneauField) {
-                        console.log(`🎯 [PANNEAU SEARCH] Section "${section.name}" (${section.id}):`);
-                        console.log(`   - ${section.fields.length} champs`);
-                        console.log(`   - IDs: [${allFieldIds.join(', ')}]`);
-                        console.log(`   - Labels: [${allFieldLabels.join(', ')}]`);
-                        console.log(`   - Recherche de sourceTemplateId="${sourceTemplateId}"...`);
+                        logger.debug(`🎯 [PANNEAU SEARCH] Section "${section.name}" (${section.id}):`);
+                        logger.debug(`   - ${section.fields.length} champs`);
+                        logger.debug(`   - IDs: [${allFieldIds.join(', ')}]`);
+                        logger.debug(`   - Labels: [${allFieldLabels.join(', ')}]`);
+                        logger.debug(`   - Recherche de sourceTemplateId="${sourceTemplateId}"...`);
                       } else {
-                        console.log(`🔍 [COPY PLACEMENT] Section "${section.name}" (${section.id}): ${section.fields.length} fields [${allFieldIds.join(', ')}]`);
+                        logger.debug(`🔍 [COPY PLACEMENT] Section "${section.name}" (${section.id}): ${section.fields.length} fields [${allFieldIds.join(', ')}]`);
                       }
                       
                       // Find the original template field by its ID
@@ -3699,48 +3700,48 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
                       
                       if (templateFieldIdx !== -1) {
                         if (isPanneauField) {
-                          console.log(`✅✅✅ [PANNEAU FOUND] Template trouvé! "${(section.fields[templateFieldIdx] as unknown).label}" à l'index ${templateFieldIdx} dans section "${section.name}"`);
+                          logger.debug(`✅✅✅ [PANNEAU FOUND] Template trouvé! "${(section.fields[templateFieldIdx] as unknown).label}" à l'index ${templateFieldIdx} dans section "${section.name}"`);
                         }
-                        console.log(`✅ [COPY PLACEMENT] Found template field "${(section.fields[templateFieldIdx] as unknown).label}" in section "${section.name}"`);
+                        logger.debug(`✅ [COPY PLACEMENT] Found template field "${(section.fields[templateFieldIdx] as unknown).label}" in section "${section.name}"`);
                         // Place the copy right after the template field in the SAME section
                         const nextFields = [ ...section.fields ];
                         nextFields.splice(templateFieldIdx + 1, 0, field);
                         secs[si] = { ...section, fields: nextFields } as unknown;
                         inserted = true;
-                        console.log(`✅ [COPY PLACEMENT] Copy "${field.label}" placed in section "${section.name}" (next to template field)`);
+                        logger.debug(`✅ [COPY PLACEMENT] Copy "${field.label}" placed in section "${section.name}" (next to template field)`);
                         if (isPanneauField) {
-                          console.log(`✅✅✅ [PANNEAU PLACED] Copie "${field.label}" placée dans section "${section.name}" après template`);
+                          logger.debug(`✅✅✅ [PANNEAU PLACED] Copie "${field.label}" placée dans section "${section.name}" après template`);
                         }
                         injected++;
                         break;
                       } else if (isPanneauField) {
-                        console.log(`❌ [PANNEAU SEARCH] Template ID "${sourceTemplateId}" NON TROUVÉ dans cette section`);
+                        logger.debug(`❌ [PANNEAU SEARCH] Template ID "${sourceTemplateId}" NON TROUVÉ dans cette section`);
                       }
                     }
                     if (inserted) break;
                   }
                   
                   if (isPanneauField && !inserted) {
-                    console.error(`❌❌❌ [PANNEAU ERROR] Impossible de trouver le template pour "${field.label}" avec sourceTemplateId="${sourceTemplateId}"`);
-                    console.error(`❌ Aucun champ avec cet ID n'existe dans aucune section de newSectionsByTab!`);
+                    logger.error(`❌❌❌ [PANNEAU ERROR] Impossible de trouver le template pour "${field.label}" avec sourceTemplateId="${sourceTemplateId}"`);
+                    logger.error(`❌ Aucun champ avec cet ID n'existe dans aucune section de newSectionsByTab!`);
                   }
                 } else {
-                  console.warn(`⚠️ [COPY PLACEMENT] Copy "${field.label}" has NO sourceTemplateId in metadata!`);
+                  logger.warn(`⚠️ [COPY PLACEMENT] Copy "${field.label}" has NO sourceTemplateId in metadata!`);
                   if (isPanneauField) {
-                    console.error(`❌❌❌ [PANNEAU ERROR] "${field.label}" n'a PAS de sourceTemplateId dans les metadata!`);
+                    logger.error(`❌❌❌ [PANNEAU ERROR] "${field.label}" n'a PAS de sourceTemplateId dans les metadata!`);
                   }
                 }
 
                 // Fallback: If no sourceTemplateId match, skip placement and do NOT add to Bloc section
                 // Copies without proper sourceTemplateId will be filtered or handled elsewhere
                 if (!inserted) {
-                  console.warn(`⚠️ [COPY PLACEMENT] Copy "${field.label}" has no template match (sourceTemplateId="${sourceTemplateId}"), skipping placement`);
+                  logger.warn(`⚠️ [COPY PLACEMENT] Copy "${field.label}" has no template match (sourceTemplateId="${sourceTemplateId}"), skipping placement`);
                   // Do NOT force insert into first section - let the normal data flow handle it
                 }
               });
 
               if (injected > 0) {
-                console.error('[TBL Hook] injected optimistic duplicated fields into sections:', injected);
+                logger.error('[TBL Hook] injected optimistic duplicated fields into sections:', injected);
                 setSectionsByTab(newSectionsByTab);
                 // Rebuild tabs & fieldsByTab
                 const newTabs = ((tabsRef.current || []) as TBLTab[]).map(tab => ({ ...tab, sections: newSectionsByTab[tab.id] || tab.sections }));
@@ -3749,11 +3750,11 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
                 newTabs.forEach(t => rebuiltFieldsByTab[t.id] = t.sections.flatMap(s => s.fields));
                 setFieldsByTab(rebuiltFieldsByTab);
               } else {
-                console.warn('[TBL Hook] No sections found to inject duplicated fields. Falling back silent fetch.');
+                logger.warn('[TBL Hook] No sections found to inject duplicated fields. Falling back silent fetch.');
                 fetchDataRef.current({ silent: true });
               }
             } catch (err) {
-              console.warn('[TBL Hook] optimistic injection failed, falling back to full silent fetch', err);
+              logger.warn('[TBL Hook] optimistic injection failed, falling back to full silent fetch', err);
               fetchDataRef.current({ silent: true });
             }
           } catch {
@@ -3783,7 +3784,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
 
     window.addEventListener('tbl-repeater-updated', handleRepeaterUpdate);
     return () => {
-      if (verbose()) console.log('🧹 [TBL Hook] Event listener tbl-repeater-updated détaché');
+      if (verbose()) logger.debug('🧹 [TBL Hook] Event listener tbl-repeater-updated détaché');
       window.removeEventListener('tbl-repeater-updated', handleRepeaterUpdate);
     };
   }, [tree_id, disabled]);

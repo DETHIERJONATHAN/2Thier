@@ -1,3 +1,4 @@
+import { logger } from '../../../../lib/logger';
 /**
  * 🔧 Logger de performance - Système de logs optimisé pour la production
  * 
@@ -9,31 +10,31 @@ const isDevelopment = process.env.NODE_ENV !== 'production';
 export const performanceLogger = {
   debug: (message: string, ...data: unknown[]) => {
     if (isDevelopment) {
-      // console.log(`🔍 ${message}`, ...data); // ✨ Log réduit
+      // logger.debug(`🔍 ${message}`, ...data); // ✨ Log réduit
     }
   },
   
   info: (message: string, ...data: unknown[]) => {
     if (isDevelopment) {
-      // console.info(`ℹ️ ${message}`, ...data); // ✨ Log réduit
+      // logger.info(`ℹ️ ${message}`, ...data); // ✨ Log réduit
     }
   },
   
   warn: (message: string, ...data: unknown[]) => {
     if (isDevelopment) {
-      // console.warn(`⚠️ ${message}`, ...data); // ✨ Log réduit
+      // logger.warn(`⚠️ ${message}`, ...data); // ✨ Log réduit
     }
   },
   
   error: (message: string, ...data: unknown[]) => {
-    console.error(`❌ ${message}`, ...data);
+    logger.error(`❌ ${message}`, ...data);
   },
   
   performance: (message: string, startTime: number) => {
     if (isDevelopment) {
       const endTime = performance.now();
       const duration = endTime - startTime;
-      // console.log(`⏱️ ${message}: ${duration.toFixed(2)}ms`); // ✨ Log réduit
+      // logger.debug(`⏱️ ${message}: ${duration.toFixed(2)}ms`); // ✨ Log réduit
     }
   }
 };

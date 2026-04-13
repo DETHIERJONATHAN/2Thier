@@ -3,6 +3,7 @@ import { useAuthenticatedApi } from './useAuthenticatedApi';
 import { useAuth } from '../auth/useAuth';
 import { message } from 'antd';
 import { ModuleSectionData, ModuleSectionResponse, defaultSections } from '../api/sections';
+import { logger } from '../lib/logger';
 
 export const useSections = () => {
   const { api } = useAuthenticatedApi();
@@ -29,7 +30,7 @@ export const useSections = () => {
         message.success('Sections initialisées avec succès');
       }
     } catch (error) {
-      console.error('Erreur lors de l\'initialisation des sections:', error);
+      logger.error('Erreur lors de l\'initialisation des sections:', error);
       message.error('Erreur lors de l\'initialisation des sections');
     }
   }, [api, currentOrganization?.id]);
@@ -49,7 +50,7 @@ export const useSections = () => {
         await initializeDefaultSections();
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des sections:', error);
+      logger.error('Erreur lors du chargement des sections:', error);
       message.error('Erreur lors du chargement des sections');
     } finally {
       setLoading(false);
@@ -81,7 +82,7 @@ export const useSections = () => {
 
       return response;
     } catch (error) {
-      console.error('Erreur lors de la sauvegarde de la section:', error);
+      logger.error('Erreur lors de la sauvegarde de la section:', error);
       message.error('Erreur lors de la sauvegarde');
       throw error;
     }
@@ -94,7 +95,7 @@ export const useSections = () => {
       setSections(prev => prev.filter(s => s.id !== sectionId));
       message.success('Section supprimée avec succès');
     } catch (error) {
-      console.error('Erreur lors de la suppression de la section:', error);
+      logger.error('Erreur lors de la suppression de la section:', error);
       message.error('Erreur lors de la suppression');
       throw error;
     }
@@ -119,7 +120,7 @@ export const useSections = () => {
 
       message.success('Ordre des sections sauvegardé');
     } catch (error) {
-      console.error('Erreur lors de la réorganisation:', error);
+      logger.error('Erreur lors de la réorganisation:', error);
       message.error('Erreur lors de la sauvegarde de l\'ordre');
       throw error;
     }

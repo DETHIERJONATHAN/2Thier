@@ -11,6 +11,7 @@ import {
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
+import { logger } from '../lib/logger';
 
 const { RangePicker } = DatePicker;
 const { Option } = Select;
@@ -69,7 +70,7 @@ const AnalyticsPage: React.FC = () => {
         setMetrics(response.data);
       }
     } catch (error) {
-      console.error('Erreur chargement métriques:', error);
+      logger.error('Erreur chargement métriques:', error);
       message.error('Erreur chargement métriques');
     } finally {
       setLoading(false);
@@ -84,7 +85,7 @@ const AnalyticsPage: React.FC = () => {
         setAuditLogs(response.data);
       }
     } catch (error) {
-      console.error('Erreur chargement audit:', error);
+      logger.error('Erreur chargement audit:', error);
       message.error('Erreur chargement audit');
     }
   }, [stableApi]);
@@ -110,12 +111,12 @@ const AnalyticsPage: React.FC = () => {
         window.URL.revokeObjectURL(url);
       } else {
         // Afficher JSON
-        console.log('Export JSON:', response.data);
+        logger.debug('Export JSON:', response.data);
       }
       
       message.success('Export terminé avec succès');
     } catch (error) {
-      console.error('Erreur export:', error);
+      logger.error('Erreur export:', error);
       message.error('Erreur lors de l\'export');
     } finally {
       setLoading(false);

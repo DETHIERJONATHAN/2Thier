@@ -30,6 +30,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Text } = Typography;
 
@@ -92,12 +93,12 @@ const DocumentsSection = ({ submissionId, leadId, treeId, onLoadDevis, onDeleteD
       if (submissionId) params.append('submissionId', submissionId);
       if (leadId) params.append('leadId', leadId);
       
-      console.log('📄 [DocumentsSection] Chargement documents:', { submissionId, leadId, params: params.toString() });
+      logger.debug('📄 [DocumentsSection] Chargement documents:', { submissionId, leadId, params: params.toString() });
       const response = await api.get(`/api/documents/generated?${params.toString()}`);
-      console.log('📄 [DocumentsSection] Documents reçus:', response);
+      logger.debug('📄 [DocumentsSection] Documents reçus:', response);
       setDocuments(Array.isArray(response) ? response : []);
     } catch (error) {
-      console.error('❌ [DocumentsSection] Erreur chargement documents:', error);
+      logger.error('❌ [DocumentsSection] Erreur chargement documents:', error);
       setDocuments([]);
     } finally {
       setLoading(false);
@@ -112,17 +113,17 @@ const DocumentsSection = ({ submissionId, leadId, treeId, onLoadDevis, onDeleteD
       setLoadingSubmissions(true);
       const effectiveTreeId = treeId || 'cmf1mwoz10005gooked1j6orn';
       
-      console.log('📄 [DocumentsSection] Chargement devis TBL pour lead:', leadId);
+      logger.debug('📄 [DocumentsSection] Chargement devis TBL pour lead:', leadId);
       const allLeadsWithSubmissions = await api.get(`/api/treebranchleaf/submissions/by-leads?treeId=${effectiveTreeId}`);
       
       // Filtrer pour ce lead
       const thisLeadData = allLeadsWithSubmissions?.find((lead: Record<string, unknown>) => lead.id === leadId);
       const submissions = thisLeadData?.submissions || [];
       
-      console.log('📄 [DocumentsSection] Devis TBL trouvés:', submissions.length);
+      logger.debug('📄 [DocumentsSection] Devis TBL trouvés:', submissions.length);
       setTblSubmissions(submissions);
     } catch (error) {
-      console.error('❌ [DocumentsSection] Erreur chargement devis TBL:', error);
+      logger.error('❌ [DocumentsSection] Erreur chargement devis TBL:', error);
       setTblSubmissions([]);
     } finally {
       setLoadingSubmissions(false);
@@ -147,7 +148,7 @@ const DocumentsSection = ({ submissionId, leadId, treeId, onLoadDevis, onDeleteD
   // Écouter l'événement de génération de document pour rafraîchir la liste
   useEffect(() => {
     const handleDocumentGenerated = () => {
-      console.log('📄 [DocumentsSection] Document généré, rafraîchissement de la liste...');
+      logger.debug('📄 [DocumentsSection] Document généré, rafraîchissement de la liste...');
       loadDocuments();
       loadTblSubmissions();
     };
@@ -174,7 +175,7 @@ const DocumentsSection = ({ submissionId, leadId, treeId, onLoadDevis, onDeleteD
         window.open(doc.pdfUrl, '_blank');
       }
     } catch (error) {
-      console.error('Erreur téléchargement:', error);
+      logger.error('Erreur téléchargement:', error);
       message.error('Erreur lors du téléchargement');
     }
   };
@@ -208,7 +209,7 @@ const DocumentsSection = ({ submissionId, leadId, treeId, onLoadDevis, onDeleteD
         setPreviewModalVisible(true);
       }
     } catch (error) {
-      console.error('Erreur aperçu:', error);
+      logger.error('Erreur aperçu:', error);
       // Fallback: essayer d'ouvrir la modal avec les données JSON
       try {
         const previewResponse = await api.get(`/api/documents/generated/${doc.id}/preview`);
@@ -276,7 +277,7 @@ const DocumentsSection = ({ submissionId, leadId, treeId, onLoadDevis, onDeleteD
         await api.delete(`/api/documents/generated/${id}`);
         deleted++;
       } catch (err) {
-        console.error('❌ Erreur suppression document:', id, err);
+        logger.error('❌ Erreur suppression document:', id, err);
       }
     }
     setSelectedDocIds(new Set());
@@ -383,7 +384,7 @@ const DocumentsSection = ({ submissionId, leadId, treeId, onLoadDevis, onDeleteD
                         await onDeleteDevis(id, devis?.name || 'Devis');
                         deleted++;
                       } catch (err) {
-                        console.error('❌ Erreur suppression devis:', id, err);
+                        logger.error('❌ Erreur suppression devis:', id, err);
                       }
                     }
                     setSelectedDevisIds(new Set());
@@ -428,7 +429,7 @@ const DocumentsSection = ({ submissionId, leadId, treeId, onLoadDevis, onDeleteD
                             await onDeleteDevis(devis.id, devis.name || 'Devis');
                             loadTblSubmissions();
                           } catch (err) {
-                            console.error('❌ [DocumentsSection] Erreur suppression:', err);
+                            logger.error('❌ [DocumentsSection] Erreur suppression:', err);
                           }
                         }}
                       />

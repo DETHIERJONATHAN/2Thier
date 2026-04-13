@@ -4,6 +4,7 @@
 
 import { Router } from 'express';
 import { aiContentService } from '../services/aiContentService';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -33,7 +34,7 @@ router.post('/generate-service', async (req, res) => {
       content
     });
   } catch (error: unknown) {
-    console.error('Erreur génération service:', error);
+    logger.error('Erreur génération service:', error);
     res.status(500).json({
       error: 'Erreur lors de la génération du service',
       details: error.message
@@ -67,7 +68,7 @@ router.post('/generate-project', async (req, res) => {
       content
     });
   } catch (error: unknown) {
-    console.error('Erreur génération projet:', error);
+    logger.error('Erreur génération projet:', error);
     res.status(500).json({
       error: 'Erreur lors de la génération du projet',
       details: error.message
@@ -101,7 +102,7 @@ router.post('/generate-testimonial', async (req, res) => {
       content
     });
   } catch (error: unknown) {
-    console.error('Erreur génération témoignage:', error);
+    logger.error('Erreur génération témoignage:', error);
     res.status(500).json({
       error: 'Erreur lors de la génération du témoignage',
       details: error.message
@@ -136,7 +137,7 @@ router.post('/generate-page', async (req, res) => {
       content
     });
   } catch (error: unknown) {
-    console.error('Erreur génération page:', error);
+    logger.error('Erreur génération page:', error);
     res.status(500).json({
       error: 'Erreur lors de la génération de la page',
       details: error.message
@@ -172,7 +173,7 @@ router.post('/optimize-seo', async (req, res) => {
       suggestions
     });
   } catch (error: unknown) {
-    console.error('Erreur optimisation SEO:', error);
+    logger.error('Erreur optimisation SEO:', error);
     res.status(500).json({
       error: 'Erreur lors de l\'optimisation SEO',
       details: error.message
@@ -206,7 +207,7 @@ router.post('/generate-multiple-services', async (req, res) => {
       count: services.length
     });
   } catch (error: unknown) {
-    console.error('Erreur génération multiple services:', error);
+    logger.error('Erreur génération multiple services:', error);
     res.status(500).json({
       error: 'Erreur lors de la génération des services',
       details: error.message

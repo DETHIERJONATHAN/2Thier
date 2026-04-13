@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import type { AuthenticatedRequest } from './auth.js';
+import { logger } from '../lib/logger';
 
 export function requireRole(roles: string[]) {
   return (req: Request, res: Response, next: NextFunction): void => {
@@ -24,7 +25,7 @@ export function requireRole(roles: string[]) {
     }
 
     if (!roles.includes(user.role as string)) {
-      console.warn(`[requireRole] Accès refusé - Rôle ${user.role} non autorisé pour ${roles.join(', ')}`);
+      logger.warn(`[requireRole] Accès refusé - Rôle ${user.role} non autorisé pour ${roles.join(', ')}`);
       res.status(403).json({ error: 'Accès refusé' });
       return;
     }

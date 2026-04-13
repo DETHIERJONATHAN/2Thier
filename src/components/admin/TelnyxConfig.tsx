@@ -31,6 +31,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -173,7 +174,7 @@ const TelnyxConfig: React.FC<TelnyxConfigProps> = ({
       const data = await api.get<{ calls: RecentTelnyxCall[] }>('/api/telnyx/recent-calls', { params: { organizationId, limit: 10 } });
       setRecentCalls(Array.isArray(data?.calls) ? data.calls : []);
     } catch (e) {
-      console.error('❌ Erreur chargement derniers appels Telnyx:', e);
+      logger.error('❌ Erreur chargement derniers appels Telnyx:', e);
       setRecentCalls([]);
       message.error('Impossible de charger les derniers appels (debug)');
     } finally {
@@ -219,7 +220,7 @@ const TelnyxConfig: React.FC<TelnyxConfigProps> = ({
       setStats(statsData || { totalCalls: 0, totalSms: 0, monthlyCost: 0, activeNumbers: 0 });
       setSipEndpoints(Array.isArray(sipEndpointsData) ? sipEndpointsData : []);
     } catch (error) {
-      console.error('❌ Erreur chargement données Telnyx:', error);
+      logger.error('❌ Erreur chargement données Telnyx:', error);
       message.error('Erreur lors du chargement des données Telnyx');
     } finally {
       setLoading(false);
@@ -269,7 +270,7 @@ const TelnyxConfig: React.FC<TelnyxConfigProps> = ({
       message.success('Synchronisation Telnyx réussie');
       loadTelnyxData();
     } catch (error) {
-      console.error('❌ Erreur synchronisation:', error);
+      logger.error('❌ Erreur synchronisation:', error);
       message.error('Erreur lors de la synchronisation');
     } finally {
       setSyncing(false);
@@ -284,7 +285,7 @@ const TelnyxConfig: React.FC<TelnyxConfigProps> = ({
       const diag = await api.get<any>('/api/telnyx/diagnostic');
       setDiagResult(diag);
     } catch (error) {
-      console.error('❌ Erreur diagnostic Telnyx:', error);
+      logger.error('❌ Erreur diagnostic Telnyx:', error);
       setDiagResult({ ok: false, error: 'Erreur lors du diagnostic' });
     } finally {
       setDiagLoading(false);
@@ -313,7 +314,7 @@ const TelnyxConfig: React.FC<TelnyxConfigProps> = ({
       message.success(assigned ? `Provisioning Telnyx appliqué (connection_id: ${assigned})` : 'Provisioning Telnyx appliqué');
       loadTelnyxData();
     } catch (error) {
-      console.error('❌ Erreur provisioning Telnyx:', error);
+      logger.error('❌ Erreur provisioning Telnyx:', error);
       const anyErr: unknown = error as unknown;
       const errMsg = anyErr?.response?.data?.error || anyErr?.response?.data?.message || anyErr?.message || 'Erreur provisioning Telnyx';
       message.error(errMsg);
@@ -357,7 +358,7 @@ const TelnyxConfig: React.FC<TelnyxConfigProps> = ({
       loadTelnyxData();
       loadOrgUsers();
     } catch (error) {
-      console.error('❌ Erreur sauvegarde config:', error);
+      logger.error('❌ Erreur sauvegarde config:', error);
       message.error('Erreur lors de la sauvegarde');
     }
   };
@@ -371,7 +372,7 @@ const TelnyxConfig: React.FC<TelnyxConfigProps> = ({
       numberForm.resetFields();
       loadTelnyxData();
     } catch (error) {
-      console.error('❌ Erreur achat numéro:', error);
+      logger.error('❌ Erreur achat numéro:', error);
       message.error('Erreur lors de l\'achat du numéro');
     }
   };
@@ -422,7 +423,7 @@ const TelnyxConfig: React.FC<TelnyxConfigProps> = ({
       setEditingSipEndpoint(null);
       loadTelnyxData();
     } catch (error) {
-      console.error('❌ Erreur sauvegarde SIP endpoint:', error);
+      logger.error('❌ Erreur sauvegarde SIP endpoint:', error);
       message.error('Erreur lors de la sauvegarde de l\'endpoint SIP');
     }
   };
@@ -433,7 +434,7 @@ const TelnyxConfig: React.FC<TelnyxConfigProps> = ({
       message.success('Endpoint SIP supprimé');
       loadTelnyxData();
     } catch (error) {
-      console.error('❌ Erreur suppression SIP endpoint:', error);
+      logger.error('❌ Erreur suppression SIP endpoint:', error);
       message.error('Erreur lors de la suppression');
     }
   };

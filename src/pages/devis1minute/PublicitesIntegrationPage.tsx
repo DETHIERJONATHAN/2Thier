@@ -32,6 +32,7 @@ import {
   RocketOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { logger } from '../../lib/logger';
 
 const { Title, Text, Paragraph } = Typography;
 const { TabPane } = Tabs;
@@ -335,7 +336,7 @@ const PublicitesIntegrationPage: React.FC = () => {
         });
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des intégrations publicitaires', error);
+      logger.error('Erreur lors du chargement des intégrations publicitaires', error);
       message.error('Erreur lors du chargement des intégrations publicitaires');
     } finally {
       setLoading(false);
@@ -397,7 +398,7 @@ const PublicitesIntegrationPage: React.FC = () => {
       }, 30000);
 
     } catch (error) {
-      console.error(`Erreur lors de la connexion à la plateforme ${platformId}`, error);
+      logger.error(`Erreur lors de la connexion à la plateforme ${platformId}`, error);
       message.error('Erreur lors de la connexion à la plateforme');
     } finally {
       setLoading(false);

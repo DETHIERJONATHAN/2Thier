@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 // Import des icônes FontAwesome - système unifié
 import * as FaIcons from 'react-icons/fa';
 import type { IconType } from 'react-icons';
+import { logger } from '../lib/logger';
 
 // Système unifié d'icônes - mapping complet
 const ICON_MAP: Record<string, IconType> = {
@@ -214,7 +215,7 @@ const Sidebar = ({ modules, hasFeature }: { modules: Array<{ key?: string; id?: 
   const debugOnceRef = useRef<{routes:Set<string>; perms:Set<string>; renderLogged:boolean}>({ routes: new Set(), perms: new Set(), renderLogged:false });
   const SIDEBAR_DEBUG = false; // activer ponctuellement si besoin
   const getModuleRoute = (mod: { key?: string; id?: string; route?: string; name?: string; label?: string }) => {
-    const log = (msg: string, ...rest: unknown[]) => { if (SIDEBAR_DEBUG) console.log(msg, ...rest); };
+    const log = (msg: string, ...rest: unknown[]) => { if (SIDEBAR_DEBUG) logger.debug(msg, ...rest); };
     if (mod.route) { log('[Sidebar] route explicite', mod.label||mod.name, mod.route); return mod.route; }
     if (mod.key && moduleRoutes[mod.key]) { log('[Sidebar] route par clé', mod.key); return moduleRoutes[mod.key]; }
     const moduleKey = mod.name || mod.label;
@@ -396,7 +397,7 @@ const Sidebar = ({ modules, hasFeature }: { modules: Array<{ key?: string; id?: 
               </button>
               {isModulesMenuOpen && (
                 <ul className="pl-4 border-l border-gray-200 ml-5" id="modules-menu" role="menu">
-                  {SIDEBAR_DEBUG && !debugOnceRef.current.renderLogged && (()=>{ debugOnceRef.current.renderLogged=true; console.log('[Sidebar] Rendu modules (snapshot unique)', modules.map(m=>({label:m.label||m.name,key:m.key, route:getModuleRoute(m)}))); return null; })()}
+                  {SIDEBAR_DEBUG && !debugOnceRef.current.renderLogged && (()=>{ debugOnceRef.current.renderLogged=true; logger.debug('[Sidebar] Rendu modules (snapshot unique)', modules.map(m=>({label:m.label||m.name,key:m.key, route:getModuleRoute(m)}))); return null; })()}
                   {modules.map(mod => {
                     const iconToUse = mod.icon || getDefaultIcon(mod.label || mod.name || '', mod.key);
                     

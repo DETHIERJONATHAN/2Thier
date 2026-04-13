@@ -16,6 +16,7 @@ import { google } from 'googleapis';
 import { UniversalNotificationService } from './UniversalNotificationService';
 import { EventEmitter } from 'events';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 // 🧠 INTERFACE ANALYSE IA RENDEZ-VOUS
 interface MeetingAIAnalysis {
@@ -80,7 +81,7 @@ export class GoogleCalendarNotificationService extends EventEmitter {
 
       const googleTokens = await this.getGoogleTokens(userId);
       if (!googleTokens) {
-        console.warn(`⚠️ [GoogleCalendar] Pas de tokens Google: ${userId}`);
+        logger.warn(`⚠️ [GoogleCalendar] Pas de tokens Google: ${userId}`);
         return;
       }
 
@@ -110,7 +111,7 @@ export class GoogleCalendarNotificationService extends EventEmitter {
       await this.checkUpcomingEvents(userId);
 
     } catch (error) {
-      console.error(`❌ [GoogleCalendar] Erreur surveillance: ${userId}`, error);
+      logger.error(`❌ [GoogleCalendar] Erreur surveillance: ${userId}`, error);
     }
   }
 
@@ -129,7 +130,7 @@ export class GoogleCalendarNotificationService extends EventEmitter {
       }
 
     } catch (error) {
-      console.error('❌ [GoogleCalendar] Erreur vérification événements:', error);
+      logger.error('❌ [GoogleCalendar] Erreur vérification événements:', error);
     }
   }
 
@@ -167,7 +168,7 @@ export class GoogleCalendarNotificationService extends EventEmitter {
 
 
     } catch (error) {
-      console.error('❌ [GoogleCalendar] Erreur traitement événement:', error);
+      logger.error('❌ [GoogleCalendar] Erreur traitement événement:', error);
     }
   }
 
@@ -232,7 +233,7 @@ export class GoogleCalendarNotificationService extends EventEmitter {
       };
 
     } catch (error) {
-      console.error('❌ [GoogleCalendar] Erreur analyse IA:', error);
+      logger.error('❌ [GoogleCalendar] Erreur analyse IA:', error);
       
       // Analyse de fallback
       return {

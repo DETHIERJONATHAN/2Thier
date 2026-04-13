@@ -38,6 +38,7 @@ import {
 } from '@ant-design/icons';
 import { useAIAssistant } from '../hooks/useAIAssistant';
 import type { Lead, CallState } from '../types/CallTypes';
+import { logger } from '../../../lib/logger';
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -89,7 +90,7 @@ export const AIAssistantChat: React.FC<AIAssistantChatProps> = ({
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const hasSeededContextRef = useRef(false);
   
-  console.log('[AIAssistantChat] 📨 Messages de useAIAssistant:', aiMessages.length, aiMessages);
+  logger.debug('[AIAssistantChat] 📨 Messages de useAIAssistant:', aiMessages.length, aiMessages);
   
   // 🔊 États vocaux
   const [voiceSettings, setVoiceSettings] = useState<VoiceSettings>({
@@ -126,17 +127,17 @@ export const AIAssistantChat: React.FC<AIAssistantChatProps> = ({
     // Événements de synthèse
     utterance.onstart = () => {
       setIsSpeaking(true);
-      console.log('[AIAssistantChat] 🔊 Début de la synthèse vocale');
+      logger.debug('[AIAssistantChat] 🔊 Début de la synthèse vocale');
     };
     
     utterance.onend = () => {
       setIsSpeaking(false);
-      console.log('[AIAssistantChat] 🔊 Fin de la synthèse vocale');
+      logger.debug('[AIAssistantChat] 🔊 Fin de la synthèse vocale');
     };
     
     utterance.onerror = (error) => {
       setIsSpeaking(false);
-      console.error('[AIAssistantChat] Erreur synthèse vocale:', error);
+      logger.error('[AIAssistantChat] Erreur synthèse vocale:', error);
     };
     
     // Sélectionner une voix française si disponible
@@ -169,7 +170,7 @@ export const AIAssistantChat: React.FC<AIAssistantChatProps> = ({
       const loadVoices = () => {
         const voices = synthesisRef.current!.getVoices();
         // Garder seulement les voix françaises ou les premières disponibles
-        console.log('[AIAssistantChat] 🔊 Voix disponibles:', voices.length);
+        logger.debug('[AIAssistantChat] 🔊 Voix disponibles:', voices.length);
       };
       
       loadVoices();
@@ -206,7 +207,7 @@ export const AIAssistantChat: React.FC<AIAssistantChatProps> = ({
       
       setSuggestions(newSuggestions.slice(0, 4)); // Max 4 suggestions
     } catch (error) {
-      console.warn('[AIAssistantChat] Erreur suggestions:', error);
+      logger.warn('[AIAssistantChat] Erreur suggestions:', error);
     }
   }, [callState.duration, callNotes, lead.data, aiMessages, getSuggestions]);
 
@@ -235,7 +236,7 @@ export const AIAssistantChat: React.FC<AIAssistantChatProps> = ({
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim()) return;
     
-    console.log('[AIAssistantChat] 💬 Envoi message:', content);
+    logger.debug('[AIAssistantChat] 💬 Envoi message:', content);
     
     setCurrentInput('');
     setIsTyping(true);
@@ -248,7 +249,7 @@ export const AIAssistantChat: React.FC<AIAssistantChatProps> = ({
       generateContextualSuggestions();
       
     } catch (error) {
-      console.error('[AIAssistantChat] Erreur IA:', error);
+      logger.error('[AIAssistantChat] Erreur IA:', error);
     } finally {
       setIsTyping(false);
     }
@@ -259,7 +260,7 @@ export const AIAssistantChat: React.FC<AIAssistantChatProps> = ({
   const toggleVoiceRecognition = useCallback(() => {
     if (isListening) {
       // L'écoute se termine automatiquement après reconnaissance
-      console.log('[AIAssistantChat] 🎤 Écoute en cours...');
+      logger.debug('[AIAssistantChat] 🎤 Écoute en cours...');
     } else {
       startListening();
     }
@@ -288,7 +289,7 @@ export const AIAssistantChat: React.FC<AIAssistantChatProps> = ({
     isVoice: false
   }));
   
-  console.log('[AIAssistantChat] 🎨 Messages convertis pour affichage:', chatMessages.length, chatMessages);
+  logger.debug('[AIAssistantChat] 🎨 Messages convertis pour affichage:', chatMessages.length, chatMessages);
   
   return (
     <Card 

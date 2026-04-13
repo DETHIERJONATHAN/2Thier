@@ -12,6 +12,7 @@ import { validateFormula, getAPIHeaders } from '../../utils/formulaValidator';
 import { Tooltip, Button, Dropdown, Space, Card, Popconfirm } from 'antd';
 import { DeleteOutlined, DownOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 interface FormulaItemEditorProps {
   formula: Formula;
@@ -45,7 +46,7 @@ const FormulaItemEditor: React.FC<FormulaItemEditorProps> = ({
   const initialName = formula.name || "Nouvelle formule";
   // Limiter les logs en mode développement
   if (process.env.NODE_ENV === 'development') {
-    console.log(`[FormulaItemEditor] 🏷️ Initialisation avec nom: "${initialName}" pour formule ${formula.id}`);
+    logger.debug(`[FormulaItemEditor] 🏷️ Initialisation avec nom: "${initialName}" pour formule ${formula.id}`);
   }
   const [name, setName] = useState(initialName);
   
@@ -56,7 +57,7 @@ const FormulaItemEditor: React.FC<FormulaItemEditorProps> = ({
   useEffect(() => {
     if (formula && formula.name) {
       if (process.env.NODE_ENV === 'development') {
-        console.log(`[FormulaItemEditor] 🔄 Mise à jour du nom local suite à changement: "${formula.name}"`);
+        logger.debug(`[FormulaItemEditor] 🔄 Mise à jour du nom local suite à changement: "${formula.name}"`);
       }
       setName(formula.name);
     }
@@ -64,12 +65,12 @@ const FormulaItemEditor: React.FC<FormulaItemEditorProps> = ({
 
   const handleNameBlur = () => {
     if (formula && formula.id && name !== formula.name) {
-      console.log(`[FormulaItemEditor] ✏️ Mise à jour du nom de la formule ${formula.id}: "${formula.name}" => "${name}"`);
+      logger.debug(`[FormulaItemEditor] ✏️ Mise à jour du nom de la formule ${formula.id}: "${formula.name}" => "${name}"`);
       
       // Valider la formule actuelle
       const validation = validateFormula(formula, 'FormulaItemEditor');
       if (!validation.isValid) {
-        console.error(`[FormulaItemEditor] ❌ Validation de la formule échouée: ${validation.message}`, validation.details);
+        logger.error(`[FormulaItemEditor] ❌ Validation de la formule échouée: ${validation.message}`, validation.details);
         return;
       }
       
@@ -93,11 +94,11 @@ const FormulaItemEditor: React.FC<FormulaItemEditorProps> = ({
       const fieldId = formula.fieldId || formula.targetFieldId;
       
       if (!fieldId) {
-        console.error(`[FormulaItemEditor] ❌ Impossible de mettre à jour la formule: fieldId manquant.`);
+        logger.error(`[FormulaItemEditor] ❌ Impossible de mettre à jour la formule: fieldId manquant.`);
         return;
       }
       
-      console.log(`[FormulaItemEditor] 📤 Envoi de la mise à jour directe à l'API (fieldId: ${fieldId})`);
+      logger.debug(`[FormulaItemEditor] 📤 Envoi de la mise à jour directe à l'API (fieldId: ${fieldId})`);
       
       // Utiliser l'URL qui fonctionne correctement avec le backend
       const apiUrl = `/api/fields/${fieldId}/formulas/${formula.id}`;
@@ -110,7 +111,7 @@ const FormulaItemEditor: React.FC<FormulaItemEditorProps> = ({
       })
   .then(async response => {
         if (response.ok) {
-          console.log(`[FormulaItemEditor] ✅ Nom de la formule mis à jour avec succès via API directe`);
+          logger.debug(`[FormulaItemEditor] ✅ Nom de la formule mis à jour avec succès via API directe`);
           // Déclencher un événement personnalisé pour informer le parent (sans délai pour réduire les problèmes)
           const event = new CustomEvent('formula-updated', { 
             detail: { formulaId: formula.id, success: true, action: 'rename' } 
@@ -131,7 +132,7 @@ const FormulaItemEditor: React.FC<FormulaItemEditorProps> = ({
             // Ignore les erreurs de parsing
           }
           
-          console.error(`[FormulaItemEditor] ❌ Échec de la mise à jour du nom via API: ${response.statusText}`, 
+          logger.error(`[FormulaItemEditor] ❌ Échec de la mise à jour du nom via API: ${response.statusText}`, 
             errorDetails ? `\nDétails: ${errorDetails}` : '');
             
           // Afficher une notification dans l'interface utilisateur
@@ -143,7 +144,7 @@ const FormulaItemEditor: React.FC<FormulaItemEditorProps> = ({
         }
       })
       .catch(error => {
-        console.error(`[FormulaItemEditor] ❌ Erreur lors de la mise à jour du nom via API:`, error);
+        logger.error(`[FormulaItemEditor] ❌ Erreur lors de la mise à jour du nom via API:`, error);
       });
     }
   };
@@ -155,11 +156,11 @@ const FormulaItemEditor: React.FC<FormulaItemEditorProps> = ({
 
   // Debug limité en mode développement
   if (!invalid && process.env.NODE_ENV === 'development') {
-    console.log(`[FormulaItemEditor] Rendering formula ${formula.id}, isOpen=${isFormulaOpen}`, { name: formula.name, id: formula.id, sequenceItems: formula.sequence?.length || 0 });
+    logger.debug(`[FormulaItemEditor] Rendering formula ${formula.id}, isOpen=${isFormulaOpen}`, { name: formula.name, id: formula.id, sequenceItems: formula.sequence?.length || 0 });
   }
 
   if (invalid) {
-    console.error('[FormulaItemEditor] Formula is undefined or missing ID');
+    logger.error('[FormulaItemEditor] Formula is undefined or missing ID');
     return <div className="p-2 bg-red-50 text-red-800 text-xs rounded border border-red-200">Erreur: Formule invalide ou corrompue</div>;
   }
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { FieldValidation } from "../../store/slices/types";
 import { validateValidation, getAPIHeaders } from '../../utils/validationValidator';
 import ValidationEvaluator from './ValidationEvaluator';
+import { logger } from '../../lib/logger';
 
 interface ValidationItemEditorProps {
   validation: FieldValidation;
@@ -21,7 +22,7 @@ export const ValidationItemEditor: React.FC<ValidationItemEditorProps> = ({
 }) => {
   // Vérifier que la validation est valide
   if (!validation || !validation.id) {
-    console.error("[ValidationItemEditor] Validation is undefined or missing ID");
+    logger.error("[ValidationItemEditor] Validation is undefined or missing ID");
     return (
       <div className="p-2 bg-red-50 text-red-800 text-xs rounded border border-red-200">
         Erreur: Validation invalide ou corrompue
@@ -31,7 +32,7 @@ export const ValidationItemEditor: React.FC<ValidationItemEditorProps> = ({
 
   // Initialiser avec le nom actuel ou "Nouvelle validation" par défaut
   const initialName = validation.name || "Nouvelle validation";
-  console.log(`[ValidationItemEditor] 🏷️ Initialisation avec nom: "${initialName}" pour validation ${validation.id}`);
+  logger.debug(`[ValidationItemEditor] 🏷️ Initialisation avec nom: "${initialName}" pour validation ${validation.id}`);
   const [name, setName] = useState(initialName);
   
   // État pour gérer l'affichage du mode test ou édition
@@ -40,19 +41,19 @@ export const ValidationItemEditor: React.FC<ValidationItemEditorProps> = ({
   // Mettre à jour le nom local si le nom de la validation change
   useEffect(() => {
     if (validation && validation.name) {
-      console.log(`[ValidationItemEditor] 🔄 Mise à jour du nom local suite à changement: "${validation.name}"`);
+      logger.debug(`[ValidationItemEditor] 🔄 Mise à jour du nom local suite à changement: "${validation.name}"`);
       setName(validation.name);
     }
   }, [validation?.name])
 
   const handleNameBlur = () => {
     if (validation && validation.id && name !== validation.name) {
-      console.log(`[ValidationItemEditor] ✏️ Mise à jour du nom de la validation ${validation.id}: "${validation.name}" => "${name}"`);
+      logger.debug(`[ValidationItemEditor] ✏️ Mise à jour du nom de la validation ${validation.id}: "${validation.name}" => "${name}"`);
       
       // Valider la validation actuelle
       const validationResult = validateValidation(validation, 'ValidationItemEditor');
       if (!validationResult.isValid) {
-        console.error(`[ValidationItemEditor] ❌ Validation de l'objet validation échouée: ${validationResult.message}`, validationResult.details);
+        logger.error(`[ValidationItemEditor] ❌ Validation de l'objet validation échouée: ${validationResult.message}`, validationResult.details);
         return;
       }
       
@@ -68,7 +69,7 @@ export const ValidationItemEditor: React.FC<ValidationItemEditorProps> = ({
       // Utiliser les headers standard
       const headers = getAPIHeaders();
       
-      console.log(`[ValidationItemEditor] 📤 Envoi de la mise à jour directe à l'API`);
+      logger.debug(`[ValidationItemEditor] 📤 Envoi de la mise à jour directe à l'API`);
       
       // Mettre à jour directement via l'API au lieu du store
       fetch(`/api/validations/${validation.id}`, {
@@ -78,7 +79,7 @@ export const ValidationItemEditor: React.FC<ValidationItemEditorProps> = ({
       })
       .then(response => {
         if (response.ok) {
-          console.log(`[ValidationItemEditor] ✅ Nom de la validation mis à jour avec succès via API directe`);
+          logger.debug(`[ValidationItemEditor] ✅ Nom de la validation mis à jour avec succès via API directe`);
           // Déclencher un événement personnalisé pour informer le parent
           setTimeout(() => {
             const event = new CustomEvent('validation-updated', { 
@@ -87,18 +88,18 @@ export const ValidationItemEditor: React.FC<ValidationItemEditorProps> = ({
             document.dispatchEvent(event);
           }, 300);
         } else {
-          console.error(`[ValidationItemEditor] ❌ Échec de la mise à jour du nom via API: ${response.statusText}`);
+          logger.error(`[ValidationItemEditor] ❌ Échec de la mise à jour du nom via API: ${response.statusText}`);
         }
       })
       .catch(error => {
-        console.error(`[ValidationItemEditor] ❌ Erreur lors de la mise à jour du nom via API:`, error);
+        logger.error(`[ValidationItemEditor] ❌ Erreur lors de la mise à jour du nom via API:`, error);
       });
     }
   };
 
   // Debug limité en mode développement
   if (process.env.NODE_ENV === 'development') {
-    console.log(`[ValidationItemEditor] Rendering validation ${validation.id}, isExpanded=${isExpanded}`, {
+    logger.debug(`[ValidationItemEditor] Rendering validation ${validation.id}, isExpanded=${isExpanded}`, {
       name: validation.name,
       id: validation.id,
       sequence: validation.sequence

@@ -1,10 +1,11 @@
+import { logger } from '../lib/logger';
 /**
  * consoleFilter
  * Filtre centralisé des logs de développement pour réduire le bruit sans toucher au code métier.
  *
  * Principes:
- * - Ne touche pas à console.error pour ne jamais masquer les erreurs réelles.
- * - Filtre console.log/info/debug/warn pour certains préfixes/tags verbeux.
+ * - Ne touche pas à logger.error pour ne jamais masquer les erreurs réelles.
+ * - Filtre logger.debug/info/debug/warn pour certains préfixes/tags verbeux.
  * - Possibilité d’opt-out via localStorage.DEBUG_VERBOSE === '1' (aucun filtre).
  * - Possibilité d’allowlist via localStorage.DEBUG_ALLOW (liste séparée par des virgules de fragments à préserver).
  * - Déduplication et rate-limit des messages identiques (config via localStorage.DEBUG_DEDUP_MS).
@@ -155,7 +156,7 @@ export default function initConsoleFilter() {
     // @ts-expect-error vite env peut ne pas exister selon le contexte
     const envVerbose = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_DEBUG_VERBOSE === '1');
     if (verbose || envVerbose) {
-      console.info('🟢 consoleFilter: mode VERBOSE (aucun filtre)');
+      logger.info('🟢 consoleFilter: mode VERBOSE (aucun filtre)');
       return;
     }
   } catch {
@@ -195,15 +196,15 @@ export default function initConsoleFilter() {
   })();
 
   const original = {
-    log: console.log as ConsoleMethod,
-    info: console.info as ConsoleMethod,
-    debug: console.debug as ConsoleMethod,
-    warn: console.warn as ConsoleMethod,
-    error: console.error as ConsoleMethod,
+    log: logger.debug as ConsoleMethod,
+    info: logger.info as ConsoleMethod,
+    debug: logger.debug as ConsoleMethod,
+    warn: logger.warn as ConsoleMethod,
+    error: logger.error as ConsoleMethod,
   };
 
   // Ne jamais toucher aux erreurs
-  console.error = original.error;
+  logger.error = original.error;
 
   // État pour déduplication et résumé
   const lastSeen = new Map<string, number>();
@@ -251,13 +252,13 @@ export default function initConsoleFilter() {
     };
   };
 
-  console.log = wrap(original.log);
-  console.info = wrap(original.info);
-  console.debug = wrap(original.debug);
-  console.warn = wrap(original.warn);
+  logger.debug = wrap(original.log);
+  logger.info = wrap(original.info);
+  logger.debug = wrap(original.debug);
+  logger.warn = wrap(original.warn);
 
   if (process.env.NODE_ENV === 'development') {
-    console.info('🧹 consoleFilter: filtres appliqués', {
+    logger.info('🧹 consoleFilter: filtres appliqués', {
       allowlist,
       nsFilter,
       dedupMs,

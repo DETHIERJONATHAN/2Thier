@@ -12,6 +12,7 @@ import ConditionEditorModal, { ConditionalConfig } from './ConditionEditorModal'
 import PricingLinesEditor, { PricingLine } from './PricingLinesEditor';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { TextArea } = Input;
 
@@ -134,7 +135,7 @@ const ModuleConfigPanel = ({
           setSelectedNodeId(treesWithNodes[0].nodeId);
         }
       } catch (error) {
-        console.error('Erreur chargement arbres TBL:', error);
+        logger.error('Erreur chargement arbres TBL:', error);
       } finally {
         setLoadingTrees(false);
       }
@@ -146,7 +147,7 @@ const ModuleConfigPanel = ({
   useEffect(() => {
     // Ne pas interférer pendant un upload en cours (vérifier aussi le flag global)
     if (uploadingField || isUploadingGlobal) {
-      console.log('⏳ useEffect bloqué - upload en cours');
+      logger.debug('⏳ useEffect bloqué - upload en cours');
       return;
     }
     
@@ -160,7 +161,7 @@ const ModuleConfigPanel = ({
         if (typeof val === 'string' && (val.startsWith('file:///') || val.includes('fakepath'))) {
           // Ne nettoyer que si c'est un nouveau module sélectionné
           if (isNewModule) {
-            console.log('🧹 Nettoyage URL locale invalide:', key);
+            logger.debug('🧹 Nettoyage URL locale invalide:', key);
             cleanConfig[key] = '';
           }
         }
@@ -501,13 +502,13 @@ const ModuleConfigPanel = ({
                 accept="image/*"
                 showUploadList={false}
                 beforeUpload={(file) => {
-                  console.log('📤 beforeUpload triggered, file:', file.name, file.size, file.type);
+                  logger.debug('📤 beforeUpload triggered, file:', file.name, file.size, file.type);
                   
                   // Vérification taille (max 10MB pour les images de fond)
                   const maxSize = 10 * 1024 * 1024; // 10MB
                   if (file.size > maxSize) {
                     const sizeMB = (file.size / 1024 / 1024).toFixed(2);
-                    console.error(`❌ Image trop grande: ${sizeMB}MB (max 10MB)`);
+                    logger.error(`❌ Image trop grande: ${sizeMB}MB (max 10MB)`);
                     message.error(`L'image fait ${sizeMB}MB, max autorisé: 10MB`);
                     alert(`L'image fait ${sizeMB}MB, maximum autorisé: 10MB`);
                     return false;
@@ -516,21 +517,21 @@ const ModuleConfigPanel = ({
                   // Bloquer le nettoyage AVANT de commencer l'async
                   isUploadingGlobal = true;
                   setUploadingField(field.key);
-                  console.log('🔒 Upload lock activé pour:', field.key);
+                  logger.debug('🔒 Upload lock activé pour:', field.key);
 
                   // Convertir en base64 directement dans beforeUpload
                   const reader = new FileReader();
                   reader.onload = (e) => {
                     const base64 = e.target?.result as string;
-                    console.log('📸 Image convertie en base64:', base64.substring(0, 80) + '...');
-                    console.log('📸 Longueur base64:', base64.length);
-                    console.log('📸 Module:', moduleInstance.moduleId, 'ThemeId:', moduleInstance.themeId);
-                    console.log('📸 Field key:', field.key);
+                    logger.debug('📸 Image convertie en base64:', base64.substring(0, 80) + '...');
+                    logger.debug('📸 Longueur base64:', base64.length);
+                    logger.debug('📸 Module:', moduleInstance.moduleId, 'ThemeId:', moduleInstance.themeId);
+                    logger.debug('📸 Field key:', field.key);
                     
                     form.setFieldValue(field.key, base64);
                     
                     const newConfig = { ...moduleInstance.config, [field.key]: base64 };
-                    console.log('📸 Nouvelle config:', Object.keys(newConfig));
+                    logger.debug('📸 Nouvelle config:', Object.keys(newConfig));
                     
                     onUpdate({ config: newConfig });
                     message.success('Image importée avec succès');
@@ -539,11 +540,11 @@ const ModuleConfigPanel = ({
                     setTimeout(() => {
                       isUploadingGlobal = false;
                       setUploadingField(null);
-                      console.log('🔓 Upload lock désactivé');
+                      logger.debug('🔓 Upload lock désactivé');
                     }, 100);
                   };
                   reader.onerror = (err) => {
-                    console.error('❌ FileReader error:', err);
+                    logger.error('❌ FileReader error:', err);
                     message.error('Erreur lors de la lecture du fichier');
                     isUploadingGlobal = false;
                     setUploadingField(null);

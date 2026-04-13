@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
 import type { Lead } from '../components/CallModule/types/CallTypes';
+import { logger } from '../lib/logger';
 
 interface Appointment {
   id: string;
@@ -73,10 +74,10 @@ export const useAIUltimateRecommendation = (): {
       setLoading(true);
       setError(null);
       
-      console.log('🧠 [UltimateRecommendation] Génération analyse ultime pour:', lead.name);
-      console.log('📊 [UltimateRecommendation] RDV existants:', existingAppointments.length);
-      console.log('📞 [UltimateRecommendation] Transcriptions:', callTranscriptions.length);
-      console.log('📝 [UltimateRecommendation] Notes:', notes.length);
+      logger.debug('🧠 [UltimateRecommendation] Génération analyse ultime pour:', lead.name);
+      logger.debug('📊 [UltimateRecommendation] RDV existants:', existingAppointments.length);
+      logger.debug('📞 [UltimateRecommendation] Transcriptions:', callTranscriptions.length);
+      logger.debug('📝 [UltimateRecommendation] Notes:', notes.length);
 
       const response = await api.post('/api/ai/ultimate-recommendation', {
         lead,
@@ -95,7 +96,7 @@ export const useAIUltimateRecommendation = (): {
 
       if (response.success && response.data) {
         setRecommendation(response.data.recommendation);
-        console.log('✅ [UltimateRecommendation] Analyse reçue:', response.data.recommendation.reasoning);
+        logger.debug('✅ [UltimateRecommendation] Analyse reçue:', response.data.recommendation.reasoning);
       } else {
         throw new Error('Réponse API invalide');
       }
@@ -103,7 +104,7 @@ export const useAIUltimateRecommendation = (): {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
       setError(errorMessage);
-      console.error('❌ [UltimateRecommendation] Erreur:', errorMessage);
+      logger.error('❌ [UltimateRecommendation] Erreur:', errorMessage);
     } finally {
       setLoading(false);
     }

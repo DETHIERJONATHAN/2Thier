@@ -14,6 +14,7 @@ import { useAuth } from '../../auth/useAuth';
 import { useChantierStatuses } from '../../hooks/useChantierStatuses';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Text } = Typography;
 
@@ -116,7 +117,7 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
       const res = await api.get(`/api/chantier-workflow/chantiers/${chantierId}/invoices`);
       setInvoices(res.data || []);
     } catch {
-      console.error('Erreur chargement factures');
+      logger.error('Erreur chargement factures');
     } finally {
       setLoading(false);
     }

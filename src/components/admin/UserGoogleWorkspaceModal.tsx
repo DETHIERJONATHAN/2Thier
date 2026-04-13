@@ -26,6 +26,7 @@ import {
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
 import { User } from '../../types';
+import { logger } from '../../lib/logger';
 
 const { Text } = Typography;
 
@@ -87,7 +88,7 @@ const UserGoogleWorkspaceModal: React.FC<UserGoogleWorkspaceModalProps> = ({
     // Vérifier si l'utilisateur actuel a les permissions nécessaires
     const userRole = currentUser?.organizationRole?.role?.name;
     if (!userRole || !['admin', 'super_admin'].includes(userRole)) {
-      console.log('[UserGoogleWorkspaceModal] ⚠️ Permissions insuffisantes pour accéder aux données Google Workspace');
+      logger.debug('[UserGoogleWorkspaceModal] ⚠️ Permissions insuffisantes pour accéder aux données Google Workspace');
       setGoogleStatus({
         hasGoogleAccount: false,
         email: null,

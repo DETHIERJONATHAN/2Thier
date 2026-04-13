@@ -14,6 +14,7 @@ import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { useBookmarks } from '../hooks/useBookmarks';
 import { useZhiiveNav } from '../contexts/ZhiiveNavContext';
 import { SF } from '../components/zhiive/ZhiiveTheme';
+import { logger } from '../lib/logger';
 
 // ── Types ──
 interface SearchResult {
@@ -476,7 +477,7 @@ const SearchPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
       const data = (await apiStable.get(url)) as { feeds: FeedResult[] };
       setFeeds(data.feeds || []);
     } catch (err) {
-      console.error('[Search] feed fetch error:', err);
+      logger.error('[Search] feed fetch error:', err);
     } finally {
       setFeedsLoading(false);
     }
@@ -488,7 +489,7 @@ const SearchPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
       const data = (await apiStable.get(`/api/user/bookmarks/feeds/${bookmarkId}`)) as { feed: FeedResult };
       if (data.feed) setFeeds(prev => prev.map(f => f.bookmarkId === bookmarkId ? data.feed : f));
     } catch (err) {
-      console.error('[Search] refresh error:', err);
+      logger.error('[Search] refresh error:', err);
     } finally {
       setRefreshingIds(prev => { const next = new Set(prev); next.delete(bookmarkId); return next; });
     }

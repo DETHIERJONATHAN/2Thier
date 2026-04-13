@@ -5,6 +5,7 @@
 
 import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
+import { logger } from '../lib/logger';
 
 const router = Router();
 const prisma = db;
@@ -28,7 +29,7 @@ router.get('/website-testimonials/:websiteId', async (req: Request, res: Respons
 
     res.json(testimonials);
   } catch (error) {
-    console.error('Error fetching testimonials:', error);
+    logger.error('Error fetching testimonials:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -67,7 +68,7 @@ router.post('/website-testimonials', async (req: Request, res: Response) => {
 
     res.json(testimonial);
   } catch (error) {
-    console.error('Error creating testimonial:', error);
+    logger.error('Error creating testimonial:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -97,7 +98,7 @@ router.put('/website-testimonials/:id', async (req: Request, res: Response) => {
 
     res.json(testimonial);
   } catch (error) {
-    console.error('Error updating testimonial:', error);
+    logger.error('Error updating testimonial:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -116,7 +117,7 @@ router.delete('/website-testimonials/:id', async (req: Request, res: Response) =
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Error deleting testimonial:', error);
+    logger.error('Error deleting testimonial:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -144,7 +145,7 @@ router.post('/website-testimonials/reorder', async (req: Request, res: Response)
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Error reordering testimonials:', error);
+    logger.error('Error reordering testimonials:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

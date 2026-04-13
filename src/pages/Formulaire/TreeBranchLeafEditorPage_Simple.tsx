@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Card, Typography, Button } from 'antd';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { logger } from '../../lib/logger';
 
 const { Title } = Typography;
 
@@ -21,29 +22,29 @@ const TreeBranchLeafEditorPageSimple: React.FC = () => {
   useEffect(() => {
     const fetchTree = async () => {
       try {
-        console.log('[DEBUG] Starting fetchTree with ID:', id);
-        console.log('[DEBUG] API object:', api);
+        logger.debug('[DEBUG] Starting fetchTree with ID:', id);
+        logger.debug('[DEBUG] API object:', api);
         
         if (!id) {
           throw new Error('No ID provided');
         }
 
-        console.log('[DEBUG] Making API call to:', `/treebranchleaf-v2/trees/${id}`);
+        logger.debug('[DEBUG] Making API call to:', `/treebranchleaf-v2/trees/${id}`);
         const response = await api.get(`/treebranchleaf-v2/trees/${id}`);
-        console.log('[DEBUG] Raw API response:', response);
-        console.log('[DEBUG] Response type:', typeof response);
-        console.log('[DEBUG] Response keys:', Object.keys(response || {}));
+        logger.debug('[DEBUG] Raw API response:', response);
+        logger.debug('[DEBUG] Response type:', typeof response);
+        logger.debug('[DEBUG] Response keys:', Object.keys(response || {}));
         
         setTree(response);
       } catch (error) {
-        console.error('[ERROR] Failed to fetch tree:', error);
+        logger.error('[ERROR] Failed to fetch tree:', error);
         setError(error instanceof Error ? error.message : 'Unknown error');
       } finally {
         setLoading(false);
       }
     };
 
-    console.log('[DEBUG] useEffect triggered, ID:', id);
+    logger.debug('[DEBUG] useEffect triggered, ID:', id);
     if (id) {
       fetchTree();
     } else {
@@ -52,7 +53,7 @@ const TreeBranchLeafEditorPageSimple: React.FC = () => {
     }
   }, [id, api]);
 
-  console.log('[DEBUG] Render state:', { loading, tree, error, id });
+  logger.debug('[DEBUG] Render state:', { loading, tree, error, id });
 
   if (loading) {
     return (

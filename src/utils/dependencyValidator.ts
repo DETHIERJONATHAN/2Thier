@@ -1,4 +1,5 @@
 import type { FieldDependency } from "../../../../../../../store/slices/types";
+import { logger } from '../lib/logger';
 
 // Interface pour le résultat de validation
 interface DependencyValidationResult {
@@ -13,29 +14,29 @@ interface DependencyValidationResult {
  * @param origin Le composant d'origine de l'appel (pour le debug)
  */
 export function validateDependency(dependency: FieldDependency, origin: string = 'unknown'): DependencyValidationResult {
-  console.log(`[DependencyValidator:${origin}] 🔍 Validation de l'objet dépendance ${dependency?.id}`);
+  logger.debug(`[DependencyValidator:${origin}] 🔍 Validation de l'objet dépendance ${dependency?.id}`);
 
   // Vérification de base
   if (!dependency) {
-    console.error(`[DependencyValidator:${origin}] ❌ Dépendance indéfinie`);
+    logger.error(`[DependencyValidator:${origin}] ❌ Dépendance indéfinie`);
     return { isValid: false, message: "Dépendance indéfinie" };
   }
 
   // Vérification de l'ID
   if (!dependency.id) {
-    console.error(`[DependencyValidator:${origin}] ❌ ID de dépendance manquant`);
+    logger.error(`[DependencyValidator:${origin}] ❌ ID de dépendance manquant`);
     return { isValid: false, message: "ID de dépendance manquant" };
   }
 
   // Vérification du champ cible
   if (!dependency.targetFieldId) {
-    console.error(`[DependencyValidator:${origin}] ❌ ID de champ cible manquant pour ${dependency.id}`);
+    logger.error(`[DependencyValidator:${origin}] ❌ ID de champ cible manquant pour ${dependency.id}`);
     return { isValid: false, message: "ID de champ cible manquant" };
   }
 
   // Vérification de la séquence
   if (!dependency.sequence) {
-    console.warn(`[DependencyValidator:${origin}] ⚠️ Séquence de dépendance manquante pour ${dependency.id}`);
+    logger.warn(`[DependencyValidator:${origin}] ⚠️ Séquence de dépendance manquante pour ${dependency.id}`);
     // Une séquence manquante n'est pas fatale, on peut en créer une par défaut
     return { 
       isValid: true, 
@@ -47,7 +48,7 @@ export function validateDependency(dependency: FieldDependency, origin: string =
   const { conditions, action } = dependency.sequence;
   
   if (!Array.isArray(conditions)) {
-    console.error(`[DependencyValidator:${origin}] ❌ Conditions n'est pas un tableau dans ${dependency.id}`);
+    logger.error(`[DependencyValidator:${origin}] ❌ Conditions n'est pas un tableau dans ${dependency.id}`);
     return { 
       isValid: false, 
       message: "Format de conditions invalide", 
@@ -58,7 +59,7 @@ export function validateDependency(dependency: FieldDependency, origin: string =
   // Vérification de l'action
   const validActions = ['show', 'hide', 'require', 'unrequire'];
   if (!validActions.includes(action)) {
-    console.error(`[DependencyValidator:${origin}] ❌ Action invalide "${action}" dans ${dependency.id}`);
+    logger.error(`[DependencyValidator:${origin}] ❌ Action invalide "${action}" dans ${dependency.id}`);
     return { 
       isValid: false, 
       message: `Action invalide "${action}". Les actions valides sont: ${validActions.join(', ')}`, 
@@ -71,7 +72,7 @@ export function validateDependency(dependency: FieldDependency, origin: string =
     const conditionGroup = conditions[i];
     
     if (!Array.isArray(conditionGroup)) {
-      console.error(`[DependencyValidator:${origin}] ❌ Groupe de conditions ${i} n'est pas un tableau dans ${dependency.id}`);
+      logger.error(`[DependencyValidator:${origin}] ❌ Groupe de conditions ${i} n'est pas un tableau dans ${dependency.id}`);
       return { 
         isValid: false, 
         message: `Format de groupe de conditions ${i} invalide`, 
@@ -82,7 +83,7 @@ export function validateDependency(dependency: FieldDependency, origin: string =
     // Vérification de chaque élément du groupe
     for (const item of conditionGroup) {
       if (!item.type) {
-        console.error(`[DependencyValidator:${origin}] ❌ Élément de condition sans type dans ${dependency.id}`, item);
+        logger.error(`[DependencyValidator:${origin}] ❌ Élément de condition sans type dans ${dependency.id}`, item);
         return { 
           isValid: false, 
           message: "Élément de condition invalide (type manquant)", 
@@ -91,7 +92,7 @@ export function validateDependency(dependency: FieldDependency, origin: string =
       }
       
       if (item.type === 'field' && !item.id) {
-        console.error(`[DependencyValidator:${origin}] ❌ Champ sans ID dans les conditions de ${dependency.id}`, item);
+        logger.error(`[DependencyValidator:${origin}] ❌ Champ sans ID dans les conditions de ${dependency.id}`, item);
         return { 
           isValid: false, 
           message: "Champ invalide dans les conditions (ID manquant)", 
@@ -100,7 +101,7 @@ export function validateDependency(dependency: FieldDependency, origin: string =
       }
       
       if (item.type === 'operator' && !item.value) {
-        console.error(`[DependencyValidator:${origin}] ❌ Opérateur sans valeur dans les conditions de ${dependency.id}`, item);
+        logger.error(`[DependencyValidator:${origin}] ❌ Opérateur sans valeur dans les conditions de ${dependency.id}`, item);
         return { 
           isValid: false, 
           message: "Opérateur invalide dans les conditions (valeur manquante)", 
@@ -110,7 +111,7 @@ export function validateDependency(dependency: FieldDependency, origin: string =
     }
   }
 
-  console.log(`[DependencyValidator:${origin}] ✅ Dépendance ${dependency.id} est valide`);
+  logger.debug(`[DependencyValidator:${origin}] ✅ Dépendance ${dependency.id} est valide`);
   return { isValid: true, message: "Dépendance valide" };
 }
 
@@ -119,7 +120,7 @@ export function validateDependency(dependency: FieldDependency, origin: string =
  * @param dependency La dépendance à préparer
  */
 export function prepareDependencyForAPI(dependency: FieldDependency): any {
-  console.log(`[DependencyValidator] 🔧 Préparation de la dépendance ${dependency.id} pour l'API`);
+  logger.debug(`[DependencyValidator] 🔧 Préparation de la dépendance ${dependency.id} pour l'API`);
   
   // Création d'une copie pour ne pas modifier l'original
   const prepared = {
@@ -133,7 +134,7 @@ export function prepareDependencyForAPI(dependency: FieldDependency): any {
     targetFieldId: dependency.targetFieldId
   };
 
-  console.log(`[DependencyValidator] ✅ Dépendance ${dependency.id} prête pour l'API`, prepared);
+  logger.debug(`[DependencyValidator] ✅ Dépendance ${dependency.id} prête pour l'API`, prepared);
   return prepared;
 }
 
@@ -156,10 +157,10 @@ export function evaluateDependency(
   dependency: FieldDependency,
   values: Record<string, unknown>
 ): { result: 'show' | 'hide' | 'require' | 'unrequire'; details?: unknown } {
-  console.log(`[DependencyEvaluator] 🧪 Évaluation de la dépendance ${dependency.id}`, values);
+  logger.debug(`[DependencyEvaluator] 🧪 Évaluation de la dépendance ${dependency.id}`, values);
   
   if (!dependency.sequence) {
-    console.warn(`[DependencyEvaluator] ⚠️ Pas de séquence à évaluer pour ${dependency.id}`);
+    logger.warn(`[DependencyEvaluator] ⚠️ Pas de séquence à évaluer pour ${dependency.id}`);
     return { result: 'show' }; // Par défaut, on montre le champ
   }
   
@@ -168,7 +169,7 @@ export function evaluateDependency(
     
     // Si pas de conditions, on applique l'action par défaut
     if (!conditions || conditions.length === 0 || (conditions.length === 1 && conditions[0].length === 0)) {
-      console.log(`[DependencyEvaluator] ℹ️ Pas de conditions, action par défaut: ${action}`);
+      logger.debug(`[DependencyEvaluator] ℹ️ Pas de conditions, action par défaut: ${action}`);
       return { result: action };
     }
     
@@ -196,7 +197,7 @@ export function evaluateDependency(
         }
       }
       
-      console.log(`[DependencyEvaluator] 📝 Expression de groupe à évaluer: ${groupExpr}`);
+      logger.debug(`[DependencyEvaluator] 📝 Expression de groupe à évaluer: ${groupExpr}`);
       
       // Évaluation sécurisée de l'expression du groupe
       let groupResult;
@@ -204,11 +205,11 @@ export function evaluateDependency(
         // Utilisation d'une fonction anonyme pour éviter eval()
         groupResult = new Function(`return ${groupExpr}`)();
       } catch (error) {
-        console.error(`[DependencyEvaluator] ❌ Erreur lors de l'évaluation du groupe: ${error}`);
+        logger.error(`[DependencyEvaluator] ❌ Erreur lors de l'évaluation du groupe: ${error}`);
         continue; // On passe au groupe suivant en cas d'erreur
       }
       
-      console.log(`[DependencyEvaluator] 🔍 Résultat de l'évaluation du groupe: ${groupResult}`);
+      logger.debug(`[DependencyEvaluator] 🔍 Résultat de l'évaluation du groupe: ${groupResult}`);
       
       // Si ce groupe est vrai, le résultat final est vrai (OU logique)
       if (groupResult) {
@@ -217,7 +218,7 @@ export function evaluateDependency(
       }
     }
     
-    console.log(`[DependencyEvaluator] 🔍 Résultat final de l'évaluation: ${finalResult}`);
+    logger.debug(`[DependencyEvaluator] 🔍 Résultat final de l'évaluation: ${finalResult}`);
     
     // Application de l'action en fonction du résultat
     if (finalResult) {
@@ -234,7 +235,7 @@ export function evaluateDependency(
     }
     
   } catch (error) {
-    console.error(`[DependencyEvaluator] ❌ Erreur lors de l'évaluation de la dépendance: ${error}`);
+    logger.error(`[DependencyEvaluator] ❌ Erreur lors de l'évaluation de la dépendance: ${error}`);
     return { result: 'show', details: { error } }; // Par défaut, on montre le champ en cas d'erreur
   }
 }

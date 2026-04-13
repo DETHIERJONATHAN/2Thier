@@ -9,6 +9,7 @@
  */
 
 import { db } from '../lib/database';
+import { logger } from '../lib/logger';
 
 const prisma = db;
 
@@ -89,7 +90,7 @@ export async function storeCalculatedValues(
         error: error instanceof Error ? error.message : String(error)
       });
 
-      console.error(`❌ [StoreCalculatedValues] Erreur stockage:`, {
+      logger.error(`❌ [StoreCalculatedValues] Erreur stockage:`, {
         nodeId: value.nodeId,
         error,
         submissionId
@@ -131,7 +132,7 @@ export async function storeCalculatedValue(
       }
     });
 
-    console.log('✅ [storeCalculatedValue] Valeur stockée:', {
+    logger.debug('✅ [storeCalculatedValue] Valeur stockée:', {
       nodeId,
       label: updated.label,
       value: updated.calculatedValue,
@@ -143,7 +144,7 @@ export async function storeCalculatedValue(
       value: updated.calculatedValue || undefined
     };
   } catch (error) {
-    console.error('❌ [storeCalculatedValue] Erreur:', {
+    logger.error('❌ [storeCalculatedValue] Erreur:', {
       nodeId,
       error
     });
@@ -170,7 +171,7 @@ export async function getCalculatedValue(nodeId: string): Promise<string | null>
 
     return node?.calculatedValue ?? null;
   } catch (error) {
-    console.error('❌ [getCalculatedValue] Erreur:', { nodeId, error });
+    logger.error('❌ [getCalculatedValue] Erreur:', { nodeId, error });
     return null;
   }
 }
@@ -203,7 +204,7 @@ export async function getCalculatedValues(
 
     return result;
   } catch (error) {
-    console.error('❌ [getCalculatedValues] Erreur:', { error });
+    logger.error('❌ [getCalculatedValues] Erreur:', { error });
     return {};
   }
 }
@@ -227,14 +228,14 @@ export async function clearCalculatedValues(nodeIds: string[]): Promise<number> 
       }
     });
 
-    console.log('🗑️ [clearCalculatedValues] Valeurs réinitialisées:', {
+    logger.debug('🗑️ [clearCalculatedValues] Valeurs réinitialisées:', {
       count: result.count,
       nodeIds: nodeIds.length
     });
 
     return result.count;
   } catch (error) {
-    console.error('❌ [clearCalculatedValues] Erreur:', { error });
+    logger.error('❌ [clearCalculatedValues] Erreur:', { error });
     return 0;
   }
 }

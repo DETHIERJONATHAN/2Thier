@@ -9,6 +9,7 @@ import { getFieldMapping } from '../config/fieldMapping';
 
 import express from 'express';
 import DynamicFormulaEngine from '../services/DynamicFormulaEngine';
+import { logger } from '../lib/logger';
 
 const router = express.Router();
 
@@ -46,7 +47,7 @@ router.get('/configurations', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Ã¢ÂÅ’ [DynamicFormulaAPI] Erreur rÃƒÂ©cupÃƒÂ©ration configurations:', error);
+    logger.error('Ã¢ÂÅ’ [DynamicFormulaAPI] Erreur rÃƒÂ©cupÃƒÂ©ration configurations:', error);
     res.status(500).json({
       success: false,
       error: 'Erreur lors de la rÃƒÂ©cupÃƒÂ©ration des configurations',
@@ -110,7 +111,7 @@ router.post('/calculate', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Ã¢ÂÅ’ [DynamicFormulaAPI] Erreur calculs:', error);
+    logger.error('Ã¢ÂÅ’ [DynamicFormulaAPI] Erreur calculs:', error);
     res.status(500).json({
       success: false,
       error: 'Erreur lors des calculs dynamiques',
@@ -180,7 +181,7 @@ router.post('/calculate-prix-kwh', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Ã¢ÂÅ’ [Prix Kw/h API] Erreur:', error);
+    logger.error('Ã¢ÂÅ’ [Prix Kw/h API] Erreur:', error);
     res.status(500).json({
       success: false,
       error: 'Erreur lors du calcul Prix Kw/h',
@@ -220,7 +221,7 @@ router.put('/configurations/:fieldId', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Ã¢ÂÅ’ [DynamicFormulaAPI] Erreur mise ÃƒÂ  jour:', error);
+    logger.error('Ã¢ÂÅ’ [DynamicFormulaAPI] Erreur mise ÃƒÂ  jour:', error);
     res.status(500).json({
       success: false,
       error: 'Erreur lors de la mise ÃƒÂ  jour de la configuration',
@@ -268,7 +269,7 @@ router.get('/field/:fieldId/logic', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Ã¢ÂÅ’ [DynamicFormulaAPI] Erreur analyse logique:', error);
+    logger.error('Ã¢ÂÅ’ [DynamicFormulaAPI] Erreur analyse logique:', error);
     res.status(500).json({
       success: false,
       error: 'Erreur lors de l\'analyse de la logique',
@@ -311,7 +312,7 @@ router.get('/analytics', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Ã¢ÂÅ’ [DynamicFormulaAPI] Erreur analytics:', error);
+    logger.error('Ã¢ÂÅ’ [DynamicFormulaAPI] Erreur analytics:', error);
     res.status(500).json({
       success: false,
       error: 'Erreur lors de la rÃƒÂ©cupÃƒÂ©ration des statistiques',

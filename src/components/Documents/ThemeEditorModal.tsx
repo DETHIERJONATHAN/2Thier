@@ -3,6 +3,7 @@ import { UploadOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import type { Color } from 'antd/es/color-picker';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 interface ThemeEditorModalProps {
   visible: boolean;
@@ -46,7 +47,7 @@ const ThemeEditorModal = ({ visible, onClose, onSave, initialTheme }: ThemeEdito
       form.resetFields();
       onClose();
     } catch (error) {
-      console.error('Erreur sauvegarde thème:', error);
+      logger.error('Erreur sauvegarde thème:', error);
       message.error('Erreur lors de la sauvegarde');
     } finally {
       setLoading(false);

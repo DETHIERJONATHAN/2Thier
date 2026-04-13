@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Button, Typography, Modal, Form, Input, message, Space } from 'antd';
 import { BankOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
+import { logger } from '../lib/logger';
 
 const { Text } = Typography;
 
@@ -30,7 +31,7 @@ export default function FreeUserBanner() {
       form.resetFields();
       window.location.reload();
     } catch (error) {
-      console.error('Erreur création Colony:', error);
+      logger.error('Erreur création Colony:', error);
       msgApi.error('Erreur lors de la création de la Colony');
     } finally {
       setIsCreatingOrg(false);

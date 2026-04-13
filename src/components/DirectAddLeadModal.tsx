@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { NotificationManager } from './Notifications';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
+import { logger } from '../lib/logger';
 
 interface DirectAddLeadModalProps {
   isOpen: boolean;
@@ -34,7 +35,7 @@ export default function DirectAddLeadModal({ isOpen, onClose, onLeadAdded, organ
     const status = formData.get('status') as string;
 
     try {
-      console.log('[DirectAddLeadModal] Envoi des données via API hook /api/direct/add-lead-direct', { status, leadData, organizationId });
+      logger.debug('[DirectAddLeadModal] Envoi des données via API hook /api/direct/add-lead-direct', { status, leadData, organizationId });
 
       // Utilise l'API authentifiée (ajoute cookies + organisation + gestion centralisée baseUrl)
       const data = await api.post<{ success?: boolean; id?: string; error?: string }>(
@@ -47,12 +48,12 @@ export default function DirectAddLeadModal({ isOpen, onClose, onLeadAdded, organ
         { showErrors: true }
       );
 
-      console.log('Lead créé avec succès via API hook:', data);
+      logger.debug('Lead créé avec succès via API hook:', data);
       NotificationManager.success("Lead ajouté avec succès !");
       onLeadAdded();
       onClose();
     } catch (error: unknown) {
-      console.error('Erreur lors de l\'ajout du lead direct:', error);
+      logger.error('Erreur lors de l\'ajout du lead direct:', error);
       NotificationManager.error(error.message || "Erreur lors de l'ajout du lead");
     } finally {
       setIsSubmitting(false);

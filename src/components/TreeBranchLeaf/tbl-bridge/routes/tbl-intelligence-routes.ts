@@ -17,14 +17,15 @@ import TBLEvaluationEngine from '../intelligence/TBLEvaluationEngine';
 import { evaluateVariableOperation, interpretFormula, interpretCondition } from '../../treebranchleaf-new/api/operation-interpreter';
 // 🎯 Import centralisé de la base de données - NE JAMAIS créer new PrismaClient() !
 import { db } from '../../../../lib/database';
+import { logger } from '../../../../lib/logger';
 
 const router = express.Router();
-// console.log('🧠 [TBL INTELLIGENCE] Initialisation du routeur tbl-intelligence-routes (avec operation-interpreter)');
+// logger.debug('🧠 [TBL INTELLIGENCE] Initialisation du routeur tbl-intelligence-routes (avec operation-interpreter)');
 const evaluationEngine = new TBLEvaluationEngine();
 
 // Petit helper interne pour log
 function logRouteHit(route: string) {
-  // console.log(`🛰️  [TBL INTELLIGENCE] Hit ${route} @ ${new Date().toISOString()}`);
+  // logger.debug(`🛰️  [TBL INTELLIGENCE] Hit ${route} @ ${new Date().toISOString()}`);
 }
 
 /**
@@ -125,7 +126,7 @@ router.post('/evaluate', async (req, res) => {
             }
           }
           
-          // console.log(`🧮 [TBL EVALUATE] Évaluation directe formule: ${formula.name} (${formula.id})`);
+          // logger.debug(`🧮 [TBL EVALUATE] Évaluation directe formule: ${formula.name} (${formula.id})`);
           
           const valuesCache = new Map();
           const labelMap = new Map<string, string>();
@@ -154,7 +155,7 @@ router.post('/evaluate', async (req, res) => {
             trace 
           });
         } catch (evalError) {
-          console.error(`❌ [TBL EVALUATE] Erreur évaluation directe formule:`, evalError);
+          logger.error(`❌ [TBL EVALUATE] Erreur évaluation directe formule:`, evalError);
           trace.push({ step: 'formula_direct_eval', info: `Erreur: ${evalError instanceof Error ? evalError.message : 'unknown'}`, success: false });
           // Continue vers le flux normal en cas d'échec
         }
@@ -244,7 +245,7 @@ router.post('/evaluate', async (req, res) => {
     // Neutre
     return res.json({ success: true, type: 'neutral', capacity, value: null, trace });
   } catch (e) {
-    console.error('💥 [TBL INTELLIGENCE] Erreur /evaluate:', e);
+    logger.error('💥 [TBL INTELLIGENCE] Erreur /evaluate:', e);
     return res.status(500).json({ success: false, error: 'Erreur interne /evaluate', details: e instanceof Error ? e.message : 'unknown' });
   }
   // Note: Plus de finally/$disconnect car on utilise le singleton db
@@ -314,7 +315,7 @@ async function resolveSingleEvaluation(prisma: MinimalPrisma, elementId: string,
           }
         }
         
-        // console.log(`🧮 [TBL EVALUATE BATCH] Évaluation directe formule: ${formula.name} (${formula.id})`);
+        // logger.debug(`🧮 [TBL EVALUATE BATCH] Évaluation directe formule: ${formula.name} (${formula.id})`);
         
         const valuesCache = new Map();
         const labelMap = new Map<string, string>();
@@ -345,7 +346,7 @@ async function resolveSingleEvaluation(prisma: MinimalPrisma, elementId: string,
           trace 
         };
       } catch (evalError) {
-        console.error(`❌ [TBL EVALUATE BATCH] Erreur évaluation directe formule:`, evalError);
+        logger.error(`❌ [TBL EVALUATE BATCH] Erreur évaluation directe formule:`, evalError);
         trace.push({ step: 'formula_direct_eval', info: `Erreur: ${evalError instanceof Error ? evalError.message : 'unknown'}`, success: false });
         // Continue vers le flux normal en cas d'échec
       }
@@ -440,8 +441,8 @@ async function resolveSingleEvaluation(prisma: MinimalPrisma, elementId: string,
         }
       }
       
-      // console.log(`🧮 [TBL EVALUATE] Utilisation de operation-interpreter pour formule: ${formulaId}`);
-      // console.log(`   📊 ValueMap: ${valueMap.size} entrées`);
+      // logger.debug(`🧮 [TBL EVALUATE] Utilisation de operation-interpreter pour formule: ${formulaId}`);
+      // logger.debug(`   📊 ValueMap: ${valueMap.size} entrées`);
       
       // Utiliser interpretFormula d'operation-interpreter.ts
       const valuesCache = new Map();
@@ -473,7 +474,7 @@ async function resolveSingleEvaluation(prisma: MinimalPrisma, elementId: string,
         trace 
       };
     } catch (error) {
-      console.error(`❌ [TBL EVALUATE] Erreur interpretFormula:`, error);
+      logger.error(`❌ [TBL EVALUATE] Erreur interpretFormula:`, error);
       trace.push({ step: 'formula_interpret', info: `Erreur: ${error instanceof Error ? error.message : 'unknown'}`, success: false });
       
       // Fallback vers TBLEvaluationEngine si interpretFormula échoue
@@ -528,12 +529,12 @@ async function resolveSingleEvaluation(prisma: MinimalPrisma, elementId: string,
         if (nodeId) {
           valueMap.set(nodeId, value);
           valueMap.set(`@value.${nodeId}`, value);
-          // console.log(`   🔗 Mapping label "${key}" → nodeId "${nodeId}" = ${value}`);
+          // logger.debug(`   🔗 Mapping label "${key}" → nodeId "${nodeId}" = ${value}`);
         }
       }
       
-      // console.log(`⚖️ [TBL EVALUATE] Utilisation de operation-interpreter pour condition: ${conditionId}`);
-      // console.log(`   📊 ValueMap: ${valueMap.size} entrées`);
+      // logger.debug(`⚖️ [TBL EVALUATE] Utilisation de operation-interpreter pour condition: ${conditionId}`);
+      // logger.debug(`   📊 ValueMap: ${valueMap.size} entrées`);
       
       // Utiliser interpretCondition d'operation-interpreter.ts
       const valuesCache = new Map();
@@ -565,7 +566,7 @@ async function resolveSingleEvaluation(prisma: MinimalPrisma, elementId: string,
         trace 
       };
     } catch (error) {
-      console.error(`❌ [TBL EVALUATE] Erreur interpretCondition:`, error);
+      logger.error(`❌ [TBL EVALUATE] Erreur interpretCondition:`, error);
       trace.push({ step: 'condition_interpret', info: `Erreur: ${error instanceof Error ? error.message : 'unknown'}`, success: false });
       return { payload: { success: false, type: 'condition', capacity, error: 'Échec évaluation condition', details: error instanceof Error ? error.message : 'unknown' }, trace };
     }
@@ -620,7 +621,7 @@ router.post('/condition', async (req, res) => {
       });
     }
 
-    // console.log('🔧 [TBL CONDITION] Évaluation avec CapacityCalculator:', elementId);
+    // logger.debug('🔧 [TBL CONDITION] Évaluation avec CapacityCalculator:', elementId);
     
     // Utiliser le CapacityCalculator corrigé
     const calculator = new CapacityCalculator();
@@ -633,7 +634,7 @@ router.post('/condition', async (req, res) => {
 
     const result = await calculator.evaluateCondition(elementId, context);
     
-    // console.log('✅ [TBL CONDITION] Résultat CapacityCalculator:', result);
+    // logger.debug('✅ [TBL CONDITION] Résultat CapacityCalculator:', result);
     
     return res.json({
       success: true,
@@ -643,7 +644,7 @@ router.post('/condition', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ [TBL CONDITION] Erreur:', error);
+    logger.error('❌ [TBL CONDITION] Erreur:', error);
     return res.status(500).json({ 
       success: false, 
       error: 'Erreur interne', 
@@ -669,7 +670,7 @@ router.post('/evaluate/condition/:tblCode', async (req, res) => {
     });
   }
 
-  // console.log('🔧 [TBL EVALUATE CONDITION] Évaluation avec operation-interpreter:', tblCode);
+  // logger.debug('🔧 [TBL EVALUATE CONDITION] Évaluation avec operation-interpreter:', tblCode);
   
   // ✨ Utiliser le système unifié operation-interpreter
   // 🎯 Utilisation du singleton db centralisé
@@ -696,7 +697,7 @@ router.post('/evaluate/condition/:tblCode', async (req, res) => {
       prisma
     );
     
-    // console.log('✅ [TBL EVALUATE CONDITION] Résultat operation-interpreter:', result);
+    // logger.debug('✅ [TBL EVALUATE CONDITION] Résultat operation-interpreter:', result);
     
     return res.json({
       success: true,
@@ -708,7 +709,7 @@ router.post('/evaluate/condition/:tblCode', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('❌ [TBL EVALUATE CONDITION] Erreur:', error);
+    logger.error('❌ [TBL EVALUATE CONDITION] Erreur:', error);
     return res.status(500).json({ 
       success: false, 
       error: 'Erreur interne', 
@@ -752,7 +753,7 @@ router.post('/update-database-results', async (req, res) => {
   try {
     const { submissionId = 'df833cac-0b44-4b2b-bb1c-de3878f00182' } = req.body || {};
     
-    // console.log('🔄 [TBL UPDATE] Début mise à jour base de données avec CapacityCalculator');
+    // logger.debug('🔄 [TBL UPDATE] Début mise à jour base de données avec CapacityCalculator');
     
     // 🎯 Utilisation du singleton db centralisé
     const prisma = db;
@@ -765,7 +766,7 @@ router.post('/update-database-results', async (req, res) => {
       }
     });
     
-    // console.log(`🔄 [TBL UPDATE] Trouvé ${submissionData.length} données de conditions à mettre à jour`);
+    // logger.debug(`🔄 [TBL UPDATE] Trouvé ${submissionData.length} données de conditions à mettre à jour`);
     
     const calculator = new CapacityCalculator();
     const context = {
@@ -781,7 +782,7 @@ router.post('/update-database-results', async (req, res) => {
       try {
         const conditionId = data.sourceRef;
         if (!conditionId) {
-          // console.log(`⚠️ [TBL UPDATE] Pas de sourceRef pour ${data.id}, ignoré`);
+          // logger.debug(`⚠️ [TBL UPDATE] Pas de sourceRef pour ${data.id}, ignoré`);
           continue;
         }
         
@@ -815,7 +816,7 @@ router.post('/update-database-results', async (req, res) => {
         });
         
         updated++;
-        // console.log(`✅ [TBL UPDATE] Condition ${conditionId} mise à jour:`, newOperationResult);
+        // logger.debug(`✅ [TBL UPDATE] Condition ${conditionId} mise à jour:`, newOperationResult);
         
       } catch (error) {
         errors.push({
@@ -823,7 +824,7 @@ router.post('/update-database-results', async (req, res) => {
           sourceRef: data.sourceRef,
           error: error instanceof Error ? error.message : 'unknown'
         });
-        console.error(`❌ [TBL UPDATE] Erreur data ${data.id}:`, error);
+        logger.error(`❌ [TBL UPDATE] Erreur data ${data.id}:`, error);
       }
     }
     
@@ -838,7 +839,7 @@ router.post('/update-database-results', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ [TBL UPDATE] Erreur globale:', error);
+    logger.error('❌ [TBL UPDATE] Erreur globale:', error);
     return res.status(500).json({ 
       success: false, 
       error: 'Erreur interne', 
@@ -888,7 +889,7 @@ router.post('/check-submission-data', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ [TBL CHECK] Erreur:', error);
+    logger.error('❌ [TBL CHECK] Erreur:', error);
     return res.status(500).json({ 
       success: false, 
       error: 'Erreur interne', 
@@ -907,7 +908,7 @@ router.post('/update-database-with-intelligent-translations', async (req, res) =
   try {
     const { submissionId = 'df833cac-0b44-4b2b-bb1c-de3878f00182' } = req.body || {};
     
-    // console.log('🧠 [TBL INTELLIGENT UPDATE] Début mise à jour avec traductions intelligentes');
+    // logger.debug('🧠 [TBL INTELLIGENT UPDATE] Début mise à jour avec traductions intelligentes');
     
     // 🎯 Utilisation du singleton db centralisé
     const prisma = db;
@@ -918,7 +919,7 @@ router.post('/update-database-with-intelligent-translations', async (req, res) =
       const translatorModule = await import('../../../../../../tbl-intelligent-translator.cjs');
       TBLIntelligentTranslator = translatorModule.default;
     } catch (error) {
-      console.error('❌ [TBL INTELLIGENT] Impossible de charger TBLIntelligentTranslator:', error);
+      logger.error('❌ [TBL INTELLIGENT] Impossible de charger TBLIntelligentTranslator:', error);
       return res.status(500).json({ 
         success: false, 
         error: 'TBLIntelligentTranslator non disponible' 
@@ -943,14 +944,14 @@ router.post('/update-database-with-intelligent-translations', async (req, res) =
       }
     });
     
-    // console.log(`🧠 [TBL INTELLIGENT UPDATE] Trouvé ${submissionData.length} données à traduire`);
+    // logger.debug(`🧠 [TBL INTELLIGENT UPDATE] Trouvé ${submissionData.length} données à traduire`);
     
     let updated = 0;
     const errors = [];
     
     for (const data of submissionData) {
       try {
-        // console.log(`🔧 [TBL INTELLIGENT] Traduction: ${data.TreeBranchLeafNode?.label || 'Sans nom'} (${data.operationSource})`);
+        // logger.debug(`🔧 [TBL INTELLIGENT] Traduction: ${data.TreeBranchLeafNode?.label || 'Sans nom'} (${data.operationSource})`);
         
         // Générer la traduction intelligente
         const intelligentResult = await translator.translateCapacity(
@@ -960,7 +961,7 @@ router.post('/update-database-with-intelligent-translations', async (req, res) =
           data.submissionId
         );
         
-        // console.log(`✅ [TBL INTELLIGENT] Traduction générée: ${intelligentResult.substring(0, 100)}...`);
+        // logger.debug(`✅ [TBL INTELLIGENT] Traduction générée: ${intelligentResult.substring(0, 100)}...`);
         
         // Mettre à jour en base
         await prisma.treeBranchLeafSubmissionData.update({
@@ -972,7 +973,7 @@ router.post('/update-database-with-intelligent-translations', async (req, res) =
         });
         
         updated++;
-        // console.log(`✅ [TBL INTELLIGENT] Mis à jour: ${data.id}`);
+        // logger.debug(`✅ [TBL INTELLIGENT] Mis à jour: ${data.id}`);
         
       } catch (error) {
         errors.push({
@@ -980,7 +981,7 @@ router.post('/update-database-with-intelligent-translations', async (req, res) =
           nodeLabel: data.TreeBranchLeafNode?.label,
           error: error instanceof Error ? error.message : 'unknown'
         });
-        console.error(`❌ [TBL INTELLIGENT] Erreur data ${data.id}:`, error);
+        logger.error(`❌ [TBL INTELLIGENT] Erreur data ${data.id}:`, error);
       }
     }
     
@@ -996,7 +997,7 @@ router.post('/update-database-with-intelligent-translations', async (req, res) =
     });
     
   } catch (error) {
-    console.error('❌ [TBL INTELLIGENT UPDATE] Erreur globale:', error);
+    logger.error('❌ [TBL INTELLIGENT UPDATE] Erreur globale:', error);
     return res.status(500).json({ 
       success: false, 
       error: 'Erreur interne', 
@@ -1066,7 +1067,7 @@ router.get('/check-intelligent-translations', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ [TBL CHECK INTELLIGENT] Erreur:', error);
+    logger.error('❌ [TBL CHECK INTELLIGENT] Erreur:', error);
     return res.status(500).json({ 
       success: false, 
       error: 'Erreur interne', 
@@ -1080,7 +1081,7 @@ router.get('/nodes/:nodeId', async (req, res) => {
   try {
     const { nodeId } = req.params;
     
-    // console.log('🔄 [TBL NODES] Récupération node via TBL:', nodeId);
+    // logger.debug('🔄 [TBL NODES] Récupération node via TBL:', nodeId);
     
     // 🎯 Utilisation du singleton db centralisé
     const prisma = db;
@@ -1098,7 +1099,7 @@ router.get('/nodes/:nodeId', async (req, res) => {
     return res.json(node);
     
   } catch (error) {
-    console.error('❌ [TBL NODES] Erreur:', error);
+    logger.error('❌ [TBL NODES] Erreur:', error);
     return res.status(500).json({ 
       success: false, 
       error: 'Erreur interne', 
@@ -1115,7 +1116,7 @@ router.get('/reusables/conditions', async (req, res) => {
   logRouteHit('GET /api/tbl/reusables/conditions');
   
   try {
-    // console.log('🔄 [TBL CONDITIONS] Récupération conditions via TBL');
+    // logger.debug('🔄 [TBL CONDITIONS] Récupération conditions via TBL');
     
     // 🎯 Utilisation du singleton db centralisé
     const prisma = db;
@@ -1135,7 +1136,7 @@ router.get('/reusables/conditions', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ [TBL CONDITIONS] Erreur:', error);
+    logger.error('❌ [TBL CONDITIONS] Erreur:', error);
     return res.status(500).json({ 
       success: false, 
       error: 'Erreur interne', 
@@ -1152,7 +1153,7 @@ router.get('/reusables/formulas', async (req, res) => {
   logRouteHit('GET /api/tbl/reusables/formulas');
   
   try {
-    // console.log('🔄 [TBL FORMULAS] Récupération formules via TBL');
+    // logger.debug('🔄 [TBL FORMULAS] Récupération formules via TBL');
     
     // 🎯 Utilisation du singleton db centralisé
     const prisma = db;
@@ -1172,7 +1173,7 @@ router.get('/reusables/formulas', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ [TBL FORMULAS] Erreur:', error);
+    logger.error('❌ [TBL FORMULAS] Erreur:', error);
     return res.status(500).json({ 
       success: false, 
       error: 'Erreur interne', 

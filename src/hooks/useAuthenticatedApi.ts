@@ -9,6 +9,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
+import { logger } from '../lib/logger';
 
 interface ApiOptions extends RequestInit {
   showErrors?: boolean;
@@ -51,10 +52,10 @@ export function useAuthenticatedApi() {
   const order = useMemo(() => ({ none: 0, error: 1, warn: 2, info: 3, debug: 4 }), []);
   const can = useCallback((lvl: keyof typeof order) => order[getLogLevel()] >= order[lvl], [order]);
   const L = useMemo(() => ({
-    error: (...a: unknown[]) => can('error') && console.error('[useAuthenticatedApi]', ...a),
-    warn: (...a: unknown[]) => can('warn') && console.warn('[useAuthenticatedApi]', ...a),
-    info: (...a: unknown[]) => can('info') && console.log('[useAuthenticatedApi]', ...a),
-    debug: (...a: unknown[]) => can('debug') && console.log('[useAuthenticatedApi]', ...a)
+    error: (...a: unknown[]) => can('error') && logger.error('[useAuthenticatedApi]', ...a),
+    warn: (...a: unknown[]) => can('warn') && logger.warn('[useAuthenticatedApi]', ...a),
+    info: (...a: unknown[]) => can('info') && logger.debug('[useAuthenticatedApi]', ...a),
+    debug: (...a: unknown[]) => can('debug') && logger.debug('[useAuthenticatedApi]', ...a)
   }), [can]);
 
   const [globalError, setGlobalError] = useState<string | null>(null);

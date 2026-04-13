@@ -12,6 +12,7 @@
  */
 
 import { db } from '../lib/database';
+import { logger } from '../lib/logger';
 
 const prisma = db;
 
@@ -42,31 +43,31 @@ interface DisplayFieldDiagnostic {
 }
 
 async function main() {
-  console.log('🔍 === DIAGNOSTIC CHAMPS D\'AFFICHAGE ===\n');
+  logger.debug('🔍 === DIAGNOSTIC CHAMPS D\'AFFICHAGE ===\n');
 
   try {
     // 1. Identifier tous les arbres
-    console.log('📋 1. Recherche des arbres TreeBranchLeaf...');
+    logger.debug('📋 1. Recherche des arbres TreeBranchLeaf...');
     const trees = await prisma.treeBranchLeafTree.findMany({
       select: { id: true, name: true, organizationId: true },
       orderBy: { createdAt: 'desc' },
       take: 5 // Limiter aux 5 derniers
     });
 
-    console.log(`   ✅ ${trees.length} arbres trouvés:`);
-    trees.forEach(tree => console.log(`      - ${tree.name} (${tree.id})`));
+    logger.debug(`   ✅ ${trees.length} arbres trouvés:`);
+    trees.forEach(tree => logger.debug(`      - ${tree.name} (${tree.id})`));
 
     if (trees.length === 0) {
-      console.log('   ❌ Aucun arbre trouvé. Impossible de continuer.');
+      logger.debug('   ❌ Aucun arbre trouvé. Impossible de continuer.');
       return;
     }
 
     // 2. Analyser le premier arbre en détail
     const targetTree = trees[0];
-    console.log(`\n🎯 2. Analyse détaillée de l'arbre: ${targetTree.name}`);
+    logger.debug(`\n🎯 2. Analyse détaillée de l'arbre: ${targetTree.name}`);
 
     // 3. Chercher les nœuds avec des capacités de calcul
-    console.log('\n🧮 3. Nœuds avec capacités de calcul...');
+    logger.debug('\n🧮 3. Nœuds avec capacités de calcul...');
     const calculationNodes = await prisma.treeBranchLeafNode.findMany({
       where: {
         treeId: targetTree.id,
@@ -96,17 +97,17 @@ async function main() {
       }
     });
 
-    console.log(`   ✅ ${calculationNodes.length} nœuds avec capacités trouvés`);
+    logger.debug(`   ✅ ${calculationNodes.length} nœuds avec capacités trouvés`);
 
     // 4. Pour chaque nœud, vérifier les données de soumission
-    console.log('\n📊 4. Vérification des données de soumission...');
+    logger.debug('\n📊 4. Vérification des données de soumission...');
     
     const diagnostics: DisplayFieldDiagnostic[] = [];
 
     for (const node of calculationNodes) {
-      console.log(`\n   🔎 Nœud: ${node.label} (${node.id})`);
-      console.log(`      Type: ${node.type}`);
-      console.log(`      Capacités: ${[
+      logger.debug(`\n   🔎 Nœud: ${node.label} (${node.id})`);
+      logger.debug(`      Type: ${node.type}`);
+      logger.debug(`      Capacités: ${[
         node.hasData && 'DATA',
         node.hasFormula && 'FORMULA',
         node.hasCondition && 'CONDITION',
@@ -114,9 +115,9 @@ async function main() {
       ].filter(Boolean).join(', ') || 'AUCUNE'}`);
 
       if (node.calculatedValue) {
-        console.log(`      💾 Valeur calculée: ${node.calculatedValue}`);
-        console.log(`      📅 Calculée le: ${node.calculatedAt}`);
-        console.log(`      🔧 Calculée par: ${node.calculatedBy}`);
+        logger.debug(`      💾 Valeur calculée: ${node.calculatedValue}`);
+        logger.debug(`      📅 Calculée le: ${node.calculatedAt}`);
+        logger.debug(`      🔧 Calculée par: ${node.calculatedBy}`);
       }
 
       // Chercher les données de soumission
@@ -137,28 +138,28 @@ async function main() {
       });
 
       if (submissionData.length > 0) {
-        console.log(`      📋 ${submissionData.length} données de soumission:`);
+        logger.debug(`      📋 ${submissionData.length} données de soumission:`);
         submissionData.forEach((data, idx) => {
-          console.log(`         ${idx + 1}. Valeur: ${data.value || '(vide)'}`);
-          console.log(`            OperationResult: ${data.operationResult ? JSON.stringify(data.operationResult).substring(0, 100) + '...' : '(vide)'}`);
-          console.log(`            Source: ${data.operationSource || '(vide)'}`);
-          console.log(`            Résolu le: ${data.lastResolved || '(jamais)'}`);
-          console.log(`            Variable: ${data.isVariable ? 'OUI (' + data.variableKey + ')' : 'NON'}`);
+          logger.debug(`         ${idx + 1}. Valeur: ${data.value || '(vide)'}`);
+          logger.debug(`            OperationResult: ${data.operationResult ? JSON.stringify(data.operationResult).substring(0, 100) + '...' : '(vide)'}`);
+          logger.debug(`            Source: ${data.operationSource || '(vide)'}`);
+          logger.debug(`            Résolu le: ${data.lastResolved || '(jamais)'}`);
+          logger.debug(`            Variable: ${data.isVariable ? 'OUI (' + data.variableKey + ')' : 'NON'}`);
         });
       } else {
-        console.log(`      ❌ Aucune donnée de soumission trouvée`);
+        logger.debug(`      ❌ Aucune donnée de soumission trouvée`);
       }
 
       // Variables liées
       if (node.linkedVariableIds.length > 0) {
-        console.log(`      🔗 Variables liées: ${node.linkedVariableIds.length}`);
+        logger.debug(`      🔗 Variables liées: ${node.linkedVariableIds.length}`);
         for (const varId of node.linkedVariableIds) {
           const variable = await prisma.treeBranchLeafNodeVariable.findUnique({
             where: { id: varId },
             select: { exposedKey: true, displayName: true, sourceType: true, fixedValue: true }
           });
           if (variable) {
-            console.log(`         - ${variable.displayName} (${variable.exposedKey}): ${variable.sourceType} = ${variable.fixedValue || '(vide)'}`);
+            logger.debug(`         - ${variable.displayName} (${variable.exposedKey}): ${variable.sourceType} = ${variable.fixedValue || '(vide)'}`);
           }
         }
       }
@@ -182,7 +183,7 @@ async function main() {
     }
 
     // 5. Chercher les champs d'affichage spécifiques (nœuds avec ID commençant par "display-")
-    console.log('\n🖥️  5. Recherche des champs d\'affichage spécifiques...');
+    logger.debug('\n🖥️  5. Recherche des champs d\'affichage spécifiques...');
     const displayNodes = await prisma.treeBranchLeafNode.findMany({
       where: {
         treeId: targetTree.id,
@@ -197,15 +198,15 @@ async function main() {
       }
     });
 
-    console.log(`   ✅ ${displayNodes.length} nœuds d'affichage trouvés`);
+    logger.debug(`   ✅ ${displayNodes.length} nœuds d'affichage trouvés`);
     displayNodes.forEach(node => {
-      console.log(`      - ${node.label} (${node.id})`);
-      console.log(`        Valeur: ${node.calculatedValue || '(vide)'}`);
-      console.log(`        Variables: ${node.linkedVariableIds.length}`);
+      logger.debug(`      - ${node.label} (${node.id})`);
+      logger.debug(`        Valeur: ${node.calculatedValue || '(vide)'}`);
+      logger.debug(`        Variables: ${node.linkedVariableIds.length}`);
     });
 
     // 6. Chercher les copies (nœuds avec metadata.sourceTemplateId)
-    console.log('\n📋 6. Recherche des copies de templates...');
+    logger.debug('\n📋 6. Recherche des copies de templates...');
     const allNodes = await prisma.treeBranchLeafNode.findMany({
       where: { treeId: targetTree.id },
       select: { id: true, label: true, metadata: true, calculatedValue: true }
@@ -216,20 +217,20 @@ async function main() {
       return meta?.sourceTemplateId || meta?.copiedFromNodeId;
     });
 
-    console.log(`   ✅ ${copyNodes.length} nœuds copiés trouvés`);
+    logger.debug(`   ✅ ${copyNodes.length} nœuds copiés trouvés`);
     copyNodes.forEach(node => {
       const meta = node.metadata as unknown;
-      console.log(`      - ${node.label} (${node.id})`);
-      console.log(`        Copié depuis: ${meta.sourceTemplateId || meta.copiedFromNodeId}`);
-      console.log(`        Valeur: ${node.calculatedValue || '(vide)'}`);
+      logger.debug(`      - ${node.label} (${node.id})`);
+      logger.debug(`        Copié depuis: ${meta.sourceTemplateId || meta.copiedFromNodeId}`);
+      logger.debug(`        Valeur: ${node.calculatedValue || '(vide)'}`);
     });
 
     // 7. Résumé et recommandations
-    console.log('\n📊 === RÉSUMÉ DIAGNOSTIC ===');
-    console.log(`🎯 Arbre analysé: ${targetTree.name}`);
-    console.log(`🧮 Nœuds avec capacités: ${calculationNodes.length}`);
-    console.log(`🖥️  Champs d'affichage: ${displayNodes.length}`);
-    console.log(`📋 Nœuds copiés: ${copyNodes.length}`);
+    logger.debug('\n📊 === RÉSUMÉ DIAGNOSTIC ===');
+    logger.debug(`🎯 Arbre analysé: ${targetTree.name}`);
+    logger.debug(`🧮 Nœuds avec capacités: ${calculationNodes.length}`);
+    logger.debug(`🖥️  Champs d'affichage: ${displayNodes.length}`);
+    logger.debug(`📋 Nœuds copiés: ${copyNodes.length}`);
 
     const nodesWithCalculatedValues = diagnostics.filter(d => d.calculatedValue).length;
     const nodesWithSubmissionData = diagnostics.filter(d => d.submissionData && d.submissionData.length > 0).length;
@@ -237,35 +238,35 @@ async function main() {
       d.submissionData && d.submissionData.some(sd => sd.operationResult)
     ).length;
 
-    console.log(`💾 Nœuds avec valeurs calculées: ${nodesWithCalculatedValues}`);
-    console.log(`📊 Nœuds avec données de soumission: ${nodesWithSubmissionData}`);
-    console.log(`🎯 Nœuds avec résultats d'opération: ${nodesWithOperationResults}`);
+    logger.debug(`💾 Nœuds avec valeurs calculées: ${nodesWithCalculatedValues}`);
+    logger.debug(`📊 Nœuds avec données de soumission: ${nodesWithSubmissionData}`);
+    logger.debug(`🎯 Nœuds avec résultats d'opération: ${nodesWithOperationResults}`);
 
     // 8. Recommendations
-    console.log('\n🔧 === RECOMMANDATIONS ===');
+    logger.debug('\n🔧 === RECOMMANDATIONS ===');
     
     if (nodesWithCalculatedValues === 0) {
-      console.log('❌ Aucune valeur calculée trouvée dans TreeBranchLeafNode.calculatedValue');
-      console.log('   → Vérifier que storeCalculatedValues() est appelé après les calculs');
+      logger.debug('❌ Aucune valeur calculée trouvée dans TreeBranchLeafNode.calculatedValue');
+      logger.debug('   → Vérifier que storeCalculatedValues() est appelé après les calculs');
     }
 
     if (nodesWithOperationResults === 0) {
-      console.log('❌ Aucun operationResult trouvé dans TreeBranchLeafSubmissionData');
-      console.log('   → Vérifier que les formules/conditions stockent leurs résultats');
+      logger.debug('❌ Aucun operationResult trouvé dans TreeBranchLeafSubmissionData');
+      logger.debug('   → Vérifier que les formules/conditions stockent leurs résultats');
     }
 
     if (displayNodes.length === 0) {
-      console.log('❌ Aucun champ d\'affichage spécifique trouvé');
-      console.log('   → Vérifier la création automatique des nœuds display-*');
+      logger.debug('❌ Aucun champ d\'affichage spécifique trouvé');
+      logger.debug('   → Vérifier la création automatique des nœuds display-*');
     }
 
-    console.log('\n✅ Diagnostic terminé !');
+    logger.debug('\n✅ Diagnostic terminé !');
 
   } catch (error) {
-    console.error('❌ Erreur pendant le diagnostic:', error);
+    logger.error('❌ Erreur pendant le diagnostic:', error);
   } finally {
     await prisma.$disconnect();
   }
 }
 
-main().catch(console.error);
+main().catch(logger.error);

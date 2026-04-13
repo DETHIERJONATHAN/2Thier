@@ -12,6 +12,7 @@ import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../../auth/useAuth';
 import TreeBranchLeafEditor from './TreeBranchLeafEditor';
 import type { TreeBranchLeafTree, TreeBranchLeafNode, NodeTypeKey } from './types';
+import { logger } from '../../../lib/logger';
 
 interface TreeBranchLeafWrapperProps {
   // Props optionnelles pour la flexibilité
@@ -45,7 +46,7 @@ const TreeBranchLeafWrapper: React.FC<TreeBranchLeafWrapperProps> = ({
   // Fonctions utilitaires
   const buildNodeHierarchy = useCallback((flatNodes: TreeBranchLeafNode[]): TreeBranchLeafNode[] => {
     if (!flatNodes || flatNodes.length === 0) {
-      // console.log(...) // ✨ Log réduit
+      // logger.debug(...) // ✨ Log réduit
       return [];
     }
     
@@ -73,14 +74,14 @@ const TreeBranchLeafWrapper: React.FC<TreeBranchLeafWrapperProps> = ({
         const parent = nodeMap.get(node.parentId)!;
         parent.children = parent.children || [];
         parent.children.push(nodeWithChildren);
-        // console.log(`📎 [buildNodeHierarchy] Nœud ${node.label} (${node.type}) ajouté sous parent ${parent.label} (${parent.type})`); // ✨ Log réduit
+        // logger.debug(`📎 [buildNodeHierarchy] Nœud ${node.label} (${node.type}) ajouté sous parent ${parent.label} (${parent.type})`); // ✨ Log réduit
       } else {
         // Nœud racine (pas de parent ou parent introuvable)
         rootNodes.push(nodeWithChildren);
         if (node.parentId) {
-          // console.log(`🚨 [buildNodeHierarchy] PROBLÈME: ${node.label} (${node.type}) a parentId=${node.parentId?.substring(0, 8)}... mais parent INTROUVABLE !`); // ✨ Log réduit
+          // logger.debug(`🚨 [buildNodeHierarchy] PROBLÈME: ${node.label} (${node.type}) a parentId=${node.parentId?.substring(0, 8)}... mais parent INTROUVABLE !`); // ✨ Log réduit
         } else {
-          // console.log(`🌱 [buildNodeHierarchy] Nœud racine: ${node.label} (${node.type}) - parentId: ${node.parentId}`); // ✨ Log réduit
+          // logger.debug(`🌱 [buildNodeHierarchy] Nœud racine: ${node.label} (${node.type}) - parentId: ${node.parentId}`); // ✨ Log réduit
         }
       }
     });
@@ -97,7 +98,7 @@ const TreeBranchLeafWrapper: React.FC<TreeBranchLeafWrapperProps> = ({
     
     sortNodesByOrder(rootNodes);
     
-    // console.log(...) // ✨ Log réduit
+    // logger.debug(...) // ✨ Log réduit
     /* {
       // flatCount: flatNodes.length,
       // rootCount: rootNodes.length,
@@ -106,7 +107,7 @@ const TreeBranchLeafWrapper: React.FC<TreeBranchLeafWrapperProps> = ({
     } */
     
     if (rootNodes.length === 0) {
-      // console.warn('🚨 [buildNodeHierarchy] AUCUN NŒUD RACINE TROUVÉ !'); // ✨ Log réduit
+      // logger.warn('🚨 [buildNodeHierarchy] AUCUN NŒUD RACINE TROUVÉ !'); // ✨ Log réduit
     }
     
     return rootNodes;
@@ -121,7 +122,7 @@ const TreeBranchLeafWrapper: React.FC<TreeBranchLeafWrapperProps> = ({
       
       setNodes(hierarchicalNodes);
     } catch (err) {
-      console.error('Erreur lors du chargement des nœuds:', err);
+      logger.error('Erreur lors du chargement des nœuds:', err);
       throw new Error('Impossible de charger les nœuds de l\'arbre');
     }
   }, [api, buildNodeHierarchy]);
@@ -136,7 +137,7 @@ const TreeBranchLeafWrapper: React.FC<TreeBranchLeafWrapperProps> = ({
       const treesData = await api.get('/api/treebranchleaf/trees');
       
       // 🐛 DEBUG: Logs pour vérifier les données de l'API
-      // console.log(...) // ✨ Log réduit
+      // logger.debug(...) // ✨ Log réduit
       /* {
         // treesData: treesData,
         // treesCount: treesData?.length || 0
@@ -160,7 +161,7 @@ const TreeBranchLeafWrapper: React.FC<TreeBranchLeafWrapperProps> = ({
       }
 
     } catch (err) {
-      console.error('Erreur lors du chargement des données:', err);
+      logger.error('Erreur lors du chargement des données:', err);
       setError('Erreur lors du chargement des données TreeBranchLeaf');
     } finally {
       setLoading(false);
@@ -246,7 +247,7 @@ const TreeBranchLeafWrapper: React.FC<TreeBranchLeafWrapperProps> = ({
       
       return newNode;
     } catch (error) {
-      console.error("Erreur lors de la création du nœud:", error);
+      logger.error("Erreur lors de la création du nœud:", error);
       return null;
     }
   }, [api, selectedTree, loadTreeNodes]);

@@ -5,6 +5,7 @@ import { PAGE_BACKGROUNDS, buildCustomBackgroundDataUri } from './PageBackground
 import type { PageBackground } from './PageBackgrounds';
 import { useAuth } from '../../auth/useAuth';
 import { useUserPreference } from '../../hooks/useUserPreference';
+import { logger } from '../../lib/logger';
 
 interface BackgroundSelectorProps {
   open: boolean;
@@ -113,7 +114,7 @@ export const BackgroundSelector: React.FC<BackgroundSelectorProps> = ({
         onClose();
       }, 300);
     } catch (error) {
-      console.error('Erreur lors de l\'upload du fond:', error);
+      logger.error('Erreur lors de l\'upload du fond:', error);
       setLoading(false);
     }
   }, [colors, customEntries, onClose, onSelect]);
@@ -138,7 +139,7 @@ export const BackgroundSelector: React.FC<BackgroundSelectorProps> = ({
           onClose();
         }, 300);
       } catch (error) {
-        console.error('Erreur lors de la sélection du fond:', error);
+        logger.error('Erreur lors de la sélection du fond:', error);
         setLoading(false);
       }
     };

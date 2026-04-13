@@ -1,3 +1,4 @@
+import { logger } from '../lib/logger';
 /**
  * Fonctions de validation pour le système CRM
  * Ces fonctions permettent de vérifier qu'une valeur est correcte/cohérente avant validation du champ
@@ -254,7 +255,7 @@ export function MATCH(value: unknown, pattern: string | RegExp): boolean {
                 regex = new RegExp(pattern);
             }
         } catch (e) {
-            console.error('Motif d\'expression régulière invalide:', e);
+            logger.error('Motif d\'expression régulière invalide:', e);
             return false;
         }
     } else {

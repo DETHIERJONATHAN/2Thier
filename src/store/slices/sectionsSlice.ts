@@ -4,6 +4,7 @@ import { StateCreator } from 'zustand';
 import { CRMState, Section } from './types';
 import { fetchWithAuth } from './api';
 import { toast } from 'react-toastify';
+import { logger } from '../../lib/logger';
 
 // Types pour ce slice spécifique
 export interface SectionsSlice {
@@ -45,7 +46,7 @@ export const createSectionsSlice: StateCreator<
       toast.success("Section ajoutée avec succès !");
     } catch (err: unknown) {
       toast.error(err.message);
-      console.error('[CRMStore] addSectionToBlock error:', err);
+      logger.error('[CRMStore] addSectionToBlock error:', err);
     }
   },
   
@@ -71,7 +72,7 @@ export const createSectionsSlice: StateCreator<
       toast.success("Section supprimée avec succès !");
     } catch (err: unknown) {
       toast.error(err.message);
-      console.error('[CRMStore] removeSectionFromBlock error:', err);
+      logger.error('[CRMStore] removeSectionFromBlock error:', err);
     }
   },
   
@@ -139,7 +140,7 @@ export const createSectionsSlice: StateCreator<
       toast.success("Sections réordonnées avec succès !");
     } catch (err: unknown) {
       toast.error(err.message);
-      console.error('[CRMStore] reorderSectionsOfBlock error:', err);
+      logger.error('[CRMStore] reorderSectionsOfBlock error:', err);
     }
   },
 });

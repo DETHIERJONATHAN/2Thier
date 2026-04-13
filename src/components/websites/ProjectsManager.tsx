@@ -37,6 +37,7 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import AIContentAssistant from '../AIContentAssistant';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { TextArea } = Input;
 
@@ -170,7 +171,7 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({ websiteId, sit
       const response = await api.get(`/api/website-projects/${websiteId}`);
       setProjects(Array.isArray(response) ? response : []);
     } catch (error) {
-      console.error('Erreur chargement projets:', error);
+      logger.error('Erreur chargement projets:', error);
       message.error('Erreur lors du chargement des projets');
     } finally {
       setLoading(false);
@@ -193,7 +194,7 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({ websiteId, sit
         });
         message.success('Ordre mis à jour');
       } catch (error) {
-        console.error('Erreur réorganisation:', error);
+        logger.error('Erreur réorganisation:', error);
         message.error('Erreur lors de la réorganisation');
         fetchProjects();
       }
@@ -223,7 +224,7 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({ websiteId, sit
       message.success('Projet supprimé');
       fetchProjects();
     } catch (error) {
-      console.error('Erreur suppression:', error);
+      logger.error('Erreur suppression:', error);
       message.error('Erreur lors de la suppression');
     }
   };
@@ -236,7 +237,7 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({ websiteId, sit
       message.success(project.isFeatured ? 'Retiré des favoris' : 'Mis en avant');
       fetchProjects();
     } catch (error) {
-      console.error('Erreur toggle:', error);
+      logger.error('Erreur toggle:', error);
       message.error('Erreur lors de la modification');
     }
   };
@@ -267,7 +268,7 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({ websiteId, sit
       setModalVisible(false);
       fetchProjects();
     } catch (error) {
-      console.error('Erreur sauvegarde:', error);
+      logger.error('Erreur sauvegarde:', error);
       message.error('Erreur lors de la sauvegarde');
     }
   };

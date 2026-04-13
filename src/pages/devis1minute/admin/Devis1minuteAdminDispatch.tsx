@@ -4,6 +4,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ExperimentOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../../lib/logger';
 
 const { Title, Paragraph } = Typography;
 
@@ -23,7 +24,7 @@ export default function Devis1minuteAdminDispatch() {
   const res = await api.get<{ success: boolean; data: Rule[] }>('/api/dispatch/rules');
       setRows(res?.data || []);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       message.error("Impossible de charger les règles");
     } finally {
       setLoading(false);
@@ -66,7 +67,7 @@ export default function Devis1minuteAdminDispatch() {
       setOpen(false);
       load();
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       message.error('Enregistrement échoué');
     }
   };
@@ -77,7 +78,7 @@ export default function Devis1minuteAdminDispatch() {
       const res = await api.post('/api/dispatch/simulate', { lead: exampleLead });
       Modal.info({ title: 'Résultats de la simulation', content: <pre className="whitespace-pre-wrap">{JSON.stringify(res?.data, null, 2)}</pre>, width: 600 });
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       message.error('Simulation échouée');
     }
   }, [api]);

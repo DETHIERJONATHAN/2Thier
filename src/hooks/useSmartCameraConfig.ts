@@ -12,6 +12,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
+import { logger } from '../lib/logger';
 
 export interface ReferenceObject {
   type: string;
@@ -65,7 +66,7 @@ export const useSmartCameraConfig = (nodeId: string | undefined) => {
       setLoading(true);
       setError(null);
       
-      console.log(`📊 [useSmartCameraConfig] Chargement config pour node ${nodeId}`);
+      logger.debug(`📊 [useSmartCameraConfig] Chargement config pour node ${nodeId}`);
       
       const data = await api.get(`/api/treebranchleaf/nodes/${nodeId}/ia-config`) as unknown;
       
@@ -80,9 +81,9 @@ export const useSmartCameraConfig = (nodeId: string | undefined) => {
       };
       
       setConfig(mergedConfig);
-      console.log(`✅ [useSmartCameraConfig] Config chargée:`, mergedConfig.referenceObjects.length, 'objets');
+      logger.debug(`✅ [useSmartCameraConfig] Config chargée:`, mergedConfig.referenceObjects.length, 'objets');
     } catch (err) {
-      console.error('❌ [useSmartCameraConfig] Erreur chargement:', err);
+      logger.error('❌ [useSmartCameraConfig] Erreur chargement:', err);
       setError(err instanceof Error ? err.message : 'Erreur de chargement');
       setConfig(DEFAULT_CONFIG);
     } finally {
@@ -95,7 +96,7 @@ export const useSmartCameraConfig = (nodeId: string | undefined) => {
    */
   const saveConfig = useCallback(async (newConfig: SmartCameraConfig) => {
     if (!nodeId) {
-      console.warn('⚠️ [useSmartCameraConfig] Pas de nodeId, impossible de sauvegarder');
+      logger.warn('⚠️ [useSmartCameraConfig] Pas de nodeId, impossible de sauvegarder');
       return;
     }
 
@@ -103,14 +104,14 @@ export const useSmartCameraConfig = (nodeId: string | undefined) => {
       setLoading(true);
       setError(null);
       
-      console.log(`💾 [useSmartCameraConfig] Sauvegarde config pour node ${nodeId}`);
+      logger.debug(`💾 [useSmartCameraConfig] Sauvegarde config pour node ${nodeId}`);
       
       await api.put(`/api/treebranchleaf/nodes/${nodeId}/ia-config`, newConfig);
       
       setConfig(newConfig);
-      console.log(`✅ [useSmartCameraConfig] Config sauvegardée avec succès`);
+      logger.debug(`✅ [useSmartCameraConfig] Config sauvegardée avec succès`);
     } catch (err) {
-      console.error('❌ [useSmartCameraConfig] Erreur sauvegarde:', err);
+      logger.error('❌ [useSmartCameraConfig] Erreur sauvegarde:', err);
       setError(err instanceof Error ? err.message : 'Erreur de sauvegarde');
       throw err;
     } finally {

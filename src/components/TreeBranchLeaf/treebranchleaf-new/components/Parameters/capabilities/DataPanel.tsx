@@ -4,6 +4,7 @@ import { useAuthenticatedApi } from '../../../../../../hooks/useAuthenticatedApi
 import { useDebouncedCallback } from '../../../hooks/useDebouncedCallback';
 import NodeTreeSelector, { NodeTreeSelectorValue } from '../shared/NodeTreeSelector';
 import { useEvalBridge } from '../../../TBL/bridge/evalBridge';
+import { logger } from '../../../../../../lib/logger';
 
 const { Title, Text } = Typography;
 
@@ -206,7 +207,7 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
               await api.put(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}`, { metadata: nextMd });
             } catch { /* noop */ }
           } else {
-            console.log('🛡️ [DataPanel] Variable proxiée ou vide, skip persistence metadata pour', nodeId);
+            logger.debug('🛡️ [DataPanel] Variable proxiée ou vide, skip persistence metadata pour', nodeId);
           }
           onChange?.(initial);
         }
@@ -228,12 +229,12 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
           api.get('/api/treebranchleaf/reusables/formulas'),
           api.get('/api/treebranchleaf/reusables/tables')
         ]);
-        console.log('📦 [DataPanel] Capacités chargées - tables:', tablesResponse);
+        logger.debug('📦 [DataPanel] Capacités chargées - tables:', tablesResponse);
         setConditions(conditionsResponse || { items: [] });
         setFormulas(formulasResponse || { items: [] });
         setTables(tablesResponse || { items: [] });
       } catch (error) {
-        console.warn('Erreur lors du chargement des capacités:', error);
+        logger.warn('Erreur lors du chargement des capacités:', error);
       }
     })();
   }, [api]);
@@ -243,7 +244,7 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
     if (activeId && instances.length > 0) {
       const activeInstance = instances.find(it => it.id === activeId);
       if (activeInstance?.config) {
-        console.log('🔄 [DataPanel] Synchronisation états pour activeId:', activeId, 'config:', activeInstance.config);
+        logger.debug('🔄 [DataPanel] Synchronisation états pour activeId:', activeId, 'config:', activeInstance.config);
         
         // 🛡️ PROTECTION: Ne pas écraser si l'utilisateur vient de faire un changement
         const now = Date.now();
@@ -259,9 +260,9 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
           // Mettre à jour le formulaire
           form.setFieldsValue(activeInstance.config as Record<string, unknown>);
           
-          console.log('✅ [DataPanel] États synchronisés - sourceType:', activeInstance.config.sourceType, 'fixedValue:', activeInstance.config.fixedValue, 'sourceRef:', selectedSourceRef, '(PRÉSERVÉ)');
+          logger.debug('✅ [DataPanel] États synchronisés - sourceType:', activeInstance.config.sourceType, 'fixedValue:', activeInstance.config.fixedValue, 'sourceRef:', selectedSourceRef, '(PRÉSERVÉ)');
         } else {
-          console.log('🛡️ [DataPanel] Synchronisation ignorée - changement utilisateur récent');
+          logger.debug('🛡️ [DataPanel] Synchronisation ignorée - changement utilisateur récent');
         }
       }
     }
@@ -281,9 +282,9 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
       if (hasConfiguration) {
         try {
           await api.put(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}`, { hasData: true });
-          console.log('🚀 [DataPanel] Capacité "Données" auto-activée');
+          logger.debug('🚀 [DataPanel] Capacité "Données" auto-activée');
         } catch (err) {
-          console.warn('⚠️ [DataPanel] Erreur auto-activation capacité:', err);
+          logger.warn('⚠️ [DataPanel] Erreur auto-activation capacité:', err);
         }
       }
       
@@ -301,8 +302,8 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
           // 🎯 CORRECTION CRITIQUE: Récupérer les données fraîches depuis l'API et mettre à jour le formulaire
           try {
             const freshData = await api.get(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}/data`);
-            console.log('🔄 [DataPanel] Données fraîches depuis l\'API:', freshData);
-            console.log('🔄 [DataPanel] États avant mise à jour - sourceType:', sourceType, 'fixedValue:', fixedValue, 'selectedSourceRef:', selectedSourceRef);
+            logger.debug('🔄 [DataPanel] Données fraîches depuis l\'API:', freshData);
+            logger.debug('🔄 [DataPanel] États avant mise à jour - sourceType:', sourceType, 'fixedValue:', fixedValue, 'selectedSourceRef:', selectedSourceRef);
             // Mettre à jour l'ID de variable si disponible
             if (freshData && typeof (freshData as { usedVariableId?: string }).usedVariableId === 'string') {
               setVariableId((freshData as { usedVariableId?: string }).usedVariableId!);
@@ -315,8 +316,8 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
               const freshFixedValue = freshData.fixedValue || '';
               const freshSourceRef = freshData.sourceRef || '';
               
-              console.log('🔄 [DataPanel] Données fraîches depuis l\'API - sourceType:', freshSourceType, 'fixedValue:', freshFixedValue, 'sourceRef:', freshSourceRef);
-              console.log('🔄 [DataPanel] États actuels - sourceType:', sourceType, 'fixedValue:', fixedValue, 'selectedSourceRef:', selectedSourceRef);
+              logger.debug('🔄 [DataPanel] Données fraîches depuis l\'API - sourceType:', freshSourceType, 'fixedValue:', freshFixedValue, 'sourceRef:', freshSourceRef);
+              logger.debug('🔄 [DataPanel] États actuels - sourceType:', sourceType, 'fixedValue:', fixedValue, 'selectedSourceRef:', selectedSourceRef);
               
           // 🛡️ PROTECTION CRITIQUE: Ne pas écraser les états utilisateur récemment modifiés
               // Ignorer la mise à jour si on vient de faire une modification (dans les 5 dernières secondes)
@@ -329,7 +330,7 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
                                              userSelectedRefRef.current !== freshSourceRef;
               
               if (timeSinceLastChange < 5000 || userHasSelectedDifferent) {
-                console.log('🛡️ [DataPanel] Récente modification utilisateur détectée - ignore mise à jour API', {
+                logger.debug('🛡️ [DataPanel] Récente modification utilisateur détectée - ignore mise à jour API', {
                   timeSinceLastChange,
                   userHasSelectedDifferent,
                   userSelected: userSelectedRefRef.current,
@@ -342,7 +343,7 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
               // Le sourceRef ne doit changer QUE si l'utilisateur clique sur "Sélectionner dans l'arborescence"
               // Seulement mettre à jour sourceType et fixedValue
               if (freshSourceType !== sourceType || freshFixedValue !== fixedValue) {
-                console.log('🔄 [DataPanel] Mise à jour nécessaire - application des données fraîches (SAUF sourceRef)');
+                logger.debug('🔄 [DataPanel] Mise à jour nécessaire - application des données fraîches (SAUF sourceRef)');
                 setSourceType(freshSourceType);
                 setFixedValue(freshFixedValue);
                 // ❌ NE PAS FAIRE: setSelectedSourceRef(freshSourceRef); 
@@ -351,13 +352,13 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
                 const { sourceRef: _ignored, ...freshDataWithoutSourceRef } = freshData as Record<string, unknown>;
                 form.setFieldsValue(freshDataWithoutSourceRef);
                 
-                console.log('✅ [DataPanel] États après mise à jour - sourceType:', freshSourceType, 'fixedValue:', freshFixedValue, 'selectedSourceRef:', selectedSourceRef, '(PRÉSERVÉ)');
+                logger.debug('✅ [DataPanel] États après mise à jour - sourceType:', freshSourceType, 'fixedValue:', freshFixedValue, 'selectedSourceRef:', selectedSourceRef, '(PRÉSERVÉ)');
               } else {
-                console.log('🚫 [DataPanel] Pas de mise à jour nécessaire - données identiques');
+                logger.debug('🚫 [DataPanel] Pas de mise à jour nécessaire - données identiques');
               }
             }
           } catch (error) {
-            console.error('🔥 [DataPanel] Erreur récupération données fraîches:', error);
+            logger.error('🔥 [DataPanel] Erreur récupération données fraîches:', error);
           }
         } catch { /* noop */ }
       }
@@ -375,7 +376,7 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
 
   // 🌲 Gestionnaire de sélection dans l'arborescence
   const handleTreeSelection = useCallback((selection: NodeTreeSelectorValue) => {
-    console.log('🌲 [DataPanel] Sélection arborescence:', selection);
+    logger.debug('🌲 [DataPanel] Sélection arborescence:', selection);
     
     // 🎯 NOUVEAU : Marquer le changement utilisateur ET sauvegarder sa sélection
     lastUserChangeRef.current = Date.now();
@@ -436,14 +437,14 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
         api.get('/api/treebranchleaf/reusables/formulas'),
         api.get('/api/treebranchleaf/reusables/tables')
       ]);
-      console.log('🔍 [DataPanel] Conditions chargées:', conditionsResponse);
-      console.log('🔍 [DataPanel] Formules chargées:', formulasResponse);
-      console.log('🔍 [DataPanel] Tables chargées:', tablesResponse);
+      logger.debug('🔍 [DataPanel] Conditions chargées:', conditionsResponse);
+      logger.debug('🔍 [DataPanel] Formules chargées:', formulasResponse);
+      logger.debug('🔍 [DataPanel] Tables chargées:', tablesResponse);
       setConditions(conditionsResponse || { items: [] });
       setFormulas(formulasResponse || { items: [] });
       setTables(tablesResponse || { items: [] });
     } catch (error) {
-      console.warn('Erreur lors du chargement des conditions/formules/tables:', error);
+      logger.warn('Erreur lors du chargement des conditions/formules/tables:', error);
     }
     setTreeSelectorOpen(true);
   }, [api, setConditions, setFormulas, setTables]);
@@ -551,7 +552,7 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
           setSinonValue(elseMeta.label);
         }
       } catch (e) {
-        console.warn('⚠️ Impossible de charger la condition:', (e as Error)?.message);
+        logger.warn('⚠️ Impossible de charger la condition:', (e as Error)?.message);
         if (!cancelled) setConditionDetails(null);
       }
     })();
@@ -680,7 +681,7 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
             } 
           }));
         } catch (e) {
-          console.warn('⚠️ Impossible de nettoyer la metadata:', (e as Error).message);
+          logger.warn('⚠️ Impossible de nettoyer la metadata:', (e as Error).message);
         }
         
         // 🎯 Passer à une autre instance ou vider si aucune
@@ -702,7 +703,7 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
         
         messageApi.success('Donnée supprimée');
       } catch (err) {
-        console.error('Erreur lors de la suppression de la variable:', err);
+        logger.error('Erreur lors de la suppression de la variable:', err);
         messageApi.error('Impossible de supprimer la donnée');
       }
     })();
@@ -799,9 +800,9 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
                   ...currentValues,
                   displayName: n // 🏷️ Envoyer le nom pour mise à jour dans la variable
                 });
-                console.log('✅ [DataPanel] Nom sauvegardé dans la variable:', n);
+                logger.debug('✅ [DataPanel] Nom sauvegardé dans la variable:', n);
               } catch (err) {
-                console.warn('⚠️ [DataPanel] Erreur sauvegarde nom:', err);
+                logger.warn('⚠️ [DataPanel] Erreur sauvegarde nom:', err);
               }
             })();
           }}
@@ -952,17 +953,17 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
                 testMode: true
               });
               
-              console.log('🧪 [handleTestCondition] Réponse API complète:', response);
-              console.log('🧪 [handleTestCondition] Données reçues:', response.data || response);
-              console.log('🧪 [handleTestCondition] Structure evaluation:', (response.data || response)?.evaluation);
+              logger.debug('🧪 [handleTestCondition] Réponse API complète:', response);
+              logger.debug('🧪 [handleTestCondition] Données reçues:', response.data || response);
+              logger.debug('🧪 [handleTestCondition] Structure evaluation:', (response.data || response)?.evaluation);
               
               // 🔍 DEBUG DÉTAILLÉ pour comprendre pourquoi ça dit "PAS OK"
               const responseData = response.data || response;
-              console.log('🔍 [DEBUG] JSON de responseData:', JSON.stringify(responseData, null, 2));
-              console.log('🔍 [DEBUG] evaluation.success existe ?', 'success' in (responseData?.evaluation || {}));
-              console.log('🔍 [DEBUG] evaluation.success valeur:', responseData?.evaluation?.success);
-              console.log('🔍 [DEBUG] evaluation.result existe ?', 'result' in (responseData?.evaluation || {}));
-              console.log('🔍 [DEBUG] evaluation.result valeur:', responseData?.evaluation?.result);
+              logger.debug('🔍 [DEBUG] JSON de responseData:', JSON.stringify(responseData, null, 2));
+              logger.debug('🔍 [DEBUG] evaluation.success existe ?', 'success' in (responseData?.evaluation || {}));
+              logger.debug('🔍 [DEBUG] evaluation.success valeur:', responseData?.evaluation?.success);
+              logger.debug('🔍 [DEBUG] evaluation.result existe ?', 'result' in (responseData?.evaluation || {}));
+              logger.debug('🔍 [DEBUG] evaluation.result valeur:', responseData?.evaluation?.result);
               
               const conditionName = responseData?.conditionName || selectedCondition?.name || 'Condition inconnue';
               
@@ -971,10 +972,10 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
               const conditionResult = responseData?.evaluation?.result;     // Peut être booléen OU valeur calculée
               const conditionMet = responseData?.evaluation?.details?.conditionMet;
               
-              console.log('🧪 [handleTestCondition] ANALYSE COMPLÈTE:');
-              console.log('🔍 [DIAGNOSTIC] API success =', evaluationSuccess);
-              console.log('🔍 [DIAGNOSTIC] Condition result =', conditionResult);
-              console.log('🔍 [DIAGNOSTIC] Condition met =', conditionMet);
+              logger.debug('🧪 [handleTestCondition] ANALYSE COMPLÈTE:');
+              logger.debug('🔍 [DIAGNOSTIC] API success =', evaluationSuccess);
+              logger.debug('🔍 [DIAGNOSTIC] Condition result =', conditionResult);
+              logger.debug('🔍 [DIAGNOSTIC] Condition met =', conditionMet);
               
               // Le test est réussi SI l'API fonctionne ET que la condition est vraie
               // Interpréter via conditionMet si disponible
@@ -982,9 +983,9 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
               const isConditionKO = evaluationSuccess && (conditionMet === 'NON' || conditionResult === false);
               const isNeutral = evaluationSuccess && (!isConditionOK && !isConditionKO);
               
-              console.log('🎯 [DIAGNOSTIC] RÉSULTAT FINAL:');
-              console.log('🔍 [DIAGNOSTIC] Condition OK ?', isConditionOK);
-              console.log('🔍 [DIAGNOSTIC] Condition KO ?', isConditionKO);
+              logger.debug('🎯 [DIAGNOSTIC] RÉSULTAT FINAL:');
+              logger.debug('🔍 [DIAGNOSTIC] Condition OK ?', isConditionOK);
+              logger.debug('🔍 [DIAGNOSTIC] Condition KO ?', isConditionKO);
               
               // Enregistrer le résultat du test (incluant la valeur calculée par l'API si fournie)
               setLastTestResult({
@@ -1005,7 +1006,7 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
                 messageApi.warning(`Test condition: erreur ou résultat invalide`);
               }
             } catch (error) {
-              console.error('Erreur test condition:', error);
+              logger.error('Erreur test condition:', error);
               
               // Enregistrer l'échec du test
               setLastTestResult({
@@ -1153,7 +1154,7 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
               else messageApi.success(`🧮 Résultat formule: ${String(value)}`);
             }
           } catch (err) {
-            console.error('🧪 Erreur exécution bac à sable:', err);
+            logger.error('🧪 Erreur exécution bac à sable:', err);
             messageApi.error('Erreur pendant le test');
           } finally {
             setExecuting(false);
@@ -1352,7 +1353,7 @@ const DataPanel: React.FC<DataPanelProps> = ({ treeId, nodeId, value, onChange, 
                 messageApi.success('Champ Total supprimé');
               }
             } catch (err) {
-              console.error('❌ Erreur gestion champ Total:', err);
+              logger.error('❌ Erreur gestion champ Total:', err);
               messageApi.error('Erreur lors de la gestion du champ Total');
               // Rollback
               setCreateSumDisplayField(!newValue);

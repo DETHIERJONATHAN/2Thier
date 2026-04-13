@@ -1,3 +1,4 @@
+import { logger } from './logger';
 /**
  * ⚠️ SERVER-ONLY MODULE ⚠️
  * 
@@ -52,7 +53,7 @@ export async function detectAprilTagsMetreA4(
   options: AprilTagDetectorOptions = {}
 ): Promise<AprilTagDetectionResult[]> {
   try {
-    console.log(`🎯 [APRILTAG] Détection AprilTags Métré A4 V10...`);
+    logger.debug(`🎯 [APRILTAG] Détection AprilTags Métré A4 V10...`);
 
     const { default: AprilTag, FAMILIES } = await loadApriltagModule();
     
@@ -76,7 +77,7 @@ export async function detectAprilTagsMetreA4(
     // Détecter les tags (synchrone)
     const detections = detector.detect(width, height, grayscale);
     
-    console.log(`   🔍 ${detections.length} AprilTag(s) détecté(s)`);
+    logger.debug(`   🔍 ${detections.length} AprilTag(s) détecté(s)`);
     
     if (detections.length === 0) {
       return [];
@@ -102,9 +103,9 @@ export async function detectAprilTagsMetreA4(
       }
       
       if (distinctPixels.size < 4) {
-        console.warn(`   ❌ [APRILTAG ID=${detection.id}] Détection DÉGÉNÉRÉE: ${distinctPixels.size} coins distincts au lieu de 4`);
-        corners.forEach((c, i) => console.warn(`      Corner ${i}: (${c.x.toFixed(1)}, ${c.y.toFixed(1)})`));
-        console.warn(`   ⏭️  REJET DE CETTE DÉTECTION`);
+        logger.warn(`   ❌ [APRILTAG ID=${detection.id}] Détection DÉGÉNÉRÉE: ${distinctPixels.size} coins distincts au lieu de 4`);
+        corners.forEach((c, i) => logger.warn(`      Corner ${i}: (${c.x.toFixed(1)}, ${c.y.toFixed(1)})`));
+        logger.warn(`   ⏭️  REJET DE CETTE DÉTECTION`);
         continue; // Skip cette détection
       }
       
@@ -118,7 +119,7 @@ export async function detectAprilTagsMetreA4(
       // Les diagonales doivent être similaires (~ratio 0.9-1.1) et le périmètre > 100px
       const diagRatio = Math.min(diag1, diag2) / Math.max(diag1, diag2);
       if (diagRatio < 0.8 || diagRatio > 1.2 || perimeter < 100) {
-        console.warn(`   ⚠️  [APRILTAG ID=${detection.id}] Géométrie suspecte: diagRatio=${diagRatio.toFixed(2)}, perimeter=${perimeter.toFixed(0)}px`);
+        logger.warn(`   ⚠️  [APRILTAG ID=${detection.id}] Géométrie suspecte: diagRatio=${diagRatio.toFixed(2)}, perimeter=${perimeter.toFixed(0)}px`);
       }
       
       // Calculer le centre du tag (moyenne des 4 coins)
@@ -128,13 +129,13 @@ export async function detectAprilTagsMetreA4(
       };
       
       results.push({ id: detection.id, corners, center });
-      console.log(`   ✅ AprilTag ID=${detection.id} détecté (diag: ${diag1.toFixed(0)}px/${diag2.toFixed(0)}px)`);
+      logger.debug(`   ✅ AprilTag ID=${detection.id} détecté (diag: ${diag1.toFixed(0)}px/${diag2.toFixed(0)}px)`);
     }
     
     return results;
     
   } catch (error) {
-    console.error(`❌ [APRILTAG] Erreur détection:`, error);
+    logger.error(`❌ [APRILTAG] Erreur détection:`, error);
     return [];
   }
 }
@@ -162,8 +163,8 @@ export async function detectMetreA4Corners(
   const missingIds = requiredIds.filter(id => !foundIds.includes(id));
   
   if (missingIds.length > 0) {
-    console.log(`   ⚠️ AprilTags manquants: ${missingIds.join(', ')}`);
-    console.log(`   📌 Trouvés: ${foundIds.join(', ')}`);
+    logger.debug(`   ⚠️ AprilTags manquants: ${missingIds.join(', ')}`);
+    logger.debug(`   📌 Trouvés: ${foundIds.join(', ')}`);
     return null;
   }
   
@@ -216,11 +217,11 @@ export async function detectMetreA4Corners(
   const tagBL = pickTag(14, 'BL'); // Bottom-Left
   const tagBR = pickTag(21, 'BR'); // Bottom-Right
   
-  console.log(`   📍 Centres AprilTags:`);
-  console.log(`      TL(2):  (${tagTL.center.x.toFixed(0)}, ${tagTL.center.y.toFixed(0)})`);
-  console.log(`      TR(7):  (${tagTR.center.x.toFixed(0)}, ${tagTR.center.y.toFixed(0)})`);
-  console.log(`      BL(14): (${tagBL.center.x.toFixed(0)}, ${tagBL.center.y.toFixed(0)})`);
-  console.log(`      BR(21): (${tagBR.center.x.toFixed(0)}, ${tagBR.center.y.toFixed(0)})`);
+  logger.debug(`   📍 Centres AprilTags:`);
+  logger.debug(`      TL(2):  (${tagTL.center.x.toFixed(0)}, ${tagTL.center.y.toFixed(0)})`);
+  logger.debug(`      TR(7):  (${tagTR.center.x.toFixed(0)}, ${tagTR.center.y.toFixed(0)})`);
+  logger.debug(`      BL(14): (${tagBL.center.x.toFixed(0)}, ${tagBL.center.y.toFixed(0)})`);
+  logger.debug(`      BR(21): (${tagBR.center.x.toFixed(0)}, ${tagBR.center.y.toFixed(0)})`);
   
   // Les centres des AprilTags SONT les coins de la feuille A4 Métré
   return {

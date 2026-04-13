@@ -3,6 +3,7 @@ import { useAuth } from '../auth/useAuth';
 import { FaBuilding, FaUser, FaExchangeAlt } from 'react-icons/fa';
 import { AuthOrganization } from '../auth/organization';
 import { AuthUser } from '../auth/user';
+import { logger } from '../lib/logger';
 
 interface OrganizationSelectorProps {
   onImpersonateClick?: (user: AuthUser, org: AuthOrganization) => void;
@@ -55,11 +56,11 @@ const OrganizationSelector: React.FC<OrganizationSelectorProps> = ({ onImpersona
           
           setUsersInOrg(activeUsers);
         } else {
-          console.error('Erreur lors du chargement des utilisateurs:', response.statusText);
+          logger.error('Erreur lors du chargement des utilisateurs:', response.statusText);
           setUsersInOrg([]);
         }
       } catch (error) {
-        console.error('Erreur lors du chargement des utilisateurs:', error);
+        logger.error('Erreur lors du chargement des utilisateurs:', error);
         setUsersInOrg([]);
       }
     };
@@ -74,7 +75,7 @@ const OrganizationSelector: React.FC<OrganizationSelectorProps> = ({ onImpersona
       await selectOrganization(orgId);
       setShowOrgDropdown(false);
     } catch (error) {
-      console.error('Erreur lors du changement d\'organisation:', error);
+      logger.error('Erreur lors du changement d\'organisation:', error);
     }
   };
   

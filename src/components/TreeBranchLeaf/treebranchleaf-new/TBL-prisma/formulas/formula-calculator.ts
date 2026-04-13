@@ -6,6 +6,7 @@ import {
   calculateResult,
   contextToLegacyMaps
 } from '../shared/legacy-functions';
+import { logger } from '../../../../../lib/logger';
 
 /**
  * Calculateur de formules avec la logique EXACTE de l'ancien système
@@ -23,7 +24,7 @@ export class FormulaCalculator {
    */
   async calculateFormula(formulaId: string): Promise<TBLCalculationResult> {
     try {
-      console.log(`[FORMULA-CALCULATOR] 📐 Calcul formule: ${formulaId}`);
+      logger.debug(`[FORMULA-CALCULATOR] 📐 Calcul formule: ${formulaId}`);
 
       // Récupérer la formule depuis la base
       const formula = await this.prisma.treeBranchLeafNodeFormula.findUnique({
@@ -32,7 +33,7 @@ export class FormulaCalculator {
       });
 
       if (!formula) {
-        console.error(`[FORMULA-CALCULATOR] ❌ Formule non trouvée: ${formulaId}`);
+        logger.error(`[FORMULA-CALCULATOR] ❌ Formule non trouvée: ${formulaId}`);
         return {
           detail: { error: `Formule ${formulaId} non trouvée` },
           result: `Erreur: Formule ${formulaId} non trouvée`,
@@ -63,7 +64,7 @@ export class FormulaCalculator {
       
       // Construire l'expression avec la fonction qui marche
       const expr = buildTextFromTokens(formula.tokens, labels, values);
-      console.log(`[FORMULA-CALCULATOR] Expression construite: ${expr}`);
+      logger.debug(`[FORMULA-CALCULATOR] Expression construite: ${expr}`);
       
       // Calculer le résultat avec la fonction qui marche
       const calculatedResult = calculateResult(expr);
@@ -74,11 +75,11 @@ export class FormulaCalculator {
       if (calculatedResult !== null && calculatedResult !== undefined && !isNaN(calculatedResult)) {
         const lbl = labels.get(formula.nodeId) ?? formula.name ?? 'Formule';
         result = `${lbl} ${expr} (=) ${calculatedResult}`;
-        console.log(`[FORMULA-CALCULATOR] ✅ Résultat calculé: ${result}`);
+        logger.debug(`[FORMULA-CALCULATOR] ✅ Résultat calculé: ${result}`);
       } else {
         const lbl = labels.get(formula.nodeId) ?? formula.name ?? 'Formule';
         result = `${lbl} ${expr}`;
-        console.log(`[FORMULA-CALCULATOR] ⚠️ Pas de résultat numérique: ${result}`);
+        logger.debug(`[FORMULA-CALCULATOR] ⚠️ Pas de résultat numérique: ${result}`);
       }
 
       return {
@@ -94,7 +95,7 @@ export class FormulaCalculator {
       };
 
     } catch (error) {
-      console.error(`[FORMULA-CALCULATOR] ❌ Erreur calcul formule:`, error);
+      logger.error(`[FORMULA-CALCULATOR] ❌ Erreur calcul formule:`, error);
       return {
         detail: { error: String(error) },
         result: `Erreur: ${error}`,

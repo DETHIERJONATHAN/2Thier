@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import DraggableItem from './DraggableItem';
+import { logger } from '../../lib/logger';
 
 interface DependenciesPaletteProps {
   dependencyId: string;
@@ -17,7 +18,7 @@ const DependenciesPalette: React.FC<DependenciesPaletteProps> = ({ dependencyId 
     // Délai court pour s'assurer que le DOM est prêt
     const timer = setTimeout(() => {
       setIsReady(true);
-      console.log('DependenciesPalette initialized');
+      logger.debug('DependenciesPalette initialized');
     }, 100);
     
     return () => clearTimeout(timer);

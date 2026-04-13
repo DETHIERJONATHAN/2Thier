@@ -6,6 +6,7 @@ import type { MinimalReq } from './services/shared-helpers.js';
 import { authenticateToken } from '../../../../../middleware/auth';
 import { updateSumDisplayFieldAfterCopyChange } from '../sum-display-field-routes.js';
 import { invalidateTriggerIndexCache } from '../../../tbl-bridge/routes/tbl-submission-evaluator.js';
+import { logger } from '../../../../../lib/logger';
 
 interface RepeatRequestBody {
   suffix?: string | number;
@@ -51,7 +52,7 @@ export default function createRepeatRouter(prisma: PrismaClient) {
           details: error.details ?? null
         });
       }
-      console.error('[repeat-route] Unable to plan duplication', error);
+      logger.error('[repeat-route] Unable to plan duplication', error);
       return res.status(500).json({
         error: 'Failed to plan repeat duplication.',
         details: error instanceof Error ? error.message : String(error)
@@ -115,7 +116,7 @@ export default function createRepeatRouter(prisma: PrismaClient) {
       }
       // Log stack to help debugging in development (improves visibility of 500s)
       const stack = error instanceof Error ? error.stack || error.message : String(error);
-      console.error('[repeat-route] Unable to execute duplication', stack);
+      logger.error('[repeat-route] Unable to execute duplication', stack);
       return res.status(500).json({
         error: 'Failed to execute repeat duplication.',
         details: error instanceof Error ? error.message : String(error)
@@ -141,7 +142,7 @@ export default function createRepeatRouter(prisma: PrismaClient) {
       const { repeaterId } = req.params;
       const { targetCount } = (req.body || {}) as { targetCount?: number };
       
-      // console.log(`⚡ [PRELOAD] Démarrage pour repeater ${repeaterId}, cible: ${targetCount}`);
+      // logger.debug(`⚡ [PRELOAD] Démarrage pour repeater ${repeaterId}, cible: ${targetCount}`);
       
       if (typeof targetCount !== 'number' || targetCount < 1) {
         return res.status(400).json({ error: 'targetCount doit être un nombre >= 1' });
@@ -175,7 +176,7 @@ export default function createRepeatRouter(prisma: PrismaClient) {
         return res.status(400).json({ error: 'Aucun templateNodeIds configuré pour ce repeater' });
       }
       
-      // console.log(`⚡ [PRELOAD] Templates: ${templateNodeIds.join(', ')}`);
+      // logger.debug(`⚡ [PRELOAD] Templates: ${templateNodeIds.join(', ')}`);
       
       // 3. Trouver les copies existantes (IDs suffixés comme templateId-1, templateId-2...)
       // On utilise la même logique que suffix-utils.ts
@@ -208,13 +209,13 @@ export default function createRepeatRouter(prisma: PrismaClient) {
       const existingCopiesCount = existingSuffixes.length;
       const totalCurrentInstances = existingCopiesCount + 1; // +1 pour l'original
       
-      // console.log(`⚡ [PRELOAD] Suffixes existants: [${existingSuffixes.join(', ')}] (total: ${totalCurrentInstances})`);
+      // logger.debug(`⚡ [PRELOAD] Suffixes existants: [${existingSuffixes.join(', ')}] (total: ${totalCurrentInstances})`);
       
       // 4. Calculer les actions nécessaires
       const copiesToCreate = Math.max(0, targetCount - totalCurrentInstances);
       const copiesToDelete = Math.max(0, totalCurrentInstances - targetCount);
       
-      // console.log(`⚡ [PRELOAD] À créer: ${copiesToCreate}, à supprimer: ${copiesToDelete}`);
+      // logger.debug(`⚡ [PRELOAD] À créer: ${copiesToCreate}, à supprimer: ${copiesToDelete}`);
       
       const createdNodes: string[] = [];
       const deletedNodes: string[] = [];
@@ -224,7 +225,7 @@ export default function createRepeatRouter(prisma: PrismaClient) {
         // Prendre les N suffixes les plus élevés pour les supprimer
         const suffixesToDelete = existingSuffixes.slice(-copiesToDelete);
         
-        // console.log(`🗑️ [PRELOAD] Suppression des suffixes: [${suffixesToDelete.join(', ')}]`);
+        // logger.debug(`🗑️ [PRELOAD] Suppression des suffixes: [${suffixesToDelete.join(', ')}]`);
         
         for (const suffix of suffixesToDelete) {
           // Trouver TOUS les nœuds avec ce suffixe (templates + display nodes + autres)
@@ -236,16 +237,16 @@ export default function createRepeatRouter(prisma: PrismaClient) {
             select: { id: true }
           });
           
-          // console.log(`🗑️ [PRELOAD] Suffixe -${suffix}: ${nodesToDeleteForSuffix.length} nœuds à supprimer`);
+          // logger.debug(`🗑️ [PRELOAD] Suffixe -${suffix}: ${nodesToDeleteForSuffix.length} nœuds à supprimer`);
           
           for (const node of nodesToDeleteForSuffix) {
             try {
-              // console.log(`🗑️ [PRELOAD] Suppression ${node.id}...`);
+              // logger.debug(`🗑️ [PRELOAD] Suppression ${node.id}...`);
               await deleteNodeWithCascade(prisma, repeaterNode.treeId, node.id);
               deletedNodes.push(node.id);
             } catch (deleteError) {
               // Peut échouer si déjà supprimé par cascade, c'est OK
-              console.warn(`⚠️ [PRELOAD] Node ${node.id} peut-être déjà supprimé:`, (deleteError as Error).message);
+              logger.warn(`⚠️ [PRELOAD] Node ${node.id} peut-être déjà supprimé:`, (deleteError as Error).message);
             }
           }
         }
@@ -259,10 +260,10 @@ export default function createRepeatRouter(prisma: PrismaClient) {
             where: { nodeId: { in: deletedNodes } }
           });
           if (deletedSD.count > 0) {
-            // console.log(`🧹 [PRELOAD] ${deletedSD.count} entrée(s) SubmissionData orpheline(s) supprimée(s)`);
+            // logger.debug(`🧹 [PRELOAD] ${deletedSD.count} entrée(s) SubmissionData orpheline(s) supprimée(s)`);
           }
         } catch (sdErr) {
-          console.warn(`⚠️ [PRELOAD] Erreur nettoyage SubmissionData:`, (sdErr as Error).message);
+          logger.warn(`⚠️ [PRELOAD] Erreur nettoyage SubmissionData:`, (sdErr as Error).message);
         }
 
         // Mettre à jour les champs sum-total impactés
@@ -275,19 +276,19 @@ export default function createRepeatRouter(prisma: PrismaClient) {
             const meta = node.metadata as Record<string, unknown> | null;
             if (meta?.isSumDisplayField === true && meta?.sourceNodeId) {
               updateSumDisplayFieldAfterCopyChange(String(meta.sourceNodeId), prisma).catch(err => {
-                console.warn(`[PRELOAD] Erreur mise à jour champ Total ${node.id}:`, err);
+                logger.warn(`[PRELOAD] Erreur mise à jour champ Total ${node.id}:`, err);
               });
             }
           }
         } catch (sumErr) {
-          console.warn(`⚠️ [PRELOAD] Erreur mise à jour sum-total:`, (sumErr as Error).message);
+          logger.warn(`⚠️ [PRELOAD] Erreur mise à jour sum-total:`, (sumErr as Error).message);
         }
       }
 
       // 6. CRÉATION des copies manquantes
       if (copiesToCreate > 0) {
         for (let i = 0; i < copiesToCreate; i++) {
-          // console.log(`⚡ [PRELOAD] Création copie ${i + 1}/${copiesToCreate}...`);
+          // logger.debug(`⚡ [PRELOAD] Création copie ${i + 1}/${copiesToCreate}...`);
           
           try {
             const executionPlan = await executeRepeatDuplication(prisma, repeaterId, {});
@@ -300,17 +301,17 @@ export default function createRepeatRouter(prisma: PrismaClient) {
             
             if (executionSummary.duplicated?.newId) {
               createdNodes.push(executionSummary.duplicated.newId);
-              // console.log(`✅ [PRELOAD] Copie créée: ${executionSummary.duplicated.newId}`);
+              // logger.debug(`✅ [PRELOAD] Copie créée: ${executionSummary.duplicated.newId}`);
             }
           } catch (execError) {
-            console.error(`❌ [PRELOAD] Erreur création copie ${i + 1}:`, execError);
+            logger.error(`❌ [PRELOAD] Erreur création copie ${i + 1}:`, execError);
           }
         }
       }
       
       const finalTotal = totalCurrentInstances + createdNodes.length - (copiesToDelete > 0 ? copiesToDelete : 0);
       
-      // console.log(`✅ [PRELOAD] Terminé: ${createdNodes.length} créées, ${deletedNodes.length} supprimées, total: ${finalTotal}`);
+      // logger.debug(`✅ [PRELOAD] Terminé: ${createdNodes.length} créées, ${deletedNodes.length} supprimées, total: ${finalTotal}`);
       
       res.json({
         success: true,
@@ -324,7 +325,7 @@ export default function createRepeatRouter(prisma: PrismaClient) {
       });
       
     } catch (error) {
-      console.error('❌ [PRELOAD] Erreur:', error);
+      logger.error('❌ [PRELOAD] Erreur:', error);
       res.status(500).json({ error: 'Erreur lors du pré-chargement des copies' });
     }
   });
@@ -376,7 +377,7 @@ async function deleteNodeWithCascade(prisma: PrismaClient, treeId: string, nodeI
         await tx.treeBranchLeafNode.delete({ where: { id } });
       } catch (err) {
         // Ignorer si déjà supprimé
-        console.warn(`[PRELOAD DELETE] Node ${id} peut-être déjà supprimé`);
+        logger.warn(`[PRELOAD DELETE] Node ${id} peut-être déjà supprimé`);
       }
     }
   });

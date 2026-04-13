@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, Row, Col, Statistic, Table, Tag, Button, Space, Tabs, Typography, Progress, Alert } from 'antd';
 import { BarChartOutlined, LineChartOutlined, PieChartOutlined, TrophyOutlined, FundOutlined, ShopOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
+import { logger } from '../lib/logger';
 
 const { Title, Text } = Typography;
 const { TabPane } = Tabs;
@@ -68,7 +69,7 @@ const AdvancedAnalyticsPage: React.FC = () => {
 
       setAnalytics(mockData);
     } catch (error) {
-      console.error('Erreur lors du chargement des analytics:', error);
+      logger.error('Erreur lors du chargement des analytics:', error);
     } finally {
       setLoading(false);
     }

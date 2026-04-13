@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef } from 'react';
 import { useEvalBridge } from '../bridge/evalBridge';
+import { logger } from '../../../../../lib/logger';
 
 // TTL cache (ms)
 const DEFAULT_TTL = 5000;
@@ -58,11 +59,11 @@ export function useBatchEvaluation(options: BatchEvalOptions = {}) {
     const now = Date.now();
     const existing = cacheRef.current.get(key);
     if (existing && (now - existing.timestamp) < ttl) {
-      if (options.debug || diag()) console.log('[BATCH-EVAL] Cache HIT', { key, nodeIds, age: now - existing.timestamp });
+      if (options.debug || diag()) logger.debug('[BATCH-EVAL] Cache HIT', { key, nodeIds, age: now - existing.timestamp });
       return existing.results;
     }
     try {
-      if (options.debug || diag()) console.log('[BATCH-EVAL] MISS -> enqueueMany', { nodeIds, key });
+      if (options.debug || diag()) logger.debug('[BATCH-EVAL] MISS -> enqueueMany', { nodeIds, key });
       // Nouvelle utilisation correcte: enqueueMany(string[], context)
       const rawValues = await enqueueMany(nodeIds, fieldValues);
       const results: Record<string, BatchEvalResultItem> = {};
@@ -91,10 +92,10 @@ export function useBatchEvaluation(options: BatchEvalOptions = {}) {
         }
       }
       cacheRef.current.set(key, { key, timestamp: Date.now(), results, nodeIds, fieldHash });
-      if (diag()) console.log('[BATCH-EVAL] STORE', { key, count: Object.keys(results).length });
+      if (diag()) logger.debug('[BATCH-EVAL] STORE', { key, count: Object.keys(results).length });
       return results;
     } catch (e) {
-      console.error('[BATCH-EVAL] Erreur bridge batch', e);
+      logger.error('[BATCH-EVAL] Erreur bridge batch', e);
       return {} as Record<string, BatchEvalResultItem>;
     }
   }, [enqueueMany, buildSignature, ttl, options.debug]);

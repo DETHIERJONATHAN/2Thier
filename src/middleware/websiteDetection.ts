@@ -15,6 +15,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import { renderWebsite } from './websiteRenderer';
+import { logger } from '../lib/logger';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -67,14 +68,14 @@ export async function detectWebsite(
     
     // 🔇 Réduire les logs en production
     if (!isProduction) {
-      console.log(`🔍 [WEBSITE-DETECTION] Headers - X-Forwarded-Host: ${forwardedHost}, Host: ${hostHeader}, hostname: ${req.hostname}`);
-      console.log(`🔍 [WEBSITE-DETECTION] Domaine détecté: ${hostname}`);
+      logger.debug(`🔍 [WEBSITE-DETECTION] Headers - X-Forwarded-Host: ${forwardedHost}, Host: ${hostHeader}, hostname: ${req.hostname}`);
+      logger.debug(`🔍 [WEBSITE-DETECTION] Domaine détecté: ${hostname}`);
     }
     
     // Si c'est un domaine CRM, passer au suivant
     if (CRM_DOMAINS.some(crm => hostname.includes(crm))) {
       if (!isProduction) {
-        console.log(`📱 [WEBSITE-DETECTION] Domaine CRM détecté: ${hostname}`);
+        logger.debug(`📱 [WEBSITE-DETECTION] Domaine CRM détecté: ${hostname}`);
       }
       req.isWebsiteRoute = false;
       return next();
@@ -84,7 +85,7 @@ export async function detectWebsite(
     const cleanDomain = hostname.replace(/^www\./, '');
 
     if (!isProduction) {
-      console.log(`🌐 [WEBSITE-DETECTION] Recherche site pour: ${cleanDomain}`);
+      logger.debug(`🌐 [WEBSITE-DETECTION] Recherche site pour: ${cleanDomain}`);
     }
 
     // Chercher le site dans la base de données
@@ -109,7 +110,7 @@ export async function detectWebsite(
 
     if (website) {
       if (!isProduction) {
-        console.log(`✅ [WEBSITE-DETECTION] Site trouvé: ${website.siteName} (${website.slug})`);
+        logger.debug(`✅ [WEBSITE-DETECTION] Site trouvé: ${website.siteName} (${website.slug})`);
       }
       
       const websiteData = {
@@ -128,14 +129,14 @@ export async function detectWebsite(
       // ET LA LAISSER PASSER AU RENDERER
     } else {
       if (!isProduction) {
-        console.log(`⚠️ [WEBSITE-DETECTION] Aucun site trouvé pour: ${cleanDomain}`);
+        logger.debug(`⚠️ [WEBSITE-DETECTION] Aucun site trouvé pour: ${cleanDomain}`);
       }
       req.isWebsiteRoute = false;
     }
 
     next();
   } catch (error) {
-    console.error('❌ [WEBSITE-DETECTION] Erreur:', error);
+    logger.error('❌ [WEBSITE-DETECTION] Erreur:', error);
     req.isWebsiteRoute = false;
     next();
   }
@@ -157,7 +158,7 @@ export function websiteInterceptor(
   
   // Si un site vitrine a été détecté, ne PAS continuer, rendre le site
   if (req.isWebsiteRoute && req.websiteData) {
-    console.log(`🎨 [WEBSITE-INTERCEPTOR] Interception pour site: ${req.websiteData.name}`);
+    logger.debug(`🎨 [WEBSITE-INTERCEPTOR] Interception pour site: ${req.websiteData.name}`);
     return renderWebsite(req, res);
   }
   

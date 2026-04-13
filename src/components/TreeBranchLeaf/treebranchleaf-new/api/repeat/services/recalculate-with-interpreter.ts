@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { interpretReference } from '../../operation-interpreter';
+import { logger } from '../../../../../../lib/logger';
 
 /**
  * Ã°Å¸Å¡â‚¬ SERVICE: RECALCULATION DES CHAMPS APRÃƒË†S DUPLICATION
@@ -135,12 +136,12 @@ export async function recalculateNodeWithOperationInterpreter(
 
     } catch (interpretError) {
       result.error = `Erreur interpretReference: ${interpretError instanceof Error ? interpretError.message : String(interpretError)}`;
-      console.warn(`   Ã¢Å¡Â Ã¯Â¸Â  ${result.error}`);
+      logger.warn(`   Ã¢Å¡Â Ã¯Â¸Â  ${result.error}`);
     }
 
   } catch (error) {
     result.error = error instanceof Error ? error.message : String(error);
-    console.error(`   Ã¢ÂÅ’ Erreur: ${result.error}`);
+    logger.error(`   Ã¢ÂÅ’ Erreur: ${result.error}`);
   }
 
   return result;
@@ -253,7 +254,7 @@ export async function recalculateAllCopiedNodesWithOperationInterpreter(
       }
     }
     
-    console.log(`[PERF] Recalc: ${nodesWithCapacity.length}/${allNodes.length} nodes have capacities`);
+    logger.debug(`[PERF] Recalc: ${nodesWithCapacity.length}/${allNodes.length} nodes have capacities`);
     
     // PERF: Increased chunk size from 5 to 10 for better parallelism
     const CHUNK_SIZE = 10;
@@ -298,7 +299,7 @@ export async function recalculateAllCopiedNodesWithOperationInterpreter(
         }
       } catch (interpretError) {
         result.error = `Erreur interpretReference: ${interpretError instanceof Error ? interpretError.message : String(interpretError)}`;
-        console.warn(`[recalculate-with-interpreter] ${result.error}`);
+        logger.warn(`[recalculate-with-interpreter] ${result.error}`);
       }
       
       return result;
@@ -317,7 +318,7 @@ export async function recalculateAllCopiedNodesWithOperationInterpreter(
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     report.errors.push({ nodeId: repeaterNodeId, error: `Erreur globale: ${errorMsg}` });
-    console.error(`[recalculate-with-interpreter] Erreur globale: ${errorMsg}`);
+    logger.error(`[recalculate-with-interpreter] Erreur globale: ${errorMsg}`);
   }
 
   return report;

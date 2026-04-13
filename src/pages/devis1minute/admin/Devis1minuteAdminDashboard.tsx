@@ -12,6 +12,7 @@ import {
   Tooltip,
   Legend
 } from 'recharts';
+import { logger } from '../../../lib/logger';
 
 const { Title, Paragraph } = Typography;
 
@@ -36,7 +37,7 @@ export default function Devis1minuteAdminDashboard() {
       setStats(leadGen?.data || null);
       setLandingStats(landing?.data || null);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       message.error('Impossible de charger les statistiques');
     }
   }, [api]);
@@ -56,7 +57,7 @@ export default function Devis1minuteAdminDashboard() {
       setLeadSeries(leadTs?.data?.series || []);
       setLandingSeries(landingTs?.data?.series || []);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       message.error('Impossible de charger les séries temporelles');
     }
   }, [api]);

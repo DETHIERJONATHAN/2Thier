@@ -16,6 +16,7 @@ import {
   METRE_A4_V10_SPECS
 } from '../lib/metre-a4-v10-detector';
 import { computeObjectDimensions, type CalibrationData, type ObjectCorners } from '../services/measurement-calculator';
+import { logger } from '../lib/logger';
 
 const sharp = (sharpModule as any).default || sharpModule;
 const router = Router();
@@ -161,7 +162,7 @@ router.post('/ultra-fusion-detect', authenticateToken, async (req: Authenticated
       }
     });
   } catch (error) {
-    console.error('❌ [V10] Erreur ultra-fusion-detect:', error);
+    logger.error('❌ [V10] Erreur ultra-fusion-detect:', error);
     return res.status(500).json({
       success: false,
       error: 'Erreur serveur lors de l’analyse Métré A4 V10'
@@ -263,7 +264,7 @@ router.post('/compute-dimensions-simple', authenticateToken, async (req: Authent
       }
     });
   } catch (error) {
-    console.error('❌ [V10] Erreur compute-dimensions-simple:', error);
+    logger.error('❌ [V10] Erreur compute-dimensions-simple:', error);
     return res.status(500).json({
       success: false,
       error: 'Erreur serveur lors du calcul des dimensions',

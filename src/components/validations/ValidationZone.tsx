@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ValidationItem } from './types';
 import ValidationsPalette from './ValidationsPalette';
+import { logger } from '../../lib/logger';
 
 interface ValidationZoneProps {
   validationId: string;
@@ -54,12 +55,12 @@ const ValidationZone: React.FC<ValidationZoneProps> = ({
     
     try {
       // Afficher tous les types de données disponibles pour le debug
-      console.log('Types de données disponibles:', e.dataTransfer.types);
+      logger.debug('Types de données disponibles:', e.dataTransfer.types);
       
       // Vérifier si nous avons une valeur spéciale
       const hasValueType = e.dataTransfer.types.includes('application/x-validation-value');
       if (hasValueType) {
-        console.log('Détection d\'une valeur spéciale de validation');
+        logger.debug('Détection d\'une valeur spéciale de validation');
       }
       
       // Vérifier d'abord si nous avons des données JSON (de nos palettes)
@@ -70,17 +71,17 @@ const ValidationZone: React.FC<ValidationZoneProps> = ({
         try {
           // Format JSON de DraggableItemHTML5
           itemData = JSON.parse(data);
-          console.log('Données de l\'élément déposé (format JSON):', itemData);
+          logger.debug('Données de l\'élément déposé (format JSON):', itemData);
           
           // Gestion spéciale pour les valeurs (true, false, null, etc.)
           if (itemData.type === 'value' && itemData.originalValue !== undefined) {
-            console.log('Valeur originale détectée:', itemData.originalValue);
+            logger.debug('Valeur originale détectée:', itemData.originalValue);
             // Utiliser la valeur JavaScript originale pour les valeurs spéciales
             itemData.value = itemData.originalValue;
           }
         } catch (error) {
-          console.error('Erreur lors du parsing JSON:', error);
-          console.log('Données brutes:', data);
+          logger.error('Erreur lors du parsing JSON:', error);
+          logger.debug('Données brutes:', data);
         }
       } else {
         // Essayer le format des champs depuis SectionsFormulaire
@@ -88,7 +89,7 @@ const ValidationZone: React.FC<ValidationZoneProps> = ({
         const fieldLabel = e.dataTransfer.getData('field-label');
         
         if (fieldId && fieldLabel) {
-          console.log('Données de l\'élément déposé (format champ):', { fieldId, fieldLabel });
+          logger.debug('Données de l\'élément déposé (format champ):', { fieldId, fieldLabel });
           itemData = {
             type: 'field',
             id: fieldId,
@@ -96,13 +97,13 @@ const ValidationZone: React.FC<ValidationZoneProps> = ({
             label: fieldLabel
           };
         } else {
-          console.warn("Aucune donnée valide n'a été trouvée dans le transfert.");
+          logger.warn("Aucune donnée valide n'a été trouvée dans le transfert.");
           return;
         }
       }
       
       if (!itemData) {
-        console.warn("Les données de l'élément ne sont pas valides");
+        logger.warn("Les données de l'élément ne sont pas valides");
         return;
       }
       
@@ -118,11 +119,11 @@ const ValidationZone: React.FC<ValidationZoneProps> = ({
       
       // Pour les valeurs, nous voulons utiliser originalValue si disponible
       if (itemData.type === 'value' && itemData.originalValue !== undefined) {
-        console.log('Valeur originale détectée:', itemData.originalValue);
+        logger.debug('Valeur originale détectée:', itemData.originalValue);
         draggedItem.value = itemData.originalValue;
       }
       
-      console.log('Élément ajouté à la séquence:', draggedItem);
+      logger.debug('Élément ajouté à la séquence:', draggedItem);
       
       // Ajouter l'élément à la séquence
       const newSequence = [...displaySequence, draggedItem];
@@ -137,7 +138,7 @@ const ValidationZone: React.FC<ValidationZoneProps> = ({
         }, 300);
       }
     } catch (error) {
-      console.error("Erreur lors de la gestion du glisser-déposer:", error);
+      logger.error("Erreur lors de la gestion du glisser-déposer:", error);
     }
   };
 

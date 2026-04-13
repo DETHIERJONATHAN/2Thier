@@ -14,11 +14,12 @@
 import { Storage } from '@google-cloud/storage';
 import { execSync } from 'child_process';
 import fs from 'fs/promises';
+import { logger } from './logger';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const GCS_BUCKET = process.env.GCS_BUCKET || 'crm-2thier-uploads';
 
-console.log(`📦 [Storage] Mode: GCS 100% (${isProduction ? 'production' : 'dev'}) | Bucket: ${GCS_BUCKET}`);
+logger.debug(`📦 [Storage] Mode: GCS 100% (${isProduction ? 'production' : 'dev'}) | Bucket: ${GCS_BUCKET}`);
 
 // ── Auth ──────────────────────────────────────────────────────
 
@@ -41,9 +42,9 @@ class GcloudAuth {
           env: { ...process.env, GOOGLE_APPLICATION_CREDENTIALS: undefined },
         }).trim();
         this.tokenExpiry = Date.now() + 50 * 60 * 1000;
-        console.log('📦 [Storage] 🔄 Token refreshed');
+        logger.debug('📦 [Storage] 🔄 Token refreshed');
       } catch (e) {
-        console.error('📦 [Storage] ⚠️ Token refresh failed:', e);
+        logger.error('📦 [Storage] ⚠️ Token refresh failed:', e);
       }
     }
   }
@@ -82,9 +83,9 @@ function getStorage(): Storage {
           projectId: process.env.GCLOUD_PROJECT || 'thiernew',
           authClient: new GcloudAuth(token) as unknown,
         });
-        console.log('📦 [Storage] ✅ Auth via gcloud access token');
+        logger.debug('📦 [Storage] ✅ Auth via gcloud access token');
       } catch {
-        console.warn('📦 [Storage] ⚠️ gcloud token failed, trying default credentials');
+        logger.warn('📦 [Storage] ⚠️ gcloud token failed, trying default credentials');
         storage = new Storage();
       }
     }
@@ -111,12 +112,12 @@ export async function uploadFile(
     metadata: { cacheControl: 'no-cache' },
   });
   const url = `https://storage.googleapis.com/${GCS_BUCKET}/${key}`;
-  console.log(`📦 [Storage] ✅ Upload OK: ${key} (${(buffer.length / 1024).toFixed(1)} KB)`);
+  logger.debug(`📦 [Storage] ✅ Upload OK: ${key} (${(buffer.length / 1024).toFixed(1)} KB)`);
   return url;
   } catch (err: unknown) {
     // If auth error, reset storage to force re-auth on next call
     if (!isProduction && (err?.code === 401 || err?.message?.includes('token') || err?.message?.includes('auth'))) {
-      console.warn('📦 [Storage] ⚠️ Auth error detected, resetting storage for re-auth');
+      logger.warn('📦 [Storage] ⚠️ Auth error detected, resetting storage for re-auth');
       storage = null;
     }
     throw err;
@@ -146,7 +147,7 @@ export async function deleteFile(keyOrUrl: string): Promise<void> {
   if (!key) return;
   try {
     await getStorage().bucket(GCS_BUCKET).file(key).delete();
-    console.log(`📦 [Storage] 🗑️ Deleted: ${key}`);
+    logger.debug(`📦 [Storage] 🗑️ Deleted: ${key}`);
   } catch {
     // File may not exist — ignore
   }

@@ -11,6 +11,7 @@
 import { useEffect, useRef } from 'react';
 import { useAuth } from '../auth/useAuth';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
+import { logger } from '../lib/logger';
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
@@ -35,12 +36,12 @@ export function usePushNotifications() {
       try {
         // 1. Enregistrer le Service Worker
         const registration = await navigator.serviceWorker.register('/sw.js');
-        console.log('[SW] Service Worker enregistré');
+        logger.debug('[SW] Service Worker enregistré');
 
         // 2. Récupérer la clé VAPID publique
         const vapidResp = await api.get('/api/push/vapid-key') as unknown;
         if (!vapidResp?.publicKey) {
-          console.warn('[PUSH] Pas de clé VAPID configurée côté serveur');
+          logger.warn('[PUSH] Pas de clé VAPID configurée côté serveur');
           return;
         }
 
@@ -50,7 +51,7 @@ export function usePushNotifications() {
           // Demander la permission
           const permission = await Notification.requestPermission();
           if (permission !== 'granted') {
-            console.log('[PUSH] Permission refusée par l\'utilisateur');
+            logger.debug('[PUSH] Permission refusée par l\'utilisateur');
             return;
           }
 
@@ -67,9 +68,9 @@ export function usePushNotifications() {
           endpoint: subJSON.endpoint,
           keys: subJSON.keys,
         });
-        console.log('[PUSH] ✅ Notifications push activées');
+        logger.debug('[PUSH] ✅ Notifications push activées');
       } catch (err) {
-        console.warn('[PUSH] Erreur enregistrement:', err);
+        logger.warn('[PUSH] Erreur enregistrement:', err);
       }
     };
 

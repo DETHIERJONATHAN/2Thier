@@ -30,6 +30,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import { evaluateExpression } from './formulaEngine.js';
+import { logger } from '../../../../lib/logger';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function formatDebugValue(value: unknown): string {
@@ -228,7 +229,7 @@ async function identifyReferenceTypeFromDB(id: string, prisma: PrismaClient): Pr
     
     return 'field';
   } catch (error) {
-    console.error(`[IDENTIFY] Ã¢ÂÅ’ Erreur lors de l'identification en BD:`, error);
+    logger.error(`[IDENTIFY] Ã¢ÂÅ’ Erreur lors de l'identification en BD:`, error);
     return 'field'; // DÃƒÂ©faut : considÃƒÂ©rer comme champ
   }
 }
@@ -499,7 +500,7 @@ async function enrichDataFromSubmission(
     
     
   } catch (error) {
-    console.error(`[ENRICHMENT] Ã¢ÂÅ’ Erreur enrichissement:`, error);
+    logger.error(`[ENRICHMENT] Ã¢ÂÅ’ Erreur enrichissement:`, error);
   }
 }
 
@@ -712,7 +713,7 @@ async function interpretReference(
   // Ã°Å¸â€ºÂ¡Ã¯Â¸Â Ãƒâ€°TAPE 1 : Protection contre rÃƒÂ©cursion infinie
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
   if (depth > 10) {
-    console.error(`[INTERPRÃƒâ€°TATION] Ã¢ÂÅ’ RÃƒÂ©cursion trop profonde (depth=${depth}) pour ref:`, ref);
+    logger.error(`[INTERPRÃƒâ€°TATION] Ã¢ÂÅ’ RÃƒÂ©cursion trop profonde (depth=${depth}) pour ref:`, ref);
     return {
       result: '∅',
       humanText: 'Ã¢Å¡Â Ã¯Â¸Â RÃƒÂ©cursion trop profonde',
@@ -772,7 +773,7 @@ async function interpretReference(
         break;
       
       default:
-        console.error(`[INTERPRÃƒâ€°TATION] Ã¢ÂÅ’ Type inconnu: ${type}`);
+        logger.error(`[INTERPRÃƒâ€°TATION] Ã¢ÂÅ’ Type inconnu: ${type}`);
         result = {
           result: '∅',
           humanText: `Type inconnu: ${type}`,
@@ -781,7 +782,7 @@ async function interpretReference(
     }
   } catch (error) {
     // Gestion des erreurs d'interprÃƒÂ©tation
-    console.error(`[INTERPRÃƒâ€°TATION] Ã¢ÂÅ’ Erreur lors de l'interprÃƒÂ©tation:`, error);
+    logger.error(`[INTERPRÃƒâ€°TATION] Ã¢ÂÅ’ Erreur lors de l'interprÃƒÂ©tation:`, error);
     result = {
       result: '∅',
       humanText: `Erreur: ${error instanceof Error ? error.message : 'Inconnue'}`,
@@ -875,7 +876,7 @@ async function interpretReference(
         }
       }
     } catch (calcError) {
-      console.warn(`[CALCULATED-FALLBACK] ⚠️ Erreur fallback pour ${cleanRef}:`, calcError);
+      logger.warn(`[CALCULATED-FALLBACK] ⚠️ Erreur fallback pour ${cleanRef}:`, calcError);
     }
   }
 
@@ -1131,7 +1132,7 @@ async function interpretCondition(
           }
         }
         
-        // console.log(`🔀 [FIRST-MATCH RESULT] "${condition.name}" → branche "${fmBranch.label || fmBranch.id}" matchée → result="${fmResult.result}"`);
+        // logger.debug(`🔀 [FIRST-MATCH RESULT] "${condition.name}" → branche "${fmBranch.label || fmBranch.id}" matchée → result="${fmResult.result}"`);
         return {
           result: fmResult.result,
           humanText: `Condition first-match "${condition.name}": branche "${fmBranch.label}" → ${fmResult.humanText}`,
@@ -1157,7 +1158,7 @@ async function interpretCondition(
       }
     }
     
-    // console.log(`🔀 [FIRST-MATCH FALLBACK] "${condition.name}" → aucune branche matchée → fallback="${fmFallbackResult.result}"`);
+    // logger.debug(`🔀 [FIRST-MATCH FALLBACK] "${condition.name}" → aucune branche matchée → fallback="${fmFallbackResult.result}"`);
     return {
       result: fmFallbackResult.result,
       humanText: `Condition first-match "${condition.name}": fallback → ${fmFallbackResult.humanText}`,
@@ -1950,7 +1951,7 @@ async function interpretFormula(
         formula = byNode;
       }
     } catch (e) {
-      console.warn('[FORMULE] Ã¢Å¡Â Ã¯Â¸Â RÃƒÂ©solution implicite ÃƒÂ©chouÃƒÂ©e:', e instanceof Error ? e.message : e);
+      logger.warn('[FORMULE] Ã¢Å¡Â Ã¯Â¸Â RÃƒÂ©solution implicite ÃƒÂ©chouÃƒÂ©e:', e instanceof Error ? e.message : e);
     }
   }
   
@@ -1968,7 +1969,7 @@ async function interpretFormula(
 
   const buildResult = buildFormulaExpression(tokens);
   if (!buildResult.expression.trim()) {
-    console.warn('[FORMULE] Ã¢Å¡Â Ã¯Â¸Â Expression vide, retour 0');
+    logger.warn('[FORMULE] Ã¢Å¡Â Ã¯Â¸Â Expression vide, retour 0');
     return {
       result: '0',
       humanText: '0',
@@ -2026,7 +2027,7 @@ async function interpretFormula(
           }
         }
       } catch (e) {
-        console.warn('[FORMULE] ⚠️ Gestionnaire constant override check failed:', e instanceof Error ? e.message : e);
+        logger.warn('[FORMULE] ⚠️ Gestionnaire constant override check failed:', e instanceof Error ? e.message : e);
       }
       valueCacheByEncoded.set(encoded, safeOriginal);
       labelCacheByEncoded.set(encoded, meta.label || meta.originalValue || String(safeOriginal));
@@ -2093,7 +2094,7 @@ async function interpretFormula(
 
       return safeValue;
     } catch (error) {
-      console.error('[FORMULE] Ã¢ÂÅ’ Erreur rÃƒÂ©solution variable:', { encoded, error });
+      logger.error('[FORMULE] Ã¢ÂÅ’ Erreur rÃƒÂ©solution variable:', { encoded, error });
       valueCacheByEncoded.set(encoded, 0);
       labelCacheByEncoded.set(encoded, meta?.rawToken || encoded);
       return 0;
@@ -2108,7 +2109,7 @@ async function interpretFormula(
       strictVariables: false
     });
   } catch (error) {
-    console.error('[FORMULE] Ã¢ÂÅ’ Erreur evaluateExpression:', error);
+    logger.error('[FORMULE] Ã¢ÂÅ’ Erreur evaluateExpression:', error);
     return {
       result: '∅',
       humanText: 'Erreur de calcul de la formule',
@@ -2264,7 +2265,7 @@ async function getSourceValue(
       );
       return capacityResult.result;
     } catch (error) {
-      console.error(`[TABLE] Ã¢ÂÅ’ Erreur exÃƒÂ©cution capacitÃƒÂ© ${sourceOption.capacityRef}:`, error);
+      logger.error(`[TABLE] Ã¢ÂÅ’ Erreur exÃƒÂ©cution capacitÃƒÂ© ${sourceOption.capacityRef}:`, error);
       return null;
     }
   }
@@ -2433,7 +2434,7 @@ async function interpretTable(
         table = byNode;
       }
     } catch (e) {
-      console.warn('[TABLE] Ã¢Å¡Â Ã¯Â¸Â RÃƒÂ©solution implicite ÃƒÂ©chouÃƒÂ©e:', e instanceof Error ? e.message : e);
+      logger.warn('[TABLE] Ã¢Å¡Â Ã¯Â¸Â RÃƒÂ©solution implicite ÃƒÂ©chouÃƒÂ©e:', e instanceof Error ? e.message : e);
     }
   }
 
@@ -2467,7 +2468,7 @@ async function interpretTable(
         table = byNode;
       }
     } catch (e) {
-      console.warn('[TABLE] Ã¢Å¡Â Ã¯Â¸Â RÃƒÂ©solution implicite (baseId) ÃƒÂ©chouÃƒÂ©e:', e instanceof Error ? e.message : e);
+      logger.warn('[TABLE] Ã¢Å¡Â Ã¯Â¸Â RÃƒÂ©solution implicite (baseId) ÃƒÂ©chouÃƒÂ©e:', e instanceof Error ? e.message : e);
     }
   }
   
@@ -2503,7 +2504,7 @@ async function interpretTable(
         (table as any).tableRows = sourceTable.tableRows;
       }
     } catch (e) {
-      console.warn('[TABLE] ⚠️ Résolution vue échouée pour sourceTableId:', tableSourceId, e instanceof Error ? e.message : e);
+      logger.warn('[TABLE] ⚠️ Résolution vue échouée pour sourceTableId:', tableSourceId, e instanceof Error ? e.message : e);
     }
   }
   
@@ -2554,7 +2555,7 @@ async function interpretTable(
         data.push([]);
       }
     } catch (error) {
-      console.error('[TABLE] Ã¢Å¡Â Ã¯Â¸Â Erreur parsing cells:', error);
+      logger.error('[TABLE] Ã¢Å¡Â Ã¯Â¸Â Erreur parsing cells:', error);
       rows.push(`Row ${row.rowIndex}`);
       data.push([]);
     }
@@ -2590,12 +2591,12 @@ async function interpretTable(
             rows.push(label);
             data.push(Array.isArray(od.data[i]) ? od.data[i] : []);
           }
-          console.log(`[TABLE] 📋 Gestionnaire override appliqué pour table ${table.name} (org: ${orgId}): ${rows.length} lignes, ${columns.length} colonnes`);
+          logger.debug(`[TABLE] 📋 Gestionnaire override appliqué pour table ${table.name} (org: ${orgId}): ${rows.length} lignes, ${columns.length} colonnes`);
         }
       }
     }
   } catch (e) {
-    console.warn('[TABLE] ⚠️ Erreur vérification gestionnaire override:', e instanceof Error ? e.message : e);
+    logger.warn('[TABLE] ⚠️ Erreur vérification gestionnaire override:', e instanceof Error ? e.message : e);
   }
   
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
@@ -2608,7 +2609,7 @@ async function interpretTable(
   const isLookupActive = lookup && (lookup.enabled === true || lookup.columnLookupEnabled === true || lookup.rowLookupEnabled === true);
   
   if (!isLookupActive) {
-    console.error(`[TABLE] Ã¢ÂÅ’ Lookup non configurÃƒÂ© ou dÃƒÂ©sactivÃƒÂ©`);
+    logger.error(`[TABLE] Ã¢ÂÅ’ Lookup non configurÃƒÂ© ou dÃƒÂ©sactivÃƒÂ©`);
     return {
       result: '∅',
       humanText: `Lookup non configurÃƒÂ© pour table ${table.name}`,
@@ -2657,7 +2658,7 @@ async function interpretTable(
     }
   } catch (e) {
     // Ne jamais casser l'interprétation si l'inférence échoue.
-    console.warn('[TABLE] ⚠️ Inférence selectors lookup échouée:', e instanceof Error ? e.message : e);
+    logger.warn('[TABLE] ⚠️ Inférence selectors lookup échouée:', e instanceof Error ? e.message : e);
   }
 
   const hasRowSelector = Boolean(rowFieldId || (rowSourceOption && rowSourceOption.type && rowSourceOption.type !== 'select'));
@@ -2704,7 +2705,7 @@ async function interpretTable(
           colSelectorValue = optionNode.label;
         }
       } catch (e) {
-        console.warn(`[TABLE] ⚠️ Impossible de résoudre UUID ${colSelectorValue}:`, e);
+        logger.warn(`[TABLE] ⚠️ Impossible de résoudre UUID ${colSelectorValue}:`, e);
       }
     }
     
@@ -2763,7 +2764,7 @@ async function interpretTable(
         });
         
       } else {
-        console.warn(`[TABLE] Ã¢Å¡Â Ã¯Â¸Â Ãƒâ€°TAPE 2.5 - Colonne de filtrage non trouvÃƒÂ©e: "${colSourceOption.filterColumn}"`);
+        logger.warn(`[TABLE] Ã¢Å¡Â Ã¯Â¸Â Ãƒâ€°TAPE 2.5 - Colonne de filtrage non trouvÃƒÂ©e: "${colSourceOption.filterColumn}"`);
       }
     }
     
@@ -2784,7 +2785,7 @@ async function interpretTable(
       const colMatchInRows = findClosestIndexInLabels(colSelectorValue, rows);
       let finalColIndex = colMatchInCols?.index ?? colMatchInRows?.index ?? -1;
       if (finalColIndex === -1) {
-        console.warn(`[TABLE] Ã¢Å¡Â Ã¯Â¸Â MODE 1 extract - colonne non trouvÃƒÂ©e pour selector ${colSelectorValue}`);
+        logger.warn(`[TABLE] Ã¢Å¡Â Ã¯Â¸Â MODE 1 extract - colonne non trouvÃƒÂ©e pour selector ${colSelectorValue}`);
       } else {
         const dataColIndex = finalColIndex - 1;
         // Chercher la premiÃƒÂ¨re ligne oÃƒÂ¹ data[row][dataColIndex] match l'opÃƒÂ©rateur
@@ -2885,7 +2886,7 @@ async function interpretTable(
           targetColIndex = colSelectorIndex; // Marquer qu'on a traitÃƒÂ© avec l'opÃƒÂ©rateur
         }
       } else {
-        console.warn(`[TABLE] Ã¢Å¡Â Ã¯Â¸Â MODE 1 - Colonne de comparaison non trouvÃƒÂ©e: ${comparisonColName}`);
+        logger.warn(`[TABLE] Ã¢Å¡Â Ã¯Â¸Â MODE 1 - Colonne de comparaison non trouvÃƒÂ©e: ${comparisonColName}`);
       }
     }
 
@@ -2926,7 +2927,7 @@ async function interpretTable(
           }
           targetColIndex = 0;
         } else {
-          console.warn(`[TABLE] Ã¢Å¡Â Ã¯Â¸Â MODE 1 ${optionLabel} - Impossible de trouver une ligne pour ${colSelectorValue}`);
+          logger.warn(`[TABLE] Ã¢Å¡Â Ã¯Â¸Â MODE 1 ${optionLabel} - Impossible de trouver une ligne pour ${colSelectorValue}`);
         }
       }
       
@@ -3026,7 +3027,7 @@ async function interpretTable(
           rowSelectorValue = optionNode.label;
         }
       } catch (e) {
-        console.warn(`[TABLE] ⚠️ Impossible de résoudre UUID row ${rowSelectorValue}:`, e);
+        logger.warn(`[TABLE] ⚠️ Impossible de résoudre UUID row ${rowSelectorValue}:`, e);
       }
     }
     
@@ -3059,7 +3060,7 @@ async function interpretTable(
       const rowMatchInCols = findClosestIndexInLabels(rowSelectorValue, columns, columnIndices);
       let finalRowIndex = rowMatchInRows?.index ?? rowMatchInCols?.index ?? -1;
       if (finalRowIndex === -1) {
-        console.warn(`[TABLE] Ã¢Å¡Â Ã¯Â¸Â MODE 2 extract - ligne non trouvÃƒÂ©e pour selector ${rowSelectorValue}`);
+        logger.warn(`[TABLE] Ã¢Å¡Â Ã¯Â¸Â MODE 2 extract - ligne non trouvÃƒÂ©e pour selector ${rowSelectorValue}`);
       } else {
         const dataRowIndex = finalRowIndex;
         // iterate across columns
@@ -3157,7 +3158,7 @@ async function interpretTable(
           targetRowIndex = rowSelectorIndex; // Marquer qu'on a traitÃƒÂ© avec l'opÃƒÂ©rateur
         }
       } else {
-        console.warn(`[TABLE] Ã¢Å¡Â Ã¯Â¸Â MODE 2 - Ligne de comparaison non trouvÃƒÂ©e: ${comparisonRowName}`);
+        logger.warn(`[TABLE] Ã¢Å¡Â Ã¯Â¸Â MODE 2 - Ligne de comparaison non trouvÃƒÂ©e: ${comparisonRowName}`);
       }
     }
 
@@ -3208,7 +3209,7 @@ async function interpretTable(
             }
           };
         } else {
-          console.warn(`[TABLE] Ã¢Å¡Â Ã¯Â¸Â MODE 2 ${optionLabel} - Impossible de trouver une ligne pour ${rowSelectorValue}`);
+          logger.warn(`[TABLE] Ã¢Å¡Â Ã¯Â¸Â MODE 2 ${optionLabel} - Impossible de trouver une ligne pour ${rowSelectorValue}`);
         }
       }
 
@@ -3278,7 +3279,7 @@ async function interpretTable(
   
   // Ã¢ÂÅ’ Configuration invalide
   else {
-    console.error(`[TABLE] Ã¢ÂÅ’ Configuration lookup invalide`);
+    logger.error(`[TABLE] Ã¢ÂÅ’ Configuration lookup invalide`);
     return {
       result: '∅',
       humanText: `Configuration lookup invalide pour table ${table.name}`,
@@ -3441,7 +3442,7 @@ async function interpretTable(
   
   
   if (dataRowIndex < 0 || dataColIndex < 0 || !data[dataRowIndex]) {
-    console.error(`[TABLE] Ã¢ÂÅ’ Index hors limites`);
+    logger.error(`[TABLE] Ã¢ÂÅ’ Index hors limites`);
     return {
       result: '∅',
       humanText: `Table "${table.name}"[${actualRowValue}, ${actualColValue}] = hors limites`,
@@ -3675,7 +3676,7 @@ export async function evaluateVariableOperation(
   
   if (!variable) {
     // Variable introuvable - retourner valeur par défaut au lieu de crasher l'évaluation
-    console.warn(`⚠️ [VARIABLE MANQUANTE] nodeId: ${variableNodeId} - retour valeur par défaut (null)`);
+    logger.warn(`⚠️ [VARIABLE MANQUANTE] nodeId: ${variableNodeId} - retour valeur par défaut (null)`);
     return {
       value: null,
       operationDetail: { type: 'missing-variable', nodeId: variableNodeId },
@@ -3713,7 +3714,7 @@ export async function evaluateVariableOperation(
       }
     } catch (err) {
       // Silently ignore — table might not exist yet or other transient errors
-      console.warn('[operation-interpreter] Gestionnaire override lookup failed:', err);
+      logger.warn('[operation-interpreter] Gestionnaire override lookup failed:', err);
     }
   }
 

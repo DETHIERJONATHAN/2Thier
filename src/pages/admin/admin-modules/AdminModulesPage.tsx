@@ -34,6 +34,7 @@ import {
 import { SortableSection } from './components/SortableSection';
 import { useTranslation } from 'react-i18next';
 import { SF } from '../../../components/zhiive/ZhiiveTheme';
+import { logger } from '../../../lib/logger';
 
 export default function AdminModulesPage() {
   const { t } = useTranslation();
@@ -236,7 +237,7 @@ export default function AdminModulesPage() {
         await loadSections(selectedOrganizationId || currentOrganization?.id || '');
         if (refreshModules) await refreshModules();
       } catch (e: unknown) {
-        console.error(e);
+        logger.error(e);
         const errMsg = e instanceof Error ? e.message : 'Erreur lors de l\'enregistrement';
         NotificationManager.error(errMsg);
       }
@@ -338,7 +339,7 @@ export default function AdminModulesPage() {
         if (!destSectionId) return;
 
         // Utiliser moveModule avec l'ID du module
-        console.log(`[DRAG] Déplacement module ${src.moduleId} de ${src.sectionId} vers ${destSectionId} à l'index ${destIndex}`);
+        logger.debug(`[DRAG] Déplacement module ${src.moduleId} de ${src.sectionId} vers ${destSectionId} à l'index ${destIndex}`);
         moveModule(src.moduleId, src.sectionId, destSectionId, destIndex);
       }
     },

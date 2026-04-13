@@ -9,6 +9,7 @@
  */
 
 import TBLIntelligence from './TBLIntelligence';
+import { logger } from '../../../../lib/logger';
 
 interface TBLEvaluationRequest {
   element_code: string; // Code TBL de l'élément à évaluer
@@ -62,8 +63,8 @@ export class TBLEvaluationEngine {
    */
   async evaluate(request: TBLEvaluationRequest): Promise<TBLEvaluationResult> {
     const startTime = Date.now();
-    console.log(`🚀 [TBL Evaluation] Début évaluation ${request.element_code}`);
-    console.log(`   Mode: ${request.evaluation_mode}, Deep: ${request.deep_resolution}`);
+    logger.debug(`🚀 [TBL Evaluation] Début évaluation ${request.element_code}`);
+    logger.debug(`   Mode: ${request.evaluation_mode}, Deep: ${request.deep_resolution}`);
 
     const result: TBLEvaluationResult = {
       success: false,
@@ -88,7 +89,7 @@ export class TBLEvaluationEngine {
       const cacheKey = this.getCacheKey(request);
       const cached = this.getCachedResult(cacheKey);
       if (cached) {
-        console.log(`💾 [TBL Evaluation] Cache HIT pour ${request.element_code}`);
+        logger.debug(`💾 [TBL Evaluation] Cache HIT pour ${request.element_code}`);
         result.performance.cache_hits = 1;
         result.final_value = cached;
         result.success = true;
@@ -126,10 +127,10 @@ export class TBLEvaluationEngine {
       this.setCachedResult(cacheKey, result.final_value);
 
       result.success = true;
-      console.log(`✅ [TBL Evaluation] Évaluation réussie: ${request.element_code} = ${result.final_value}`);
+      logger.debug(`✅ [TBL Evaluation] Évaluation réussie: ${request.element_code} = ${result.final_value}`);
 
     } catch (error) {
-      console.error(`❌ [TBL Evaluation] Erreur:`, error);
+      logger.error(`❌ [TBL Evaluation] Erreur:`, error);
       result.errors.push(error instanceof Error ? error.message : 'Erreur inconnue');
     }
 
@@ -145,7 +146,7 @@ export class TBLEvaluationEngine {
     request: TBLEvaluationRequest,
     result: TBLEvaluationResult
   ): Promise<void> {
-    console.log(`🧮 [TBL Evaluation] Évaluation de ${analysis.formulas.length} formules`);
+    logger.debug(`🧮 [TBL Evaluation] Évaluation de ${analysis.formulas.length} formules`);
 
     for (const formula of analysis.formulas) {
       try {
@@ -174,10 +175,10 @@ export class TBLEvaluationEngine {
         // La dernière formule donne la valeur finale
         result.final_value = formulaResult;
 
-        console.log(`   ✅ Formule ${formula.id}: ${formulaResult}`);
+        logger.debug(`   ✅ Formule ${formula.id}: ${formulaResult}`);
 
       } catch (error) {
-        console.error(`   ❌ Erreur formule ${formula.id}:`, error);
+        logger.error(`   ❌ Erreur formule ${formula.id}:`, error);
         result.errors.push(`Formule ${formula.id}: ${error instanceof Error ? error.message : 'Erreur'}`);
       }
     }
@@ -191,7 +192,7 @@ export class TBLEvaluationEngine {
     request: TBLEvaluationRequest,
     result: TBLEvaluationResult
   ): Promise<void> {
-    console.log(`⚖️ [TBL Evaluation] Évaluation de ${analysis.conditions.length} conditions`);
+    logger.debug(`⚖️ [TBL Evaluation] Évaluation de ${analysis.conditions.length} conditions`);
 
     for (const condition of analysis.conditions) {
       try {
@@ -221,7 +222,7 @@ export class TBLEvaluationEngine {
             show_field: shouldShowField
           });
 
-          console.log(`   🎯 Option ${mapping.option_code} → Champ ${mapping.field_code}: ${shouldShowField ? 'AFFICHÉ' : 'MASQUÉ'}`);
+          logger.debug(`   🎯 Option ${mapping.option_code} → Champ ${mapping.field_code}: ${shouldShowField ? 'AFFICHÉ' : 'MASQUÉ'}`);
         }
 
         result.conditions_evaluated.push({
@@ -232,10 +233,10 @@ export class TBLEvaluationEngine {
 
         result.final_value = conditionResult;
 
-        console.log(`   ✅ Condition ${condition.id}: ${conditionResult}`);
+        logger.debug(`   ✅ Condition ${condition.id}: ${conditionResult}`);
 
       } catch (error) {
-        console.error(`   ❌ Erreur condition ${condition.id}:`, error);
+        logger.error(`   ❌ Erreur condition ${condition.id}:`, error);
         result.errors.push(`Condition ${condition.id}: ${error instanceof Error ? error.message : 'Erreur'}`);
       }
     }
@@ -249,7 +250,7 @@ export class TBLEvaluationEngine {
     request: TBLEvaluationRequest,
     result: TBLEvaluationResult
   ): Promise<void> {
-    console.log(`📊 [TBL Evaluation] Évaluation de ${analysis.tables.length} tableaux`);
+    logger.debug(`📊 [TBL Evaluation] Évaluation de ${analysis.tables.length} tableaux`);
 
     for (const table of analysis.tables) {
       try {
@@ -268,14 +269,14 @@ export class TBLEvaluationEngine {
         // Calculer les colonnes computées
         for (const computedCode of table.computed_columns) {
           // Ici on pourrait appeler récursivement l'évaluation pour les formules
-          console.log(`   🧮 Colonne calculée: ${computedCode}`);
+          logger.debug(`   🧮 Colonne calculée: ${computedCode}`);
         }
 
         result.final_value = tableData;
-        console.log(`   ✅ Tableau ${table.id}: ${tableData.length} lignes`);
+        logger.debug(`   ✅ Tableau ${table.id}: ${tableData.length} lignes`);
 
       } catch (error) {
-        console.error(`   ❌ Erreur tableau ${table.id}:`, error);
+        logger.error(`   ❌ Erreur tableau ${table.id}:`, error);
         result.errors.push(`Tableau ${table.id}: ${error instanceof Error ? error.message : 'Erreur'}`);
       }
     }
@@ -292,7 +293,7 @@ export class TBLEvaluationEngine {
   ): Promise<void> {
     const capacity = analysis.element.tbl_capacity;
     
-    console.log(`🤖 [TBL Evaluation] Mode auto - capacité détectée: ${capacity}`);
+    logger.debug(`🤖 [TBL Evaluation] Mode auto - capacité détectée: ${capacity}`);
 
     switch (capacity) {
       case 2: // Formule
@@ -318,7 +319,7 @@ export class TBLEvaluationEngine {
     request: TBLEvaluationRequest,
     result: TBLEvaluationResult
   ): Promise<void> {
-    console.log(`🔄 [TBL Evaluation] Résolution profonde des dépendances`);
+    logger.debug(`🔄 [TBL Evaluation] Résolution profonde des dépendances`);
 
     for (const dependency of analysis.dependencies) {
       if (!result.evaluation_path.includes(dependency.source_code)) {

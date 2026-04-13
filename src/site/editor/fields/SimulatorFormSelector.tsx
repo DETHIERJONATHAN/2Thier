@@ -11,6 +11,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Select, Space, Typography, message, Tag, Spin, Empty, Button } from 'antd';
 import { FormOutlined, ReloadOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
+import { logger } from '../../../lib/logger';
 
 const { Text } = Typography;
 
@@ -64,7 +65,7 @@ const SimulatorFormSelector: React.FC<SimulatorFormSelectorProps> = ({
       
       setForms(validForms.sort((a, b) => a.name.localeCompare(b.name)));
     } catch (error) {
-      console.error('[SimulatorFormSelector] Erreur chargement:', error);
+      logger.error('[SimulatorFormSelector] Erreur chargement:', error);
       message.error('Impossible de charger les formulaires');
     } finally {
       setLoading(false);

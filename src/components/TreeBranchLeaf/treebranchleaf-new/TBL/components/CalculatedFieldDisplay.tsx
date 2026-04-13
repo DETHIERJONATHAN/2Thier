@@ -4,6 +4,7 @@ import { Spin, Alert, Tag } from 'antd';
 import { EyeInvisibleOutlined } from '@ant-design/icons';
 import { useCalculatedFieldValue } from '../hooks/useCalculatedFieldValue';
 import { useAuth } from '../../../../../auth/useAuth';
+import { logger } from '../../../../../lib/logger';
 
 interface CalculatedFieldDisplayProps {
   /** ID du node variable à évaluer */
@@ -35,7 +36,7 @@ export const CalculatedFieldDisplay: React.FC<CalculatedFieldDisplayProps> = ({
   const isSuperAdmin = user?.role === 'SUPERADMIN';
 
   // 🔍 DEBUG: Log quand le composant est monté
-  console.log('[CalculatedFieldDisplay] 🎯 Rendu avec:', {
+  logger.debug('[CalculatedFieldDisplay] 🎯 Rendu avec:', {
     nodeId,
     treeId,
     formDataKeys: Object.keys(formData).length,
@@ -44,21 +45,21 @@ export const CalculatedFieldDisplay: React.FC<CalculatedFieldDisplayProps> = ({
 
   const { value, loading, error, displayConfig } = useCalculatedFieldValue(nodeId, treeId, formData);
   
-  console.error('═══════════════════════════════════════════════════════');
-  console.error('🔍 [STEP 6] COMPOSANT CalculatedFieldDisplay');
-  console.error('NodeId:', nodeId);
-  console.error('Value reçue du hook:', value);
-  console.error('Type de value:', typeof value);
-  console.error('Loading:', loading);
-  console.error('Error:', error);
-  console.error('DisplayConfig:', displayConfig);
-  console.error('Est undefined?', value === undefined);
-  console.error('Est null?', value === null);
-  console.error('Est 0?', value === 0);
-  console.error('Est "0"?', value === "0");
-  console.error('Est 56?', value === 56);
-  console.error('Est "56"?', value === "56");
-  console.error('═══════════════════════════════════════════════════════');
+  logger.error('═══════════════════════════════════════════════════════');
+  logger.error('🔍 [STEP 6] COMPOSANT CalculatedFieldDisplay');
+  logger.error('NodeId:', nodeId);
+  logger.error('Value reçue du hook:', value);
+  logger.error('Type de value:', typeof value);
+  logger.error('Loading:', loading);
+  logger.error('Error:', error);
+  logger.error('DisplayConfig:', displayConfig);
+  logger.error('Est undefined?', value === undefined);
+  logger.error('Est null?', value === null);
+  logger.error('Est 0?', value === 0);
+  logger.error('Est "0"?', value === "0");
+  logger.error('Est 56?', value === 56);
+  logger.error('Est "56"?', value === "56");
+  logger.error('═══════════════════════════════════════════════════════');
 
   if (loading) {
     return (

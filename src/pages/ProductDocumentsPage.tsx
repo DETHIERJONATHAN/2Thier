@@ -40,6 +40,7 @@ import {
   DocumentCategory
 } from '../hooks/useProductDocuments';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../lib/logger';
 
 const { Title, Text } = Typography;
 const { Search } = Input;
@@ -150,7 +151,7 @@ const ProductDocumentsPage: React.FC = () => {
       setDocuments(data?.documents || []);
       setTotalDocs(data?.pagination?.total || 0);
     } catch (err) {
-      console.error('Erreur chargement documents:', err);
+      logger.error('Erreur chargement documents:', err);
     } finally {
       setLoading(false);
     }

@@ -12,6 +12,7 @@
 
 import NotificationOrchestrator from './NotificationOrchestrator';
 import { UniversalNotificationService } from './UniversalNotificationService';
+import { logger } from '../lib/logger';
 
 export class NotificationSystemInitializer {
   private static instance: NotificationSystemInitializer;
@@ -49,7 +50,7 @@ export class NotificationSystemInitializer {
 
 
     } catch (error) {
-      console.error('❌ [NotificationSystem] ERREUR INITIALISATION:', error);
+      logger.error('❌ [NotificationSystem] ERREUR INITIALISATION:', error);
       throw error;
     }
   }
@@ -70,12 +71,12 @@ export class NotificationSystemInitializer {
 
     // Gestion des erreurs système
     process.on('uncaughtException', (error) => {
-      console.error('💥 [NotificationSystem] Erreur non gérée:', error);
+      logger.error('💥 [NotificationSystem] Erreur non gérée:', error);
       this.handleSystemError(error);
     });
 
     process.on('unhandledRejection', (reason) => {
-      console.error('💥 [NotificationSystem] Promesse rejetée:', reason);
+      logger.error('💥 [NotificationSystem] Promesse rejetée:', reason);
       this.handleSystemError(reason);
     });
   }
@@ -98,7 +99,7 @@ export class NotificationSystemInitializer {
       }
 
     } catch (error) {
-      console.error('❌ [NotificationSystem] Erreur notification urgente:', error);
+      logger.error('❌ [NotificationSystem] Erreur notification urgente:', error);
     }
   }
 
@@ -110,7 +111,7 @@ export class NotificationSystemInitializer {
       // Logique de routage des notifications normales
       
     } catch (error) {
-      console.error('❌ [NotificationSystem] Erreur notification normale:', error);
+      logger.error('❌ [NotificationSystem] Erreur notification normale:', error);
     }
   }
 
@@ -142,7 +143,7 @@ export class NotificationSystemInitializer {
    * 💥 GESTION ERREURS SYSTÈME
    */
   private handleSystemError(error: unknown): void {
-    console.error('💥 [NotificationSystem] ERREUR SYSTÈME:', error);
+    logger.error('💥 [NotificationSystem] ERREUR SYSTÈME:', error);
     
     // TODO: Gestion robuste des erreurs
     // - Notification aux administrateurs
@@ -173,7 +174,7 @@ export class NotificationSystemInitializer {
       };
 
     } catch (error) {
-      console.error('❌ [NotificationSystem] Erreur stats:', error);
+      logger.error('❌ [NotificationSystem] Erreur stats:', error);
       return { error: error.message };
     }
   }
@@ -189,7 +190,7 @@ export class NotificationSystemInitializer {
       
 
     } catch (error) {
-      console.error('❌ [NotificationSystem] Erreur arrêt:', error);
+      logger.error('❌ [NotificationSystem] Erreur arrêt:', error);
     }
   }
 }

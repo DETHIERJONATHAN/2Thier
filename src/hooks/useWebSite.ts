@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { logger } from '../lib/logger';
 
 // Utiliser une URL relative pour passer par le proxy Vite (évite les problèmes CORS/Codespaces)
 const API_BASE_URL = '';
@@ -183,7 +184,7 @@ export const useWebSite = (slug: string): UseWebSiteReturn => {
       
       setData(mappedData);
     } catch (err: unknown) {
-      console.error('Error fetching website:', err);
+      logger.error('Error fetching website:', err);
       setError(err.response?.data?.error || 'Une erreur est survenue lors du chargement du site');
     } finally {
       setLoading(false);
@@ -219,7 +220,7 @@ export const useWebSiteServices = (slug: string) => {
         const response = await axios.get(`${API_BASE_URL}/api/websites/${slug}/services`);
         setData(response.data);
       } catch (err: unknown) {
-        console.error('Error fetching services:', err);
+        logger.error('Error fetching services:', err);
         setError(err.response?.data?.error || 'Erreur de chargement');
       } finally {
         setLoading(false);
@@ -250,7 +251,7 @@ export const useWebSiteProjects = (slug: string, featuredOnly = false) => {
         const response = await axios.get(url);
         setData(response.data);
       } catch (err: unknown) {
-        console.error('Error fetching projects:', err);
+        logger.error('Error fetching projects:', err);
         setError(err.response?.data?.error || 'Erreur de chargement');
       } finally {
         setLoading(false);
@@ -281,7 +282,7 @@ export const useWebSiteTestimonials = (slug: string, featuredOnly = false) => {
         const response = await axios.get(url);
         setData(response.data);
       } catch (err: unknown) {
-        console.error('Error fetching testimonials:', err);
+        logger.error('Error fetching testimonials:', err);
         setError(err.response?.data?.error || 'Erreur de chargement');
       } finally {
         setLoading(false);
@@ -314,7 +315,7 @@ export const useWebSiteBlog = (slug: string, limit = 10, featuredOnly = false) =
         const response = await axios.get(`${API_BASE_URL}/api/websites/${slug}/blog?${params}`);
         setData(response.data);
       } catch (err: unknown) {
-        console.error('Error fetching blog:', err);
+        logger.error('Error fetching blog:', err);
         setError(err.response?.data?.error || 'Erreur de chargement');
       } finally {
         setLoading(false);

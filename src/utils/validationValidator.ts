@@ -1,4 +1,5 @@
 import type { FieldValidation } from "../../../../../../../store/slices/types";
+import { logger } from '../lib/logger';
 
 // Interface pour le résultat de validation
 interface ValidationResult {
@@ -13,23 +14,23 @@ interface ValidationResult {
  * @param origin Le composant d'origine de l'appel (pour le debug)
  */
 export function validateValidation(validation: FieldValidation, origin: string = 'unknown'): ValidationResult {
-  console.log(`[ValidationValidator:${origin}] 🔍 Validation de l'objet validation ${validation?.id}`);
+  logger.debug(`[ValidationValidator:${origin}] 🔍 Validation de l'objet validation ${validation?.id}`);
 
   // Vérification de base
   if (!validation) {
-    console.error(`[ValidationValidator:${origin}] ❌ Validation indéfinie`);
+    logger.error(`[ValidationValidator:${origin}] ❌ Validation indéfinie`);
     return { isValid: false, message: "Validation indéfinie" };
   }
 
   // Vérification de l'ID
   if (!validation.id) {
-    console.error(`[ValidationValidator:${origin}] ❌ ID de validation manquant`);
+    logger.error(`[ValidationValidator:${origin}] ❌ ID de validation manquant`);
     return { isValid: false, message: "ID de validation manquant" };
   }
 
   // Vérification de la séquence
   if (!validation.sequence) {
-    console.warn(`[ValidationValidator:${origin}] ⚠️ Séquence de validation manquante pour ${validation.id}`);
+    logger.warn(`[ValidationValidator:${origin}] ⚠️ Séquence de validation manquante pour ${validation.id}`);
     // Une séquence manquante n'est pas fatale, on peut en créer une par défaut
     return { 
       isValid: true,
@@ -41,7 +42,7 @@ export function validateValidation(validation: FieldValidation, origin: string =
   const { validationSequence, comparisonSequence } = validation.sequence;
   
   if (!Array.isArray(validationSequence)) {
-    console.error(`[ValidationValidator:${origin}] ❌ validationSequence n'est pas un tableau dans ${validation.id}`);
+    logger.error(`[ValidationValidator:${origin}] ❌ validationSequence n'est pas un tableau dans ${validation.id}`);
     return { 
       isValid: false, 
       message: "Format de séquence de validation invalide", 
@@ -50,7 +51,7 @@ export function validateValidation(validation: FieldValidation, origin: string =
   }
 
   if (!Array.isArray(comparisonSequence)) {
-    console.error(`[ValidationValidator:${origin}] ❌ comparisonSequence n'est pas un tableau dans ${validation.id}`);
+    logger.error(`[ValidationValidator:${origin}] ❌ comparisonSequence n'est pas un tableau dans ${validation.id}`);
     return { 
       isValid: false, 
       message: "Format de séquence de comparaison invalide", 
@@ -61,7 +62,7 @@ export function validateValidation(validation: FieldValidation, origin: string =
   // Vérification des éléments des séquences
   for (const item of [...validationSequence, ...comparisonSequence]) {
     if (!item.type) {
-      console.error(`[ValidationValidator:${origin}] ❌ Élément de séquence sans type dans ${validation.id}`, item);
+      logger.error(`[ValidationValidator:${origin}] ❌ Élément de séquence sans type dans ${validation.id}`, item);
       return { 
         isValid: false, 
         message: "Élément de séquence invalide (type manquant)", 
@@ -70,7 +71,7 @@ export function validateValidation(validation: FieldValidation, origin: string =
     }
     
     if (item.type === 'field' && !item.id) {
-      console.error(`[ValidationValidator:${origin}] ❌ Champ sans ID dans la séquence de ${validation.id}`, item);
+      logger.error(`[ValidationValidator:${origin}] ❌ Champ sans ID dans la séquence de ${validation.id}`, item);
       return { 
         isValid: false, 
         message: "Champ invalide dans la séquence (ID manquant)", 
@@ -79,7 +80,7 @@ export function validateValidation(validation: FieldValidation, origin: string =
     }
     
     if (item.type === 'operator' && !item.value) {
-      console.error(`[ValidationValidator:${origin}] ❌ Opérateur sans valeur dans la séquence de ${validation.id}`, item);
+      logger.error(`[ValidationValidator:${origin}] ❌ Opérateur sans valeur dans la séquence de ${validation.id}`, item);
       return { 
         isValid: false, 
         message: "Opérateur invalide dans la séquence (valeur manquante)", 
@@ -90,11 +91,11 @@ export function validateValidation(validation: FieldValidation, origin: string =
 
   // Vérification du message d'erreur
   if (!validation.errorMessage) {
-    console.warn(`[ValidationValidator:${origin}] ⚠️ Message d'erreur manquant pour ${validation.id}`);
+    logger.warn(`[ValidationValidator:${origin}] ⚠️ Message d'erreur manquant pour ${validation.id}`);
     // Un message manquant n'est pas fatal, on peut utiliser un message par défaut
   }
 
-  console.log(`[ValidationValidator:${origin}] ✅ Validation ${validation.id} est valide`);
+  logger.debug(`[ValidationValidator:${origin}] ✅ Validation ${validation.id} est valide`);
   return { isValid: true, message: "Validation valide" };
 }
 
@@ -103,7 +104,7 @@ export function validateValidation(validation: FieldValidation, origin: string =
  * @param validation La validation à préparer
  */
 export function prepareValidationForAPI(validation: FieldValidation): any {
-  console.log(`[ValidationValidator] 🔧 Préparation de la validation ${validation.id} pour l'API`);
+  logger.debug(`[ValidationValidator] 🔧 Préparation de la validation ${validation.id} pour l'API`);
   
   // Création d'une copie pour ne pas modifier l'original
   const prepared = {
@@ -114,7 +115,7 @@ export function prepareValidationForAPI(validation: FieldValidation): any {
     fieldId: validation.fieldId
   };
 
-  console.log(`[ValidationValidator] ✅ Validation ${validation.id} prête pour l'API`, prepared);
+  logger.debug(`[ValidationValidator] ✅ Validation ${validation.id} prête pour l'API`, prepared);
   return prepared;
 }
 
@@ -134,10 +135,10 @@ export function getAPIHeaders(): HeadersInit {
  * @param values Les valeurs à utiliser pour l'évaluation
  */
 export function evaluateValidation(validation: FieldValidation, values: Record<string, unknown>): { isValid: boolean; error?: string; details?: any } {
-  console.log(`[ValidationEvaluator] 🧪 Évaluation de la validation ${validation.id}`, values);
+  logger.debug(`[ValidationEvaluator] 🧪 Évaluation de la validation ${validation.id}`, values);
   
   if (!validation.sequence) {
-    console.warn(`[ValidationEvaluator] ⚠️ Pas de séquence à évaluer pour ${validation.id}`);
+    logger.warn(`[ValidationEvaluator] ⚠️ Pas de séquence à évaluer pour ${validation.id}`);
     return { isValid: true };
   }
   
@@ -176,7 +177,7 @@ export function evaluateValidation(validation: FieldValidation, values: Record<s
     // Construction de l'expression complète
     const fullExpr = `${validationExpr} ${comparisonSequence.length > 0 ? '==' : ''} ${comparisonExpr}`;
     
-    console.log(`[ValidationEvaluator] 📝 Expression à évaluer: ${fullExpr}`);
+    logger.debug(`[ValidationEvaluator] 📝 Expression à évaluer: ${fullExpr}`);
     
     // Évaluation sécurisée de l'expression
     let result;
@@ -184,7 +185,7 @@ export function evaluateValidation(validation: FieldValidation, values: Record<s
       // Utilisation d'une fonction anonyme pour éviter eval()
       result = new Function(`return ${fullExpr}`)();
     } catch (error) {
-      console.error(`[ValidationEvaluator] ❌ Erreur lors de l'évaluation: ${error}`);
+      logger.error(`[ValidationEvaluator] ❌ Erreur lors de l'évaluation: ${error}`);
       return { 
         isValid: false, 
         error: `Erreur d'évaluation: ${error}`, 
@@ -192,7 +193,7 @@ export function evaluateValidation(validation: FieldValidation, values: Record<s
       };
     }
     
-    console.log(`[ValidationEvaluator] 🔍 Résultat de l'évaluation: ${result}`);
+    logger.debug(`[ValidationEvaluator] 🔍 Résultat de l'évaluation: ${result}`);
     
     // La validation est valide si l'expression est vraie
     return { 
@@ -202,7 +203,7 @@ export function evaluateValidation(validation: FieldValidation, values: Record<s
     };
     
   } catch (error) {
-    console.error(`[ValidationEvaluator] ❌ Erreur lors de l'évaluation de la validation: ${error}`);
+    logger.error(`[ValidationEvaluator] ❌ Erreur lors de l'évaluation de la validation: ${error}`);
     return { 
       isValid: false, 
       error: `Erreur lors de l'évaluation: ${error}`, 

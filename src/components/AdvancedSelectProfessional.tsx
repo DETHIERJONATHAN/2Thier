@@ -3,6 +3,7 @@ import { Select, Input, Card, Space, Typography, Alert, Spin, InputNumber, Steps
 import { CheckCircleOutlined, LoadingOutlined, CalculatorOutlined, AlertOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { SF } from '../components/zhiive/ZhiiveTheme';
+import { logger } from '../lib/logger';
 
 const { Option } = Select;
 const { Text, Title } = Typography;
@@ -165,7 +166,7 @@ const AdvancedSelectProfessional: React.FC<Props> = ({
                 setCurrentStep(2); // Passer à l'étape résultat
             }
         } catch (error) {
-            console.error('Erreur lors du calcul:', error);
+            logger.error('Erreur lors du calcul:', error);
             setCalculationResult({
                 success: false,
                 error: 'Erreur lors du calcul automatique'

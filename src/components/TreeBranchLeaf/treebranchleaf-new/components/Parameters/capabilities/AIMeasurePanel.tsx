@@ -39,6 +39,7 @@ import {
 import { useAuthenticatedApi } from '../../../../../../hooks/useAuthenticatedApi';
 import { useDebouncedCallback } from '../../../hooks/useDebouncedCallback';
 import NodeTreeSelector, { NodeTreeSelectorValue } from '../shared/NodeTreeSelector';
+import { logger } from '../../../../../../lib/logger';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -113,7 +114,7 @@ const AIMeasurePanel: React.FC<AIMeasurePanelProps> = ({
         const node = response?.data || response;
         
         // 🔍 DEBUG: Voir ce que le backend retourne vraiment
-        console.log('📊 [AIMeasurePanel] Réponse backend simple GET:', {
+        logger.debug('📊 [AIMeasurePanel] Réponse backend simple GET:', {
           nodeKeys: node ? Object.keys(node).filter(k => k.startsWith('aiMeasure_')) : [],
           aiMeasure_enabled: node?.aiMeasure_enabled,
           aiMeasure_autoTrigger: node?.aiMeasure_autoTrigger,
@@ -138,11 +139,11 @@ const AIMeasurePanel: React.FC<AIMeasurePanelProps> = ({
               targetLabel: k.targetLabel || ''
             }))
           };
-          console.log('📊 [AIMeasurePanel] Config chargée depuis colonnes dédiées:', loadedConfig);
+          logger.debug('📊 [AIMeasurePanel] Config chargée depuis colonnes dédiées:', loadedConfig);
           setConfig(loadedConfig);
         } else if (node?.metadata?.aiMeasure) {
           // Fallback legacy: lire depuis metadata JSON
-          console.log('⚠️ [AIMeasurePanel] Fallback legacy metadata.aiMeasure');
+          logger.debug('⚠️ [AIMeasurePanel] Fallback legacy metadata.aiMeasure');
           setConfig(node.metadata.aiMeasure);
         } else if (value) {
           setConfig(value);
@@ -159,7 +160,7 @@ const AIMeasurePanel: React.FC<AIMeasurePanelProps> = ({
         }
 
       } catch (error) {
-        console.error('❌ [AIMeasurePanel] Erreur chargement:', error);
+        logger.error('❌ [AIMeasurePanel] Erreur chargement:', error);
       } finally {
         if (mountedRef.current) {
           setLoading(false);
@@ -209,10 +210,10 @@ const AIMeasurePanel: React.FC<AIMeasurePanelProps> = ({
       
       onChange?.(newConfig);
       
-      console.log('✅ [AIMeasurePanel] Configuration sauvegardée vers colonnes dédiées:', aiMeasurePayload);
+      logger.debug('✅ [AIMeasurePanel] Configuration sauvegardée vers colonnes dédiées:', aiMeasurePayload);
       
     } catch (error) {
-      console.error('❌ [AIMeasurePanel] Erreur sauvegarde:', error);
+      logger.error('❌ [AIMeasurePanel] Erreur sauvegarde:', error);
       messageApi.error('Erreur lors de la sauvegarde');
     } finally {
       if (mountedRef.current) {

@@ -30,6 +30,7 @@ import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import LeadGagneTab from '../../pages/Leads/components/LeadGagneTab';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 interface LeadDetailProps {
   leadId: string;
@@ -109,14 +110,14 @@ export default function LeadDetail({ leadId, onEdit, onDelete, onCall, onEmail, 
         setLoading(true);
         setError(null);
         
-        console.log('[LeadDetail] Récupération du lead:', leadId);
+        logger.debug('[LeadDetail] Récupération du lead:', leadId);
     const leadData = await api.get<Lead>(`/api/leads/${leadId}`);
         
-        console.log('[LeadDetail] Données reçues:', leadData);
+        logger.debug('[LeadDetail] Données reçues:', leadData);
         setLead(leadData);
         
       } catch (err) {
-        console.error('[LeadDetail] Erreur lors de la récupération:', err);
+        logger.error('[LeadDetail] Erreur lors de la récupération:', err);
         setError(err instanceof Error ? err.message : 'Erreur inconnue');
       } finally {
         setLoading(false);
@@ -191,7 +192,7 @@ export default function LeadDetail({ leadId, onEdit, onDelete, onCall, onEmail, 
           setRectificationCtx(res.data);
         }
       } catch (err) {
-        console.error('[LeadDetail] Erreur chargement contexte rectification:', err);
+        logger.error('[LeadDetail] Erreur chargement contexte rectification:', err);
       } finally {
         setLoadingRectification(false);
       }
@@ -223,7 +224,7 @@ export default function LeadDetail({ leadId, onEdit, onDelete, onCall, onEmail, 
             message.error(res?.message || 'Erreur lors de la re-soumission');
           }
         } catch (err) {
-          console.error('[LeadDetail] Erreur re-soumission chantier:', err);
+          logger.error('[LeadDetail] Erreur re-soumission chantier:', err);
           message.error('Erreur lors de la re-soumission au chantier');
         } finally {
           setResubmitting(false);

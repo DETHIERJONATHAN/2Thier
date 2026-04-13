@@ -35,6 +35,7 @@ import {
   formatMeasurement,
   convertUnit
 } from '../../types/measurement';
+import { logger } from '../../lib/logger';
 
 const { Text, Title } = Typography;
 
@@ -272,7 +273,7 @@ export const ImageMeasurementCanvasMobile: React.FC<ImageMeasurementCanvasMobile
         color: POINT_COLORS.primary
       }));
       setPoints(scaledPoints);
-      console.log('📱 [Mobile] Points initiaux scalés:', scaledPoints.length);
+      logger.debug('📱 [Mobile] Points initiaux scalés:', scaledPoints.length);
     }
   }, [initialPoints, imageDimensions.width, imageDimensions.height]);
 
@@ -473,8 +474,8 @@ export const ImageMeasurementCanvasMobile: React.FC<ImageMeasurementCanvasMobile
     let largeurCm = avgWidthPx / pixelPerCmX;
     let hauteurCm = avgHeightPx / pixelPerCmY;
 
-    console.log(`📱 [MOBILE] Mesures brutes: ${largeurCm.toFixed(2)}cm × ${hauteurCm.toFixed(2)}cm`);
-    console.log(`   pixelPerCmX=${pixelPerCmX.toFixed(2)}, pixelPerCmY=${pixelPerCmY.toFixed(2)}`);
+    logger.debug(`📱 [MOBILE] Mesures brutes: ${largeurCm.toFixed(2)}cm × ${hauteurCm.toFixed(2)}cm`);
+    logger.debug(`   pixelPerCmX=${pixelPerCmX.toFixed(2)}, pixelPerCmY=${pixelPerCmY.toFixed(2)}`);
 
     results.largeur_cm = largeurCm;
     results.hauteur_cm = hauteurCm;

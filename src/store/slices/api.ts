@@ -2,6 +2,7 @@
 
 import { toast } from 'react-toastify';
 import { isSuperAdmin } from '../../utils/roles';
+import { logger } from '../../lib/logger';
 
 // Fonction pour récupérer le token d'authentification
 export const getToken = () => localStorage.getItem('token');
@@ -48,7 +49,7 @@ export const getOrganizationId = () => localStorage.getItem('organizationId');
 export const handleApiError = (err: unknown, message = "Une erreur est survenue") => {
   const errorMsg = err instanceof Error ? err.message : message;
   toast.error(errorMsg);
-  console.error(`[API Error] ${message}:`, err);
+  logger.error(`[API Error] ${message}:`, err);
   throw err;
 };
 

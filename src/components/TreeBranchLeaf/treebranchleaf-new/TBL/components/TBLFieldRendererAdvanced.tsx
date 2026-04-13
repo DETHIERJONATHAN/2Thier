@@ -56,6 +56,7 @@ import { getAIMeasureConfig } from '../../../../../hooks/useAIMeasure';
 import { ImageDisplayBubble } from './ImageDisplayBubble';
 
 import type { RawTreeNode } from '../types';
+import { logger } from '../../../../../lib/logger';
 
 declare global {
   interface Window {
@@ -216,7 +217,7 @@ const evaluateLookupExtensions = (
         return { ref: c.fieldRef, op: c.operator, val: c.value, met };
       });
       const allMet = condResults.every((r: Record<string, unknown>) => r.met);
-      console.log(`[LookupAlerts] "${alert.label}": ${allMet ? '✅ ACTIVE' : '❌ inactive'}`, condResults);
+      logger.debug(`[LookupAlerts] "${alert.label}": ${allMet ? '✅ ACTIVE' : '❌ inactive'}`, condResults);
       if (allMet) {
         result.activeAlerts.push({ message: alert.message, level: alert.level || 'warning', label: alert.label });
       }
@@ -394,7 +395,7 @@ const evaluateFilterConditions = (
         return false;
       }
     } catch (error) {
-      console.warn('Erreur lors de l\'extraction de la valeur du tableau:', error);
+      logger.warn('Erreur lors de l\'extraction de la valeur du tableau:', error);
       return false;
     }
 
@@ -443,7 +444,7 @@ const evaluateFilterConditions = (
           const fieldBValue = resolveMultiplierRef(cond.fieldB);
           // 🔍 DEBUG MULTIPLIER: Log les valeurs résolues pour chaque condition
           if (fieldAValue === null || fieldAValue === undefined || fieldBValue === null || fieldBValue === undefined) {
-            console.log(`[Multiplier] Cond${condIdx ?? '?'}: "${cond.fieldA}" → ${JSON.stringify(fieldAValue)} | "${cond.fieldB}" → ${JSON.stringify(fieldBValue)} → NULL/UNDEFINED → FALSE`);
+            logger.debug(`[Multiplier] Cond${condIdx ?? '?'}: "${cond.fieldA}" → ${JSON.stringify(fieldAValue)} | "${cond.fieldB}" → ${JSON.stringify(fieldBValue)} → NULL/UNDEFINED → FALSE`);
             return false;
           }
           
@@ -465,7 +466,7 @@ const evaluateFilterConditions = (
         if (mode === 'fixed') {
           // Mode valeur fixe: remplacer la valeur du tableau par la valeur ALORS ou SINON
           const fixedValue = allConditionsMet ? (mult.factor ?? 0) : (mult.elseFactor ?? 0);
-          console.log(`[Fixed] ${conditions.length} condition(s) → ${allConditionsMet ? 'TOUTES VRAIES' : 'NON'} → tableValue ${originalTableValue} → ${fixedValue}`);
+          logger.debug(`[Fixed] ${conditions.length} condition(s) → ${allConditionsMet ? 'TOUTES VRAIES' : 'NON'} → tableValue ${originalTableValue} → ${fixedValue}`);
           tableValue = fixedValue;
         } else {
           // Mode multiplicateur: multiplier la valeur du tableau
@@ -476,13 +477,13 @@ const evaluateFilterConditions = (
             const sourceVal = extractValueFromColumn(option, mult.sourceColumn, tableData, config);
             if (sourceVal !== null && sourceVal !== undefined) {
               baseValue = sourceVal;
-              console.log(`[Multiplier] sourceColumn "${mult.sourceColumn}" → baseValue = ${sourceVal}`);
+              logger.debug(`[Multiplier] sourceColumn "${mult.sourceColumn}" → baseValue = ${sourceVal}`);
             }
           }
           const numericValue = Number(baseValue);
           if (!isNaN(numericValue) && factor !== 1) {
             tableValue = numericValue * factor;
-            console.log(`[Multiplier] ${conditions.length} condition(s) → ${allConditionsMet ? 'TOUTES VRAIES' : 'NON'} → ${allConditionsMet && mult.sourceColumn ? `sourceCol(${mult.sourceColumn})=${baseValue}` : `tableValue ${originalTableValue}`} × ${factor} = ${tableValue}`);
+            logger.debug(`[Multiplier] ${conditions.length} condition(s) → ${allConditionsMet ? 'TOUTES VRAIES' : 'NON'} → ${allConditionsMet && mult.sourceColumn ? `sourceCol(${mult.sourceColumn})=${baseValue}` : `tableValue ${originalTableValue}`} × ${factor} = ${tableValue}`);
           } else if (!isNaN(numericValue)) {
             tableValue = numericValue;
           }
@@ -616,7 +617,7 @@ const extractValueFromColumn = (
       }
     }
   } catch (error) {
-    console.error('[extractValueFromColumn] Erreur:', error);
+    logger.error('[extractValueFromColumn] Erreur:', error);
   }
   
   return null;
@@ -1219,7 +1220,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         window.TBL_CASCADER_NODE_IDS[field.id] = optionNode.id;
       }
     } catch (e) {
-      console.error("Erreur lors de l'initialisation du mapping Cascader:", e);
+      logger.error("Erreur lors de l'initialisation du mapping Cascader:", e);
     }
   }, [value, allNodes, field.id, field.options]);
   
@@ -1258,7 +1259,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     if (localStorage.getItem('TBL_DIAG') !== '1') return;
 
     if (field.label?.toLowerCase().includes('onduleur')) {
-      console.log(`🔴 [DEBUG ONDULEUR] "${field.label}" (${field.id}):`, {
+      logger.debug(`🔴 [DEBUG ONDULEUR] "${field.label}" (${field.id}):`, {
         hasTableCapability,
         fieldHasTable: field.hasTable,
         fieldCapabilities: field.capabilities,
@@ -1271,7 +1272,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     }
     // 🔴 DEBUG: Tracer Orientation
     if (field.label?.toLowerCase() === 'orientation') {
-      console.log(`🔴 [DEBUG ORIENTATION] "${field.label}" (${field.id}):`, {
+      logger.debug(`🔴 [DEBUG ORIENTATION] "${field.label}" (${field.id}):`, {
         hasTableCapability,
         fieldHasTable: field.hasTable,
         fieldType: field.type,
@@ -1301,7 +1302,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   if (isDuplicatedFromRepeater) {
     // Les champs dupliqués depuis repeat doivent utiliser leur propre ID, pas celui du template
     lookupNodeId = field.id;
-    console.log(`[TBL-DEBUG] Champ dupliqué depuis repeat: ${field.label} (${field.id})`);
+    logger.debug(`[TBL-DEBUG] Champ dupliqué depuis repeat: ${field.label} (${field.id})`);
   } else {
     // Pour les champs normaux, essayer les autres candidats
     lookupNodeId = repeaterTemplateNodeId || originalFieldId || metaOriginalNodeId || sourceTemplateNodeId || field.id;
@@ -1319,7 +1320,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     }
   }
   
-  console.log(`[TBL-DEBUG] Field: ${field.label}, field.id=${field.id}, lookupNodeId=${lookupNodeId}, duplicatedFromRepeater=${isDuplicatedFromRepeater}`);
+  logger.debug(`[TBL-DEBUG] Field: ${field.label}, field.id=${field.id}, lookupNodeId=${lookupNodeId}, duplicatedFromRepeater=${isDuplicatedFromRepeater}`);
 
   // 🔧 FIX CRITIQUE: Pour les champs dupliqués avec suffix (-1, -2, etc.),
   // il faut charger la config du champ ORIGINAL (sans suffix)
@@ -1439,7 +1440,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     
     // 🔍 DEBUG: Tracer tous les changements de valeur externe pour les champs NUMBER
     if (isNumberField) {
-      console.log(`🔍 [${field.label}] useEffect value change:`, {
+      logger.debug(`🔍 [${field.label}] useEffect value change:`, {
         newValue: value,
         previousValue: previousValueRef.current,
         localValue,
@@ -1453,7 +1454,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       isInternalChangeRef.current = false;
       previousValueRef.current = value;
       if (isNumberField) {
-        console.log(`✅ [${field.label}] Changement interne détecté - protection activée`);
+        logger.debug(`✅ [${field.label}] Changement interne détecté - protection activée`);
       }
       return;
     }
@@ -1465,7 +1466,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     const hasLocalValue = localValue !== null && localValue !== undefined && localValue !== '';
     
     if (hasPendingEvaluations && isValueBeingCleared && hasLocalValue) {
-      console.log(`🛡️ [${field.label}] PROTECTION useEffect: ne pas écraser "${localValue}" avec "${value}" (${pendingEvaluations.current} évaluations en cours)`);
+      logger.debug(`🛡️ [${field.label}] PROTECTION useEffect: ne pas écraser "${localValue}" avec "${value}" (${pendingEvaluations.current} évaluations en cours)`);
       return; // Ne pas mettre à jour - gardons la valeur locale
     }
     
@@ -1473,7 +1474,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     // (par exemple initialisation, reset, ou changement depuis un autre composant)
     if (value !== previousValueRef.current) {
       if (isNumberField) {
-        console.log(`🔄 [${field.label}] Synchronisation depuis extérieur: "${previousValueRef.current}" → "${value}"`);
+        logger.debug(`🔄 [${field.label}] Synchronisation depuis extérieur: "${previousValueRef.current}" → "${value}"`);
       }
       setLocalValue(value);
       previousValueRef.current = value;
@@ -1485,7 +1486,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     const handleEvaluationComplete = () => {
       if (pendingEvaluations.current > 0) {
         pendingEvaluations.current--;
-        console.log(`⬇️ [${field.label}] Évaluation terminée (${pendingEvaluations.current} restantes)`);
+        logger.debug(`⬇️ [${field.label}] Évaluation terminée (${pendingEvaluations.current} restantes)`);
       }
     };
 
@@ -1602,7 +1603,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     };
     
     // 🔍 [DEBUG] Log spécifique pour l'apparence et le type
-    // console.log(`🎨 [Apparence Renderer] Champ "${field.label}":`, { // ✨ Log réduit
+    // logger.debug(`🎨 [Apparence Renderer] Champ "${field.label}":`, { // ✨ Log réduit
     //   fieldType: field.type,
     //   nodeType,
     //   subType,
@@ -1620,10 +1621,10 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       .map(([name]) => name);
     
     if (activeCapabilities.length > 0) {
-      // console.log(`🎯 [CAPACITÉS RENDERER] Champ "${field.label}": ${activeCapabilities.join(', ')}`); // ✨ Log réduit
+      // logger.debug(`🎯 [CAPACITÉS RENDERER] Champ "${field.label}": ${activeCapabilities.join(', ')}`); // ✨ Log réduit
     }
     
-    // console.log(`🎯 [TBLFieldRendererAdvanced] Champ "${field.label}":`, { // ✨ Log réduit
+    // logger.debug(`🎯 [TBLFieldRendererAdvanced] Champ "${field.label}":`, { // ✨ Log réduit
     //   fieldType: field.type,
     //   nodeType,
     //   subType,
@@ -2105,7 +2106,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
 
     // 🚀 FALLBACK BATCH: Si ni formData ni backend n'ont de valeur, utiliser le batch
     if (hasBatchValue) {
-      console.log(`🚀 [Constraint] "${field.label}" utilise valeur batch pour source ${constraintSourceNodeId}: ${resolvedBatchValue}`);
+      logger.debug(`🚀 [Constraint] "${field.label}" utilise valeur batch pour source ${constraintSourceNodeId}: ${resolvedBatchValue}`);
       return resolvedBatchValue;
     }
     
@@ -2119,7 +2120,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     if (constraintFormulas.length === 0 || constraintSourceValue === undefined) {
       // 🔍 DEBUG: Diagnostic quand la chaîne de contrainte échoue
       if (constraintFormulas.length > 0 && constraintSourceValue === undefined) {
-        console.warn(`⚠️ [Constraint] "${field.label}" a ${constraintFormulas.length} formule(s) de contrainte mais PAS de valeur source`, {
+        logger.warn(`⚠️ [Constraint] "${field.label}" a ${constraintFormulas.length} formule(s) de contrainte mais PAS de valeur source`, {
           constraintSourceNodeId,
           constraintBackendValue,
           constraintSourceValueUndefined: true,
@@ -2146,7 +2147,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           // on ne doit PAS bloquer le champ. Quand les valeurs sources seront renseignées,
           // la contrainte se mettra à jour automatiquement avec la vraie valeur.
           if (targetProp === 'number_max' && numValue === 0) {
-            console.log(`⚠️ [Constraint] "${field.label}" - number_max=0 ignoré (probablement pas encore calculé)`);
+            logger.debug(`⚠️ [Constraint] "${field.label}" - number_max=0 ignoré (probablement pas encore calculé)`);
             continue;
           }
           (constraints as Record<string, number>)[targetProp] = numValue;
@@ -2186,7 +2187,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     
     // Log si on trouve des conditions inversées
     if (convertedInverse.length > 0) {
-      console.log(`🎯 [TBLFieldRendererAdvanced] "${field.label}" (${field.id}) a ${convertedInverse.length} condition(s) inversée(s):`, convertedInverse);
+      logger.debug(`🎯 [TBLFieldRendererAdvanced] "${field.label}" (${field.id}) a ${convertedInverse.length} condition(s) inversée(s):`, convertedInverse);
     }
     
     return [...directConditions, ...convertedInverse];
@@ -2269,7 +2270,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       
       // Log conditionnel pour éviter le spam console (était ×57 par render)
       if (!conditionResult) {
-        console.log(`🔍 [TBLFieldRendererAdvanced] Condition "${field.label}": dependentValue="${dependentValue}", op="${condition.operator}", showWhen="${condition.showWhen}" → ${conditionResult}`);
+        logger.debug(`🔍 [TBLFieldRendererAdvanced] Condition "${field.label}": dependentValue="${dependentValue}", op="${condition.operator}", showWhen="${condition.showWhen}" → ${conditionResult}`);
       }
       
       // 🔥 CRITIQUE: Gérer les actions SHOW vs HIDE
@@ -2309,7 +2310,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     
     // Log seulement quand le champ est masqué (réduit le bruit console)
     if (!isVisible) {
-      console.log(`🔍 [TBLFieldRendererAdvanced] Champ "${field.label}" (${field.id}) visible: ${isVisible}, hasShowCondition: ${hasShowCondition}, anyShowMet: ${anyShowConditionMet}`);
+      logger.debug(`🔍 [TBLFieldRendererAdvanced] Champ "${field.label}" (${field.id}) visible: ${isVisible}, hasShowCondition: ${hasShowCondition}, anyShowMet: ${anyShowConditionMet}`);
     }
     setConditionMet(isVisible);
   }, [allConditions, formData, field.label, field.id]);
@@ -2340,7 +2341,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         setCalculatedValue(evaluatedFormula);
       }
     } catch (error) {
-      console.warn('Erreur d\'évaluation de formule:', error); // ✨ Log réduit
+      logger.warn('Erreur d\'évaluation de formule:', error); // ✨ Log réduit
       setCalculatedValue(localValue);
     }
   }, [fieldConfig, formData, localValue]);
@@ -2461,7 +2462,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     // CAS 1 : Aucune option disponible → VIDER la sélection
     if (!tableLookup.options || tableLookup.options.length === 0) {
       if (currentValue !== null && currentValue !== undefined && currentValue !== '' && lastAutoSelectedValueRef.current !== null) {
-        console.log(`🧹 [Auto-Clear] Champ "${field.label}": Aucune option disponible, vidage de la sélection`);
+        logger.debug(`🧹 [Auto-Clear] Champ "${field.label}": Aucune option disponible, vidage de la sélection`);
         lastAutoSelectedValueRef.current = null;
         // 🚀 FIX R18: Utiliser handleChange au lieu de onChange direct
         // pour passer par toute la chaîne (normalisation, protection, etc.)
@@ -2481,7 +2482,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     // Les filtres/conditions continuent de fonctionner (ils limitent les options disponibles)
     // mais aucune valeur n'est pré-sélectionnée automatiquement.
     if (!isCurrentValueValid && currentValue !== null && currentValue !== undefined && currentValue !== '') {
-      console.log(`🧹 [Auto-Clear] Champ "${field.label}": Valeur "${currentValue}" invalide parmi les options, vidage (pas d'auto-sélection)`);
+      logger.debug(`🧹 [Auto-Clear] Champ "${field.label}": Valeur "${currentValue}" invalide parmi les options, vidage (pas d'auto-sélection)`);
       lastAutoSelectedValueRef.current = null;
       handleChange(null);
       setLocalValue(null);
@@ -2493,8 +2494,8 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   const handleChange = (newValue: unknown) => {
     // ⚠️ DIAGNOSTIC : Champ dans section DATA (read-only) ?
     if (!onChange) {
-      console.error(`❌ [${field.label}] onChange est undefined - Le champ est probablement dans une SECTION DE DONNÉES (read-only) !`);
-      console.error(`💡 SOLUTION : Déplacez "${field.label}" dans une section normale (pas isDataSection) pour permettre l'édition.`);
+      logger.error(`❌ [${field.label}] onChange est undefined - Le champ est probablement dans une SECTION DE DONNÉES (read-only) !`);
+      logger.error(`💡 SOLUTION : Déplacez "${field.label}" dans une section normale (pas isDataSection) pour permettre l'édition.`);
       return;
     }
     
@@ -2505,7 +2506,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     const hasLocalValue = localValue !== null && localValue !== undefined && localValue !== '';
     
     if (hasPendingEvaluations && isValueBeingCleared && hasLocalValue) {
-      console.log(`🛡️ [${field.label}] PROTECTION handleChange: ne pas écraser "${localValue}" avec "${newValue}" (${pendingEvaluations.current} évaluations en cours)`);
+      logger.debug(`🛡️ [${field.label}] PROTECTION handleChange: ne pas écraser "${localValue}" avec "${newValue}" (${pendingEvaluations.current} évaluations en cours)`);
       return; // Bloquer complètement - ne pas appeler setLocalValue
     }
     
@@ -2518,7 +2519,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     // 🔥 CRITICAL FIX: Si ce champ utilise tableLookup, stocker AUSSI la valeur avec le nodeId du SELECT
     // Le backend `interpretTable` cherche les valeurs dans formData[selectNodeId], pas formData[field.id]
     if (fieldConfig.hasTable && field.table_activeId && formData) {
-      console.log(`🔗 [${field.label}] Table Lookup détecté - Stockage duppliqué avec table_activeId: ${field.table_activeId}`);
+      logger.debug(`🔗 [${field.label}] Table Lookup détecté - Stockage duppliqué avec table_activeId: ${field.table_activeId}`);
       
       // Trouver le(s) SELECT node(s) configuré(s) pour cette table
       // Le table_activeId pointe vers la table, mais les SELECTs ont leurs propres IDs
@@ -2533,13 +2534,13 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
             // Si le node a une reference vers notre table dans ses capacités
             const nodeTableId = node.table_activeId;
             if (nodeTableId === tableId) {
-              console.log(`✅ [${field.label}] Trouvé SELECT node ${node.id} (${node.label}) lié à la table ${tableId}`);
+              logger.debug(`✅ [${field.label}] Trouvé SELECT node ${node.id} (${node.label}) lié à la table ${tableId}`);
               // Stocker la valeur AVEC LE NODE ID du SELECT
               onChange(newValue); // Stockage original avec field.id (déjà fait au-dessus)
               // Maintenant on doit aussi écrire dans formData[node.id] mais on n'a pas d'accès direct
               // SOLUTION: Appeler un callback parent si disponible, ou utiliser un setter global
-              console.log(`⚠️ [${field.label}] ATTENTION: Impossible de stocker directement dans formData[${node.id}]`);
-              console.log(`💡 SOLUTION: Le parent (TBLSectionRenderer) doit gérer ce cas`);
+              logger.debug(`⚠️ [${field.label}] ATTENTION: Impossible de stocker directement dans formData[${node.id}]`);
+              logger.debug(`💡 SOLUTION: Le parent (TBLSectionRenderer) doit gérer ce cas`);
             }
           }
         });
@@ -2580,7 +2581,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         if (meta?.originalNodeId) return String(meta.originalNodeId);
         if (f?.nodeId) return String(f.nodeId);
         if (f?.id) return String(f.id);
-      } catch (e) { console.warn('[resolveBackendNodeId] erreur:', e); }
+      } catch (e) { logger.warn('[resolveBackendNodeId] erreur:', e); }
       return undefined;
     };
 
@@ -2655,9 +2656,9 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     
     // 🔗 DEBUG DYNAMIQUE: Logger TOUS les champs avec link détecté (pas de hardcoding)
     if (fieldHasLink || fieldLinkTargetNodeId) {
-      console.log(`🔗 [LINK] Champ "${fieldConfig.label}" (${field.id}) hasLink=${fieldHasLink}, target=${fieldLinkTargetNodeId}, mode=${fieldLinkMode}`);
+      logger.debug(`🔗 [LINK] Champ "${fieldConfig.label}" (${field.id}) hasLink=${fieldHasLink}, target=${fieldLinkTargetNodeId}, mode=${fieldLinkMode}`);
       // 🔍 DEBUG DÉTAILLÉ pour comprendre d'où vient (ou ne vient pas) link_mode
-      console.log(`🔗 [LINK DEBUG] fieldAsAny.link_mode=${fieldAsAny.link_mode}, originalNode?.link_mode=${originalNode?.link_mode}`);
+      logger.debug(`🔗 [LINK DEBUG] fieldAsAny.link_mode=${fieldAsAny.link_mode}, originalNode?.link_mode=${originalNode?.link_mode}`);
     }
 
     // 🔗 PRIORITÉ 0: Capacité Link (affiche la valeur d'un autre champ)
@@ -2688,18 +2689,18 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       let linkedValue = formData?.[field.id];
       
       // 🔍 DEBUG: Tracer la recherche de la valeur liée
-      console.log(`🔍🔍🔍 [LINK VALUE SEARCH] Champ "${field.label}" (${field.id}):`);
-      console.log(`   - formData[field.id]="${formData?.[field.id]}"`);
-      console.log(`   - formData[targetNodeId]="${formData?.[targetNodeId]}"`);
-      console.log(`   - targetNodeId="${targetNodeId}"`);
-      console.log(`   - fieldLinkMode="${fieldLinkMode}"`);
+      logger.debug(`🔍🔍🔍 [LINK VALUE SEARCH] Champ "${field.label}" (${field.id}):`);
+      logger.debug(`   - formData[field.id]="${formData?.[field.id]}"`);
+      logger.debug(`   - formData[targetNodeId]="${formData?.[targetNodeId]}"`);
+      logger.debug(`   - targetNodeId="${targetNodeId}"`);
+      logger.debug(`   - fieldLinkMode="${fieldLinkMode}"`);
       // Afficher toutes les clés qui contiennent "photo" ou l'ID
       const relevantKeys = Object.keys(formData || {}).filter(k => 
         k.toLowerCase().includes('photo') || 
         k.includes(field.id) || 
         k.includes(targetNodeId)
       );
-      console.log(`   - Clés pertinentes dans formData:`, relevantKeys);
+      logger.debug(`   - Clés pertinentes dans formData:`, relevantKeys);
       
       // 🎯 ÉTAPE 1b: Si pas trouvé sous field.id, chercher sous targetNodeId (ancien comportement)
       if (linkedValue === undefined || linkedValue === null || linkedValue === '') {
@@ -2767,7 +2768,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         // Ceci fonctionne même si link_mode n'est pas "PHOTO" - détection intelligente
         if (typeof linkedValue === 'string') {
           // 🔍 DEBUG: Afficher la valeur pour voir ce qu'on reçoit
-          console.log(`🔍 [LINK IMAGE CHECK] Champ "${field.label}" - valeur type=${typeof linkedValue}, debut="${String(linkedValue).substring(0, 80)}..."`);
+          logger.debug(`🔍 [LINK IMAGE CHECK] Champ "${field.label}" - valeur type=${typeof linkedValue}, debut="${String(linkedValue).substring(0, 80)}..."`);
           
           // Détection des différents types d'URLs d'images
           const isDataImage = linkedValue.startsWith('data:image');
@@ -2783,10 +2784,10 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           );
           
           const isImageUrl = isDataImage || isBlobUrl || isHttpImage;
-          console.log(`🔍 [LINK IMAGE CHECK] isDataImage=${isDataImage}, isBlobUrl=${isBlobUrl}, isHttpImage=${isHttpImage}, isImageUrl=${isImageUrl}`);
+          logger.debug(`🔍 [LINK IMAGE CHECK] isDataImage=${isDataImage}, isBlobUrl=${isBlobUrl}, isHttpImage=${isHttpImage}, isImageUrl=${isImageUrl}`);
           
           if (isImageUrl) {
-            console.log(`🖼️ [LINK] Détection automatique d'image RÉUSSIE pour "${field.label}"`);
+            logger.debug(`🖼️ [LINK] Détection automatique d'image RÉUSSIE pour "${field.label}"`);
             return wrapWithCustomTooltip(
               <ImageDisplayBubble
                 fieldId={field.id}
@@ -2816,7 +2817,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
               );
               if (matchedOption?.label) {
                 displayValue = matchedOption.label;
-                console.log(`🔗 [LINK] Option trouvée: "${linkedValue}" -> label="${displayValue}"`);
+                logger.debug(`🔗 [LINK] Option trouvée: "${linkedValue}" -> label="${displayValue}"`);
               } else {
                 displayValue = linkedValue;
               }
@@ -3086,7 +3087,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         return <span style={{ color: '#888' }}>---</span>;
       }
       
-      console.log(`🔥 [FALLBACK DIRECT SOURCEREF] Champ "${fieldConfig.label}" utilise sourceRef directe: ${fieldSourceRef}, nodeId: ${fieldNodeId}`);
+      logger.debug(`🔥 [FALLBACK DIRECT SOURCEREF] Champ "${fieldConfig.label}" utilise sourceRef directe: ${fieldSourceRef}, nodeId: ${fieldNodeId}`);
       
       const resolvedNodeId = resolveNodeIdFromSourceRef(fieldSourceRef, {
         dataActiveId: capabilities.data?.activeId,
@@ -3117,7 +3118,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     
     // 🔍 DEBUG: Log pour diagnostiquer les champs désactivés
     if (isDisabled && fieldConfig.fieldType === 'NUMBER') {
-      console.log(`❌ [NUMBER DISABLED] "${fieldConfig.label}":`, {
+      logger.debug(`❌ [NUMBER DISABLED] "${fieldConfig.label}":`, {
         disabled,
         isReadOnly,
         useCalculatedValue,
@@ -3191,7 +3192,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
 
     // 🔍 Debug du style appliqué
     if (Object.keys(widthStyle).length > 0) {
-      // console.log(`🎨 [Style Apply] Champ "${fieldConfig.label}":`, { // ✨ Log réduit
+      // logger.debug(`🎨 [Style Apply] Champ "${fieldConfig.label}":`, { // ✨ Log réduit
       //   widthStyle: widthStyle,
       //   finalStyle: commonProps.style
       // });
@@ -3311,7 +3312,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         
         // 🎯 DEBUG: Afficher les contraintes appliquées
         if (dynamicConstraints.number_max !== undefined || dynamicConstraints.number_min !== undefined) {
-          console.log(`🎯 [InputNumber] "${field.label}" contraintes dynamiques appliquées:`, {
+          logger.debug(`🎯 [InputNumber] "${field.label}" contraintes dynamiques appliquées:`, {
             min: numberMin,
             max: numberMax,
             step: numberStep,
@@ -3322,7 +3323,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         
         // 🆕 Handler pour onChange - ne pas clamper, laisser l'utilisateur saisir librement
         const handleNumberChange = (val: number | null) => {
-          console.log(`🔢 [NUMBER CHANGE] "${fieldConfig.label}":`, { 
+          logger.debug(`🔢 [NUMBER CHANGE] "${fieldConfig.label}":`, { 
             oldValue: finalValue, 
             newValue: val,
             isDisabled,
@@ -3333,7 +3334,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           // Marquer comme changement interne et incrémenter le compteur d'évaluations
           isInternalChangeRef.current = true;
           pendingEvaluations.current++;
-          console.log(`⬆️ [${field.label}] Évaluation démarrée (${pendingEvaluations.current} en cours)`);
+          logger.debug(`⬆️ [${field.label}] Évaluation démarrée (${pendingEvaluations.current} en cours)`);
           
           // Simplement propager la valeur, sans clamper pendant la frappe
           handleChange(val);
@@ -3412,7 +3413,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         // 🎯 DEBUG: Vérifier la configuration lookup pour diagnostic
         if (fieldConfig.hasTable && field.capabilities?.table?.currentTable?.meta?.lookup) {
           const lookup = field.capabilities.table.currentTable.meta.lookup;
-          console.log(`🔍 [LOOKUP DEBUG] Configuration pour "${field.label}":`, {
+          logger.debug(`🔍 [LOOKUP DEBUG] Configuration pour "${field.label}":`, {
             rowEnabled: lookup.rowLookupEnabled,
             colEnabled: lookup.columnLookupEnabled,
             rowFieldId: lookup.selectors?.rowFieldId,
@@ -3518,7 +3519,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
               return true;
             });
 
-            console.log(`[ValueCaps] capColumn="${capColumn}", existingTotal=${existingTotal}, caps=`, lookupExtensionsResult.activeCaps, `→ ${baseOptions.length} options restantes`);
+            logger.debug(`[ValueCaps] capColumn="${capColumn}", existingTotal=${existingTotal}, caps=`, lookupExtensionsResult.activeCaps, `→ ${baseOptions.length} options restantes`);
           }
         }
 
@@ -3549,7 +3550,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         
         // 🔍 DEBUG CASCADE COPIÉ - Vérifier les options disponibles
         if (field.type === 'cascade') {
-          console.log(`🔍 [CASCADE FIELD RENDER] "${field.label}":`, {
+          logger.debug(`🔍 [CASCADE FIELD RENDER] "${field.label}":`, {
             fieldId: field.id,
             fieldType: field.type,
             hasFieldOptions: !!field.options,
@@ -3577,7 +3578,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         );
         
         // 🔥 DEBUG: Log de détection hiérarchie
-        console.log(`🔍 [CASCADER DEBUG] Champ "${field.label}":`, {
+        logger.debug(`🔍 [CASCADER DEBUG] Champ "${field.label}":`, {
           fieldId: field.id,
           allNodesLength: allNodes.length,
           optionIds,
@@ -3622,7 +3623,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
             };
           });
           
-          console.log(`✅ [CASCADER] Options construites pour "${field.label}":`, cascaderOptions);
+          logger.debug(`✅ [CASCADER] Options construites pour "${field.label}":`, cascaderOptions);
           
           return (
             <Cascader
@@ -3933,12 +3934,12 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
               ? targetFieldId.replace('@value.', '') 
               : targetFieldId;
             
-            console.log(`🤖 [AI Measure] Mise à jour du champ ${cleanFieldId} avec:`, value);
+            logger.debug(`🤖 [AI Measure] Mise à jour du champ ${cleanFieldId} avec:`, value);
             
             if (onUpdateAnyField) {
               onUpdateAnyField(cleanFieldId, value);
             } else {
-              console.warn('[AI Measure] onUpdateAnyField non disponible - impossible de remplir le champ cible');
+              logger.warn('[AI Measure] onUpdateAnyField non disponible - impossible de remplir le champ cible');
             }
           };
           
@@ -3957,10 +3958,10 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
             return typeof finalValue;
           })();
           
-          console.log(`🖼️ [TBLImageFieldWithAI] RENDER (nodeId=${field.id})`);
-          console.log(`   finalValue type: ${valueSummary}`);
-          console.log(`   useCalculatedValue: ${useCalculatedValue}`);
-          console.log(`   localValue: ${typeof localValue === 'string' ? localValue.substring(0, 50) : localValue}`);
+          logger.debug(`🖼️ [TBLImageFieldWithAI] RENDER (nodeId=${field.id})`);
+          logger.debug(`   finalValue type: ${valueSummary}`);
+          logger.debug(`   useCalculatedValue: ${useCalculatedValue}`);
+          logger.debug(`   localValue: ${typeof localValue === 'string' ? localValue.substring(0, 50) : localValue}`);
           
           return (
             <TBLImageFieldWithAI

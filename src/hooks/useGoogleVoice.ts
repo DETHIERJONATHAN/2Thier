@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
 import { message } from 'antd';
+import { logger } from '../lib/logger';
 
 interface GoogleVoiceUser {
   phoneNumber: string;
@@ -62,7 +63,7 @@ export const useGoogleVoice = () => {
       setConfig(response);
       return response;
     } catch (error) {
-      console.error('Erreur lors du chargement de la config Google Voice:', error);
+      logger.error('Erreur lors du chargement de la config Google Voice:', error);
       throw error;
     } finally {
       setConfigLoading(false);
@@ -77,7 +78,7 @@ export const useGoogleVoice = () => {
       setUsers(response.users || []);
       return response.users || [];
     } catch (error) {
-      console.error('Erreur lors du chargement des utilisateurs Google Voice:', error);
+      logger.error('Erreur lors du chargement des utilisateurs Google Voice:', error);
       throw error;
     } finally {
       setLoading(false);
@@ -97,7 +98,7 @@ export const useGoogleVoice = () => {
       await loadConfig(); // Recharger la config après sauvegarde
       return response;
     } catch (error) {
-      console.error('Erreur lors de la sauvegarde de la config:', error);
+      logger.error('Erreur lors de la sauvegarde de la config:', error);
       throw error;
     } finally {
       setConfigLoading(false);
@@ -114,7 +115,7 @@ export const useGoogleVoice = () => {
       }
       return response;
     } catch (error) {
-      console.error('Erreur lors du test de connexion:', error);
+      logger.error('Erreur lors du test de connexion:', error);
       throw error;
     } finally {
       setConfigLoading(false);
@@ -132,7 +133,7 @@ export const useGoogleVoice = () => {
       await loadUsers(); // Recharger les utilisateurs
       return response;
     } catch (error) {
-      console.error('Erreur lors de l\'initialisation de l\'utilisateur:', error);
+      logger.error('Erreur lors de l\'initialisation de l\'utilisateur:', error);
       throw error;
     } finally {
       setLoading(false);
@@ -149,7 +150,7 @@ export const useGoogleVoice = () => {
       message.success(`Appel initié de ${fromNumber} vers ${toNumber}`);
       return response;
     } catch (error) {
-      console.error('Erreur lors de l\'appel:', error);
+      logger.error('Erreur lors de l\'appel:', error);
       message.error('Erreur lors de l\'initiation de l\'appel');
       throw error;
     }
@@ -166,7 +167,7 @@ export const useGoogleVoice = () => {
       message.success(`SMS envoyé de ${fromNumber} vers ${toNumber}`);
       return response;
     } catch (error) {
-      console.error('Erreur lors de l\'envoi SMS:', error);
+      logger.error('Erreur lors de l\'envoi SMS:', error);
       message.error('Erreur lors de l\'envoi du SMS');
       throw error;
     }
@@ -186,7 +187,7 @@ export const useGoogleVoice = () => {
       await loadUsers(); // Recharger les utilisateurs
       return response;
     } catch (error) {
-      console.error('Erreur lors de la mise à jour des paramètres:', error);
+      logger.error('Erreur lors de la mise à jour des paramètres:', error);
       throw error;
     } finally {
       setLoading(false);
@@ -203,7 +204,7 @@ export const useGoogleVoice = () => {
       await loadUsers(); // Recharger les utilisateurs
       return response;
     } catch (error) {
-      console.error('Erreur lors de la modification du mode Ne pas déranger:', error);
+      logger.error('Erreur lors de la modification du mode Ne pas déranger:', error);
       throw error;
     }
   }, [api, loadUsers]);
@@ -214,7 +215,7 @@ export const useGoogleVoice = () => {
       const response = await api.get(`/google-voice/call-history/${userEmail}?limit=${limit}`);
       return response.calls || [];
     } catch (error) {
-      console.error('Erreur lors de la récupération de l\'historique des appels:', error);
+      logger.error('Erreur lors de la récupération de l\'historique des appels:', error);
       throw error;
     }
   }, [api]);
@@ -225,7 +226,7 @@ export const useGoogleVoice = () => {
       const response = await api.get(`/google-voice/sms-history/${userEmail}?limit=${limit}`);
       return response.messages || [];
     } catch (error) {
-      console.error('Erreur lors de la récupération de l\'historique SMS:', error);
+      logger.error('Erreur lors de la récupération de l\'historique SMS:', error);
       throw error;
     }
   }, [api]);

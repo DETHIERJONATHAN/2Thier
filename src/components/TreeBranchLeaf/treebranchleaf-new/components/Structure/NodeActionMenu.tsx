@@ -20,6 +20,7 @@ import {
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import type { TreeNode } from '../../types';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../../../../lib/logger';
 
 interface DependencyInfo {
   dependentNodeId: string;
@@ -91,7 +92,7 @@ export const NodeActionMenu: React.FC<NodeActionMenuProps> = ({
   const { api } = useAuthenticatedApi();
 
   // Log pour vérifier que le composant est monté et l'ID
-  // console.log('🔄 [NodeActionMenu] Composant monté pour node:', node.label, 'ID:', node.id, 'readOnly:', readOnly);
+  // logger.debug('🔄 [NodeActionMenu] Composant monté pour node:', node.label, 'ID:', node.id, 'readOnly:', readOnly);
 
   // Vérification que le nœud a un ID valide
   const hasValidId = node.id && node.id !== 'undefined';
@@ -110,12 +111,12 @@ export const NodeActionMenu: React.FC<NodeActionMenuProps> = ({
 
   const handleDelete = async () => {
     if (!hasValidId) {
-      console.warn('Impossible de supprimer: nœud sans ID valide');
+      logger.warn('Impossible de supprimer: nœud sans ID valide');
       return;
     }
 
     if (!onDelete) {
-      console.warn('Erreur: fonction de suppression non disponible');
+      logger.warn('Erreur: fonction de suppression non disponible');
       return;
     }
 
@@ -134,7 +135,7 @@ export const NodeActionMenu: React.FC<NodeActionMenuProps> = ({
         setDepResult({ hasDependencies: false, nodeLabel: node.label || '', nodesToDeleteCount: 1, externalDependencies: [] });
       }
     } catch (err) {
-      console.error('Erreur vérification dépendances:', err);
+      logger.error('Erreur vérification dépendances:', err);
       setDepError('Impossible de vérifier les dépendances. Vous pouvez quand même supprimer.');
       setDepResult({ hasDependencies: false, nodeLabel: node.label || '', nodesToDeleteCount: 1, externalDependencies: [] });
     } finally {
@@ -147,10 +148,10 @@ export const NodeActionMenu: React.FC<NodeActionMenuProps> = ({
     setDepResult(null);
     try {
       onDelete!(node);
-      console.info('✅ Élément supprimé avec succès');
+      logger.info('✅ Élément supprimé avec succès');
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
-      console.error('❌ Erreur lors de la suppression:', errorMessage);
+      logger.error('❌ Erreur lors de la suppression:', errorMessage);
     }
   };
 
@@ -162,7 +163,7 @@ export const NodeActionMenu: React.FC<NodeActionMenuProps> = ({
 
   const handleMoveUp = () => {
     if (!hasValidId) {
-      console.warn('Impossible de déplacer: nœud sans ID valide');
+      logger.warn('Impossible de déplacer: nœud sans ID valide');
       return;
     }
     if (onMoveUp) {
@@ -172,7 +173,7 @@ export const NodeActionMenu: React.FC<NodeActionMenuProps> = ({
 
   const handleMoveDown = () => {
     if (!hasValidId) {
-      console.warn('Impossible de déplacer: nœud sans ID valide');
+      logger.warn('Impossible de déplacer: nœud sans ID valide');
       return;
     }
     if (onMoveDown) {
@@ -182,7 +183,7 @@ export const NodeActionMenu: React.FC<NodeActionMenuProps> = ({
 
   const handleToggleVisibility = () => {
     if (!hasValidId) {
-      console.warn('Impossible de modifier la visibilité: nœud sans ID valide');
+      logger.warn('Impossible de modifier la visibilité: nœud sans ID valide');
       return;
     }
     if (onToggleVisibility) {
@@ -281,7 +282,7 @@ export const NodeActionMenu: React.FC<NodeActionMenuProps> = ({
   ]), [readOnly, onEdit, onDuplicate, onDelete, onMoveUp, onMoveDown, onToggleVisibility, onOpenSettings, hasValidId, node.visible]);
 
   useEffect(() => {
-    // console.log('🛰️ [NodeActionMenu] render', {
+    // logger.debug('🛰️ [NodeActionMenu] render', {
     //   nodeId: node.id,
     //   label: node.label,
     //   isMenuOpen,
@@ -291,7 +292,7 @@ export const NodeActionMenu: React.FC<NodeActionMenuProps> = ({
   });
 
   useEffect(() => {
-    // console.log('🛰️ [NodeActionMenu] state change -> isMenuOpen:', isMenuOpen, 'for', node.id);
+    // logger.debug('🛰️ [NodeActionMenu] state change -> isMenuOpen:', isMenuOpen, 'for', node.id);
   }, [isMenuOpen, node.id]);
 
   useEffect(() => {
@@ -300,14 +301,14 @@ export const NodeActionMenu: React.FC<NodeActionMenuProps> = ({
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
       if (menuRef.current?.contains(target)) {
-        // console.log('🛰️ [NodeActionMenu] pointerdown inside menu');
+        // logger.debug('🛰️ [NodeActionMenu] pointerdown inside menu');
         return;
       }
       if (triggerRef.current?.contains(target)) {
-        // console.log('🛰️ [NodeActionMenu] pointerdown on trigger');
+        // logger.debug('🛰️ [NodeActionMenu] pointerdown on trigger');
         return;
       }
-      // console.log('🛰️ [NodeActionMenu] pointerdown outside -> closing menu');
+      // logger.debug('🛰️ [NodeActionMenu] pointerdown outside -> closing menu');
       setIsMenuOpen(false);
     };
 
@@ -320,18 +321,18 @@ export const NodeActionMenu: React.FC<NodeActionMenuProps> = ({
   const handleTriggerClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    // console.log('🛰️ [NodeActionMenu] trigger click detected, toggling menu');
+    // logger.debug('🛰️ [NodeActionMenu] trigger click detected, toggling menu');
     setIsMenuOpen((open) => !open);
   }, []);
 
   const handleTriggerPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    // console.log('🛰️ [NodeActionMenu] trigger pointerdown (suppression propagation)');
+    // logger.debug('🛰️ [NodeActionMenu] trigger pointerdown (suppression propagation)');
   }, []);
 
   const handleMenuItemClick = (key: string) => {
-    // console.log('🛰️ [NodeActionMenu] menu item click', key, 'for', node.id);
+    // logger.debug('🛰️ [NodeActionMenu] menu item click', key, 'for', node.id);
     setIsMenuOpen(false);
     handleMenuClick({ key });
   };
@@ -346,7 +347,7 @@ export const NodeActionMenu: React.FC<NodeActionMenuProps> = ({
         onMouseDown={handleTriggerPointerDown}
         onPointerDown={handleTriggerPointerDown}
         onDragStart={(event) => {
-          // console.log('🔄 [NodeActionMenu] DragStart bloqué');
+          // logger.debug('🔄 [NodeActionMenu] DragStart bloqué');
           event.preventDefault();
           event.stopPropagation();
         }}

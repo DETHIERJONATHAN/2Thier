@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -21,7 +22,7 @@ router.get('/:websiteId', async (req, res) => {
 
     res.json(theme);
   } catch (error) {
-    console.error('❌ [API] Erreur GET theme:', error);
+    logger.error('❌ [API] Erreur GET theme:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -40,7 +41,7 @@ router.post('/', async (req, res) => {
 
     res.status(201).json(theme);
   } catch (error) {
-    console.error('❌ [API] Erreur POST theme:', error);
+    logger.error('❌ [API] Erreur POST theme:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -61,7 +62,7 @@ router.put('/:id', async (req, res) => {
 
     res.json(theme);
   } catch (error) {
-    console.error('❌ [API] Erreur PUT theme:', error);
+    logger.error('❌ [API] Erreur PUT theme:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -80,7 +81,7 @@ router.delete('/:id', async (req, res) => {
 
     res.json({ message: 'Thème supprimé avec succès' });
   } catch (error) {
-    console.error('❌ [API] Erreur DELETE theme:', error);
+    logger.error('❌ [API] Erreur DELETE theme:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

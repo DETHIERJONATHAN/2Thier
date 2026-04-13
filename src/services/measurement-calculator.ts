@@ -29,6 +29,7 @@ import {
   type HomographyCorners,
   type HomographyResult
 } from '../utils/homographyUtils';
+import { logger } from '../lib/logger';
 
 // ============================================================================
 // TYPES
@@ -145,7 +146,7 @@ export function computeObjectDimensions(
   try {
     homography = computeHomography(srcPoints, dstPoints);
   } catch (error) {
-    console.error('❌ Erreur calcul homographie:', error);
+    logger.error('❌ Erreur calcul homographie:', error);
     return {
       success: false,
       largeur_cm: 0,

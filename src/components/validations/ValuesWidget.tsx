@@ -1,4 +1,5 @@
 import React, { useCallback, memo } from 'react';
+import { logger } from '../../lib/logger';
 
 // Liste des valeurs spéciales disponibles
 const SPECIAL_VALUES = [
@@ -44,7 +45,7 @@ interface ValuesWidgetProps {
  */
 const ValuesWidget = memo(({ onSelectValue }: ValuesWidgetProps) => {
     const handleValueClick = useCallback((value: string) => {
-        console.log(`[ValuesWidget] Valeur sélectionnée: ${value}`);
+        logger.debug(`[ValuesWidget] Valeur sélectionnée: ${value}`);
         
         if (onSelectValue) {
             onSelectValue(value);
@@ -52,7 +53,7 @@ const ValuesWidget = memo(({ onSelectValue }: ValuesWidgetProps) => {
             // Pas de callback fourni, copier dans le presse-papier par défaut
             navigator.clipboard.writeText(value)
                 .then(() => {
-                    console.log(`[ValuesWidget] Valeur copiée dans le presse-papier: ${value}`);
+                    logger.debug(`[ValuesWidget] Valeur copiée dans le presse-papier: ${value}`);
                     
                     // Afficher une notification temporaire
                     const notification = document.createElement('div');
@@ -66,7 +67,7 @@ const ValuesWidget = memo(({ onSelectValue }: ValuesWidgetProps) => {
                     }, 2000);
                 })
                 .catch(err => {
-                    console.error(`[ValuesWidget] Erreur lors de la copie dans le presse-papier:`, err);
+                    logger.error(`[ValuesWidget] Erreur lors de la copie dans le presse-papier:`, err);
                 });
         }
     }, [onSelectValue]);
@@ -86,7 +87,7 @@ const ValuesWidget = memo(({ onSelectValue }: ValuesWidgetProps) => {
                                 draggable="true"
                                 title={val.label}
                                 onDragStart={(e) => {
-                                    console.log(`[VALUE_DRAG] Starting drag for value: ${val.value}`);
+                                    logger.debug(`[VALUE_DRAG] Starting drag for value: ${val.value}`);
                                     e.dataTransfer.setData('value-data', val.value);
                                     e.dataTransfer.setData('value-label', val.label);
                                     e.dataTransfer.setData('element-type', 'value');

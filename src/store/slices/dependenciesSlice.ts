@@ -1,6 +1,7 @@
 import { StateCreator } from 'zustand';
 import { CRMState } from './types';
 import { fetchWithAuth } from './api';
+import { logger } from '../../lib/logger';
 
 export interface DependenciesSlice {
   // Actions pour les dépendances
@@ -26,7 +27,7 @@ export const createDependenciesSlice: StateCreator<
   DependenciesSlice
 > = (set, get) => ({
   createDependency: async (fieldId, dependencyData) => {
-    console.log(`[CRMStore][createDependency] Creating dependency for field ${fieldId}:`, dependencyData);
+    logger.debug(`[CRMStore][createDependency] Creating dependency for field ${fieldId}:`, dependencyData);
     
     try {
       const res = await fetchWithAuth(`/api/fields/${fieldId}/dependencies`, {
@@ -41,7 +42,7 @@ export const createDependenciesSlice: StateCreator<
       }
       
       const updatedDependencies = await res.json();
-      console.log(`[CRMStore][createDependency] Received dependencies:`, updatedDependencies);
+      logger.debug(`[CRMStore][createDependency] Received dependencies:`, updatedDependencies);
       
       // Mise à jour du state
       set(state => {
@@ -73,13 +74,13 @@ export const createDependenciesSlice: StateCreator<
       
       return newDependency || null;
     } catch (err: unknown) {
-      console.error('[CRMStore][createDependency] Error:', err);
+      logger.error('[CRMStore][createDependency] Error:', err);
       throw err;
     }
   },
   
   updateDependency: async (dependencyId, data) => {
-    console.log(`[CRMStore][updateDependency] Updating dependency ${dependencyId}:`, data);
+    logger.debug(`[CRMStore][updateDependency] Updating dependency ${dependencyId}:`, data);
     const stateBeforeUpdate = get();
     
     // Trouver le field qui contient cette dépendance
@@ -101,7 +102,7 @@ export const createDependenciesSlice: StateCreator<
     });
     
     if (!fieldId || !originalDependency) {
-      console.error(`[CRMStore][updateDependency] Dependency ${dependencyId} not found in any field`);
+      logger.error(`[CRMStore][updateDependency] Dependency ${dependencyId} not found in any field`);
       throw new Error("Dépendance non trouvée");
     }
     
@@ -164,9 +165,9 @@ export const createDependenciesSlice: StateCreator<
         return { blocks: newBlocks };
       });
       
-      console.log(`[CRMStore][updateDependency] Dependency updated successfully`);
+      logger.debug(`[CRMStore][updateDependency] Dependency updated successfully`);
     } catch (err: unknown) {
-      console.error('[CRMStore][updateDependency] Error:', err);
+      logger.error('[CRMStore][updateDependency] Error:', err);
       // Rollback en cas d'erreur
       set({ blocks: stateBeforeUpdate.blocks });
       throw err;
@@ -174,7 +175,7 @@ export const createDependenciesSlice: StateCreator<
   },
   
   deleteDependency: async (dependencyId) => {
-    console.log(`[CRMStore][deleteDependency] Deleting dependency ${dependencyId}`);
+    logger.debug(`[CRMStore][deleteDependency] Deleting dependency ${dependencyId}`);
     const stateBeforeUpdate = get();
     
     // Trouver le field qui contient cette dépendance
@@ -191,7 +192,7 @@ export const createDependenciesSlice: StateCreator<
     });
     
     if (!fieldId) {
-      console.error(`[CRMStore][deleteDependency] Dependency ${dependencyId} not found in any field`);
+      logger.error(`[CRMStore][deleteDependency] Dependency ${dependencyId} not found in any field`);
       throw new Error("Dépendance non trouvée");
     }
     
@@ -245,9 +246,9 @@ export const createDependenciesSlice: StateCreator<
         return { blocks: newBlocks };
       });
       
-      console.log(`[CRMStore][deleteDependency] Dependency deleted successfully`);
+      logger.debug(`[CRMStore][deleteDependency] Dependency deleted successfully`);
     } catch (err: unknown) {
-      console.error('[CRMStore][deleteDependency] Error:', err);
+      logger.error('[CRMStore][deleteDependency] Error:', err);
       // Rollback en cas d'erreur
       set({ blocks: stateBeforeUpdate.blocks });
       throw err;
@@ -269,7 +270,7 @@ export const createDependenciesSlice: StateCreator<
   },
   
   reorderDependencies: async (fieldId, oldIndex, newIndex) => {
-    console.log(`[CRMStore][reorderDependencies] Reordering dependencies for field ${fieldId} from ${oldIndex} to ${newIndex}`);
+    logger.debug(`[CRMStore][reorderDependencies] Reordering dependencies for field ${fieldId} from ${oldIndex} to ${newIndex}`);
     let fieldToUpdate: unknown | undefined;
     let reorderedDependencies: unknown[] | undefined;
     const stateBeforeUpdate = get();
@@ -305,9 +306,9 @@ export const createDependenciesSlice: StateCreator<
           throw new Error(err.error || "Erreur lors de la mise à jour de l'ordre des dépendances");
         }
         
-        console.log(`[CRMStore][reorderDependencies] Dependencies order updated successfully`);
+        logger.debug(`[CRMStore][reorderDependencies] Dependencies order updated successfully`);
       } catch (err: unknown) {
-        console.error('[CRMStore][reorderDependencies] API error:', err);
+        logger.error('[CRMStore][reorderDependencies] API error:', err);
         // Rollback en cas d'erreur
         set({ blocks: stateBeforeUpdate.blocks });
         throw err;

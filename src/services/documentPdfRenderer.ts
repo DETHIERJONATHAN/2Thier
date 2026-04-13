@@ -10,6 +10,7 @@ import { PassThrough } from 'stream';
 import * as path from 'path';
 import * as fs from 'fs';
 import { calculateVerticalCenterOffset } from './textAlignmentUtils';
+import { logger } from '../lib/logger';
 
 // ============================================================
 // TYPES
@@ -300,14 +301,14 @@ export class DocumentPdfRenderer {
     }
 
     // Section données TBL si présentes
-    console.log('📄 [PDF RENDERER] Vérification tblData:', {
+    logger.debug('📄 [PDF RENDERER] Vérification tblData:', {
       hasTblData: !!this.ctx.tblData,
       tblDataKeys: Object.keys(this.ctx.tblData || {}),
       keysCount: Object.keys(this.ctx.tblData || {}).length
     });
     
     if (this.ctx.tblData && Object.keys(this.ctx.tblData).length > 0) {
-      console.log('📄 [PDF RENDERER] ✅ Rendu des données TBL...');
+      logger.debug('📄 [PDF RENDERER] ✅ Rendu des données TBL...');
       this.doc
         .fillColor(this.theme.primaryColor || '#1890ff')
           .fontSize(this.scaleFontSize(16))
@@ -502,17 +503,17 @@ export class DocumentPdfRenderer {
             const buf = Buffer.from(await resp.arrayBuffer());
             fs.writeFileSync(cachePath, buf);
             this.emojiPngCache.set(emoji, cachePath);
-            console.log(`📄 [PDF] Emoji ${emoji} → ${hex}.png (${buf.length}B)`);
+            logger.debug(`📄 [PDF] Emoji ${emoji} → ${hex}.png (${buf.length}B)`);
             return;
           }
         } catch { /* try next */ }
       }
-      console.warn(`📄 [PDF] Emoji non trouvé sur Twemoji: ${emoji} (${hex})`);
+      logger.warn(`📄 [PDF] Emoji non trouvé sur Twemoji: ${emoji} (${hex})`);
     });
 
     await Promise.all(downloadPromises);
     if (this.emojiPngCache.size > 0) {
-      console.log(`📄 [PDF] ${this.emojiPngCache.size} emojis KPI pré-chargés`);
+      logger.debug(`📄 [PDF] ${this.emojiPngCache.size} emojis KPI pré-chargés`);
     }
   }
 
@@ -520,7 +521,7 @@ export class DocumentPdfRenderer {
     const urls = this.collectImageUrls();
     if (urls.length === 0) return;
     
-    console.log(`📄 [PDF] Pré-chargement de ${urls.length} images externes...`);
+    logger.debug(`📄 [PDF] Pré-chargement de ${urls.length} images externes...`);
     
     const fetchPromises = urls.map(async (url) => {
       try {
@@ -529,21 +530,21 @@ export class DocumentPdfRenderer {
         });
         
         if (!response.ok) {
-          console.warn(`📄 [PDF] Image non accessible: ${url} (${response.status})`);
+          logger.warn(`📄 [PDF] Image non accessible: ${url} (${response.status})`);
           return;
         }
         
         const arrayBuffer = await response.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
         this.imageCache.set(url, buffer);
-        console.log(`📄 [PDF] ✅ Image chargée: ${url.substring(0, 60)}...`);
+        logger.debug(`📄 [PDF] ✅ Image chargée: ${url.substring(0, 60)}...`);
       } catch (error) {
-        console.warn(`📄 [PDF] Échec chargement image: ${url}`, error);
+        logger.warn(`📄 [PDF] Échec chargement image: ${url}`, error);
       }
     });
     
     await Promise.all(fetchPromises);
-    console.log(`📄 [PDF] ${this.imageCache.size}/${urls.length} images pré-chargées`);
+    logger.debug(`📄 [PDF] ${this.imageCache.size}/${urls.length} images pré-chargées`);
   }
 
   /**
@@ -566,7 +567,7 @@ export class DocumentPdfRenderer {
       this.doc.pipe(stream);
 
       try {
-        console.log('📄 [PDF RENDERER] Début du rendu', {
+        logger.debug('📄 [PDF RENDERER] Début du rendu', {
           templateId: this.ctx.template.id,
           templateName: this.ctx.template.name,
           sectionsCount: this.ctx.template.sections?.length || 0,
@@ -577,21 +578,21 @@ export class DocumentPdfRenderer {
         // Trier les sections par ordre
         const sortedSections = [...(this.ctx.template.sections || [])].sort((a, b) => a.order - b.order);
 
-        console.log('📄 [PDF RENDERER] Sections à rendre:', sortedSections.map(s => s.type));
+        logger.debug('📄 [PDF RENDERER] Sections à rendre:', sortedSections.map(s => s.type));
 
         // Si aucune section, rendre un document par défaut avec les données TBL
         if (sortedSections.length === 0) {
-          console.log('📄 [PDF RENDERER] ⚠️ Aucune section configurée, rendu par défaut');
+          logger.debug('📄 [PDF RENDERER] ⚠️ Aucune section configurée, rendu par défaut');
           this.renderDefaultContent();
         } else {
           // Rendre chaque section
           for (const section of sortedSections) {
-            console.log(`📄 [PDF RENDERER] Rendu section: ${section.type} (${section.id})`);
+            logger.debug(`📄 [PDF RENDERER] Rendu section: ${section.type} (${section.id})`);
             this.renderSection(section);
           }
         }
 
-        console.log('📄 [PDF RENDERER] ✅ Rendu terminé');
+        logger.debug('📄 [PDF RENDERER] ✅ Rendu terminé');
 
         // Footer global uniquement si ce n'est PAS un document PageBuilder
         if (!this.hasModularPage) {
@@ -619,7 +620,7 @@ export class DocumentPdfRenderer {
       return;
     }
 
-    console.log(`📄 [PDF] Rendering section: ${section.type}`);
+    logger.debug(`📄 [PDF] Rendering section: ${section.type}`);
 
     switch (section.type) {
       case 'MODULAR_PAGE':
@@ -667,7 +668,7 @@ export class DocumentPdfRenderer {
         this.renderCustomContent(config);
         break;
       default:
-        console.warn(`📄 [PDF] Unknown section type: ${section.type}`);
+        logger.warn(`📄 [PDF] Unknown section type: ${section.type}`);
     }
   }
 
@@ -753,22 +754,22 @@ export class DocumentPdfRenderer {
    */
   private renderModularPage(config: Record<string, unknown>): void {
     this.hasModularPage = true;
-    console.log('📄 [PDF] ========================================');
-    console.log('📄 [PDF] Rendu page modulaire:', config.name);
-    console.log('📄 [PDF] Pages actuelles dans le doc:', (this.doc as unknown).bufferedPageRange?.()?.count || 'N/A');
-    console.log('📄 [PDF] isFirstModularPage:', this.isFirstModularPage);
+    logger.debug('📄 [PDF] ========================================');
+    logger.debug('📄 [PDF] Rendu page modulaire:', config.name);
+    logger.debug('📄 [PDF] Pages actuelles dans le doc:', (this.doc as unknown).bufferedPageRange?.()?.count || 'N/A');
+    logger.debug('📄 [PDF] isFirstModularPage:', this.isFirstModularPage);
     
     // 🔥 CORRECTION: Créer une nouvelle page pour chaque MODULAR_PAGE sauf la première
     // La première page est déjà créée par PDFKit à l'initialisation
     if (!this.isFirstModularPage) {
-      console.log('📄 [PDF] 📃 Création d\'une nouvelle page PDF');
+      logger.debug('📄 [PDF] 📃 Création d\'une nouvelle page PDF');
       this.doc.addPage();
       this.currentY = 0; // Reset Y pour la nouvelle page
     }
     this.isFirstModularPage = false; // Les pages suivantes créeront une nouvelle page
     
     const modules = config.modules || [];
-    console.log('📄 [PDF] Nombre de modules:', modules.length);
+    logger.debug('📄 [PDF] Nombre de modules:', modules.length);
     
     // Les modules sont positionnés en coordonnées absolues du Page Builder (794x1123 pixels)
     // On les convertit en coordonnées PDF (595.28x841.89 points)
@@ -791,8 +792,8 @@ export class DocumentPdfRenderer {
       return aX - bX;
     });
 
-    console.log(`📄 [PDF] Rendu de ${sortedModules.length} modules sur la page`);
-    console.log(`📄 [PDF] Ordre des modules:`, sortedModules.map((m: Record<string, unknown>) => m.moduleId || m.moduleType || m.type));
+    logger.debug(`📄 [PDF] Rendu de ${sortedModules.length} modules sur la page`);
+    logger.debug(`📄 [PDF] Ordre des modules:`, sortedModules.map((m: Record<string, unknown>) => m.moduleId || m.moduleType || m.type));
 
     // Objectif: si le détail (table) descend, déplacer les modules placés sous la table
     // (conditions, totaux, signatures, footer, etc.) sur la page suivante plutôt que de tronquer.
@@ -849,7 +850,7 @@ export class DocumentPdfRenderer {
 
       const conditionResult = this.evaluateModuleConditions(configRaw);
       if (!conditionResult.shouldRender) {
-        console.log(`📄 [PDF] Module ${flowType}: SKIPPED (condition false)`);
+        logger.debug(`📄 [PDF] Module ${flowType}: SKIPPED (condition false)`);
         remainingModules = belowOrEqual;
         continue;
       }
@@ -864,7 +865,7 @@ export class DocumentPdfRenderer {
       const effectiveConfig = { ...configRaw, _themeId: flowModule.themeId };
       if (conditionResult.content !== undefined) {
         // pour PRICING_TABLE, on ne remplace rien ici
-        console.log(`📄 [PDF] Module ${flowType}: Using conditional content: "${conditionResult.content}"`);
+        logger.debug(`📄 [PDF] Module ${flowType}: Using conditional content: "${conditionResult.content}"`);
       }
 
       this.renderModulePricingTablePaginated(effectiveConfig, rect.x, rect.y, rect.width, rect.height, {
@@ -1124,21 +1125,21 @@ export class DocumentPdfRenderer {
     // 🔥 ÉVALUATION DES CONDITIONS
     const conditionResult = this.evaluateModuleConditions(config);
     if (!conditionResult.shouldRender) {
-      console.log(`📄 [PDF] Module ${moduleType}: SKIPPED (condition false)`);
+      logger.debug(`📄 [PDF] Module ${moduleType}: SKIPPED (condition false)`);
       return;
     }
     
     // Si un contenu alternatif est défini par la condition, on le passe à la config
     const effectiveConfig = { ...config, _themeId: module.themeId };
     if (conditionResult.content !== undefined) {
-      console.log(`📄 [PDF] Module ${moduleType}: Using conditional content: "${conditionResult.content}"`);
+      logger.debug(`📄 [PDF] Module ${moduleType}: Using conditional content: "${conditionResult.content}"`);
       // Pour TITLE, SUBTITLE, TEXT_BLOCK -> remplacer le text
       if (moduleType === 'TITLE' || moduleType === 'SUBTITLE' || moduleType === 'TEXT_BLOCK') {
         effectiveConfig.text = conditionResult.content;
       }
     }
 
-    console.log(`📄 [PDF] ★★★ FRESH CODE ★★★ Module ${moduleType}: PageBuilder(${position.x ?? 0},${position.y ?? 0}) -> PDF(${rect.x.toFixed(1)},${rect.y.toFixed(1)}) size ${rect.width.toFixed(1)}x${rect.height.toFixed(1)}`);
+    logger.debug(`📄 [PDF] ★★★ FRESH CODE ★★★ Module ${moduleType}: PageBuilder(${position.x ?? 0},${position.y ?? 0}) -> PDF(${rect.x.toFixed(1)},${rect.y.toFixed(1)}) size ${rect.width.toFixed(1)}x${rect.height.toFixed(1)}`);
     // debug dispatch removed
 
     this.doc.save();
@@ -1202,7 +1203,7 @@ export class DocumentPdfRenderer {
           this.renderModuleKpiBanner(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
           break;
         default:
-          console.warn(`📄 [PDF] Module type inconnu: ${moduleType}`);
+          logger.warn(`📄 [PDF] Module type inconnu: ${moduleType}`);
       }
     } finally {
       this.doc.restore();
@@ -1245,7 +1246,7 @@ export class DocumentPdfRenderer {
     const color = config.color || config.textColor || config.style?.color || '#FFFFFF';
     const actualHeight = height || 50;
     
-    console.log(`📄 [PDF] TITLE: config.color=${config.color}, config.textColor=${config.textColor}, final color=${color}`);
+    logger.debug(`📄 [PDF] TITLE: config.color=${config.color}, config.textColor=${config.textColor}, final color=${color}`);
     
     // Trouver la bonne taille de police pour que le texte tienne
     let fontSize = level === 'h1' ? 20 : level === 'h2' ? 16 : 14;
@@ -1261,7 +1262,7 @@ export class DocumentPdfRenderer {
       scaledFontSize = this.scaleFontSize(fontSize);
     }
 
-    console.log(`📄 [PDF] TITLE: text="${text}", fontSize=${fontSize}, height=${Math.round(actualHeight)}, color=${color}`);
+    logger.debug(`📄 [PDF] TITLE: text="${text}", fontSize=${fontSize}, height=${Math.round(actualHeight)}, color=${color}`);
     
     // Sauvegarder la position Y actuelle de PDFKit
     const savedY = (this.doc as unknown).y;
@@ -1310,7 +1311,7 @@ export class DocumentPdfRenderer {
       scaledFontSize = this.scaleFontSize(fontSize);
     }
 
-    console.log(`📄 [PDF] SUBTITLE: text="${text}", fontSize=${fontSize}`);
+    logger.debug(`📄 [PDF] SUBTITLE: text="${text}", fontSize=${fontSize}`);
 
     const savedY = (this.doc as unknown).y;
     this.doc.fontSize(scaledFontSize);
@@ -1336,7 +1337,7 @@ export class DocumentPdfRenderer {
     // 🔥 Vérifier si le bloc peut tenir
     const availableHeight = this.getAvailableHeightOnPage(y);
     if (availableHeight < 10) {
-      console.warn(`📄 [PDF] TEXT_BLOCK: Pas de place (${availableHeight.toFixed(0)}px). Bloc masqué.`);
+      logger.warn(`📄 [PDF] TEXT_BLOCK: Pas de place (${availableHeight.toFixed(0)}px). Bloc masqué.`);
       return;
     }
 
@@ -1378,7 +1379,7 @@ export class DocumentPdfRenderer {
         .fill(config.backgroundColor);
     }
 
-    console.log(`📄 [PDF] TEXT_BLOCK: text="${text.substring(0, 30)}...", color=${color}, fontSize=${fontSize}, hauteur disponible=${availableHeight.toFixed(0)}px`);
+    logger.debug(`📄 [PDF] TEXT_BLOCK: text="${text.substring(0, 30)}...", color=${color}, fontSize=${fontSize}, hauteur disponible=${availableHeight.toFixed(0)}px`);
 
     const savedY = (this.doc as unknown).y;
     const finalTextHeight = this.doc.heightOfString(text, { width: innerWidth });
@@ -1404,12 +1405,12 @@ export class DocumentPdfRenderer {
   private renderModuleImage(config: Record<string, unknown>, x: number, y: number, width: number, height: number): void {
     const imageUrl = config.image || config.url || config.src;
     
-    console.log(`📄 [PDF] IMAGE: x=${Math.round(x)}, y=${Math.round(y)}, w=${Math.round(width)}, h=${Math.round(height)}`);
-    console.log(`📄 [PDF] IMAGE: source=${imageUrl ? imageUrl.substring(0, 50) + '...' : 'NONE'}`);
+    logger.debug(`📄 [PDF] IMAGE: x=${Math.round(x)}, y=${Math.round(y)}, w=${Math.round(width)}, h=${Math.round(height)}`);
+    logger.debug(`📄 [PDF] IMAGE: source=${imageUrl ? imageUrl.substring(0, 50) + '...' : 'NONE'}`);
     
     if (!imageUrl) {
       // Placeholder si pas d'image
-      console.log(`📄 [PDF] IMAGE: pas d'URL, affichage placeholder`);
+      logger.debug(`📄 [PDF] IMAGE: pas d'URL, affichage placeholder`);
       this.doc
         .rect(x, y, width, height)
         .fill('#f0f0f0')
@@ -1434,15 +1435,15 @@ export class DocumentPdfRenderer {
     try {
       if (imageUrl.startsWith('data:')) {
         // Data URL - extraire le base64
-        console.log(`📄 [PDF] IMAGE: traitement data URL avec fit pour préserver proportions`);
+        logger.debug(`📄 [PDF] IMAGE: traitement data URL avec fit pour préserver proportions`);
         const base64Data = imageUrl.split(',')[1];
         if (base64Data) {
           const buffer = Buffer.from(base64Data, 'base64');
-          console.log(`📄 [PDF] IMAGE: buffer créé, taille=${buffer.length}`);
+          logger.debug(`📄 [PDF] IMAGE: buffer créé, taille=${buffer.length}`);
           this.doc.image(buffer, x, y, imageOptions);
-          console.log(`📄 [PDF] IMAGE: ✅ rendu réussi à x=${Math.round(x)}, y=${Math.round(y)}`);
+          logger.debug(`📄 [PDF] IMAGE: ✅ rendu réussi à x=${Math.round(x)}, y=${Math.round(y)}`);
         } else {
-          console.warn(`📄 [PDF] IMAGE: ⚠️ pas de données base64 trouvées`);
+          logger.warn(`📄 [PDF] IMAGE: ⚠️ pas de données base64 trouvées`);
           this.renderImagePlaceholder(x, y, width, height, 'Base64 vide');
         }
       } else if (imageUrl.startsWith('/uploads/') || imageUrl.startsWith('uploads/')) {
@@ -1453,26 +1454,26 @@ export class DocumentPdfRenderer {
         if (cachedBuffer) {
           this.doc.image(cachedBuffer, x, y, imageOptions);
         } else {
-          console.warn(`📄 [PDF] Image /uploads/ non en cache GCS: ${gcsUrl}`);
+          logger.warn(`📄 [PDF] Image /uploads/ non en cache GCS: ${gcsUrl}`);
           this.renderImagePlaceholder(x, y, width, height, 'Image non chargée');
         }
       } else if (imageUrl.startsWith('http')) {
         // URL externe - vérifier le cache pré-chargé
         const cachedBuffer = this.imageCache.get(imageUrl);
         if (cachedBuffer) {
-          console.log(`📄 [PDF] ✅ Utilisation image du cache: ${imageUrl.substring(0, 50)}...`);
+          logger.debug(`📄 [PDF] ✅ Utilisation image du cache: ${imageUrl.substring(0, 50)}...`);
           this.doc.image(cachedBuffer, x, y, imageOptions);
         } else {
-          console.warn(`📄 [PDF] Image externe non en cache: ${imageUrl.substring(0, 50)}...`);
+          logger.warn(`📄 [PDF] Image externe non en cache: ${imageUrl.substring(0, 50)}...`);
           this.renderImagePlaceholder(x, y, width, height, 'Image non chargée');
         }
       } else {
         // URL inconnue
-        console.log(`📄 [PDF] URL non supportée: ${imageUrl.substring(0, 50)}...`);
+        logger.debug(`📄 [PDF] URL non supportée: ${imageUrl.substring(0, 50)}...`);
         this.renderImagePlaceholder(x, y, width, height, 'URL non supportée');
       }
     } catch (error) {
-      console.error('📄 [PDF] Erreur chargement image:', error);
+      logger.error('📄 [PDF] Erreur chargement image:', error);
       this.renderImagePlaceholder(x, y, width, height, 'Erreur');
     }
   }
@@ -1496,12 +1497,12 @@ export class DocumentPdfRenderer {
     const hasGradient = !!(config.gradientStart && config.gradientEnd);
     const declaredType = config.type; // "color", "image", "solid", "gradient", etc.
     
-    console.log(`📄 [PDF] BACKGROUND: declaredType=${declaredType}, hasImage=${hasImage}, hasColor=${hasColor}, hasGradient=${hasGradient}`);
-    console.log(`📄 [PDF] BACKGROUND: position x=${x}, y=${y}, w=${width}, h=${height}`);
+    logger.debug(`📄 [PDF] BACKGROUND: declaredType=${declaredType}, hasImage=${hasImage}, hasColor=${hasColor}, hasGradient=${hasGradient}`);
+    logger.debug(`📄 [PDF] BACKGROUND: position x=${x}, y=${y}, w=${width}, h=${height}`);
     
     // PRIORITÉ 1: Image (si elle existe, on la rend, peu importe le "type" déclaré)
     if (hasImage) {
-      console.log(`📄 [PDF] BACKGROUND: rendu image de fond`);
+      logger.debug(`📄 [PDF] BACKGROUND: rendu image de fond`);
       try {
         const imageUrl = config.image;
         const backgroundColor = config.backgroundColor || config.color || this.theme.backgroundColor;
@@ -1513,12 +1514,12 @@ export class DocumentPdfRenderer {
           const base64Data = imageUrl.split(',')[1];
           if (base64Data) {
             const buffer = Buffer.from(base64Data, 'base64');
-            console.log(`📄 [PDF] BACKGROUND: buffer créé, taille=${buffer.length} octets`);
+            logger.debug(`📄 [PDF] BACKGROUND: buffer créé, taille=${buffer.length} octets`);
             this.drawBackgroundImage(buffer, x, y, width, height);
-            console.log(`📄 [PDF] BACKGROUND: ✅ image rendue avec succès (ratio maintenu)`);
+            logger.debug(`📄 [PDF] BACKGROUND: ✅ image rendue avec succès (ratio maintenu)`);
             return; // Sortie après succès
           }
-          console.warn(`📄 [PDF] BACKGROUND: ⚠️ pas de données base64`);
+          logger.warn(`📄 [PDF] BACKGROUND: ⚠️ pas de données base64`);
         } else if (imageUrl.startsWith('/uploads/') || imageUrl.startsWith('uploads/')) {
           const prefix = imageUrl.startsWith('/') ? imageUrl.slice(1) : imageUrl;
           const gcsUrl = `https://storage.googleapis.com/crm-2thier-uploads/${prefix.replace(/^\/?uploads\//, '')}`;
@@ -1527,7 +1528,7 @@ export class DocumentPdfRenderer {
             this.drawBackgroundImage(cachedBuffer, x, y, width, height);
             return;
           }
-          console.warn(`📄 [PDF] Image /uploads/ non en cache GCS: ${gcsUrl}`);
+          logger.warn(`📄 [PDF] Image /uploads/ non en cache GCS: ${gcsUrl}`);
           this.renderImagePlaceholder(x, y, width, height, 'Image non chargée');
           return;
         } else if (imageUrl.startsWith('http')) {
@@ -1536,23 +1537,23 @@ export class DocumentPdfRenderer {
             this.drawBackgroundImage(cachedBuffer, x, y, width, height);
             return;
           }
-          console.warn(`📄 [PDF] Image externe non en cache: ${imageUrl.substring(0, 50)}...`);
+          logger.warn(`📄 [PDF] Image externe non en cache: ${imageUrl.substring(0, 50)}...`);
           this.renderImagePlaceholder(x, y, width, height, 'Image non chargée');
           return;
         } else {
-          console.log(`📄 [PDF] URL non supportée: ${imageUrl.substring(0, 50)}...`);
+          logger.debug(`📄 [PDF] URL non supportée: ${imageUrl.substring(0, 50)}...`);
           this.renderImagePlaceholder(x, y, width, height, 'URL non supportée');
           return;
         }
       } catch (error) {
-        console.error(`📄 [PDF] BACKGROUND: ❌ erreur image:`, error);
+        logger.error(`📄 [PDF] BACKGROUND: ❌ erreur image:`, error);
         // Continuer vers les fallbacks si l'image échoue
       }
     }
     
     // PRIORITÉ 2: Gradient
     if (hasGradient) {
-      console.log(`📄 [PDF] BACKGROUND: rendu gradient`);
+      logger.debug(`📄 [PDF] BACKGROUND: rendu gradient`);
       const steps = 20;
       const stepHeight = Math.max(1, height / steps);
       for (let i = 0; i < steps; i++) {
@@ -1567,14 +1568,14 @@ export class DocumentPdfRenderer {
     
     // PRIORITÉ 3: Couleur solide (type "color" ou "solid" ou couleur présente)
     if (hasColor) {
-      console.log(`📄 [PDF] BACKGROUND: rendu couleur solide ${config.color}`);
+      logger.debug(`📄 [PDF] BACKGROUND: rendu couleur solide ${config.color}`);
       this.doc
         .rect(x, y, width, height)
         .fill(config.color);
       return;
     }
     
-    console.log(`📄 [PDF] BACKGROUND: aucun rendu (pas d'image, pas de couleur, pas de gradient)`);
+    logger.debug(`📄 [PDF] BACKGROUND: aucun rendu (pas d'image, pas de couleur, pas de gradient)`);
   }
 
   private interpolateColor(color1: string, color2: string, ratio: number): string {
@@ -1601,9 +1602,9 @@ export class DocumentPdfRenderer {
     let items: Array<{ description: string; quantity: number | null; unitPrice: number | null; total: number | null }> = [];
     
     if (config.pricingLines && config.pricingLines.length > 0) {
-      console.log('📄 [PDF] PRICING_TABLE: Utilisation de pricingLines', config.pricingLines.length);
+      logger.debug('📄 [PDF] PRICING_TABLE: Utilisation de pricingLines', config.pricingLines.length);
       items = this.processPricingLines(config.pricingLines, config);
-      console.log('📄 [PDF] PRICING_TABLE: Items résolus:', items);
+      logger.debug('📄 [PDF] PRICING_TABLE: Items résolus:', items);
     } else if (config.items && config.items.length > 0) {
       // Ancien format: items simples
       items = config.items.map((item: Record<string, unknown>) => ({
@@ -1626,7 +1627,7 @@ export class DocumentPdfRenderer {
     const availableHeight = this.getAvailableHeightOnPage(y);
     
     if (availableHeight < 50) {
-      console.warn(`📄 [PDF] PRICING_TABLE: Pas assez de place (${availableHeight.toFixed(0)}px restants). Tableau masqué.`);
+      logger.warn(`📄 [PDF] PRICING_TABLE: Pas assez de place (${availableHeight.toFixed(0)}px restants). Tableau masqué.`);
       return; // Trop petit pour afficher quoi que ce soit
     }
 
@@ -1641,7 +1642,7 @@ export class DocumentPdfRenderer {
     
     // 🔥 Vérifier si le titre + header peuvent tenir
     if (!this.canFitOnPage(currentY, 30)) {
-      console.warn(`📄 [PDF] PRICING_TABLE: Pas de place pour la table. Tableau masqué.`);
+      logger.warn(`📄 [PDF] PRICING_TABLE: Pas de place pour la table. Tableau masqué.`);
       return;
     }
     
@@ -1683,7 +1684,7 @@ export class DocumentPdfRenderer {
         // 🔥 Avant de rendre chaque ligne, vérifier si elle peut tenir
         const rowHeight = 18;
         if (!this.canFitOnPage(currentY, rowHeight + 5)) {
-          console.warn(`📄 [PDF] PRICING_TABLE: Plus de place pour ${items.length - rowsRendered} lignes. Arrêt du rendu.`);
+          logger.warn(`📄 [PDF] PRICING_TABLE: Plus de place pour ${items.length - rowsRendered} lignes. Arrêt du rendu.`);
           break; // Arrêter ici plutôt que de déborder
         }
         
@@ -1783,13 +1784,13 @@ export class DocumentPdfRenderer {
       // formatValue peut retourner "5 000" ou "1 234,56" qui cassent parseFloat
       const cleaned = raw.replace(/[\s\u00A0]/g, '').replace(',', '.');
       const num = parseFloat(cleaned);
-      console.log(`📄 [PDF] resolveAndFormat("${source}") → raw="${raw}", cleaned="${cleaned}", num=${num}, isFinite=${Number.isFinite(num)}`);
+      logger.debug(`📄 [PDF] resolveAndFormat("${source}") → raw="${raw}", cleaned="${cleaned}", num=${num}, isFinite=${Number.isFinite(num)}`);
       if (Number.isFinite(num)) return `${num.toFixed(2)} ${currency}`;
       return raw || '-';
     };
 
     // 🔥 DEBUG: Log les sources configurées
-    console.log(`📄 [PDF] renderPricingTotalsTBL sources:`, {
+    logger.debug(`📄 [PDF] renderPricingTotalsTBL sources:`, {
       remiseSource: config.remiseSource || '(non configuré)',
       totalHTVASource: config.totalHTVASource || '(non configuré)',
       totalTVASource: config.totalTVASource || '(non configuré)',
@@ -1810,7 +1811,7 @@ export class DocumentPdfRenderer {
       if (tagPng && fs.existsSync(tagPng)) {
         try {
           this.doc.image(tagPng, remTextX - tagS - 3, currentY - 1, { width: tagS, height: tagS });
-        } catch (e) { console.warn('PDF tag icon error:', e); }
+        } catch (e) { logger.warn('PDF tag icon error:', e); }
       }
       this.doc.fontSize(remFs).font('Helvetica-Bold').fillColor('#D9791F');
       this.doc.text('Remise', labelX, currentY, { width: labelW, align: 'right' });
@@ -2063,7 +2064,7 @@ export class DocumentPdfRenderer {
           logoOffset = maxLogoWidth + 10;
         }
       } catch (e) {
-        console.warn('📄 [PDF] Impossible de charger le logo:', e);
+        logger.warn('📄 [PDF] Impossible de charger le logo:', e);
       }
     }
     
@@ -2150,7 +2151,7 @@ export class DocumentPdfRenderer {
         .text(`TVA: ${clientTVA}`, rightX, currentY, { width: halfWidth, align: 'right', lineBreak: false });
     }
     
-    console.log(`📄 [PDF] DOCUMENT_HEADER rendu: company=${companyName}, client=${clientName}`);
+    logger.debug(`📄 [PDF] DOCUMENT_HEADER rendu: company=${companyName}, client=${clientName}`);
   }
 
   // ============================================================
@@ -2160,7 +2161,7 @@ export class DocumentPdfRenderer {
     const themeId = (config as any)._themeId as string | undefined;
     const layoutRaw = (config.layout || '').toString().trim();
     const layout = 'inline'; // 🔥 Forcer l'alignement en badges comme PageBuilder
-    console.log('📄 [PDF] DOCUMENT_INFO render', {
+    logger.debug('📄 [PDF] DOCUMENT_INFO render', {
       themeId,
       layoutRaw,
       forcedLayout: layout,
@@ -2266,7 +2267,7 @@ export class DocumentPdfRenderer {
       }
     }
     
-    console.log(`📄 [PDF] DOCUMENT_INFO rendu: ref=${reference}, date=${date}`);
+    logger.debug(`📄 [PDF] DOCUMENT_INFO rendu: ref=${reference}, date=${date}`);
   }
 
   // ============================================================
@@ -2356,14 +2357,14 @@ export class DocumentPdfRenderer {
         }
       }
 
-      console.log(`📄 [PDF] DOCUMENT_FOOTER rendu (spread): ${companyName}`);
+      logger.debug(`📄 [PDF] DOCUMENT_FOOTER rendu (spread): ${companyName}`);
       return;
     }
 
     if (layout === 'minimal') {
       const minimalText = `${companyName}${pageNumberText ? ` — ${pageNumberText}` : ''}`;
       drawSingleLine(minimalText, y, { font: textFont, size: baseFontSize, color: '#888888', align: 'center' });
-      console.log(`📄 [PDF] DOCUMENT_FOOTER rendu (minimal): ${companyName}`);
+      logger.debug(`📄 [PDF] DOCUMENT_FOOTER rendu (minimal): ${companyName}`);
       return;
     }
 
@@ -2465,7 +2466,7 @@ export class DocumentPdfRenderer {
         .text(pageNumberText, x, pageNumY, { width: width - bannerPaddingH, align: 'right', lineBreak: false });
     }
     
-    console.log(`📄 [PDF] DOCUMENT_FOOTER rendu (green banner+icons): ${companyName}`);
+    logger.debug(`📄 [PDF] DOCUMENT_FOOTER rendu (green banner+icons): ${companyName}`);
   }
 
   // ============================================================
@@ -2476,10 +2477,10 @@ export class DocumentPdfRenderer {
     const availableHeight = this.getAvailableHeightOnPage(y);
     const minHeight = 60; // Réduit car le bloc est compact maintenant
     
-    console.log(`📄 [PDF] SIGNATURE_BLOCK: y=${y.toFixed(0)}, height=${height}, availableHeight=${availableHeight.toFixed(0)}, minHeight=${minHeight}`);
+    logger.debug(`📄 [PDF] SIGNATURE_BLOCK: y=${y.toFixed(0)}, height=${height}, availableHeight=${availableHeight.toFixed(0)}, minHeight=${minHeight}`);
     
     if (availableHeight < minHeight) {
-      console.warn(`📄 [PDF] SIGNATURE_BLOCK: Pas assez de place (${availableHeight.toFixed(0)}px restants). Bloc masqué.`);
+      logger.warn(`📄 [PDF] SIGNATURE_BLOCK: Pas assez de place (${availableHeight.toFixed(0)}px restants). Bloc masqué.`);
       return;
     }
 
@@ -2504,7 +2505,7 @@ export class DocumentPdfRenderer {
         ? eSigs.find(s => s.signerRole === 'CLIENT')
         : eSigs.find(s => s.signerRole !== 'CLIENT');
 
-      console.log(`📄 [PDF] SIGNATURE_BLOCK renderBox: role=${signerRole}, eSigs=${eSigs.length}, found=${!!eSig}${eSig ? `, signerName=${eSig.signerName}, hasData=${!!eSig.signatureData}, dataLen=${eSig.signatureData?.length || 0}` : ''}`);
+      logger.debug(`📄 [PDF] SIGNATURE_BLOCK renderBox: role=${signerRole}, eSigs=${eSigs.length}, found=${!!eSig}${eSig ? `, signerName=${eSig.signerName}, hasData=${!!eSig.signatureData}, dataLen=${eSig.signatureData?.length || 0}` : ''}`);
 
       // Bordure
       this.doc
@@ -2543,7 +2544,7 @@ export class DocumentPdfRenderer {
             this.doc.image(imgBuffer, boxX + padding, currentY + 2, { width: innerW - 10, height: imgH, fit: [innerW - 10, imgH] });
           }
         } catch (imgErr) {
-          console.warn('[PDF] Erreur image signature module:', imgErr);
+          logger.warn('[PDF] Erreur image signature module:', imgErr);
         }
       } else {
         const showMention = config.showMention !== false;
@@ -2600,7 +2601,7 @@ export class DocumentPdfRenderer {
 
     this.doc.restore();
     
-    console.log(`📄 [PDF] SIGNATURE_BLOCK rendu: ${clientLabel} / ${companyLabel} (disponible: ${availableHeight.toFixed(0)}px)`);
+    logger.debug(`📄 [PDF] SIGNATURE_BLOCK rendu: ${clientLabel} / ${companyLabel} (disponible: ${availableHeight.toFixed(0)}px)`);
   }
 
   // ============================================================
@@ -2662,7 +2663,7 @@ export class DocumentPdfRenderer {
         if (tagPng && fs.existsSync(tagPng)) {
           try {
             this.doc.image(tagPng, textEndX - labelTextW - iconSz - 4, currentY + 5, { width: iconSz, height: iconSz });
-          } catch (e) { console.warn('PDF tag icon error:', e); }
+          } catch (e) { logger.warn('PDF tag icon error:', e); }
         }
       }
 
@@ -2730,7 +2731,7 @@ export class DocumentPdfRenderer {
     // 🔥 Vérifier si le bloc peut tenir
     const availableHeight = this.getAvailableHeightOnPage(y);
     if (availableHeight < 30) {
-      console.warn(`📄 [PDF] PAYMENT_INFO: Pas de place (${availableHeight.toFixed(0)}px). Bloc masqué.`);
+      logger.warn(`📄 [PDF] PAYMENT_INFO: Pas de place (${availableHeight.toFixed(0)}px). Bloc masqué.`);
       return;
     }
 
@@ -2746,7 +2747,7 @@ export class DocumentPdfRenderer {
     if (config.showTitle !== false) {
       // 🔥 Vérifier si le titre peut tenir
       if (!this.canFitOnPage(currentY, 20)) {
-        console.warn(`📄 [PDF] PAYMENT_INFO: Pas de place pour le titre. Bloc masqué.`);
+        logger.warn(`📄 [PDF] PAYMENT_INFO: Pas de place pour le titre. Bloc masqué.`);
         return;
       }
       
@@ -2764,7 +2765,7 @@ export class DocumentPdfRenderer {
     if (config.showIBAN !== false && iban) {
       // 🔥 Vérifier si on peut ajouter ce champ
       if (!this.canFitOnPage(currentY, fieldHeight)) {
-        console.warn(`📄 [PDF] PAYMENT_INFO: Plus de place pour IBAN et suivants.`);
+        logger.warn(`📄 [PDF] PAYMENT_INFO: Plus de place pour IBAN et suivants.`);
         return;
       }
       
@@ -2845,7 +2846,7 @@ export class DocumentPdfRenderer {
         .text(`${config.paymentTerms}`, x + 10, currentY + 8, { width: width - 20 });
     }
     
-    console.log(`📄 [PDF] PAYMENT_INFO rendu (disponible: ${availableHeight.toFixed(0)}px)`);
+    logger.debug(`📄 [PDF] PAYMENT_INFO rendu (disponible: ${availableHeight.toFixed(0)}px)`);
   }
 
   // ============================================================
@@ -2855,7 +2856,7 @@ export class DocumentPdfRenderer {
     // 🔥 Vérifier si le bloc peut tenir
     const availableHeight = this.getAvailableHeightOnPage(y);
     if (availableHeight < 30) {
-      console.warn(`📄 [PDF] CONTACT_INFO: Pas de place (${availableHeight.toFixed(0)}px). Bloc masqué.`);
+      logger.warn(`📄 [PDF] CONTACT_INFO: Pas de place (${availableHeight.toFixed(0)}px). Bloc masqué.`);
       return;
     }
 
@@ -2864,7 +2865,7 @@ export class DocumentPdfRenderer {
     if (config.title) {
       // 🔥 Vérifier si le titre peut tenir
       if (!this.canFitOnPage(currentY, 20)) {
-        console.warn(`📄 [PDF] CONTACT_INFO: Pas de place pour le titre. Bloc masqué.`);
+        logger.warn(`📄 [PDF] CONTACT_INFO: Pas de place pour le titre. Bloc masqué.`);
         return;
       }
       
@@ -2881,7 +2882,7 @@ export class DocumentPdfRenderer {
     if (config.showPhone && config.phone) {
       // 🔥 Vérifier si on peut ajouter ce champ
       if (!this.canFitOnPage(currentY, fieldHeight)) {
-        console.warn(`📄 [PDF] CONTACT_INFO: Plus de place pour Phone et suivants.`);
+        logger.warn(`📄 [PDF] CONTACT_INFO: Plus de place pour Phone et suivants.`);
         return;
       }
       
@@ -2931,7 +2932,7 @@ export class DocumentPdfRenderer {
         .text(`Web: ${config.website}`, x, currentY, { width });
     }
     
-    console.log(`📄 [PDF] CONTACT_INFO rendu (disponible: ${availableHeight.toFixed(0)}px)`);
+    logger.debug(`📄 [PDF] CONTACT_INFO rendu (disponible: ${availableHeight.toFixed(0)}px)`);
   }
 
   // ============================================================
@@ -3218,7 +3219,7 @@ export class DocumentPdfRenderer {
     for (const line of pricingLines) {
       // 1. Évaluer la condition d'affichage
       if (line.condition && !this.evaluateCondition(line.condition)) {
-        console.log(`📄 [PDF] Ligne "${line.label}" ignorée (condition non remplie)`);
+        logger.debug(`📄 [PDF] Ligne "${line.label}" ignorée (condition non remplie)`);
         continue;
       }
       
@@ -3237,7 +3238,7 @@ export class DocumentPdfRenderer {
           
           if (repeaterInstances.length === 0) {
             // ✅ Pas d'instances → ne pas afficher la ligne du tout
-            console.log(`📄 [PDF] Ligne repeater "${line.label}" masquée (0 instances pour repeater ${repeaterId})`);
+            logger.debug(`📄 [PDF] Ligne repeater "${line.label}" masquée (0 instances pour repeater ${repeaterId})`);
             continue;
           }
           
@@ -3247,7 +3248,7 @@ export class DocumentPdfRenderer {
           }
         } else {
           // Type repeater mais pas de repeaterId trouvable → masquer
-          console.log(`📄 [PDF] Ligne repeater "${line.label}" masquée (repeaterId non trouvé)`);
+          logger.debug(`📄 [PDF] Ligne repeater "${line.label}" masquée (repeaterId non trouvé)`);
           continue;
         }
       } else {
@@ -3367,7 +3368,7 @@ export class DocumentPdfRenderer {
       return this.resolveVariable(effectiveRef);
     };
     
-    console.log('📄 [PDF] resolveLineValues:', {
+    logger.debug('📄 [PDF] resolveLineValues:', {
       label: line.label,
       labelSource: line.labelSource,
       quantity: line.quantity,
@@ -3398,13 +3399,13 @@ export class DocumentPdfRenderer {
         return `${prefix}${value}${suffix}`.trim();
       }).filter((p: string) => p.length > 0);
       resolvedLine.description = parts.join(' - ');
-      console.log(`📄 [PDF] Label multi-segments résolu: "${resolvedLine.description}" (${line.labelParts.length} segments)`);
+      logger.debug(`📄 [PDF] Label multi-segments résolu: "${resolvedLine.description}" (${line.labelParts.length} segments)`);
       if (!resolvedLine.description) {
         resolvedLine.description = line.label || 'Non défini';
       }
     } else if (line.labelSource) {
       const resolved = resolve(line.labelSource);
-      console.log(`📄 [PDF] Label résolu: "${resolved}" (source: ${line.labelSource}, suffix: ${suffix})`);
+      logger.debug(`📄 [PDF] Label résolu: "${resolved}" (source: ${line.labelSource}, suffix: ${suffix})`);
       resolvedLine.description = resolved || line.label || 'Non défini';
     } else {
       resolvedLine.description = this.substituteVariables(line.label || '');
@@ -3418,7 +3419,7 @@ export class DocumentPdfRenderer {
     // Résoudre la quantité (optionnelle)
     if (line.quantitySource) {
       const qty = resolve(line.quantitySource);
-      console.log(`📄 [PDF] Quantité résolue: "${qty}" (source: ${line.quantitySource}, suffix: ${suffix})`);
+      logger.debug(`📄 [PDF] Quantité résolue: "${qty}" (source: ${line.quantitySource}, suffix: ${suffix})`);
       const n = parseFloat(qty);
       resolvedLine.quantity = Number.isFinite(n) ? n : null;
     } else if (typeof line.quantity === 'string' && line.quantity.startsWith('@')) {
@@ -3437,7 +3438,7 @@ export class DocumentPdfRenderer {
     // Résoudre le prix unitaire (optionnel)
     if (line.unitPriceSource) {
       const price = resolve(line.unitPriceSource);
-      console.log(`📄 [PDF] Prix résolu: "${price}" (source: ${line.unitPriceSource}, suffix: ${suffix})`);
+      logger.debug(`📄 [PDF] Prix résolu: "${price}" (source: ${line.unitPriceSource}, suffix: ${suffix})`);
       const n = parseFloat(price);
       resolvedLine.unitPrice = Number.isFinite(n) ? n : null;
     } else if (typeof line.unitPrice === 'string' && (line.unitPrice.startsWith('@') || line.unitPrice.startsWith('node-formula:') || line.unitPrice.startsWith('condition:'))) {
@@ -3453,7 +3454,7 @@ export class DocumentPdfRenderer {
       }
     }
     
-    console.log(`📄 [PDF] ➡️ Ligne résolue:`, resolvedLine);
+    logger.debug(`📄 [PDF] ➡️ Ligne résolue:`, resolvedLine);
     
     // Résoudre le total (ou le calculer)
     const hasExplicitTotal = line.totalSource || line.total !== undefined;
@@ -3502,7 +3503,7 @@ export class DocumentPdfRenderer {
       }
     }
     
-    console.log(`📄 [PDF] Repeater ${repeaterId}: templateChildIds trouvés:`, [...templateChildIds]);
+    logger.debug(`📄 [PDF] Repeater ${repeaterId}: templateChildIds trouvés:`, [...templateChildIds]);
     
     // 2. Chercher les suffixes en scannant tblData pour {templateChildId}-N
     const suffixes = new Set<string>();
@@ -3530,7 +3531,7 @@ export class DocumentPdfRenderer {
       data: {},  // Les données seront résolues via resolveVariable avec le suffix
     }));
     
-    console.log(`📄 [PDF] Repeater ${repeaterId}: ${instances.length} instance(s) trouvée(s) (suffixes: ${sortedSuffixes.join(', ')})`);
+    logger.debug(`📄 [PDF] Repeater ${repeaterId}: ${instances.length} instance(s) trouvée(s) (suffixes: ${sortedSuffixes.join(', ')})`);
     return instances;
   }
 
@@ -3912,7 +3913,7 @@ export class DocumentPdfRenderer {
           this.doc.image(imgBuffer, leftX, signatureY + 45, { width: colWidth - 10, height: 55, fit: [colWidth - 10, 55] });
         }
       } catch (imgErr) {
-        console.warn('[PDF] Erreur image signature client:', imgErr);
+        logger.warn('[PDF] Erreur image signature client:', imgErr);
         this.doc.rect(leftX, signatureY + 45, colWidth, 55).stroke('#52c41a');
       }
 
@@ -3960,7 +3961,7 @@ export class DocumentPdfRenderer {
           this.doc.image(imgBuffer, rightX, signatureY + 45, { width: colWidth - 10, height: 55, fit: [colWidth - 10, 55] });
         }
       } catch (imgErr) {
-        console.warn('[PDF] Erreur image signature entreprise:', imgErr);
+        logger.warn('[PDF] Erreur image signature entreprise:', imgErr);
         this.doc.rect(rightX, signatureY + 45, colWidth, 55).stroke('#52c41a');
       }
 
@@ -4288,12 +4289,12 @@ export class DocumentPdfRenderer {
     const formulaResultsMap = (this.ctx as unknown).formulaResultsMap || {};
     if (formulaResultsMap[ref] !== undefined) {
       const rawVal = formulaResultsMap[ref];
-      console.log(`📄 [PDF] ✅ Résolu via formulaResultsMap: "${ref}" → ${rawVal}`);
+      logger.debug(`📄 [PDF] ✅ Résolu via formulaResultsMap: "${ref}" → ${rawVal}`);
       // Si la valeur ressemble à un UUID, chercher dans selectOptionsMap (ex: optimiseur -> label produit)
       if (this.ctx.selectOptionsMap && typeof rawVal === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(rawVal)) {
         const label = this.ctx.selectOptionsMap[rawVal];
         if (label) {
-          console.log(`📄 [PDF] 🔄 SELECT résolu via formulaResultsMap: "${rawVal}" → "${label}"`);
+          logger.debug(`📄 [PDF] 🔄 SELECT résolu via formulaResultsMap: "${rawVal}" → "${label}"`);
           return label;
         }
       }
@@ -4304,7 +4305,7 @@ export class DocumentPdfRenderer {
     if (ref.startsWith('lead.')) {
       const key = ref.replace('lead.', '');
       const value = (lead as any)[key];
-      console.log(`📄 [PDF] resolveVariable("${ref}") -> lead.${key} = "${value}"`);
+      logger.debug(`📄 [PDF] resolveVariable("${ref}") -> lead.${key} = "${value}"`);
       return String(value || '');
     }
 
@@ -4320,7 +4321,7 @@ export class DocumentPdfRenderer {
       if (key === 'bankName') return String(orgAny.bankName ?? '');
 
       const value = orgAny[key];
-      console.log(`📄 [PDF] resolveVariable("${ref}") -> org.${key} = "${value}"`);
+      logger.debug(`📄 [PDF] resolveVariable("${ref}") -> org.${key} = "${value}"`);
       return String(value || '');
     }
 
@@ -4328,7 +4329,7 @@ export class DocumentPdfRenderer {
     if (ref.startsWith('quote.')) {
       const key = ref.replace('quote.', '');
       const value = (quote as any)[key];
-      console.log(`📄 [PDF] resolveVariable("${ref}") -> quote.${key} = "${value}"`, { quoteKeys: Object.keys(quote) });
+      logger.debug(`📄 [PDF] resolveVariable("${ref}") -> quote.${key} = "${value}"`, { quoteKeys: Object.keys(quote) });
       if (typeof value === 'number') return value.toFixed(2);
       return String(value || '');
     }
@@ -4336,7 +4337,7 @@ export class DocumentPdfRenderer {
     // Variables @value.xxx et @select.xxx (données TBL)
     if (ref.startsWith('@value.') || ref.startsWith('@select.')) {
       const nodeRef = ref.replace(/^@(value|select)\./, '');
-      console.log(`📄 [PDF] Cherche TBL ref: "${nodeRef}"`);
+      logger.debug(`📄 [PDF] Cherche TBL ref: "${nodeRef}"`);
       
       // Helper: résoudre les valeurs SELECT (UUID → label lisible)
       const resolveSelectLabel = (rawValue: unknown): string => {
@@ -4345,7 +4346,7 @@ export class DocumentPdfRenderer {
         if (this.ctx.selectOptionsMap && typeof rawValue === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(rawValue)) {
           const label = this.ctx.selectOptionsMap[rawValue];
           if (label) {
-            console.log(`📄 [PDF] 🔄 SELECT résolu: "${rawValue}" → "${label}"`);
+            logger.debug(`📄 [PDF] 🔄 SELECT résolu: "${rawValue}" → "${label}"`);
             return label;
           }
         }
@@ -4354,20 +4355,20 @@ export class DocumentPdfRenderer {
       
       // Chercher dans tblData par ID exact
       if (tblData[nodeRef] !== undefined) {
-        console.log(`📄 [PDF] ✅ Trouvé exact: ${tblData[nodeRef]}`);
+        logger.debug(`📄 [PDF] ✅ Trouvé exact: ${tblData[nodeRef]}`);
         return resolveSelectLabel(tblData[nodeRef]);
       }
       
       // Chercher dans values si c'est une submission
       if (tblData.values && tblData.values[nodeRef] !== undefined) {
-        console.log(`📄 [PDF] ✅ Trouvé dans values: ${tblData.values[nodeRef]}`);
+        logger.debug(`📄 [PDF] ✅ Trouvé dans values: ${tblData.values[nodeRef]}`);
         return resolveSelectLabel(tblData.values[nodeRef]);
       }
       
       // Chercher par clé partielle (le nodeRef peut être le dernier segment d'un ID plus long)
       for (const [key, value] of Object.entries(tblData)) {
         if (key.includes(nodeRef) || key.endsWith(nodeRef)) {
-          console.log(`📄 [PDF] ✅ Trouvé partiel "${key}": ${value}`);
+          logger.debug(`📄 [PDF] ✅ Trouvé partiel "${key}": ${value}`);
           return resolveSelectLabel(value);
         }
       }
@@ -4376,7 +4377,7 @@ export class DocumentPdfRenderer {
       if (tblData.values) {
         for (const [key, value] of Object.entries(tblData.values)) {
           if (key.includes(nodeRef) || key.endsWith(nodeRef)) {
-            console.log(`📄 [PDF] ✅ Trouvé partiel dans values "${key}": ${value}`);
+            logger.debug(`📄 [PDF] ✅ Trouvé partiel dans values "${key}": ${value}`);
             return resolveSelectLabel(value);
           }
         }
@@ -4393,15 +4394,15 @@ export class DocumentPdfRenderer {
       const altRef = ref.startsWith('node-formula:') ? `formula:${formulaId}` : `node-formula:${formulaId}`;
       
       if (formulaResultsMap[ref] !== undefined) {
-        console.log(`📄 [PDF] ✅ Formula résolu via formulaResultsMap: ${ref} → ${formulaResultsMap[ref]}`);
+        logger.debug(`📄 [PDF] ✅ Formula résolu via formulaResultsMap: ${ref} → ${formulaResultsMap[ref]}`);
         return this.formatValue(formulaResultsMap[ref]);
       }
       if (formulaResultsMap[altRef] !== undefined) {
-        console.log(`📄 [PDF] ✅ Formula résolu via formulaResultsMap (alt): ${altRef} → ${formulaResultsMap[altRef]}`);
+        logger.debug(`📄 [PDF] ✅ Formula résolu via formulaResultsMap (alt): ${altRef} → ${formulaResultsMap[altRef]}`);
         return this.formatValue(formulaResultsMap[altRef]);
       }
       
-      console.log(`📄 [PDF] Cherche formula: "${formulaId}" (pas trouvé dans formulaResultsMap, keys: ${Object.keys(formulaResultsMap).join(', ')})`);
+      logger.debug(`📄 [PDF] Cherche formula: "${formulaId}" (pas trouvé dans formulaResultsMap, keys: ${Object.keys(formulaResultsMap).join(', ')})`);
       
       // Fallback: chercher dans formulas ou directement dans tblData
       if (tblData.formulas && tblData.formulas[formulaId] !== undefined) {
@@ -4424,12 +4425,12 @@ export class DocumentPdfRenderer {
       // Vérifier d'abord dans formulaResultsMap (pré-résolu par la route)
       const formulaResultsMap = (this.ctx as unknown).formulaResultsMap || {};
       if (formulaResultsMap[ref] !== undefined) {
-        console.log(`📄 [PDF] ✅ Calculated résolu via formulaResultsMap: ${ref} → ${formulaResultsMap[ref]}`);
+        logger.debug(`📄 [PDF] ✅ Calculated résolu via formulaResultsMap: ${ref} → ${formulaResultsMap[ref]}`);
         return this.formatValue(formulaResultsMap[ref]);
       }
       
       const calcRef = ref.replace(/^(calculatedValue:|@calculated\.)/, '');
-      console.log(`📄 [PDF] Cherche calculatedValue: "${calcRef}"`);
+      logger.debug(`📄 [PDF] Cherche calculatedValue: "${calcRef}"`);
       
       // Chercher dans calculatedValues ou directement dans tblData
       if (tblData.calculatedValues && tblData.calculatedValues[calcRef] !== undefined) {
@@ -4449,7 +4450,7 @@ export class DocumentPdfRenderer {
     // 🆕 Variables condition:xxx
     if (ref.startsWith('condition:')) {
       const condRef = ref.replace('condition:', '');
-      console.log(`📄 [PDF] Cherche condition: "${condRef}"`);
+      logger.debug(`📄 [PDF] Cherche condition: "${condRef}"`);
       
       if (tblData.conditions && tblData.conditions[condRef] !== undefined) {
         return this.formatValue(tblData.conditions[condRef]);
@@ -4467,12 +4468,12 @@ export class DocumentPdfRenderer {
     // 🆕 Dernière tentative: chercher par ID partiel dans toutes les clés
     for (const [key, value] of Object.entries(tblData)) {
       if (key.includes(ref) || ref.includes(key)) {
-        console.log(`📄 [PDF] ✅ Trouvé par recherche globale "${key}": ${value}`);
+        logger.debug(`📄 [PDF] ✅ Trouvé par recherche globale "${key}": ${value}`);
         return this.formatValue(value);
       }
     }
 
-    console.log(`📄 [PDF] ❌ Variable non trouvée: "${ref}"`);
+    logger.debug(`📄 [PDF] ❌ Variable non trouvée: "${ref}"`);
     return '';
   }
 
@@ -4524,7 +4525,7 @@ export class DocumentPdfRenderer {
     
     const compareValue = rule.compareValue;
     
-    console.log(`📋 [PDF Condition] Rule: ${fieldRef} ${rule.operator} ${compareValue} | fieldValue=${fieldValue}`);
+    logger.debug(`📋 [PDF Condition] Rule: ${fieldRef} ${rule.operator} ${compareValue} | fieldValue=${fieldValue}`);
     
     // Évaluer l'opérateur
     switch (rule.operator) {
@@ -4564,7 +4565,7 @@ export class DocumentPdfRenderer {
       return { shouldRender: true };
     }
     
-    console.log(`📋 [PDF] Évaluation conditions:`, JSON.stringify(conditionalConfig.rules));
+    logger.debug(`📋 [PDF] Évaluation conditions:`, JSON.stringify(conditionalConfig.rules));
     
     // Évaluer toutes les règles
     let result = this.evaluateSingleConditionRule(conditionalConfig.rules[0]);
@@ -4583,7 +4584,7 @@ export class DocumentPdfRenderer {
     // Déterminer le comportement selon l'action
     const action = conditionalConfig.rules[0]?.action || 'SHOW';
     
-    console.log(`📋 [PDF] Condition result: ${result}, action: ${action}`);
+    logger.debug(`📋 [PDF] Condition result: ${result}, action: ${action}`);
     
     if (action === 'SHOW') {
       // Quand on montre si la condition est vraie
@@ -4669,7 +4670,7 @@ export class DocumentPdfRenderer {
     const footerY = this.pageHeight - 40;
     const footerText = `Document généré le ${new Date().toLocaleDateString('fr-FR')} | ${this.ctx.organization?.name || '2Thier CRM'}`;
     
-    console.log(`📄 [PDF] FOOTER: y=${footerY}`);
+    logger.debug(`📄 [PDF] FOOTER: y=${footerY}`);
     
     // Dessiner le footer avec une position Y absolue
     // Utiliser une très petite hauteur pour éviter tout débordement
@@ -4689,7 +4690,7 @@ export class DocumentPdfRenderer {
   // KPI_BANNER - Bandeau KPI / ROI graphique
   // ============================================================
   private renderModuleKpiBanner(config: Record<string, unknown>, x: number, y: number, width: number, height: number): void {
-    console.log(`🎨 [KPI-ICON-DEBUG] BANNER CALLED! icon keys: ${Object.keys(config).filter(k => k.includes('icon')).map(k => `${k}="${config[k]}"`).join(', ')}`);
+    logger.debug(`🎨 [KPI-ICON-DEBUG] BANNER CALLED! icon keys: ${Object.keys(config).filter(k => k.includes('icon')).map(k => `${k}="${config[k]}"`).join(', ')}`);
     this.doc.save();
     this.doc.rect(x, y, width, height).clip();
 
@@ -5008,7 +5009,7 @@ export class DocumentPdfRenderer {
           doc.image(pngPath, cx - sz / 2, cy - sz / 2, { width: sz, height: sz });
           return true;
         } catch (e) {
-          console.warn(`📄 [PDF] Erreur doc.image emoji: ${e}`);
+          logger.warn(`📄 [PDF] Erreur doc.image emoji: ${e}`);
         }
       }
 
@@ -5086,7 +5087,7 @@ export class DocumentPdfRenderer {
 
     // Les champs plats (kpi1_icon, kpi2_icon...) sont la source de vérité configurée par l'icon-picker.
     // NE PAS enrichir/écraser avec config.kpis[] qui contient des icônes différentes.
-    console.log(`📊 [KPI-BANNER] ${allKpis.length} KPIs from flat fields: ${allKpis.map(k => `${k.label}(icon=${k.icon})`).join(', ')}`);
+    logger.debug(`📊 [KPI-BANNER] ${allKpis.length} KPIs from flat fields: ${allKpis.map(k => `${k.label}(icon=${k.icon})`).join(', ')}`);
 
     // Fallback : si pas de champs plats, essayer tableau complet
     if (allKpis.length === 0 && Array.isArray(config.kpis)) {
@@ -5415,7 +5416,7 @@ export class DocumentPdfRenderer {
     const heightDiff = Math.abs(actualHeight - this.pageHeight);
 
     if (widthDiff > A4_DIMENSION_TOLERANCE || heightDiff > A4_DIMENSION_TOLERANCE) {
-      console.warn(`📄 [PDF] Taille A4 attendue: ${this.pageWidth.toFixed(2)}x${this.pageHeight.toFixed(2)}, taille réelle: ${actualWidth.toFixed(2)}x${actualHeight.toFixed(2)}`);
+      logger.warn(`📄 [PDF] Taille A4 attendue: ${this.pageWidth.toFixed(2)}x${this.pageHeight.toFixed(2)}, taille réelle: ${actualWidth.toFixed(2)}x${actualHeight.toFixed(2)}`);
     }
 
     this.pageWidth = actualWidth;

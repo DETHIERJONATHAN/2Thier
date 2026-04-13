@@ -16,6 +16,7 @@ import {
 import { CapturedPhoto } from './SmartCameraMobile';
 import type { CaptureMetadata } from './PhotoAnalyzer';
 import { SF } from '../zhiive/ZhiiveTheme';
+import { logger } from '../../lib/logger';
 
 const { Text } = Typography;
 
@@ -85,7 +86,7 @@ const VideoCapture: React.FC<VideoCaptureProps> = ({
         await videoRef.current.play();
       }
     } catch (err) {
-      console.error('Camera init error:', err);
+      logger.error('Camera init error:', err);
     }
   };
 
@@ -288,7 +289,7 @@ const VideoCapture: React.FC<VideoCaptureProps> = ({
       }, 500);
       
     } catch (err) {
-      console.error('Processing error:', err);
+      logger.error('Processing error:', err);
       setIsProcessing(false);
     }
   };

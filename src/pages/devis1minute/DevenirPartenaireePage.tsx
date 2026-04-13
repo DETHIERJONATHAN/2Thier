@@ -29,6 +29,7 @@ import {
   ToolOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Title, Paragraph, Text } = Typography;
 const { TextArea } = Input;
@@ -64,7 +65,7 @@ const DevenirPartenairePage: React.FC = () => {
     setLoading(true);
     try {
       // TODO: Intégrer avec l'API
-      console.log('Inscription professionnel:', values);
+      logger.debug('Inscription professionnel:', values);
       
       // Simulation appel API
       await new Promise(resolve => setTimeout(resolve, 2000));

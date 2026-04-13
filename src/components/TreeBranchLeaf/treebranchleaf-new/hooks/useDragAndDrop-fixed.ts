@@ -19,6 +19,7 @@ import type {
   TreeBranchLeafNode,
   TreeBranchLeafRegistry
 } from '../types';
+import { logger } from '../../../../lib/logger';
 
 interface UseDragAndDropOptions {
   onNodeMove: (nodeId: string, targetId?: string, position?: 'before' | 'after' | 'child') => Promise<boolean>;
@@ -76,20 +77,20 @@ export function useDragAndDrop({
     const nodeMap = new Map(nodes.map(node => [node.id, node]));
     
     return (sourceNodeType: string, target: DropTargetData): boolean => {
-      // console.log(`🏗️ Validation hiérarchique - sourceType: ${sourceNodeType}, targetId: ${target.nodeId}`); // ✨ Log réduit
+      // logger.debug(`🏗️ Validation hiérarchique - sourceType: ${sourceNodeType}, targetId: ${target.nodeId}`); // ✨ Log réduit
       
       // Si pas de target.nodeId, c'est la racine de l'arbre
       if (!target.nodeId) {
         // Seules les branches peuvent être à la racine
         const result = sourceNodeType === 'branch';
-        // console.log(`🌳 Drop à la racine - sourceType: ${sourceNodeType}, result: ${result}`); // ✨ Log réduit
+        // logger.debug(`🌳 Drop à la racine - sourceType: ${sourceNodeType}, result: ${result}`); // ✨ Log réduit
         return result;
       }
 
       // Récupérer le nœud parent depuis le Map (O(1))
       const parentNode = nodeMap.get(target.nodeId);
       if (!parentNode) {
-        // console.warn('❌ Nœud parent introuvable:', target.nodeId); // ✨ Log réduit
+        // logger.warn('❌ Nœud parent introuvable:', target.nodeId); // ✨ Log réduit
         return false; // Sécurité : refuser si on ne connaît pas le parent
       }
       
@@ -98,10 +99,10 @@ export function useDragAndDrop({
   }, [nodes]);
 
   const handleNodeDrop = useCallback(async (source: DragItem, target: DropTargetData) => {
-    // console.log('📦 Node Drop:', { source, target }); // ✨ Log réduit
+    // logger.debug('📦 Node Drop:', { source, target }); // ✨ Log réduit
 
     if (!source.data?.id) {
-      console.error('❌ Source sans ID:', source);
+      logger.error('❌ Source sans ID:', source);
       return;
     }
 
@@ -113,20 +114,20 @@ export function useDragAndDrop({
       );
 
       if (success) {
-        // console.log('✅ Nœud déplacé avec succès'); // ✨ Log réduit
+        // logger.debug('✅ Nœud déplacé avec succès'); // ✨ Log réduit
         message.success('Élément déplacé avec succès !');
       } else {
-        console.error('❌ Échec du déplacement du nœud');
+        logger.error('❌ Échec du déplacement du nœud');
         message.error('Échec du déplacement de l\'élément');
       }
     } catch (error) {
-      console.error('💥 Erreur lors du déplacement:', error);
+      logger.error('💥 Erreur lors du déplacement:', error);
       message.error('Erreur lors du déplacement : ' + (error instanceof Error ? error.message : 'Erreur inconnue'));
     }
   }, [onNodeMove]);
 
   const handleDrop = useCallback(async (source: DragItem, target: DropTargetData) => {
-    // console.log('🚀 Handle Drop:', { source, target }); // ✨ Log réduit
+    // logger.debug('🚀 Handle Drop:', { source, target }); // ✨ Log réduit
 
     switch (source.type) {
       case 'palette-item':
@@ -136,16 +137,16 @@ export function useDragAndDrop({
         await handleNodeDrop(source, target);
         break;
       default:
-        // console.warn('❓ Type de source non géré:', source.type); // ✨ Log réduit
+        // logger.warn('❓ Type de source non géré:', source.type); // ✨ Log réduit
     }
   }, [handlePaletteDrop, handleNodeDrop]);
 
   const handleDragEnd = useCallback(async (event: DragEndEvent) => {
     const { over } = event;
-    // console.log(`🎯 DRAG END - Over: ${over?.id}, Dragged: ${draggedItem?.id}, ValidDrop: ${validDrop}`); // ✨ Log réduit
+    // logger.debug(`🎯 DRAG END - Over: ${over?.id}, Dragged: ${draggedItem?.id}, ValidDrop: ${validDrop}`); // ✨ Log réduit
     
     if (!over || !draggedItem || !validDrop) {
-      // console.log(`❌ DROP ANNULÉ - Over: ${!!over}, DraggedItem: ${!!draggedItem}, ValidDrop: ${validDrop}`); // ✨ Log réduit
+      // logger.debug(`❌ DROP ANNULÉ - Over: ${!!over}, DraggedItem: ${!!draggedItem}, ValidDrop: ${validDrop}`); // ✨ Log réduit
       setDraggedItem(null);
       setHoveredTarget(null);
       setValidDrop(false);
@@ -161,13 +162,13 @@ export function useDragAndDrop({
 ,
     };
 
-    // console.log(`🚀 EXECUTING DROP:`, { draggedItem, targetData }); // ✨ Log réduit
+    // logger.debug(`🚀 EXECUTING DROP:`, { draggedItem, targetData }); // ✨ Log réduit
 
     try {
       await handleDrop(draggedItem, targetData);
-      // console.log(`✅ DROP RÉUSSI !`); // ✨ Log réduit
+      // logger.debug(`✅ DROP RÉUSSI !`); // ✨ Log réduit
     } catch (error) {
-      console.error(`💥 ERREUR DANS DROP:`, error);
+      logger.error(`💥 ERREUR DANS DROP:`, error);
       message.error('Erreur lors du drop : ' + (error instanceof Error ? error.message : 'Erreur inconnue'));
     } finally {
       setDraggedItem(null);

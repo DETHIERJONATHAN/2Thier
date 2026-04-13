@@ -112,11 +112,10 @@ describe('Wave 9 — CSP Configuration', () => {
 });
 
 describe('Wave 9 — Console Suppression', () => {
-  it('api-server should suppress console.log in production', () => {
+  it('api-server should use logger instead of console', () => {
     const content = fs.readFileSync(path.join(SRC, 'api-server-clean.ts'), 'utf-8');
-    expect(content).toContain("process.env.NODE_ENV === 'production'");
-    expect(content).toContain('console.log');
-    expect(content).toContain('noop');
+    expect(content).toContain("import { logger } from './lib/logger'");
+    expect(content).toContain('logger.');
   });
 
   it('vite.config should drop console in production build', () => {

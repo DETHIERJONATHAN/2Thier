@@ -2,6 +2,7 @@
 import { emailService } from './EmailService';
 import { prisma } from '../lib/prisma';
 import { sendPushToUser } from '../routes/push';
+import { logger } from '../lib/logger';
 
 export interface CalendarNotificationData {
   eventId: string;
@@ -51,7 +52,7 @@ export class CalendarNotificationService {
       }).catch(() => {});
       
     } catch (error) {
-      console.error('❌ [Calendar] Erreur lors de la création de la notification:', error);
+      logger.error('❌ [Calendar] Erreur lors de la création de la notification:', error);
     }
   }
 
@@ -94,7 +95,7 @@ export class CalendarNotificationService {
       }).catch(() => {});
       
     } catch (error) {
-      console.error('❌ [Calendar] Erreur lors de la création du rappel:', error);
+      logger.error('❌ [Calendar] Erreur lors de la création du rappel:', error);
     }
   }
 
@@ -139,7 +140,7 @@ export class CalendarNotificationService {
       }
       
     } catch (error) {
-      console.error('❌ [Calendar] Erreur lors de la création des notifications de mise à jour:', error);
+      logger.error('❌ [Calendar] Erreur lors de la création des notifications de mise à jour:', error);
     }
   }
 
@@ -184,7 +185,7 @@ export class CalendarNotificationService {
       }
       
     } catch (error) {
-  console.error("❌ [Calendar] Erreur lors de la création des notifications d'annulation:", error);
+  logger.error("❌ [Calendar] Erreur lors de la création des notifications d'annulation:", error);
     }
   }
 
@@ -261,7 +262,7 @@ export class CalendarNotificationService {
       });
       
     } catch (error) {
-      console.error('❌ [Calendar] Erreur lors de l\'envoi de l\'email d\'invitation:', error);
+      logger.error('❌ [Calendar] Erreur lors de l\'envoi de l\'email d\'invitation:', error);
     }
   }
 }

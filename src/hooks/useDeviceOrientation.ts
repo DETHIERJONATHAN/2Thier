@@ -10,6 +10,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { logger } from '../lib/logger';
 
 /**
  * Données d'orientation du device
@@ -212,7 +213,7 @@ export function useDeviceOrientation(enabled: boolean = true) {
   const requestPermission = useCallback(async (): Promise<boolean> => {
     // Vérifier si l'API existe
     if (typeof window === 'undefined' || !window.DeviceOrientationEvent) {
-      console.log('📱 [Gyro] DeviceOrientationEvent non disponible');
+      logger.debug('📱 [Gyro] DeviceOrientationEvent non disponible');
       return false;
     }
 
@@ -224,10 +225,10 @@ export function useDeviceOrientation(enabled: boolean = true) {
         const granted = permission === 'granted';
         setPermissionState(granted ? 'granted' : 'denied');
         setOrientation(prev => ({ ...prev, hasPermission: granted, isAvailable: true }));
-        console.log(`📱 [Gyro] Permission iOS: ${permission}`);
+        logger.debug(`📱 [Gyro] Permission iOS: ${permission}`);
         return granted;
       } catch (err) {
-        console.warn('📱 [Gyro] Erreur permission iOS:', err);
+        logger.warn('📱 [Gyro] Erreur permission iOS:', err);
         setPermissionState('denied');
         return false;
       }
@@ -263,7 +264,7 @@ export function useDeviceOrientation(enabled: boolean = true) {
     
     listenerRef.current = handleOrientation;
     window.addEventListener('deviceorientation', handleOrientation);
-    console.log('📱 [Gyro] Tracking démarré');
+    logger.debug('📱 [Gyro] Tracking démarré');
   }, [handleOrientation]);
 
   /**
@@ -273,7 +274,7 @@ export function useDeviceOrientation(enabled: boolean = true) {
     if (listenerRef.current) {
       window.removeEventListener('deviceorientation', listenerRef.current);
       listenerRef.current = null;
-      console.log('📱 [Gyro] Tracking arrêté');
+      logger.debug('📱 [Gyro] Tracking arrêté');
     }
   }, []);
 

@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { DependencyAction, DependencyResult } from '../../utils/dependencyFunctions';
 import AdvancedDependencyEditor from './AdvancedDependencyEditor';
+import { logger } from '../../lib/logger';
 
 interface DependencyRulesProps {
   fieldId: string;
@@ -20,7 +21,7 @@ const DependencyRules = ({ fieldId, initialRules = [], formValues = {}, onChange
   
   // Fonction pour mettre à jour un champ - simulation pour les tests
   const updateFormField = useCallback((fieldId: string, property: string, value: unknown) => {
-    console.log(`[DependencyRules] Mise à jour du champ ${fieldId}, propriété ${property} = ${value}`);
+    logger.debug(`[DependencyRules] Mise à jour du champ ${fieldId}, propriété ${property} = ${value}`);
     
     // Si onApply est fourni, on l'appelle avec les résultats des dépendances
     if (onApply) {
@@ -49,7 +50,7 @@ const DependencyRules = ({ fieldId, initialRules = [], formValues = {}, onChange
       // Note: cette étape nécessiterait normalement d'utiliser eval() ou Function(),
       // mais pour des raisons de sécurité, nous simulons ici l'évaluation
       
-      console.log(`[DependencyRules] Évaluation de ${rules.length} règles pour le champ ${fieldId}`);
+      logger.debug(`[DependencyRules] Évaluation de ${rules.length} règles pour le champ ${fieldId}`);
       
       // Simulation d'évaluation des règles
       const dummyResults: DependencyResult[] = rules.map((rule) => {
@@ -83,7 +84,7 @@ const DependencyRules = ({ fieldId, initialRules = [], formValues = {}, onChange
       }
       
     } catch (error) {
-      console.error('[DependencyRules] Erreur lors de l\'évaluation des règles:', error);
+      logger.error('[DependencyRules] Erreur lors de l\'évaluation des règles:', error);
     }
   }, [fieldId, rules, onApply]);
   

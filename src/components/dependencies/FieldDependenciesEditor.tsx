@@ -6,6 +6,7 @@ import { PlusCircleIcon } from '@heroicons/react/24/outline';
 // Utilisation de l'implémentation simplifiée avec HTML5 Drag & Drop
 import { DependencyRuleEditorSimplified as DependencyRuleEditor } from './DependencyRuleEditorSimplified';
 import useCRMStore from '../../store';
+import { logger } from '../../lib/logger';
 
 interface FieldDependenciesEditorProps {
   fieldId: string;
@@ -37,7 +38,7 @@ const FieldDependenciesEditor: React.FC<FieldDependenciesEditorProps> = ({ field
       setDependencies(list as Dependency[]);
     } catch (err) {
       setError('Impossible de charger les dépendances.');
-      console.error(err);
+      logger.error(err);
     } finally {
       setLoading(false);
     }
@@ -77,7 +78,7 @@ const FieldDependenciesEditor: React.FC<FieldDependenciesEditorProps> = ({ field
       setDependencies(updatedList as Dependency[]);
     } catch (err) {
       // Fallback: append local en cas d'échec API
-      console.error(err);
+      logger.error(err);
       setError("Impossible d'ajouter la dépendance (API). Passage en mode local.");
       const mockedDependency: Dependency = { ...newRule, id: `dep-${Date.now()}` } as Dependency;
       setDependencies(prev => [...prev, mockedDependency]);
@@ -96,7 +97,7 @@ const FieldDependenciesEditor: React.FC<FieldDependenciesEditorProps> = ({ field
     } catch (err) {
       setError("Impossible de supprimer la dépendance.");
       setDependencies(originalDependencies);
-      console.error(err);
+      logger.error(err);
     }
   };
 
@@ -125,7 +126,7 @@ const FieldDependenciesEditor: React.FC<FieldDependenciesEditorProps> = ({ field
       const updatedList = Array.isArray(updated) ? updated : (updated?.data ?? []);
       setDependencies(updatedList as Dependency[]);
     } catch (err) {
-      console.error(err);
+      logger.error(err);
       setError("Impossible de mettre à jour la dépendance.");
       setDependencies(original);
     }
@@ -174,7 +175,7 @@ const FieldDependenciesEditor: React.FC<FieldDependenciesEditorProps> = ({ field
         )
       );
     } catch (err) {
-      console.error('Erreur lors du test de la dépendance:', err);
+      logger.error('Erreur lors du test de la dépendance:', err);
       
       // Notification visuelle d'erreur
       setDependencies(prev => 

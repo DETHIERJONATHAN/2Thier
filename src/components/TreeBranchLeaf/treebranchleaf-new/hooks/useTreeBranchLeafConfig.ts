@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuthenticatedApi } from '../../../../hooks/useAuthenticatedApi';
+import { logger } from '../../../../lib/logger';
 
 export interface TreeBranchLeafConfig {
   variables: {
@@ -106,7 +107,7 @@ export function useTreeBranchLeafConfig() {
             const r = await api.get('/api/tbl/variables');
             vars = normalizeVariables(r.data || r.data?.variables);
           } catch (e) {
-            console.warn('[TBL Config] ⚠️ Variables non chargées:', e);
+            logger.warn('[TBL Config] ⚠️ Variables non chargées:', e);
             partialErrors.push('variables');
           }
         })(),
@@ -115,7 +116,7 @@ export function useTreeBranchLeafConfig() {
             const r = await api.get('/api/tbl/modes');
             modes = normalizeModes(r.data || r.data?.modes);
           } catch (e) {
-            console.warn('[TBL Config] ⚠️ Modes non chargés:', e);
+            logger.warn('[TBL Config] ⚠️ Modes non chargés:', e);
             partialErrors.push('modes');
           }
         })()

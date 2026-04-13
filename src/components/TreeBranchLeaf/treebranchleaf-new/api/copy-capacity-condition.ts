@@ -21,6 +21,7 @@ import { PrismaClient, Prisma } from '@prisma/client';
 import { linkConditionToAllNodes } from './universal-linking-system';
 import { rewriteJsonReferences, forceSharedRefSuffixesInJson, type RewriteMaps } from './repeat/utils/universal-reference-rewriter.js';
 import { copyFormulaCapacity } from './copy-capacity-formula.js';
+import { logger } from '../../../../lib/logger';
 
 // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // Ã°Å¸â€œâ€¹ TYPES ET INTERFACES
@@ -120,7 +121,7 @@ function regenerateInternalIds(conditionSet: unknown, suffix: number | string): 
     return result as Prisma.InputJsonValue;
     
   } catch (error) {
-    console.error(`Ã¢ÂÅ’ Erreur lors de la rÃƒÂ©gÃƒÂ©nÃƒÂ©ration des IDs internes:`, error);
+    logger.error(`Ã¢ÂÅ’ Erreur lors de la rÃƒÂ©gÃƒÂ©nÃƒÂ©ration des IDs internes:`, error);
     return conditionSet as Prisma.InputJsonValue;
   }
 }
@@ -239,7 +240,7 @@ function replaceInJson(json: unknown, replacements: Map<string, string>): Prisma
     
     return JSON.parse(str) as Prisma.InputJsonValue;
   } catch (error) {
-    console.error(`Ã¢ÂÅ’ Erreur lors du remplacement dans JSON:`, error);
+    logger.error(`Ã¢ÂÅ’ Erreur lors du remplacement dans JSON:`, error);
     return json as Prisma.InputJsonValue;
   }
 }
@@ -448,7 +449,7 @@ function rewriteConditionSet(
 
     return suffixConditionIds(rewritten) as Prisma.InputJsonValue;
   } catch (error) {
-    console.error(`Ã¢ÂÅ’ Erreur lors de la rÃƒÂ©ÃƒÂ©criture du conditionSet:`, error);
+    logger.error(`Ã¢ÂÅ’ Erreur lors de la rÃƒÂ©ÃƒÂ©criture du conditionSet:`, error);
     return conditionSet as Prisma.InputJsonValue;
   }
 }
@@ -540,7 +541,7 @@ export async function copyConditionCapacity(
     });
 
     if (!originalCondition) {
-      console.error(`Ã¢ÂÅ’ Condition introuvable avec id: ${cleanConditionId}`);
+      logger.error(`Ã¢ÂÅ’ Condition introuvable avec id: ${cleanConditionId}`);
       return {
         newConditionId: '',
         nodeId: '',
@@ -609,7 +610,7 @@ export async function copyConditionCapacity(
             );
             // Debug uniquement si nécessaire
             // if (unsuffixedSharedRefs.length > 0) {
-            //   console.warn(`   ⚠️ ${unsuffixedSharedRefs.length} shared-refs NON-suffixés:`, unsuffixedSharedRefs);
+            //   logger.warn(`   ⚠️ ${unsuffixedSharedRefs.length} shared-refs NON-suffixés:`, unsuffixedSharedRefs);
             // }
           }
         } else {
@@ -649,7 +650,7 @@ export async function copyConditionCapacity(
                     typeof t === 'string' && t.includes('shared-ref') && !/-\d+$/.test(t)
                   );
                   if (unsuffixed.length > 0) {
-                    console.error(`   Ã¢ÂÅ’ PROBLÃƒË†ME: ${unsuffixed.length} shared-refs TOUJOURS non-suffixÃƒÂ©s en BD:`, unsuffixed);
+                    logger.error(`   Ã¢ÂÅ’ PROBLÃƒË†ME: ${unsuffixed.length} shared-refs TOUJOURS non-suffixÃƒÂ©s en BD:`, unsuffixed);
                   } else {
                   }
                 }
@@ -657,10 +658,10 @@ export async function copyConditionCapacity(
               // Enregistrer dans la map pour la rÃƒÂ©ÃƒÂ©criture suivante
               formulaIdMap.set(linkedFormId, linkedFormResult.newFormulaId);
             } else {
-              console.warn(`   Ã¢Å¡Â Ã¯Â¸Â Ãƒâ€°chec copie formule liÃƒÂ©e: ${linkedFormId}`);
+              logger.warn(`   Ã¢Å¡Â Ã¯Â¸Â Ãƒâ€°chec copie formule liÃƒÂ©e: ${linkedFormId}`);
             }
           } catch (e) {
-            console.error(`   Ã¢ÂÅ’ Exception copie formule liÃƒÂ©e:`, (e as Error).message);
+            logger.error(`   Ã¢ÂÅ’ Exception copie formule liÃƒÂ©e:`, (e as Error).message);
           }
         }
       }
@@ -751,10 +752,10 @@ export async function copyConditionCapacity(
                 ])
               );
             } else {
-              console.warn(`   Ã¢Å¡Â Ã¯Â¸Â Ãƒâ€°chec copie condition liÃƒÂ©e: ${linkedCondId}`);
+              logger.warn(`   Ã¢Å¡Â Ã¯Â¸Â Ãƒâ€°chec copie condition liÃƒÂ©e: ${linkedCondId}`);
             }
           } catch (e) {
-            console.error(`   Ã¢ÂÅ’ Exception copie condition liÃƒÂ©e:`, (e as Error).message);
+            logger.error(`   Ã¢ÂÅ’ Exception copie condition liÃƒÂ©e:`, (e as Error).message);
           }
         }
       }
@@ -804,10 +805,10 @@ export async function copyConditionCapacity(
                 ])
               );
             } else {
-              console.warn(`   Ã¢Å¡Â Ã¯Â¸Â Ãƒâ€°chec copie table liÃƒÂ©e: ${linkedTableId}`);
+              logger.warn(`   Ã¢Å¡Â Ã¯Â¸Â Ãƒâ€°chec copie table liÃƒÂ©e: ${linkedTableId}`);
             }
           } catch (e) {
-            console.error(`   Ã¢ÂÅ’ Exception copie table liÃƒÂ©e:`, (e as Error).message);
+            logger.error(`   Ã¢ÂÅ’ Exception copie table liÃƒÂ©e:`, (e as Error).message);
           }
         }
       }
@@ -867,7 +868,7 @@ export async function copyConditionCapacity(
     try {
       await linkConditionToAllNodes(prisma, newConditionId, rewrittenConditionSet);
     } catch (e) {
-      console.error(`Ã¢ÂÅ’ Erreur LIAISON AUTOMATIQUE:`, (e as Error).message);
+      logger.error(`Ã¢ÂÅ’ Erreur LIAISON AUTOMATIQUE:`, (e as Error).message);
     }
 
     // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
@@ -876,7 +877,7 @@ export async function copyConditionCapacity(
     try {
       await addToNodeLinkedField(prisma, finalOwnerNodeId, 'linkedConditionIds', [newConditionId]);
     } catch (e) {
-      console.warn(`Ã¢Å¡Â Ã¯Â¸Â Erreur MAJ linkedConditionIds du propriÃƒÂ©taire:`, (e as Error).message);
+      logger.warn(`Ã¢Å¡Â Ã¯Â¸Â Erreur MAJ linkedConditionIds du propriÃƒÂ©taire:`, (e as Error).message);
     }
 
     // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
@@ -891,7 +892,7 @@ export async function copyConditionCapacity(
         }
       });
     } catch (e) {
-      console.warn(`Ã¢Å¡Â Ã¯Â¸Â Erreur lors de la mise ÃƒÂ  jour des paramÃƒÂ¨tres capacitÃƒÂ©:`, (e as Error).message);
+      logger.warn(`Ã¢Å¡Â Ã¯Â¸Â Erreur lors de la mise ÃƒÂ  jour des paramÃƒÂ¨tres capacitÃƒÂ©:`, (e as Error).message);
     }
 
     // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
@@ -908,7 +909,7 @@ export async function copyConditionCapacity(
     };
 
   } catch (error) {
-    console.error(`Ã¢ÂÅ’ Erreur lors de la copie de la condition:`, error);
+    logger.error(`Ã¢ÂÅ’ Erreur lors de la copie de la condition:`, error);
     return {
       newConditionId: '',
       nodeId: '',
@@ -940,7 +941,7 @@ async function addToNodeLinkedField(
   });
 
   if (!node) {
-    console.warn(`Ã¢Å¡Â Ã¯Â¸Â NÃ…â€œud ${nodeId} introuvable pour MAJ ${field}`);
+    logger.warn(`Ã¢Å¡Â Ã¯Â¸Â NÃ…â€œud ${nodeId} introuvable pour MAJ ${field}`);
     return;
   }
 

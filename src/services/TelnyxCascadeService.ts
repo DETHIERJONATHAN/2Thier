@@ -3,6 +3,7 @@ import axios from 'axios';
 import { decrypt } from '../utils/crypto';
 import { getBackendBaseUrl, joinUrl } from '../utils/baseUrl';
 import type { Request } from 'express';
+import { logger } from '../lib/logger';
 
 const prisma = db;
 const TELNYX_API_URL = 'https://api.telnyx.com/v2';
@@ -45,13 +46,13 @@ async function getTelnyxHeaders(organizationId: string) {
       try {
         apiKey = decrypt(config.encryptedApiKey).trim();
       } catch {
-        console.error('❌ [TelnyxCascade] API Key illisible (ENCRYPTION_KEY modifiée ?)');
+        logger.error('❌ [TelnyxCascade] API Key illisible (ENCRYPTION_KEY modifiée ?)');
         return null;
       }
     }
 
     if (!apiKey || apiKey.trim().length === 0) {
-      console.error('❌ [TelnyxCascade] API Key vide après déchiffrement');
+      logger.error('❌ [TelnyxCascade] API Key vide après déchiffrement');
       return null;
     }
 
@@ -60,7 +61,7 @@ async function getTelnyxHeaders(organizationId: string) {
       'Content-Type': 'application/json'
     };
   } catch (error) {
-    console.error('❌ [TelnyxCascade] Erreur getTelnyxHeaders:', error);
+    logger.error('❌ [TelnyxCascade] Erreur getTelnyxHeaders:', error);
     return null;
   }
 }
@@ -97,7 +98,7 @@ async function planCascade(organizationId: string): Promise<CascadeLeg[]> {
     return legs;
 
   } catch (error) {
-    console.error('❌ [TelnyxCascade] Erreur planCascade:', error);
+    logger.error('❌ [TelnyxCascade] Erreur planCascade:', error);
     return [];
   }
 }
@@ -167,7 +168,7 @@ export async function initiateCallWithCascade(options: CascadeOptions, req?: Req
     const cascadeLegs = await planCascade(organizationId);
 
     if (cascadeLegs.length === 0) {
-      console.warn('⚠️ [TelnyxCascade] Aucun endpoint SIP configuré, appel direct');
+      logger.warn('⚠️ [TelnyxCascade] Aucun endpoint SIP configuré, appel direct');
       // Pas de cascade, l'appel va directement au `to`
       return {
         success: true,
@@ -192,7 +193,7 @@ export async function initiateCallWithCascade(options: CascadeOptions, req?: Req
     };
 
   } catch (error: unknown) {
-    console.error('❌ [TelnyxCascade] Erreur initiation cascade:', error.response?.data || error.message);
+    logger.error('❌ [TelnyxCascade] Erreur initiation cascade:', error.response?.data || error.message);
     throw error;
   }
 }
@@ -231,7 +232,7 @@ async function executeCascade(
     // Pour l'instant, les webhooks vont gérer les transitions d'état
 
   } catch (error) {
-    console.error('❌ [TelnyxCascade] Erreur executeCascade:', error);
+    logger.error('❌ [TelnyxCascade] Erreur executeCascade:', error);
     throw error;
   }
 }
@@ -256,7 +257,7 @@ export async function updateCallLegStatus(
     });
 
     if (!leg) {
-      console.warn(`⚠️ [TelnyxCascade] Leg non trouvé: ${callId} -> ${destination}`);
+      logger.warn(`⚠️ [TelnyxCascade] Leg non trouvé: ${callId} -> ${destination}`);
       return;
     }
 
@@ -286,7 +287,7 @@ export async function updateCallLegStatus(
     }
 
   } catch (error) {
-    console.error('❌ [TelnyxCascade] Erreur updateCallLegStatus:', error);
+    logger.error('❌ [TelnyxCascade] Erreur updateCallLegStatus:', error);
   }
 }
 

@@ -19,6 +19,7 @@ import type {
   TreeBranchLeafNode,
   TreeBranchLeafRegistry
 } from '../types';
+import { logger } from '../../../../lib/logger';
 
 interface UseDragAndDropOptions {
   onNodeMove: (nodeId: string, targetId?: string, position?: 'before' | 'after' | 'child') => Promise<boolean>;
@@ -111,63 +112,63 @@ export function useDragAndDrop({
 
         return canBeChildOf(sourceNodeType, parentNode.type);
       } catch (e) {
-        console.warn('[validateHierarchicalDrop] Exception', e);
+        logger.warn('[validateHierarchicalDrop] Exception', e);
         return false;
       }
     };
   }, [nodes]);
 
   const canDropPaletteItem = useCallback((source: DragItem, target: DropTargetData): boolean => {
-    console.log(`🎨 Validation palette item:`, { sourceNodeType: source.nodeType, targetType: target.type });
+    logger.debug(`🎨 Validation palette item:`, { sourceNodeType: source.nodeType, targetType: target.type });
     
     // Palette → Structure seulement
     if (target.type !== 'structure') {
-      console.log(`❌ Target n'est pas structure: ${target.type}`);
+      logger.debug(`❌ Target n'est pas structure: ${target.type}`);
       return false;
     }
     
     if (!source.nodeType) {
-      console.log(`❌ Source sans nodeType`);
+      logger.debug(`❌ Source sans nodeType`);
       return false;
     }
 
     const nodeType = registry.getNodeType(source.nodeType);
     if (!nodeType) {
-      console.log(`❌ NodeType non trouvé dans registry: ${source.nodeType}`);
+      logger.debug(`❌ NodeType non trouvé dans registry: ${source.nodeType}`);
       return false;
     }
 
-    console.log(`✅ NodeType trouvé:`, nodeType);
+    logger.debug(`✅ NodeType trouvé:`, nodeType);
 
     // Vérifier que le type de nœud accepte cette source
     if (!nodeType.acceptsDropFrom.includes('palette')) {
-      console.log(`❌ NodeType n'accepte pas 'palette'`, nodeType.acceptsDropFrom);
+      logger.debug(`❌ NodeType n'accepte pas 'palette'`, nodeType.acceptsDropFrom);
       return false;
     }
 
     // 🚨 VALIDATION HIÉRARCHIQUE STRICTE
     const hierarchicalResult = validateHierarchicalDrop(source.nodeType, target);
-    console.log(`🏗️ Validation hiérarchique: ${hierarchicalResult}`);
+    logger.debug(`🏗️ Validation hiérarchique: ${hierarchicalResult}`);
     return hierarchicalResult;
   }, [registry, validateHierarchicalDrop]);
 
   const canDropNode = useCallback((source: DragItem, target: DropTargetData): boolean => {
     const sourceId = source.data?.id || source.data?.nodeId; // compatibilité
     if (!sourceId || !source.nodeType) {
-      console.log('[canDropNode] ❌ Pas de sourceId ou nodeType', { sourceId, nodeType: source.nodeType });
+      logger.debug('[canDropNode] ❌ Pas de sourceId ou nodeType', { sourceId, nodeType: source.nodeType });
       return false;
     }
     if (target.type !== 'structure') return false;
 
     // Self-drop direct interdit (même zone 'child')
     if (target.nodeId && String(target.nodeId) === String(sourceId)) {
-      console.log('[canDropNode] ⛔ Self drop');
+      logger.debug('[canDropNode] ⛔ Self drop');
       return false;
     }
 
     // Empêcher before/after sur soi-même via position
     if ((target.position === 'before' || target.position === 'after') && target.nodeId === sourceId) {
-      console.log('[canDropNode] ⛔ before/after sur soi-même');
+      logger.debug('[canDropNode] ⛔ before/after sur soi-même');
       return false;
     }
 
@@ -190,7 +191,7 @@ export function useDragAndDrop({
         while (st.length) {
           const n = st.pop()!;
           if (n.id === target.nodeId) {
-            console.log('[canDropNode] ⛔ Drop dans son propre descendant');
+            logger.debug('[canDropNode] ⛔ Drop dans son propre descendant');
             return false; // descendant direct ou indirect
           }
           if (n.children) for (const c of n.children) st.push(c);
@@ -201,13 +202,13 @@ export function useDragAndDrop({
     // Autoriser drop racine (main zone / sibling root) si branche
     const ok = validateHierarchicalDrop(source.nodeType, target);
     if (!ok) {
-      console.log('[canDropNode] ❌ validateHierarchicalDrop = false', { sourceType: source.nodeType, target });
+      logger.debug('[canDropNode] ❌ validateHierarchicalDrop = false', { sourceType: source.nodeType, target });
     }
     return ok;
   }, [nodes, validateHierarchicalDrop]);
 
   const canDropReusable = useCallback((): boolean => {
-    console.log(`♻️ Validation reusable drop`);
+    logger.debug(`♻️ Validation reusable drop`);
   // Désactivé: pas de drop réutilisables vers Paramètres
   return false;
   }, []);
@@ -215,10 +216,10 @@ export function useDragAndDrop({
   // 🎯 Fonction principale canDrop qui utilise les fonctions spécialisées
   const canDrop = useCallback((source: DragItem, target: DropTargetData): boolean => {
   // Log allégé
-  // console.log(`🤔 Can drop check`, { source: { type: source.type, nodeType: source.nodeType }, target });
+  // logger.debug(`🤔 Can drop check`, { source: { type: source.type, nodeType: source.nodeType }, target });
     
     if (!source || !target) {
-      console.log(`❌ Source ou target manquant`);
+      logger.debug(`❌ Source ou target manquant`);
       return false;
     }
 
@@ -227,22 +228,22 @@ export function useDragAndDrop({
     switch (source.type) {
       case 'palette-item':
         result = canDropPaletteItem(source, target);
-    // console.log(`🎨 Palette item can drop: ${result}`);
+    // logger.debug(`🎨 Palette item can drop: ${result}`);
         break;
       case 'node':
         result = canDropNode(source, target);
-    // console.log(`📦 Node can drop: ${result}`);
+    // logger.debug(`📦 Node can drop: ${result}`);
         break;
       case 'reusable':
         result = canDropReusable(source, target);
-    // console.log(`♻️ Reusable can drop: ${result}`);
+    // logger.debug(`♻️ Reusable can drop: ${result}`);
         break;
       default:
-    // console.log(`❓ Type inconnu: ${source.type}`);
+    // logger.debug(`❓ Type inconnu: ${source.type}`);
         result = false;
     }
     
-  // console.log(`🎯 Final can drop result: ${result}`);
+  // logger.debug(`🎯 Final can drop result: ${result}`);
     return result;
   }, [canDropPaletteItem, canDropNode, canDropReusable]);
 
@@ -252,8 +253,8 @@ export function useDragAndDrop({
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const { active } = event;
-    console.log(`🔥 DRAG START - ID: ${active.id}`);
-    console.log(`📊 Data active:`, active.data.current);
+    logger.debug(`🔥 DRAG START - ID: ${active.id}`);
+    logger.debug(`📊 Data active:`, active.data.current);
     
     // Construire l'objet DragItem depuis les données de l'élément draggé
     const dragItem: DragItem = {
@@ -264,7 +265,7 @@ export function useDragAndDrop({
       data: active.data.current
     };
 
-    console.log(`✅ DragItem créé:`, dragItem);
+    logger.debug(`✅ DragItem créé:`, dragItem);
     
     setDraggedItem(dragItem);
     setHoveredTarget(null);
@@ -278,10 +279,10 @@ export function useDragAndDrop({
 
   const handleDragOver = useCallback((event: DragOverEvent): boolean => {
     const { over } = event;
-    console.log(`🔄 DRAG OVER - Over ID: ${over?.id}, Dragged:`, draggedItem?.id);
+    logger.debug(`🔄 DRAG OVER - Over ID: ${over?.id}, Dragged:`, draggedItem?.id);
     
     if (!over || !draggedItem) {
-      console.log(`❌ Pas de over ou draggedItem - Over: ${!!over}, DraggedItem: ${!!draggedItem}`);
+      logger.debug(`❌ Pas de over ou draggedItem - Over: ${!!over}, DraggedItem: ${!!draggedItem}`);
       setHoveredTarget(null);
       setValidDrop(false);
       return false;
@@ -297,12 +298,12 @@ export function useDragAndDrop({
   subTab: over.data.current?.subTab
     };
     
-    console.log(`🎯 Target data:`, targetData);
+    logger.debug(`🎯 Target data:`, targetData);
 
     const canDropHere = canDrop(draggedItem, targetData);
     // S'assurer qu'on retourne toujours un booléen
     const finalResult = canDropHere !== undefined ? canDropHere : false;
-    console.log(`✅ Can drop: ${canDropHere} -> final: ${finalResult}`);
+    logger.debug(`✅ Can drop: ${canDropHere} -> final: ${finalResult}`);
     
     setHoveredTarget(String(over.id));
     setValidDrop(finalResult);
@@ -315,16 +316,16 @@ export function useDragAndDrop({
   // =============================================================================
 
   const handlePaletteDrop = useCallback(async (source: DragItem, target: DropTargetData): Promise<TreeBranchLeafNode | null> => {
-    console.log('🎨 Palette Drop:', { source, target });
+    logger.debug('🎨 Palette Drop:', { source, target });
 
     if (!source.nodeType) {
-      console.error('❌ Source sans nodeType:', source);
+      logger.error('❌ Source sans nodeType:', source);
       return null;
     }
 
     const nodeType = registry.getNodeType(source.nodeType);
     if (!nodeType) {
-      console.error('❌ NodeType non trouvé:', source.nodeType);
+      logger.error('❌ NodeType non trouvé:', source.nodeType);
       return null;
     }
 
@@ -355,7 +356,7 @@ export function useDragAndDrop({
     const baseLabel = String(source.data?.label || nodeType.label);
     const labelToUse = source.nodeType === 'leaf_field' ? baseLabel : `Nouveau ${nodeType.label}`;
 
-    console.log('📝 Création nœud avec:', {
+    logger.debug('📝 Création nœud avec:', {
       type: source.nodeType,
       label: labelToUse,
       parentId: effectiveParentId || undefined,
@@ -372,7 +373,7 @@ export function useDragAndDrop({
       });
 
       if (!newNode) {
-        console.error('❌ Échec de la création du nœud');
+        logger.error('❌ Échec de la création du nœud');
         message.error(`Échec de la création du ${nodeType.label}`);
         return null;
       }
@@ -380,31 +381,31 @@ export function useDragAndDrop({
       // Si before/after, on repositionne immédiatement le nouveau nœud par rapport au sibling cible
       if ((target.position === 'before' || target.position === 'after') && target.nodeId) {
         try {
-          console.log(`🔀 Repositionnement post-création (${target.position}) par rapport à ${target.nodeId}`);
+          logger.debug(`🔀 Repositionnement post-création (${target.position}) par rapport à ${target.nodeId}`);
           const moveOk = await onNodeMove(newNode.id, target.nodeId, target.position);
           if (!moveOk) {
-            console.warn('⚠️ Repositionnement échoué après création');
+            logger.warn('⚠️ Repositionnement échoué après création');
           }
         } catch (err) {
-          console.error('💥 Erreur repositionnement après création:', err);
+          logger.error('💥 Erreur repositionnement après création:', err);
         }
       }
 
-      console.log('✅ Nœud créé (et potentiellement repositionné) :', newNode);
+      logger.debug('✅ Nœud créé (et potentiellement repositionné) :', newNode);
       message.success(`${nodeType.label} créé avec succès !`);
       return newNode;
     } catch (error) {
-      console.error('💥 Erreur lors de la création:', error);
+      logger.error('💥 Erreur lors de la création:', error);
       message.error('Erreur lors de la création : ' + (error instanceof Error ? error.message : 'Erreur inconnue'));
       return null;
     }
   }, [onNodeCreate, onNodeMove, registry, nodes]);
 
   const handleNodeDrop = useCallback(async (source: DragItem, target: DropTargetData) => {
-    console.log('📦 Node Drop:', { source, target });
+    logger.debug('📦 Node Drop:', { source, target });
 
     if (!source.data?.id) {
-      console.error('❌ Source sans ID:', source);
+      logger.error('❌ Source sans ID:', source);
       return;
     }
 
@@ -416,20 +417,20 @@ export function useDragAndDrop({
       );
 
       if (success) {
-        console.log('✅ Nœud déplacé avec succès');
+        logger.debug('✅ Nœud déplacé avec succès');
         message.success('Élément déplacé avec succès !');
       } else {
-        console.error('❌ Échec du déplacement du nœud');
+        logger.error('❌ Échec du déplacement du nœud');
         message.error('Échec du déplacement de l\'élément');
       }
     } catch (error) {
-      console.error('💥 Erreur lors du déplacement:', error);
+      logger.error('💥 Erreur lors du déplacement:', error);
       message.error('Erreur lors du déplacement : ' + (error instanceof Error ? error.message : 'Erreur inconnue'));
     }
   }, [onNodeMove]);
 
   const handleDrop = useCallback(async (source: DragItem, target: DropTargetData): Promise<TreeBranchLeafNode | boolean | null> => {
-    console.log('🚀 Handle Drop:', { source, target });
+    logger.debug('🚀 Handle Drop:', { source, target });
 
     switch (source.type) {
       case 'palette-item':
@@ -442,17 +443,17 @@ export function useDragAndDrop({
         }
         return await handleNodeDrop(source, target);
       default:
-        console.warn('❓ Type de source non géré:', source.type);
+        logger.warn('❓ Type de source non géré:', source.type);
         return null;
     }
   }, [handlePaletteDrop, handleNodeDrop]);
 
   const handleDragEnd = useCallback(async (event: DragEndEvent) => {
     const { over } = event;
-    console.log(`🎯 DRAG END - Over: ${over?.id}, Dragged: ${draggedItem?.id}, ValidDrop: ${validDrop}`);
+    logger.debug(`🎯 DRAG END - Over: ${over?.id}, Dragged: ${draggedItem?.id}, ValidDrop: ${validDrop}`);
     
     if (!over || !draggedItem || !validDrop) {
-      console.log(`❌ DROP ANNULÉ - Over: ${!!over}, DraggedItem: ${!!draggedItem}, ValidDrop: ${validDrop}`);
+      logger.debug(`❌ DROP ANNULÉ - Over: ${!!over}, DraggedItem: ${!!draggedItem}, ValidDrop: ${validDrop}`);
       setDraggedItem(null);
       setHoveredTarget(null);
       setValidDrop(false);
@@ -469,15 +470,15 @@ export function useDragAndDrop({
   subTab: over.data.current?.subTab
     };
 
-    console.log(`🚀 EXECUTING DROP:`, { draggedItem, targetData });
+    logger.debug(`🚀 EXECUTING DROP:`, { draggedItem, targetData });
 
     try {
       const result = await handleDrop(draggedItem, targetData);
-      console.log(`✅ DROP RÉUSSI ! Résultat:`, result);
+      logger.debug(`✅ DROP RÉUSSI ! Résultat:`, result);
       // Ici, vous pourriez utiliser le `result` pour mettre à jour l'état local
       // si nécessaire, avant le re-fetch global.
     } catch (error) {
-      console.error(`💥 ERREUR DANS DROP:`, error);
+      logger.error(`💥 ERREUR DANS DROP:`, error);
       message.error('Erreur lors du drop : ' + (error instanceof Error ? error.message : 'Erreur inconnue'));
     } finally {
       setDraggedItem(null);

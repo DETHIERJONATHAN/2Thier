@@ -13,6 +13,7 @@ import { Router } from 'express';
 import { Prisma } from '@prisma/client';
 import { db } from '../../../../lib/database';
 import { randomUUID } from 'crypto';
+import { logger } from '../../../../lib/logger';
 
 const router = Router();
 const prisma = db;
@@ -95,7 +96,7 @@ async function syncTableReferences(
         where: { tableReference: oldTableId, nodeId: { not: ownerNodeId } },
         data: { tableReference: newTableId, updatedAt: new Date() }
       });
-      // console.log(`[syncTableRefs] ✅ ${externalConfigs.length} SelectConfig(s) externe(s) migrée(s): ${oldTableId} → ${newTableId}`);
+      // logger.debug(`[syncTableRefs] ✅ ${externalConfigs.length} SelectConfig(s) externe(s) migrée(s): ${oldTableId} → ${newTableId}`);
     }
 
     // 2. Mettre à jour les @table.{oldId} dans les filtres d'AUTRES tables
@@ -124,9 +125,9 @@ async function syncTableReferences(
             where: { id: t.id },
             data: { meta: updatedMeta as Prisma.InputJsonValue, updatedAt: new Date() }
           });
-          // console.log(`[syncTableRefs] ✅ Table "${t.name}" (${t.id}): @table.${oldTableId} → @table.${newTableId}`);
+          // logger.debug(`[syncTableRefs] ✅ Table "${t.name}" (${t.id}): @table.${oldTableId} → @table.${newTableId}`);
         } catch (parseErr) {
-          console.error(`[syncTableRefs] ❌ Erreur parse meta pour table ${t.id}:`, parseErr);
+          logger.error(`[syncTableRefs] ❌ Erreur parse meta pour table ${t.id}:`, parseErr);
         }
       }
     }
@@ -144,9 +145,9 @@ async function syncTableReferences(
       }
     }
 
-    // console.log(`[syncTableRefs] 🔄 Sync terminée pour "${tableName}": ${oldTableId} → ${newTableId}`);
+    // logger.debug(`[syncTableRefs] 🔄 Sync terminée pour "${tableName}": ${oldTableId} → ${newTableId}`);
   } catch (error) {
-    console.error(`[syncTableRefs] ❌ Erreur lors de la sync des références:`, error);
+    logger.error(`[syncTableRefs] ❌ Erreur lors de la sync des références:`, error);
     // Non bloquant
   }
 }
@@ -291,7 +292,7 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
         order: viewTable.createdAt ? new Date(viewTable.createdAt).getTime() : 0,
       };
 
-      console.log(`[POST table] ✅ Vue "${finalName}" créée (source: ${sourceTableId})`);
+      logger.debug(`[POST table] ✅ Vue "${finalName}" créée (source: ${sourceTableId})`);
       return res.status(201).json(response);
     }
 
@@ -447,7 +448,7 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
           if (sameRole) {
             await syncTableReferences(oldTableRef, result.id, nodeId, finalName);
           }
-          // console.log(`[NEW POST /tables] ✅ Ancienne tableReference ${oldTableRef} remplacée par ${result.id} sur le nœud ${nodeId}. Sync des refs externes effectuée.`);
+          // logger.debug(`[NEW POST /tables] ✅ Ancienne tableReference ${oldTableRef} remplacée par ${result.id} sur le nœud ${nodeId}. Sync des refs externes effectuée.`);
         }
       } else {
         // CREATION AUTOMATIQUE DES SELECTCONFIGS POUR LES LOOKUPS
@@ -484,7 +485,7 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
                     updatedAt: new Date(),
                   }
                 });
-                // console.log(`[LOOKUP] SelectConfig cree pour ROW source: ${rowSourceField}`);
+                // logger.debug(`[LOOKUP] SelectConfig cree pour ROW source: ${rowSourceField}`);
               }
               
               // METTRE A JOUR les selectors si vides
@@ -522,7 +523,7 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
                     updatedAt: new Date(),
                   }
                 });
-                // console.log(`[LOOKUP] SelectConfig cree pour COLUMN source: ${colSourceField}`);
+                // logger.debug(`[LOOKUP] SelectConfig cree pour COLUMN source: ${colSourceField}`);
               }
               
               // METTRE A JOUR les selectors si vides
@@ -558,7 +559,7 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
                   updatedAt: new Date(),
                 }
               });
-              // console.log(`[LOOKUP] SelectConfig cree pour champ composite: ${nodeId}`);
+              // logger.debug(`[LOOKUP] SelectConfig cree pour champ composite: ${nodeId}`);
             }
             
             // ETAPE 4: METTRE A JOUR la table avec les selectors remplis
@@ -569,16 +570,16 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
               data: { meta: toJsonSafe(finalMeta) }
             });
             
-            // console.log(`[LOOKUP] Configuration de lookup complete pour table: ${result.id}`);
-            // console.log(`[LOOKUP] Selectors remplis: rowFieldId=${lookupMeta.selectors?.rowFieldId}, columnFieldId=${lookupMeta.selectors?.columnFieldId}`);
+            // logger.debug(`[LOOKUP] Configuration de lookup complete pour table: ${result.id}`);
+            // logger.debug(`[LOOKUP] Selectors remplis: rowFieldId=${lookupMeta.selectors?.rowFieldId}, columnFieldId=${lookupMeta.selectors?.columnFieldId}`);
           }
         } catch (lookupError) {
-          console.error(`[NEW POST /tables] Erreur lors de la creation des SelectConfigs lookup:`, lookupError);
+          logger.error(`[NEW POST /tables] Erreur lors de la creation des SelectConfigs lookup:`, lookupError);
           // Ne pas bloquer la reponse meme si la creation echoue
         }
       }
     } catch (updateError) {
-      console.error(`[NEW POST /tables] Ã¢Å¡Â Ã¯Â¸Â Erreur lors de la mise ÃƒÂ  jour des SelectConfigs:`, updateError);
+      logger.error(`[NEW POST /tables] Ã¢Å¡Â Ã¯Â¸Â Erreur lors de la mise ÃƒÂ  jour des SelectConfigs:`, updateError);
       // Ne pas bloquer la rÃƒÂ©ponse mÃƒÂªme si la mise ÃƒÂ  jour ÃƒÂ©choue
     }
 
@@ -634,7 +635,7 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
     });
 
   } catch (error) {
-    console.error(`Ã¢ÂÅ’ [NEW POST /tables] Erreur lors de la crÃƒÂ©ation de la table:`, error);
+    logger.error(`Ã¢ÂÅ’ [NEW POST /tables] Erreur lors de la crÃƒÂ©ation de la table:`, error);
     if (error instanceof Prisma.PrismaClientValidationError) {
       return res.status(400).json({
         error: 'RequÃªte invalide pour la crÃƒÂ©ation de la table.',
@@ -737,7 +738,7 @@ router.get('/tables/:id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error(`Ã¢ÂÅ’ [NEW GET /tables/:id] Erreur lors de la rÃƒÂ©cupÃƒÂ©ration de la table:`, error);
+    logger.error(`Ã¢ÂÅ’ [NEW GET /tables/:id] Erreur lors de la rÃƒÂ©cupÃƒÂ©ration de la table:`, error);
     res.status(500).json({ error: 'Impossible de rÃƒÂ©cupÃƒÂ©rer la table' });
   }
 });
@@ -839,7 +840,7 @@ router.put('/tables/:id', async (req, res) => {
     res.json(finalTableData);
 
   } catch (error) {
-    console.error(`Ã¢ÂÅ’ [NEW PUT /tables/:id] Erreur lors de la mise ÃƒÂ  jour:`, error);
+    logger.error(`Ã¢ÂÅ’ [NEW PUT /tables/:id] Erreur lors de la mise ÃƒÂ  jour:`, error);
     if (error instanceof Error && (error.message === 'Table non trouvÃƒÂ©e' || error.message === 'AccÃƒÂ¨s non autorisÃƒÂ©')) {
       const status = error.message === 'Table non trouvÃƒÂ©e' ? 404 : 403;
       return res.status(status).json({ error: error.message });
@@ -896,10 +897,10 @@ router.delete('/tables/:id', async (req, res) => {
         if (replacement) {
           await syncTableReferences(id, replacement.id, table.nodeId, tableName);
         } else {
-          // console.log(`[NEW DELETE /tables/:id] ⚠️ Pas de table de remplacement pour "${tableName}" (${id}).`);
+          // logger.debug(`[NEW DELETE /tables/:id] ⚠️ Pas de table de remplacement pour "${tableName}" (${id}).`);
         }
       } catch (syncErr) {
-        console.error(`[NEW DELETE /tables/:id] ⚠️ Erreur sync références:`, syncErr);
+        logger.error(`[NEW DELETE /tables/:id] ⚠️ Erreur sync références:`, syncErr);
       }
     }
 
@@ -971,7 +972,7 @@ router.delete('/tables/:id', async (req, res) => {
 
       }
     } catch (selectConfigError) {
-      console.error(`[NEW DELETE /tables/:id] Ã¢Å¡Â Ã¯Â¸Â Erreur dÃƒÂ©sactivation lookups:`, selectConfigError);
+      logger.error(`[NEW DELETE /tables/:id] Ã¢Å¡Â Ã¯Â¸Â Erreur dÃƒÂ©sactivation lookups:`, selectConfigError);
       // On continue quand mÃƒÂªme
     }
 
@@ -1035,7 +1036,7 @@ router.delete('/tables/:id', async (req, res) => {
     res.json({ success: true, message: 'Table supprimÃƒÂ©e avec succÃƒÂ¨s' });
 
   } catch (error) {
-    console.error(`Ã¢ÂÅ’ [NEW DELETE /tables/:id] Erreur lors de la suppression:`, error);
+    logger.error(`Ã¢ÂÅ’ [NEW DELETE /tables/:id] Erreur lors de la suppression:`, error);
     res.status(500).json({ error: 'Impossible de supprimer la table' });
   }
 });
@@ -1060,7 +1061,7 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
         const metaObj = typeof meta === 'string' ? JSON.parse(meta) : meta;
         const lookup = metaObj?.lookup || {};
         const selectors = lookup?.selectors || {};
-        // console.log('[MANUAL-SAVE][TABLE META] ➡️ PUT /nodes/:nodeId/tables/:tableId', {
+        // logger.debug('[MANUAL-SAVE][TABLE META] ➡️ PUT /nodes/:nodeId/tables/:tableId', {
         //   tableId,
         //   name,
         //   description,
@@ -1075,8 +1076,8 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
         //   rawMetaKeys: Object.keys(metaObj || {})
         // });
       } catch {
-        // console.log('[MANUAL-SAVE][TABLE META] ⚠️ Impossible de parser meta pour logging, envoi brut');
-        // console.log('[MANUAL-SAVE][TABLE META] RAW:', typeof meta === 'string' ? meta : JSON.stringify(meta));
+        // logger.debug('[MANUAL-SAVE][TABLE META] ⚠️ Impossible de parser meta pour logging, envoi brut');
+        // logger.debug('[MANUAL-SAVE][TABLE META] RAW:', typeof meta === 'string' ? meta : JSON.stringify(meta));
       }
       
       const table = await prisma.treeBranchLeafNodeTable.findUnique({
@@ -1111,7 +1112,7 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
         const persistedMeta = typeof updatedTable.meta === 'string' ? JSON.parse(updatedTable.meta) : updatedTable.meta;
         const lookup = (persistedMeta as unknown)?.lookup || {};
         const selectors = lookup?.selectors || {};
-        // console.log('[MANUAL-SAVE][TABLE META] ✅ Persisté', {
+        // logger.debug('[MANUAL-SAVE][TABLE META] ✅ Persisté', {
         //   tableId,
         //   lookupSelectors: {
         //     columnFieldId: selectors.columnFieldId || null,
@@ -1122,7 +1123,7 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
         //   }
         // });
       } catch {
-        // console.log('[MANUAL-SAVE][TABLE META] ⚠️ Persisté (meta non parsé)');
+        // logger.debug('[MANUAL-SAVE][TABLE META] ⚠️ Persisté (meta non parsé)');
       }
 
       return res.json(updatedTable);
@@ -1249,7 +1250,7 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
     res.json(updatedTable);
 
   } catch (error) {
-    console.error(`Ã¢ÂÅ’ [NEW PUT /nodes/:nodeId/tables/:tableId] Erreur:`, error);
+    logger.error(`Ã¢ÂÅ’ [NEW PUT /nodes/:nodeId/tables/:tableId] Erreur:`, error);
     if (error instanceof Error && (error.message === 'Table non trouvÃƒÂ©e' || error.message === 'AccÃƒÂ¨s non autorisÃƒÂ©')) {
       const status = error.message === 'Table non trouvÃƒÂ©e' ? 404 : 403;
       return res.status(status).json({ error: error.message });
@@ -1298,7 +1299,7 @@ router.get('/nodes/:nodeId/tables', async (req, res) => {
     // 🔧 FIX: AUSSI charger la table ACTIVE pointée par table_activeId
     // Cas typique: nœud LOOKUP qui référence une table via table_activeId
     let activeTable = null;
-    // console.log(`[GET /nodes/:nodeId/tables] nodeId: ${nodeId}, table_activeId: ${node.table_activeId}`);
+    // logger.debug(`[GET /nodes/:nodeId/tables] nodeId: ${nodeId}, table_activeId: ${node.table_activeId}`);
     
     if (node.table_activeId) {
       activeTable = await prisma.treeBranchLeafNodeTable.findUnique({
@@ -1469,11 +1470,11 @@ router.get('/nodes/:nodeId/tables', async (req, res) => {
       };
     });
 
-    // console.log(`[GET /nodes/:nodeId/tables] Returning ${formattedTables.length} tables. First table columns: ${formattedTables[0]?.columns?.slice(0, 3).join(', ')}`);
+    // logger.debug(`[GET /nodes/:nodeId/tables] Returning ${formattedTables.length} tables. First table columns: ${formattedTables[0]?.columns?.slice(0, 3).join(', ')}`);
     res.json(formattedTables);
 
   } catch (error) {
-    console.error(`Ã¢ÂÅ’ [NEW GET /nodes/:nodeId/tables] Erreur:`, error);
+    logger.error(`Ã¢ÂÅ’ [NEW GET /nodes/:nodeId/tables] Erreur:`, error);
     res.status(500).json({ error: 'Impossible de rÃƒÂ©cupÃƒÂ©rer les tables' });
   }
 });

@@ -1,6 +1,7 @@
 // API pour gérer les formules de nœuds dans la table dédiée TreeBranchLeafNodeFormula
 
 import { db } from '../database';
+import { logger } from '../logger';
 
 const prisma = db;
 
@@ -32,7 +33,7 @@ export async function getNodeFormulas(nodeId: string): Promise<NodeFormula[]> {
       tokens: Array.isArray(f.tokens) ? f.tokens as string[] : []
     }));
   } catch (error) {
-    console.error('Erreur lors de la récupération des formules:', error);
+    logger.error('Erreur lors de la récupération des formules:', error);
     return [];
   }
 }
@@ -72,7 +73,7 @@ export async function saveNodeFormula(formula: Omit<NodeFormula, 'createdAt' | '
       tokens: Array.isArray(saved.tokens) ? saved.tokens as string[] : []
     };
   } catch (error) {
-    console.error('Erreur lors de la sauvegarde de la formule:', error);
+    logger.error('Erreur lors de la sauvegarde de la formule:', error);
     return null;
   }
 }
@@ -92,7 +93,7 @@ export async function deleteNodeFormula(nodeId: string, name: string): Promise<b
     });
     return true;
   } catch (error) {
-    console.error('Erreur lors de la suppression de la formule:', error);
+    logger.error('Erreur lors de la suppression de la formule:', error);
     return false;
   }
 }
@@ -107,7 +108,7 @@ export async function deleteAllNodeFormulas(nodeId: string): Promise<boolean> {
     });
     return true;
   } catch (error) {
-    console.error('Erreur lors de la suppression des formules:', error);
+    logger.error('Erreur lors de la suppression des formules:', error);
     return false;
   }
 }
@@ -125,7 +126,7 @@ export async function updateFormulasOrder(formulas: { id: string; order: number 
     }
     return true;
   } catch (error) {
-    console.error('Erreur lors de la mise à jour de l\'ordre:', error);
+    logger.error('Erreur lors de la mise à jour de l\'ordre:', error);
     return false;
   }
 }

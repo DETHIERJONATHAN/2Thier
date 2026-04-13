@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import FormulaTestTool from '../../components/formulas/FormulaTestTool';
 import { evaluateFormula, exampleTestFormula } from '../../utils/formulaEvaluator';
+import { logger } from '../../lib/logger';
 
 /**
  * Page de diagnostic pour tester les formules avec des valeurs réelles
@@ -53,11 +54,11 @@ const FormulaTestPage: React.FC = () => {
         setSelectedFormulaId(data[0].id);
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des formulas:', error);
+      logger.error('Erreur lors du chargement des formulas:', error);
       
       // Utiliser une formule d'exemple en cas d'erreur
       const exampleResult = exampleTestFormula();
-      console.log('Formule d\'exemple utilisée:', exampleResult);
+      logger.debug('Formule d\'exemple utilisée:', exampleResult);
     } finally {
       setLoading(false);
     }

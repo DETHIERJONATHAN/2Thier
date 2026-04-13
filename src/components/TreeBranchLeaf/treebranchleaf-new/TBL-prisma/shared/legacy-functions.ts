@@ -1,4 +1,5 @@
 import { TBLContext } from './types';
+import { logger } from '../../../../../lib/logger';
 
 /**
  * Fonctions utilitaires portées depuis treebranchleaf-routes.ts
@@ -131,7 +132,7 @@ export function calculateResult(expression: string): number | null {
     
     return null;
   } catch (error) {
-    console.error('Erreur lors du calcul:', error);
+    logger.error('Erreur lors du calcul:', error);
     return null;
   }
 }

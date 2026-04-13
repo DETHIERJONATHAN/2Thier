@@ -1,5 +1,6 @@
 import { PrismaClient, type Prisma } from '@prisma/client';
 import { copyFormulaCapacity } from '../../copy-capacity-formula.js';
+import { logger } from '../../../../../../lib/logger';
 
 /**
  * Service pour corriger COMPLÃƒË†TEMENT la duplication des nÃ…â€œuds avec lookups
@@ -118,10 +119,10 @@ export async function fixCompleteDuplication(
         formulaIdMap.set(formula.id, formulaResult.newFormulaId);
         result.capacitiesFixed.formulas++;
       } else {
-        console.error(`Ã¢ÂÅ’ Erreur copie formule: ${formula.id}`);
+        logger.error(`Ã¢ÂÅ’ Erreur copie formule: ${formula.id}`);
       }
     } catch (error) {
-      console.error(`Ã¢ÂÅ’ Exception copie formule ${formula.id}:`, error);
+      logger.error(`Ã¢ÂÅ’ Exception copie formule ${formula.id}:`, error);
     }
   }
 
@@ -535,7 +536,7 @@ export async function fixAllCompleteDuplications(
     }
 
   } catch (error) {
-    console.error('Ã¢ÂÅ’ [COMPLETE-DUPLICATION-FIX] Erreur gÃƒÂ©nÃƒÂ©rale:', error);
+    logger.error('Ã¢ÂÅ’ [COMPLETE-DUPLICATION-FIX] Erreur gÃƒÂ©nÃƒÂ©rale:', error);
   }
 
   return report;

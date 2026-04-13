@@ -3,6 +3,7 @@ import { Card, Descriptions, Tag, Avatar, Button, Spin } from 'antd';
 import { EditOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../../lib/logger';
 
 interface LeadInfoProps {
   leadId?: string;
@@ -26,7 +27,7 @@ export const LeadInfo: React.FC<LeadInfoProps> = ({ leadId }) => {
       const response = await api.get(`/api/leads/${leadId}`);
       setLead(response.data);
     } catch (error) {
-      console.error('Erreur lors du chargement du lead:', error);
+      logger.error('Erreur lors du chargement du lead:', error);
     } finally {
       setLoading(false);
     }

@@ -20,6 +20,7 @@ import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import { tblLog, tblWarn, isTBLDebugEnabled } from '../../../../../utils/tblDebug';
 import { useTBLBatch } from '../contexts/TBLBatchContext';
 import { canFieldBeSelect } from '../../../../../lib/fieldDuplicationPolicy';
+import { logger } from '../../../../../lib/logger';
 
 // 🚀 PERF: Cache global pour les SelectConfig
 const selectConfigCache = new Map<string, TreeBranchLeafSelectConfig>();
@@ -212,7 +213,7 @@ export function useTBLTableLookup(
           replaceAllRef.current = false;
           if (shouldReplaceAll) {
             if (isTBLDebugEnabled()) {
-              console.log(`🔄 [useTBLTableLookup] Broadcast ref update: ${Object.keys(pending).length} valeurs (replaceAll)`);
+              logger.debug(`🔄 [useTBLTableLookup] Broadcast ref update: ${Object.keys(pending).length} valeurs (replaceAll)`);
             }
             broadcastedCalcValuesRef.current = pending;
           } else {
@@ -228,7 +229,7 @@ export function useTBLTableLookup(
             }
             if (hasChanges) {
               if (isTBLDebugEnabled()) {
-                console.log(`🔄 [useTBLTableLookup] Broadcast ref update: ${Object.keys(pending).length} valeurs (merge)`);
+                logger.debug(`🔄 [useTBLTableLookup] Broadcast ref update: ${Object.keys(pending).length} valeurs (merge)`);
               }
               broadcastedCalcValuesRef.current = { ...prev, ...pending };
             }
@@ -354,17 +355,17 @@ export function useTBLTableLookup(
         }
       }
       if ((enrichedCount > 0 || overwrittenCount > 0) && isTBLDebugEnabled()) {
-        console.log(`🔧 [useTBLTableLookup] formData enrichi avec ${enrichedCount}/${Object.keys(safeBroadcast).length} valeurs calculées (${overwrittenCount} valeurs stale écrasées)`);
+        logger.debug(`🔧 [useTBLTableLookup] formData enrichi avec ${enrichedCount}/${Object.keys(safeBroadcast).length} valeurs calculées (${overwrittenCount} valeurs stale écrasées)`);
       }
     }
 
     if (isTargetField) {
-      console.log(`[DEBUG][Test - liste] 🚀 Hook déclenché pour le champ cible. fieldId: ${fieldId}, nodeId: ${nodeId}, enabled: ${enabled}`);
+      logger.debug(`[DEBUG][Test - liste] 🚀 Hook déclenché pour le champ cible. fieldId: ${fieldId}, nodeId: ${nodeId}, enabled: ${enabled}`);
     }
 
     // ✅ NOUVEAU: Si le lookup est désactivé, on vide les options
     if (!enabled) {
-      if (isTargetField) console.log(`[DEBUG][Test - liste] 🔴 Lookup désactivé (enabled=false). Vidage des options.`);
+      if (isTargetField) logger.debug(`[DEBUG][Test - liste] 🔴 Lookup désactivé (enabled=false). Vidage des options.`);
       setOptions([]);
       setTableData(undefined);
       setConfig(undefined);
@@ -391,14 +392,14 @@ export function useTBLTableLookup(
     // Au premier montage (isFirstMountRef), pas de debounce pour afficher les options initiales rapidement.
     const executeLookup = async () => {
       try {
-        if (isTargetField) console.log(`[DEBUG][Test - liste] 🔄 Statut initial: loading=true`);
+        if (isTargetField) logger.debug(`[DEBUG][Test - liste] 🔄 Statut initial: loading=true`);
         setLoading(true);
         setError(null);
 
         // 🚀 BATCHING: Attendre un court instant si le batch est en cours de chargement
         // Cela évite les 404 inutiles sur les IDs de repeater
         if (!batchContext.isReady && batchContext.loading) {
-          if (isTargetField) console.log(`[DEBUG][Test - liste] ⏳ Batch en cours de chargement, attente...`);
+          if (isTargetField) logger.debug(`[DEBUG][Test - liste] ⏳ Batch en cours de chargement, attente...`);
           await new Promise(resolve => setTimeout(resolve, 100));
           if (cancelled) return;
         }
@@ -409,7 +410,7 @@ export function useTBLTableLookup(
         if (batchContext.isReady && fieldId) {
           const batchConfig = batchContext.getSelectConfigForNode(fieldId);
           if (batchConfig) {
-            if (isTargetField) console.log(`[DEBUG][Test - liste] 🚀 Config SELECT trouvée dans le cache batch:`, batchConfig);
+            if (isTargetField) logger.debug(`[DEBUG][Test - liste] 🚀 Config SELECT trouvée dans le cache batch:`, batchConfig);
             // Convertir le format batch vers le format attendu
             selectConfig = {
               id: fieldId,
@@ -433,13 +434,13 @@ export function useTBLTableLookup(
             if (selectConfigCache.has(fieldId)) {
               selectConfig = selectConfigCache.get(fieldId)!;
               if (isTBLDebugEnabled()) {
-                console.log(`[useTBLTableLookup] ✅ Config SELECT depuis cache mémoire pour ${fieldId}`);
+                logger.debug(`[useTBLTableLookup] ✅ Config SELECT depuis cache mémoire pour ${fieldId}`);
               }
             } else {
             
             if (isTBLDebugEnabled()) {
-              console.log(`[useTBLTableLookup] 🔍 Recherche SelectConfig pour fieldId=${fieldId}, hasSuffix=${hasSuffix}, baseFieldId=${baseFieldId}`);
-              console.log(`[useTBLTableLookup] ➡️ GET /api/treebranchleaf/nodes/${fieldId}/select-config (primary)`);
+              logger.debug(`[useTBLTableLookup] 🔍 Recherche SelectConfig pour fieldId=${fieldId}, hasSuffix=${hasSuffix}, baseFieldId=${baseFieldId}`);
+              logger.debug(`[useTBLTableLookup] ➡️ GET /api/treebranchleaf/nodes/${fieldId}/select-config (primary)`);
             }
 
             selectConfig = await api.get<TreeBranchLeafSelectConfig>(
@@ -453,7 +454,7 @@ export function useTBLTableLookup(
             }
 
             if (isTBLDebugEnabled()) {
-              console.log(`[useTBLTableLookup] 📥 Réponse PRIMARY:`, selectConfig ? `TROUVÉ - nodeId=${selectConfig.nodeId}` : 'NULL (pas trouvé ou erreur)');
+              logger.debug(`[useTBLTableLookup] 📥 Réponse PRIMARY:`, selectConfig ? `TROUVÉ - nodeId=${selectConfig.nodeId}` : 'NULL (pas trouvé ou erreur)');
             }
             } // fin du else (pas dans cache)
 
@@ -463,7 +464,7 @@ export function useTBLTableLookup(
             // la politique du backend a déterminé que ce champ ne DOIT PAS être un select.
             if (err.response?.data?.isCalculated === true) {
               if (isTBLDebugEnabled()) {
-                console.log(`[useTBLTableLookup] 🛡️ Politique appliquée: le champ ${fieldId} est calculé, pas un select. Arrêt du lookup.`);
+                logger.debug(`[useTBLTableLookup] 🛡️ Politique appliquée: le champ ${fieldId} est calculé, pas un select. Arrêt du lookup.`);
               }
               setOptions([]);
               setTableData(undefined);
@@ -478,13 +479,13 @@ export function useTBLTableLookup(
           }
         }
 
-        if (isTargetField) console.log(`[DEBUG][Test - liste] ⬅️ Réponse select-config:`, selectConfig);
+        if (isTargetField) logger.debug(`[DEBUG][Test - liste] ⬅️ Réponse select-config:`, selectConfig);
 
         if (cancelled) return;
 
         // 404 supprimé retourne null
         if (!selectConfig) {
-          if (isTargetField) console.log(`[DEBUG][Test - liste] ❌ Pas de selectConfig. Arrêt.`);
+          if (isTargetField) logger.debug(`[DEBUG][Test - liste] ❌ Pas de selectConfig. Arrêt.`);
           setOptions([]);
           setTableData(undefined);
           setConfig(undefined);
@@ -497,7 +498,7 @@ export function useTBLTableLookup(
         //            Bloquer les champs TEXT dupliqués de devenir SELECT
         const fieldType = selectConfig?.sourceType || 'TEXT'; // Si pas de source, c'est TEXT
         if (!canFieldBeSelect(fieldId, fieldType)) {
-          if (isTargetField) console.log(`[DEBUG][Test - liste] 🛡️ Politique appliquée: champ dupliqué (${fieldId}) de type ${fieldType} ne peut pas être SELECT. Arrêt.`);
+          if (isTargetField) logger.debug(`[DEBUG][Test - liste] 🛡️ Politique appliquée: champ dupliqué (${fieldId}) de type ${fieldType} ne peut pas être SELECT. Arrêt.`);
           setOptions([]);
           setTableData(undefined);
           setConfig(undefined);
@@ -506,7 +507,7 @@ export function useTBLTableLookup(
         }
 
         if (selectConfig.optionsSource !== 'table') {
-          if (isTargetField) console.log(`[DEBUG][Test - liste] ❌ optionsSource n'est pas 'table'. Arrêt.`);
+          if (isTargetField) logger.debug(`[DEBUG][Test - liste] ❌ optionsSource n'est pas 'table'. Arrêt.`);
           setOptions([]);
           setTableData(undefined);
           setConfig(undefined);
@@ -515,7 +516,7 @@ export function useTBLTableLookup(
         }
 
         if (!selectConfig.tableReference) {
-          if (isTargetField) console.log(`[DEBUG][Test - liste] ❌ Pas de tableReference. Arrêt.`);
+          if (isTargetField) logger.debug(`[DEBUG][Test - liste] ❌ Pas de tableReference. Arrêt.`);
           setOptions([]);
           setTableData(undefined);
           setConfig(undefined);
@@ -524,7 +525,7 @@ export function useTBLTableLookup(
         }
 
         // 2. Charger le tableau référencé - IMPORTANT: Utiliser nodeId (ID du champ SELECT) pas tableReference
-        if (isTargetField) console.log(`[DEBUG][Test - liste] ➡️ GET /api/treebranchleaf/nodes/${nodeId}/table/lookup (tableRef=${selectConfig.tableReference})`);
+        if (isTargetField) logger.debug(`[DEBUG][Test - liste] ➡️ GET /api/treebranchleaf/nodes/${nodeId}/table/lookup (tableRef=${selectConfig.tableReference})`);
         
         // 🆕 ÉTAPE 2.5: Construire les formValues pour le filtrage dynamique
         let queryParams = '';
@@ -542,7 +543,7 @@ export function useTBLTableLookup(
               
               // 🛡️ Exclure toute string de plus de 2000 caractères (images, signatures, fichiers encodés)
               if (typeof value === 'string' && value.length > 2000) {
-                console.log(`[useTBLTableLookup] 🛡️ Valeur trop longue exclue pour lookup: ${key} (${(value.length / 1024).toFixed(1)} KB)`);
+                logger.debug(`[useTBLTableLookup] 🛡️ Valeur trop longue exclue pour lookup: ${key} (${(value.length / 1024).toFixed(1)} KB)`);
                 return false;
               }
               
@@ -553,20 +554,20 @@ export function useTBLTableLookup(
                 for (const prop of ['original', 'annotated', 'src', 'image', 'data', 'base64']) {
                   const v = obj[prop];
                   if (typeof v === 'string' && (v.startsWith('data:') || v.length > 2000)) {
-                    console.log(`[useTBLTableLookup] 🖼️ Image object exclue pour lookup: ${key}.${prop} (${(v.length / 1024).toFixed(1)} KB)`);
+                    logger.debug(`[useTBLTableLookup] 🖼️ Image object exclue pour lookup: ${key}.${prop} (${(v.length / 1024).toFixed(1)} KB)`);
                     return false;
                   }
                 }
                 // Exclure si l'objet a une propriété thumbnails (= champ image)
                 if ('thumbnails' in obj || 'original' in obj) {
-                  console.log(`[useTBLTableLookup] 🖼️ Image object exclue pour lookup: ${key} (contient thumbnails/original)`);
+                  logger.debug(`[useTBLTableLookup] 🖼️ Image object exclue pour lookup: ${key} (contient thumbnails/original)`);
                   return false;
                 }
                 // 🛡️ Exclure tout objet sérialisé > 5KB
                 try {
                   const serialized = JSON.stringify(value);
                   if (serialized.length > 5000) {
-                    console.log(`[useTBLTableLookup] 🛡️ Objet trop volumineux exclu: ${key} (${(serialized.length / 1024).toFixed(1)} KB)`);
+                    logger.debug(`[useTBLTableLookup] 🛡️ Objet trop volumineux exclu: ${key} (${(serialized.length / 1024).toFixed(1)} KB)`);
                     return false;
                   }
                 } catch { /* ignore serialization errors */ }
@@ -606,17 +607,17 @@ export function useTBLTableLookup(
                 if (shouldOverride) {
                   filteredFormData[nodeId] = calculatedValue;
                   if (isTargetField) {
-                    console.log(`[DEBUG][Test - liste] 🚀 Valeur batch injectée pour ${nodeId}: ${calculatedValue}`);
+                    logger.debug(`[DEBUG][Test - liste] 🚀 Valeur batch injectée pour ${nodeId}: ${calculatedValue}`);
                   }
                 }
               }
-              if (isTargetField) console.log(`[DEBUG][Test - liste] 🚀 Valeurs calculées depuis batch cache`);
+              if (isTargetField) logger.debug(`[DEBUG][Test - liste] 🚀 Valeurs calculées depuis batch cache`);
             } else if (!isNewDevisRecent) {
               // Fallback: Charger depuis API si batch pas disponible
               // 🔥 FIX: Ne PAS charger si nouveau devis récent (données stales)
               const treeId = (window as any).__TBL_LAST_TREE_ID;
               if (treeId) {
-                if (isTargetField) console.log(`[DEBUG][Test - liste] ⚠️ Batch pas prêt, fallback API /trees/${treeId}/nodes`);
+                if (isTargetField) logger.debug(`[DEBUG][Test - liste] ⚠️ Batch pas prêt, fallback API /trees/${treeId}/nodes`);
                 const allNodesResponse = await api.get(`/api/treebranchleaf/trees/${treeId}/nodes`);
                 const allNodes = allNodesResponse as Array<{ id: string; calculatedValue?: string | number | boolean; hasFormula?: boolean; hasData?: boolean }>;
               
@@ -636,14 +637,14 @@ export function useTBLTableLookup(
                   if (shouldOverride) {
                     filteredFormData[node.id] = node.calculatedValue;
                     if (isTargetField) {
-                      console.log(`[DEBUG][Test - liste] ✅ Valeur calculée injectée (${shouldOverride ? 'override' : 'set'}) pour ${node.id}: ${node.calculatedValue}`);
+                      logger.debug(`[DEBUG][Test - liste] ✅ Valeur calculée injectée (${shouldOverride ? 'override' : 'set'}) pour ${node.id}: ${node.calculatedValue}`);
                     }
                   }
                 }
               }
             }
           } catch (err) {
-            console.warn('[useTBLTableLookup] Erreur chargement valeurs calculées:', err);
+            logger.warn('[useTBLTableLookup] Erreur chargement valeurs calculées:', err);
           }
           
           // 🔗 FIX LINK-RACE FRONTEND: Injecter les valeurs LINK depuis window.TBL_FORM_DATA
@@ -666,7 +667,7 @@ export function useTBLTableLookup(
               }
             }
             if (linkEnrichedCount > 0) {
-              console.log(`🔗 [useTBLTableLookup] formData enrichi avec ${linkEnrichedCount} valeurs depuis TBL_FORM_DATA (LINK values)`);
+              logger.debug(`🔗 [useTBLTableLookup] formData enrichi avec ${linkEnrichedCount} valeurs depuis TBL_FORM_DATA (LINK values)`);
             }
           }
 
@@ -679,7 +680,7 @@ export function useTBLTableLookup(
             // Node.js limite les headers HTTP à 16KB → seuil bas pour éviter les erreurs 431
             if (formValues.length > 4000) {
               if (isTBLDebugEnabled()) {
-                console.log(`[useTBLTableLookup] 📦 formValues volumineuses (${(formValues.length / 1024).toFixed(1)} KB), envoi via POST`);
+                logger.debug(`[useTBLTableLookup] 📦 formValues volumineuses (${(formValues.length / 1024).toFixed(1)} KB), envoi via POST`);
               }
               usePostMethod = true;
               postFormValues = filteredFormData;
@@ -687,7 +688,7 @@ export function useTBLTableLookup(
             } else {
               queryParams = `?formValues=${encodeURIComponent(formValues)}`;
             }
-            if (isTargetField) console.log(`[DEBUG][Test - liste] 📊 formValues filtrées (avec calculatedValues):`, filteredFormData);
+            if (isTargetField) logger.debug(`[DEBUG][Test - liste] 📊 formValues filtrées (avec calculatedValues):`, filteredFormData);
           }
         }
         
@@ -712,7 +713,7 @@ export function useTBLTableLookup(
         ) {
           setLoading(false);
           if (isTBLDebugEnabled()) {
-            console.log(`[useTBLTableLookup] ⚡ Skip lookup (clé identique au dernier appel): ${fieldId}`);
+            logger.debug(`[useTBLTableLookup] ⚡ Skip lookup (clé identique au dernier appel): ${fieldId}`);
           }
           return;
         }
@@ -731,8 +732,8 @@ export function useTBLTableLookup(
           );
         }
         if (isTargetField) {
-          console.log(`[DEBUG][Test - liste] ⬅️ Réponse table/lookup:`, table);
-          console.log(`[DEBUG][Test - liste] 🔍 Structure de table:`, {
+          logger.debug(`[DEBUG][Test - liste] ⬅️ Réponse table/lookup:`, table);
+          logger.debug(`[DEBUG][Test - liste] 🔍 Structure de table:`, {
             isArray: Array.isArray(table),
             hasOptions: table && typeof table === 'object' && 'options' in table,
             hasColumns: table && typeof table === 'object' && 'columns' in table,
@@ -759,7 +760,7 @@ export function useTBLTableLookup(
         const extractedOptions = extractOptions(table, selectConfig);
 
         if (isTargetField) {
-            console.log('✅ [DEBUG][Test - liste] Lookup chargé avec succès:', {
+            logger.debug('✅ [DEBUG][Test - liste] Lookup chargé avec succès:', {
               field: fieldId,
               optionsCount: extractedOptions.length,
               options: extractedOptions
@@ -792,7 +793,7 @@ export function useTBLTableLookup(
         setFilterConditions(newFilterConditions);
         setLoading(false);
       } catch (err) {
-        if (isTargetField) console.error(`[DEBUG][Test - liste] 💥 Erreur dans le hook:`, err);
+        if (isTargetField) logger.error(`[DEBUG][Test - liste] 💥 Erreur dans le hook:`, err);
         if (!cancelled) {
           // Ne logger que les erreurs réelles (pas les 404 qui sont gérés)
           setError(err instanceof Error ? err.message : 'Erreur inconnue');
@@ -903,7 +904,7 @@ function extractOptionsFromTable(
     const displayIdx = displayColumn ? table.columns.indexOf(displayColumn) : valueIdx;
 
     if (keyIdx === -1 || valueIdx === -1) {
-      console.warn('⚠️ [extractOptions] Colonnes key/value introuvables', {
+      logger.warn('⚠️ [extractOptions] Colonnes key/value introuvables', {
         keyColumn,
         valueColumn,
         columns: table.columns,
@@ -930,7 +931,7 @@ function extractOptionsFromTable(
       const rowIdx = table.rows.indexOf(config.keyRow);
       
       if (rowIdx === -1) {
-        console.warn('⚠️ [extractOptions] Ligne introuvable:', config.keyRow);
+        logger.warn('⚠️ [extractOptions] Ligne introuvable:', config.keyRow);
         return [];
       }
 
@@ -953,7 +954,7 @@ function extractOptionsFromTable(
       const colIdx = valueColumn ? table.columns.indexOf(valueColumn) : 1;
 
       if (colIdx === -1) {
-        console.warn('⚠️ [extractOptions] Colonne value introuvable en mode matrix', {
+        logger.warn('⚠️ [extractOptions] Colonne value introuvable en mode matrix', {
           valueColumn,
           columns: table.columns,
         });

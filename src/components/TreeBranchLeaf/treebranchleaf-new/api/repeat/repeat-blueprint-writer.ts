@@ -7,6 +7,7 @@ import {
   type RegisterCapacityLinkInput,
   type TotalFieldConfig
 } from '../registry/repeat-id-registry.js';
+import { logger } from '../../../../../lib/logger';
 
 /**
  * Safe logging surface used by the legacy copier and by future repeat endpoints.
@@ -55,7 +56,7 @@ export function logVariableEvent(payload: VariableEventPayload): void {
     };
     registerVariable(input);
   } catch (err) {
-    console.warn('[repeat-blueprint-writer] Unable to log variable event:', err);
+    logger.warn('[repeat-blueprint-writer] Unable to log variable event:', err);
   }
 }
 
@@ -75,7 +76,7 @@ export function logCapacityEvent(payload: CapacityEventPayload): void {
     };
     registerCapacityLink(input);
   } catch (err) {
-    console.warn('[repeat-blueprint-writer] Unable to log capacity event:', err);
+    logger.warn('[repeat-blueprint-writer] Unable to log capacity event:', err);
   }
 }
 
@@ -88,6 +89,6 @@ export function logTotalFieldConfig(payload: TotalFieldPayload): void {
   try {
     recordTotalFieldConfig(payload);
   } catch (err) {
-    console.warn('[repeat-blueprint-writer] Unable to log total field config:', err);
+    logger.warn('[repeat-blueprint-writer] Unable to log total field config:', err);
   }
 }

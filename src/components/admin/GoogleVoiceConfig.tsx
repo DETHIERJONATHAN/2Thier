@@ -22,6 +22,7 @@ import {
   InfoCircleOutlined,
   SettingOutlined
 } from '@ant-design/icons';
+import { logger } from '../../lib/logger';
 
 const { Title, Text, Paragraph } = Typography;
 const { Step } = Steps;
@@ -67,7 +68,7 @@ const GoogleVoiceConfig: React.FC<GoogleVoiceConfigProps> = ({ onConfigurationCo
         });
       }
     } catch (error: unknown) {
-      console.error('Erreur lors du chargement de la configuration:', error);
+      logger.error('Erreur lors du chargement de la configuration:', error);
       message.error('Erreur lors du chargement de la configuration');
     } finally {
       setLoading(false);
@@ -95,7 +96,7 @@ const GoogleVoiceConfig: React.FC<GoogleVoiceConfigProps> = ({ onConfigurationCo
         onConfigurationComplete();
       }
     } catch (error: unknown) {
-      console.error('Erreur lors de la sauvegarde:', error);
+      logger.error('Erreur lors de la sauvegarde:', error);
       message.error(
         error.response?.data?.error || 
         'Erreur lors de la sauvegarde de la configuration'
@@ -119,7 +120,7 @@ const GoogleVoiceConfig: React.FC<GoogleVoiceConfigProps> = ({ onConfigurationCo
         message.error(`Échec de la connexion: ${response.message}`);
       }
     } catch (error: unknown) {
-      console.error('Erreur lors du test de connexion:', error);
+      logger.error('Erreur lors du test de connexion:', error);
       message.error(
         error.response?.data?.error || 
         'Erreur lors du test de connexion'

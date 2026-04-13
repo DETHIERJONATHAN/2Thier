@@ -33,6 +33,7 @@ import {
 } from '@ant-design/icons';
 import { useProductDocuments, ProductDocument, DOCUMENT_CATEGORIES } from '../../hooks/useProductDocuments';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Text, Title } = Typography;
 const { Panel } = Collapse;
@@ -111,7 +112,7 @@ const DevisProductDocuments: React.FC<DevisProductDocumentsProps> = ({
           setAllDocuments(result.documents);
         }
       } catch (err) {
-        console.error('[DevisProductDocuments] Erreur:', err);
+        logger.error('[DevisProductDocuments] Erreur:', err);
       } finally {
         if (!cancelled) setLoading(false);
       }

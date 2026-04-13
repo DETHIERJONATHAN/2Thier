@@ -14,6 +14,7 @@ import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { useZhiiveNav } from '../contexts/ZhiiveNavContext';
 import { useBookmarks } from '../hooks/useBookmarks';
 import { SF } from './zhiive/ZhiiveTheme';
+import { logger } from '../lib/logger';
 
 interface SearchResult {
   id: string;
@@ -144,7 +145,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
       setResults(data as SearchResponse);
       setSelectedIndex(-1);
     } catch (err) {
-      console.error('[GlobalSearch] Error:', err);
+      logger.error('[GlobalSearch] Error:', err);
       setResults(null);
     } finally {
       setLoading(false);

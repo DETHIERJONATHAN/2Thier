@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../../../lib/database';
 import { verifyAuthToken } from '../../../../../auth/auth';
+import { logger } from '../../../../../lib/logger';
 
 const prisma = db;
 
@@ -9,26 +10,26 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    console.log('🚀 [activate-devis1minute] Début de la demande d\'activation');
+    logger.debug('🚀 [activate-devis1minute] Début de la demande d\'activation');
 
     // Vérification de l'authentification
     const authResult = await verifyAuthToken(request);
     if (!authResult.isValid || !authResult.user) {
-      console.log('❌ [activate-devis1minute] Utilisateur non authentifié');
+      logger.debug('❌ [activate-devis1minute] Utilisateur non authentifié');
       return NextResponse.json({ success: false, message: 'Non authentifié' }, { status: 401 });
     }
 
     // Vérification des permissions Super Admin
     if (authResult.user.role !== 'super_admin') {
-      console.log('❌ [activate-devis1minute] Utilisateur pas Super Admin:', authResult.user.role);
+      logger.debug('❌ [activate-devis1minute] Utilisateur pas Super Admin:', authResult.user.role);
       return NextResponse.json({ success: false, message: 'Accès refusé - Super Admin requis' }, { status: 403 });
     }
 
     const organizationId = params.id;
     const { features } = await request.json();
 
-    console.log('🎯 [activate-devis1minute] Organisation ID:', organizationId);
-    console.log('🎯 [activate-devis1minute] Features à activer:', features);
+    logger.debug('🎯 [activate-devis1minute] Organisation ID:', organizationId);
+    logger.debug('🎯 [activate-devis1minute] Features à activer:', features);
 
     // Vérifier que l'organisation existe
     const organization = await prisma.organization.findUnique({
@@ -36,14 +37,14 @@ export async function POST(
     });
 
     if (!organization) {
-      console.log('❌ [activate-devis1minute] Organisation introuvable:', organizationId);
+      logger.debug('❌ [activate-devis1minute] Organisation introuvable:', organizationId);
       return NextResponse.json({ 
         success: false, 
         message: 'Organisation introuvable' 
       }, { status: 404 });
     }
 
-    console.log('✅ [activate-devis1minute] Organisation trouvée:', organization.name);
+    logger.debug('✅ [activate-devis1minute] Organisation trouvée:', organization.name);
 
     // Trouver tous les modules correspondant aux features Devis1Minute
     const modulesToActivate = await prisma.module.findMany({
@@ -52,7 +53,7 @@ export async function POST(
       }
     });
 
-    console.log(`📦 [activate-devis1minute] ${modulesToActivate.length} modules trouvés pour activation:`, 
+    logger.debug(`📦 [activate-devis1minute] ${modulesToActivate.length} modules trouvés pour activation:`, 
       modulesToActivate.map(m => ({ key: m.key, feature: m.feature }))
     );
 
@@ -92,9 +93,9 @@ export async function POST(
           status: 'activated'
         });
 
-        console.log(`✅ [activate-devis1minute] Module "${module.key}" activé`);
+        logger.debug(`✅ [activate-devis1minute] Module "${module.key}" activé`);
       } catch (moduleError) {
-        console.error(`❌ [activate-devis1minute] Erreur activation module "${module.key}":`, moduleError);
+        logger.error(`❌ [activate-devis1minute] Erreur activation module "${module.key}":`, moduleError);
         activationResults.push({
           module: module.key,
           feature: module.feature,
@@ -103,7 +104,7 @@ export async function POST(
       }
     }
 
-    console.log('📊 [activate-devis1minute] Résultats d\'activation:', activationResults);
+    logger.debug('📊 [activate-devis1minute] Résultats d\'activation:', activationResults);
 
     const successCount = activationResults.filter(r => r.status === 'activated').length;
     const totalCount = activationResults.length;
@@ -120,7 +121,7 @@ export async function POST(
     });
 
   } catch (error) {
-    console.error('💥 [activate-devis1minute] Erreur générale:', error);
+    logger.error('💥 [activate-devis1minute] Erreur générale:', error);
     return NextResponse.json({ 
       success: false, 
       message: 'Erreur interne du serveur lors de l\'activation' 

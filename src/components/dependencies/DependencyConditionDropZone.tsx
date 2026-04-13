@@ -1,4 +1,5 @@
 import React, { useCallback } from 'react';
+import { logger } from '../../lib/logger';
 
 interface DependencyConditionDropZoneProps {
   dependencyId: string;
@@ -11,7 +12,7 @@ const DependencyConditionDropZone: React.FC<DependencyConditionDropZoneProps> = 
 }) => {
   // Implémentation simplifiée - à développer selon les besoins
   const handleRemoveCondition = useCallback(() => {
-    console.log(`Removing condition ${conditionId} from dependency ${dependencyId}`);
+    logger.debug(`Removing condition ${conditionId} from dependency ${dependencyId}`);
     // Ici, implémentez la logique pour supprimer cette condition
   }, [dependencyId, conditionId]);
 

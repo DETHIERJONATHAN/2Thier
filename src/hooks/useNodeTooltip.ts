@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { logger } from '../lib/logger';
 
 export interface TooltipData {
   type: 'none' | 'text' | 'image' | 'both';
@@ -16,7 +17,7 @@ export interface TooltipData {
 export const useNodeTooltip = (node?: unknown): TooltipData => {
   return useMemo(() => {
     // 🚨 DEBUG GLOBAL - Log TOUS les appels du hook
-    console.log(`🚨 [useNodeTooltip] APPELÉ avec:`, {
+    logger.debug(`🚨 [useNodeTooltip] APPELÉ avec:`, {
       hasNode: !!node,
       nodeId: node?.id,
       nodeLabel: node?.label,
@@ -24,7 +25,7 @@ export const useNodeTooltip = (node?: unknown): TooltipData => {
     });
 
     if (!node) {
-      console.log(`🚨 [useNodeTooltip] AUCUN NŒUD - retour par défaut`);
+      logger.debug(`🚨 [useNodeTooltip] AUCUN NŒUD - retour par défaut`);
       return {
         type: 'none',
         text: null,
@@ -36,7 +37,7 @@ export const useNodeTooltip = (node?: unknown): TooltipData => {
     // 🔍 DEBUG: Log du nœud pour diagnostiquer (tous les nœuds TBL)
     const shouldDebug = true; // DEBUG GLOBAL TEMPORAIRE
     if (shouldDebug) {
-      console.log(`🔍 [useNodeTooltip][${node.label || node.id}]`, {
+      logger.debug(`🔍 [useNodeTooltip][${node.label || node.id}]`, {
         nodeId: node.id,
         appearanceConfig: node.appearanceConfig,
         metadata: node.metadata,
@@ -55,7 +56,7 @@ export const useNodeTooltip = (node?: unknown): TooltipData => {
       const image = node.appearanceConfig.helpTooltipImage || null;
       
       if (shouldDebug) {
-        console.log(`[useNodeTooltip][${node.label || node.id}] appearanceConfig:`, { type, text, image });
+        logger.debug(`[useNodeTooltip][${node.label || node.id}] appearanceConfig:`, { type, text, image });
       }
       
       if (type !== 'none' && (text || image)) {
@@ -66,7 +67,7 @@ export const useNodeTooltip = (node?: unknown): TooltipData => {
           hasTooltip: true
         };
         if (shouldDebug) {
-          console.log(`✅ [useNodeTooltip][${node.label || node.id}] TROUVÉ dans appearanceConfig:`, result);
+          logger.debug(`✅ [useNodeTooltip][${node.label || node.id}] TROUVÉ dans appearanceConfig:`, result);
         }
         return result;
       }
@@ -79,7 +80,7 @@ export const useNodeTooltip = (node?: unknown): TooltipData => {
       const image = node.metadata.appearance.helpTooltipImage || null;
       
       if (shouldDebug) {
-        console.log(`[useNodeTooltip][${node.label || node.id}] metadata.appearance:`, { type, text, image });
+        logger.debug(`[useNodeTooltip][${node.label || node.id}] metadata.appearance:`, { type, text, image });
       }
       
       if (type !== 'none' && (text || image)) {
@@ -90,7 +91,7 @@ export const useNodeTooltip = (node?: unknown): TooltipData => {
           hasTooltip: true
         };
         if (shouldDebug) {
-          console.log(`✅ [useNodeTooltip][${node.label || node.id}] TROUVÉ dans metadata.appearance:`, result);
+          logger.debug(`✅ [useNodeTooltip][${node.label || node.id}] TROUVÉ dans metadata.appearance:`, result);
         }
         return result;
       }
@@ -103,7 +104,7 @@ export const useNodeTooltip = (node?: unknown): TooltipData => {
       const image = node.text_helpTooltipImage || null;
       
       if (shouldDebug) {
-        console.log(`[useNodeTooltip][${node.label || node.id}] colonnes TBL directes:`, { type, text, image });
+        logger.debug(`[useNodeTooltip][${node.label || node.id}] colonnes TBL directes:`, { type, text, image });
       }
       
       if (type !== 'none' && (text || image)) {
@@ -114,7 +115,7 @@ export const useNodeTooltip = (node?: unknown): TooltipData => {
           hasTooltip: true
         };
         if (shouldDebug) {
-          console.log(`✅ [useNodeTooltip][${node.label || node.id}] TROUVÉ dans TBL directes:`, result);
+          logger.debug(`✅ [useNodeTooltip][${node.label || node.id}] TROUVÉ dans TBL directes:`, result);
         }
         return result;
       }
@@ -129,7 +130,7 @@ export const useNodeTooltip = (node?: unknown): TooltipData => {
     };
     
     if (shouldDebug) {
-      console.log(`❌ [useNodeTooltip][${node.label || node.id}] AUCUN TOOLTIP TROUVÉ - RÉSULTAT:`, result);
+      logger.debug(`❌ [useNodeTooltip][${node.label || node.id}] AUCUN TOOLTIP TROUVÉ - RÉSULTAT:`, result);
     }
     
     return result;

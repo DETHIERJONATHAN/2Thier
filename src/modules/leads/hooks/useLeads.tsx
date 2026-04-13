@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
+import { logger } from '../../../lib/logger';
 
 interface LeadFilters {
   status?: string;
@@ -28,7 +29,7 @@ export const useLeads = () => {
       });
       setLeads(response.data || []);
     } catch (error) {
-      console.error('Erreur lors du chargement des leads:', error);
+      logger.error('Erreur lors du chargement des leads:', error);
       setLeads([]);
     } finally {
       setLoading(false);

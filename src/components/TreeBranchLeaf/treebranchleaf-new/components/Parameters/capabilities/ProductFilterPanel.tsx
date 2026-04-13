@@ -20,6 +20,7 @@ import {
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../../../../../lib/logger';
 
 const { Text } = Typography;
 
@@ -522,7 +523,7 @@ const ProductFilterPanel: React.FC<ProductFilterPanelProps> = ({ treeId, nodeId,
                 );
               }
             } catch (err) {
-              console.error('[ProductFilterPanel] Erreur auto-liaison:', err);
+              logger.error('[ProductFilterPanel] Erreur auto-liaison:', err);
             }
           }
         }
@@ -532,7 +533,7 @@ const ProductFilterPanel: React.FC<ProductFilterPanelProps> = ({ treeId, nodeId,
           const currentSelectOpts = node?.select_options;
           const needsSync = !currentSelectOpts || !Array.isArray(currentSelectOpts) || currentSelectOpts.length === 0;
           if (needsSync) {
-            console.log('[ProductFilterPanel] Sync select_options depuis product_options:', resolvedOptions);
+            logger.debug('[ProductFilterPanel] Sync select_options depuis product_options:', resolvedOptions);
             try {
               if (onNodeUpdate) {
                 await onNodeUpdate({
@@ -548,7 +549,7 @@ const ProductFilterPanel: React.FC<ProductFilterPanelProps> = ({ treeId, nodeId,
                 );
               }
             } catch (err) {
-              console.error('[ProductFilterPanel] Erreur sync select_options:', err);
+              logger.error('[ProductFilterPanel] Erreur sync select_options:', err);
             }
           }
         }
@@ -559,7 +560,7 @@ const ProductFilterPanel: React.FC<ProductFilterPanelProps> = ({ treeId, nodeId,
           setVisibleFor(node?.product_visibleFor ?? null);
         }
       } catch (err) {
-        console.error('[ProductFilterPanel] Erreur chargement:', err);
+        logger.error('[ProductFilterPanel] Erreur chargement:', err);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -583,7 +584,7 @@ const ProductFilterPanel: React.FC<ProductFilterPanelProps> = ({ treeId, nodeId,
         }
       }
     } catch (err) {
-      console.error('[ProductFilterPanel] Erreur sauvegarde:', err);
+      logger.error('[ProductFilterPanel] Erreur sauvegarde:', err);
       message.error('Erreur lors de la sauvegarde');
     }
   }, [api, nodeId, treeId, allNodes, onNodeUpdate]);
@@ -602,7 +603,7 @@ const ProductFilterPanel: React.FC<ProductFilterPanelProps> = ({ treeId, nodeId,
         }
       }
     } catch (err) {
-      console.error('[ProductFilterPanel] Erreur sauvegarde source:', err);
+      logger.error('[ProductFilterPanel] Erreur sauvegarde source:', err);
     }
   }, [api, sourceNodeId, treeId, allNodes, onNodeUpdate]);
 

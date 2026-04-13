@@ -6,6 +6,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { DeleteOutlined, SendOutlined, PauseCircleOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { SF } from '../zhiive/ZhiiveTheme';
+import { logger } from '../../lib/logger';
 
 interface VoiceRecorderProps {
   onSend: (audioBlob: Blob, durationSeconds: number) => void;
@@ -78,7 +79,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }
       };
       updateWaveform();
     } catch (err) {
-      console.error('Microphone access denied:', err);
+      logger.error('Microphone access denied:', err);
     }
   }, []);
 

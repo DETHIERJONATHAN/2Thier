@@ -7,6 +7,7 @@
 
 import type { TreeBranchLeafTree, TreeBranchLeafNode } from '../types';
 import { TreeBranchLeafRegistry } from '../core/registry';
+import { logger } from '../../../../lib/logger';
 
 // Mock data pour commencer - remplacera l'ancienne API
 // Configuration d'organisation par dÃƒÂ©faut (modifiable via variable d'environnement)
@@ -241,14 +242,14 @@ export class TreeBranchLeafAPI {
       });
 
       if (!response.ok) {
-        console.error('Ã¢ÂÅ’ [TreeBranchLeafAPI] Erreur HTTP:', response.status);
+        logger.error('Ã¢ÂÅ’ [TreeBranchLeafAPI] Erreur HTTP:', response.status);
         return null;
       }
 
       const updatedNode = await response.json();
       return updatedNode;
     } catch (error) {
-      console.error('Ã¢ÂÅ’ [TreeBranchLeafAPI] Erreur updateNode:', error);
+      logger.error('Ã¢ÂÅ’ [TreeBranchLeafAPI] Erreur updateNode:', error);
       return null;
     }
   }

@@ -3,6 +3,7 @@ import { Card, Form, Input, Button, Alert, Divider, Space, Switch, message, Spin
 import { GoogleOutlined, CheckCircleOutlined, ExclamationCircleOutlined, LoginOutlined, EyeInvisibleOutlined, EyeTwoTone, RedoOutlined, CopyOutlined, SettingOutlined, CloudOutlined, ApiOutlined, InfoCircleOutlined, DesktopOutlined, CloudServerOutlined, GithubOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import GoogleTokenMonitor from './GoogleTokenMonitor';
+import { logger } from '../../lib/logger';
 
 interface GoogleWorkspaceConfig {
   id?: string;
@@ -193,15 +194,15 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
   // Définir loadConfig en premier pour éviter l'erreur de référence
   const loadConfig = useCallback(async () => {
     try {
-      console.log('[GoogleWorkspaceConfig] 📥 Début chargement configuration...');
+      logger.debug('[GoogleWorkspaceConfig] 📥 Début chargement configuration...');
       const response = await api.get(`/api/organizations/${organizationId}/google-workspace/config`);
-      console.log('[GoogleWorkspaceConfig] 📊 Réponse getConfig:', response);
-      console.log('[GoogleWorkspaceConfig] 📋 Données détaillées:', JSON.stringify(response.data, null, 2));
+      logger.debug('[GoogleWorkspaceConfig] 📊 Réponse getConfig:', response);
+      logger.debug('[GoogleWorkspaceConfig] 📋 Données détaillées:', JSON.stringify(response.data, null, 2));
       
       if (response.success && response.data) {
-        console.log('[GoogleWorkspaceConfig] ✅ Configuration trouvée:', response.data);
-        console.log('[GoogleWorkspaceConfig] 🔑 serviceAccountEmail:', response.data.serviceAccountEmail);
-        console.log('[GoogleWorkspaceConfig] 🔐 privateKey présent:', !!response.data.privateKey);
+        logger.debug('[GoogleWorkspaceConfig] ✅ Configuration trouvée:', response.data);
+        logger.debug('[GoogleWorkspaceConfig] 🔑 serviceAccountEmail:', response.data.serviceAccountEmail);
+        logger.debug('[GoogleWorkspaceConfig] 🔐 privateKey présent:', !!response.data.privateKey);
         
         setConfig(response.data);
         
@@ -217,12 +218,12 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
           isActive: response.data.isActive || response.data.enabled || false
         };
         
-        console.log('[GoogleWorkspaceConfig] 📝 Données form à définir:', formData);
-        console.log('[GoogleWorkspaceConfig] 🔗 URI de redirection (auto-détectée):', currentRedirectUri);
+        logger.debug('[GoogleWorkspaceConfig] 📝 Données form à définir:', formData);
+        logger.debug('[GoogleWorkspaceConfig] 🔗 URI de redirection (auto-détectée):', currentRedirectUri);
         form.setFieldsValue(formData);
         // Pas besoin de setConnectionStatus car on utilise maintenant les vrais états
       } else {
-        console.log('[GoogleWorkspaceConfig] ⚪ Aucune configuration trouvée ou échec');
+        logger.debug('[GoogleWorkspaceConfig] ⚪ Aucune configuration trouvée ou échec');
         // Définir les valeurs par défaut si pas de config
         form.setFieldsValue({
           domain: '2thier.be',
@@ -231,7 +232,7 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
         });
       }
     } catch (err) {
-      console.error('[GoogleWorkspaceConfig] ❌ Erreur lors du chargement de la configuration:', err);
+      logger.error('[GoogleWorkspaceConfig] ❌ Erreur lors du chargement de la configuration:', err);
     }
   }, [api, organizationId, form, currentRedirectUri]);
 
@@ -267,7 +268,7 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
         message.error("Impossible de récupérer les informations de l'organisation.");
       }
     } catch (error) {
-      console.error('Erreur lors de la vérification du domaine:', error);
+      logger.error('Erreur lors de la vérification du domaine:', error);
       setDomainStatus('error');
       message.error("Impossible de vérifier le statut du domaine.");
     }
@@ -275,16 +276,16 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
 
   const checkGoogleConnection = useCallback(async () => {
     try {
-      console.log('[GoogleWorkspaceConfig] 🔍 Vérification connexion Google...');
+      logger.debug('[GoogleWorkspaceConfig] 🔍 Vérification connexion Google...');
       const response = await api.get(`/api/google-auth/status?organizationId=${organizationId}`);
-      console.log('[GoogleWorkspaceConfig] 📊 Status Google:', response);
+      logger.debug('[GoogleWorkspaceConfig] 📊 Status Google:', response);
       
       if (response.success && response.data) {
         setIsGoogleConnected(response.data.connected || false);
-        console.log('[GoogleWorkspaceConfig] 🔗 Google connecté:', response.data.connected);
+        logger.debug('[GoogleWorkspaceConfig] 🔗 Google connecté:', response.data.connected);
       }
     } catch (err) {
-      console.error('[GoogleWorkspaceConfig] ❌ Erreur vérification Google:', err);
+      logger.error('[GoogleWorkspaceConfig] ❌ Erreur vérification Google:', err);
       setIsGoogleConnected(false);
     }
   }, [api, organizationId]);
@@ -298,7 +299,7 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
         setOrganizationData(orgResponse.data);
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des données organisation:', error);
+      logger.error('Erreur lors du chargement des données organisation:', error);
     }
   }, [api, organizationId]);
 
@@ -317,27 +318,27 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
     
     setDomainChecking(true);
     try {
-      console.log('[GoogleWorkspaceConfig] 🔍 Chargement des DNS records...');
+      logger.debug('[GoogleWorkspaceConfig] 🔍 Chargement des DNS records...');
       const statusResponse = await api.get(`/api/organizations/${organizationId}/google-workspace/domain-status`);
-      console.log('[GoogleWorkspaceConfig] 📊 Réponse domain-status:', statusResponse);
-      console.log('[GoogleWorkspaceConfig] 📋 Données détaillées:', JSON.stringify(statusResponse.data, null, 2));
+      logger.debug('[GoogleWorkspaceConfig] 📊 Réponse domain-status:', statusResponse);
+      logger.debug('[GoogleWorkspaceConfig] 📋 Données détaillées:', JSON.stringify(statusResponse.data, null, 2));
       
       if (statusResponse.success) {
-        console.log('[GoogleWorkspaceConfig] ✅ Success = true');
-        console.log('[GoogleWorkspaceConfig] 🔧 isConfigured:', statusResponse.data.isConfigured);
-        console.log('[GoogleWorkspaceConfig] 📝 requiredRecords:', statusResponse.data.requiredRecords);
+        logger.debug('[GoogleWorkspaceConfig] ✅ Success = true');
+        logger.debug('[GoogleWorkspaceConfig] 🔧 isConfigured:', statusResponse.data.isConfigured);
+        logger.debug('[GoogleWorkspaceConfig] 📝 requiredRecords:', statusResponse.data.requiredRecords);
         
         setDnsRecords(statusResponse.data.requiredRecords);
         setDomainStatus(statusResponse.data.isConfigured ? 'configured' : 'unconfigured');
         
-        console.log('[GoogleWorkspaceConfig] 📌 Statut défini:', statusResponse.data.isConfigured ? 'configured' : 'unconfigured');
+        logger.debug('[GoogleWorkspaceConfig] 📌 Statut défini:', statusResponse.data.isConfigured ? 'configured' : 'unconfigured');
       } else {
-        console.log('[GoogleWorkspaceConfig] ❌ Success = false');
+        logger.debug('[GoogleWorkspaceConfig] ❌ Success = false');
         setDomainStatus('error');
         message.error("Erreur lors de la récupération des enregistrements DNS.");
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des DNS records:', error);
+      logger.error('Erreur lors du chargement des DNS records:', error);
       setDomainStatus('error');
       message.error("Impossible de charger les enregistrements DNS.");
     } finally {
@@ -353,15 +354,15 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
   const handleSave = async (values: GoogleWorkspaceConfig) => {
     setLoading(true);
     try {
-      console.log('[GoogleWorkspaceConfig] 💾 Début sauvegarde avec données:', values);
-      console.log('[GoogleWorkspaceConfig] 📋 serviceAccountEmail à sauver:', values.serviceAccountEmail);
-      console.log('[GoogleWorkspaceConfig] 🔐 privateKey à sauver (présent):', !!values.privateKey);
+      logger.debug('[GoogleWorkspaceConfig] 💾 Début sauvegarde avec données:', values);
+      logger.debug('[GoogleWorkspaceConfig] 📋 serviceAccountEmail à sauver:', values.serviceAccountEmail);
+      logger.debug('[GoogleWorkspaceConfig] 🔐 privateKey à sauver (présent):', !!values.privateKey);
       
       // Garder l'état précédent pour détection du changement
       const wasActive = config?.isActive || false;
       
       const response = await api.post(`/api/organizations/${organizationId}/google-workspace/config`, values);
-      console.log('[GoogleWorkspaceConfig] 📋 Réponse sauvegarde:', response);
+      logger.debug('[GoogleWorkspaceConfig] 📋 Réponse sauvegarde:', response);
       
       if (response.success) {
         setConfig(values);
@@ -369,19 +370,19 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
         
         // 🚀 Si Google Workspace vient d'être activé, déclencher l'activation des modules
         if (!wasActive && values.isActive && onGoogleWorkspaceActivated) {
-          console.log('[GoogleWorkspaceConfig] 🚀 Google Workspace activé - activation des modules...');
+          logger.debug('[GoogleWorkspaceConfig] 🚀 Google Workspace activé - activation des modules...');
           onGoogleWorkspaceActivated();
         }
         
         // Recharger la configuration depuis le serveur pour vérifier la persistance
         await loadConfig();
-        console.log('[GoogleWorkspaceConfig] ✅ Configuration rechargée après sauvegarde');
+        logger.debug('[GoogleWorkspaceConfig] ✅ Configuration rechargée après sauvegarde');
       } else {
-        console.error('[GoogleWorkspaceConfig] ❌ Échec sauvegarde:', response);
+        logger.error('[GoogleWorkspaceConfig] ❌ Échec sauvegarde:', response);
         message.error('Erreur lors de la sauvegarde: ' + (response.message || 'Erreur inconnue'));
       }
     } catch (err) {
-      console.error('[GoogleWorkspaceConfig] ❌ Erreur lors de la sauvegarde:', err);
+      logger.error('[GoogleWorkspaceConfig] ❌ Erreur lors de la sauvegarde:', err);
       message.error('Erreur lors de la sauvegarde de la configuration');
     } finally {
       setLoading(false);
@@ -408,7 +409,7 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
 
     setDisconnecting(true);
     try {
-      console.log('[GoogleWorkspaceConfig] 🔌 Déconnexion Google...');
+      logger.debug('[GoogleWorkspaceConfig] 🔌 Déconnexion Google...');
       const response = await api.post('/api/google-auth/disconnect', { organizationId });
       if (response.success) {
         setIsGoogleConnected(false);
@@ -418,7 +419,7 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
         message.error('Erreur lors de la déconnexion Google');
       }
     } catch (error) {
-      console.error('Erreur lors de la déconnexion Google:', error);
+      logger.error('Erreur lors de la déconnexion Google:', error);
       message.error('Erreur lors de la déconnexion Google');
     } finally {
       setDisconnecting(false);
@@ -437,7 +438,7 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
       const statusResponse = await api.get(`/api/google-auth/status?organizationId=${organizationId}`);
       
       if (statusResponse.success && statusResponse.data?.connected && statusResponse.data?.isValid) {
-        console.log('[GoogleWorkspaceConfig] ✅ Token Google déjà valide, pas besoin de se réauthentifier');
+        logger.debug('[GoogleWorkspaceConfig] ✅ Token Google déjà valide, pas besoin de se réauthentifier');
         message.success('Vous êtes déjà connecté à Google avec un token valide');
         setIsGoogleConnected(true);
         setConnecting(false);
@@ -450,7 +451,7 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
       // Si pas de token valide, procéder à l'authentification
       const response = await api.get(`/api/google-auth/connect?organizationId=${organizationId}`);
       if (response.success && response.data?.authUrl) {
-        console.log('[GoogleWorkspaceConfig] 🔗 Redirection vers Google OAuth...');
+        logger.debug('[GoogleWorkspaceConfig] 🔗 Redirection vers Google OAuth...');
         message.info('🔐 Redirection vers Google pour authentification...');
         
         // Stocker l'état pour savoir qu'on attend un retour OAuth
@@ -466,7 +467,7 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
         setConnecting(false);
       }
     } catch (error) {
-      console.error('Erreur lors de l\'authentification Google:', error);
+      logger.error('Erreur lors de l\'authentification Google:', error);
       message.error('Erreur lors de l\'authentification Google');
       setConnecting(false);
     }

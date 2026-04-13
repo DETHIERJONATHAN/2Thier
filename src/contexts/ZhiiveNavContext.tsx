@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useRef, ReactNode, useCallback, useMemo, useEffect } from 'react';
 import { useUserPreference } from '../hooks/useUserPreference';
 
-export type ZhiiveApp = 'explore' | 'nectar' | 'reels' | 'wax' | 'stats' | 'mail' | 'agenda' | 'search';
+export type ZhiiveApp = 'explore' | 'nectar' | 'reels' | 'wax' | 'stats' | 'mail' | 'agenda' | 'search' | 'arena';
 export type FeedMode = 'personal' | 'org';
 
 interface ZhiiveNavContextType {
@@ -38,11 +38,11 @@ interface ZhiiveNavContextType {
   setWallViewUrl: (url: string | null) => void;
 }
 
-const defaultTabOrder = ['nectar', 'wax', 'explore', 'reels', 'mur', 'mail', 'agenda', 'search', 'stats'];
+const defaultTabOrder = ['nectar', 'wax', 'explore', 'reels', 'mur', 'arena', 'mail', 'agenda', 'search', 'stats'];
 
 const ZhiiveNavContext = createContext<ZhiiveNavContextType>({
   centerApp: null, setCenterApp: () => {},
-  leftApps: ['nectar', 'wax', 'explore', 'reels'], rightApps: ['mail', 'agenda', 'search', 'stats'],
+  leftApps: ['nectar', 'wax', 'explore', 'reels'], rightApps: ['arena', 'mail', 'agenda', 'search', 'stats'],
   leftSidebarApp: 'reels', rightSidebarApp: 'mail',
   tabOrder: defaultTabOrder, reorderTabs: () => {},
   mobilePanel: 4, setMobilePanel: () => {},

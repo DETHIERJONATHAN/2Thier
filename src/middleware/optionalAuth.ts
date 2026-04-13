@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'development-secret-key';
 
@@ -121,7 +122,7 @@ export const optionalAuthMiddleware = async (
       next();
     }
   } catch (error) {
-    console.error('[optionalAuthMiddleware] Erreur:', error);
+    logger.error('[optionalAuthMiddleware] Erreur:', error);
     req.user = {
       userId: '',
       email: '',

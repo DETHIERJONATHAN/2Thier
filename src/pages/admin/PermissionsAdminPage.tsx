@@ -3,6 +3,7 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
 import { NotificationManager } from '../../components/Notifications';
 import AdminSwitch from '../../components/admin/AdminSwitch';
+import { logger } from '../../lib/logger';
 
 
 const resolveErrorMessage = (err: unknown, fallback: string) => {
@@ -93,7 +94,7 @@ export default function PermissionsAdminPage() {
       ]);
 
       if (rolesResponse.success) {
-        console.log('[PermissionsAdminPage] Roles loaded:', (rolesResponse.data || []).length);
+        logger.debug('[PermissionsAdminPage] Roles loaded:', (rolesResponse.data || []).length);
         setRoles(rolesResponse.data || []);
       } else {
         throw new Error(rolesResponse.message || 'Erreur lors du chargement des rôles');
@@ -101,7 +102,7 @@ export default function PermissionsAdminPage() {
 
       if (modulesResponse.success) {
         const sortedModules = (modulesResponse.data || []).sort((a: Module, b: Module) => a.label.localeCompare(b.label, 'fr'));
-        console.log('[PermissionsAdminPage] Modules loaded:', sortedModules.length);
+        logger.debug('[PermissionsAdminPage] Modules loaded:', sortedModules.length);
         setModules(sortedModules);
       } else {
         throw new Error(modulesResponse.message || 'Erreur lors du chargement des modules');
@@ -132,14 +133,14 @@ export default function PermissionsAdminPage() {
       const response = await api.get(`/api/permissions?roleId=${selectedRole.id}&organizationId=${currentOrganization.id}`);
       if (response.success) {
         const permsData = response.data || [];
-        console.log('[PermissionsAdminPage] Permissions loaded for role', selectedRole.label, ':', permsData.length, 'total,', permsData.filter((p: Permission) => p.action === 'access' && p.allowed).length, 'access actifs');
+        logger.debug('[PermissionsAdminPage] Permissions loaded for role', selectedRole.label, ':', permsData.length, 'total,', permsData.filter((p: Permission) => p.action === 'access' && p.allowed).length, 'access actifs');
         setPermissions(permsData);
       } else {
         throw new Error(response.message || 'Erreur lors du chargement des permissions');
       }
     } catch (err: unknown) {
       const errorMessage = resolveErrorMessage(err, 'Erreur lors du chargement des permissions.');
-      console.error('[PermissionsAdminPage] Error loading permissions:', errorMessage);
+      logger.error('[PermissionsAdminPage] Error loading permissions:', errorMessage);
       setError(errorMessage);
       NotificationManager.error(errorMessage);
       setPermissions([]);
@@ -198,7 +199,7 @@ export default function PermissionsAdminPage() {
   };
 
   const handleSelectRole = async (role: Role | null) => {
-    console.log('[PermissionsAdminPage] Role selected:', role?.label, '(', role?.id, ')');
+    logger.debug('[PermissionsAdminPage] Role selected:', role?.label, '(', role?.id, ')');
     setSelectedRole(role);
     if (!role) {
       setPermissions([]);
@@ -228,7 +229,7 @@ export default function PermissionsAdminPage() {
     const permissionsToSave = permissions.map(({ moduleId, action, resource, allowed }) => 
       ({ moduleId, action, resource, allowed }));
 
-    console.log('[PermissionsAdminPage] Saving permissions with payload:', JSON.stringify(permissionsToSave, null, 2));
+    logger.debug('[PermissionsAdminPage] Saving permissions with payload:', JSON.stringify(permissionsToSave, null, 2));
 
     try {
       const response = await api.post('/api/permissions', {

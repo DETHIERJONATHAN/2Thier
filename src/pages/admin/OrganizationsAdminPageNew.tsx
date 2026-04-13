@@ -64,6 +64,7 @@ import {
   debounce
 } from '../../utils/organizationOptimizations';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Title, Text } = Typography;
 
@@ -416,18 +417,18 @@ const OrganizationsAdminPageNew: React.FC = () => {
   // 🚀 Fonction pour activer automatiquement les modules Google Workspace
   const handleActivateGoogleWorkspaceModules = useCallback(async (organizationId: string) => {
     try {
-      console.log('🚀 [DEBUG] handleActivateGoogleWorkspaceModules appelé pour org:', organizationId);
+      logger.debug('🚀 [DEBUG] handleActivateGoogleWorkspaceModules appelé pour org:', organizationId);
       
       // ✨ 1. Activer automatiquement la section Google Workspace
       const googleWorkspaceSection = sections.find(section => section.id === 'googleWorkspace');
-      console.log('🔧 [DEBUG] Section Google Workspace trouvée:', googleWorkspaceSection);
+      logger.debug('🔧 [DEBUG] Section Google Workspace trouvée:', googleWorkspaceSection);
       
       if (googleWorkspaceSection && !googleWorkspaceSection.active) {
-        console.log('🔧 Activation de la section Google Workspace...');
+        logger.debug('🔧 Activation de la section Google Workspace...');
         toggleSectionActive('googleWorkspace');
         messageApi.success('Section Google Workspace activée');
       } else if (googleWorkspaceSection?.active) {
-        console.log('✅ [DEBUG] Section Google Workspace déjà active');
+        logger.debug('✅ [DEBUG] Section Google Workspace déjà active');
       }
 
       // 2. Identifier les modules Google Workspace (utiliser les mêmes clés que l'API)
@@ -439,18 +440,18 @@ const OrganizationsAdminPageNew: React.FC = () => {
         )
       ) || [];
 
-      console.log('📋 [DEBUG] Modules Google Workspace trouvés:', googleModules.map(m => ({ key: m.key, label: m.label, active: m.active })));
+      logger.debug('📋 [DEBUG] Modules Google Workspace trouvés:', googleModules.map(m => ({ key: m.key, label: m.label, active: m.active })));
 
       if (googleModules.length === 0) {
-        console.log('⚠️ Aucun module Google Workspace trouvé');
+        logger.debug('⚠️ Aucun module Google Workspace trouvé');
         return;
       }
 
-      console.log(`🚀 Activation de ${googleModules.length} modules Google Workspace pour l'organisation ${organizationId}`);
+      logger.debug(`🚀 Activation de ${googleModules.length} modules Google Workspace pour l'organisation ${organizationId}`);
 
       // 3. Activer tous les modules Google Workspace
       const activationPromises = googleModules.map(async module => {
-        console.log(`🔄 Activation du module ${module.key} (${module.label})`);
+        logger.debug(`🔄 Activation du module ${module.key} (${module.label})`);
         return api.patch('/api/modules/status', {
           moduleId: module.id,
           organizationId: organizationId,
@@ -464,9 +465,9 @@ const OrganizationsAdminPageNew: React.FC = () => {
       results.forEach((result, index) => {
         const module = googleModules[index];
         if (result.status === 'fulfilled') {
-          console.log(`✅ Module ${module.key} activé avec succès`);
+          logger.debug(`✅ Module ${module.key} activé avec succès`);
         } else {
-          console.error(`❌ Erreur activation module ${module.key}:`, result.reason);
+          logger.error(`❌ Erreur activation module ${module.key}:`, result.reason);
         }
       });
       
@@ -486,7 +487,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
         });
         
         // Recharger les données après un petit délai
-        console.log('🔄 Rechargement des données après activation...');
+        logger.debug('🔄 Rechargement des données après activation...');
         setTimeout(async () => {
           await fetchOrganizationModules(organizationId);
           await fetchOrganizations();
@@ -495,13 +496,13 @@ const OrganizationsAdminPageNew: React.FC = () => {
         if (refreshModules) {
           await refreshModules();
         }
-        console.log('✅ Données rechargées');
+        logger.debug('✅ Données rechargées');
       } else {
         messageApi.warning('Aucun module Google Workspace n\'a pu être activé');
       }
 
     } catch (error) {
-      console.error('Erreur lors de l\'activation des modules Google Workspace:', error);
+      logger.error('Erreur lors de l\'activation des modules Google Workspace:', error);
       messageApi.error('Erreur lors de l\'activation des modules Google Workspace');
     }
   }, [allModules, api, fetchOrganizationModules, fetchOrganizations, messageApi, refreshModules, sections, toggleSectionActive]);
@@ -538,7 +539,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
         messageApi.error('Erreur lors de l\'activation de Google Workspace');
       }
     } catch (error) {
-      console.error('Erreur lors de l\'activation rapide de Google Workspace:', error);
+      logger.error('Erreur lors de l\'activation rapide de Google Workspace:', error);
       messageApi.error('Erreur lors de l\'activation de Google Workspace');
     }
   }, [api, fetchOrganizations, handleActivateGoogleWorkspaceModules, messageApi]);
@@ -551,13 +552,13 @@ const OrganizationsAdminPageNew: React.FC = () => {
       for (const org of organizations) {
         // Si l'org a Google Workspace activé mais aucun module Google Workspace actif
         if (org.stats?.googleWorkspaceEnabled && (!org.googleWorkspaceModules || org.googleWorkspaceModules.length === 0)) {
-          console.log(`🔄 Auto-activation des modules Google Workspace pour ${org.name}...`);
+          logger.debug(`🔄 Auto-activation des modules Google Workspace pour ${org.name}...`);
           try {
             await handleActivateGoogleWorkspaceModules(org.id);
             // Pause entre les activations pour éviter les surcharges
             await new Promise(resolve => setTimeout(resolve, 1000));
           } catch (error) {
-            console.error(`❌ Erreur auto-activation pour ${org.name}:`, error);
+            logger.error(`❌ Erreur auto-activation pour ${org.name}:`, error);
           }
         }
       }
@@ -719,11 +720,11 @@ const OrganizationsAdminPageNew: React.FC = () => {
           devis1minuteFeatures.includes(module.feature || '')
         );
         
-        console.log(`🚀 ${devis1MinuteOnly.length}/4 modules Devis1Minute ORGANISATIONS trouvés`);
+        logger.debug(`🚀 ${devis1MinuteOnly.length}/4 modules Devis1Minute ORGANISATIONS trouvés`);
         setDevis1minuteModules(devis1MinuteOnly);
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des modules Devis1Minute:', error);
+      logger.error('Erreur lors du chargement des modules Devis1Minute:', error);
       const errMessage = error instanceof Error ? error.message : 'Erreur lors du chargement des modules';
       messageApi.error(errMessage);
     } finally {
@@ -758,7 +759,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
         messageApi.error(response.message || 'Erreur lors de la mise à jour');
       }
     } catch (error) {
-      console.error('Erreur toggle module:', error);
+      logger.error('Erreur toggle module:', error);
       const errMessage = error instanceof Error ? error.message : 'Erreur lors de la mise à jour du module';
       messageApi.error(errMessage);
     }
@@ -1693,7 +1694,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
                 <div style={{ marginTop: 16, textAlign: 'center' }}>
                   <button
                     onClick={async () => {
-                      console.log('🔄 Actualisation des statistiques...');
+                      logger.debug('🔄 Actualisation des statistiques...');
                       await fetchOrganizations();
                       messageApi.success('Statistiques actualisées');
                     }}
@@ -1790,7 +1791,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {/* MODULES ORGANISÉS PAR SECTIONS */}
                 {(() => {
-                  console.log('[Modal] État des modules:', {
+                  logger.debug('[Modal] État des modules:', {
                     allModulesLength: allModules?.length || 0,
                     allModules: allModules?.map(m => ({ id: m.id, name: m.name, key: m.key })) || [],
                     organizationModulesLength: organizationModules?.length || 0,

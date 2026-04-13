@@ -13,6 +13,7 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import jwt from 'jsonwebtoken';
 import { db } from './database';
+import { logger } from './logger';
 
 let io: SocketIOServer | null = null;
 
@@ -69,7 +70,7 @@ export function initializeSocketIO(httpServer: HTTPServer): SocketIOServer {
   // 🔌 Connection handler
   io.on('connection', (socket: Socket) => {
     const userId = (socket as any).userId as string;
-    console.log(`🔌 [SOCKET] User ${userId} connected (${socket.id})`);
+    logger.debug(`🔌 [SOCKET] User ${userId} connected (${socket.id})`);
 
     // Track user socket
     if (!userSockets.has(userId)) {
@@ -132,7 +133,7 @@ export function initializeSocketIO(httpServer: HTTPServer): SocketIOServer {
           timestamp: now.toISOString(),
         });
       } catch (err) {
-        console.error('[SOCKET] Error updating delivered status:', err);
+        logger.error('[SOCKET] Error updating delivered status:', err);
       }
     });
 
@@ -164,7 +165,7 @@ export function initializeSocketIO(httpServer: HTTPServer): SocketIOServer {
           });
         }
       } catch (err) {
-        console.error('[SOCKET] Error updating read status:', err);
+        logger.error('[SOCKET] Error updating read status:', err);
       }
     });
 
@@ -196,13 +197,13 @@ export function initializeSocketIO(httpServer: HTTPServer): SocketIOServer {
           customStatusEmoji: data.emoji || null,
         });
       } catch (err) {
-        console.error('[SOCKET] Error updating status:', err);
+        logger.error('[SOCKET] Error updating status:', err);
       }
     });
 
     // Disconnect
     socket.on('disconnect', (reason) => {
-      console.log(`🔌 [SOCKET] User ${userId} disconnected (${reason})`);
+      logger.debug(`🔌 [SOCKET] User ${userId} disconnected (${reason})`);
       const sockets = userSockets.get(userId);
       if (sockets) {
         sockets.delete(socket.id);
@@ -215,7 +216,7 @@ export function initializeSocketIO(httpServer: HTTPServer): SocketIOServer {
     });
   });
 
-  console.log('🔌 [SOCKET.IO] Initialized successfully');
+  logger.debug('🔌 [SOCKET.IO] Initialized successfully');
   return io;
 }
 
@@ -273,7 +274,7 @@ async function joinUserConversations(socket: Socket, userId: string) {
       socket.join(`conv:${p.conversationId}`);
     }
   } catch (err) {
-    console.error('[SOCKET] Error joining conversation rooms:', err);
+    logger.error('[SOCKET] Error joining conversation rooms:', err);
   }
 }
 

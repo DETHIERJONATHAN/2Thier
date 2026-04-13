@@ -9,6 +9,7 @@
  * Aucun fichier audio requis — tout est généré via oscillateurs.
  */
 import { useRef, useCallback } from 'react';
+import { logger } from '../lib/logger';
 
 type SoundType = 'ringtone' | 'telnyxRing' | 'messageNotification' | 'wizz';
 
@@ -153,7 +154,7 @@ function createTelnyxRing(ctx: AudioContext, destination: AudioNode): { stop: ()
 function playWizzSound(_ctx: AudioContext, _destination: AudioNode): void {
   const audio = new Audio('/msn-wizz.mp3');
   audio.volume = 0.5;
-  audio.play().catch(err => console.warn('[SOUND] Wizz MP3 playback failed:', err));
+  audio.play().catch(err => logger.warn('[SOUND] Wizz MP3 playback failed:', err));
 }
 
 /**
@@ -229,7 +230,7 @@ export function useNotificationSound() {
         activeRingRef.current = createTelnyxRing(ctx, ctx.destination);
       }
     } catch (err) {
-      console.warn('[SOUND] Failed to play notification sound:', err);
+      logger.warn('[SOUND] Failed to play notification sound:', err);
     }
   }, []);
 
@@ -271,7 +272,7 @@ export function playNotificationSound(type: SoundType): { stop: () => void } {
       return createTelnyxRing(ctx, ctx.destination);
     }
   } catch (err) {
-    console.warn('[SOUND] Failed to play notification sound:', err);
+    logger.warn('[SOUND] Failed to play notification sound:', err);
   }
 
   return { stop: () => {} };

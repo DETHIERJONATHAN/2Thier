@@ -17,6 +17,7 @@
  */
 
 import { type PrismaClient } from '@prisma/client';
+import { logger } from '../../../../../../lib/logger';
 
 export interface BatchPostDuplicationResult {
   processedCount: number;
@@ -107,7 +108,7 @@ export async function batchPostDuplicationProcessing(
       // Fallback: try individually if transaction fails
       for (const op of updateOps) {
         try { await op; } catch (e) {
-          console.error(`[BATCH-POST-DUP] Individual update failed:`, (e as Error).message);
+          logger.error(`[BATCH-POST-DUP] Individual update failed:`, (e as Error).message);
         }
       }
     }

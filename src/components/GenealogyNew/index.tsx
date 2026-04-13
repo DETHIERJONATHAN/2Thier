@@ -3,6 +3,7 @@ import { Card, Button, Typography, Divider, Tooltip, message, Input, Modal, Sele
 import { PlusOutlined, DeleteOutlined, DragOutlined, EditOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Text, Title } = Typography;
 const { Option } = Select;
@@ -384,7 +385,7 @@ function useGenealogyData(fieldId: string, onTreeChange?: (tree: GenealogyNode[]
         onTreeChange?.([]);
       }
     } catch (err) {
-      console.error('Loading error:', err);
+      logger.error('Loading error:', err);
       message.error('Erreur lors du chargement');
       setTree([]);
       onTreeChange?.([]);
@@ -419,7 +420,7 @@ function useGenealogyData(fieldId: string, onTreeChange?: (tree: GenealogyNode[]
       message.success('Élément ajouté avec succès');
       return response;
     } catch (err) {
-      console.error('Add node error:', err);
+      logger.error('Add node error:', err);
       message.error('Erreur lors de l\'ajout');
       return null;
     }
@@ -436,7 +437,7 @@ function useGenealogyData(fieldId: string, onTreeChange?: (tree: GenealogyNode[]
       await loadTree();
       message.success('Élément modifié avec succès');
     } catch (err) {
-      console.error('Update node error:', err);
+      logger.error('Update node error:', err);
       message.error('Erreur lors de la modification');
     }
   }, [put, loadTree]);
@@ -447,7 +448,7 @@ function useGenealogyData(fieldId: string, onTreeChange?: (tree: GenealogyNode[]
       await loadTree();
       message.success('Élément supprimé avec succès');
     } catch (err) {
-      console.error('Delete node error:', err);
+      logger.error('Delete node error:', err);
       message.error('Erreur lors de la suppression');
     }
   }, [del, loadTree]);

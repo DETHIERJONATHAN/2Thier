@@ -2,6 +2,7 @@ import React from 'react';
 import { Spin, Typography } from 'antd';
 import { useConditionEvaluation } from '../hooks/useConditionEvaluation';
 import type { TBLFormData } from '../hooks/useTBLSave';
+import { logger } from '../../../../../lib/logger';
 
 const { Text } = Typography;
 
@@ -20,7 +21,7 @@ export const TBLConditionField: React.FC<TBLConditionFieldProps> = ({
 }) => {
   const { isLoading, result, error, conditionMet } = useConditionEvaluation(conditionId, formData);
 
-  console.log(`🧮 [TBLConditionField] État pour ${conditionId}:`, {
+  logger.debug(`🧮 [TBLConditionField] État pour ${conditionId}:`, {
     isLoading,
     result,
     error,

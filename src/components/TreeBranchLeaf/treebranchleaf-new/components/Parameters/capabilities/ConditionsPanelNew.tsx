@@ -4,6 +4,7 @@ import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../../../../../hooks/useAuthenticatedApi';
 import type { ConditionSet } from '../../../types';
 import ConditionsDnDComposer from './conditions/ConditionsDnDComposer';
+import { logger } from '../../../../../../lib/logger';
 
 const { Title, Text } = Typography;
 
@@ -103,7 +104,7 @@ const ConditionsPanelNew: React.FC<ConditionsPanelNewProps> = ({
         try {
           await onNodeUpdate?.({ id: nodeId, hasCondition: true });
         } catch (e) {
-          console.warn('Impossible de mettre à jour hasCondition sur le nœud:', e);
+          logger.warn('Impossible de mettre à jour hasCondition sur le nœud:', e);
         }
         
         onChange?.({
@@ -139,7 +140,7 @@ const ConditionsPanelNew: React.FC<ConditionsPanelNewProps> = ({
         return res;
       }
     } catch (e) {
-      console.error('❌ ConditionsPanelNew: Erreur sauvegarde condition', e);
+      logger.error('❌ ConditionsPanelNew: Erreur sauvegarde condition', e);
       // message.error limité (sinon déclenché à chaque keypress) -> seulement création
       if (id.startsWith('temp_')) message.error('Impossible de sauvegarder la condition');
       setSaving(false);
@@ -173,14 +174,14 @@ const ConditionsPanelNew: React.FC<ConditionsPanelNewProps> = ({
     if (!nodeId) return;
     
     try {
-      // console.log('🚀 ConditionsPanelNew: Chargement depuis nouvelle table pour nodeId:', nodeId); // ✨ Log réduit
+      // logger.debug('🚀 ConditionsPanelNew: Chargement depuis nouvelle table pour nodeId:', nodeId); // ✨ Log réduit
       setLoading(true);
       
       const response = await api.get(`/api/treebranchleaf/nodes/${nodeId}/conditions`) as { conditions: ConditionInstance[] };
       const conditions = response.conditions || [];
       
-      // console.log('🚀 ConditionsPanelNew: Conditions chargées depuis table:', conditions.length); // ✨ Log réduit
-      // console.log('🚀 ConditionsPanelNew: Détail conditions:', conditions.map(c => ({ id: c.id, name: c.name }))); // ✨ Log réduit
+      // logger.debug('🚀 ConditionsPanelNew: Conditions chargées depuis table:', conditions.length); // ✨ Log réduit
+      // logger.debug('🚀 ConditionsPanelNew: Détail conditions:', conditions.map(c => ({ id: c.id, name: c.name }))); // ✨ Log réduit
       
       if (conditions.length === 0) {
         // Créer une condition par défaut
@@ -215,7 +216,7 @@ const ConditionsPanelNew: React.FC<ConditionsPanelNewProps> = ({
         // La mise à jour se fait uniquement lors des créations/suppressions
       }
     } catch (err) {
-      console.error('❌ ConditionsPanelNew: Erreur chargement conditions:', err);
+      logger.error('❌ ConditionsPanelNew: Erreur chargement conditions:', err);
       message.error('Impossible de charger les conditions');
     } finally {
       setLoading(false);
@@ -271,7 +272,7 @@ const ConditionsPanelNew: React.FC<ConditionsPanelNewProps> = ({
       order: instances.length
     };
     
-    // console.log('➕ ConditionsPanelNew: Ajout nouvelle condition:', newCondition); // ✨ Log réduit
+    // logger.debug('➕ ConditionsPanelNew: Ajout nouvelle condition:', newCondition); // ✨ Log réduit
 
     setInstances(prev => [...prev, newCondition]);
     setActiveId(newCondition.id);
@@ -285,7 +286,7 @@ const ConditionsPanelNew: React.FC<ConditionsPanelNewProps> = ({
     const condition = instances.find(inst => inst.id === conditionId);
     if (!condition) return;
 
-    // console.log('🔄 ConditionsPanelNew: Basculement vers condition:', condition.name); // ✨ Log réduit
+    // logger.debug('🔄 ConditionsPanelNew: Basculement vers condition:', condition.name); // ✨ Log réduit
 
     setActiveId(conditionId);
     setLocalConditionSet(normalizeConditionSet(condition.conditionSet));
@@ -296,17 +297,17 @@ const ConditionsPanelNew: React.FC<ConditionsPanelNewProps> = ({
   // Supprimer une condition
   const deleteCondition = useCallback(async () => {
     if (!activeId || !nodeId) {
-      // console.warn('🗑️ ConditionsPanelNew: Pas de condition active ou nodeId manquant'); // ✨ Log réduit
+      // logger.warn('🗑️ ConditionsPanelNew: Pas de condition active ou nodeId manquant'); // ✨ Log réduit
       return;
     }
 
     const activeCondition = instances.find(c => c.id === activeId);
     if (!activeCondition) {
-      // console.warn('🗑️ ConditionsPanelNew: Condition introuvable', { activeId }); // ✨ Log réduit
+      // logger.warn('🗑️ ConditionsPanelNew: Condition introuvable', { activeId }); // ✨ Log réduit
       return;
     }
 
-    // console.log(...) // ✨ Log réduit
+    // logger.debug(...) // ✨ Log réduit
 
     // {
       // activeId,
@@ -315,7 +316,7 @@ const ConditionsPanelNew: React.FC<ConditionsPanelNewProps> = ({
 
     // }
 
-    // console.log('🗑️ ConditionsPanelNew: Avant window.confirm...'); // ✨ Log réduit
+    // logger.debug('🗑️ ConditionsPanelNew: Avant window.confirm...'); // ✨ Log réduit
     
     // Confirmation de suppression
     const userConfirmed = window.confirm(
@@ -323,14 +324,14 @@ const ConditionsPanelNew: React.FC<ConditionsPanelNewProps> = ({
     );
     
     if (!userConfirmed) {
-      // console.log('🚫 ConditionsPanelNew: Suppression annulée par l\'utilisateur (window.confirm)'); // ✨ Log réduit
+      // logger.debug('🚫 ConditionsPanelNew: Suppression annulée par l\'utilisateur (window.confirm)'); // ✨ Log réduit
       return;
     }
 
-    // console.log('🗑️ ConditionsPanelNew: Confirmation reçue avec window.confirm !'); // ✨ Log réduit
+    // logger.debug('🗑️ ConditionsPanelNew: Confirmation reçue avec window.confirm !'); // ✨ Log réduit
     
     try {
-      // console.log(...) // ✨ Log réduit
+      // logger.debug(...) // ✨ Log réduit
 
       // {
         // activeId,
@@ -339,9 +340,9 @@ const ConditionsPanelNew: React.FC<ConditionsPanelNewProps> = ({
       
       // Supprimer la condition de Prisma (comme pour les formules)
       if (!activeId.startsWith('temp_')) {
-        // console.log('🗑️ ConditionsPanelNew: Appel DELETE API...'); // ✨ Log réduit
+        // logger.debug('🗑️ ConditionsPanelNew: Appel DELETE API...'); // ✨ Log réduit
         await api.delete(`/api/treebranchleaf/nodes/${nodeId}/conditions/${activeId}`);
-        // console.log('🗑️ ConditionsPanelNew: DELETE API réussi'); // ✨ Log réduit
+        // logger.debug('🗑️ ConditionsPanelNew: DELETE API réussi'); // ✨ Log réduit
       }
       
       // Mettre à jour les instances locales
@@ -352,7 +353,7 @@ const ConditionsPanelNew: React.FC<ConditionsPanelNewProps> = ({
       try {
         await onNodeUpdate?.({ id: nodeId, hasCondition: remaining.length > 0 });
       } catch (e) {
-        console.warn('Impossible de mettre à jour hasCondition sur le nœud:', e);
+        logger.warn('Impossible de mettre à jour hasCondition sur le nœud:', e);
       }
       
       // Sélectionner la prochaine condition ou vider
@@ -373,9 +374,9 @@ const ConditionsPanelNew: React.FC<ConditionsPanelNewProps> = ({
       
       message.success(`Condition "${activeCondition.name}" supprimée`);
       
-      // console.log('✅ ConditionsPanelNew: Suppression terminée'); // ✨ Log réduit
+      // logger.debug('✅ ConditionsPanelNew: Suppression terminée'); // ✨ Log réduit
     } catch (err) {
-      console.error('❌ ConditionsPanelNew: Erreur suppression', err);
+      logger.error('❌ ConditionsPanelNew: Erreur suppression', err);
       message.error('Impossible de supprimer la condition');
     }
   }, [api, activeId, instances, normalizeConditionSet, nodeId, onNodeUpdate]);

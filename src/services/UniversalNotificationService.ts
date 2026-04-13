@@ -15,6 +15,7 @@
 
 import { EventEmitter } from 'events';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 // 🎯 TYPES DE NOTIFICATIONS SUPPORTÉS
 export type NotificationType = 
@@ -82,11 +83,11 @@ export class UniversalNotificationService extends EventEmitter {
    */
   start(): void {
     if (this.isRunning) {
-      console.log('⚠️ [UniversalNotification] Service déjà en cours...');
+      logger.debug('⚠️ [UniversalNotification] Service déjà en cours...');
       return;
     }
 
-    console.log('🌟 [UniversalNotification] Démarrage du service UNIVERSEL de notifications...');
+    logger.debug('🌟 [UniversalNotification] Démarrage du service UNIVERSEL de notifications...');
     this.isRunning = true;
 
     // Démarrer la vérification périodique de tous les types d'événements
@@ -94,14 +95,14 @@ export class UniversalNotificationService extends EventEmitter {
 
     // Émettre l'événement de démarrage
     this.emit('service-started');
-    console.log('✅ [UniversalNotification] Service universel démarré avec succès');
+    logger.debug('✅ [UniversalNotification] Service universel démarré avec succès');
   }
 
   /**
    * 🛑 ARRÊTER LE SERVICE
    */
   stop(): void {
-    console.log('🛑 [UniversalNotification] Arrêt du service...');
+    logger.debug('🛑 [UniversalNotification] Arrêt du service...');
     
     if (this.checkInterval) {
       clearInterval(this.checkInterval);
@@ -109,7 +110,7 @@ export class UniversalNotificationService extends EventEmitter {
     
     this.isRunning = false;
     this.emit('service-stopped');
-    console.log('✅ [UniversalNotification] Service arrêté');
+    logger.debug('✅ [UniversalNotification] Service arrêté');
   }
 
   /**
@@ -134,7 +135,7 @@ export class UniversalNotificationService extends EventEmitter {
     try {
       const config = NOTIFICATION_CONFIG[data.type];
       
-      console.log(`🔔 [UniversalNotification] Création notification: ${data.type} - ${data.title}`);
+      logger.debug(`🔔 [UniversalNotification] Création notification: ${data.type} - ${data.title}`);
 
       // Créer en base de données
       const notification = await prisma.notification.create({
@@ -171,10 +172,10 @@ export class UniversalNotificationService extends EventEmitter {
         config
       });
 
-      console.log(`✅ [UniversalNotification] Notification créée: ${notification.id}`);
+      logger.debug(`✅ [UniversalNotification] Notification créée: ${notification.id}`);
 
     } catch (error) {
-      console.error('❌ [UniversalNotification] Erreur création notification:', error);
+      logger.error('❌ [UniversalNotification] Erreur création notification:', error);
       throw error;
     }
   }
@@ -336,7 +337,7 @@ export class UniversalNotificationService extends EventEmitter {
    * 🔄 VÉRIFICATIONS PÉRIODIQUES (toutes les 2 minutes)
    */
   private startPeriodicChecks(): void {
-    console.log('🔄 [UniversalNotification] Démarrage vérifications périodiques...');
+    logger.debug('🔄 [UniversalNotification] Démarrage vérifications périodiques...');
     
     this.checkInterval = setInterval(async () => {
       try {
@@ -345,7 +346,7 @@ export class UniversalNotificationService extends EventEmitter {
         await this.checkForExpiringContracts();
         await this.cleanExpiredNotifications();
       } catch (error) {
-        console.error('❌ [UniversalNotification] Erreur vérification périodique:', error);
+        logger.error('❌ [UniversalNotification] Erreur vérification périodique:', error);
       }
     }, 2 * 60 * 1000); // 2 minutes
   }
@@ -359,7 +360,7 @@ export class UniversalNotificationService extends EventEmitter {
 
     // Logique à implémenter selon votre modèle de données calendrier
     // Exemple: récupérer les meetings dans les 15 prochaines minutes
-    console.log(
+    logger.debug(
       `📅 [UniversalNotification] Vérification des rendez-vous entre ${now.toISOString()} et ${fifteenMinutesFromNow.toISOString()}...`
     );
   }
@@ -369,7 +370,7 @@ export class UniversalNotificationService extends EventEmitter {
    */
   private async checkForOverdueTasks(): Promise<void> {
     // Logique à implémenter selon votre modèle de tâches
-    console.log('⏰ [UniversalNotification] Vérification des tâches en retard...');
+    logger.debug('⏰ [UniversalNotification] Vérification des tâches en retard...');
   }
 
   /**
@@ -377,7 +378,7 @@ export class UniversalNotificationService extends EventEmitter {
    */
   private async checkForExpiringContracts(): Promise<void> {
     // Logique à implémenter selon votre modèle de contrats
-    console.log('📄 [UniversalNotification] Vérification des contrats expirants...');
+    logger.debug('📄 [UniversalNotification] Vérification des contrats expirants...');
   }
 
   /**
@@ -394,10 +395,10 @@ export class UniversalNotificationService extends EventEmitter {
       });
 
       if (result.count > 0) {
-        console.log(`🧹 [UniversalNotification] ${result.count} notifications expirées supprimées`);
+        logger.debug(`🧹 [UniversalNotification] ${result.count} notifications expirées supprimées`);
       }
     } catch (error) {
-      console.error('❌ [UniversalNotification] Erreur nettoyage notifications expirées:', error);
+      logger.error('❌ [UniversalNotification] Erreur nettoyage notifications expirées:', error);
     }
   }
 
@@ -433,7 +434,7 @@ export class UniversalNotificationService extends EventEmitter {
         }, {} as Record<string, number>)
       };
     } catch (error) {
-      console.error('❌ [UniversalNotification] Erreur stats:', error);
+      logger.error('❌ [UniversalNotification] Erreur stats:', error);
       return { total: 0, byType: {}, byStatus: {} };
     }
   }

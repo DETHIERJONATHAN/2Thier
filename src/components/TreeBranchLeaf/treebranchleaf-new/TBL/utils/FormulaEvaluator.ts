@@ -1,3 +1,4 @@
+import { logger } from '../../../../../lib/logger';
 /**
  * 🧮 ÉVALUATEUR DE FORMULES DYNAMIQUE
  * 
@@ -19,7 +20,7 @@ export class FormulaEvaluator {
   ): { success: boolean; result?: number; error?: string } {
     
     if (debug) {
-      console.log('🧮 [FORMULA] Évaluation tokens:', tokens);
+      logger.debug('🧮 [FORMULA] Évaluation tokens:', tokens);
     }
     
     try {
@@ -38,14 +39,14 @@ export class FormulaEvaluator {
       });
       
       if (debug) {
-        console.log('🧮 [FORMULA] Tokens résolus:', resolvedTokens);
+        logger.debug('🧮 [FORMULA] Tokens résolus:', resolvedTokens);
       }
       
       // Évaluer l'expression mathématique
       const result = this.evaluateExpression(resolvedTokens, debug);
       
       if (debug) {
-        console.log('🧮 [FORMULA] Résultat:', result);
+        logger.debug('🧮 [FORMULA] Résultat:', result);
       }
       
       return { success: true, result };
@@ -73,7 +74,7 @@ export class FormulaEvaluator {
     if (formData[nodeId] !== undefined) {
       const value = parseFloat(String(formData[nodeId]));
       if (debug) {
-        console.log(`🧮 [FORMULA] Référence ${ref} -> ${value}`);
+        logger.debug(`🧮 [FORMULA] Référence ${ref} -> ${value}`);
       }
       return isNaN(value) ? 0 : value;
     }
@@ -83,14 +84,14 @@ export class FormulaEvaluator {
       if (key.includes(nodeId)) {
         const numValue = parseFloat(String(value));
         if (debug) {
-          console.log(`🧮 [FORMULA] Référence ${ref} -> ${numValue} (via clé ${key})`);
+          logger.debug(`🧮 [FORMULA] Référence ${ref} -> ${numValue} (via clé ${key})`);
         }
         return isNaN(numValue) ? 0 : numValue;
       }
     }
     
     if (debug) {
-      console.log(`🧮 [FORMULA] Référence ${ref} non trouvée, utilisation de 0`);
+      logger.debug(`🧮 [FORMULA] Référence ${ref} non trouvée, utilisation de 0`);
     }
     
     return 0; // Valeur par défaut
@@ -114,7 +115,7 @@ export class FormulaEvaluator {
     if (formData[calculatedKey] !== undefined) {
       const value = parseFloat(String(formData[calculatedKey]));
       if (debug) {
-        console.log(`📊 [FORMULA] Calculated ${ref} -> ${value}`);
+        logger.debug(`📊 [FORMULA] Calculated ${ref} -> ${value}`);
       }
       return isNaN(value) ? 0 : value;
     }
@@ -123,13 +124,13 @@ export class FormulaEvaluator {
     if (formData[nodeId] !== undefined) {
       const value = parseFloat(String(formData[nodeId]));
       if (debug) {
-        console.log(`📊 [FORMULA] Calculated ${ref} (fallback) -> ${value}`);
+        logger.debug(`📊 [FORMULA] Calculated ${ref} (fallback) -> ${value}`);
       }
       return isNaN(value) ? 0 : value;
     }
     
     if (debug) {
-      console.log(`📊 [FORMULA] Calculated ${ref} non trouvé, utilisation de 0`);
+      logger.debug(`📊 [FORMULA] Calculated ${ref} non trouvé, utilisation de 0`);
     }
     
     return 0; // Valeur par défaut
@@ -167,7 +168,7 @@ export class FormulaEvaluator {
     });
     
     if (debug) {
-      console.log('🧮 [FORMULA] Expression processée:', processed);
+      logger.debug('🧮 [FORMULA] Expression processée:', processed);
     }
     
     // Évaluation simple de gauche à droite pour l'instant
@@ -197,12 +198,12 @@ export class FormulaEvaluator {
           break;
         default:
           if (debug) {
-            console.warn(`🧮 [FORMULA] Opérateur non supporté: ${operator}`);
+            logger.warn(`🧮 [FORMULA] Opérateur non supporté: ${operator}`);
           }
       }
       
       if (debug) {
-        console.log(`🧮 [FORMULA] ${result} ${operator} ${operand} = ${result}`);
+        logger.debug(`🧮 [FORMULA] ${result} ${operator} ${operand} = ${result}`);
       }
     }
     

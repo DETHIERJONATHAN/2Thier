@@ -6,6 +6,7 @@ import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
 import { useUserPreference } from '../../../hooks/useUserPreference';
 import { Lead } from '../../../types/leads';
 import { BulbOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { logger } from '../../../lib/logger';
 
 const { Text } = Typography; // Title & Paragraph retirés (non utilisés après refonte)
 
@@ -57,13 +58,13 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({ lead, onSelectSlot
       if (!lead.id) return;
       setLoading(true); setError(null);
       try {
-        console.log(`[SmartCalendar] Fetch AI suggestions for lead ${lead.id}`);
+        logger.debug(`[SmartCalendar] Fetch AI suggestions for lead ${lead.id}`);
         const res = await api.get(`/api/calendar/ai-suggestions?leadId=${lead.id}`);
         const data = res.data?.data || res.data; // compat
         setSuggestions(Array.isArray(data) ? data : []);
       } catch (err) {
         const e = err as Error;
-        console.error('[SmartCalendar] Erreur suggestions:', e);
+        logger.error('[SmartCalendar] Erreur suggestions:', e);
         setError(e.message || 'Chargement impossible');
       } finally {
         setLoading(false);
@@ -118,7 +119,7 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({ lead, onSelectSlot
         });
         setEvents(res.data || []);
       } catch {
-        console.warn('[SmartCalendar] Impossible de charger les événements');
+        logger.warn('[SmartCalendar] Impossible de charger les événements');
       }
     };
     fetchEvents();

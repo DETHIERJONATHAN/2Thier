@@ -9,6 +9,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { db } from '../lib/database';
 import { uploadFile, deleteFile } from '../lib/storage';
+import { logger } from '../lib/logger';
 
 const router = Router();
 const prisma = db;
@@ -67,7 +68,7 @@ router.post('/upload', upload.single('file'), async (req: unknown, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ [IMAGE-UPLOAD] Erreur:', error);
+    logger.error('❌ [IMAGE-UPLOAD] Erreur:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de l\'upload',
@@ -125,7 +126,7 @@ router.post('/upload-image', upload.single('image'), async (req: unknown, res) =
     });
 
   } catch (error) {
-    console.error('❌ Erreur upload image:', error);
+    logger.error('❌ Erreur upload image:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de l\'upload'
@@ -155,7 +156,7 @@ router.get('/images/:websiteId', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erreur récupération images:', error);
+    logger.error('Erreur récupération images:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur serveur'
@@ -183,7 +184,7 @@ router.delete('/image/:id', async (req, res) => {
     try {
       await deleteFile(mediaFile.fileUrl || mediaFile.filePath);
     } catch (err) {
-      console.warn('Fichier déjà supprimé ou inexistant');
+      logger.warn('Fichier déjà supprimé ou inexistant');
     }
 
     // Supprimer de la BDD
@@ -197,7 +198,7 @@ router.delete('/image/:id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erreur suppression image:', error);
+    logger.error('Erreur suppression image:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur serveur'

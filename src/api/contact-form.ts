@@ -15,6 +15,7 @@
 
 import { Router, Request } from 'express';
 import { db } from '../lib/database';
+import { logger } from '../lib/logger';
 
 const router = Router();
 const prisma = db;
@@ -138,7 +139,7 @@ router.post('/contact-form', async (req: Request, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erreur lors de la soumission du formulaire:', error);
+    logger.error('❌ Erreur lors de la soumission du formulaire:', error);
     res.status(500).json({
       success: false,
       message: 'Une erreur est survenue. Veuillez réessayer ou nous contacter directement par téléphone.'
@@ -161,7 +162,7 @@ router.get('/contact-submissions/:websiteId', async (req: Request, res) => {
 
     res.json(submissions);
   } catch (error) {
-    console.error('Erreur récupération soumissions:', error);
+    logger.error('Erreur récupération soumissions:', error);
     res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });
@@ -178,7 +179,7 @@ router.patch('/contact-submission/:id/read', async (req: Request, res) => {
 
     res.json({ success: true, submission });
   } catch (error) {
-    console.error('Erreur marquage lu:', error);
+    logger.error('Erreur marquage lu:', error);
     res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });
@@ -205,7 +206,7 @@ router.patch('/contact-submission/:id/status', async (req: Request, res) => {
 
     res.json({ success: true, submission });
   } catch (error) {
-    console.error('Erreur changement statut:', error);
+    logger.error('Erreur changement statut:', error);
     res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });
@@ -221,7 +222,7 @@ router.delete('/contact-submission/:id', async (req: Request, res) => {
 
     res.json({ success: true, message: 'Soumission supprimée' });
   } catch (error) {
-    console.error('Erreur suppression:', error);
+    logger.error('Erreur suppression:', error);
     res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });

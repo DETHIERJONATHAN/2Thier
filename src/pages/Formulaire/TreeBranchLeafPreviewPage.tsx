@@ -25,6 +25,7 @@ import {
   MinusCircleOutlined,
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { logger } from '../../lib/logger';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -131,7 +132,7 @@ const TreeBranchLeafPreviewPage: React.FC = () => {
       setVisibleNodes(rootNodes);
       
     } catch (error) {
-      console.error('Erreur lors du chargement de l\'arbre:', error);
+      logger.error('Erreur lors du chargement de l\'arbre:', error);
       message.error('Erreur lors du chargement du formulaire');
     } finally {
       setLoading(false);
@@ -171,7 +172,7 @@ const TreeBranchLeafPreviewPage: React.FC = () => {
             newCalculatedData[node.id] = 'Erreur';
           }
         } catch (error) {
-          console.error('Erreur de calcul pour le nœud', node.id, error);
+          logger.error('Erreur de calcul pour le nœud', node.id, error);
           newCalculatedData[node.id] = 'Erreur';
         }
       }
@@ -300,7 +301,7 @@ const TreeBranchLeafPreviewPage: React.FC = () => {
 
       message.success('Réponses sauvegardées avec succès');
     } catch (error) {
-      console.error('Erreur lors de la sauvegarde:', error);
+      logger.error('Erreur lors de la sauvegarde:', error);
       message.error('Erreur lors de la sauvegarde');
     }
   };

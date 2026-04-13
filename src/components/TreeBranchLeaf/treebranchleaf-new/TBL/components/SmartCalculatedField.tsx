@@ -28,6 +28,7 @@ const isReady = () => (typeof window === 'undefined') ? true : window.__TBL_READ
 
 // (Anciennes interfaces FormulaInstanceMeta / VariableInstanceMeta retirées après unification evaluate)
 import { useEvalBridge } from '../bridge/evalBridge';
+import { logger } from '../../../../../lib/logger';
 
 // 📊 Cache des résultats calculés (résultat typé en unknown pour accepter primitif ou objet)
 const calculationCache = new Map<string, {
@@ -164,7 +165,7 @@ async function evaluateConditionDynamically(
     return { success: false, error: 'Aucune action trouvée' };
     
   } catch (error) {
-    console.error('❌ [CONDITION ERROR]:', error);
+    logger.error('❌ [CONDITION ERROR]:', error);
     return { success: false, error: error.message };
   }
 }
@@ -219,7 +220,7 @@ async function evaluateFormulaDynamically(
     return { success: false, error: 'Formule non supportée' };
     
   } catch (error) {
-    console.error('❌ [FORMULA ERROR]:', error);
+    logger.error('❌ [FORMULA ERROR]:', error);
     return { success: false, error: error.message };
   }
 }
@@ -287,7 +288,7 @@ function useUniversalTranslator() {
           });
           
           if (!tableResponse.ok) {
-            console.error(`❌ [TABLE] Erreur récupération table: ${tableResponse.statusText}`);
+            logger.error(`❌ [TABLE] Erreur récupération table: ${tableResponse.statusText}`);
             return null;
           }
           
@@ -295,7 +296,7 @@ function useUniversalTranslator() {
           const table = tableData.table;
           
           if (!table) {
-            console.error(`❌ [TABLE] Table introuvable: ${tableId}`);
+            logger.error(`❌ [TABLE] Table introuvable: ${tableId}`);
             return null;
           }
           
@@ -306,7 +307,7 @@ function useUniversalTranslator() {
           const lookup = meta.lookup;
           
           if (!lookup || !lookup.enabled) {
-            console.error(`❌ [TABLE] Lookup non configuré ou désactivé`);
+            logger.error(`❌ [TABLE] Lookup non configuré ou désactivé`);
             return null;
           }
           
@@ -360,7 +361,7 @@ function useUniversalTranslator() {
             const colValue = formData[colFieldId] || formData[`__mirror_data_${colFieldId}`] || (window.TBL_FORM_DATA && window.TBL_FORM_DATA[`__mirror_data_${colFieldId}`]);
             
             if (!colValue) {
-              if (isSmartDebug()) console.warn(`⚠️ [TABLE] MODE 1: Aucune valeur colonne`);
+              if (isSmartDebug()) logger.warn(`⚠️ [TABLE] MODE 1: Aucune valeur colonne`);
               return null;
             }
             
@@ -433,7 +434,7 @@ function useUniversalTranslator() {
                   results.push(value);
                 }
               } else {
-                console.warn(`⚠️ [TABLE] MODE 1 INVERSÉ - Index non trouvé:`, {
+                logger.warn(`⚠️ [TABLE] MODE 1 INVERSÉ - Index non trouvé:`, {
                   orientation: colValue,
                   orientationTrouvéeÀLindex: colSelectorInRows,
                   rowsDisponibles: rows,
@@ -458,7 +459,7 @@ function useUniversalTranslator() {
             const rowValue = formData[rowFieldId] || formData[`__mirror_data_${rowFieldId}`] || (window.TBL_FORM_DATA && window.TBL_FORM_DATA[`__mirror_data_${rowFieldId}`]);
             
             if (!rowValue) {
-              if (isSmartDebug()) console.warn(`⚠️ [TABLE] MODE 2: Aucune valeur ligne`);
+              if (isSmartDebug()) logger.warn(`⚠️ [TABLE] MODE 2: Aucune valeur ligne`);
               return null;
             }
             
@@ -530,7 +531,7 @@ function useUniversalTranslator() {
                 results.push(result);
                 if (isSmartDebug()) if (isSmartDebug()) tblLog(`✅ [TABLE] MODE 2: "${fixedColValue}" × "${rowValue}" = ${result} (data[${dataRowIdx}][${dataColIdx}])`);
               } else {
-                if (isSmartDebug()) console.warn(`⚠️ [TABLE] MODE 2: Impossible de croiser "${fixedColValue}" × "${rowValue}"`);
+                if (isSmartDebug()) logger.warn(`⚠️ [TABLE] MODE 2: Impossible de croiser "${fixedColValue}" × "${rowValue}"`);
               }
             }
             
@@ -557,7 +558,7 @@ function useUniversalTranslator() {
             }
             
             if (!rowValue || !colValue) {
-              if (isSmartDebug()) console.warn(`⚠️ [TABLE] MODE 3: Valeur manquante`);
+              if (isSmartDebug()) logger.warn(`⚠️ [TABLE] MODE 3: Valeur manquante`);
               return null;
             }
             
@@ -626,16 +627,16 @@ function useUniversalTranslator() {
               calculationCache.set(cacheKey, { result, timestamp: Date.now(), dependencies: [rowFieldId, colFieldId] });
               return result;
             } else {
-              console.error(`❌ [TABLE] MODE 3: Index introuvables`);
+              logger.error(`❌ [TABLE] MODE 3: Index introuvables`);
               return null;
             }
           }
           
-          console.error(`❌ [TABLE] Configuration lookup invalide`);
+          logger.error(`❌ [TABLE] Configuration lookup invalide`);
           return null;
           
         } catch (error) {
-          console.error(`❌ [TABLE] Erreur lors du lookup:`, error);
+          logger.error(`❌ [TABLE] Erreur lors du lookup:`, error);
           return null;
         }
       }
@@ -696,7 +697,7 @@ function useUniversalTranslator() {
           }
         }
       } catch (e) {
-        console.warn('⚠️ [TRADUCTEUR][MIRROR_ERROR]', e);
+        logger.warn('⚠️ [TRADUCTEUR][MIRROR_ERROR]', e);
       }
 
       // 3. Extraire elementId réel (supprimer préfixe capacity si présent) - conserver version original pour logs
@@ -764,14 +765,14 @@ function useUniversalTranslator() {
       
       // 🔍 Debug pour diagnostic uniquement en cas d'erreur
       if (!response) { 
-        console.warn(`❌ [TRADUCTEUR] Réponse vide pour ${sourceRef}`);
+        logger.warn(`❌ [TRADUCTEUR] Réponse vide pour ${sourceRef}`);
         return null; 
       }
       
       if (response?.success === false) {
-        console.warn(`❌ [TRADUCTEUR] Échec API pour ${sourceRef}:`, response.error);
+        logger.warn(`❌ [TRADUCTEUR] Échec API pour ${sourceRef}:`, response.error);
         if (response.code === 'ELEMENT_UNRESOLVED') {
-          console.warn(`❌ [TRADUCTEUR] ELEMENT_UNRESOLVED pour ${sourceRef} (elementId: ${elementId})`);
+          logger.warn(`❌ [TRADUCTEUR] ELEMENT_UNRESOLVED pour ${sourceRef} (elementId: ${elementId})`);
           return null;
         }
       }
@@ -1127,7 +1128,7 @@ export function SmartCalculatedField({
     const signature = dataSignature;
     // Guard: éviter recalcul si signature identique ET résultat déjà présent (ou en vol)
     if (lastCalcRef.current && lastCalcRef.current.sourceRef === sourceRef && lastCalcRef.current.signature === signature) {
-      if (isSmartDebug()) console.log('[SMART][SKIP] same signature', { sourceRef, signature });
+      if (isSmartDebug()) logger.debug('[SMART][SKIP] same signature', { sourceRef, signature });
       return;
     }
     if (inflightRef.current) { return; }
@@ -1141,7 +1142,7 @@ export function SmartCalculatedField({
     const sigKey = `${sourceRef}::${signature}`;
     const cachedSig = signatureResultCache.get(sigKey);
     if (cachedSig && cachedSig.expiresAt > Date.now()) {
-      if (isSmartDebug()) console.log('[SMART][FAST-PATH] signature cache hit', { sourceRef, signature });
+      if (isSmartDebug()) logger.debug('[SMART][FAST-PATH] signature cache hit', { sourceRef, signature });
       if (latestResultRef.current !== cachedSig.value) {
         if (isSmartDebug()) tblLog(`🏃 [RESULT DEBUG] Cache hit pour ${sourceRef}, setResult:`, cachedSig.value);
         setResult(cachedSig.value);
@@ -1156,7 +1157,7 @@ export function SmartCalculatedField({
       try {
         lastCalcRef.current = { sourceRef, signature };
   const { result: calculatedResult } = await translateAndExecute(sourceRef, latestFormDataRef.current);
-        if ((diagMode() || isSmartDebug())) console.log('[SMART][CALC][DONE]', { sourceRef, signature, calculatedResult });
+        if ((diagMode() || isSmartDebug())) logger.debug('[SMART][CALC][DONE]', { sourceRef, signature, calculatedResult });
         // Logging ordre d'évaluation naïf: compter combien de dépendants connus dans graphe pointent vers cette source
         try {
           if (diagMode() && typeof window !== 'undefined' && window.TBL_DEP_GRAPH) {
@@ -1164,21 +1165,21 @@ export function SmartCalculatedField({
             // Normaliser référence (sourceRef peut être formula:xxx -> on garde tel quel pour correspondance)
             const dependants = g.get(sourceRef) || g.get(sourceRef.replace(/^(formula:|condition:|table:|variable:)/,''));
             if (dependants && dependants.size) {
-              console.log('[TBL_DIAG][eval-order]', { sourceRef, dependants: Array.from(dependants) });
+              logger.debug('[TBL_DIAG][eval-order]', { sourceRef, dependants: Array.from(dependants) });
             }
           }
         } catch {/* silent */}
-        if (diagMode()) console.log('[TBL_DIAG][calc-result]', { sourceRef, signature, value: calculatedResult });
+        if (diagMode()) logger.debug('[TBL_DIAG][calc-result]', { sourceRef, signature, value: calculatedResult });
         setResult(prev => {
           // 🔍 LOG FORCÉ pour diagnostic
           if (isSmartDebug()) tblLog(`🔍 [RESULT DEBUG] setResult pour ${sourceRef}:`, { prev, calculatedResult, willChange: prev !== calculatedResult });
           
           if (prev === calculatedResult) {
-            if (isSmartDebug()) console.log('[SMART][RESULT][UNCHANGED]', sourceRef);
+            if (isSmartDebug()) logger.debug('[SMART][RESULT][UNCHANGED]', sourceRef);
             return prev;
           }
           signatureResultCache.set(sigKey, { value: calculatedResult, expiresAt: Date.now() + CACHE_TTL });
-          if (isSmartDebug()) console.log('[SMART][RESULT][SET]', { sourceRef, signature, value: calculatedResult });
+          if (isSmartDebug()) logger.debug('[SMART][RESULT][SET]', { sourceRef, signature, value: calculatedResult });
           
           if (isSmartDebug()) tblLog(`✅ [RESULT DEBUG] Nouveau result pour ${sourceRef}:`, calculatedResult);
           
@@ -1186,14 +1187,14 @@ export function SmartCalculatedField({
         });
       } catch (error) {
         const msg = (error as Error)?.message || '';
-        if (diagMode()) console.warn('[TBL_DIAG][calc-error]', { sourceRef, signature, error: msg });
+        if (diagMode()) logger.warn('[TBL_DIAG][calc-error]', { sourceRef, signature, error: msg });
         if (/accès refusé/i.test(msg) || /access refus/i.test(msg)) {
           if (!('__loggedDenied' in (calculate as unknown as Record<string, unknown>))) {
-            console.warn('🔐 Accès formule refusé (log unique).');
+            logger.warn('🔐 Accès formule refusé (log unique).');
             (calculate as unknown as Record<string, unknown>).__loggedDenied = true;
           }
         } else {
-          if (isSmartDebug()) console.error('❌ Erreur calcul:', error);
+          if (isSmartDebug()) logger.error('❌ Erreur calcul:', error);
         }
         if (isSmartDebug()) tblLog(`❌ [RESULT DEBUG] setResult(null) à cause d'erreur pour ${sourceRef}:`, error);
         setResult(null);
@@ -1206,7 +1207,7 @@ export function SmartCalculatedField({
     // Timeout de secours: si pas de résultat sous 2000ms et aucune nouvelle tentative -> forcer un affichage neutre
     const timeoutId = setTimeout(() => {
       if (latestIsLoadingRef.current) {
-        if ((diagMode() || isSmartDebug())) console.warn('[SMART][TIMEOUT]', sourceRef);
+        if ((diagMode() || isSmartDebug())) logger.warn('[SMART][TIMEOUT]', sourceRef);
         if (isSmartDebug()) tblLog(`⏰ [RESULT DEBUG] Timeout pour ${sourceRef}, setResult(prev ?? null)`);
         setIsLoading(false);
         setResult(prev => prev ?? null);
@@ -1253,7 +1254,7 @@ export function SmartCalculatedField({
         const value = await getMirrorFallback(sourceRef);
         setMirrorValue(value);
       } catch (error) {
-        console.warn(`Erreur lors du chargement mirror pour ${sourceRef}:`, error);
+        logger.warn(`Erreur lors du chargement mirror pour ${sourceRef}:`, error);
         setMirrorValue(null);
       }
     };

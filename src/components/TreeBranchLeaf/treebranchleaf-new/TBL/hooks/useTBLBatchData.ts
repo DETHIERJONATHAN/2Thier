@@ -18,6 +18,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
+import { logger } from '../../../../../lib/logger';
 
 // Types pour les données batch
 export interface BatchFormula {
@@ -521,7 +522,7 @@ export const useTBLBatchData = (
         const nodeDataUrl = `/api/tbl/batch/trees/${treeId}/node-data`;
         const conditionsUrl = `/api/tbl/batch/trees/${treeId}/conditions`;
 
-        console.log(`🚀 [useTBLBatchData] Chargement batch pour tree ${treeId}...`);
+        logger.debug(`🚀 [useTBLBatchData] Chargement batch pour tree ${treeId}...`);
         const startTime = performance.now();
 
         const [baseResponse, nodeDataResponse, conditionsResponse] = await Promise.all([
@@ -590,7 +591,7 @@ export const useTBLBatchData = (
           // "refreshKey === 0" ne fonctionne plus → boucle infinie de rechargements
           setRefreshKey(0);
 
-          console.log(
+          logger.debug(
             `✅ [useTBLBatchData] Batch chargé en ${duration.toFixed(0)}ms:`,
             `${data.stats.totalFormulas} formules,`,
             `${data.stats.nodesWithValues} valeurs,`,
@@ -600,7 +601,7 @@ export const useTBLBatchData = (
           );
         }
       } catch (err) {
-        console.error('[useTBLBatchData] Erreur chargement batch:', err);
+        logger.error('[useTBLBatchData] Erreur chargement batch:', err);
         if (mountedRef.current) {
           setError('Erreur lors du chargement batch des données TBL');
           // Ne pas bloquer - les hooks individuels peuvent fallback

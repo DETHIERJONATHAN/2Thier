@@ -36,6 +36,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import AIContentAssistant from '../AIContentAssistant';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { TextArea } = Input;
 
@@ -161,7 +162,7 @@ export const ServicesManager: React.FC<ServicesManagerProps> = ({ websiteId, sit
       const response = await api.get(`/api/website-services/${websiteId}`);
       setServices(Array.isArray(response) ? response : []);
     } catch (error) {
-      console.error('Erreur chargement services:', error);
+      logger.error('Erreur chargement services:', error);
       message.error('Erreur lors du chargement des services');
     } finally {
       setLoading(false);
@@ -185,7 +186,7 @@ export const ServicesManager: React.FC<ServicesManagerProps> = ({ websiteId, sit
         });
         message.success('Ordre mis à jour');
       } catch (error) {
-        console.error('Erreur réorganisation:', error);
+        logger.error('Erreur réorganisation:', error);
         message.error('Erreur lors de la réorganisation');
         fetchServices(); // Recharger en cas d'erreur
       }
@@ -210,7 +211,7 @@ export const ServicesManager: React.FC<ServicesManagerProps> = ({ websiteId, sit
       message.success('Service supprimé');
       fetchServices();
     } catch (error) {
-      console.error('Erreur suppression:', error);
+      logger.error('Erreur suppression:', error);
       message.error('Erreur lors de la suppression');
     }
   };
@@ -223,7 +224,7 @@ export const ServicesManager: React.FC<ServicesManagerProps> = ({ websiteId, sit
       message.success(service.isActive ? 'Service désactivé' : 'Service activé');
       fetchServices();
     } catch (error) {
-      console.error('Erreur toggle:', error);
+      logger.error('Erreur toggle:', error);
       message.error('Erreur lors de la modification');
     }
   };
@@ -243,7 +244,7 @@ export const ServicesManager: React.FC<ServicesManagerProps> = ({ websiteId, sit
       setModalVisible(false);
       fetchServices();
     } catch (error) {
-      console.error('Erreur sauvegarde:', error);
+      logger.error('Erreur sauvegarde:', error);
       message.error('Erreur lors de la sauvegarde');
     }
   };

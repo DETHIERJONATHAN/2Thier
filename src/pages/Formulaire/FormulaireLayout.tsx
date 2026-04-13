@@ -19,9 +19,10 @@ import {
 import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { toast } from 'react-toastify';
 import { useParams } from 'react-router-dom';
+import { logger } from '../../lib/logger';
 
 const FormulaireLayout: React.FC = () => {
-  console.log('[FormulaireLayout] Render');
+  logger.debug('[FormulaireLayout] Render');
   // Centralise la sélection du champ pour la colonne de droite
   const [selectedField, setSelectedField] = useState<{ sectionId: string | number; fieldId: string | number } | null>(null);
   const { 
@@ -49,10 +50,10 @@ const FormulaireLayout: React.FC = () => {
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-    console.log('[DND_END] Event:', event);
+    logger.debug('[DND_END] Event:', event);
 
     if (!over || !block) {
-      console.log('[DND_CANCEL] No "over" element or block not found. Aborting.');
+      logger.debug('[DND_CANCEL] No "over" element or block not found. Aborting.');
       return;
     }
 
@@ -60,7 +61,7 @@ const FormulaireLayout: React.FC = () => {
     const overData = over.data.current;
     const activeType = activeData?.type;
 
-    console.log(`[DND_END] Active type: ${activeType}, Over type: ${overData?.type}`);
+    logger.debug(`[DND_END] Active type: ${activeType}, Over type: ${overData?.type}`);
 
     // Cas: Réordonnancement d'un item dans une séquence de formule
     if (activeType === 'formula-sequence-item' && overData && (overData.type === 'formula-sequence-item' || overData.type === 'formula-drop-zone')) {
@@ -71,7 +72,7 @@ const FormulaireLayout: React.FC = () => {
         const formulaId = active.data.current?.item?.formulaId;
         
         if (!formulaId) {
-            console.warn("[DND_END] Missing formulaId in formula-sequence-item drag", active.data.current);
+            logger.warn("[DND_END] Missing formulaId in formula-sequence-item drag", active.data.current);
             toast.error("ID de formule manquant dans l'élément déplacé");
             return;
         }
@@ -102,7 +103,7 @@ const FormulaireLayout: React.FC = () => {
     // Cas 0: Ajout d'un nouveau champ depuis la palette
     if (activeType === 'palette-field' && activeData) {
         const fieldType = activeData.fieldType as string;
-        console.log(`[DND_END] Palette field drop detected. Type: ${fieldType}`);
+        logger.debug(`[DND_END] Palette field drop detected. Type: ${fieldType}`);
         
         let targetSectionId: string | null = null;
         let targetIndex: number | null = null;
@@ -129,10 +130,10 @@ const FormulaireLayout: React.FC = () => {
                 order: targetIndex,
             });
             toast.success(`Champ '${fieldType}' ajouté.`);
-            console.log(`[DND_END] Added field '${fieldType}' to section ${targetSectionId} at index ${targetIndex}`);
+            logger.debug(`[DND_END] Added field '${fieldType}' to section ${targetSectionId} at index ${targetIndex}`);
         } else {
             toast.warn('Déposez le champ sur une section pour l\'ajouter.');
-            console.log('[DND_END] Drop from palette failed: no valid target section.');
+            logger.debug('[DND_END] Drop from palette failed: no valid target section.');
         }
         return;
     }
@@ -141,9 +142,9 @@ const FormulaireLayout: React.FC = () => {
     if (activeType === 'form-field' && activeData && overData?.type?.endsWith('-drop-zone')) {
         const field = activeData.field as Field;
         const { itemData } = overData;
-        console.log(`[DND_END] 🔄 Field dropped into a build zone. Field: ${field.label}, Zone: ${overData.type}`);
-        console.log(`[DND_END] 🧩 Données complètes:`, { active: activeData, over: overData, itemData });
-        console.log(`[DND_END] 🧩 Over ID:`, over.id);
+        logger.debug(`[DND_END] 🔄 Field dropped into a build zone. Field: ${field.label}, Zone: ${overData.type}`);
+        logger.debug(`[DND_END] 🧩 Données complètes:`, { active: activeData, over: overData, itemData });
+        logger.debug(`[DND_END] 🧩 Over ID:`, over.id);
 
         // S'assurer que l'item à ajouter a un ID valide
         const newItem: FormulaItem = { 
@@ -152,18 +153,18 @@ const FormulaireLayout: React.FC = () => {
           label: field.label,
           value: field.id
         };
-        console.log(`[DND_END] 📦 Nouvel item créé:`, newItem);
+        logger.debug(`[DND_END] 📦 Nouvel item créé:`, newItem);
 
         if (overData.type === 'formula-drop-zone') {
             // Extraction de l'ID de la formule avec vérifications renforcées
             let formulaId = itemData?.formulaId;
             let formulaName = itemData?.formulaName || 'Sans nom';
             
-            console.log(`[DND_END] 🔍 Extraction de l'ID de formule: initial=${formulaId}`);
+            logger.debug(`[DND_END] 🔍 Extraction de l'ID de formule: initial=${formulaId}`);
             
             // Si l'ID de la formule n'est pas disponible dans itemData, essayons de l'extraire du dropZoneId
             if (!formulaId) {
-                console.warn(`[DND_END] ⚠️ Formula ID is undefined or null in itemData`);
+                logger.warn(`[DND_END] ⚠️ Formula ID is undefined or null in itemData`);
                 
                 // Extraction à partir de l'ID de la zone de dépôt
                 const dropZoneId = String(over?.id || '');
@@ -171,37 +172,37 @@ const FormulaireLayout: React.FC = () => {
                 
                 if (formulaIdMatch && formulaIdMatch[1]) {
                     formulaId = formulaIdMatch[1];
-                    console.log(`[DND_END] 🎯 Extracted formula ID from drop zone ID: ${formulaId}`);
+                    logger.debug(`[DND_END] 🎯 Extracted formula ID from drop zone ID: ${formulaId}`);
                 }
             }
             
             // Si nous n'avons toujours pas d'ID de formule, affichons une erreur
             if (!formulaId) {
                 toast.error("Impossible d'identifier la formule cible. Veuillez réessayer.");
-                console.error(`[DND_END] ❌ Could not determine formula ID from drop zone or item data`);
+                logger.error(`[DND_END] ❌ Could not determine formula ID from drop zone or item data`);
                 return;
             }
             
             // Vérifier que l'ID est une chaîne valide
             if (typeof formulaId !== 'string' || formulaId.trim() === '') {
                 toast.error("L'ID de la formule cible n'est pas valide.");
-                console.error(`[DND_END] ❌ Invalid formula ID: ${formulaId} (type: ${typeof formulaId})`);
+                logger.error(`[DND_END] ❌ Invalid formula ID: ${formulaId} (type: ${typeof formulaId})`);
                 return;
             }
             
             // À ce stade, nous avons un ID de formule valide
-            console.log(`[DND_END] ✅ Using formula ID: ${formulaId}, name: ${formulaName}`);
+            logger.debug(`[DND_END] ✅ Using formula ID: ${formulaId}, name: ${formulaName}`);
             
             // Recherche dans tous les blocs pour trouver le champ parent
             let fieldFound = null;
             
-            console.log(`[DND_END] 🔎 Recherche du champ parent pour la formule ${formulaId}...`);
+            logger.debug(`[DND_END] 🔎 Recherche du champ parent pour la formule ${formulaId}...`);
             for (const b of blocks) {
                 for (const s of b.sections) {
                     for (const f of s.fields) {
                         if (f.formulas?.some(form => form && form.id === formulaId)) {
                             fieldFound = f;
-                            console.log(`[DND_END] ✅ Champ parent trouvé: ${f.id} (${f.label || 'sans label'})`);
+                            logger.debug(`[DND_END] ✅ Champ parent trouvé: ${f.id} (${f.label || 'sans label'})`);
                             break;
                         }
                     }
@@ -211,13 +212,13 @@ const FormulaireLayout: React.FC = () => {
             }
             
             if (!fieldFound) {
-                console.log(`[DND_END] 🔬 Recherche avancée avec toutes les formules...`);
+                logger.debug(`[DND_END] 🔬 Recherche avancée avec toutes les formules...`);
                 // Recherche de secours : afficher toutes les formules de tous les champs
                 blocks.forEach((b, bi) => {
                     b.sections.forEach((s, si) => {
                         s.fields.forEach((f, fi) => {
                             if (f.formulas && f.formulas.length > 0) {
-                                console.log(`[DND_END] 📋 Bloc ${bi}, Section ${si}, Champ ${fi} (${f.id}): Formules:`, 
+                                logger.debug(`[DND_END] 📋 Bloc ${bi}, Section ${si}, Champ ${fi} (${f.id}): Formules:`, 
                                     f.formulas.map(form => ({ id: form?.id || 'MISSING', type: typeof form?.id })));
                             }
                         });
@@ -226,19 +227,19 @@ const FormulaireLayout: React.FC = () => {
             }
             
             if (fieldFound) {
-                console.log(`[DND_END] 🚀 Ajout du champ ${field.id} à la formule ${formulaId}...`);
+                logger.debug(`[DND_END] 🚀 Ajout du champ ${field.id} à la formule ${formulaId}...`);
                 
                 try {
                     addItemsToFormulaSequence(fieldFound.id, formulaId, [newItem]);
                     toast.success(`Champ "${field.label}" ajouté à la formule.`);
-                    console.log(`[DND_END] ✅ Added field ${field.id} to formula ${formulaId}`);
+                    logger.debug(`[DND_END] ✅ Added field ${field.id} to formula ${formulaId}`);
                 } catch (error) {
-                    console.error(`[DND_END] ❌ ERREUR lors de l'ajout à la formule:`, error);
+                    logger.error(`[DND_END] ❌ ERREUR lors de l'ajout à la formule:`, error);
                     toast.error(`Erreur lors de l'ajout: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
                 }
             } else {
                 toast.error("Champ parent de la formule introuvable.");
-                console.error(`[DND_END] ❌ Could not find parent field for formula ${formulaId}`);
+                logger.error(`[DND_END] ❌ Could not find parent field for formula ${formulaId}`);
             }
         } else if (overData.type === 'validation-drop-zone') {
             // TODO: Implémenter la logique pour les validations

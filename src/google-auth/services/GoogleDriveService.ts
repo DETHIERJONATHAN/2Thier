@@ -7,6 +7,7 @@
 
 import { google, drive_v3 } from 'googleapis';
 import { googleAuthManager } from '../index';
+import { logger } from '../../lib/logger';
 
 export interface DriveFile {
   id: string;
@@ -48,7 +49,7 @@ export class GoogleDriveService {
    * Obtient une instance de l'API Google Drive pour un utilisateur dans une organisation
    */
   private async getDriveAPI(organizationId: string, userId?: string): Promise<drive_v3.Drive> {
-    console.log(`[GoogleDriveService] 📁 Création instance API Drive pour organisation: ${organizationId}, utilisateur: ${userId || 'non spécifié'}`);
+    logger.debug(`[GoogleDriveService] 📁 Création instance API Drive pour organisation: ${organizationId}, utilisateur: ${userId || 'non spécifié'}`);
     
     const authClient = await googleAuthManager.getAuthenticatedClient(organizationId, userId);
     if (!authClient) {
@@ -69,7 +70,7 @@ export class GoogleDriveService {
     userId?: string
   ): Promise<{ files: DriveFile[]; nextPageToken?: string }> {
     try {
-      console.log(`[GoogleDriveService] 🔍 Récupération des fichiers pour folder: ${folderId}, userId: ${userId}`);
+      logger.debug(`[GoogleDriveService] 🔍 Récupération des fichiers pour folder: ${folderId}, userId: ${userId}`);
       const drive = await this.getDriveAPI(organizationId, userId);
 
       const query = folderId === 'root' 
@@ -102,14 +103,14 @@ export class GoogleDriveService {
         ownedByMe: file.ownedByMe || false,
       }));
 
-      console.log(`[GoogleDriveService] ✅ ${files.length} fichiers récupérés`);
+      logger.debug(`[GoogleDriveService] ✅ ${files.length} fichiers récupérés`);
 
       return {
         files,
         nextPageToken: response.data.nextPageToken || undefined,
       };
     } catch (error) {
-      console.error('[GoogleDriveService] ❌ Erreur lors de la récupération des fichiers:', error);
+      logger.error('[GoogleDriveService] ❌ Erreur lors de la récupération des fichiers:', error);
       throw error;
     }
   }
@@ -124,7 +125,7 @@ export class GoogleDriveService {
     userId?: string
   ): Promise<{ files: DriveFile[]; nextPageToken?: string }> {
     try {
-      console.log(`[GoogleDriveService] 🔍 Récupération des fichiers partagés`);
+      logger.debug(`[GoogleDriveService] 🔍 Récupération des fichiers partagés`);
       const drive = await this.getDriveAPI(organizationId, userId);
 
       const response = await drive.files.list({
@@ -153,14 +154,14 @@ export class GoogleDriveService {
         ownedByMe: false,
       }));
 
-      console.log(`[GoogleDriveService] ✅ ${files.length} fichiers partagés récupérés`);
+      logger.debug(`[GoogleDriveService] ✅ ${files.length} fichiers partagés récupérés`);
 
       return {
         files,
         nextPageToken: response.data.nextPageToken || undefined,
       };
     } catch (error) {
-      console.error('[GoogleDriveService] ❌ Erreur lors de la récupération des fichiers partagés:', error);
+      logger.error('[GoogleDriveService] ❌ Erreur lors de la récupération des fichiers partagés:', error);
       throw error;
     }
   }
@@ -174,7 +175,7 @@ export class GoogleDriveService {
     userId?: string
   ): Promise<{ drives: { id: string; name: string }[] }> {
     try {
-      console.log(`[GoogleDriveService] 🔍 Récupération des drives partagés`);
+      logger.debug(`[GoogleDriveService] 🔍 Récupération des drives partagés`);
       const drive = await this.getDriveAPI(organizationId, userId);
 
       const response = await drive.drives.list({
@@ -187,11 +188,11 @@ export class GoogleDriveService {
         name: d.name || 'Drive partagé',
       }));
 
-      console.log(`[GoogleDriveService] ✅ ${drives.length} drives partagés récupérés`);
+      logger.debug(`[GoogleDriveService] ✅ ${drives.length} drives partagés récupérés`);
 
       return { drives };
     } catch (error) {
-      console.error('[GoogleDriveService] ❌ Erreur lors de la récupération des drives partagés:', error);
+      logger.error('[GoogleDriveService] ❌ Erreur lors de la récupération des drives partagés:', error);
       throw error;
     }
   }
@@ -208,7 +209,7 @@ export class GoogleDriveService {
     userId?: string
   ): Promise<{ files: DriveFile[]; nextPageToken?: string }> {
     try {
-      console.log(`[GoogleDriveService] 🔍 Récupération des fichiers du drive partagé: ${driveId}, folder: ${folderId || 'root'}`);
+      logger.debug(`[GoogleDriveService] 🔍 Récupération des fichiers du drive partagé: ${driveId}, folder: ${folderId || 'root'}`);
       const drive = await this.getDriveAPI(organizationId, userId);
 
       // Si folderId est fourni, on liste les fichiers de ce dossier, sinon la racine du drive
@@ -243,14 +244,14 @@ export class GoogleDriveService {
         ownedByMe: false,
       }));
 
-      console.log(`[GoogleDriveService] ✅ ${files.length} fichiers récupérés du drive partagé`);
+      logger.debug(`[GoogleDriveService] ✅ ${files.length} fichiers récupérés du drive partagé`);
 
       return {
         files,
         nextPageToken: response.data.nextPageToken || undefined,
       };
     } catch (error) {
-      console.error('[GoogleDriveService] ❌ Erreur lors de la récupération des fichiers du drive partagé:', error);
+      logger.error('[GoogleDriveService] ❌ Erreur lors de la récupération des fichiers du drive partagé:', error);
       throw error;
     }
   }
@@ -265,7 +266,7 @@ export class GoogleDriveService {
     userId?: string
   ): Promise<DriveFile[]> {
     try {
-      console.log(`[GoogleDriveService] 🔎 Recherche: "${searchQuery}"`);
+      logger.debug(`[GoogleDriveService] 🔎 Recherche: "${searchQuery}"`);
       const drive = await this.getDriveAPI(organizationId, userId);
 
       const response = await drive.files.list({
@@ -289,10 +290,10 @@ export class GoogleDriveService {
         shared: file.shared || false,
       }));
 
-      console.log(`[GoogleDriveService] ✅ ${files.length} fichiers trouvés`);
+      logger.debug(`[GoogleDriveService] ✅ ${files.length} fichiers trouvés`);
       return files;
     } catch (error) {
-      console.error('[GoogleDriveService] ❌ Erreur lors de la recherche:', error);
+      logger.error('[GoogleDriveService] ❌ Erreur lors de la recherche:', error);
       throw error;
     }
   }
@@ -307,7 +308,7 @@ export class GoogleDriveService {
     userId?: string
   ): Promise<DriveFolder> {
     try {
-      console.log(`[GoogleDriveService] 📂 Création du dossier: "${name}"`);
+      logger.debug(`[GoogleDriveService] 📂 Création du dossier: "${name}"`);
       const drive = await this.getDriveAPI(organizationId, userId);
 
       const response = await drive.files.create({
@@ -319,7 +320,7 @@ export class GoogleDriveService {
         fields: 'id, name, mimeType, modifiedTime, webViewLink',
       });
 
-      console.log(`[GoogleDriveService] ✅ Dossier créé: ${response.data.id}`);
+      logger.debug(`[GoogleDriveService] ✅ Dossier créé: ${response.data.id}`);
 
       return {
         id: response.data.id || '',
@@ -329,7 +330,7 @@ export class GoogleDriveService {
         webViewLink: response.data.webViewLink || undefined,
       };
     } catch (error) {
-      console.error('[GoogleDriveService] ❌ Erreur lors de la création du dossier:', error);
+      logger.error('[GoogleDriveService] ❌ Erreur lors de la création du dossier:', error);
       throw error;
     }
   }
@@ -339,7 +340,7 @@ export class GoogleDriveService {
    */
   async deleteFile(organizationId: string, fileId: string, userId?: string): Promise<boolean> {
     try {
-      console.log(`[GoogleDriveService] 🗑️ Suppression du fichier: ${fileId}`);
+      logger.debug(`[GoogleDriveService] 🗑️ Suppression du fichier: ${fileId}`);
       const drive = await this.getDriveAPI(organizationId, userId);
 
       // Mise à la corbeille plutôt que suppression définitive
@@ -351,10 +352,10 @@ export class GoogleDriveService {
         },
       });
 
-      console.log(`[GoogleDriveService] ✅ Fichier mis à la corbeille`);
+      logger.debug(`[GoogleDriveService] ✅ Fichier mis à la corbeille`);
       return true;
     } catch (error) {
-      console.error('[GoogleDriveService] ❌ Erreur lors de la suppression:', error);
+      logger.error('[GoogleDriveService] ❌ Erreur lors de la suppression:', error);
       throw error;
     }
   }
@@ -387,7 +388,7 @@ export class GoogleDriveService {
         ownedByMe: response.data.ownedByMe || false,
       };
     } catch (error) {
-      console.error('[GoogleDriveService] ❌ Erreur lors de la récupération des infos:', error);
+      logger.error('[GoogleDriveService] ❌ Erreur lors de la récupération des infos:', error);
       throw error;
     }
   }
@@ -417,7 +418,7 @@ export class GoogleDriveService {
         usageInTrash: quota?.usageInTrash || '0',
       };
     } catch (error) {
-      console.error('[GoogleDriveService] ❌ Erreur lors de la récupération du stockage:', error);
+      logger.error('[GoogleDriveService] ❌ Erreur lors de la récupération du stockage:', error);
       throw error;
     }
   }
@@ -434,7 +435,7 @@ export class GoogleDriveService {
     userId?: string
   ): Promise<DriveFile> {
     try {
-      console.log(`[GoogleDriveService] 📤 Upload du fichier: "${fileName}"`);
+      logger.debug(`[GoogleDriveService] 📤 Upload du fichier: "${fileName}"`);
       const drive = await this.getDriveAPI(organizationId, userId);
 
       const { Readable } = await import('stream');
@@ -452,7 +453,7 @@ export class GoogleDriveService {
         fields: 'id, name, mimeType, size, modifiedTime, webViewLink, webContentLink, iconLink, thumbnailLink',
       });
 
-      console.log(`[GoogleDriveService] ✅ Fichier uploadé: ${response.data.id}`);
+      logger.debug(`[GoogleDriveService] ✅ Fichier uploadé: ${response.data.id}`);
 
       return {
         id: response.data.id || '',
@@ -466,7 +467,7 @@ export class GoogleDriveService {
         thumbnailLink: response.data.thumbnailLink || undefined,
       };
     } catch (error) {
-      console.error('[GoogleDriveService] ❌ Erreur lors de l\'upload:', error);
+      logger.error('[GoogleDriveService] ❌ Erreur lors de l\'upload:', error);
       throw error;
     }
   }
@@ -476,7 +477,7 @@ export class GoogleDriveService {
    */
   async renameFile(organizationId: string, fileId: string, newName: string, userId?: string): Promise<DriveFile> {
     try {
-      console.log(`[GoogleDriveService] ✏️ Renommer fichier ${fileId} en "${newName}"`);
+      logger.debug(`[GoogleDriveService] ✏️ Renommer fichier ${fileId} en "${newName}"`);
       const drive = await this.getDriveAPI(organizationId, userId);
 
       const response = await drive.files.update({
@@ -488,7 +489,7 @@ export class GoogleDriveService {
         fields: 'id, name, mimeType, size, modifiedTime, webViewLink',
       });
 
-      console.log(`[GoogleDriveService] ✅ Fichier renommé`);
+      logger.debug(`[GoogleDriveService] ✅ Fichier renommé`);
 
       return {
         id: response.data.id || '',
@@ -498,7 +499,7 @@ export class GoogleDriveService {
         webViewLink: response.data.webViewLink || undefined,
       };
     } catch (error) {
-      console.error('[GoogleDriveService] ❌ Erreur lors du renommage:', error);
+      logger.error('[GoogleDriveService] ❌ Erreur lors du renommage:', error);
       throw error;
     }
   }
@@ -508,7 +509,7 @@ export class GoogleDriveService {
    */
   async moveFile(organizationId: string, fileId: string, newParentId: string, userId?: string): Promise<DriveFile> {
     try {
-      console.log(`[GoogleDriveService] 📦 Déplacer fichier ${fileId} vers ${newParentId}`);
+      logger.debug(`[GoogleDriveService] 📦 Déplacer fichier ${fileId} vers ${newParentId}`);
       const drive = await this.getDriveAPI(organizationId, userId);
 
       // D'abord, récupérer les parents actuels
@@ -528,7 +529,7 @@ export class GoogleDriveService {
         fields: 'id, name, mimeType, parents, webViewLink',
       });
 
-      console.log(`[GoogleDriveService] ✅ Fichier déplacé`);
+      logger.debug(`[GoogleDriveService] ✅ Fichier déplacé`);
 
       return {
         id: response.data.id || '',
@@ -538,7 +539,7 @@ export class GoogleDriveService {
         webViewLink: response.data.webViewLink || undefined,
       };
     } catch (error) {
-      console.error('[GoogleDriveService] ❌ Erreur lors du déplacement:', error);
+      logger.error('[GoogleDriveService] ❌ Erreur lors du déplacement:', error);
       throw error;
     }
   }
@@ -548,7 +549,7 @@ export class GoogleDriveService {
    */
   async copyFile(organizationId: string, fileId: string, newName?: string, userId?: string): Promise<DriveFile> {
     try {
-      console.log(`[GoogleDriveService] 📋 Copier fichier ${fileId}`);
+      logger.debug(`[GoogleDriveService] 📋 Copier fichier ${fileId}`);
       const drive = await this.getDriveAPI(organizationId, userId);
 
       const response = await drive.files.copy({
@@ -558,7 +559,7 @@ export class GoogleDriveService {
         fields: 'id, name, mimeType, size, modifiedTime, webViewLink',
       });
 
-      console.log(`[GoogleDriveService] ✅ Fichier copié: ${response.data.id}`);
+      logger.debug(`[GoogleDriveService] ✅ Fichier copié: ${response.data.id}`);
 
       return {
         id: response.data.id || '',
@@ -569,7 +570,7 @@ export class GoogleDriveService {
         webViewLink: response.data.webViewLink || undefined,
       };
     } catch (error) {
-      console.error('[GoogleDriveService] ❌ Erreur lors de la copie:', error);
+      logger.error('[GoogleDriveService] ❌ Erreur lors de la copie:', error);
       throw error;
     }
   }
@@ -579,7 +580,7 @@ export class GoogleDriveService {
    */
   async getShareLink(organizationId: string, fileId: string, userId?: string): Promise<{ webViewLink: string; webContentLink?: string }> {
     try {
-      console.log(`[GoogleDriveService] 🔗 Obtenir lien de partage pour ${fileId}`);
+      logger.debug(`[GoogleDriveService] 🔗 Obtenir lien de partage pour ${fileId}`);
       const drive = await this.getDriveAPI(organizationId, userId);
 
       const response = await drive.files.get({
@@ -593,7 +594,7 @@ export class GoogleDriveService {
         webContentLink: response.data.webContentLink || undefined,
       };
     } catch (error) {
-      console.error('[GoogleDriveService] ❌ Erreur lors de la récupération du lien:', error);
+      logger.error('[GoogleDriveService] ❌ Erreur lors de la récupération du lien:', error);
       throw error;
     }
   }
@@ -603,7 +604,7 @@ export class GoogleDriveService {
    */
   async makePublic(organizationId: string, fileId: string, userId?: string): Promise<{ webViewLink: string }> {
     try {
-      console.log(`[GoogleDriveService] 🌐 Rendre public ${fileId}`);
+      logger.debug(`[GoogleDriveService] 🌐 Rendre public ${fileId}`);
       const drive = await this.getDriveAPI(organizationId, userId);
 
       // Créer une permission "anyone with link"
@@ -623,13 +624,13 @@ export class GoogleDriveService {
         fields: 'webViewLink',
       });
 
-      console.log(`[GoogleDriveService] ✅ Fichier rendu public`);
+      logger.debug(`[GoogleDriveService] ✅ Fichier rendu public`);
 
       return {
         webViewLink: response.data.webViewLink || '',
       };
     } catch (error) {
-      console.error('[GoogleDriveService] ❌ Erreur lors du partage:', error);
+      logger.error('[GoogleDriveService] ❌ Erreur lors du partage:', error);
       throw error;
     }
   }
@@ -639,7 +640,7 @@ export class GoogleDriveService {
    */
   async getRecentFiles(organizationId: string, pageSize: number = 50, userId?: string): Promise<DriveFile[]> {
     try {
-      console.log(`[GoogleDriveService] 🕐 Récupération des fichiers récents`);
+      logger.debug(`[GoogleDriveService] 🕐 Récupération des fichiers récents`);
       const drive = await this.getDriveAPI(organizationId, userId);
 
       const response = await drive.files.list({
@@ -663,10 +664,10 @@ export class GoogleDriveService {
         shared: file.shared || false,
       }));
 
-      console.log(`[GoogleDriveService] ✅ ${files.length} fichiers récents récupérés`);
+      logger.debug(`[GoogleDriveService] ✅ ${files.length} fichiers récents récupérés`);
       return files;
     } catch (error) {
-      console.error('[GoogleDriveService] ❌ Erreur lors de la récupération des fichiers récents:', error);
+      logger.error('[GoogleDriveService] ❌ Erreur lors de la récupération des fichiers récents:', error);
       throw error;
     }
   }
@@ -676,7 +677,7 @@ export class GoogleDriveService {
    */
   async getStarredFiles(organizationId: string, pageSize: number = 50, userId?: string): Promise<DriveFile[]> {
     try {
-      console.log(`[GoogleDriveService] ⭐ Récupération des fichiers favoris`);
+      logger.debug(`[GoogleDriveService] ⭐ Récupération des fichiers favoris`);
       const drive = await this.getDriveAPI(organizationId, userId);
 
       const response = await drive.files.list({
@@ -700,10 +701,10 @@ export class GoogleDriveService {
         shared: file.shared || false,
       }));
 
-      console.log(`[GoogleDriveService] ✅ ${files.length} fichiers favoris récupérés`);
+      logger.debug(`[GoogleDriveService] ✅ ${files.length} fichiers favoris récupérés`);
       return files;
     } catch (error) {
-      console.error('[GoogleDriveService] ❌ Erreur lors de la récupération des fichiers favoris:', error);
+      logger.error('[GoogleDriveService] ❌ Erreur lors de la récupération des fichiers favoris:', error);
       throw error;
     }
   }
@@ -713,7 +714,7 @@ export class GoogleDriveService {
    */
   async toggleStar(organizationId: string, fileId: string, starred: boolean, userId?: string): Promise<boolean> {
     try {
-      console.log(`[GoogleDriveService] ⭐ ${starred ? 'Ajouter aux' : 'Retirer des'} favoris: ${fileId}`);
+      logger.debug(`[GoogleDriveService] ⭐ ${starred ? 'Ajouter aux' : 'Retirer des'} favoris: ${fileId}`);
       const drive = await this.getDriveAPI(organizationId, userId);
 
       await drive.files.update({
@@ -724,10 +725,10 @@ export class GoogleDriveService {
         },
       });
 
-      console.log(`[GoogleDriveService] ✅ Favori mis à jour`);
+      logger.debug(`[GoogleDriveService] ✅ Favori mis à jour`);
       return true;
     } catch (error) {
-      console.error('[GoogleDriveService] ❌ Erreur lors de la mise à jour du favori:', error);
+      logger.error('[GoogleDriveService] ❌ Erreur lors de la mise à jour du favori:', error);
       throw error;
     }
   }
@@ -737,7 +738,7 @@ export class GoogleDriveService {
    */
   async getTrash(organizationId: string, pageSize: number = 50, userId?: string): Promise<DriveFile[]> {
     try {
-      console.log(`[GoogleDriveService] 🗑️ Récupération de la corbeille`);
+      logger.debug(`[GoogleDriveService] 🗑️ Récupération de la corbeille`);
       const drive = await this.getDriveAPI(organizationId, userId);
 
       const response = await drive.files.list({
@@ -758,10 +759,10 @@ export class GoogleDriveService {
         thumbnailLink: file.thumbnailLink || undefined,
       }));
 
-      console.log(`[GoogleDriveService] ✅ ${files.length} fichiers dans la corbeille`);
+      logger.debug(`[GoogleDriveService] ✅ ${files.length} fichiers dans la corbeille`);
       return files;
     } catch (error) {
-      console.error('[GoogleDriveService] ❌ Erreur lors de la récupération de la corbeille:', error);
+      logger.error('[GoogleDriveService] ❌ Erreur lors de la récupération de la corbeille:', error);
       throw error;
     }
   }
@@ -771,7 +772,7 @@ export class GoogleDriveService {
    */
   async restoreFile(organizationId: string, fileId: string, userId?: string): Promise<boolean> {
     try {
-      console.log(`[GoogleDriveService] ♻️ Restaurer fichier: ${fileId}`);
+      logger.debug(`[GoogleDriveService] ♻️ Restaurer fichier: ${fileId}`);
       const drive = await this.getDriveAPI(organizationId, userId);
 
       await drive.files.update({
@@ -782,10 +783,10 @@ export class GoogleDriveService {
         },
       });
 
-      console.log(`[GoogleDriveService] ✅ Fichier restauré`);
+      logger.debug(`[GoogleDriveService] ✅ Fichier restauré`);
       return true;
     } catch (error) {
-      console.error('[GoogleDriveService] ❌ Erreur lors de la restauration:', error);
+      logger.error('[GoogleDriveService] ❌ Erreur lors de la restauration:', error);
       throw error;
     }
   }
@@ -795,7 +796,7 @@ export class GoogleDriveService {
    */
   async deleteFilePermanently(organizationId: string, fileId: string, userId?: string): Promise<boolean> {
     try {
-      console.log(`[GoogleDriveService] ❌ Suppression définitive: ${fileId}`);
+      logger.debug(`[GoogleDriveService] ❌ Suppression définitive: ${fileId}`);
       const drive = await this.getDriveAPI(organizationId, userId);
 
       await drive.files.delete({
@@ -803,10 +804,10 @@ export class GoogleDriveService {
         supportsAllDrives: true,
       });
 
-      console.log(`[GoogleDriveService] ✅ Fichier supprimé définitivement`);
+      logger.debug(`[GoogleDriveService] ✅ Fichier supprimé définitivement`);
       return true;
     } catch (error) {
-      console.error('[GoogleDriveService] ❌ Erreur lors de la suppression définitive:', error);
+      logger.error('[GoogleDriveService] ❌ Erreur lors de la suppression définitive:', error);
       throw error;
     }
   }
@@ -816,15 +817,15 @@ export class GoogleDriveService {
    */
   async emptyTrash(organizationId: string, userId?: string): Promise<boolean> {
     try {
-      console.log(`[GoogleDriveService] 🗑️ Vider la corbeille`);
+      logger.debug(`[GoogleDriveService] 🗑️ Vider la corbeille`);
       const drive = await this.getDriveAPI(organizationId, userId);
 
       await drive.files.emptyTrash();
 
-      console.log(`[GoogleDriveService] ✅ Corbeille vidée`);
+      logger.debug(`[GoogleDriveService] ✅ Corbeille vidée`);
       return true;
     } catch (error) {
-      console.error('[GoogleDriveService] ❌ Erreur lors du vidage de la corbeille:', error);
+      logger.error('[GoogleDriveService] ❌ Erreur lors du vidage de la corbeille:', error);
       throw error;
     }
   }
@@ -834,7 +835,7 @@ export class GoogleDriveService {
    */
   async getDownloadUrl(organizationId: string, fileId: string, userId?: string): Promise<{ downloadUrl: string; fileName: string; mimeType: string }> {
     try {
-      console.log(`[GoogleDriveService] ⬇️ Obtenir URL de téléchargement: ${fileId}`);
+      logger.debug(`[GoogleDriveService] ⬇️ Obtenir URL de téléchargement: ${fileId}`);
       const drive = await this.getDriveAPI(organizationId, userId);
 
       const response = await drive.files.get({
@@ -868,7 +869,7 @@ export class GoogleDriveService {
         mimeType,
       };
     } catch (error) {
-      console.error('[GoogleDriveService] ❌ Erreur lors de la récupération de l\'URL:', error);
+      logger.error('[GoogleDriveService] ❌ Erreur lors de la récupération de l\'URL:', error);
       throw error;
     }
   }
@@ -884,7 +885,7 @@ export class GoogleDriveService {
     userId?: string
   ): Promise<DriveFile> {
     try {
-      console.log(`[GoogleDriveService] 📄 Créer ${type}: "${name}"`);
+      logger.debug(`[GoogleDriveService] 📄 Créer ${type}: "${name}"`);
       const drive = await this.getDriveAPI(organizationId, userId);
 
       const mimeTypes: { [key: string]: string } = {
@@ -902,7 +903,7 @@ export class GoogleDriveService {
         fields: 'id, name, mimeType, modifiedTime, webViewLink',
       });
 
-      console.log(`[GoogleDriveService] ✅ ${type} créé: ${response.data.id}`);
+      logger.debug(`[GoogleDriveService] ✅ ${type} créé: ${response.data.id}`);
 
       return {
         id: response.data.id || '',
@@ -912,7 +913,7 @@ export class GoogleDriveService {
         webViewLink: response.data.webViewLink || undefined,
       };
     } catch (error) {
-      console.error('[GoogleDriveService] ❌ Erreur lors de la création:', error);
+      logger.error('[GoogleDriveService] ❌ Erreur lors de la création:', error);
       throw error;
     }
   }

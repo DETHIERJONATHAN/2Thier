@@ -43,6 +43,7 @@ import {
   LoadingOutlined
 } from '@ant-design/icons';
 import { useWebSite } from '../hooks/useWebSite';
+import { logger } from '../lib/logger';
 
 const { Header, Content, Footer } = Layout;
 const { Title, Paragraph, Text } = Typography;
@@ -178,7 +179,7 @@ const SiteVitrine2Thier: React.FC = () => {
 
   // Handler formulaire contact
   const handleSubmit = (values: unknown) => {
-    console.log('Formulaire soumis:', values);
+    logger.debug('Formulaire soumis:', values);
     // TODO: Envoyer vers API CRM
   };
 

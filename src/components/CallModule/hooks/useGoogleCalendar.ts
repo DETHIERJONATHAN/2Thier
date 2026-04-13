@@ -22,6 +22,7 @@ import type {
   CreateEventResponse,
   Lead
 } from '../types/CallTypes';
+import { logger } from '../../../lib/logger';
 
 export const useGoogleCalendar = (
   leadId: string,
@@ -48,7 +49,7 @@ export const useGoogleCalendar = (
     events: CalendarEvent[]
   ): Promise<void> => {
     try {
-      console.log('[useGoogleCalendar] 🧠 Calcul créneaux libres IA...');
+      logger.debug('[useGoogleCalendar] 🧠 Calcul créneaux libres IA...');
       
       const response = await api.post<{ freeSlots: FreeSlot[] }>('/api/google/calendar/free-slots', {
         date: date.format('YYYY-MM-DD'),
@@ -69,7 +70,7 @@ export const useGoogleCalendar = (
       });
       
       if (response.freeSlots) {
-        console.log('[useGoogleCalendar] ✅ Créneaux libres calculés:', response.freeSlots.length);
+        logger.debug('[useGoogleCalendar] ✅ Créneaux libres calculés:', response.freeSlots.length);
         
         setCalendarState(prev => ({
           ...prev,
@@ -79,7 +80,7 @@ export const useGoogleCalendar = (
       }
       
     } catch (error: unknown) {
-      console.warn('[useGoogleCalendar] ⚠️ Erreur calcul créneaux:', error);
+      logger.warn('[useGoogleCalendar] ⚠️ Erreur calcul créneaux:', error);
       // Fallback : créneaux simples sans IA
       const simpleFreeSlots = generateSimpleFreeSlots(date, events);
       setCalendarState(prev => ({
@@ -95,7 +96,7 @@ export const useGoogleCalendar = (
     setError(undefined);
     
     try {
-      console.log('[useGoogleCalendar] 📅 Chargement événements pour:', date.format('YYYY-MM-DD'));
+      logger.debug('[useGoogleCalendar] 📅 Chargement événements pour:', date.format('YYYY-MM-DD'));
       
       const response = await api.get<{ events: CalendarEvent[] }>('/api/google/calendar/events', {
         params: {
@@ -105,7 +106,7 @@ export const useGoogleCalendar = (
       });
       
       if (response.events) {
-        console.log('[useGoogleCalendar] ✅ Événements chargés:', response.events.length);
+        logger.debug('[useGoogleCalendar] ✅ Événements chargés:', response.events.length);
         
         setCalendarState(prev => ({
           ...prev,
@@ -121,7 +122,7 @@ export const useGoogleCalendar = (
       }
       
     } catch (error: unknown) {
-      console.error('[useGoogleCalendar] ❌ Erreur chargement événements:', error);
+      logger.error('[useGoogleCalendar] ❌ Erreur chargement événements:', error);
       const errorMessage = error instanceof Error ? error.message : 'Erreur lors du chargement du calendrier';
       setError(errorMessage);
       NotificationManager.error('Impossible de charger le calendrier Google');
@@ -140,7 +141,7 @@ export const useGoogleCalendar = (
   
   // 🎯 Sélectionner un créneau libre
   const selectSlot = useCallback((slot: FreeSlot): void => {
-    console.log('[useGoogleCalendar] 🎯 Créneau sélectionné:', slot);
+    logger.debug('[useGoogleCalendar] 🎯 Créneau sélectionné:', slot);
     
     setCalendarState(prev => ({
       ...prev,
@@ -166,7 +167,7 @@ export const useGoogleCalendar = (
     setCalendarState(prev => ({ ...prev, isLoading: true }));
     
     try {
-      console.log('[useGoogleCalendar] ⚡ Création RDV...');
+      logger.debug('[useGoogleCalendar] ⚡ Création RDV...');
       
       const eventData: CreateEventRequest = {
         title: meetingDetails.title || `RDV Commercial - ${lead.data.name}`,
@@ -199,14 +200,14 @@ export const useGoogleCalendar = (
       const response = await api.post<CreateEventResponse>('/api/google/calendar/create-event', eventData);
       
       if (response.success && response.eventId) {
-        console.log('[useGoogleCalendar] ✅ RDV créé - ID:', response.eventId);
+        logger.debug('[useGoogleCalendar] ✅ RDV créé - ID:', response.eventId);
         
         // 🔄 Recharger les événements pour afficher le nouveau RDV
         await loadCalendarEvents(calendarState.selectedDate);
         
         // 📧 Envoyer email de confirmation automatique
         if (response.emailSent) {
-          console.log('[useGoogleCalendar] ✅ Email confirmation envoyé');
+          logger.debug('[useGoogleCalendar] ✅ Email confirmation envoyé');
           NotificationManager.success('✅ RDV programmé ! Email de confirmation envoyé');
         } else {
           NotificationManager.success('✅ RDV programmé dans Google Calendar');
@@ -225,7 +226,7 @@ export const useGoogleCalendar = (
       }
       
     } catch (error: unknown) {
-      console.error('[useGoogleCalendar] ❌ Erreur création RDV:', error);
+      logger.error('[useGoogleCalendar] ❌ Erreur création RDV:', error);
       const errorMessage = error instanceof Error ? error.message : 'Erreur lors de la création du RDV';
       setError(errorMessage);
       NotificationManager.error(errorMessage);
@@ -250,7 +251,7 @@ export const useGoogleCalendar = (
       loadCalendarEvents(dayjs());
     }
     
-    console.log('[useGoogleCalendar] 👁️ Calendrier', newVisibility ? 'affiché' : 'masqué');
+    logger.debug('[useGoogleCalendar] 👁️ Calendrier', newVisibility ? 'affiché' : 'masqué');
   }, [calendarState.isVisible, calendarState.events.length, loadCalendarEvents]);
   
   // 🎯 Suggestions IA créneaux optimaux

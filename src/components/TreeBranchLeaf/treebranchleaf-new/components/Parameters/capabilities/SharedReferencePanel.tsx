@@ -28,6 +28,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../../../../../hooks/useAuthenticatedApi';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../../../../../lib/logger';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -99,7 +100,7 @@ const SharedReferencePanel: React.FC<SharedReferencePanelProps> = ({
           const response = await api.get<TreeBranchLeafNode>(`/api/treebranchleaf/nodes/${nodeId}`);
           setSelectedNode(response);
         } catch (error) {
-          console.error("❌ [SharedRef] Impossible de charger les détails du nœud:", error);
+          logger.error("❌ [SharedRef] Impossible de charger les détails du nœud:", error);
         }
       }
     };
@@ -107,16 +108,16 @@ const SharedReferencePanel: React.FC<SharedReferencePanelProps> = ({
   }, [nodeId, api]);
 
   const loadAvailableReferences = useCallback(async () => {
-    console.log('🔄 [SharedRef] Chargement des références disponibles...');
+    logger.debug('🔄 [SharedRef] Chargement des références disponibles...');
     try {
       setLoading(true);
       const response = await api.get<SharedReferenceTemplate[]>(
         `/api/treebranchleaf/shared-references`
       );
-      console.log(`✅ [SharedRef] ${response?.length || 0} références chargées`);
+      logger.debug(`✅ [SharedRef] ${response?.length || 0} références chargées`);
       setAvailableReferences(response || []);
     } catch (error) {
-      console.error('❌ [SharedRef] Erreur lors du chargement des références:', error);
+      logger.error('❌ [SharedRef] Erreur lors du chargement des références:', error);
       message.error('Impossible de charger les références disponibles');
     } finally {
       setLoading(false);
@@ -130,7 +131,7 @@ const SharedReferencePanel: React.FC<SharedReferencePanelProps> = ({
       );
       setSelectedReferenceDetails(response);
     } catch (error) {
-      console.error('Erreur chargement info template:', error);
+      logger.error('Erreur chargement info template:', error);
     }
   }, [api]);
 
@@ -195,7 +196,7 @@ const SharedReferencePanel: React.FC<SharedReferencePanelProps> = ({
         }
       );
 
-      console.log('✅ [SharedRef] Nouveau nœud référence créé:', response.id);
+      logger.debug('✅ [SharedRef] Nouveau nœud référence créé:', response.id);
       message.success('Référence partagée créée avec succès');
       
       // Réinitialiser le formulaire
@@ -206,7 +207,7 @@ const SharedReferencePanel: React.FC<SharedReferencePanelProps> = ({
       await loadAvailableReferences();
       
     } catch (error) {
-      console.error('Erreur lors de la création:', error);
+      logger.error('Erreur lors de la création:', error);
       message.error('Impossible de créer la référence');
     } finally {
       setCreating(false);
@@ -239,21 +240,21 @@ const SharedReferencePanel: React.FC<SharedReferencePanelProps> = ({
       // Recharger la liste
       await loadAvailableReferences();
     } catch (error) {
-      console.error('Erreur modification:', error);
+      logger.error('Erreur modification:', error);
       message.error('Impossible de modifier la référence');
     }
   }, [editingReference, editName, editDescription, api, loadAvailableReferences]);
 
   const handleDeleteReference = useCallback(async (refId: string) => {
-    console.log('🗑️ [SharedRef] Début suppression:', refId);
+    logger.debug('🗑️ [SharedRef] Début suppression:', refId);
     try {
       const response = await api.delete(`/api/treebranchleaf/shared-references/${refId}`);
-      console.log('✅ [SharedRef] Suppression réussie:', response);
+      logger.debug('✅ [SharedRef] Suppression réussie:', response);
       message.success('Référence supprimée avec succès');
       
       // Retirer la référence supprimée de la sélection actuelle
       const updatedReferenceIds = (value?.sharedReferenceIds || []).filter(id => id !== refId);
-      console.log('🔄 [SharedRef] Nouvelle sélection après suppression:', updatedReferenceIds);
+      logger.debug('🔄 [SharedRef] Nouvelle sélection après suppression:', updatedReferenceIds);
       
       // Mettre à jour la sélection
       if (updatedReferenceIds.length === 0) {
@@ -288,9 +289,9 @@ const SharedReferencePanel: React.FC<SharedReferencePanelProps> = ({
       
       // Recharger la liste
       await loadAvailableReferences();
-      console.log('🔄 [SharedRef] Liste rechargée après suppression');
+      logger.debug('🔄 [SharedRef] Liste rechargée après suppression');
     } catch (error: unknown) {
-      console.error('❌ [SharedRef] Erreur suppression:', error);
+      logger.error('❌ [SharedRef] Erreur suppression:', error);
       if (error.response?.data?.message) {
         message.error(error.response.data.message);
       } else {
@@ -378,12 +379,12 @@ const SharedReferencePanel: React.FC<SharedReferencePanelProps> = ({
                     const targetNodeId = nodeId;
 
                     if (!targetNodeId) {
-                      console.error("❌ [SharedRef] Pas de `nodeId` fourni au composant. Annulation.");
+                      logger.error("❌ [SharedRef] Pas de `nodeId` fourni au composant. Annulation.");
                       message.error("ID du nœud de travail manquant.");
                       return;
                     }
 
-                    console.log(`🔗 [SharedRef] Cible de la mise à jour : ${targetNodeId}`);
+                    logger.debug(`🔗 [SharedRef] Cible de la mise à jour : ${targetNodeId}`);
 
                     try {
                       await api.post(
@@ -391,7 +392,7 @@ const SharedReferencePanel: React.FC<SharedReferencePanelProps> = ({
                         { referenceIds: newReferenceIds }
                       );
                       
-                      console.log(`✅ [SharedRef] Liaison API réussie pour le noeud: ${targetNodeId}`);
+                      logger.debug(`✅ [SharedRef] Liaison API réussie pour le noeud: ${targetNodeId}`);
                       
                       const firstRef = newOptions[0];
                       const updates = {
@@ -412,7 +413,7 @@ const SharedReferencePanel: React.FC<SharedReferencePanelProps> = ({
                       message.success('Référence(s) mise(s) à jour.');
 
                     } catch (error) {
-                      console.error('❌ [SharedRef] Erreur liaison:', error);
+                      logger.error('❌ [SharedRef] Erreur liaison:', error);
                       message.error('Erreur lors de la liaison des références');
                     }
                   }}
@@ -481,7 +482,7 @@ const SharedReferencePanel: React.FC<SharedReferencePanelProps> = ({
                                   onClick={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
-                                    console.log('🔘 [SharedRef] Bouton Supprimer cliqué pour:', ref.id);
+                                    logger.debug('🔘 [SharedRef] Bouton Supprimer cliqué pour:', ref.id);
                                     setDeletingReference(ref);
                                     setIsDeleteModalOpen(true);
                                   }}
@@ -583,7 +584,7 @@ const SharedReferencePanel: React.FC<SharedReferencePanelProps> = ({
         title="Supprimer cette référence ?"
         open={isDeleteModalOpen}
         onOk={async () => {
-          console.log('✅ [SharedRef] Modal de suppression confirmé');
+          logger.debug('✅ [SharedRef] Modal de suppression confirmé');
           if (deletingReference) {
             await handleDeleteReference(deletingReference.id);
           }
@@ -591,7 +592,7 @@ const SharedReferencePanel: React.FC<SharedReferencePanelProps> = ({
           setDeletingReference(null);
         }}
         onCancel={() => {
-          console.log('❌ [SharedRef] Modal de suppression annulé');
+          logger.debug('❌ [SharedRef] Modal de suppression annulé');
           setIsDeleteModalOpen(false);
           setDeletingReference(null);
         }}

@@ -6,6 +6,7 @@
  */
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { logger } from '../lib/logger';
 
 interface UseSocketOptions {
   /** JWT token for authentication */
@@ -73,18 +74,18 @@ export function useSocket({ token, enabled = true }: UseSocketOptions) {
     });
 
     socket.on('connect', () => {
-      console.log('🔌 [SOCKET] Connected:', socket.id);
+      logger.debug('🔌 [SOCKET] Connected:', socket.id);
       setConnected(true);
       setConnectionError(null);
     });
 
     socket.on('disconnect', (reason) => {
-      console.log('🔌 [SOCKET] Disconnected:', reason);
+      logger.debug('🔌 [SOCKET] Disconnected:', reason);
       setConnected(false);
     });
 
     socket.on('connect_error', (err) => {
-      console.warn('🔌 [SOCKET] Connection error:', err.message);
+      logger.warn('🔌 [SOCKET] Connection error:', err.message);
       setConnectionError(err.message);
       setConnected(false);
     });

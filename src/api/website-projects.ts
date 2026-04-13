@@ -5,6 +5,7 @@
 
 import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
+import { logger } from '../lib/logger';
 
 const router = Router();
 const prisma = db;
@@ -28,7 +29,7 @@ router.get('/website-projects/:websiteId', async (req: Request, res: Response) =
 
     res.json(projects);
   } catch (error) {
-    console.error('Error fetching projects:', error);
+    logger.error('Error fetching projects:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -66,7 +67,7 @@ router.post('/website-projects', async (req: Request, res: Response) => {
 
     res.json(project);
   } catch (error) {
-    console.error('Error creating project:', error);
+    logger.error('Error creating project:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -95,7 +96,7 @@ router.put('/website-projects/:id', async (req: Request, res: Response) => {
 
     res.json(project);
   } catch (error) {
-    console.error('Error updating project:', error);
+    logger.error('Error updating project:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -114,7 +115,7 @@ router.delete('/website-projects/:id', async (req: Request, res: Response) => {
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Error deleting project:', error);
+    logger.error('Error deleting project:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -142,7 +143,7 @@ router.post('/website-projects/reorder', async (req: Request, res: Response) => 
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Error reordering projects:', error);
+    logger.error('Error reordering projects:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

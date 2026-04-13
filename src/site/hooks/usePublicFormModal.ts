@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { message } from 'antd';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import type { WebsiteFormConfig } from '../components/WebsiteFormModal';
+import { logger } from '../../lib/logger';
 
 interface ModalState {
   visible: boolean;
@@ -106,7 +107,7 @@ export const usePublicFormModal = () => {
         configRef.current = config;
         setState({ visible: true, loading: false, config });
       } catch (error) {
-        console.error('[usePublicFormModal] Chargement impossible', error);
+        logger.error('[usePublicFormModal] Chargement impossible', error);
         message.error("Impossible d\'ouvrir le formulaire pour le moment.");
         configRef.current = null;
         setState({ visible: false, loading: false, config: null });
@@ -137,7 +138,7 @@ export const usePublicFormModal = () => {
         configRef.current = null;
         setState({ visible: false, loading: false, config: null });
       } catch (error) {
-        console.error('[usePublicFormModal] Soumission impossible', error);
+        logger.error('[usePublicFormModal] Soumission impossible', error);
         message.error("Erreur lors de l'envoi du formulaire.");
         setState((prev) => ({ ...prev, loading: false }));
       }

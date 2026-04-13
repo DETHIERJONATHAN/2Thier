@@ -5,6 +5,7 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useLeadStatuses } from '../../hooks/useLeadStatuses';
 import type { Lead } from '../../types/leads';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -65,7 +66,7 @@ const EditLeadModal: React.FC<EditLeadModalProps> = ({
           linkedin: lead.data?.linkedin || '',
         });
       } catch (error) {
-        console.error('[EditLeadModal] Erreur chargement lead:', error);
+        logger.error('[EditLeadModal] Erreur chargement lead:', error);
         message.error('Erreur lors du chargement du lead');
       } finally {
         setFetching(false);
@@ -109,7 +110,7 @@ const EditLeadModal: React.FC<EditLeadModalProps> = ({
 
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
-      console.error('[EditLeadModal] Erreur modification:', error);
+      logger.error('[EditLeadModal] Erreur modification:', error);
       message.error(`Erreur lors de la modification: ${errorMessage}`);
     } finally {
       setLoading(false);

@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Modal, Form, Input, Select, Button, Space, message, Divider, Switch, Progress } from 'antd';
 import { ThunderboltOutlined, RobotOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { logger } from '../../lib/logger';
 
 /**
  * ✨ AI CONTENT GENERATOR - CONNECTÉ AUX API ROUTES
@@ -52,7 +53,7 @@ const AIContentGenerator: React.FC<AIContentGeneratorProps> = ({
     let progressInterval: ReturnType<typeof setInterval> | undefined;
     
     try {
-      console.log('🤖 [AI] Génération section complète:', sectionType, values);
+      logger.debug('🤖 [AI] Génération section complète:', sectionType, values);
       
       // Animation du progress
       progressInterval = setInterval(() => {
@@ -74,7 +75,7 @@ const AIContentGenerator: React.FC<AIContentGeneratorProps> = ({
 
       setProgress(100);
 
-      console.log('✅ [AI] Section générée:', response);
+      logger.debug('✅ [AI] Section générée:', response);
 
       // ✅ Callback avec le contenu complet
       onGenerated(response.content);
@@ -95,7 +96,7 @@ const AIContentGenerator: React.FC<AIContentGeneratorProps> = ({
       setProgress(0);
 
     } catch (error: unknown) {
-      console.error('❌ [AI] Erreur génération section:', error);
+      logger.error('❌ [AI] Erreur génération section:', error);
       
       setProgress(0);
       

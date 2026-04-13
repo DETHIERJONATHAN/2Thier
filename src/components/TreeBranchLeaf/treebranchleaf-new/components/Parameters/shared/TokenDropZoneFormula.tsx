@@ -1,5 +1,6 @@
 import React from 'react';
 import { Card, Empty, Tag } from 'antd';
+import { logger } from '../../../../../../lib/logger';
 
 interface TokenDropZoneProps {
   tokens: string[];
@@ -18,8 +19,8 @@ const TokenDropZone: React.FC<TokenDropZoneProps> = ({
 }) => {
   
   // Debug pour voir les tokens reçus
-  // console.log('🔍 Debug TokenDropZoneFormula - tokens reçus:', tokens); // ✨ Log réduit
-  // console.log('🔍 Debug TokenDropZoneFormula - nodeCache:', nodeCache); // ✨ Log réduit
+  // logger.debug('🔍 Debug TokenDropZoneFormula - tokens reçus:', tokens); // ✨ Log réduit
+  // logger.debug('🔍 Debug TokenDropZoneFormula - nodeCache:', nodeCache); // ✨ Log réduit
   
   const renderToken = (token: string, index: number) => {
     const removeToken = () => {

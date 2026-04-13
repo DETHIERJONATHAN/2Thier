@@ -59,6 +59,7 @@ const LazyNectarPanel = React.lazy(() => import('../components/zhiive/NectarPane
 const LazyStoriesBar = React.lazy(() => import('../components/zhiive/StoriesBar'));
 const LazyReelsPanel = React.lazy(() => import('../components/zhiive/ReelsPanel'));
 const LazyWaxPanel = React.lazy(() => import('../components/zhiive/WaxPanel'));
+const LazyArenaPanel = React.lazy(() => import('../components/zhiive/ArenaPanel'));
 
 /** Maps route paths to their lazy-loaded component */
 const MODULE_COMPONENTS: Record<string, React.LazyExoticComponent<any>> = {
@@ -177,6 +178,7 @@ import {
 import { NotificationManager } from "../components/Notifications";
 import { REACTION_TYPES, getReactionByType } from "../constants/reactions";
 import { FriendsWidget } from "../components/MessengerChat";
+import { logger } from '../lib/logger';
 
 /* ═══════════════════════════════════════════════════════════════
    FACEBOOK COLORS — exactement les mêmes tokens
@@ -548,14 +550,14 @@ export const WallPostCard: React.FC<{
       } else {
         setMyReaction(result.reaction);
       }
-    } catch (e) { console.error("[WALL] Reaction error:", e); }
+    } catch (e) { logger.error("[WALL] Reaction error:", e); }
   };
 
   const loadComments = async () => {
     try {
       const result = await api.get(`/api/wall/posts/${post.id}/comments`);
       setAllComments(Array.isArray(result) ? result : []);
-    } catch (e) { console.error("[WALL] Comments load error:", e); }
+    } catch (e) { logger.error("[WALL] Comments load error:", e); }
   };
 
   const handleComment = async (parentCommentId?: string) => {
@@ -582,7 +584,7 @@ export const WallPostCard: React.FC<{
         setCommentText("");
       }
       setCommentsCount(c => c + 1);
-    } catch (e) { console.error("[WALL] Comment error:", e); }
+    } catch (e) { logger.error("[WALL] Comment error:", e); }
     setSubmittingComment(false);
   };
 
@@ -678,7 +680,7 @@ export const WallPostCard: React.FC<{
         }
       }
       setShowShareMenu(false);
-    } catch (e) { console.error("[WALL] Share error:", e); }
+    } catch (e) { logger.error("[WALL] Share error:", e); }
   };
 
   const handleAddToHiveLive = async () => {
@@ -692,7 +694,7 @@ export const WallPostCard: React.FC<{
       setShowHiveLiveModal(false);
       setHiveLiveTitle('');
     } catch (e) { 
-      console.error("[HIVE-LIVE] Add from post error:", e);
+      logger.error("[HIVE-LIVE] Add from post error:", e);
       NotificationManager.error(t('hive.errorAddingToHiveLive', 'Erreur'));
     } finally { setHiveLiveSaving(false); }
   };
@@ -710,7 +712,7 @@ export const WallPostCard: React.FC<{
       setShowShareModal(false);
       setShareComment("");
       _onUpdate();
-    } catch (e) { console.error("[WALL] Repost error:", e); }
+    } catch (e) { logger.error("[WALL] Repost error:", e); }
     setSharingPost(false);
   };
 
@@ -1927,7 +1929,7 @@ export default function DashboardPageUnified() {
       acts.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
       setRecentActivities(acts.slice(0, 30));
     } catch (error) {
-      console.error("Erreur chargement données:", error);
+      logger.error("Erreur chargement données:", error);
       NotificationManager.error(t('dashboard.errorLoad'));
     } finally {
       setLoading(false);
@@ -1943,7 +1945,7 @@ export default function DashboardPageUnified() {
       const data = (resp as unknown)?.data || resp;
       setAnalytics(data);
     } catch (error) {
-      console.error('Erreur analytics:', error);
+      logger.error('Erreur analytics:', error);
     } finally {
       setAnalyticsLoading(false);
     }
@@ -1975,7 +1977,7 @@ export default function DashboardPageUnified() {
       }
       setWallCursor(result?.nextCursor || null);
     } catch (error) {
-      console.error("[WALL] Erreur chargement feed:", error);
+      logger.error("[WALL] Erreur chargement feed:", error);
       // Ignorer silencieusement — le feed legacy s'affichera
     } finally {
       setWallLoading(false);
@@ -2069,7 +2071,7 @@ export default function DashboardPageUnified() {
           mediaUrls = uploadResult?.urls || [];
         } catch {
           // If upload fails, still post without media
-          console.warn('[WALL] Upload failed, posting without media');
+          logger.warn('[WALL] Upload failed, posting without media');
         }
         if (mediaUrls.length > 0) {
           const hasVideo = postMediaPreviews.some(m => m.type === 'video');
@@ -2114,7 +2116,7 @@ export default function DashboardPageUnified() {
       setPostMediaPreviews([]);
       NotificationManager.success(t('wall.buzzPublished'));
     } catch (error) {
-      console.error("[WALL] Erreur création post:", error);
+      logger.error("[WALL] Erreur création post:", error);
       NotificationManager.error(t('wall.publishFailed'));
     }
     setPostSubmitting(false);
@@ -3337,6 +3339,7 @@ export default function DashboardPageUnified() {
       case 'nectar': return <LazyNectarPanel api={api} currentUser={user} />;
       case 'reels': return <LazyReelsPanel api={api} currentUser={user} />;
       case 'wax': return <LazyWaxPanel api={api} currentUser={user} />;
+      case 'arena': return <LazyArenaPanel api={api} currentUser={user} />;
       case 'mail': return <LazyGoogleGmailPageV2 compact={sidebar} />;
       case 'agenda': return <LazyAgendaWrapper compact={sidebar} />;
       case 'search': return <LazySearchPage compact={sidebar} />;

@@ -28,6 +28,7 @@ const FormulairePage = React.lazy(() => import('../pages/FormulairePage'));
 const AgendaWrapper = React.lazy(() => import('../pages/AgendaWrapper'));
 const DevisPage = React.lazy(() => import('../pages/DevisPage'));
 const ProductDocumentsPage = React.lazy(() => import('../pages/ProductDocumentsPage'));  // 📋 Page unifiée fiches techniques
+const ArenaPage = React.lazy(() => import('../pages/ArenaPage'));  // 🏟️ Arena — Tournois & Championnats
 
 // Pages Google Workspace
 const GoogleMailPageFixed = React.lazy(() => import('../pages/UnifiedMailPage'));  // ✅ Page mail unifiée Gmail + Yandex
@@ -128,6 +129,7 @@ export const AppLayout: React.FC = () => {
                   {hasFeature('Agenda') && <Route path="/agenda" element={<AgendaWrapper />} />}
                   {(hasFeature('devis') || isSuperAdmin) && <Route path="/devis" element={<DevisPage />} />}
                   {(hasFeature('fiches_techniques') || isSuperAdmin) && <Route path="/fiches-techniques" element={<ProductDocumentsPage />} />}
+                  {(hasFeature('arena') || isSuperAdmin) && <Route path="/arena" element={<ArenaPage />} />}
 
                   {/* Routes Google Workspace */}
                   {hasFeature('google_gmail_access') && <Route path="/google-gmail" element={<GoogleMailPageFixed />} />}

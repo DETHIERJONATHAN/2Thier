@@ -3,6 +3,7 @@ import type { DuplicationContext } from '../../registry/repeat-id-registry.js';
 import { logCapacityEvent } from '../repeat-blueprint-writer.js';
 import { deriveRepeatContextFromMetadata } from './repeat-context-utils.js';
 import { copyFormulaCapacity } from '../../copy-capacity-formula.js';
+import { logger } from '../../../../../../lib/logger';
 
 /**
  * Service pour corriger la copie des capacitÃƒÂ©s manquantes dans les nÃ…â€œuds dupliquÃƒÂ©s
@@ -150,10 +151,10 @@ export async function copyMissingCapacities(
           });
         }
       } else {
-        console.error(`   Ã¢ÂÅ’ Erreur copie formule: ${formula.id}`);
+        logger.error(`   Ã¢ÂÅ’ Erreur copie formule: ${formula.id}`);
       }
     } catch (error) {
-      console.error(`   Ã¢ÂÅ’ Exception copie formule ${formula.id}:`, error);
+      logger.error(`   Ã¢ÂÅ’ Exception copie formule ${formula.id}:`, error);
     }
   }
 
@@ -246,7 +247,7 @@ export async function copyMissingCapacities(
               });
               return JSON.parse(str) as Prisma.InputJsonValue;
             } catch {
-              console.warn('[table.meta] Erreur traitement meta, copie tel quel');
+              logger.warn('[table.meta] Erreur traitement meta, copie tel quel');
               return table.meta as Prisma.InputJsonValue;
             }
           })(),
@@ -326,7 +327,7 @@ export async function copyMissingCapacities(
 
       updatedMetadata = metaObj as Prisma.InputJsonValue;
     } catch (error) {
-      console.warn('[CAPACITY-COPY] Erreur traitement metadata nœud:', error);
+      logger.warn('[CAPACITY-COPY] Erreur traitement metadata nœud:', error);
     }
   }
   
@@ -601,7 +602,7 @@ export async function fixAllMissingCapacities(
     }
 
   } catch (error) {
-    console.error('Ã¢ÂÅ’ [CAPACITY-FIX] Erreur gÃƒÂ©nÃƒÂ©rale:', error);
+    logger.error('Ã¢ÂÅ’ [CAPACITY-FIX] Erreur gÃƒÂ©nÃƒÂ©rale:', error);
   }
 
   return report;

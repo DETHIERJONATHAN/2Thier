@@ -1,4 +1,5 @@
 import { Formula } from '../types/formula';
+import { logger } from '../lib/logger';
 
 /**
  * Génère un ensemble de cas de test pour les formules
@@ -258,17 +259,17 @@ export const runFormulaValidationTests = (
         console.group(`Test: ${testCase.name}`);
         
         // Tester la validation
-        console.log('Formule à tester:', testCase);
+        logger.debug('Formule à tester:', testCase);
         const validationResult = validateFn(testCase, 'TestRunner');
-        console.log('Résultat de validation:', validationResult);
+        logger.debug('Résultat de validation:', validationResult);
         
         // Tester la préparation
         let preparationResult;
         try {
             preparationResult = prepareFn(testCase, 'TestRunner');
-            console.log('Résultat de préparation:', preparationResult);
+            logger.debug('Résultat de préparation:', preparationResult);
         } catch (error) {
-            console.error('Erreur lors de la préparation:', error);
+            logger.error('Erreur lors de la préparation:', error);
             preparationResult = { error };
         }
         
@@ -285,11 +286,11 @@ export const runFormulaValidationTests = (
     // Afficher le résumé
     console.group('📊 Résumé des tests');
     const validCount = results.filter(r => r.isValid).length;
-    console.log(`${validCount}/${testCases.length} formules validées avec succès`);
+    logger.debug(`${validCount}/${testCases.length} formules validées avec succès`);
     
     results.forEach(result => {
         const icon = result.isValid ? '✅' : '❌';
-        console.log(`${icon} ${result.caseName}`);
+        logger.debug(`${icon} ${result.caseName}`);
     });
     
     console.groupEnd();

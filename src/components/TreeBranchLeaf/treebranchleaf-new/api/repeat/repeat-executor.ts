@@ -14,6 +14,7 @@ import { tableLookupDuplicationService } from './services/table-lookup-duplicati
 import { recalculateAllCopiedNodesWithOperationInterpreter } from './services/recalculate-with-interpreter.js';
 import { syncRepeaterTemplateIds } from './services/repeater-template-sync.js';
 import { copyVariableWithCapacities } from './services/variable-copy-engine.js';
+import { logger } from '../../../../../lib/logger';
 
 export interface RepeatExecutionSummary {
   duplicated: Array<{ id: string; label: string | null; type: string; parentId: string | null; sourceTemplateId: string }>;
@@ -170,7 +171,7 @@ export async function runRepeatExecution(
   const _preloadedTreeNodesById = new Map(_preloadedTreeNodes.map(n => [n.id, n] as const));
   
   const _t1 = Date.now();
-  console.log(`[PERF] Setup: ${_t1 - _t0}ms`);
+  logger.debug(`[PERF] Setup: ${_t1 - _t0}ms`);
   // PERF: Process ALL templates in PARALLEL instead of sequentially
   // JS is single-threaded so in-memory mutations (Map.set, Array.push) are safe between awaits.
   // Each template creates nodes with unique suffixed IDs → no DB conflicts.
@@ -208,7 +209,7 @@ export async function runRepeatExecution(
           return { result, appliedSuffix: forcedSuffix };
         } catch (error) {
           if (forcedSuffix !== undefined && isUniqueConstraintError(error)) {
-            console.warn('[repeat-executor] Forced suffix already exists, retrying with auto suffix', {
+            logger.warn('[repeat-executor] Forced suffix already exists, retrying with auto suffix', {
               templateId: template!.id,
               forcedSuffix
             });
@@ -395,7 +396,7 @@ export async function runRepeatExecution(
                 );
               }
             } catch (childErr) {
-              console.error(`[REPEAT-EXECUTOR] Erreur traitement triggers pour enfant ${childId}:`, childErr);
+              logger.error(`[REPEAT-EXECUTOR] Erreur traitement triggers pour enfant ${childId}:`, childErr);
             }
           }
           if (childUpdateOps.length > 0) {
@@ -474,7 +475,7 @@ export async function runRepeatExecution(
           authCtx
         });
       } catch (sharedErr) {
-        console.warn('[repeat-executor] Failed to apply shared references', sharedErr);
+        logger.warn('[repeat-executor] Failed to apply shared references', sharedErr);
       }
 
       try {
@@ -491,11 +492,11 @@ export async function runRepeatExecution(
           effectiveSuffix
         );
       } catch (selectorErr) {
-        console.warn('[repeat-executor] Failed to copy selector tables', selectorErr);
+        logger.warn('[repeat-executor] Failed to copy selector tables', selectorErr);
       }
     } catch (nodeExecErr) {
       // Provide contextual information and rethrow so the route returns 500
-      console.error(`[repeat-executor] Error during execution for template ${template?.id || 'unknown'}:`, nodeExecErr instanceof Error ? nodeExecErr.stack || nodeExecErr.message : String(nodeExecErr));
+      logger.error(`[repeat-executor] Error during execution for template ${template?.id || 'unknown'}:`, nodeExecErr instanceof Error ? nodeExecErr.stack || nodeExecErr.message : String(nodeExecErr));
       templateErrors.push(nodeExecErr instanceof Error ? nodeExecErr : new Error(String(nodeExecErr)));
     }
   }));
@@ -506,7 +507,7 @@ export async function runRepeatExecution(
 
   // 🚀 COPIER LES VARIABLES APRÈS LES NŒUDS
   const _t2 = Date.now();
-  console.log(`[PERF] Template duplication loop: ${_t2 - _t1}ms`);
+  logger.debug(`[PERF] Template duplication loop: ${_t2 - _t1}ms`);
   // PERF: Pre-charger TOUTES les variables COMPLETES + owner nodes + display nodes + formules
   // en batch avant la boucle pour eliminer ~12 findUnique par variable
   const allTemplateVarIds = [...new Set(plan.variables.map(v => v.templateVariableId))];
@@ -603,7 +604,7 @@ export async function runRepeatExecution(
     if (realTargetNodeId) {
       targetNodeId = realTargetNodeId;
     } else {
-      console.warn(`[REPEAT-EXECUTOR] No mapping for targetNodeId "${targetNodeId}", using directly`);
+      logger.warn(`[REPEAT-EXECUTOR] No mapping for targetNodeId "${targetNodeId}", using directly`);
     }
     varTasks.push({ templateVariableId, targetNodeId, plannedSuffix });
   }
@@ -697,7 +698,7 @@ export async function runRepeatExecution(
         );
         return { task, result: variableResult };
       } catch (varErr) {
-        console.error(`[repeat-executor] Erreur copie variable ${task.templateVariableId}:`, varErr instanceof Error ? varErr.stack || varErr.message : String(varErr));
+        logger.error(`[repeat-executor] Erreur copie variable ${task.templateVariableId}:`, varErr instanceof Error ? varErr.stack || varErr.message : String(varErr));
         failedVarTasks.push(task);
         return { task, result: null as unknown };
       }
@@ -710,7 +711,7 @@ export async function runRepeatExecution(
 
   // 🔁 RETRY: Retenter les variables échouées une par une (séquentiellement pour éviter les conflits)
   if (failedVarTasks.length > 0) {
-    console.warn(`[repeat-executor] ${failedVarTasks.length} variable(s) échouée(s), retry séquentiel...`);
+    logger.warn(`[repeat-executor] ${failedVarTasks.length} variable(s) échouée(s), retry séquentiel...`);
     for (const task of failedVarTasks) {
       try {
         const retryResult = await copyVariableWithCapacities(
@@ -722,26 +723,26 @@ export async function runRepeatExecution(
         );
         aggregateResult(retryResult);
         if (retryResult.success) {
-          console.log(`[repeat-executor] ✅ Retry réussi pour variable ${task.templateVariableId}`);
+          logger.debug(`[repeat-executor] ✅ Retry réussi pour variable ${task.templateVariableId}`);
         } else {
           const msg = `Variable ${task.templateVariableId} → échec retry: ${retryResult.error || 'unknown'}`;
-          console.warn(`[repeat-executor] ⚠️ ${msg}`);
+          logger.warn(`[repeat-executor] ⚠️ ${msg}`);
           varCopyWarnings.push(msg);
         }
       } catch (retryErr) {
         const msg = `Variable ${task.templateVariableId} → échec retry: ${retryErr instanceof Error ? retryErr.message : String(retryErr)}`;
-        console.error(`[repeat-executor] ❌ ${msg}`);
+        logger.error(`[repeat-executor] ❌ ${msg}`);
         varCopyWarnings.push(msg);
       }
     }
   }
 
   const _t3 = Date.now();
-  console.log(`[PERF] Variable copy loop: ${_t3 - _t2}ms`);
+  logger.debug(`[PERF] Variable copy loop: ${_t3 - _t2}ms`);
   try {
     await syncRepeaterTemplateIds(prisma, repeaterNodeId, templateNodeIds);
   } catch (syncErr) {
-    console.warn('[repeat-executor] Unable to sync repeater template IDs', syncErr);
+    logger.warn('[repeat-executor] Unable to sync repeater template IDs', syncErr);
   }
 
   // Ã°Å¸Å¡Â« NOUVEAU: Isolation stricte des nÃ…â€œuds copiÃƒÂ©s et correction des capacitÃƒÂ©s
@@ -802,7 +803,7 @@ export async function runRepeatExecution(
 
       // Ã°Å¸Â§Â­ NOUVEAU: rÃƒÂ©aligner les parents des copies quand la section dupliquÃƒÂ©e existe dÃƒÂ©jÃƒÂ 
       const _t5 = Date.now();
-      console.log(`[PERF] TBL-DUP: ${_t5 - _t4}ms`);
+      logger.debug(`[PERF] TBL-DUP: ${_t5 - _t4}ms`);
       await reassignCopiedNodesToDuplicatedParents(prisma, duplicatedNodeIds, originalNodeIdByCopyId);
       
       // 🔒 SAFETY NET: Sync enfants manquants des display nodes copiés
@@ -818,15 +819,15 @@ export async function runRepeatExecution(
           repeaterNode.treeId
         );
         if (syncResult.created > 0) {
-          console.log(`[repeat-executor] 🔒 Safety net: ${syncResult.created} enfant(s) manquant(s) créé(s)`);
+          logger.debug(`[repeat-executor] 🔒 Safety net: ${syncResult.created} enfant(s) manquant(s) créé(s)`);
           for (const id of syncResult.createdIds) {
             duplicatedNodeIds.add(id);
           }
         }
       } catch (syncErr) {
-        console.warn('[repeat-executor] Safety net sync failed (non-blocking):', (syncErr as Error).message);
+        logger.warn('[repeat-executor] Safety net sync failed (non-blocking):', (syncErr as Error).message);
       }
-      console.log(`[PERF] DisplayNodeChildSync: ${Date.now() - _t5b}ms`);
+      logger.debug(`[PERF] DisplayNodeChildSync: ${Date.now() - _t5b}ms`);
 
       // 1-5+7. BATCH: isolation + reset + calcul indep + triggers + block fallback
       // (remplace 5 services individuels: ~560 queries → ~71 queries)
@@ -845,7 +846,7 @@ export async function runRepeatExecution(
       
       // Ã°Å¸Å¡â‚¬ 8. RECALCULER LES VRAIES VALEURS AVEC OPERATION INTERPRETER
       const _t7 = Date.now();
-      console.log(`[PERF] batchPostDup: ${_t7 - _t6}ms`);
+      logger.debug(`[PERF] batchPostDup: ${_t7 - _t6}ms`);
       const interpreterRecalcReport = await recalculateAllCopiedNodesWithOperationInterpreter(
         prisma,
         repeaterNodeId,
@@ -853,8 +854,8 @@ export async function runRepeatExecution(
         Array.from(duplicatedNodeIds)
       );
       const _t8 = Date.now();
-      console.log(`[PERF] Recalculate interpreter: ${_t8 - _t7}ms`);
-      console.log(`[PERF] === TOTAL: ${_t8 - _t0}ms === | Templates: ${_t2-_t1}ms | Variables: ${_t3-_t2}ms | TBL-DUP: ${_t5-_t4}ms | BatchPost: ${_t7-_t6}ms | Recalc: ${_t8-_t7}ms`);
+      logger.debug(`[PERF] Recalculate interpreter: ${_t8 - _t7}ms`);
+      logger.debug(`[PERF] === TOTAL: ${_t8 - _t0}ms === | Templates: ${_t2-_t1}ms | Variables: ${_t3-_t2}ms | TBL-DUP: ${_t5-_t4}ms | BatchPost: ${_t7-_t6}ms | Recalc: ${_t8-_t7}ms`);
       interpreterRecalcReport.recalculated.forEach(r => {
         if (r.hasCapacity && r.newValue) {
         }
@@ -862,7 +863,7 @@ export async function runRepeatExecution(
       
     } catch (isolationError) {
       const errMsg = `Erreur post-duplication: ${isolationError instanceof Error ? isolationError.message : String(isolationError)}`;
-      console.warn('[REPEAT-EXECUTOR]', errMsg, isolationError instanceof Error ? isolationError.stack : '');
+      logger.warn('[REPEAT-EXECUTOR]', errMsg, isolationError instanceof Error ? isolationError.stack : '');
       varCopyWarnings.push(errMsg);
     }
   }
@@ -879,7 +880,7 @@ export async function runRepeatExecution(
   }
 
   if (varCopyWarnings.length > 0) {
-    console.warn(`[repeat-executor] ⚠️ ${varCopyWarnings.length} avertissement(s) durant la copie:`, varCopyWarnings);
+    logger.warn(`[repeat-executor] ⚠️ ${varCopyWarnings.length} avertissement(s) durant la copie:`, varCopyWarnings);
   }
 
   return {
@@ -1311,7 +1312,7 @@ async function syncMissingDisplayNodeChildren(
           });
 
           createdIds.push(expectedChildId);
-          console.log(`[repeat-executor] 🔒 Enfant manquant créé: ${origChild.label} → ${expectedChildId} (parent: ${copyParentId})`);
+          logger.debug(`[repeat-executor] 🔒 Enfant manquant créé: ${origChild.label} → ${expectedChildId} (parent: ${copyParentId})`);
 
           // Continuer le BFS pour les petits-enfants
           bfsQueue.push({ origParentId: origChild.id, copyParentId: expectedChildId });
@@ -1414,7 +1415,7 @@ async function syncMissingDisplayNodeChildren(
               copiedFormulaIds.push(newFormulaId);
               localFormulaIdMap.set(f.id, newFormulaId);
             } catch (fErr) {
-              console.warn(`[repeat-executor] Safety net: erreur copie formule ${f.id}:`, (fErr as Error).message);
+              logger.warn(`[repeat-executor] Safety net: erreur copie formule ${f.id}:`, (fErr as Error).message);
             }
           }
           if (copiedFormulaIds.length > 0) {
@@ -1440,7 +1441,7 @@ async function syncMissingDisplayNodeChildren(
             // Déjà créé par un processus concurrent — continuer le BFS
             bfsQueue.push({ origParentId: origChild.id, copyParentId: expectedChildId });
           } else {
-            console.warn(`[repeat-executor] Safety net: erreur création enfant ${expectedChildId}:`, (createErr as Error).message);
+            logger.warn(`[repeat-executor] Safety net: erreur création enfant ${expectedChildId}:`, (createErr as Error).message);
           }
         }
       }

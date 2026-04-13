@@ -1,5 +1,6 @@
 import { Application, Request, Response, NextFunction } from 'express';
 import helmet from 'helmet';
+import { logger } from '../lib/logger';
 
 /**
  * Configure les middlewares de sécurité pour l'application Express.
@@ -39,5 +40,5 @@ export function setupSecurity(app: Application): void {
     next();
   });
 
-  console.log('🔒 [Security] Middlewares de sécurité configurés');
+  logger.debug('🔒 [Security] Middlewares de sécurité configurés');
 }

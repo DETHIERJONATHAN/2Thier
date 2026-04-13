@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
+import { logger } from '../../../../../lib/logger';
 
 export interface PreloadedTBLCapability {
   nodeId: string;
@@ -41,7 +42,7 @@ interface UseTBLCapabilitiesPreloadResult {
 const ddiag = (...args: unknown[]) => {
   try {
     if (localStorage.getItem('TBL_DIAG')) {
-      console.log('[TBL][CAPA-PRELOAD]', ...args);
+      logger.debug('[TBL][CAPA-PRELOAD]', ...args);
     }
   } catch {
     /* noop */

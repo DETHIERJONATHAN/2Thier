@@ -5,6 +5,7 @@ import { BugOutlined, UserOutlined, KeyOutlined, ReloadOutlined, EyeOutlined, Ey
 import { useAuth } from '../../auth/useAuth';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { debugTranslations, permissionActionTranslations, moduleTranslations, tooltips } from '../../utils/userRightsTranslations';
+import { logger } from '../../lib/logger';
 
 const { Panel } = Collapse;
 const { Text, Paragraph } = Typography;
@@ -52,11 +53,11 @@ const DebugAuth: React.FC = React.memo(() => {
       
       // Appeler /api/me
       const response = await api.get('/api/me');
-      console.log('[DebugAuth] /me response:', response);
+      logger.debug('[DebugAuth] /me response:', response);
       setMeResponse(response as MeResponse);
       
     } catch (error) {
-      console.error('Erreur lors de la récupération des données de débogage:', error);
+      logger.error('Erreur lors de la récupération des données de débogage:', error);
       setError('Impossible de charger les données de débogage');
     } finally {
       setLoading(false);

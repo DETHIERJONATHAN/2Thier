@@ -3,6 +3,7 @@ import { Modal, Form, Select, Input, Space, Button, message, Radio, Divider, Ale
 import { PlusOutlined, DeleteOutlined, InfoCircleOutlined, NodeIndexOutlined } from '@ant-design/icons';
 import NodeTreeSelector, { NodeTreeSelectorValue } from '../TreeBranchLeaf/treebranchleaf-new/components/Parameters/shared/NodeTreeSelector';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Text } = Typography;
 
@@ -155,7 +156,7 @@ const ConditionEditorModal = ({ open, onClose, onSave, initialConfig, nodeId }: 
         hideContent: form.getFieldValue('hideContent'),
       };
 
-      console.log('💾 [ConditionEditorModal] Sauvegarde config:', config);
+      logger.debug('💾 [ConditionEditorModal] Sauvegarde config:', config);
       onSave(config);
       onClose();
     });

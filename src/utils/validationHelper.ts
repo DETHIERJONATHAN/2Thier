@@ -1,3 +1,4 @@
+import { logger } from '../lib/logger';
 /**
  * Utilitaires pour les validations
  */
@@ -77,7 +78,7 @@ export function applyValidation(
                 const pattern = new RegExp(params?.pattern || '');
                 return pattern.test(String(value));
             } catch (e) {
-                console.error('Erreur regex:', e);
+                logger.error('Erreur regex:', e);
                 return false;
             }
         
@@ -139,7 +140,7 @@ function evaluateCondition(condition: string, values: Record<string, unknown>): 
             return andClauses.every(clause => evaluateClause(clause, values));
         });
     } catch (e) {
-        console.error('Erreur évaluation condition:', e);
+        logger.error('Erreur évaluation condition:', e);
         return false;
     }
 }

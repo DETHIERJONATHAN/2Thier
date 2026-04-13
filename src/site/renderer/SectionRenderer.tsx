@@ -15,6 +15,7 @@ import { ProcessRenderer } from './sections/ProcessRenderer';
 import { ProjectsRenderer } from './sections/ProjectsRenderer';
 import { AboutRenderer } from './sections/AboutRenderer';
 import { ContactRenderer } from './sections/ContactRenderer';
+import { logger } from '../../lib/logger';
 
 /**
  * 🎨 SECTION RENDERER UNIVERSEL
@@ -40,13 +41,13 @@ export const SectionRenderer: React.FC<SectionRendererProps> = ({
   mode = 'preview',
   onEdit 
 }) => {
-  console.log('🎨 [SectionRenderer] Rendu section:', section.type, mode);
+  logger.debug('🎨 [SectionRenderer] Rendu section:', section.type, mode);
 
   // 🔍 Vérification du schema
   const schema = getSectionSchema(section.type);
   
   if (!schema) {
-    console.error('❌ [SectionRenderer] Schema introuvable pour:', section.type);
+    logger.error('❌ [SectionRenderer] Schema introuvable pour:', section.type);
     return (
       <Alert
         type="error"
@@ -112,7 +113,7 @@ export const SectionRenderer: React.FC<SectionRendererProps> = ({
         break;
       
       default:
-        console.warn('⚠️ [SectionRenderer] Renderer non implémenté pour:', section.type);
+        logger.warn('⚠️ [SectionRenderer] Renderer non implémenté pour:', section.type);
         content = (
           <Alert
             type="warning"
@@ -124,7 +125,7 @@ export const SectionRenderer: React.FC<SectionRendererProps> = ({
         );
     }
   } catch (error) {
-    console.error('❌ [SectionRenderer] Erreur rendu:', error);
+    logger.error('❌ [SectionRenderer] Erreur rendu:', error);
     content = (
       <Alert
         type="error"

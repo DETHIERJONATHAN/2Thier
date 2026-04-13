@@ -10,6 +10,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { logger } from '../../lib/logger';
 
 export interface GuidanceState {
   canCapture: boolean;
@@ -99,7 +100,7 @@ export function useRealTimeGuidance(options: UseRealTimeGuidanceOptions) {
       return newGuidance;
       
     } catch (error) {
-      console.error('❌ [RealTimeGuidance] Erreur analyse frame:', error);
+      logger.error('❌ [RealTimeGuidance] Erreur analyse frame:', error);
       
       // En cas d'erreur, permettre la capture
       const fallbackGuidance: GuidanceState = {

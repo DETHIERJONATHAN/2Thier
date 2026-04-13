@@ -23,6 +23,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../lib/logger';
 
 const { TextArea } = Input;
 const { TabPane } = Tabs;
@@ -106,7 +107,7 @@ const PublicFormsManagementPage: React.FC = () => {
       const data = await api.get('/api/public-forms');
       setForms(data);
     } catch (error) {
-      console.error('[PublicFormsManagement] Erreur chargement:', error);
+      logger.error('[PublicFormsManagement] Erreur chargement:', error);
       message.error('Erreur lors du chargement des formulaires');
     } finally {
       setLoading(false);
@@ -171,7 +172,7 @@ const PublicFormsManagementPage: React.FC = () => {
       setModalVisible(false);
       form.resetFields();
     } catch (error) {
-      console.error('[PublicFormsManagement] Erreur sauvegarde:', error);
+      logger.error('[PublicFormsManagement] Erreur sauvegarde:', error);
       message.error('Erreur lors de la sauvegarde');
     } finally {
       setLoading(false);
@@ -186,7 +187,7 @@ const PublicFormsManagementPage: React.FC = () => {
       message.success('Formulaire supprimé');
       setForms(forms.filter((f) => f.id !== formId));
     } catch (error) {
-      console.error('[PublicFormsManagement] Erreur suppression:', error);
+      logger.error('[PublicFormsManagement] Erreur suppression:', error);
       message.error('Erreur lors de la suppression');
     } finally {
       setLoading(false);

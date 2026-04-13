@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { db } from '../lib/database';
 import bcrypt from 'bcryptjs';
 import { JWT_SECRET } from '../config';
+import { logger } from '../lib/logger';
 
 const prisma = db;
 
@@ -80,7 +81,7 @@ export const authMiddleware = async (req: AuthenticatedRequest, res: Response, n
         });
         
         if (!user) {
-            console.error('[AUTH] Utilisateur non trouvé pour l\'ID:', decoded.userId);
+            logger.error('[AUTH] Utilisateur non trouvé pour l\'ID:', decoded.userId);
             return res.status(401).json({ error: 'Authentification invalide' });
         }
         
@@ -101,7 +102,7 @@ export const authMiddleware = async (req: AuthenticatedRequest, res: Response, n
     if (organizationId) {
       const organization = await prisma.organization.findUnique({ where: { id: organizationId } });
       if (!organization) {
-        console.error('[AUTH] Organisation non trouvée pour l\'ID:', organizationId);
+        logger.error('[AUTH] Organisation non trouvée pour l\'ID:', organizationId);
         return res.status(404).json({ error: 'Organisation non trouvée' });
       }
     }
@@ -123,7 +124,7 @@ export const authMiddleware = async (req: AuthenticatedRequest, res: Response, n
         return next();
         
     } catch (error) {
-        console.error('[AUTH] Erreur de vérification du token:', error);
+        logger.error('[AUTH] Erreur de vérification du token:', error);
         return res.status(401).json({ error: 'Token d\'authentification invalide' });
     }
 };
@@ -144,7 +145,7 @@ export const login = async (req: AuthenticatedRequest, res: Response) => {
 
     // Assurer que le rôle existe avant de générer le token
     if (!user.role) {
-      console.error(`[Login] ERREUR: Le rôle de l'utilisateur ${user.email} est manquant.`);
+      logger.error(`[Login] ERREUR: Le rôle de l'utilisateur ${user.email} est manquant.`);
       return res.status(500).json({ error: 'Erreur de configuration du compte : rôle manquant.' });
     }
     
@@ -170,7 +171,7 @@ export const login = async (req: AuthenticatedRequest, res: Response) => {
     res.json({ token, user: userWithoutPassword });
 
   } catch (e) {
-    console.error('[Login] Erreur lors de la connexion:', e);
+    logger.error('[Login] Erreur lors de la connexion:', e);
     res.status(500).json({ error: 'Erreur interne' });
   }
 };

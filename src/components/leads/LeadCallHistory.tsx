@@ -17,6 +17,7 @@ import {
   SoundOutlined,
   ReloadOutlined
 } from '@ant-design/icons';
+import { logger } from '../../lib/logger';
 
 const { Text, Paragraph } = Typography;
 
@@ -67,7 +68,7 @@ const LeadCallHistory: React.FC<LeadCallHistoryProps> = ({ leadId, leadPhone }) 
       
       setHistory(combinedHistory);
     } catch (error) {
-      console.error('Erreur lors du chargement de l\'historique:', error);
+      logger.error('Erreur lors du chargement de l\'historique:', error);
       // En cas d'erreur, afficher un historique simulé pour la démo
       setHistory([
         {

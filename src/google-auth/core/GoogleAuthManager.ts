@@ -13,6 +13,7 @@
 
 import { OAuth2Client } from 'google-auth-library';
 import { googleOAuthService } from './GoogleOAuthCore';
+import { logger } from '../../lib/logger';
 
 export class GoogleAuthManager {
   private static instance: GoogleAuthManager;
@@ -37,16 +38,16 @@ export class GoogleAuthManager {
    */
   async getAuthenticatedClient(organizationId: string, userId?: string): Promise<OAuth2Client | null> {
     if (!organizationId) {
-      console.error('[GoogleAuthManager] ❌ organizationId est requis');
+      logger.error('[GoogleAuthManager] ❌ organizationId est requis');
       return null;
     }
 
-    console.log(`[GoogleAuthManager] 🔐 Demande de client authentifié pour l'organisation: ${organizationId}, utilisateur: ${userId || 'non spécifié'}`);
+    logger.debug(`[GoogleAuthManager] 🔐 Demande de client authentifié pour l'organisation: ${organizationId}, utilisateur: ${userId || 'non spécifié'}`);
     
     try {
       return await googleOAuthService.getAuthenticatedClientForOrganization(organizationId, userId);
     } catch (error) {
-      console.error('[GoogleAuthManager] ❌ Erreur lors de l\'obtention du client authentifié:', error);
+      logger.error('[GoogleAuthManager] ❌ Erreur lors de l\'obtention du client authentifié:', error);
       return null;
     }
   }

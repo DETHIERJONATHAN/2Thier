@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
+import { logger } from '../lib/logger';
 
 export interface Bookmark {
   id: string;
@@ -27,7 +28,7 @@ export function useBookmarks() {
       const data = await apiStable.get('/api/user/bookmarks') as { bookmarks: Bookmark[] };
       setBookmarks(data.bookmarks || []);
     } catch (err) {
-      console.error('[useBookmarks] fetch error:', err);
+      logger.error('[useBookmarks] fetch error:', err);
     } finally {
       setLoading(false);
     }
@@ -54,7 +55,7 @@ export function useBookmarks() {
     } catch (err: unknown) {
       // 409 = already exists
       if (err?.status === 409 || err?.response?.status === 409) return false;
-      console.error('[useBookmarks] add error:', err);
+      logger.error('[useBookmarks] add error:', err);
       return false;
     }
   }, [apiStable]);
@@ -64,7 +65,7 @@ export function useBookmarks() {
       await apiStable.delete(`/api/user/bookmarks/${id}`);
       setBookmarks(prev => prev.filter(b => b.id !== id));
     } catch (err) {
-      console.error('[useBookmarks] remove error:', err);
+      logger.error('[useBookmarks] remove error:', err);
     }
   }, [apiStable]);
 
@@ -73,7 +74,7 @@ export function useBookmarks() {
       await apiStable.post('/api/user/bookmarks/remove-by-url', { url });
       setBookmarks(prev => prev.filter(b => b.url !== url));
     } catch (err) {
-      console.error('[useBookmarks] removeByUrl error:', err);
+      logger.error('[useBookmarks] removeByUrl error:', err);
     }
   }, [apiStable]);
 
@@ -106,7 +107,7 @@ export function useBookmarks() {
     try {
       await apiStable.put('/api/user/bookmarks/reorder', { orderedIds });
     } catch (err) {
-      console.error('[useBookmarks] reorder error:', err);
+      logger.error('[useBookmarks] reorder error:', err);
       fetchBookmarks(); // Rollback on error
     }
   }, [bookmarks, apiStable, fetchBookmarks]);

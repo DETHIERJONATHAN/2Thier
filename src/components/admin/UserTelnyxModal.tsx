@@ -24,6 +24,7 @@ import {
   SettingOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { logger } from '../../lib/logger';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -104,7 +105,7 @@ const UserTelnyxModal: React.FC<UserTelnyxModalProps> = ({
       });
       
     } catch (error) {
-      console.error('❌ Erreur chargement config Telnyx:', error);
+      logger.error('❌ Erreur chargement config Telnyx:', error);
       message.error('Erreur lors du chargement de la configuration');
     } finally {
       setLoading(false);
@@ -144,7 +145,7 @@ const UserTelnyxModal: React.FC<UserTelnyxModalProps> = ({
       onClose();
       
     } catch (error) {
-      console.error('❌ Erreur sauvegarde:', error);
+      logger.error('❌ Erreur sauvegarde:', error);
       message.error('Erreur lors de la sauvegarde');
     } finally {
       setLoading(false);

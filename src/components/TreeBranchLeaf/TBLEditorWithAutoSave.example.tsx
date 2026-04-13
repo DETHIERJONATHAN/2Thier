@@ -15,6 +15,7 @@ import { SaveOutlined, CloseOutlined, HistoryOutlined, ReloadOutlined } from '@a
 import { useTblSubmission } from '../../../hooks/useTblSubmission';
 import { useBeforeUnload } from '../../../hooks/useBeforeUnload';
 import { ConflictResolutionModal, ConflictField } from '../ConflictResolutionModal';
+import { logger } from '../../lib/logger';
 
 interface TBLEditorWithAutoSaveProps {
   treeId: string;
@@ -110,7 +111,7 @@ export const TBLEditorWithAutoSave: React.FC<TBLEditorWithAutoSaveProps> = ({
     } catch (error: unknown) {
       // Détecter les conflits (HTTP 409)
       if (error?.response?.status === 409 && error?.response?.data?.conflicts) {
-        console.log('⚠️ Conflits détectés, affichage modal');
+        logger.debug('⚠️ Conflits détectés, affichage modal');
         setConflicts(error.response.data.conflicts);
         setConflictMetadata({
           lastEditedBy: error.response.data.lastEditedBy,

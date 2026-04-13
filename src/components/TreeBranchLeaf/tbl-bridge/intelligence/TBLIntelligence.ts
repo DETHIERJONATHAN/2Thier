@@ -11,6 +11,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import { db } from '../../../../lib/database';
+import { logger } from '../../../../lib/logger';
 
 interface TBLElement {
   id: string;
@@ -84,11 +85,11 @@ export class TBLIntelligence {
     
     // Vérifier le cache d'abord
     if (this.dataCache.has(cacheKey)) {
-      console.log(`📖 [TBL Intelligence] Données en cache pour ${cacheKey}`);
+      logger.debug(`📖 [TBL Intelligence] Données en cache pour ${cacheKey}`);
       return this.dataCache.get(cacheKey);
     }
 
-    console.log(`📖 [TBL Intelligence] Lecture données encodées pour ${elementType} ${elementId}`);
+    logger.debug(`📖 [TBL Intelligence] Lecture données encodées pour ${elementType} ${elementId}`);
     
     let decodedData: unknown = {};
 
@@ -107,17 +108,17 @@ export class TBLIntelligence {
           decodedData = await this.readFieldData(elementId);
           break;
         default:
-          console.warn(`Type d'élément non supporté pour lecture données: ${elementType}`);
+          logger.warn(`Type d'élément non supporté pour lecture données: ${elementType}`);
       }
 
       // Mettre en cache
       this.dataCache.set(cacheKey, decodedData);
       
-      console.log(`📖 [TBL Intelligence] Données décodées pour ${cacheKey}:`, decodedData);
+      logger.debug(`📖 [TBL Intelligence] Données décodées pour ${cacheKey}:`, decodedData);
       return decodedData;
 
     } catch (error) {
-      console.error(`📖 [TBL Intelligence] Erreur lecture données ${cacheKey}:`, error);
+      logger.error(`📖 [TBL Intelligence] Erreur lecture données ${cacheKey}:`, error);
       return {};
     }
   }
@@ -137,7 +138,7 @@ export class TBLIntelligence {
     try {
       tokens = formula.tokens ? JSON.parse(formula.tokens) : [];
     } catch (e) {
-      console.warn('Erreur décodage tokens formule:', e);
+      logger.warn('Erreur décodage tokens formule:', e);
     }
 
     // Récupérer les variables et valeurs depuis les tokens
@@ -215,7 +216,7 @@ export class TBLIntelligence {
     try {
       conditionSet = condition.conditionSet ? JSON.parse(condition.conditionSet) : {};
     } catch (e) {
-      console.warn('Erreur décodage conditionSet:', e);
+      logger.warn('Erreur décodage conditionSet:', e);
     }
 
     // Extraire les règles du conditionSet
@@ -246,7 +247,7 @@ export class TBLIntelligence {
       tableData = table.data ? (typeof table.data === 'string' ? JSON.parse(table.data) : table.data) : [];
       columns = table.columns ? (typeof table.columns === 'string' ? JSON.parse(table.columns) : table.columns) : [];
     } catch (e) {
-      console.warn('Erreur décodage données tableau:', e);
+      logger.warn('Erreur décodage données tableau:', e);
     }
 
     return {
@@ -305,7 +306,7 @@ export class TBLIntelligence {
     error?: string;
     steps: string[];
   }> {
-    console.log(`🧮 [TBL Intelligence] Calcul formule ${formulaId}`);
+    logger.debug(`🧮 [TBL Intelligence] Calcul formule ${formulaId}`);
     
     const steps: string[] = [];
     
@@ -550,7 +551,7 @@ export class TBLIntelligence {
     error?: string;
     details: string[];
   }> {
-    console.log(`⚖️ [TBL Intelligence] Évaluation condition ${conditionId}`);
+    logger.debug(`⚖️ [TBL Intelligence] Évaluation condition ${conditionId}`);
     
     const details: string[] = [];
     
@@ -731,7 +732,7 @@ export class TBLIntelligence {
         return !String(compare).split(',').map(s => s.trim()).includes(String(source));
       
       default:
-        console.warn(`Opérateur de comparaison non supporté: ${operator}`);
+        logger.warn(`Opérateur de comparaison non supporté: ${operator}`);
         return false;
     }
   }
@@ -818,7 +819,7 @@ export class TBLIntelligence {
     error?: string;
     processing: string[];
   }> {
-    console.log(`📊 [TBL Intelligence] Traitement tableau ${tableId}`);
+    logger.debug(`📊 [TBL Intelligence] Traitement tableau ${tableId}`);
     
     const processing: string[] = [];
     
@@ -1011,7 +1012,7 @@ export class TBLIntelligence {
     try {
       return this.safeEvaluateExpression(processedFormula);
     } catch (error) {
-      console.warn('Formule non évaluable comme JS, tentative d\'évaluation simple:', processedFormula);
+      logger.warn('Formule non évaluable comme JS, tentative d\'évaluation simple:', processedFormula);
       return processedFormula;
     }
   }
@@ -1120,10 +1121,10 @@ export class TBLIntelligence {
     tables: TBLTable[];
     dependencies: TBLDependency[];
   }> {
-    console.log(`🧠 [TBL Intelligence] Analyse complète de ${elementIdentifier}`);
+    logger.debug(`🧠 [TBL Intelligence] Analyse complète de ${elementIdentifier}`);
 
     // 🚀 NOUVEAU SYSTÈME TBL BRIDGE : Recherche UNIQUEMENT sur code TBL
-    console.log(`🔍 Recherche TBL Bridge sur code: ${elementIdentifier}`);
+    logger.debug(`🔍 Recherche TBL Bridge sur code: ${elementIdentifier}`);
 
     // 1. Récupérer l'élément avec ses relations par code TBL
     const element = await this.prisma.treeBranchLeafNode.findFirst({
@@ -1158,14 +1159,14 @@ export class TBLIntelligence {
       throw new Error(`❌ Élément TBL Bridge avec code "${elementIdentifier}" non trouvé dans la base de données`);
     }
     
-    console.log(`✅ Élément TBL Bridge trouvé: ${element.label} (${element.type})`);
-    console.log(`   🎯 TBL Code: ${element.tbl_code}`);
-    console.log(`   🏗️ Type TBL: ${element.tbl_type} | 🔧 Capacité TBL: ${element.tbl_capacity}`);
+    logger.debug(`✅ Élément TBL Bridge trouvé: ${element.label} (${element.type})`);
+    logger.debug(`   🎯 TBL Code: ${element.tbl_code}`);
+    logger.debug(`   🏗️ Type TBL: ${element.tbl_type} | 🔧 Capacité TBL: ${element.tbl_capacity}`);
     
     // 🚀 NOUVEAU SYSTÈME : Utilisation directe des colonnes natives tbl_type et tbl_capacity
     const typeDescription = this.getTBLTypeDescription(element.tbl_type);
     const capacityDescription = this.getTBLCapacityDescription(element.tbl_capacity);
-    console.log(`   📋 TBL Intelligence: ${typeDescription} avec ${capacityDescription}`);
+    logger.debug(`   📋 TBL Intelligence: ${typeDescription} avec ${capacityDescription}`);
 
     const tblElement: TBLElement = {
       id: element.id,
@@ -1178,21 +1179,21 @@ export class TBLIntelligence {
     };
 
     // 🚀 TBL BRIDGE V2.0 : Analyse basée sur les colonnes natives
-    console.log(`🧠 [TBL Intelligence V2.0] Analyse des capacités via colonnes Prisma...`);
+    logger.debug(`🧠 [TBL Intelligence V2.0] Analyse des capacités via colonnes Prisma...`);
     
     // 2. Analyser les capacités selon tbl_capacity (plus besoin de regex !)
     const formulas = element.tbl_capacity === 2 ? await this.analyzeFormulas(element.TreeBranchLeafNodeFormula || []) : [];
     const conditions = element.tbl_capacity === 3 ? await this.analyzeConditions(element.TreeBranchLeafNodeCondition || []) : [];
     const tables = element.tbl_capacity === 4 ? await this.analyzeTables(element.TreeBranchLeafNodeTable || []) : [];
     
-    console.log(`📊 [TBL V2.0] Résultats: ${formulas.length} formules, ${conditions.length} conditions, ${tables.length} tableaux`);
+    logger.debug(`📊 [TBL V2.0] Résultats: ${formulas.length} formules, ${conditions.length} conditions, ${tables.length} tableaux`);
 
     // 5. Construire le graphe de dépendances
     const dependencies = await this.buildDependencyGraph(tblElement, formulas, conditions, tables);
 
-    console.log(`✅ [TBL Intelligence] Analyse terminée pour ${element.label} (${element.tbl_code})`);
-    console.log(`   📊 ${formulas.length} formules, ${conditions.length} conditions, ${tables.length} tableaux`);
-    console.log(`   🔗 ${dependencies.length} dépendances détectées`);
+    logger.debug(`✅ [TBL Intelligence] Analyse terminée pour ${element.label} (${element.tbl_code})`);
+    logger.debug(`   📊 ${formulas.length} formules, ${conditions.length} conditions, ${tables.length} tableaux`);
+    logger.debug(`   🔗 ${dependencies.length} dépendances détectées`);
 
     return {
       element: tblElement,
@@ -1211,7 +1212,7 @@ export class TBLIntelligence {
     const tblFormulas: TBLFormula[] = [];
 
     for (const formula of formulas) {
-      console.log(`🧮 [TBL Intelligence] Analyse formule ${formula.id}`);
+      logger.debug(`🧮 [TBL Intelligence] Analyse formule ${formula.id}`);
 
       // Extraire les tokens pour identifier les références (depuis le JSON)
       const referencedFields: string[] = [];
@@ -1235,7 +1236,7 @@ export class TBLIntelligence {
               relationship: 'depends_on'
             });
 
-            console.log(`   🔗 Référence détectée: ${referencedElement.label} (${referencedElement.tbl_code})`);
+            logger.debug(`   🔗 Référence détectée: ${referencedElement.label} (${referencedElement.tbl_code})`);
           }
         }
       }
@@ -1259,7 +1260,7 @@ export class TBLIntelligence {
     const tblConditions: TBLCondition[] = [];
 
     for (const condition of conditions) {
-      console.log(`⚖️ [TBL Intelligence] Analyse condition ${condition.id}`);
+      logger.debug(`⚖️ [TBL Intelligence] Analyse condition ${condition.id}`);
 
       const triggerElements: string[] = [];
       const targetElements: string[] = [];
@@ -1299,7 +1300,7 @@ export class TBLIntelligence {
                     show_when_selected: rule.condition_value === 'true' || rule.condition_value === sourceElement.label
                   });
 
-                  console.log(`   🎯 Option + Champ détecté: ${sourceElement.label} (${sourceElement.tbl_code}) → ${child.label} (${child.tbl_code})`);
+                  logger.debug(`   🎯 Option + Champ détecté: ${sourceElement.label} (${sourceElement.tbl_code}) → ${child.label} (${child.tbl_code})`);
                 }
               }
             }
@@ -1339,7 +1340,7 @@ export class TBLIntelligence {
     const tblTables: TBLTable[] = [];
 
     for (const table of tables) {
-      console.log(`📊 [TBL Intelligence] Analyse tableau ${table.id}`);
+      logger.debug(`📊 [TBL Intelligence] Analyse tableau ${table.id}`);
 
       const dataSources: string[] = [];
       const computedColumns: string[] = [];
@@ -1361,7 +1362,7 @@ export class TBLIntelligence {
               dataSources.push(sourceElement.tbl_code);
             }
 
-            console.log(`   📋 Source données: ${sourceElement.label} (${sourceElement.tbl_code})`);
+            logger.debug(`   📋 Source données: ${sourceElement.label} (${sourceElement.tbl_code})`);
           }
         }
       }
@@ -1451,7 +1452,7 @@ export class TBLIntelligence {
     conditions_evaluated: string[];
     formulas_calculated: string[];
   }> {
-    console.log(`🎯 [TBL Intelligence] Résolution intelligente de ${elementCode}`);
+    logger.debug(`🎯 [TBL Intelligence] Résolution intelligente de ${elementCode}`);
 
     // Récupérer l'élément par son code TBL
     const element = await this.prisma.treeBranchLeafNode.findFirst({
@@ -1480,7 +1481,7 @@ export class TBLIntelligence {
 
   private async resolveFormula(analysis: unknown, context: Record<string, unknown>) {
     // Implementation de résolution de formule avec codes TBL
-    console.log(`🧮 Résolution formule avec ${analysis.formulas.length} formules`);
+    logger.debug(`🧮 Résolution formule avec ${analysis.formulas.length} formules`);
     return {
       value: 0, // Calculé selon la formule
       dependencies_resolved: analysis.formulas.flatMap((f: unknown) => f.referenced_fields),
@@ -1491,7 +1492,7 @@ export class TBLIntelligence {
 
   private async resolveCondition(analysis: unknown, context: Record<string, unknown>) {
     // Implementation de résolution de condition avec options + champs
-    console.log(`⚖️ Résolution condition avec ${analysis.conditions.length} conditions`);
+    logger.debug(`⚖️ Résolution condition avec ${analysis.conditions.length} conditions`);
     return {
       value: true, // Évalué selon les conditions
       dependencies_resolved: [],
@@ -1502,7 +1503,7 @@ export class TBLIntelligence {
 
   private async resolveTable(analysis: unknown, context: Record<string, unknown>) {
     // Implementation de résolution de tableau avec sources de données
-    console.log(`📊 Résolution tableau avec ${analysis.tables.length} tableaux`);
+    logger.debug(`📊 Résolution tableau avec ${analysis.tables.length} tableaux`);
     return {
       value: [], // Données du tableau
       dependencies_resolved: analysis.tables.flatMap((t: unknown) => t.data_sources),
@@ -1514,7 +1515,7 @@ export class TBLIntelligence {
   private async resolveSimpleValue(analysis: unknown, context: Record<string, unknown>) {
     // Résolution d'une valeur simple
     const value = context[analysis.element.tbl_code] || null;
-    console.log(`📝 Résolution valeur simple: ${analysis.element.label} = ${value}`);
+    logger.debug(`📝 Résolution valeur simple: ${analysis.element.label} = ${value}`);
     return {
       value,
       dependencies_resolved: [],

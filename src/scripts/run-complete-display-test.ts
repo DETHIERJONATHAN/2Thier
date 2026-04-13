@@ -12,15 +12,16 @@
 import { spawn } from 'child_process';
 import { existsSync } from 'fs';
 import path from 'path';
+import { logger } from '../lib/logger';
 
 function runScript(scriptPath: string): Promise<void> {
   return new Promise((resolve) => {
-    console.log(`\n🚀 Exécution: ${scriptPath}`);
-    console.log('=' .repeat(60));
+    logger.debug(`\n🚀 Exécution: ${scriptPath}`);
+    logger.debug('=' .repeat(60));
     
     const fullPath = path.resolve(scriptPath);
     if (!existsSync(fullPath)) {
-      console.log(`❌ Script non trouvé: ${fullPath}`);
+      logger.debug(`❌ Script non trouvé: ${fullPath}`);
       resolve();
       return;
     }
@@ -31,26 +32,26 @@ function runScript(scriptPath: string): Promise<void> {
     });
 
     child.on('close', (code) => {
-      console.log('=' .repeat(60));
+      logger.debug('=' .repeat(60));
       if (code === 0) {
-        console.log(`✅ ${scriptPath} terminé avec succès`);
+        logger.debug(`✅ ${scriptPath} terminé avec succès`);
         resolve();
       } else {
-        console.log(`❌ ${scriptPath} terminé avec code ${code}`);
+        logger.debug(`❌ ${scriptPath} terminé avec code ${code}`);
         resolve(); // Continuer même en cas d'erreur
       }
     });
 
     child.on('error', (error) => {
-      console.log(`❌ Erreur lors de l'exécution de ${scriptPath}:`, error);
+      logger.debug(`❌ Erreur lors de l'exécution de ${scriptPath}:`, error);
       resolve(); // Continuer même en cas d'erreur
     });
   });
 }
 
 async function main() {
-  console.log('🧪 === TEST COMPLET CHAMPS D\'AFFICHAGE ===');
-  console.log('Ce script va exécuter tous les tests de diagnostic en séquence.\n');
+  logger.debug('🧪 === TEST COMPLET CHAMPS D\'AFFICHAGE ===');
+  logger.debug('Ce script va exécuter tous les tests de diagnostic en séquence.\n');
 
   const scripts = [
     // 1. Créer des données de test
@@ -82,44 +83,44 @@ async function main() {
   const startTime = Date.now();
 
   for (const script of scripts) {
-    console.log(`\n📋 ${completedScripts + 1}/${scripts.length}: ${script.description}`);
+    logger.debug(`\n📋 ${completedScripts + 1}/${scripts.length}: ${script.description}`);
     
     try {
       await runScript(script.path);
       completedScripts++;
     } catch (error) {
-      console.log(`❌ Erreur lors de l'exécution de ${script.path}:`, error);
+      logger.debug(`❌ Erreur lors de l'exécution de ${script.path}:`, error);
     }
     
     // Pause entre les scripts
     if (completedScripts < scripts.length) {
-      console.log('\n⏸️  Pause de 2 secondes...');
+      logger.debug('\n⏸️  Pause de 2 secondes...');
       await new Promise(resolve => setTimeout(resolve, 2000));
     }
   }
 
   const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
   
-  console.log('\n🎉 === RÉSUMÉ FINAL ===');
-  console.log(`✅ Scripts exécutés: ${completedScripts}/${scripts.length}`);
-  console.log(`⏱️  Temps total: ${totalTime}s`);
+  logger.debug('\n🎉 === RÉSUMÉ FINAL ===');
+  logger.debug(`✅ Scripts exécutés: ${completedScripts}/${scripts.length}`);
+  logger.debug(`⏱️  Temps total: ${totalTime}s`);
   
   if (completedScripts === scripts.length) {
-    console.log('\n🎯 ANALYSE TERMINÉE !');
-    console.log('Vous devriez maintenant avoir :');
-    console.log('1. 📊 Des données de test complètes');
-    console.log('2. 🔍 Un diagnostic détaillé du système');
-    console.log('3. 🧪 Des tests de fonctionnement en temps réel');
-    console.log('4. 🌐 Une validation des endpoints API');
+    logger.debug('\n🎯 ANALYSE TERMINÉE !');
+    logger.debug('Vous devriez maintenant avoir :');
+    logger.debug('1. 📊 Des données de test complètes');
+    logger.debug('2. 🔍 Un diagnostic détaillé du système');
+    logger.debug('3. 🧪 Des tests de fonctionnement en temps réel');
+    logger.debug('4. 🌐 Une validation des endpoints API');
     
-    console.log('\n🔧 PROCHAINES ÉTAPES:');
-    console.log('- Analyser les logs pour identifier les problèmes');
-    console.log('- Vérifier les valeurs calculées vs. affichées');
-    console.log('- Corriger les dysfonctionnements identifiés');
+    logger.debug('\n🔧 PROCHAINES ÉTAPES:');
+    logger.debug('- Analyser les logs pour identifier les problèmes');
+    logger.debug('- Vérifier les valeurs calculées vs. affichées');
+    logger.debug('- Corriger les dysfonctionnements identifiés');
   } else {
-    console.log('\n⚠️  Certains scripts ont échoué.');
-    console.log('Vérifiez les logs ci-dessus pour identifier les problèmes.');
+    logger.debug('\n⚠️  Certains scripts ont échoué.');
+    logger.debug('Vérifiez les logs ci-dessus pour identifier les problèmes.');
   }
 }
 
-main().catch(console.error);
+main().catch(logger.error);

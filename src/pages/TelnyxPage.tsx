@@ -52,6 +52,7 @@ import {
   // Collapse
 } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../lib/logger';
 
 dayjs.locale('fr');
 
@@ -185,7 +186,7 @@ const TelnyxPage: React.FC = () => {
     if (!stableApi) return;
     setLoading(true);
     try {
-      console.log('🔍 [Telnyx] Chargement des données...');
+      logger.debug('🔍 [Telnyx] Chargement des données...');
       const [
         connectionsResponse,
         numbersResponse,
@@ -239,7 +240,7 @@ const TelnyxPage: React.FC = () => {
       
       msgApi.success('Données Telnyx chargées avec succès');
     } catch (error) {
-      console.error('❌ [Telnyx] Erreur lors du chargement:', error);
+      logger.error('❌ [Telnyx] Erreur lors du chargement:', error);
       msgApi.error('Erreur lors du chargement des données Telnyx');
     } finally {
       setLoading(false);
@@ -279,7 +280,7 @@ const TelnyxPage: React.FC = () => {
   const handleMakeCall = async (values: { to: string; from: string; leadId?: string }) => {
     if (!stableApi) return;
     try {
-      console.log('📞 [Telnyx] Initiation d\'appel:', values);
+      logger.debug('📞 [Telnyx] Initiation d\'appel:', values);
       const response = await stableApi.post('/api/telnyx/calls', {
         to: values.to,
         from: values.from,
@@ -303,7 +304,7 @@ const TelnyxPage: React.FC = () => {
   (window as unknown as { callTimer?: number | null }).callTimer = timer as unknown as number;
       
     } catch (error) {
-      console.error('❌ [Telnyx] Erreur lors de l\'appel:', error);
+      logger.error('❌ [Telnyx] Erreur lors de l\'appel:', error);
       msgApi.error('Erreur lors de l\'initiation de l\'appel');
     }
   };
@@ -327,7 +328,7 @@ const TelnyxPage: React.FC = () => {
       msgApi.success('Appel terminé');
       loadData(); // Recharger pour mettre à jour l'historique
     } catch (error) {
-      console.error('❌ [Telnyx] Erreur fin d\'appel:', error);
+      logger.error('❌ [Telnyx] Erreur fin d\'appel:', error);
       msgApi.error('Erreur lors de la fin d\'appel');
     }
   };
@@ -340,7 +341,7 @@ const TelnyxPage: React.FC = () => {
       setIsMuted(!isMuted);
       msgApi.success(isMuted ? 'Micro activé' : 'Micro coupé');
     } catch (error) {
-      console.error('❌ [Telnyx] Erreur mute/unmute:', error);
+      logger.error('❌ [Telnyx] Erreur mute/unmute:', error);
       msgApi.error('Erreur lors du changement de micro');
     }
   };
@@ -349,7 +350,7 @@ const TelnyxPage: React.FC = () => {
   const handleSendSms = async (values: { to: string; from: string; text: string; leadId?: string }) => {
     if (!stableApi) return;
     try {
-      console.log('💬 [Telnyx] Envoi SMS:', values);
+      logger.debug('💬 [Telnyx] Envoi SMS:', values);
       await stableApi.post('/api/telnyx/messages', {
         to: values.to,
         from: values.from,
@@ -363,7 +364,7 @@ const TelnyxPage: React.FC = () => {
       msgApi.success('SMS envoyé avec succès');
       loadData(); // Recharger pour mettre à jour l'historique
     } catch (error) {
-      console.error('❌ [Telnyx] Erreur envoi SMS:', error);
+      logger.error('❌ [Telnyx] Erreur envoi SMS:', error);
       msgApi.error('Erreur lors de l\'envoi du SMS');
     }
   };
@@ -372,7 +373,7 @@ const TelnyxPage: React.FC = () => {
   const handlePurchaseNumber = async (values: { country: string; type: string; area_code?: string }) => {
     if (!stableApi) return;
     try {
-      console.log('🔢 [Telnyx] Achat numéro:', values);
+      logger.debug('🔢 [Telnyx] Achat numéro:', values);
       await stableApi.post('/api/telnyx/phone-numbers/purchase', values);
       
       setIsNumberModalVisible(false);
@@ -380,7 +381,7 @@ const TelnyxPage: React.FC = () => {
       msgApi.success('Numéro acheté avec succès');
       loadData();
     } catch (error) {
-      console.error('❌ [Telnyx] Erreur achat numéro:', error);
+      logger.error('❌ [Telnyx] Erreur achat numéro:', error);
       msgApi.error('Erreur lors de l\'achat du numéro');
     }
   };
@@ -394,7 +395,7 @@ const TelnyxPage: React.FC = () => {
       await loadData();
       msgApi.success('Synchronisation Telnyx réussie !');
     } catch (error) {
-      console.error('❌ [Telnyx] Erreur sync:', error);
+      logger.error('❌ [Telnyx] Erreur sync:', error);
       msgApi.error('Erreur lors de la synchronisation Telnyx');
     } finally {
       setSyncing(false);

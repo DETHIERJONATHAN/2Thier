@@ -7,6 +7,7 @@
 
 import { Request, Response } from 'express';
 import { GoogleGmailService } from '../index';
+import { logger } from '../../lib/logger';
 
 // Interface pour les fichiers Formidable
 interface FormidableFile {
@@ -54,7 +55,7 @@ export const getThreads = async (req: AuthenticatedRequest, res: Response) => {
     // Renvoyer directement les données pour compatibilité frontend
   res.json(result);
   } catch (error) {
-    console.error('[Gmail Controller] Erreur getThreads:', error);
+    logger.error('[Gmail Controller] Erreur getThreads:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des threads' });
   }
 };
@@ -82,7 +83,7 @@ export const getMessages = async (req: AuthenticatedRequest, res: Response) => {
       mailbox // Frontend peut envoyer mailbox au lieu de labelIds
     } = req.query;
 
-    console.log('[Gmail Controller] Paramètres reçus:', { maxResults, pageToken, q, labelIds, mailbox });
+    logger.debug('[Gmail Controller] Paramètres reçus:', { maxResults, pageToken, q, labelIds, mailbox });
 
     // 🔄 CONVERSION MAILBOX -> LABELIDS (Compatibilité frontend)
     let finalLabelIds: string[] | undefined;
@@ -93,7 +94,7 @@ export const getMessages = async (req: AuthenticatedRequest, res: Response) => {
     } else if (mailbox) {
       // Si mailbox est fourni, convertir selon la logique métier
       const mailboxStr = mailbox as string;
-      console.log(`[Gmail Controller] 📦 Conversion mailbox: ${mailboxStr}`);
+      logger.debug(`[Gmail Controller] 📦 Conversion mailbox: ${mailboxStr}`);
       
       switch (mailboxStr.toLowerCase()) {
         case 'inbox':
@@ -125,7 +126,7 @@ export const getMessages = async (req: AuthenticatedRequest, res: Response) => {
           finalLabelIds = [mailboxStr];
       }
       
-      console.log(`[Gmail Controller] ✅ Label final: ${finalLabelIds}`);
+      logger.debug(`[Gmail Controller] ✅ Label final: ${finalLabelIds}`);
     }
 
     const result = await gmailService.getMessages({
@@ -138,7 +139,7 @@ export const getMessages = async (req: AuthenticatedRequest, res: Response) => {
     // Renvoyer directement les données pour compatibilité frontend
     res.json(result);
   } catch (error) {
-    console.error('[Gmail Controller] Erreur getMessages:', error);
+    logger.error('[Gmail Controller] Erreur getMessages:', error);
   res.status(500).json({ error: 'Erreur lors de la récupération des messages', details: (error as Error)?.message });
   }
 };
@@ -171,7 +172,7 @@ export const getMessage = async (req: AuthenticatedRequest, res: Response) => {
     // Renvoyer directement les données pour compatibilité frontend
     res.json(message);
   } catch (error) {
-    console.error('[Gmail Controller] Erreur getMessage:', error);
+    logger.error('[Gmail Controller] Erreur getMessage:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération du message' });
   }
 };
@@ -180,40 +181,40 @@ export const getMessage = async (req: AuthenticatedRequest, res: Response) => {
  * Envoie un message Gmail (avec support des pièces jointes)
  */
 export const sendMessage = async (req: AuthenticatedRequest, res: Response) => {
-  console.log('[Gmail Controller] 🚀🚀🚀 === DÉBUT SENDMESSAGE - CONTRÔLEUR ATTEINT (FORMIDABLE) ===');
-  console.log('[Gmail Controller] 🎯 Timestamp:', new Date().toISOString());
+  logger.debug('[Gmail Controller] 🚀🚀🚀 === DÉBUT SENDMESSAGE - CONTRÔLEUR ATTEINT (FORMIDABLE) ===');
+  logger.debug('[Gmail Controller] 🎯 Timestamp:', new Date().toISOString());
   
   try {
     const organizationId = (req.headers['x-organization-id'] as string) || req.user?.organizationId;
-    console.log('[Gmail Controller] 📋 Organization ID reçu:', organizationId);
+    logger.debug('[Gmail Controller] 📋 Organization ID reçu:', organizationId);
     
     if (!organizationId) {
-      console.log('[Gmail Controller] ❌ Organization ID manquant');
+      logger.debug('[Gmail Controller] ❌ Organization ID manquant');
       return res.status(401).json({ error: 'Organization ID manquant dans la requête' });
     }
 
-    console.log('[Gmail Controller] 🔍 === ANALYSE DES DONNÉES REÇUES (FORMIDABLE) ===');
-    console.log('[Gmail Controller] 🔍 RAW req.body:', JSON.stringify(req.body, null, 2));
-    console.log('[Gmail Controller] 🔍 Type de req.body:', typeof req.body);
-    console.log('[Gmail Controller] 🔍 Clés dans req.body:', Object.keys(req.body || {}));
-    console.log('[Gmail Controller] 🔍 RAW req.files:', req.files);
-    console.log('[Gmail Controller] 🔍 Type de req.files:', typeof req.files);
+    logger.debug('[Gmail Controller] 🔍 === ANALYSE DES DONNÉES REÇUES (FORMIDABLE) ===');
+    logger.debug('[Gmail Controller] 🔍 RAW req.body:', JSON.stringify(req.body, null, 2));
+    logger.debug('[Gmail Controller] 🔍 Type de req.body:', typeof req.body);
+    logger.debug('[Gmail Controller] 🔍 Clés dans req.body:', Object.keys(req.body || {}));
+    logger.debug('[Gmail Controller] 🔍 RAW req.files:', req.files);
+    logger.debug('[Gmail Controller] 🔍 Type de req.files:', typeof req.files);
     
     if (req.files && typeof req.files === 'object') {
-      console.log('[Gmail Controller] 🔍 Clés dans req.files:', Object.keys(req.files));
+      logger.debug('[Gmail Controller] 🔍 Clés dans req.files:', Object.keys(req.files));
       if ('attachments' in req.files) {
         const attachments = req.files['attachments'];
-        console.log('[Gmail Controller] 🔍 Attachments trouvés:', Array.isArray(attachments) ? attachments.length : 1);
+        logger.debug('[Gmail Controller] 🔍 Attachments trouvés:', Array.isArray(attachments) ? attachments.length : 1);
         if (Array.isArray(attachments)) {
           attachments.forEach((file, index) => {
-            console.log('[Gmail Controller] 📎 Fichier', index + 1, ':', {
+            logger.debug('[Gmail Controller] 📎 Fichier', index + 1, ':', {
               name: file.name,
               size: file.size,
               mimetype: file.mimetype
             });
           });
         } else {
-          console.log('[Gmail Controller] 📎 Fichier unique:', {
+          logger.debug('[Gmail Controller] 📎 Fichier unique:', {
             name: attachments.name,
             size: attachments.size,
             mimetype: attachments.mimetype
@@ -232,7 +233,7 @@ export const sendMessage = async (req: AuthenticatedRequest, res: Response) => {
     const bcc = req.body.bcc;
     const fromName = req.body.fromName; // 🆕 Nouveau paramètre pour nom professionnel
 
-    console.log('[Gmail Controller] 📧 Données extraites:', { 
+    logger.debug('[Gmail Controller] 📧 Données extraites:', { 
       to, 
       subject, 
       body: body?.substring(0, 100), 
@@ -245,20 +246,20 @@ export const sendMessage = async (req: AuthenticatedRequest, res: Response) => {
     
     // Validation des champs obligatoires
     if (!to || !subject) {
-      console.log('[Gmail Controller] ❌ Champs obligatoires manquants:', { to, subject });
+      logger.debug('[Gmail Controller] ❌ Champs obligatoires manquants:', { to, subject });
       return res.status(400).json({ error: 'Destinataire et sujet requis' });
     }
 
-    console.log('[Gmail Controller] 📤 Envoi email avec', req.files ? Object.keys(req.files) : 'aucun', 'fichiers');
-    console.log('[Gmail Controller] 📧 Destinataire:', to, 'Sujet:', subject);
+    logger.debug('[Gmail Controller] 📤 Envoi email avec', req.files ? Object.keys(req.files) : 'aucun', 'fichiers');
+    logger.debug('[Gmail Controller] 📧 Destinataire:', to, 'Sujet:', subject);
 
-    console.log('[Gmail Controller]  Création du service Gmail...');
+    logger.debug('[Gmail Controller]  Création du service Gmail...');
     const gmailService = await GoogleGmailService.create(organizationId, req.user?.id || req.user?.userId);
     if (!gmailService) {
-      console.log('[Gmail Controller] ❌ Impossible de créer le service Gmail');
+      logger.debug('[Gmail Controller] ❌ Impossible de créer le service Gmail');
       return res.status(401).json({ error: 'Google non connecté pour cette organisation' });
     }
-    console.log('[Gmail Controller] ✅ Service Gmail créé avec succès');
+    logger.debug('[Gmail Controller] ✅ Service Gmail créé avec succès');
 
     // Extraire les attachments - avec Formidable, les fichiers sont dans req.files
     let attachments: FormidableFile[] = [];
@@ -267,9 +268,9 @@ export const sendMessage = async (req: AuthenticatedRequest, res: Response) => {
       attachments = Array.isArray(files) ? files : [files];
     }
 
-    console.log('[Gmail Controller] 📎 Nombre de pièces jointes traitées:', attachments.length);
+    logger.debug('[Gmail Controller] 📎 Nombre de pièces jointes traitées:', attachments.length);
     if (attachments.length > 0) {
-      console.log('[Gmail Controller] 📎 Détails des pièces jointes:', attachments.map(f => ({
+      logger.debug('[Gmail Controller] 📎 Détails des pièces jointes:', attachments.map(f => ({
         filename: f.name,
         size: f.size,
         mimetype: f.mimetype
@@ -292,34 +293,34 @@ export const sendMessage = async (req: AuthenticatedRequest, res: Response) => {
       })) : undefined
     };
 
-    console.log('[Gmail Controller] 📎 Données email préparées (VERSION ANTI-SPAM):', {
+    logger.debug('[Gmail Controller] 📎 Données email préparées (VERSION ANTI-SPAM):', {
       to: emailData.to,
       subject: emailData.subject,
       fromName: emailData.fromName,
       attachments: emailData.attachments?.length || 0
     });
 
-    console.log('[Gmail Controller] 🚀 Appel gmailService.sendEmail...');
+    logger.debug('[Gmail Controller] 🚀 Appel gmailService.sendEmail...');
     const result = await gmailService.sendEmail(emailData);
 
     if (!result) {
-      console.log('[Gmail Controller] ❌ Aucun résultat de sendEmail');
+      logger.debug('[Gmail Controller] ❌ Aucun résultat de sendEmail');
       return res.status(500).json({ error: 'Erreur lors de l\'envoi du message' });
     }
 
-    console.log('[Gmail Controller] ✅ Email envoyé avec succès:', result);
+    logger.debug('[Gmail Controller] ✅ Email envoyé avec succès:', result);
 
     res.json({
       success: true,
       message: 'Email envoyé avec succès',
       data: result
     });
-    console.log('[Gmail Controller] ✅ Réponse envoyée au client');
+    logger.debug('[Gmail Controller] ✅ Réponse envoyée au client');
   } catch (error) {
-    console.error('[Gmail Controller] ❌❌❌ ERREUR COMPLÈTE sendMessage:', error);
-    console.error('[Gmail Controller] ❌ Type erreur:', typeof error);
-    console.error('[Gmail Controller] ❌ Message erreur:', (error as Error)?.message);
-    console.error('[Gmail Controller] ❌ Stack trace:', (error as Error)?.stack);
+    logger.error('[Gmail Controller] ❌❌❌ ERREUR COMPLÈTE sendMessage:', error);
+    logger.error('[Gmail Controller] ❌ Type erreur:', typeof error);
+    logger.error('[Gmail Controller] ❌ Message erreur:', (error as Error)?.message);
+    logger.error('[Gmail Controller] ❌ Stack trace:', (error as Error)?.stack);
     res.status(500).json({ error: 'Erreur lors de l\'envoi du message' });
   }
 };
@@ -350,7 +351,7 @@ export const modifyMessage = async (req: AuthenticatedRequest, res: Response) =>
 
     // Si on a addLabelIds ou removeLabelIds, on utilise la logique de modification de labels
     if (addLabelIds || removeLabelIds) {
-      console.log('[Gmail Controller] Modification des labels:', { addLabelIds, removeLabelIds });
+      logger.debug('[Gmail Controller] Modification des labels:', { addLabelIds, removeLabelIds });
       
       // Gérer les favoris spécialement
       if (addLabelIds && addLabelIds.includes('STARRED')) {
@@ -383,7 +384,7 @@ export const modifyMessage = async (req: AuthenticatedRequest, res: Response) =>
       message: result ? 'Message modifié avec succès' : 'Erreur lors de la modification'
     });
   } catch (error) {
-    console.error('[Gmail Controller] Erreur modifyMessage:', error);
+    logger.error('[Gmail Controller] Erreur modifyMessage:', error);
     res.status(500).json({ error: 'Erreur lors de la modification du message' });
   }
 };
@@ -415,7 +416,7 @@ export const deleteMessage = async (req: AuthenticatedRequest, res: Response) =>
       message: result ? 'Message supprimé avec succès' : 'Erreur lors de la suppression'
     });
   } catch (error) {
-    console.error('[Gmail Controller] Erreur deleteMessage:', error);
+    logger.error('[Gmail Controller] Erreur deleteMessage:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression du message' });
   }
 };
@@ -440,7 +441,7 @@ export const getLabels = async (req: AuthenticatedRequest, res: Response) => {
     // Renvoyer directement les données pour compatibilité frontend
     res.json(labels);
   } catch (error) {
-    console.error('[Gmail Controller] Erreur getLabels:', error);
+    logger.error('[Gmail Controller] Erreur getLabels:', error);
   res.status(500).json({ error: 'Erreur lors de la récupération des labels', details: (error as Error)?.message });
   }
 };
@@ -471,7 +472,7 @@ export const trashMessage = async (req: AuthenticatedRequest, res: Response) => 
       message: result ? 'Message déplacé vers la corbeille avec succès' : 'Erreur lors de la suppression'
     });
   } catch (error) {
-    console.error('[Gmail Controller] Erreur trashMessage:', error);
+    logger.error('[Gmail Controller] Erreur trashMessage:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression du message' });
   }
 };
@@ -500,7 +501,7 @@ export const untrashMessage = async (req: AuthenticatedRequest, res: Response) =
       message: result ? 'Message restauré de la corbeille avec succès' : 'Erreur lors de la restauration'
     });
   } catch (error) {
-    console.error('[Gmail Controller] Erreur untrashMessage:', error);
+    logger.error('[Gmail Controller] Erreur untrashMessage:', error);
     res.status(500).json({ error: 'Erreur lors de la restauration du message' });
   }
 };
@@ -527,7 +528,7 @@ export const emptyTrash = async (req: AuthenticatedRequest, res: Response) => {
       message: result ? 'Corbeille vidée avec succès' : 'Erreur lors du vidage de la corbeille'
     });
   } catch (error) {
-    console.error('[Gmail Controller] Erreur emptyTrash:', error);
+    logger.error('[Gmail Controller] Erreur emptyTrash:', error);
     res.status(500).json({ error: 'Erreur lors du vidage de la corbeille' });
   }
 };
@@ -559,7 +560,7 @@ export const createLabel = async (req: AuthenticatedRequest, res: Response) => {
       data: label
     });
   } catch (error) {
-    console.error('[Gmail Controller] Erreur createLabel:', error);
+    logger.error('[Gmail Controller] Erreur createLabel:', error);
     res.status(500).json({ error: 'Erreur lors de la création du label' });
   }
 };
@@ -590,7 +591,7 @@ export const updateLabel = async (req: AuthenticatedRequest, res: Response) => {
       message: result ? 'Label modifié avec succès' : 'Erreur lors de la modification'
     });
   } catch (error) {
-    console.error('[Gmail Controller] Erreur updateLabel:', error);
+    logger.error('[Gmail Controller] Erreur updateLabel:', error);
     res.status(500).json({ error: 'Erreur lors de la modification du label' });
   }
 };
@@ -619,7 +620,7 @@ export const deleteLabel = async (req: AuthenticatedRequest, res: Response) => {
       message: result ? 'Label supprimé avec succès' : 'Erreur lors de la suppression'
     });
   } catch (error) {
-    console.error('[Gmail Controller] Erreur deleteLabel:', error);
+    logger.error('[Gmail Controller] Erreur deleteLabel:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression du label' });
   }
 };
@@ -636,7 +637,7 @@ export const getAttachment = async (req: AuthenticatedRequest, res: Response) =>
     
     // Fallback: retourner une erreur si aucune organisation trouvée
     if (!organizationId) {
-      console.log('[Gmail Controller] ❌ Aucune organisation trouvée pour l\'utilisateur');
+      logger.debug('[Gmail Controller] ❌ Aucune organisation trouvée pour l\'utilisateur');
       return res.status(400).json({ 
         error: 'Organization ID manquant',
         message: 'Impossible de déterminer l\'organisation de l\'utilisateur'
@@ -650,8 +651,8 @@ export const getAttachment = async (req: AuthenticatedRequest, res: Response) =>
       return res.status(400).json({ error: 'Message ID et Attachment ID requis' });
     }
 
-    console.log(`[Gmail Controller] 📎 Récupération pièce jointe: ${attachmentId} du message: ${messageId}`);
-    console.log(`[Gmail Controller] 🏢 Organization ID utilisé: ${organizationId}`);
+    logger.debug(`[Gmail Controller] 📎 Récupération pièce jointe: ${attachmentId} du message: ${messageId}`);
+    logger.debug(`[Gmail Controller] 🏢 Organization ID utilisé: ${organizationId}`);
 
     const gmailService = await GoogleGmailService.create(organizationId, req.user?.id || req.user?.userId);
     if (!gmailService) {
@@ -707,11 +708,11 @@ export const getAttachment = async (req: AuthenticatedRequest, res: Response) =>
       }
     }
     
-    console.log(`[Gmail Controller] ✅ Serving attachment: ${filename}, Type: ${contentType}, Disposition: ${contentDisposition}`);
+    logger.debug(`[Gmail Controller] ✅ Serving attachment: ${filename}, Type: ${contentType}, Disposition: ${contentDisposition}`);
     res.send(attachment.data);
     
   } catch (error) {
-    console.error('[Gmail Controller] Erreur getAttachment:', error);
+    logger.error('[Gmail Controller] Erreur getAttachment:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la récupération de la pièce jointe',
       details: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -737,7 +738,7 @@ export const getDrafts = async (req: AuthenticatedRequest, res: Response) => {
     const result = await gmailService.getDrafts();
     res.json(result);
   } catch (error) {
-    console.error('[Gmail Controller] Erreur getDrafts:', error);
+    logger.error('[Gmail Controller] Erreur getDrafts:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des brouillons' });
   }
 };
@@ -786,7 +787,7 @@ export const saveDraft = async (req: AuthenticatedRequest, res: Response) => {
       });
     }
   } catch (error) {
-    console.error('[Gmail Controller] Erreur saveDraft:', error);
+    logger.error('[Gmail Controller] Erreur saveDraft:', error);
     res.status(500).json({ error: 'Erreur lors de la sauvegarde du brouillon' });
   }
 };
@@ -818,7 +819,7 @@ export const deleteDraft = async (req: AuthenticatedRequest, res: Response) => {
       message: result ? 'Brouillon supprimé avec succès' : 'Erreur lors de la suppression'
     });
   } catch (error) {
-    console.error('[Gmail Controller] Erreur deleteDraft:', error);
+    logger.error('[Gmail Controller] Erreur deleteDraft:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression du brouillon' });
   }
 };
@@ -858,7 +859,7 @@ export const sendDraft = async (req: AuthenticatedRequest, res: Response) => {
       });
     }
   } catch (error) {
-    console.error('[Gmail Controller] Erreur sendDraft:', error);
+    logger.error('[Gmail Controller] Erreur sendDraft:', error);
     res.status(500).json({ error: 'Erreur lors de l\'envoi du brouillon' });
   }
 };

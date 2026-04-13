@@ -3,6 +3,7 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { Card, Button, Typography, Table, Input, Form, Modal, Space, Tag, message } from 'antd';
 import { UserOutlined, LockOutlined, KeyOutlined, MailOutlined, PhoneOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -116,22 +117,22 @@ const UnifiedPasswordManager: React.FC = () => {
   const loadUsers = async () => {
     setLoading(true);
     try {
-      console.log("Appel API /admin-password/users-services...");
+      logger.debug("Appel API /admin-password/users-services...");
       
       const response = await api.api.get('/api/admin-password/users-services');
-      console.log("Réponse API brute:", response);
+      logger.debug("Réponse API brute:", response);
       
       // La réponse est directement le tableau d'utilisateurs
       if (Array.isArray(response)) {
-        console.log("Données utilisateurs reçues correctement:", response);
+        logger.debug("Données utilisateurs reçues correctement:", response);
         setUsers(response);
       } else {
-        console.error("La réponse n'est pas un tableau:", response);
+        logger.error("La réponse n'est pas un tableau:", response);
         setUsers([]);
         message.error("Format de données incorrect reçu du serveur");
       }
     } catch (err: unknown) {
-      console.error("Erreur lors du chargement des utilisateurs:", err);
+      logger.error("Erreur lors du chargement des utilisateurs:", err);
       message.error(
         err.response?.data?.error || err.message || 'Une erreur est survenue lors du chargement des utilisateurs'
       );

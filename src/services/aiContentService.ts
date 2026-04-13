@@ -4,6 +4,7 @@
  */
 
 import { getGeminiService, GoogleGeminiService } from './GoogleGeminiService';
+import { logger } from '../lib/logger';
 
 export interface ServiceContent {
   key: string;
@@ -304,7 +305,7 @@ Règles :
         });
         services.push(service);
       } catch (error) {
-        console.error(`Erreur génération service ${serviceType}:`, error);
+        logger.error(`Erreur génération service ${serviceType}:`, error);
       }
     }
 

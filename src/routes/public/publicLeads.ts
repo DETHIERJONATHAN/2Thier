@@ -1,7 +1,7 @@
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import { prisma } from '../../lib/prisma';
-import { logger } from '../lib/logger';
+import { logger } from '../../lib/logger';
 
 const router = express.Router();
 

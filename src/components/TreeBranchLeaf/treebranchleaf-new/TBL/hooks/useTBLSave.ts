@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
+import { logger } from '../../../../../lib/logger';
 
 export type TBLFormData = Record<string, string | number | boolean | null | undefined>;
 
@@ -8,7 +9,7 @@ export const useTBLSave = () => {
 
   // Fonction pour sauvegarder automatiquement avec TBL Prisma
   const autoSave = useCallback(async (formData: TBLFormData, treeId: string, clientId: string) => {
-    console.log('🔄 [TBL-AUTO-SAVE] Sauvegarde automatique avec TBL Prisma...', { 
+    logger.debug('🔄 [TBL-AUTO-SAVE] Sauvegarde automatique avec TBL Prisma...', { 
       treeId, 
       clientId, 
       fieldsCount: Object.keys(formData).length 
@@ -16,7 +17,7 @@ export const useTBLSave = () => {
 
     try {
       // 🔥 NOUVEAU: Utiliser l'endpoint TBL Prisma tout-en-un (BYPASS TreeBranchLeaf routes)
-      console.log('🚀 [TBL-AUTO-SAVE] Création et évaluation via TBL Prisma pur...');
+      logger.debug('🚀 [TBL-AUTO-SAVE] Création et évaluation via TBL Prisma pur...');
       
       const response = await api.post('/api/tbl/submissions/create-and-evaluate', {
         treeId,
@@ -26,7 +27,7 @@ export const useTBLSave = () => {
         providedName: `Devis automatique ${new Date().toLocaleDateString()}`
       });
 
-      console.log('✅ [TBL-AUTO-SAVE] Soumission créée et évaluée via TBL Prisma:', response.submission?.id);
+      logger.debug('✅ [TBL-AUTO-SAVE] Soumission créée et évaluée via TBL Prisma:', response.submission?.id);
       
       return {
         success: true,
@@ -36,7 +37,7 @@ export const useTBLSave = () => {
       };
 
     } catch (error) {
-      console.error('❌ [TBL-AUTO-SAVE] Erreur:', error);
+      logger.error('❌ [TBL-AUTO-SAVE] Erreur:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -51,7 +52,7 @@ export const useTBLSave = () => {
     notes?: string;
     isDraft: boolean;
   }) => {
-    console.log('💾 [TBL-SAVE-DEVIS] Sauvegarde comme devis avec TBL Prisma...', { 
+    logger.debug('💾 [TBL-SAVE-DEVIS] Sauvegarde comme devis avec TBL Prisma...', { 
       treeId, 
       options, 
       fieldsCount: Object.keys(formData).length 
@@ -59,7 +60,7 @@ export const useTBLSave = () => {
 
     try {
       // 🔥 NOUVEAU: Utiliser l'endpoint TBL Prisma tout-en-un (BYPASS TreeBranchLeaf routes)
-      console.log('🚀 [TBL-SAVE-DEVIS] Création et évaluation via TBL Prisma pur...');
+      logger.debug('🚀 [TBL-SAVE-DEVIS] Création et évaluation via TBL Prisma pur...');
       
       const response = await api.post('/api/tbl/submissions/create-and-evaluate', {
         treeId,
@@ -69,7 +70,7 @@ export const useTBLSave = () => {
         providedName: options.projectName || `Devis ${new Date().toLocaleDateString()}`
       });
 
-      console.log('✅ [TBL-SAVE-DEVIS] Soumission créée et évaluée via TBL Prisma:', response.submission?.id);
+      logger.debug('✅ [TBL-SAVE-DEVIS] Soumission créée et évaluée via TBL Prisma:', response.submission?.id);
 
       // 🚀 PERF: create-and-evaluate fait déjà l'évaluation complète.
       // Les appels evaluate-all et verification étaient REDONDANTS (+10s inutiles).
@@ -83,7 +84,7 @@ export const useTBLSave = () => {
       };
 
     } catch (error) {
-      console.error('❌ [TBL-SAVE-DEVIS] Erreur:', error);
+      logger.error('❌ [TBL-SAVE-DEVIS] Erreur:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Erreur lors de la sauvegarde'

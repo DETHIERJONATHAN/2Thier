@@ -32,6 +32,7 @@ import {
   CloseOutlined,
   ExclamationCircleOutlined
 } from '@ant-design/icons';
+import { logger } from '../lib/logger';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -108,7 +109,7 @@ export const DraftRecoveryModal: React.FC<DraftRecoveryModalProps> = ({
           setOpen(true);
         }
       } catch (error) {
-        console.error('[DraftRecoveryModal] Erreur checkDrafts:', error);
+        logger.error('[DraftRecoveryModal] Erreur checkDrafts:', error);
       } finally {
         setLoading(false);
       }
@@ -129,7 +130,7 @@ export const DraftRecoveryModal: React.FC<DraftRecoveryModalProps> = ({
       setOpen(false);
       onRestoreSuccess?.(draft);
     } catch (error) {
-      console.error('[DraftRecoveryModal] Erreur restore:', error);
+      logger.error('[DraftRecoveryModal] Erreur restore:', error);
       // TODO: Afficher notification d'erreur
     } finally {
       setActionLoading(null);
@@ -160,7 +161,7 @@ export const DraftRecoveryModal: React.FC<DraftRecoveryModalProps> = ({
             setOpen(false);
           }
         } catch (error) {
-          console.error('[DraftRecoveryModal] Erreur discard:', error);
+          logger.error('[DraftRecoveryModal] Erreur discard:', error);
         } finally {
           setActionLoading(null);
         }

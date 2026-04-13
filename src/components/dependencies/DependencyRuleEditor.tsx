@@ -11,6 +11,7 @@ import {
   useDroppable 
 } from '@dnd-kit/core';
 import useCRMStore from '../../store';
+import { logger } from '../../lib/logger';
 
 interface DependencyRuleEditorProps {
   dependency: Dependency;
@@ -75,7 +76,7 @@ function DependencyRuleEditor({ dependency, allFields, onUpdate, onDelete, onTes
     const { active, over } = event;
     
     if (over && active.id !== over.id) {
-      console.log(`Élément ${active.id} déposé sur ${over.id}`);
+      logger.debug(`Élément ${active.id} déposé sur ${over.id}`);
       
       // Récupérer les données associées à l'élément déplacé
       const activeData = active.data.current;

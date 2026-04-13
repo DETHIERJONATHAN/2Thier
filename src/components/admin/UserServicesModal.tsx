@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Modal, Switch, Spin, message, Row, Col, Typography, Alert, Space } from 'antd';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { User } from '../../types';
+import { logger } from '../../lib/logger';
 
 const { Text } = Typography;
 
@@ -39,7 +40,7 @@ const UserServicesModal: React.FC<UserServicesModalProps> = ({ user, visible, on
         }
       } catch (err) {
         setError("Erreur lors de la récupération du statut des services.");
-        console.error(err);
+        logger.error(err);
       } finally {
         setLoading(false);
       }

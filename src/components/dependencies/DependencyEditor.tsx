@@ -4,6 +4,7 @@ import type { FieldDependency } from '../../store/slices/types';
 import DependencyDropZone from './DependencyDropZone';
 import { ADVANCED_CONDITION_FUNCTIONS, ADVANCED_VALUE_TESTS } from './dependencyIntegration';
 import { generateNewFormatCode } from './dependencyUtils';
+import { logger } from '../../lib/logger';
 
 interface DependencyEditorProps {
   dependency: FieldDependency;
@@ -14,18 +15,18 @@ interface DependencyEditorProps {
  * Éditeur complet pour une dépendance
  */
 const DependencyEditor: React.FC<DependencyEditorProps> = ({ dependency, onClose }) => {
-    console.log(`[DependencyEditor] Render for dependency ${dependency.id}`);
+    logger.debug(`[DependencyEditor] Render for dependency ${dependency.id}`);
     
     const [fixedValue, setFixedValue] = useState('');
 
     const handleNameChange = (newName: string) => {
-        console.log(`[DependencyEditor] Name changed to: ${newName}`);
+        logger.debug(`[DependencyEditor] Name changed to: ${newName}`);
         const { updateDependency } = useCRMStore.getState();
         updateDependency(dependency.id, { name: newName });
     };
 
     const handleActionChange = (newAction: 'show' | 'hide' | 'require' | 'unrequire' | 'enable' | 'disable' | 'setValue') => {
-        console.log(`[DependencyEditor] Action changed to: ${newAction}`);
+        logger.debug(`[DependencyEditor] Action changed to: ${newAction}`);
         if (!dependency.sequence) return;
         const { updateDependency } = useCRMStore.getState();
         updateDependency(dependency.id, { sequence: { ...dependency.sequence, action: newAction } });
@@ -37,7 +38,7 @@ const DependencyEditor: React.FC<DependencyEditorProps> = ({ dependency, onClose
         
         // Vérifier que dependency.sequence existe et est correctement structuré
         if (!dependency.sequence || !Array.isArray(dependency.sequence.conditions)) {
-            console.error("[DependencyEditor] Sequence is missing or malformed");
+            logger.error("[DependencyEditor] Sequence is missing or malformed");
             return;
         }
         
@@ -69,7 +70,7 @@ const DependencyEditor: React.FC<DependencyEditorProps> = ({ dependency, onClose
     const handleAddOperator = (operator: string) => {
         // Vérifier que dependency.sequence existe et est correctement structuré
         if (!dependency.sequence || !Array.isArray(dependency.sequence.conditions)) {
-            console.error("[DependencyEditor] Sequence is missing or malformed");
+            logger.error("[DependencyEditor] Sequence is missing or malformed");
             return;
         }
         

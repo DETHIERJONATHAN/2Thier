@@ -30,6 +30,7 @@ import { Autocomplete, useJsApiLoader } from '@react-google-maps/api';
 import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
 import type { LeadCreatorModalProps, CreateLeadData, TBLLead } from './types/lead-types';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../../lib/logger';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -214,7 +215,7 @@ const LeadCreatorModalAdvanced: React.FC<LeadCreatorModalPropsExtended> = ({
           }
         });
         
-        console.log('🗺️ Adresse sélectionnée:', place.formatted_address);
+        logger.debug('🗺️ Adresse sélectionnée:', place.formatted_address);
       }
     }
   }, [autocomplete, form]);
@@ -259,7 +260,7 @@ const LeadCreatorModalAdvanced: React.FC<LeadCreatorModalPropsExtended> = ({
           coordinates: r.geometry?.location ? { lat: r.geometry.location.lat(), lng: r.geometry.location.lng() } : null,
           components: { streetNumber, route, locality, postalCode, country }
         });
-        console.log('🗺️ (fallback geocode) Adresse normalisée:', formatted);
+        logger.debug('🗺️ (fallback geocode) Adresse normalisée:', formatted);
       }
     });
   }, [addressInput, form]);
@@ -285,7 +286,7 @@ const LeadCreatorModalAdvanced: React.FC<LeadCreatorModalPropsExtended> = ({
           coordinates: place.geometry?.location ? { lat: place.geometry.location.lat(), lng: place.geometry.location.lng() } : null,
           components: { streetNumber, route, locality, postalCode, country }
         });
-        console.log('🗺️ (chantier) Adresse sélectionnée:', place.formatted_address);
+        logger.debug('🗺️ (chantier) Adresse sélectionnée:', place.formatted_address);
       }
     }
   }, [siteAutocomplete, form]);
@@ -345,7 +346,7 @@ const LeadCreatorModalAdvanced: React.FC<LeadCreatorModalPropsExtended> = ({
           coordinates: r.geometry?.location ? { lat: r.geometry.location.lat(), lng: r.geometry.location.lng() } : null,
           components: { streetNumber, route, locality, postalCode, country }
         });
-        console.log('🗺️ (fallback geocode chantier) Adresse normalisée:', formatted);
+        logger.debug('🗺️ (fallback geocode chantier) Adresse normalisée:', formatted);
       }
     });
   }, [addressSiteInput, form, addressDetails?.coordinates]);
@@ -373,7 +374,7 @@ const LeadCreatorModalAdvanced: React.FC<LeadCreatorModalPropsExtended> = ({
         }
       };
       
-      console.log('📝 Création lead avec données:', leadData);
+      logger.debug('📝 Création lead avec données:', leadData);
       
       if (mode === 'edit' && initialLead?.id) {
         // 🔁 Mise à jour du lead existant
@@ -471,7 +472,7 @@ const LeadCreatorModalAdvanced: React.FC<LeadCreatorModalPropsExtended> = ({
       }
     } catch (err: unknown) {
       const errorMessage = (err as Error)?.message || 'Erreur lors de la création du lead';
-      console.error('❌ Erreur création lead:', err);
+      logger.error('❌ Erreur création lead:', err);
   msgApi.error(errorMessage);
     } finally {
       setLoading(false);

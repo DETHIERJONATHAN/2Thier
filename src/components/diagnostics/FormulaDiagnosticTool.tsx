@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { generateFormulaTestCases, runFormulaValidationTests } from '../../utils/formulaTestCases';
 import { validateFormula, prepareFormulaForAPI } from '../../utils/formulaValidator';
 import { Formula } from '../../types/formula';
+import { logger } from '../../lib/logger';
 
 /**
  * Outil de diagnostic pour tester l'éditeur de formules
@@ -103,13 +104,13 @@ export const FormulaDiagnosticTool: React.FC = () => {
                             <button
                                 onClick={() => {
                                     const validationResult = validateFormula(selectedTestCase, 'DiagnosticTool');
-                                    console.log('Résultat de validation:', validationResult);
+                                    logger.debug('Résultat de validation:', validationResult);
                                     
                                     try {
                                         const preparedFormula = prepareFormulaForAPI(selectedTestCase, 'DiagnosticTool');
-                                        console.log('Formule préparée:', preparedFormula);
+                                        logger.debug('Formule préparée:', preparedFormula);
                                     } catch (error) {
-                                        console.error('Erreur lors de la préparation:', error);
+                                        logger.error('Erreur lors de la préparation:', error);
                                     }
                                 }}
                                 className="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700"

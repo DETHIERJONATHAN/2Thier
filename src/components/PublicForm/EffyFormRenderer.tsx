@@ -33,6 +33,7 @@ import {
   PhoneOutlined,
   CloseOutlined
 } from '@ant-design/icons';
+import { logger } from '../../lib/logger';
 
 // ==================== TYPES ====================
 interface QuestionOption {
@@ -350,7 +351,7 @@ const EffyFormRenderer: React.FC = () => {
         setFormData(data);
         setCurrentQuestionKey(data.startQuestionKey || data.questions[0]?.questionKey || '');
       } catch (err) {
-        console.error('Erreur chargement formulaire:', err);
+        logger.error('Erreur chargement formulaire:', err);
         setError('Impossible de charger le formulaire');
       } finally {
         setLoading(false);
@@ -518,7 +519,7 @@ const EffyFormRenderer: React.FC = () => {
       setSubmitted(true);
       message.success(result.message || 'Formulaire envoyé avec succès !');
     } catch (err) {
-      console.error('Erreur soumission:', err);
+      logger.error('Erreur soumission:', err);
       message.error(err instanceof Error ? err.message : 'Une erreur est survenue. Veuillez réessayer.');
     } finally {
       setSubmitting(false);
@@ -538,7 +539,7 @@ const EffyFormRenderer: React.FC = () => {
     }
 
     // Log de debug pour le multi-branches
-    console.log(`📍 [Nav] Question: ${currentQuestion.questionKey}, pendingBranches: [${pendingBranches.join(', ')}], returnTo: ${returnToQuestion}`);
+    logger.debug(`📍 [Nav] Question: ${currentQuestion.questionKey}, pendingBranches: [${pendingBranches.join(', ')}], returnTo: ${returnToQuestion}`);
 
     // Sauvegarder la réponse
     const newAnswers = { ...answers, [currentQuestion.questionKey]: currentAnswer };
@@ -587,7 +588,7 @@ const EffyFormRenderer: React.FC = () => {
         const [nextBranch, ...remainingBranches] = pendingBranches;
         setPendingBranches(remainingBranches);
         
-        console.log(`🌿 [MultiBranch] Fin de branche, passage à: ${nextBranch}, restantes: ${remainingBranches.length}`);
+        logger.debug(`🌿 [MultiBranch] Fin de branche, passage à: ${nextBranch}, restantes: ${remainingBranches.length}`);
         
         setHistory(prev => [...prev, currentQuestionKey]);
         setCurrentQuestionKey(nextBranch);
@@ -602,7 +603,7 @@ const EffyFormRenderer: React.FC = () => {
     // Si la prochaine question est la question de retour ET qu'il n'y a plus de branches pendantes
     // → On peut maintenant aller à la question de retour
     if (nextKey === returnToQuestion && pendingBranches.length === 0) {
-      console.log(`🏁 [MultiBranch] Toutes les branches terminées, retour à: ${returnToQuestion}`);
+      logger.debug(`🏁 [MultiBranch] Toutes les branches terminées, retour à: ${returnToQuestion}`);
       setReturnToQuestion(null); // Reset car on y va maintenant
     }
 

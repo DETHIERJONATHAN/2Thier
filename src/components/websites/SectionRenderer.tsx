@@ -20,6 +20,7 @@ import {
   TeamOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { logger } from '../../lib/logger';
 
 const { Header, Content, Footer } = Layout;
 const { Title, Paragraph, Text } = Typography;
@@ -102,7 +103,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
         setTestimonials(data || []);
       }
     } catch (error) {
-      console.error('Erreur chargement données:', error);
+      logger.error('Erreur chargement données:', error);
     } finally {
       setLoading(false);
     }

@@ -21,6 +21,7 @@ import * as Icons from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { GridRenderer } from './GridRenderer';
 import { SectionHeaderRenderer } from './SectionHeaderRenderer';
+import { logger } from '../../lib/logger';
 
 const { Title, Paragraph, Text } = Typography;
 const { TextArea } = Input;
@@ -140,9 +141,9 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
     setLoading(true);
     try {
       if (section.type === 'services') {
-        console.log('🔍 [SectionRendererV2] Chargement services pour websiteId:', section.websiteId);
+        logger.debug('🔍 [SectionRendererV2] Chargement services pour websiteId:', section.websiteId);
         const data = await api.get(`/api/website-services/${section.websiteId}`);
-        console.log('✅ [SectionRendererV2] Services chargés:', data);
+        logger.debug('✅ [SectionRendererV2] Services chargés:', data);
         setServices(data || []);
       } else if (section.type === 'projects') {
         const data = await api.get(`/api/website-projects/${section.websiteId}`);
@@ -152,7 +153,7 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
         setTestimonials(data || []);
       }
     } catch (error) {
-      console.error('❌ [SectionRendererV2] Erreur chargement données:', error);
+      logger.error('❌ [SectionRendererV2] Erreur chargement données:', error);
     } finally {
       setLoading(false);
     }

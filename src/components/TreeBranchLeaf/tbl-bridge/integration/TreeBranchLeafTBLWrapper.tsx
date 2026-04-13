@@ -20,6 +20,7 @@ import React, {
 } from 'react';
 import { getTBLSyncService, TBLSyncEvent, TBLSyncStats } from './TBLSyncService';
 import { TBLElement, type TreeBranchLeafNode } from '../index';
+import { logger } from '../../../../lib/logger';
 
 // 🎯 CONTEXTE TBL
 interface TBLContextValue {
@@ -71,7 +72,7 @@ export function TreeBranchLeafTBLWrapper({
   // 🔧 LOGGING
   const log = (message: string) => {
     if (debugMode) {
-      console.log(`[TBL Wrapper] ${message}`);
+      logger.debug(`[TBL Wrapper] ${message}`);
     }
   };
 

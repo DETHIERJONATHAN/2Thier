@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';
+import { logger } from '../../../../../../lib/logger';
 
 type DuplicateLookupOptions = {
   copiedNodeId: string;
@@ -109,8 +110,8 @@ export class TableLookupDuplicationService {
       }
       
     } catch (error) {
-      console.error(`[TBL-DUP] ERROR: ${error instanceof Error ? error.message : String(error)}`);
-      if (error instanceof Error) console.error(`[TBL-DUP] Stack: ${error.stack}`);
+      logger.error(`[TBL-DUP] ERROR: ${error instanceof Error ? error.message : String(error)}`);
+      if (error instanceof Error) logger.error(`[TBL-DUP] Stack: ${error.stack}`);
       throw error;
     }
   }
@@ -187,14 +188,14 @@ export class TableLookupDuplicationService {
             });
             nodeOwnerExists = createdNode;
           } catch (err) {
-            console.error(`[TBL-DUP] ❌ Failed to create stub node: ${err.message}`);
+            logger.error(`[TBL-DUP] ❌ Failed to create stub node: ${err.message}`);
             throw err; // Propager l'erreur pour arrêter le processus
           }
         }
       }
 
       if (!nodeOwnerExists) {
-        console.warn(
+        logger.warn(
           `[TBL-DUP] Cannot duplicate table: owner node "${copiedTableOwnerNodeId}" doesn't exist`
         );
         return;
@@ -230,13 +231,13 @@ export class TableLookupDuplicationService {
             select: { id: true }
           });
           if (linkTargetNode) {
-            console.log(`[TBL-DUP] 🔗 sourceField resolved: ${originalId} → LINK target ${linkTargetSuffixed}`);
+            logger.debug(`[TBL-DUP] 🔗 sourceField resolved: ${originalId} → LINK target ${linkTargetSuffixed}`);
             return linkTargetSuffixed;
           }
         }
 
         // 4. Fallback: utiliser le suffixé même s'il n'existe pas (comportement legacy)
-        console.warn(`[TBL-DUP] ⚠️ Node ${suffixedId} not found, LINK resolution failed. Using suffixed ID anyway.`);
+        logger.warn(`[TBL-DUP] ⚠️ Node ${suffixedId} not found, LINK resolution failed. Using suffixed ID anyway.`);
         return suffixedId;
       };
 
@@ -476,13 +477,13 @@ export class TableLookupDuplicationService {
             });
           }
         } catch (nodeUpdateErr) {
-          console.warn(`   ⚠️ Warning updating node ${copiedNodeId} capabilities:`, (nodeUpdateErr as Error).message);
+          logger.warn(`   ⚠️ Warning updating node ${copiedNodeId} capabilities:`, (nodeUpdateErr as Error).message);
         }
       } else {
       }
       
     } catch (error) {
-      console.error(`❌ Erreur duplication table/config ${originalTableId}:`, error);
+      logger.error(`❌ Erreur duplication table/config ${originalTableId}:`, error);
       throw error;
     }
   }
@@ -521,7 +522,7 @@ export class TableLookupDuplicationService {
       
       
     } catch (error) {
-      console.error(`Ã¢ÂÅ’ [TableLookupDuplication] Erreur rÃƒÂ©paration:`, error);
+      logger.error(`Ã¢ÂÅ’ [TableLookupDuplication] Erreur rÃƒÂ©paration:`, error);
       throw error;
     }
   }

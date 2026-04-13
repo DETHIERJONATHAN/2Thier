@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useChantierStatuses } from '../../hooks/useChantierStatuses';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Text, Title } = Typography;
 
@@ -98,7 +99,7 @@ const ChantierWorkflowSettingsPage: React.FC<{ onBack?: () => void }> = ({ onBac
       const res = await api.get('/api/chantier-workflow/transitions');
       setTransitions(res.data || []);
     } catch {
-      console.error('Erreur chargement transitions');
+      logger.error('Erreur chargement transitions');
     } finally {
       setTransLoading(false);
     }
@@ -110,7 +111,7 @@ const ChantierWorkflowSettingsPage: React.FC<{ onBack?: () => void }> = ({ onBac
       const res = await api.get('/api/chantier-workflow/invoice-templates');
       setTemplates(res.data || []);
     } catch {
-      console.error('Erreur chargement templates');
+      logger.error('Erreur chargement templates');
     } finally {
       setTemplLoading(false);
     }

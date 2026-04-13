@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Dependency, DependencyCondition } from './types';
 import DependencyZone from './DependencyZone';
+import { logger } from '../../lib/logger';
 
 interface DependencyRuleEditorProps {
   dependency: Dependency;
@@ -52,12 +53,12 @@ const DependencyRuleEditorSimplified: React.FC<DependencyRuleEditorProps> = ({
   
   // Initialisation de l'éditeur après le rendu initial
   useEffect(() => {
-    console.log(`Initializing DependencyRuleEditor: ${dependency.id}`);
+    logger.debug(`Initializing DependencyRuleEditor: ${dependency.id}`);
     
     // Délai court pour s'assurer que tous les composants sont bien montés
     const timer = setTimeout(() => {
       setIsReady(true);
-      console.log(`DependencyRuleEditor ready: ${dependency.id}`);
+      logger.debug(`DependencyRuleEditor ready: ${dependency.id}`);
       
       // Auto-expansion pour les nouvelles dépendances
       if (!dependency.targetFieldId && !dependency.formulaId) {
@@ -108,7 +109,7 @@ const DependencyRuleEditorSimplified: React.FC<DependencyRuleEditorProps> = ({
       
       // S'assurer que l'événement est pour cette dépendance
       if (dependencyId === dependency.id && actionType) {
-        console.log(`Action reçue pour la dépendance ${dependency.id}: ${actionType}`);
+        logger.debug(`Action reçue pour la dépendance ${dependency.id}: ${actionType}`);
         
         // Mettre à jour l'état local pour une réaction immédiate de l'UI
         setCurrentAction(actionType);
@@ -149,7 +150,7 @@ const DependencyRuleEditorSimplified: React.FC<DependencyRuleEditorProps> = ({
       
       // S'assurer que l'événement est pour cette dépendance
       if (dependencyId === dependency.id && operatorType) {
-        console.log(`Opérateur reçu pour la dépendance ${dependency.id}: ${operatorType}`);
+        logger.debug(`Opérateur reçu pour la dépendance ${dependency.id}: ${operatorType}`);
         
         // Mettre à jour l'état local pour une réaction immédiate de l'UI
         setCurrentOperator(operatorType);
@@ -184,7 +185,7 @@ const DependencyRuleEditorSimplified: React.FC<DependencyRuleEditorProps> = ({
       
       // S'assurer que l'événement est pour cette dépendance
       if (dependencyId === dependency.id && testType) {
-        console.log(`Test reçu pour la dépendance ${dependency.id}: ${testType}`);
+        logger.debug(`Test reçu pour la dépendance ${dependency.id}: ${testType}`);
         
         // Mettre à jour l'état local pour une réaction immédiate de l'UI
         setCurrentTest(testType);

@@ -6,6 +6,7 @@
  */
 
 import { type PrismaClient } from '@prisma/client';
+import { logger } from '../../../../../../lib/logger';
 
 /**
  * Ã°Å¸â€â€ž Forcer la mise ÃƒÂ  jour des rÃƒÂ©fÃƒÂ©rences internes pour l'indÃƒÂ©pendance
@@ -69,7 +70,7 @@ export async function forceIndependentCalculation(
       }
 
     } catch (error) {
-      console.error(`Ã¢ÂÅ’ [FORCE-CALC] Erreur pour ${nodeId}:`, error);
+      logger.error(`Ã¢ÂÅ’ [FORCE-CALC] Erreur pour ${nodeId}:`, error);
     }
   }
 
@@ -115,7 +116,7 @@ export async function createRecalculationTriggers(
 
 
     } catch (error) {
-      console.error(`Ã¢ÂÅ’ [TRIGGERS] Erreur pour ${nodeId}:`, error);
+      logger.error(`Ã¢ÂÅ’ [TRIGGERS] Erreur pour ${nodeId}:`, error);
     }
   }
 }

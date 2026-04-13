@@ -54,6 +54,7 @@ import { AIAssistantChat } from '../../components/CallModule/components/AIAssist
 import type { Lead, TimeSlot } from '../../types/leads';
 import type { CallState } from '../../components/CallModule/types/CallTypes';
 import dayjs from 'dayjs';
+import { logger } from '../../lib/logger';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -86,7 +87,7 @@ interface CallModuleProps {
 }
 
 export default function CallModule({ leadId: propLeadId, onClose }: CallModuleProps = {}): React.ReactElement {
-  console.log('🔍 [DEBUG] CallModule render', { propLeadId, onClose: !!onClose });
+  logger.debug('🔍 [DEBUG] CallModule render', { propLeadId, onClose: !!onClose });
   
   const { leadId: urlLeadId } = useParams<{ leadId: string }>();
   const navigate = useNavigate();
@@ -136,7 +137,7 @@ export default function CallModule({ leadId: propLeadId, onClose }: CallModulePr
   
   // 🐛 LOG: Tracker les changements de callStatus
   useEffect(() => {
-    console.log('🔍 [DEBUG] callStatus changed:', callStatus);
+    logger.debug('🔍 [DEBUG] callStatus changed:', callStatus);
   }, [callStatus]);
   
   // États pour l'IA
@@ -175,7 +176,7 @@ export default function CallModule({ leadId: propLeadId, onClose }: CallModulePr
       
       setAvailableSlots(response?.data?.slots || simulatedSlots);
     } catch (error) {
-      console.warn('Erreur lors de la récupération des créneaux, utilisation de données simulées');
+      logger.warn('Erreur lors de la récupération des créneaux, utilisation de données simulées');
       // Créneaux de secours
       const fallbackSlots = ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00'];
       setAvailableSlots(fallbackSlots);
@@ -232,7 +233,7 @@ export default function CallModule({ leadId: propLeadId, onClose }: CallModulePr
           externalCalendarId: response.data?.id || response?.id || null
         });
       } catch (internalErr) {
-        console.warn('[CallModule] Événement Google OK, erreur calendrier interne:', internalErr);
+        logger.warn('[CallModule] Événement Google OK, erreur calendrier interne:', internalErr);
       }
       
       // Envoyer un email de confirmation automatique
@@ -256,7 +257,7 @@ export default function CallModule({ leadId: propLeadId, onClose }: CallModulePr
 
       return true;
     } catch (error) {
-      console.error('Erreur lors de la création du RDV:', error);
+      logger.error('Erreur lors de la création du RDV:', error);
       message.error('Erreur lors de la création du RDV');
       return false;
     }
@@ -274,7 +275,7 @@ export default function CallModule({ leadId: propLeadId, onClose }: CallModulePr
     if (!callStatus) return; // Ne rien faire si pas de statut sélectionné
     
     const shouldShowCalendar = isRDVStatus(callStatus);
-    console.log('🔍 [DEBUG] isRDVStatus check:', { callStatus, shouldShowCalendar, currentShowCalendar: showCalendar });
+    logger.debug('🔍 [DEBUG] isRDVStatus check:', { callStatus, shouldShowCalendar, currentShowCalendar: showCalendar });
     
     if (shouldShowCalendar !== showCalendar) {
       setShowCalendar(shouldShowCalendar);
@@ -357,7 +358,7 @@ Avez-vous quelques minutes pour échanger à ce sujet ?"
   }, [notes, callStatus]);
 
   const aiCallState = useMemo<CallState>(() => {
-    console.log('🔍 [DEBUG] aiCallState recalculated');
+    logger.debug('🔍 [DEBUG] aiCallState recalculated');
     return {
       isInProgress: callInProgress,
       startTime: callStartTime,
@@ -575,7 +576,7 @@ Avez-vous quelques minutes pour échanger à ce sujet ?"
       }
       
     } catch (error) {
-      console.error('Erreur lors de la sauvegarde:', error);
+      logger.error('Erreur lors de la sauvegarde:', error);
       NotificationManager.error('Erreur lors de la sauvegarde de l\'appel');
     }
   }, [
@@ -872,20 +873,20 @@ Avez-vous quelques minutes pour échanger à ce sujet ?"
                   placeholder="Choisir un statut..."
                   value={callStatus}
                   onChange={(value) => {
-                    console.log('🔍 [DEBUG] Select onChange triggered:', value);
+                    logger.debug('🔍 [DEBUG] Select onChange triggered:', value);
                     setCallStatus(value);
                     setIsCallStatusOpen(false);
                   }}
                   onFocus={() => {
-                    console.log('🔍 [DEBUG] Select onFocus - dropdown opening');
+                    logger.debug('🔍 [DEBUG] Select onFocus - dropdown opening');
                     setIsCallStatusOpen(true);
                   }}
                   onBlur={() => {
-                    console.log('🔍 [DEBUG] Select onBlur - dropdown closing');
+                    logger.debug('🔍 [DEBUG] Select onBlur - dropdown closing');
                     setIsCallStatusOpen(false);
                   }}
                   onDropdownVisibleChange={(open) => {
-                    console.log('🔍 [DEBUG] Select dropdown visibility changed:', open);
+                    logger.debug('🔍 [DEBUG] Select dropdown visibility changed:', open);
                     setIsCallStatusOpen(open);
                   }}
                   open={isCallStatusOpen}

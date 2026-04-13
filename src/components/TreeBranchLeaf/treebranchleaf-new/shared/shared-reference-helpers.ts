@@ -1,5 +1,6 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import { copyVariableWithCapacities } from '../api/copy-variable-with-capacities';
+import { logger } from '../../../../lib/logger';
 
 export interface SharedReferenceAuthContext {
   organizationId: string | null;
@@ -229,10 +230,10 @@ export async function applySharedReferencesFromOriginalInternal(
             );
 
             if (!copyResult.success) {
-              console.warn(`⚠️ [SHARED-REF] Échec copie variable ${originalVarId}: ${copyResult.error}`);
+              logger.warn(`⚠️ [SHARED-REF] Échec copie variable ${originalVarId}: ${copyResult.error}`);
             }
           } catch (e) {
-            console.warn(`⚠️ [SHARED-REF] Erreur copie variable ${originalVarId}:`, (e as Error).message);
+            logger.warn(`⚠️ [SHARED-REF] Erreur copie variable ${originalVarId}:`, (e as Error).message);
           }
         }
       }
@@ -255,7 +256,7 @@ export async function applySharedReferencesFromOriginalInternal(
       select: { id: true }
     });
     if (!copyExists) {
-      console.warn(`⚠️ Nœud ${copyId} introuvable pour MAJ linkedConditionIds`);
+      logger.warn(`⚠️ Nœud ${copyId} introuvable pour MAJ linkedConditionIds`);
       continue;
     }
     

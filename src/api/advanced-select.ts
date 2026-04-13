@@ -1,5 +1,6 @@
 import express from 'express';
 import AdvancedSelectService from '../services/AdvancedSelectService.js';
+import { logger } from '../lib/logger';
 
 /**
  * 🚀 API ENDPOINTS POUR ADVANCED_SELECT PROFESSIONNEL
@@ -41,7 +42,7 @@ router.get('/:fieldId', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Erreur GET advanced-select:', error);
+        logger.error('Erreur GET advanced-select:', error);
         res.status(500).json({
             success: false,
             error: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -98,7 +99,7 @@ router.post('/:fieldId/calculate', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Erreur POST calculate:', error);
+        logger.error('Erreur POST calculate:', error);
         res.status(500).json({
             success: false,
             error: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -134,7 +135,7 @@ router.put('/:fieldId/update', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Erreur PUT update:', error);
+        logger.error('Erreur PUT update:', error);
         res.status(500).json({
             success: false,
             error: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -168,7 +169,7 @@ router.post('/validate', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Erreur POST validate:', error);
+        logger.error('Erreur POST validate:', error);
         res.status(500).json({
             success: false,
             error: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -300,7 +301,7 @@ router.post('/templates', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Erreur POST templates:', error);
+        logger.error('Erreur POST templates:', error);
         res.status(500).json({
             success: false,
             error: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -352,7 +353,7 @@ router.get('/:fieldId/analytics', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Erreur GET analytics:', error);
+        logger.error('Erreur GET analytics:', error);
         res.status(500).json({
             success: false,
             error: error instanceof Error ? error.message : 'Erreur inconnue'

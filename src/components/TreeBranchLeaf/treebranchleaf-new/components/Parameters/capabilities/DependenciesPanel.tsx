@@ -30,6 +30,7 @@ import {
   EyeInvisibleOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../../../../../hooks/useAuthenticatedApi';
+import { logger } from '../../../../../../lib/logger';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -110,7 +111,7 @@ const DependenciesPanel: React.FC<DependenciesPanelProps> = ({
       
       setAvailableNodes(nodes);
     } catch (error) {
-      console.error('Erreur lors du chargement des nœuds:', error);
+      logger.error('Erreur lors du chargement des nœuds:', error);
       message.error('Impossible de charger les champs disponibles');
     } finally {
       setLoading(false);

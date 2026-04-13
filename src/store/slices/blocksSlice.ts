@@ -1,10 +1,11 @@
 ﻿// blocksSlice.ts - Gestion des blocs (formulaires)
-console.log(' [DEBUG] blocksSlice.ts chargé - début du fichier');
+logger.debug(' [DEBUG] blocksSlice.ts chargé - début du fichier');
 
 import { StateCreator } from 'zustand';
 import { CRMState, Block } from './types';
 import { fetchWithAuth } from './api';
 import { dlog } from '../../utils/debug';
+import { logger } from '../../lib/logger';
 
 // Types pour ce slice spécifique
 export interface BlocksSlice {
@@ -57,7 +58,7 @@ export const createBlocksSlice: StateCreator<
         set({ blocks: [] });
       }
     } catch (error) {
-      console.error('[blocksSlice] Erreur lors de fetchBlocks:', error);
+      logger.error('[blocksSlice] Erreur lors de fetchBlocks:', error);
       set({ blocks: [] });
     }
   },
@@ -75,7 +76,7 @@ export const createBlocksSlice: StateCreator<
       set((state) => ({ blocks: [...state.blocks, block] }));
       return block;
     } catch (error) {
-      console.error('Erreur lors de la création du bloc:', error);
+      logger.error('Erreur lors de la création du bloc:', error);
       throw error;
     }
   },
@@ -89,7 +90,7 @@ export const createBlocksSlice: StateCreator<
       if (!res.ok) throw new Error('Erreur lors de la suppression du formulaire');
       set((state) => ({ blocks: state.blocks.filter(b => String(b.id) !== String(blockId)) }));
     } catch (error) {
-      console.error('Erreur lors de la suppression du bloc:', error);
+      logger.error('Erreur lors de la suppression du bloc:', error);
       throw error;
     }
   },
@@ -99,4 +100,4 @@ export const createBlocksSlice: StateCreator<
 });
 
 export default createBlocksSlice;
-console.log(' [DEBUG] createBlocksSlice exporté:', typeof createBlocksSlice);
+logger.debug(' [DEBUG] createBlocksSlice exporté:', typeof createBlocksSlice);

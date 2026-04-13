@@ -42,6 +42,7 @@ import ThemeManager from '../../components/websites/ThemeManager';
 import CloudRunDomainSelector from '../../components/websites/CloudRunDomainSelector';
 import { useTranslation } from 'react-i18next';
 import { FB, SF } from '../../components/zhiive/ZhiiveTheme';
+import { logger } from '../../lib/logger';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -98,15 +99,15 @@ export const WebsitesAdminPage: React.FC = () => {
   const fetchWebsites = async () => {
     setLoading(true);
     try {
-      console.log('🌐 [WebsitesAdmin] Fetching websites...');
+      logger.debug('🌐 [WebsitesAdmin] Fetching websites...');
       // Super Admin voit tous les sites
       const response = await api.get('/api/websites?all=true');
-      console.log('🌐 [WebsitesAdmin] Response:', response);
-      console.log('🌐 [WebsitesAdmin] Response type:', typeof response, Array.isArray(response));
+      logger.debug('🌐 [WebsitesAdmin] Response:', response);
+      logger.debug('🌐 [WebsitesAdmin] Response type:', typeof response, Array.isArray(response));
       // Le hook retourne directement les données, pas un objet {data: ...}
       setWebsites(Array.isArray(response) ? response : []);
     } catch (error) {
-      console.error('❌ [WebsitesAdmin] Erreur chargement sites:', error);
+      logger.error('❌ [WebsitesAdmin] Erreur chargement sites:', error);
       message.error('Erreur lors du chargement des sites');
     } finally {
       setLoading(false);
@@ -126,7 +127,7 @@ export const WebsitesAdminPage: React.FC = () => {
   };
 
   const handleDelete = (website: Website) => {
-    console.log('🗑️ handleDelete appelé pour:', website.siteName, website.id);
+    logger.debug('🗑️ handleDelete appelé pour:', website.siteName, website.id);
     setWebsiteToDelete(website);
     setDeleteModalVisible(true);
   };
@@ -135,7 +136,7 @@ export const WebsitesAdminPage: React.FC = () => {
     if (!websiteToDelete) return;
     
     try {
-      console.log(`🗑️ Suppression du site ${websiteToDelete.id}...`);
+      logger.debug(`🗑️ Suppression du site ${websiteToDelete.id}...`);
       setLoading(true);
       await api.delete(`/api/websites/${websiteToDelete.id}`);
       message.success(`Site "${websiteToDelete.siteName}" supprimé avec succès`);
@@ -143,7 +144,7 @@ export const WebsitesAdminPage: React.FC = () => {
       setWebsiteToDelete(null);
       fetchWebsites();
     } catch (error) {
-      console.error('❌ Erreur suppression:', error);
+      logger.error('❌ Erreur suppression:', error);
       message.error('Erreur lors de la suppression du site');
     } finally {
       setLoading(false);
@@ -221,7 +222,7 @@ export const WebsitesAdminPage: React.FC = () => {
               <AIContentAssistant
                 type="page"
                 onContentGenerated={(content) => {
-                  console.log('Contenu page généré:', content);
+                  logger.debug('Contenu page généré:', content);
                   message.success('Utilisez ce contenu pour créer un nouveau site');
                 }}
                 buttonText="🤖 Générer un nouveau site"

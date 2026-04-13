@@ -5,6 +5,7 @@
 
 import express from 'express';
 import { db } from '../lib/database';
+import { logger } from '../lib/logger';
 
 const router = express.Router();
 
@@ -24,7 +25,7 @@ router.get('/website-sections/:websiteId', async (req, res) => {
 
     res.json(sections);
   } catch (error) {
-    console.error('❌ Erreur récupération sections:', error);
+    logger.error('❌ Erreur récupération sections:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -58,7 +59,7 @@ router.post('/website-sections', async (req, res) => {
 
     res.json(section);
   } catch (error) {
-    console.error('❌ Erreur création section:', error);
+    logger.error('❌ Erreur création section:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -125,7 +126,7 @@ router.put('/website-sections/:id', async (req, res) => {
 
     res.json(section);
   } catch (error) {
-    console.error('❌ Erreur modification section:', error);
+    logger.error('❌ Erreur modification section:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -191,7 +192,7 @@ router.patch('/website-sections/:id', async (req, res) => {
 
     res.json(section);
   } catch (error) {
-    console.error('❌ Erreur modification section:', error);
+    logger.error('❌ Erreur modification section:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -216,7 +217,7 @@ router.delete('/website-sections/:id', async (req, res) => {
 
     res.json({ success: true });
   } catch (error) {
-    console.error('❌ Erreur suppression section:', error);
+    logger.error('❌ Erreur suppression section:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -237,7 +238,7 @@ router.post('/website-sections/reorder', async (req, res) => {
 
     res.json({ success: true });
   } catch (error) {
-    console.error('❌ Erreur réorganisation sections:', error);
+    logger.error('❌ Erreur réorganisation sections:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -276,7 +277,7 @@ router.post('/website-sections/duplicate/:id', async (req, res) => {
 
     res.json(duplicate);
   } catch (error) {
-    console.error('❌ Erreur duplication section:', error);
+    logger.error('❌ Erreur duplication section:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

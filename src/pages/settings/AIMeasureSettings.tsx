@@ -9,6 +9,7 @@ import {
   CheckCircleOutlined,
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { logger } from '../../lib/logger';
 
 const useScreenSize = () => {
   const [w, setW] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
@@ -32,7 +33,7 @@ const AIMeasureSettings: React.FC = () => {
       try {
         await api.get('/api/settings/ai-measure');
       } catch (error) {
-        console.error('Erreur chargement config IA Mesure:', error);
+        logger.error('Erreur chargement config IA Mesure:', error);
       } finally {
         setLoading(false);
       }

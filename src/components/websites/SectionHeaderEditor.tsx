@@ -28,6 +28,7 @@ import {
   AlignRightOutlined
 } from '@ant-design/icons';
 import { ColorInput } from '../common/ColorInput';
+import { logger } from '../../lib/logger';
 
 const { TextArea } = Input;
 
@@ -123,7 +124,7 @@ export const SectionHeaderEditor: React.FC<SectionHeaderEditorProps> = ({
 
   const handleAIGenerate = (field: 'title' | 'subtitle' | 'description') => {
     // TODO: Intégrer l'IA pour générer du contenu
-    console.log(`Générer ${field} avec IA pour section ${sectionType}`);
+    logger.debug(`Générer ${field} avec IA pour section ${sectionType}`);
   };
 
   return (

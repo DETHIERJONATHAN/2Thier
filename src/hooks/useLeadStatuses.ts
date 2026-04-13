@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
 import { useAuth } from '../auth/useAuth';
 import { LeadStatus } from '../types/leads';
+import { logger } from '../lib/logger';
 
 // Interface pour la compatibilité avec l'ancien format
 export interface LeadStatusWithLegacy extends LeadStatus {
@@ -41,7 +42,7 @@ export function useLeadStatuses() {
 
       setLeadStatuses(formattedStatuses);
     } catch (err) {
-      console.error('Erreur lors de la récupération des statuts de leads:', err);
+      logger.error('Erreur lors de la récupération des statuts de leads:', err);
       setError(err instanceof Error ? err.message : 'Erreur inconnue');
       // Fallback vers des statuts par défaut en cas d'erreur
       setLeadStatuses([

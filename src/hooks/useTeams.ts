@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
 import type { Team, Technician, ChantierAssignment, TechnicianType } from '../types/chantier';
+import { logger } from '../lib/logger';
 
 /**
  * Hook complet pour techniciens, équipes, assignations et indisponibilités
@@ -19,7 +20,7 @@ export function useTeams() {
       const response = await api.get('/api/teams') as { success: boolean; data: Team[] };
       setTeams(response.data || []);
     } catch (err) {
-      console.error('[useTeams] Erreur chargement équipes:', err);
+      logger.error('[useTeams] Erreur chargement équipes:', err);
     }
   }, [api]);
 
@@ -29,7 +30,7 @@ export function useTeams() {
       const response = await api.get('/api/teams/technicians?scopeAction=view') as { success: boolean; data: Technician[] };
       setTechnicians(response.data || []);
     } catch (err) {
-      console.error('[useTeams] Erreur chargement techniciens:', err);
+      logger.error('[useTeams] Erreur chargement techniciens:', err);
     }
   }, [api]);
 

@@ -21,6 +21,7 @@ import {
   EditOutlined,
   CopyOutlined
 } from '@ant-design/icons';
+import { logger } from '../../lib/logger';
 
 interface Document {
   id: string;
@@ -68,7 +69,7 @@ const DocsWidget: React.FC<DocsWidgetProps> = ({
       const response = await api.api.get(`/docs/list?leadId=${leadId}`);
       setDocuments(response.documents || []);
     } catch (error) {
-      console.error('Erreur lors du chargement des documents:', error);
+      logger.error('Erreur lors du chargement des documents:', error);
       // Documents simulés pour la démo
       setDocuments([
         {
@@ -155,7 +156,7 @@ const DocsWidget: React.FC<DocsWidgetProps> = ({
       }
       
     } catch (error) {
-      console.error('Erreur lors de la création du document:', error);
+      logger.error('Erreur lors de la création du document:', error);
       message.error('Erreur lors de la création du document');
     } finally {
       setCreating(false);
@@ -178,7 +179,7 @@ const DocsWidget: React.FC<DocsWidgetProps> = ({
       await loadDocuments(); // Recharger pour mettre à jour le statut
       
     } catch (error) {
-      console.error('Erreur lors du partage:', error);
+      logger.error('Erreur lors du partage:', error);
       message.error('Erreur lors du partage du document');
     }
   };
@@ -199,7 +200,7 @@ const DocsWidget: React.FC<DocsWidgetProps> = ({
       await loadDocuments();
       
     } catch (error) {
-      console.error('Erreur lors de la duplication:', error);
+      logger.error('Erreur lors de la duplication:', error);
       message.error('Erreur lors de la duplication du document');
     }
   };

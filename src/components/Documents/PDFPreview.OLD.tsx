@@ -1,5 +1,6 @@
 import { Card, Empty } from 'antd';
 import { SF } from '../zhiive/ZhiiveTheme';
+import { logger } from '../../lib/logger';
 
 interface PDFPreviewProps {
   sections: unknown[];
@@ -7,7 +8,7 @@ interface PDFPreviewProps {
 }
 
 const PDFPreview = ({ sections, theme }: PDFPreviewProps) => {
-  console.log('[PDFPreview] Rendering with sections:', sections);
+  logger.debug('[PDFPreview] Rendering with sections:', sections);
   
   if (sections.length === 0) {
     return (
@@ -36,7 +37,7 @@ const PDFPreview = ({ sections, theme }: PDFPreviewProps) => {
 
   const renderSection = (section: unknown, index: number) => {
     const config = section.config || {};
-    console.log(`[PDFPreview] Rendering section ${index} (${section.type}):`, config);
+    logger.debug(`[PDFPreview] Rendering section ${index} (${section.type}):`, config);
 
     switch (section.type) {
       case 'COVER_PAGE':

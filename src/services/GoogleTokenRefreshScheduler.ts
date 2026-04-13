@@ -19,6 +19,7 @@
 
 import { db } from '../lib/database.js';
 import { decrypt } from '../utils/crypto.js';
+import { logger } from '../lib/logger';
 
 export class GoogleTokenRefreshScheduler {
   private intervalId: NodeJS.Timeout | null = null;
@@ -118,7 +119,7 @@ export class GoogleTokenRefreshScheduler {
 
       this.refreshCount++;
     } catch (error) {
-      console.error('❌ [GoogleTokenScheduler] Erreur lors du refresh général:', error);
+      logger.error('❌ [GoogleTokenScheduler] Erreur lors du refresh général:', error);
     }
   }
 
@@ -136,7 +137,7 @@ export class GoogleTokenRefreshScheduler {
       
       if (!token.refreshToken) {
         const errorMsg = 'Aucun refresh token disponible';
-        console.error(`❌ [GoogleTokenScheduler] ${errorMsg} pour org ${token.organizationId}`);
+        logger.error(`❌ [GoogleTokenScheduler] ${errorMsg} pour org ${token.organizationId}`);
         
         await this.logRefreshHistory({
           organizationId: token.organizationId,
@@ -167,7 +168,7 @@ export class GoogleTokenRefreshScheduler {
 
       if (!clientId || !clientSecret) {
         const errorMsg = 'Configuration OAuth (clientId/clientSecret) manquante ou invalide';
-        console.error(`❌ [GoogleTokenScheduler] ${errorMsg} pour org ${token.organizationId}`);
+        logger.error(`❌ [GoogleTokenScheduler] ${errorMsg} pour org ${token.organizationId}`);
         await this.logRefreshHistory({
           organizationId: token.organizationId,
           success: false,
@@ -216,7 +217,7 @@ export class GoogleTokenRefreshScheduler {
               data: { refreshToken: null, updatedAt: new Date() }
             });
           } catch (cleanupError) {
-            console.warn('[GoogleTokenScheduler] ⚠️ Impossible de nettoyer refreshToken après invalid_grant:', cleanupError);
+            logger.warn('[GoogleTokenScheduler] ⚠️ Impossible de nettoyer refreshToken après invalid_grant:', cleanupError);
           }
         } else if (googleError === 'invalid_client') {
           errorMsg = 'Client OAuth invalide (clientId/clientSecret incorrects)';
@@ -230,7 +231,7 @@ export class GoogleTokenRefreshScheduler {
           rawBody || null
         ].filter(Boolean).join(' | ');
 
-        console.error(`❌ [GoogleTokenScheduler] ${errorMsg} pour org ${token.organizationId}:`, errorDetails);
+        logger.error(`❌ [GoogleTokenScheduler] ${errorMsg} pour org ${token.organizationId}:`, errorDetails);
         
         await this.logRefreshHistory({
           organizationId: token.organizationId,
@@ -279,7 +280,7 @@ export class GoogleTokenRefreshScheduler {
       const errorMsg = 'Erreur lors du refresh du token';
       const errorDetails = error instanceof Error ? error.message : 'Erreur inconnue';
       
-      console.error(`❌ [GoogleTokenScheduler] ${errorMsg} pour org ${token.organizationId}:`, error);
+      logger.error(`❌ [GoogleTokenScheduler] ${errorMsg} pour org ${token.organizationId}:`, error);
       
       await this.logRefreshHistory({
         organizationId: token.organizationId,
@@ -322,7 +323,7 @@ export class GoogleTokenRefreshScheduler {
         }
       });
     } catch (error) {
-      console.error('❌ [GoogleTokenScheduler] Erreur lors de l\'enregistrement de l\'historique:', error);
+      logger.error('❌ [GoogleTokenScheduler] Erreur lors de l\'enregistrement de l\'historique:', error);
     }
   }
 }

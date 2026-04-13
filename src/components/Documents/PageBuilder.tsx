@@ -37,6 +37,7 @@ import { getModuleById } from './ModuleRegistry';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useUserPreference } from '../../hooks/useUserPreference';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 interface PageBuilderProps {
   templateId: string;
@@ -157,15 +158,15 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
     const loadSections = async () => {
       try {
         setLoading(true);
-        console.log('📥 [PageBuilder] Chargement des sections pour template:', templateId);
+        logger.debug('📥 [PageBuilder] Chargement des sections pour template:', templateId);
         
         // Charger les sections existantes
         const sections = await api.get(`/api/documents/templates/${templateId}/sections`) as unknown[];
-        console.log('📥 [PageBuilder] Sections chargées:', sections?.length || 0);
+        logger.debug('📥 [PageBuilder] Sections chargées:', sections?.length || 0);
         
         // Charger le template pour le globalTheme
         const template = await api.get(`/api/documents/templates/${templateId}`) as unknown;
-        console.log('📥 [PageBuilder] Template chargé, globalTheme:', !!template?.globalTheme, 'DocumentTheme:', !!template?.DocumentTheme);
+        logger.debug('📥 [PageBuilder] Template chargé, globalTheme:', !!template?.globalTheme, 'DocumentTheme:', !!template?.DocumentTheme);
         
         // Priorité : globalTheme > DocumentTheme (DB) > défaut
         const loadedTheme = template?.globalTheme || (template?.DocumentTheme ? {
@@ -195,7 +196,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
               backgroundCustomSvg: section.config?.backgroundCustomSvg,
             }));
           
-          console.log('📥 [PageBuilder] Pages construites:', pages.length);
+          logger.debug('📥 [PageBuilder] Pages construites:', pages.length);
           
           if (pages.length > 0) {
             setConfig(prev => ({
@@ -211,7 +212,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
           }
         }
       } catch (error) {
-        console.error('❌ [PageBuilder] Erreur chargement:', error);
+        logger.error('❌ [PageBuilder] Erreur chargement:', error);
         message.error('Erreur lors du chargement du document');
       } finally {
         setLoading(false);
@@ -268,13 +269,13 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
   }, [activePage?.backgroundId]);
 
   useEffect(() => {
-    console.log('🔄 [PageBuilder] useEffect themeColors triggered:', themeColors);
+    logger.debug('🔄 [PageBuilder] useEffect themeColors triggered:', themeColors);
     
     setConfig(prev => {
       let changed = false;
       const updatedPages = prev.pages.map(p => {
         if (!p.backgroundId && !p.backgroundCustomSvg) return p;
-        console.log('🔄 [PageBuilder] Regenerating background for page:', p.id, 'backgroundId:', p.backgroundId);
+        logger.debug('🔄 [PageBuilder] Regenerating background for page:', p.id, 'backgroundId:', p.backgroundId);
         
         let rawSvg = p.backgroundCustomSvg;
         if (!rawSvg && p.backgroundId?.startsWith('bg_custom_')) {
@@ -485,37 +486,37 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
 
   // Fonction pour appliquer un template pré-construit à la page active
   const handleApplyTemplate = useCallback((selectedTemplate: DocumentTemplate | null) => {
-    console.log('🎯 [PageBuilder] handleApplyTemplate appelé avec:', selectedTemplate?.name);
-    console.log('📄 [PageBuilder] activePage:', activePage?.id, 'modules count:', activePage?.modules.length);
+    logger.debug('🎯 [PageBuilder] handleApplyTemplate appelé avec:', selectedTemplate?.name);
+    logger.debug('📄 [PageBuilder] activePage:', activePage?.id, 'modules count:', activePage?.modules.length);
     setTemplateSelectorOpen(false);
     
     if (!selectedTemplate || !activePage) {
-      console.warn('⚠️ [PageBuilder] Template ou page active manquant');
+      logger.warn('⚠️ [PageBuilder] Template ou page active manquant');
       return;
     }
     
     // Si la page a des modules, demander confirmation
     if (activePage.modules.length > 0) {
-      console.log('⚠️ [PageBuilder] Page has', activePage.modules.length, 'existing modules - asking for confirmation');
+      logger.debug('⚠️ [PageBuilder] Page has', activePage.modules.length, 'existing modules - asking for confirmation');
       setPendingTemplateToApply(selectedTemplate);
       setTemplateConfirmModalOpen(true);
     } else {
-      console.log('✅ [PageBuilder] Page is empty, applying template directly');
+      logger.debug('✅ [PageBuilder] Page is empty, applying template directly');
       applyTemplateToPage(selectedTemplate);
     }
   }, [activePage]);
 
   // Appliquer effectivement le template à la page
   const applyTemplateToPage = useCallback((template: DocumentTemplate) => {
-    console.log('📋 [PageBuilder] applyTemplateToPage - Applying template:', template.name);
+    logger.debug('📋 [PageBuilder] applyTemplateToPage - Applying template:', template.name);
     if (!activePage) {
-      console.warn('⚠️ [PageBuilder] No active page');
+      logger.warn('⚠️ [PageBuilder] No active page');
       return;
     }
     
     // Convertir les modules du template en instances
     const moduleInstances = instantiateTemplate(template);
-    console.log('📦 [PageBuilder] Instantiated modules:', moduleInstances.length, 'modules');
+    logger.debug('📦 [PageBuilder] Instantiated modules:', moduleInstances.length, 'modules');
     
     // Assigner des positions automatiques à chaque module
     const modulesWithPositions: ModuleInstance[] = moduleInstances.map((module, index) => {
@@ -530,7 +531,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
           height: 100, // Hauteur par défaut
         },
       };
-      console.log(`📍 [PageBuilder] Module ${index}:`, {
+      logger.debug(`📍 [PageBuilder] Module ${index}:`, {
         id: positioned.id,
         moduleId: positioned.moduleId,
         name: positioned.moduleId,
@@ -539,16 +540,16 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
       return positioned;
     });
     
-    console.log('✨ [PageBuilder] Total modules to add:', modulesWithPositions.length);
-    console.log('📄 [PageBuilder] Active page ID:', activePage.id);
+    logger.debug('✨ [PageBuilder] Total modules to add:', modulesWithPositions.length);
+    logger.debug('📄 [PageBuilder] Active page ID:', activePage.id);
     
     // Mettre à jour la page avec les nouveaux modules
     setConfig(prev => {
-      console.log('🔄 [PageBuilder] setConfig called - Current pages:', prev.pages.length);
+      logger.debug('🔄 [PageBuilder] setConfig called - Current pages:', prev.pages.length);
       const newConfig = {
         ...prev,
         pages: prev.pages.map(p => {
-          console.log(`  Checking page ${p.id} === ${activePage.id} ?`, p.id === activePage.id);
+          logger.debug(`  Checking page ${p.id} === ${activePage.id} ?`, p.id === activePage.id);
           return p.id === activePage.id 
             ? { 
                 ...p, 
@@ -558,7 +559,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
             : p;
         }),
       };
-      console.log('✅ [PageBuilder] setConfig updated, new page modules:', 
+      logger.debug('✅ [PageBuilder] setConfig updated, new page modules:', 
         newConfig.pages.find(p => p.id === activePage.id)?.modules.length || 0);
       return newConfig;
     });
@@ -659,25 +660,25 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
       const currentPage = prev.pages.find(p => p.id === activePage.id);
       const currentModule = currentPage?.modules.find(m => m.id === instanceId);
       
-      console.log('🔄 [updateModule] instanceId:', instanceId);
-      console.log('🔄 [updateModule] currentPage found:', !!currentPage);
-      console.log('🔄 [updateModule] currentModule?.moduleId:', currentModule?.moduleId);
-      console.log('🔄 [updateModule] updates keys:', Object.keys(updates));
-      console.log('🔄 [updateModule] has updates.config:', !!updates.config);
+      logger.debug('🔄 [updateModule] instanceId:', instanceId);
+      logger.debug('🔄 [updateModule] currentPage found:', !!currentPage);
+      logger.debug('🔄 [updateModule] currentModule?.moduleId:', currentModule?.moduleId);
+      logger.debug('🔄 [updateModule] updates keys:', Object.keys(updates));
+      logger.debug('🔄 [updateModule] has updates.config:', !!updates.config);
       
       let pageBackgroundUpdates: { backgroundColor?: string; backgroundImage?: string } = {};
       
       // DEBUG: Vérifier la comparaison
       const moduleIdValue = currentModule?.moduleId;
       const isBackground = moduleIdValue === 'BACKGROUND';
-      console.log('🔍 [DEBUG] moduleIdValue:', moduleIdValue, 'type:', typeof moduleIdValue);
-      console.log('🔍 [DEBUG] isBackground:', isBackground);
-      console.log('🔍 [DEBUG] moduleIdValue === "BACKGROUND":', moduleIdValue === 'BACKGROUND');
-      console.log('🔍 [DEBUG] String comparison:', String(moduleIdValue) === 'BACKGROUND');
+      logger.debug('🔍 [DEBUG] moduleIdValue:', moduleIdValue, 'type:', typeof moduleIdValue);
+      logger.debug('🔍 [DEBUG] isBackground:', isBackground);
+      logger.debug('🔍 [DEBUG] moduleIdValue === "BACKGROUND":', moduleIdValue === 'BACKGROUND');
+      logger.debug('🔍 [DEBUG] String comparison:', String(moduleIdValue) === 'BACKGROUND');
       
       // Si c'est un module BACKGROUND, synchroniser avec le fond de page
       if (isBackground) {
-        console.log('*** BACKGROUND SYNC *** Module détecté!');
+        logger.debug('*** BACKGROUND SYNC *** Module détecté!');
         
         const config = { ...currentModule.config, ...updates.config };
         // IMPORTANT: Si pas de themeId explicite, déduire du contenu
@@ -686,13 +687,13 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
         // Si themeId n'est pas défini mais qu'on a une image, c'est un thème image
         if (!themeId && config.image && config.image.startsWith('data:')) {
           themeId = 'image';
-          console.log('*** BACKGROUND SYNC *** ThemeId déduit: image (car base64 présent)');
+          logger.debug('*** BACKGROUND SYNC *** ThemeId déduit: image (car base64 présent)');
         }
         
-        console.log('*** BACKGROUND SYNC *** ThemeId:', themeId);
-        console.log('*** BACKGROUND SYNC *** Config keys:', Object.keys(config));
-        console.log('*** BACKGROUND SYNC *** Has image:', !!config.image);
-        console.log('*** BACKGROUND SYNC *** Image starts with:', config.image ? config.image.substring(0, 50) : 'NONE');
+        logger.debug('*** BACKGROUND SYNC *** ThemeId:', themeId);
+        logger.debug('*** BACKGROUND SYNC *** Config keys:', Object.keys(config));
+        logger.debug('*** BACKGROUND SYNC *** Has image:', !!config.image);
+        logger.debug('*** BACKGROUND SYNC *** Image starts with:', config.image ? config.image.substring(0, 50) : 'NONE');
         
         // Valider que l'image n'est pas une URL locale file:///
         const imageUrl = config.image;
@@ -704,13 +705,13 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
           imageUrl.startsWith('radial-gradient')
         );
         
-        console.log('*** BACKGROUND SYNC *** isValidImage:', isValidImage);
-        console.log('*** BACKGROUND SYNC *** themeId === "image":', themeId === 'image');
+        logger.debug('*** BACKGROUND SYNC *** isValidImage:', isValidImage);
+        logger.debug('*** BACKGROUND SYNC *** themeId === "image":', themeId === 'image');
         
         if (themeId === 'image' && isValidImage) {
-          console.log('*** BACKGROUND SYNC *** ✅ APPLYING background image to page!');
+          logger.debug('*** BACKGROUND SYNC *** ✅ APPLYING background image to page!');
           pageBackgroundUpdates.backgroundImage = config.image;
-          console.log('*** BACKGROUND SYNC *** pageBackgroundUpdates LENGTH:', pageBackgroundUpdates.backgroundImage?.length);
+          logger.debug('*** BACKGROUND SYNC *** pageBackgroundUpdates LENGTH:', pageBackgroundUpdates.backgroundImage?.length);
         } else if (themeId === 'solid' || themeId === 'color') {
           pageBackgroundUpdates.backgroundColor = config.color;
           pageBackgroundUpdates.backgroundImage = undefined;
@@ -721,10 +722,10 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
           const gradientAngle = config.gradientAngle || 45;
           pageBackgroundUpdates.backgroundImage = `linear-gradient(${gradientAngle}deg, ${gradientStart}, ${gradientEnd})`;
         } else {
-          console.log('*** BACKGROUND SYNC *** ❌ Conditions not met - themeId:', themeId, 'isValidImage:', isValidImage);
+          logger.debug('*** BACKGROUND SYNC *** ❌ Conditions not met - themeId:', themeId, 'isValidImage:', isValidImage);
         }
         
-        console.log('*** BACKGROUND SYNC *** Final pageBackgroundUpdates keys:', Object.keys(pageBackgroundUpdates));
+        logger.debug('*** BACKGROUND SYNC *** Final pageBackgroundUpdates keys:', Object.keys(pageBackgroundUpdates));
       }
 
       return {
@@ -791,15 +792,15 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
   const handleSave = useCallback(async () => {
     try {
       setSaving(true);
-      console.log('💾 [handleSave] Début sauvegarde, pages:', config.pages.length);
+      logger.debug('💾 [handleSave] Début sauvegarde, pages:', config.pages.length);
 
       // Récupérer toutes les sections existantes
       const existingSections = await api.get(`/api/documents/templates/${templateId}/sections`) as unknown[];
-      console.log('💾 [handleSave] Sections existantes:', existingSections?.length || 0);
+      logger.debug('💾 [handleSave] Sections existantes:', existingSections?.length || 0);
 
       // Convertir la config en sections pour le backend existant
       for (const page of config.pages) {
-        console.log('💾 [handleSave] Traitement page:', page.id, page.name, 'modules:', page.modules.length);
+        logger.debug('💾 [handleSave] Traitement page:', page.id, page.name, 'modules:', page.modules.length);
         
         const sectionData = {
           type: 'MODULAR_PAGE',
@@ -818,13 +819,13 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
 
         // Chercher si la section existe déjà par pageId
         const existing = existingSections?.find((s: Record<string, unknown>) => s.config?.pageId === page.id);
-        console.log('💾 [handleSave] Section existante trouvée:', !!existing, existing?.id);
+        logger.debug('💾 [handleSave] Section existante trouvée:', !!existing, existing?.id);
 
         if (existing) {
-          console.log('💾 [handleSave] PUT section:', existing.id);
+          logger.debug('💾 [handleSave] PUT section:', existing.id);
           await api.put(`/api/documents/templates/${templateId}/sections/${existing.id}`, sectionData);
         } else {
-          console.log('💾 [handleSave] POST nouvelle section');
+          logger.debug('💾 [handleSave] POST nouvelle section');
           await api.post(`/api/documents/templates/${templateId}/sections`, sectionData);
         }
       }
@@ -833,13 +834,13 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
       const currentPageIds = config.pages.map(p => p.id);
       for (const section of existingSections || []) {
         if (section.type === 'MODULAR_PAGE' && section.config?.pageId && !currentPageIds.includes(section.config.pageId)) {
-          console.log('💾 [handleSave] DELETE section orpheline:', section.id);
+          logger.debug('💾 [handleSave] DELETE section orpheline:', section.id);
           await api.delete(`/api/documents/templates/${templateId}/sections/${section.id}`);
         }
       }
 
       // Sauvegarder le thème global
-      console.log('💾 [handleSave] PUT globalTheme');
+      logger.debug('💾 [handleSave] PUT globalTheme');
       await api.put(`/api/documents/templates/${templateId}`, {
         globalTheme: config.globalTheme,
       });
@@ -847,7 +848,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
       message.success('Document sauvegardé !');
       onSave?.();
     } catch (error) {
-      console.error('❌ [handleSave] Erreur sauvegarde:', error);
+      logger.error('❌ [handleSave] Erreur sauvegarde:', error);
       message.error('Erreur lors de la sauvegarde');
     } finally {
       setSaving(false);
@@ -875,7 +876,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
     // Debounce : sauvegarder 1.5s après le dernier changement
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(() => {
-      console.log('💾 [AUTO-SAVE] ★ Sauvegarde automatique déclenchée ★');
+      logger.debug('💾 [AUTO-SAVE] ★ Sauvegarde automatique déclenchée ★');
       handleSave();
     }, 1500);
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
@@ -1141,7 +1142,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
                   setMobileActiveTab('preview');
                 }}
                 onApplyTemplate={() => {
-                  console.log('📋 [PageBuilder] Opening TemplateSelector via mobile ModulePalette');
+                  logger.debug('📋 [PageBuilder] Opening TemplateSelector via mobile ModulePalette');
                   setTemplateSelectorOpen(true);
                 }}
               />
@@ -1178,7 +1179,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
               onModuleDragEnd={handleModuleDragEnd}
               onModuleClick={addModule}
               onApplyTemplate={() => {
-                console.log('📋 [PageBuilder] Opening TemplateSelector via desktop ModulePalette');
+                logger.debug('📋 [PageBuilder] Opening TemplateSelector via desktop ModulePalette');
                 setTemplateSelectorOpen(true);
               }}
             />
@@ -1357,7 +1358,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
         open={themeSelectorOpen}
         currentThemeId={selectedThemeId}
         onThemeSelected={(theme) => {
-          console.log('🎨 [PageBuilder] Theme selected:', theme);
+          logger.debug('🎨 [PageBuilder] Theme selected:', theme);
           
           // Appliquer le thème sélectionné au globalTheme du config
           setConfig(prev => {
@@ -1373,7 +1374,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
                 fontSize: theme.fontSize,
               }
             };
-            console.log('✨ [PageBuilder] Theme applied to config:', updated.globalTheme);
+            logger.debug('✨ [PageBuilder] Theme applied to config:', updated.globalTheme);
             return updated;
           });
           
@@ -1390,13 +1391,13 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
         open={backgroundSelectorOpen}
         onClose={() => setBackgroundSelectorOpen(false)}
         onSelect={(backgroundId, backgroundSvg, rawSvg) => {
-          console.log('🖼️ [PageBuilder] Background selected:', backgroundId);
-          console.log('🖼️ [PageBuilder] SVG length:', backgroundSvg?.length || 0);
+          logger.debug('🖼️ [PageBuilder] Background selected:', backgroundId);
+          logger.debug('🖼️ [PageBuilder] SVG length:', backgroundSvg?.length || 0);
           
           // Appliquer le background à la page active, pas au globalTheme
           if (activePage) {
             setConfig(prev => {
-              console.log('🖼️ [PageBuilder] Applying background to active page:', activePage.id);
+              logger.debug('🖼️ [PageBuilder] Applying background to active page:', activePage.id);
               return {
                 ...prev,
                 pages: prev.pages.map(p => 
@@ -1479,7 +1480,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
 
                 message.success({ content: '✅ PDF téléchargé !', key: 'pdf-gen' });
               } catch (error: unknown) {
-                console.error('❌ Erreur génération PDF:', error);
+                logger.error('❌ Erreur génération PDF:', error);
                 message.error({ content: `Erreur: ${error.message}`, key: 'pdf-gen' });
               }
             }}
@@ -1513,11 +1514,11 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
       </Modal>
 
       {/* Template Selector Modal */}
-      {templateSelectorOpen && console.log('🎨 [PageBuilder] TemplateSelector modal is now VISIBLE')}
+      {templateSelectorOpen && logger.debug('🎨 [PageBuilder] TemplateSelector modal is now VISIBLE')}
       <TemplateSelector
         visible={templateSelectorOpen}
         onClose={() => {
-          console.log('❌ [PageBuilder] TemplateSelector closed');
+          logger.debug('❌ [PageBuilder] TemplateSelector closed');
           setTemplateSelectorOpen(false);
         }}
         onSelectTemplate={handleApplyTemplate}
@@ -1528,7 +1529,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
         title="Remplacer le contenu existant ?"
         open={templateConfirmModalOpen}
         onOk={() => {
-          console.log('✅ [PageBuilder] User confirmed replacement - proceeding');
+          logger.debug('✅ [PageBuilder] User confirmed replacement - proceeding');
           if (pendingTemplateToApply) {
             applyTemplateToPage(pendingTemplateToApply);
             setPendingTemplateToApply(null);
@@ -1536,7 +1537,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
           setTemplateConfirmModalOpen(false);
         }}
         onCancel={() => {
-          console.log('❌ [PageBuilder] User cancelled template replacement');
+          logger.debug('❌ [PageBuilder] User cancelled template replacement');
           setPendingTemplateToApply(null);
           setTemplateConfirmModalOpen(false);
         }}

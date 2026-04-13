@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useAuthContext } from '../auth/AuthProvider';
+import { logger } from '../lib/logger';
 
 /**
  * Hook pour assurer l'authentification automatique en mode développement
@@ -13,12 +14,12 @@ export const useAutoAuth = () => {
     if (!user) {
       const autoLogin = async () => {
         try {
-          console.log('[useAutoAuth] Tentative de connexion automatique...');
+          logger.debug('[useAutoAuth] Tentative de connexion automatique...');
           // Utiliser des identifiants par défaut pour le développement
           await login('admin@example.com', 'admin123');
-          console.log('[useAutoAuth] Connexion automatique réussie');
+          logger.debug('[useAutoAuth] Connexion automatique réussie');
         } catch (error) {
-          console.error('Échec de la connexion automatique:', error);
+          logger.error('Échec de la connexion automatique:', error);
           // Ne pas afficher d'erreur car l'utilisateur peut simplement ne pas être connecté
         }
       };

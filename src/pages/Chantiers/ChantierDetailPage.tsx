@@ -40,6 +40,7 @@ import ChantierEventsTab from './ChantierEventsTab';
 import ChantierHistoryTab from './ChantierHistoryTab';
 import ChantierPointageTab from './ChantierPointageTab';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { TextArea } = Input;
 const { Text, Title } = Typography;
@@ -116,7 +117,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
       const response = await api.get(`/api/chantiers/${id}`) as { success: boolean; data: Chantier };
       setChantier(response.data);
     } catch (err) {
-      console.error('[ChantierDetail] Erreur:', err);
+      logger.error('[ChantierDetail] Erreur:', err);
       message.error('Erreur lors du chargement du chantier');
     } finally {
       setLoading(false);
@@ -212,7 +213,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
       setEditing(false);
       fetchChantier();
     } catch (err) {
-      console.error('[ChantierDetail] Erreur sauvegarde:', err);
+      logger.error('[ChantierDetail] Erreur sauvegarde:', err);
       message.error('Erreur lors de la sauvegarde');
     } finally {
       setSaving(false);

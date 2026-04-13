@@ -54,6 +54,7 @@ const HTML5toTouch = {
 import type { Lead } from '../../types/leads';
 import { getErrorMessage, getErrorResponseDetails } from '../../utils/errorHandling';
 import { useChantiers } from '../../hooks/useChantiers';
+import { logger } from '../../lib/logger';
 
 
 // Types pour le drag & drop
@@ -201,13 +202,13 @@ const AutoScrollDragTracker: React.FC<{ boardRef: React.RefObject<HTMLDivElement
         const ratio = 1 - (distFromLeft / edgeSize);
         const speed = Math.pow(ratio, 1.6) * maxSpeed;
         boardEl.scrollLeft = Math.max(0, boardEl.scrollLeft - speed);
-        console.log(`⬅️ SCROLL LEFT x=${x.toFixed(0)} speed=${speed.toFixed(1)}`);
+        logger.debug(`⬅️ SCROLL LEFT x=${x.toFixed(0)} speed=${speed.toFixed(1)}`);
       } else if (distFromRight >= 0 && distFromRight < edgeSize) {
         const ratio = 1 - (distFromRight / edgeSize);
         const speed = Math.pow(ratio, 1.6) * maxSpeed;
         const maxScrollLeft = boardEl.scrollWidth - boardEl.clientWidth;
         boardEl.scrollLeft = Math.min(maxScrollLeft, boardEl.scrollLeft + speed);
-        console.log(`➡️ SCROLL RIGHT x=${x.toFixed(0)} speed=${speed.toFixed(1)}`);
+        logger.debug(`➡️ SCROLL RIGHT x=${x.toFixed(0)} speed=${speed.toFixed(1)}`);
       }
 
       rafId = requestAnimationFrame(tick);
@@ -260,12 +261,12 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, onView, onCall, onEmail, onSc
     type: ITEM_TYPE,
     item: () => {
       onDragStart?.();
-      console.log('🎯 [DRAG ITEM] Début du drag pour lead:', lead.id);
+      logger.debug('🎯 [DRAG ITEM] Début du drag pour lead:', lead.id);
       return { id: lead.id, type: ITEM_TYPE, fromColumn: lead.status };
     },
     end: () => {
       onDragEnd?.();
-      console.log('🛑 [DRAG END] Fin du drag pour lead:', lead.id);
+      logger.debug('🛑 [DRAG END] Fin du drag pour lead:', lead.id);
     },
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
@@ -286,7 +287,7 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, onView, onCall, onEmail, onSc
     touchStartTime.current = Date.now();
     touchStartPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     hasMoved.current = false;
-    console.log('👆 [TOUCH START] Position:', touchStartPos.current);
+    logger.debug('👆 [TOUCH START] Position:', touchStartPos.current);
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
@@ -299,12 +300,12 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, onView, onCall, onEmail, onSc
 
   const handleTouchEnd = (e: React.TouchEvent) => {
     const duration = Date.now() - touchStartTime.current;
-    console.log('👆 [TOUCH END] Duration:', duration, 'hasMoved:', hasMoved.current);
+    logger.debug('👆 [TOUCH END] Duration:', duration, 'hasMoved:', hasMoved.current);
     // C'est un TAP si < 300ms et pas de mouvement significatif (augmenté à 300ms pour plus de fiabilité)
     if (duration < 300 && !hasMoved.current) {
       e.preventDefault();
       e.stopPropagation();
-      console.log('✅ [TAP DETECTED] Ouverture du lead');
+      logger.debug('✅ [TAP DETECTED] Ouverture du lead');
       setTimeout(() => onView(), 0);
     }
   };
@@ -312,7 +313,7 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, onView, onCall, onEmail, onSc
   const handleClick = (e: React.MouseEvent) => {
     // Pour desktop - on vérifie qu'on n'est pas en train de dragger
     if (!isDragging) {
-      console.log('🖱️ [CLICK DETECTED] Ouverture du lead');
+      logger.debug('🖱️ [CLICK DETECTED] Ouverture du lead');
       onView();
     }
   };
@@ -775,7 +776,7 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
       setLeads(transformedLeads);
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error, 'Erreur lors du chargement des leads');
-      console.error('[LeadsKanban] ❌ Erreur lors du chargement des leads:', errorMessage, error);
+      logger.error('[LeadsKanban] ❌ Erreur lors du chargement des leads:', errorMessage, error);
       message.error(errorMessage);
     } finally {
       setLoading(false);
@@ -863,7 +864,7 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error, 'Erreur lors du déplacement du lead');
       const { status, data } = getErrorResponseDetails(error);
-      console.error('[LeadsKanban] ❌ Erreur lors du déplacement du lead:', errorMessage, {
+      logger.error('[LeadsKanban] ❌ Erreur lors du déplacement du lead:', errorMessage, {
         status,
         data,
         leadId,
@@ -978,7 +979,7 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
 
   // 🤖 Fonction pour afficher les alertes IA sous forme de notifications
   const showAIAlerts = useCallback(() => {
-    console.log('🤖 showAIAlerts appelée !', metrics);
+    logger.debug('🤖 showAIAlerts appelée !', metrics);
     
     const { critical, urgent, overdue, total, conversionRate, commercialScore } = metrics;
 
@@ -1183,14 +1184,14 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
     isDraggingRef.current = true;
     setIsBoardDragging(true);
     dragLastXRef.current = null;
-    console.log('🎯 [DRAG START] isDraggingRef = true, RAF loop va démarrer');
+    logger.debug('🎯 [DRAG START] isDraggingRef = true, RAF loop va démarrer');
   }, []);
 
   const handleCardDragEnd = useCallback(() => {
     isDraggingRef.current = false;
     setIsBoardDragging(false);
     dragLastXRef.current = null;
-    console.log('🛑 [DRAG END] isDraggingRef = false');
+    logger.debug('🛑 [DRAG END] isDraggingRef = false');
   }, []);
 
 
@@ -1245,7 +1246,7 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
                   size="small" 
                   icon={<PlusOutlined />}
                   onClick={() => {
-                    console.log('🆕 Bouton Nouveau Lead cliqué');
+                    logger.debug('🆕 Bouton Nouveau Lead cliqué');
                     setIsAddLeadModalOpen(true);
                   }}
                 >
@@ -1255,7 +1256,7 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
                   size="small" 
                   icon={<DownloadOutlined />}
                   onClick={() => {
-                    console.log('📥 Bouton Export cliqué, nombre de leads:', leads.length);
+                    logger.debug('📥 Bouton Export cliqué, nombre de leads:', leads.length);
                     
                     try {
                       if (leads.length === 0) {
@@ -1301,9 +1302,9 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
                       XLSX.writeFile(wb, `leads-export-${new Date().toISOString().split('T')[0]}.xlsx`);
                       
                       message.success(`${leads.length} lead(s) exporté(s) en Excel !`);
-                      console.log('✅ Export Excel réussi');
+                      logger.debug('✅ Export Excel réussi');
                     } catch (error) {
-                      console.error('❌ Erreur export:', error);
+                      logger.error('❌ Erreur export:', error);
                       message.error('Erreur lors de l\'export');
                     }
                   }}

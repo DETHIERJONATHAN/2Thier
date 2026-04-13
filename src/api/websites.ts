@@ -7,6 +7,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -49,7 +50,7 @@ router.get('/websites', authenticateToken, async (req: Request, res: Response) =
 
     res.json(websites);
   } catch (error) {
-    console.error('Error fetching websites:', error);
+    logger.error('Error fetching websites:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -82,7 +83,7 @@ router.get('/websites/id/:id', authenticateToken, async (req: Request, res: Resp
 
     res.json(website);
   } catch (error) {
-    console.error('Error fetching website by ID:', error);
+    logger.error('Error fetching website by ID:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -99,15 +100,15 @@ router.put('/websites/:id', authenticateToken, async (req: Request, res: Respons
     const isSuperAdmin = req.headers['x-is-super-admin'] === 'true';
     const data = req.body;
 
-    console.log('🔍 [WEBSITES PUT] ===== DÉBUT =====');
-    console.log('🔍 [WEBSITES PUT] websiteId:', websiteId);
-    console.log('🔍 [WEBSITES PUT] organizationId from header:', organizationId);
-    console.log('🔍 [WEBSITES PUT] isSuperAdmin:', isSuperAdmin);
-    console.log('🔍 [WEBSITES PUT] All headers:', JSON.stringify(req.headers, null, 2));
-    console.log('🔍 [WEBSITES PUT] Body:', JSON.stringify(data, null, 2));
+    logger.debug('🔍 [WEBSITES PUT] ===== DÉBUT =====');
+    logger.debug('🔍 [WEBSITES PUT] websiteId:', websiteId);
+    logger.debug('🔍 [WEBSITES PUT] organizationId from header:', organizationId);
+    logger.debug('🔍 [WEBSITES PUT] isSuperAdmin:', isSuperAdmin);
+    logger.debug('🔍 [WEBSITES PUT] All headers:', JSON.stringify(req.headers, null, 2));
+    logger.debug('🔍 [WEBSITES PUT] Body:', JSON.stringify(data, null, 2));
 
     if (!organizationId && !isSuperAdmin) {
-      console.log('🔍 [WEBSITES PUT] ❌ Pas d\'organizationId dans les headers');
+      logger.debug('🔍 [WEBSITES PUT] ❌ Pas d\'organizationId dans les headers');
       return res.status(400).json({ error: 'Organization ID is required' });
     }
 
@@ -118,14 +119,14 @@ router.put('/websites/:id', authenticateToken, async (req: Request, res: Respons
       whereClause.organizationId = organizationId;
     }
     
-    console.log('🔍 [WEBSITES PUT] Recherche du site avec:', whereClause);
+    logger.debug('🔍 [WEBSITES PUT] Recherche du site avec:', whereClause);
     const existingWebsite = await db.websites.findFirst({
       where: whereClause
     });
 
-    console.log('🔍 [WEBSITES PUT] Résultat recherche:', existingWebsite ? 'TROUVÉ' : 'NON TROUVÉ');
+    logger.debug('🔍 [WEBSITES PUT] Résultat recherche:', existingWebsite ? 'TROUVÉ' : 'NON TROUVÉ');
     if (existingWebsite) {
-      console.log('🔍 [WEBSITES PUT] Site trouvé:', { 
+      logger.debug('🔍 [WEBSITES PUT] Site trouvé:', { 
         id: existingWebsite.id, 
         organizationId: existingWebsite.organizationId,
         siteName: existingWebsite.siteName 
@@ -133,7 +134,7 @@ router.put('/websites/:id', authenticateToken, async (req: Request, res: Respons
     }
 
     if (!existingWebsite) {
-      console.log('🔍 [WEBSITES PUT] ❌ Website not found - 404');
+      logger.debug('🔍 [WEBSITES PUT] ❌ Website not found - 404');
       return res.status(404).json({ error: 'Website not found' });
     }
 
@@ -157,7 +158,7 @@ router.put('/websites/:id', authenticateToken, async (req: Request, res: Respons
     if (data.cloudRunServiceName !== undefined) updateData.cloudRunServiceName = data.cloudRunServiceName;
     if (data.cloudRunRegion !== undefined) updateData.cloudRunRegion = data.cloudRunRegion;
 
-    console.log('📝 [WEBSITES] Données de mise à jour:', updateData);
+    logger.debug('📝 [WEBSITES] Données de mise à jour:', updateData);
 
     // Mettre à jour le site
     const updatedWebsite = await db.websites.update({
@@ -168,10 +169,10 @@ router.put('/websites/:id', authenticateToken, async (req: Request, res: Respons
       }
     });
 
-    console.log('✅ [WEBSITES] Site mis à jour:', updatedWebsite.id);
+    logger.debug('✅ [WEBSITES] Site mis à jour:', updatedWebsite.id);
     res.json(updatedWebsite);
   } catch (error) {
-    console.error('Error updating website:', error);
+    logger.error('Error updating website:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -208,7 +209,7 @@ router.delete('/websites/:id', authenticateToken, async (req: Request, res: Resp
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Error deleting website:', error);
+    logger.error('Error deleting website:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -249,7 +250,7 @@ router.post('/websites', authenticateToken, async (req: Request, res: Response) 
 
     res.status(201).json(newWebsite);
   } catch (error) {
-    console.error('Error creating website:', error);
+    logger.error('Error creating website:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -326,7 +327,7 @@ router.get('/websites/:idOrSlug', async (req: Request, res: Response) => {
 
     res.json(website);
   } catch (error) {
-    console.error('Error fetching website:', error);
+    logger.error('Error fetching website:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -358,7 +359,7 @@ router.get('/websites/:slug/services', async (req: Request, res: Response) => {
 
     res.json(services);
   } catch (error) {
-    console.error('Error fetching services:', error);
+    logger.error('Error fetching services:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -397,7 +398,7 @@ router.get('/websites/:slug/projects', async (req: Request, res: Response) => {
 
     res.json(projects);
   } catch (error) {
-    console.error('Error fetching projects:', error);
+    logger.error('Error fetching projects:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -436,7 +437,7 @@ router.get('/websites/:slug/testimonials', async (req: Request, res: Response) =
 
     res.json(testimonials);
   } catch (error) {
-    console.error('Error fetching testimonials:', error);
+    logger.error('Error fetching testimonials:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -486,7 +487,7 @@ router.get('/websites/:slug/blog', async (req: Request, res: Response) => {
 
     res.json(blogPosts);
   } catch (error) {
-    console.error('Error fetching blog posts:', error);
+    logger.error('Error fetching blog posts:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -533,7 +534,7 @@ router.get('/websites/:slug/blog/:postSlug', async (req: Request, res: Response)
 
     res.json(blogPost);
   } catch (error) {
-    console.error('Error fetching blog post:', error);
+    logger.error('Error fetching blog post:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

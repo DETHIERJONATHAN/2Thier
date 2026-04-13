@@ -22,6 +22,7 @@ import {
   UserOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { logger } from '../../lib/logger';
 
 interface CalendarEvent {
   id: string;
@@ -70,7 +71,7 @@ const CalendarWidget: React.FC<CalendarWidgetProps> = ({
       const response = await api.api.get(`/calendar/events?attendee=${encodeURIComponent(leadEmail)}`);
       setEvents(response.events || []);
     } catch (error) {
-      console.error('Erreur lors du chargement des événements:', error);
+      logger.error('Erreur lors du chargement des événements:', error);
       // Événements simulés pour la démo
       setEvents([
         {
@@ -152,7 +153,7 @@ const CalendarWidget: React.FC<CalendarWidgetProps> = ({
       }
       
     } catch (error) {
-      console.error('Erreur lors de la création de l\'événement:', error);
+      logger.error('Erreur lors de la création de l\'événement:', error);
       message.error('Erreur lors de la création de l\'événement');
     } finally {
       setCreating(false);

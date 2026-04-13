@@ -7,6 +7,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { TelnyxRTC } from '@telnyx/webrtc';
 import { playNotificationSound } from './useNotificationSound';
+import { logger } from '../lib/logger';
 
 // ═══════════════════════════════════════════════════════════════
 // TYPES
@@ -161,26 +162,26 @@ export function useTelnyxCall({
 
       // ─── EVENT HANDLERS ──────────────────────────────────
       client.on('telnyx.ready', () => {
-        console.log('[TELNYX-RTC] ✅ Registered & ready');
+        logger.debug('[TELNYX-RTC] ✅ Registered & ready');
         setIsRegistered(true);
         setErrorMessage(null);
       });
 
       client.on('telnyx.error', (error: unknown) => {
-        console.error('[TELNYX-RTC] ❌ Error:', JSON.stringify(error, null, 2));
+        logger.error('[TELNYX-RTC] ❌ Error:', JSON.stringify(error, null, 2));
         const msg = error?.message || error?.error?.message || (typeof error === 'string' ? error : 'Erreur de connexion Telnyx');
         setErrorMessage(msg);
         setIsRegistered(false);
       });
 
       client.on('telnyx.socket.error', (error: unknown) => {
-        console.error('[TELNYX-RTC] ❌ Socket error:', error);
+        logger.error('[TELNYX-RTC] ❌ Socket error:', error);
         setErrorMessage('Connexion WebSocket perdue');
         setIsRegistered(false);
       });
 
       client.on('telnyx.socket.close', () => {
-        console.warn('[TELNYX-RTC] ⚠️ Socket closed');
+        logger.warn('[TELNYX-RTC] ⚠️ Socket closed');
         setIsRegistered(false);
       });
 
@@ -191,7 +192,7 @@ export function useTelnyxCall({
         switch (notification.type) {
           case 'callUpdate': {
             const state = call.state;
-            console.log('[TELNYX-RTC] Call state:', state);
+            logger.debug('[TELNYX-RTC] Call state:', state);
 
             if (state === 'ringing' || state === 'requesting') {
               setCallState('ringing');
@@ -238,7 +239,7 @@ export function useTelnyxCall({
       client.connect();
       clientRef.current = client;
     } catch (err: unknown) {
-      console.error('[TELNYX-RTC] Failed to init:', err);
+      logger.error('[TELNYX-RTC] Failed to init:', err);
       setErrorMessage(err?.message || 'Erreur d\'initialisation Telnyx');
     }
 
@@ -287,7 +288,7 @@ export function useTelnyxCall({
       currentCallRef.current = call;
       onCallStarted?.(call.id || destination);
     } catch (err: unknown) {
-      console.error('[TELNYX-RTC] Call error:', err);
+      logger.error('[TELNYX-RTC] Call error:', err);
       setErrorMessage(err?.message || 'Erreur lors de l\'appel');
       setCallState('error');
     }
@@ -300,7 +301,7 @@ export function useTelnyxCall({
     try {
       currentCallRef.current.answer();
     } catch (err: unknown) {
-      console.error('[TELNYX-RTC] Answer error:', err);
+      logger.error('[TELNYX-RTC] Answer error:', err);
       setErrorMessage(err?.message || 'Erreur en décrochant');
     }
   }, [stopRingtone]);
@@ -331,7 +332,7 @@ export function useTelnyxCall({
       }
       setIsMuted(!isMuted);
     } catch (err) {
-      console.error('[TELNYX-RTC] Mute error:', err);
+      logger.error('[TELNYX-RTC] Mute error:', err);
     }
   }, [isMuted]);
 
@@ -346,7 +347,7 @@ export function useTelnyxCall({
       }
       setIsOnHold(!isOnHold);
     } catch (err) {
-      console.error('[TELNYX-RTC] Hold error:', err);
+      logger.error('[TELNYX-RTC] Hold error:', err);
     }
   }, [isOnHold]);
 
@@ -356,7 +357,7 @@ export function useTelnyxCall({
     try {
       currentCallRef.current.dtmf(digit);
     } catch (err) {
-      console.error('[TELNYX-RTC] DTMF error:', err);
+      logger.error('[TELNYX-RTC] DTMF error:', err);
     }
   }, []);
 

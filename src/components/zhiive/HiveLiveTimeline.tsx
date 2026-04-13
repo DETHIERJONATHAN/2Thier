@@ -8,6 +8,7 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
+import { logger } from '../../lib/logger';
 
 // ── Types ──
 interface HiveLiveMomentMedia {
@@ -91,7 +92,7 @@ const HiveLiveTimeline: React.FC<HiveLiveTimelineProps> = ({ userId, isOwner = f
       const data = await api.get<HiveLiveMoment[]>(`/hive-live/${userId}`);
       setMoments(data || []);
     } catch (err) {
-      console.error('[HIVE-LIVE] Error fetching:', err);
+      logger.error('[HIVE-LIVE] Error fetching:', err);
     } finally {
       setLoading(false);
     }

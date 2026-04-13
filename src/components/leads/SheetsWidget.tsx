@@ -21,6 +21,7 @@ import {
   EyeOutlined,
   EditOutlined
 } from '@ant-design/icons';
+import { logger } from '../../lib/logger';
 
 interface SheetData {
   id: string;
@@ -74,7 +75,7 @@ const SheetsWidget: React.FC<SheetsWidgetProps> = ({
       const response = await api.api.get(`/sheets/list?leadId=${leadId}`);
       setSheets(response.sheets || []);
     } catch (error) {
-      console.error('Erreur lors du chargement des feuilles:', error);
+      logger.error('Erreur lors du chargement des feuilles:', error);
       // Feuilles simulées pour la démo
       setSheets([
         {
@@ -145,7 +146,7 @@ const SheetsWidget: React.FC<SheetsWidgetProps> = ({
       }
       
     } catch (error) {
-      console.error('Erreur lors de la création de la feuille:', error);
+      logger.error('Erreur lors de la création de la feuille:', error);
       message.error('Erreur lors de la création de la feuille');
     } finally {
       setCreating(false);
@@ -161,7 +162,7 @@ const SheetsWidget: React.FC<SheetsWidgetProps> = ({
       const response = await api.api.get(`/sheets/${sheet.id}/data`);
       setSheetData(response.data || []);
     } catch (error) {
-      console.error('Erreur lors du chargement des données:', error);
+      logger.error('Erreur lors du chargement des données:', error);
       // Données simulées
       setSheetData([
         { Date: '2024-01-15', Action: 'Appel téléphonique', Statut: 'Complété', Notes: 'Premier contact établi' },
@@ -187,7 +188,7 @@ const SheetsWidget: React.FC<SheetsWidgetProps> = ({
       await loadSheets(); // Recharger pour mettre à jour le statut
       
     } catch (error) {
-      console.error('Erreur lors du partage:', error);
+      logger.error('Erreur lors du partage:', error);
       message.error('Erreur lors du partage de la feuille');
     }
   };

@@ -43,6 +43,7 @@ import {
   type ReferenceType, 
   type OrganizationMeasurementReferenceConfig 
 } from '../../types/measurement';
+import { logger } from '../../lib/logger';
 
 const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;
@@ -104,7 +105,7 @@ export const ReferenceConfigModal: React.FC<ReferenceConfigModalProps> = ({
         });
       }
     } catch (error) {
-      console.error('Erreur chargement config référence:', error);
+      logger.error('Erreur chargement config référence:', error);
     } finally {
       setLoading(false);
     }
@@ -161,7 +162,7 @@ export const ReferenceConfigModal: React.FC<ReferenceConfigModalProps> = ({
         throw new Error(response?.error || 'Erreur inconnue');
       }
     } catch (error) {
-      console.error('Erreur sauvegarde config:', error);
+      logger.error('Erreur sauvegarde config:', error);
       message.error('Erreur lors de la sauvegarde');
     } finally {
       setSaving(false);

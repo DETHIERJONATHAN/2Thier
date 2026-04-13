@@ -11,6 +11,7 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAdvancedSelectCache } from '../../hooks/useAdvancedSelectCache';
 import { GenealogyExplorer } from '../../components/GenealogyExplorer/exports';
 import { cleanColor } from '../../utils/colorUtils';
+import { logger } from '../../lib/logger';
 
 const slugify = (text: string) =>
   text
@@ -88,20 +89,20 @@ const AdvancedConfigPanel: React.FC<AdvancedConfigPanelProps> = ({ selectedField
   
   // DEBUG: Affichage état fieldTypes
   useEffect(() => {
-    console.log('[ConfigAvancee] FieldTypes état:', {
+    logger.debug('[ConfigAvancee] FieldTypes état:', {
       length: fieldTypes.length,
       types: fieldTypes.map(ft => ({ name: ft.name, label: ft.label }))
     });
     
     if (fieldTypes.length === 0) {
-      console.warn('[ConfigAvancee] WARN: FieldTypes vide - Problème d\'authentification ?');
+      logger.warn('[ConfigAvancee] WARN: FieldTypes vide - Problème d\'authentification ?');
     }
   }, [fieldTypes]);
 
   // DEBUG: Affichage field actuel
   useEffect(() => {
     if (field) {
-      console.log('[ConfigAvancee] Champ actuel:', {
+      logger.debug('[ConfigAvancee] Champ actuel:', {
         id: field.id,
         type: field.type,
         label: field.label,
@@ -144,23 +145,23 @@ const AdvancedConfigPanel: React.FC<AdvancedConfigPanelProps> = ({ selectedField
     const handleAdvancedChange = (key: string, value: unknown) => {
     if (!fieldId) return;
     
-    console.log('[ConfigAvancee] handleAdvancedChange:', { key, value, fieldId });
-    console.log('[ConfigAvancee] advancedConfig actuel:', advancedConfig);
+    logger.debug('[ConfigAvancee] handleAdvancedChange:', { key, value, fieldId });
+    logger.debug('[ConfigAvancee] advancedConfig actuel:', advancedConfig);
     
     setLocalValues(v => ({ ...v, [key]: value }));
     setSaving(s => ({ ...s, [key]: true }));
     setSaveError(e => ({ ...e, [key]: null }));
     
     const newAdvancedConfig = { ...advancedConfig, [key]: value };
-    console.log('[ConfigAvancee] Nouveau advancedConfig à sauver:', newAdvancedConfig);
+    logger.debug('[ConfigAvancee] Nouveau advancedConfig à sauver:', newAdvancedConfig);
     
     saveFieldChange({ advancedConfig: newAdvancedConfig })
       .then(() => {
-        console.log('[ConfigAvancee] Sauvegarde réussie pour:', key);
+        logger.debug('[ConfigAvancee] Sauvegarde réussie pour:', key);
         setSaving(s => ({ ...s, [key]: false }));
       })
       .catch(err => {
-        console.error('[ConfigAvancee] Erreur sauvegarde pour:', key, err);
+        logger.error('[ConfigAvancee] Erreur sauvegarde pour:', key, err);
         setSaving(s => ({ ...s, [key]: false }));
         setSaveError(e => ({ ...e, [key]: err?.message || 'Erreur de sauvegarde' }));
       });
@@ -243,7 +244,7 @@ const AdvancedConfigPanel: React.FC<AdvancedConfigPanelProps> = ({ selectedField
     else if (resp && typeof resp === 'object' && 'data' in resp) list = (resp as { data?: ApiFieldType[] }).data || [];
         if (mounted) setFieldTypes(list);
       } catch (e) {
-        console.warn('Impossible de charger les types de champs', e);
+        logger.warn('Impossible de charger les types de champs', e);
       }
     })();
     return () => { mounted = false; };
@@ -251,7 +252,7 @@ const AdvancedConfigPanel: React.FC<AdvancedConfigPanelProps> = ({ selectedField
 
   // RETRY: Rechargement forcé fieldTypes si vide
   const forceReloadFieldTypes = useCallback(async () => {
-    console.log('[ConfigAvancee] Force reload fieldTypes...');
+    logger.debug('[ConfigAvancee] Force reload fieldTypes...');
     let attempts = 0;
     const maxAttempts = 3;
     
@@ -268,22 +269,22 @@ const AdvancedConfigPanel: React.FC<AdvancedConfigPanelProps> = ({ selectedField
         
         if (list.length > 0) {
           setFieldTypes(list);
-          console.log('✅ [ConfigAvancee] FieldTypes rechargés:', list.length);
+          logger.debug('✅ [ConfigAvancee] FieldTypes rechargés:', list.length);
           return;
         }
         
         attempts++;
         if (attempts < maxAttempts) {
-          console.log(`🔄 [ConfigAvancee] Retry ${attempts}/${maxAttempts}...`);
+          logger.debug(`🔄 [ConfigAvancee] Retry ${attempts}/${maxAttempts}...`);
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
       } catch (e) {
-        console.error('❌ [ConfigAvancee] Erreur reload fieldTypes:', e);
+        logger.error('❌ [ConfigAvancee] Erreur reload fieldTypes:', e);
         attempts++;
       }
     }
     
-    console.error('❌ [ConfigAvancee] Échec après', maxAttempts, 'tentatives');
+    logger.error('❌ [ConfigAvancee] Échec après', maxAttempts, 'tentatives');
   }, [get]);
 
   // Déclencher le retry si fieldTypes vide après 2 secondes
@@ -291,7 +292,7 @@ const AdvancedConfigPanel: React.FC<AdvancedConfigPanelProps> = ({ selectedField
     if (fieldTypes.length === 0) {
       const timer = setTimeout(() => {
         if (fieldTypes.length === 0) {
-          console.warn('⚠️ [ConfigAvancee] FieldTypes toujours vide, tentative de rechargement...');
+          logger.warn('⚠️ [ConfigAvancee] FieldTypes toujours vide, tentative de rechargement...');
           forceReloadFieldTypes();
         }
       }, 2000);
@@ -684,7 +685,7 @@ const AdvancedConfigPanel: React.FC<AdvancedConfigPanelProps> = ({ selectedField
                       const hasCrossingData = Object.keys(existingCrossingData).length > 0;
                       
                       if (!hasCrossingData) {
-                        console.log('[ConfigAvancee] Migration des vraies données data[] vers crossingData');
+                        logger.debug('[ConfigAvancee] Migration des vraies données data[] vers crossingData');
                         
                         const crossingData: Record<string, unknown> = {};
                         
@@ -703,24 +704,24 @@ const AdvancedConfigPanel: React.FC<AdvancedConfigPanelProps> = ({ selectedField
                           }
                         });
 
-                        console.log(`[ConfigAvancee] Migration réussie: ${Object.keys(crossingData).length} vraies valeurs migrées`);
+                        logger.debug(`[ConfigAvancee] Migration réussie: ${Object.keys(crossingData).length} vraies valeurs migrées`);
                         if (Object.keys(crossingData).length > 0) {
-                          console.log('[ConfigAvancee] Exemples de vraies données migrées:', 
+                          logger.debug('[ConfigAvancee] Exemples de vraies données migrées:', 
                             Object.entries(crossingData).slice(0, 2).map(([k, v]) => `${k}: ${v}`));
                           // ✅ Seulement assigner crossingData si on a des vraies données
                           baseConfig.crossingData = crossingData;
                         } else {
-                          console.log('[ConfigAvancee] Aucune donnée valide à migrer, crossingData non initialisé');
+                          logger.debug('[ConfigAvancee] Aucune donnée valide à migrer, crossingData non initialisé');
                         }
                       } else {
-                        console.log('[ConfigAvancee] CrossingData existe déjà, pas de migration nécessaire');
+                        logger.debug('[ConfigAvancee] CrossingData existe déjà, pas de migration nécessaire');
                       }
                     } else {
                       // ✅ Pas de données à migrer, ne pas créer crossingData vide
-                      console.log('[ConfigAvancee] Aucune donnée à migrer, crossingData non initialisé');
+                      logger.debug('[ConfigAvancee] Aucune donnée à migrer, crossingData non initialisé');
                     }
                     
-                    console.log('[ConfigAvancee] Config finale:', {
+                    logger.debug('[ConfigAvancee] Config finale:', {
                       columns: baseConfig.columns?.length || 0,
                       rows: baseConfig.rows?.length || 0,
                       dataLength: Array.isArray(baseConfig.data) ? baseConfig.data.length : 0,
@@ -730,7 +731,7 @@ const AdvancedConfigPanel: React.FC<AdvancedConfigPanelProps> = ({ selectedField
                     return baseConfig;
                   })()}
                   onChange={(tableauConfig) => {
-                    console.log('[TableauConfigEditor] Configuration reçue:', {
+                    logger.debug('[TableauConfigEditor] Configuration reçue:', {
                       columns: Array.isArray(tableauConfig.columns) ? tableauConfig.columns.length : 0,
                       rows: Array.isArray(tableauConfig.rows) ? tableauConfig.rows.length : 0,
                       templates: Array.isArray(tableauConfig.templates) ? tableauConfig.templates.length : 0,
@@ -743,7 +744,7 @@ const AdvancedConfigPanel: React.FC<AdvancedConfigPanelProps> = ({ selectedField
                     
                     // Ignorer si déjà migré RÉCEMMENT
                     if (migratedFields.current.has(fieldKey)) {
-                      console.log('[TableauConfigEditor] Changement ignoré - champ déjà migré');
+                      logger.debug('[TableauConfigEditor] Changement ignoré - champ déjà migré');
                       return;
                     }
                     const now = Date.now();
@@ -752,7 +753,7 @@ const AdvancedConfigPanel: React.FC<AdvancedConfigPanelProps> = ({ selectedField
                     
                     // DÉBOUNCE : Ignorer si sauvegarde récente (moins de 2 secondes)
                     if (now - lastSaveTime < 2000) {
-                      console.log('[TableauConfigEditor] DÉBOUNCE - Sauvegarde trop récente, ignorée');
+                      logger.debug('[TableauConfigEditor] DÉBOUNCE - Sauvegarde trop récente, ignorée');
                       return;
                     }
 
@@ -767,7 +768,7 @@ const AdvancedConfigPanel: React.FC<AdvancedConfigPanelProps> = ({ selectedField
                     
                     // Détecter oscillation (même signature revient dans les 5 dernières)
                     if (previousStates.includes(currentSignature) && previousStates.length >= 2) {
-                      console.log('[TableauConfigEditor] OSCILLATION DÉTECTÉE - Blocage définitif');
+                      logger.debug('[TableauConfigEditor] OSCILLATION DÉTECTÉE - Blocage définitif');
                       return;
                     }
                     
@@ -787,7 +788,7 @@ const AdvancedConfigPanel: React.FC<AdvancedConfigPanelProps> = ({ selectedField
                     const hasRealChange = currentSignatureField !== currentSignature;
                     const isFirstLoad = !currentFieldConfig;
                     
-                    console.log('[TableauConfigEditor] Analyse oscillation-safe:', {
+                    logger.debug('[TableauConfigEditor] Analyse oscillation-safe:', {
                       currentSignatureField,
                       currentSignature,
                       hasRealChange,
@@ -796,11 +797,11 @@ const AdvancedConfigPanel: React.FC<AdvancedConfigPanelProps> = ({ selectedField
                     });
                     
                     if (hasRealChange || isFirstLoad) {
-                      console.log('[TableauConfigEditor] Sauvegarde - changement validé');
+                      logger.debug('[TableauConfigEditor] Sauvegarde - changement validé');
                       (window as Record<string, unknown>)[lastSaveKey] = now; // Marquer dernière sauvegarde
                       handleAdvancedChange('tableau', tableauConfig);
                     } else {
-                      console.log('[TableauConfigEditor] Changement ignoré - identique ou oscillation bloquée');
+                      logger.debug('[TableauConfigEditor] Changement ignoré - identique ou oscillation bloquée');
                     }
                   }}
                 />
@@ -857,7 +858,7 @@ function OptionsEditor({ fieldId, options }: {
       await addOptionToField(fieldId, newOption);
       setNewOptionLabel('');
     } catch (error) {
-      console.error("Failed to add option", error);
+      logger.error("Failed to add option", error);
       // TODO: show error to user
     } finally {
       setIsAdding(false);
@@ -871,7 +872,7 @@ function OptionsEditor({ fieldId, options }: {
       // Passer correctement le fieldId ET l'optionId au store
       await removeOptionFromField(fieldId, String(optionId));
     } catch (error) {
-      console.error("Failed to remove option", error);
+      logger.error("Failed to remove option", error);
       // TODO: show error to user
       setIsRemoving(prev => ({...prev, [optionId]: false}));
     }

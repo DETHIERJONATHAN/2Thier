@@ -7,6 +7,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
+import { logger } from '../../lib/logger';
 
 interface SmartNotification {
   id: string;
@@ -157,7 +158,7 @@ export default function SmartNotifications({ context = 'general' }: SmartNotific
       setNotifications(smartNotifications);
 
     } catch (error) {
-      console.error('Erreur lors de l\'analyse IA des notifications:', error);
+      logger.error('Erreur lors de l\'analyse IA des notifications:', error);
       
       // Notification d'erreur de fallback
       setNotifications([{

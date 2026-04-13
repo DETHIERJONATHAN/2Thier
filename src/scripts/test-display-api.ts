@@ -13,6 +13,7 @@
 
 import fetch from 'node-fetch';
 import { db } from '../lib/database';
+import { logger } from '../lib/logger';
 
 const prisma = db;
 const API_BASE = 'http://localhost:4000/api';
@@ -30,7 +31,7 @@ async function testEndpoint(url: string, options: unknown = {}): Promise<ApiTest
   const startTime = Date.now();
   
   try {
-    console.log(`🌐 Testing: ${url}`);
+    logger.debug(`🌐 Testing: ${url}`);
     
     const response = await fetch(url, {
       headers: {
@@ -52,11 +53,11 @@ async function testEndpoint(url: string, options: unknown = {}): Promise<ApiTest
       data = null;
     }
 
-    console.log(`   Status: ${response.status} (${responseTime}ms)`);
+    logger.debug(`   Status: ${response.status} (${responseTime}ms)`);
     if (success && data) {
-      console.log(`   ✅ Success:`, typeof data === 'object' ? Object.keys(data) : data);
+      logger.debug(`   ✅ Success:`, typeof data === 'object' ? Object.keys(data) : data);
     } else {
-      console.log(`   ❌ Error:`, data?.error || response.statusText);
+      logger.debug(`   ❌ Error:`, data?.error || response.statusText);
     }
 
     return {
@@ -69,7 +70,7 @@ async function testEndpoint(url: string, options: unknown = {}): Promise<ApiTest
 
   } catch (error) {
     const responseTime = Date.now() - startTime;
-    console.log(`   ❌ Request failed: ${error}`);
+    logger.debug(`   ❌ Request failed: ${error}`);
     
     return {
       endpoint: url,
@@ -82,11 +83,11 @@ async function testEndpoint(url: string, options: unknown = {}): Promise<ApiTest
 }
 
 async function main() {
-  console.log('🌐 === TEST ENDPOINTS API D\'AFFICHAGE ===\n');
+  logger.debug('🌐 === TEST ENDPOINTS API D\'AFFICHAGE ===\n');
 
   try {
     // 1. Vérifier qu'on a des données de test
-    console.log('🔍 1. Vérification données de test...');
+    logger.debug('🔍 1. Vérification données de test...');
     
     const tree = await prisma.treeBranchLeafTree.findFirst({
       where: { name: { contains: 'Test Affichage' } },
@@ -94,12 +95,12 @@ async function main() {
     });
 
     if (!tree) {
-      console.log('❌ Aucune donnée de test trouvée.');
-      console.log('Exécutez d\'abord: npx tsx src/scripts/create-test-display-data.ts');
+      logger.debug('❌ Aucune donnée de test trouvée.');
+      logger.debug('Exécutez d\'abord: npx tsx src/scripts/create-test-display-data.ts');
       return;
     }
 
-    console.log(`✅ Arbre de test trouvé: ${tree.name} (${tree.id})`);
+    logger.debug(`✅ Arbre de test trouvé: ${tree.name} (${tree.id})`);
 
     // 2. Récupérer les nœuds de test
     const nodes = await prisma.treeBranchLeafNode.findMany({
@@ -107,38 +108,38 @@ async function main() {
       select: { id: true, label: true, type: true, calculatedValue: true }
     });
 
-    console.log(`📊 ${nodes.length} nœuds trouvés`);
+    logger.debug(`📊 ${nodes.length} nœuds trouvés`);
 
     const results: ApiTestResult[] = [];
 
     // 3. Tester l'endpoint des nœuds d'arbre
-    console.log('\n🌳 3. Test GET /api/treebranchleaf/trees/:treeId/nodes');
+    logger.debug('\n🌳 3. Test GET /api/treebranchleaf/trees/:treeId/nodes');
     const nodesResult = await testEndpoint(`${API_BASE}/treebranchleaf/trees/${tree.id}/nodes`);
     results.push(nodesResult);
 
     if (nodesResult.success) {
-      console.log(`   📊 Nœuds retournés: ${Array.isArray(nodesResult.data) ? nodesResult.data.length : 'Format inattendu'}`);
+      logger.debug(`   📊 Nœuds retournés: ${Array.isArray(nodesResult.data) ? nodesResult.data.length : 'Format inattendu'}`);
     }
 
     // 4. Tester l'endpoint des arbres
-    console.log('\n🌳 4. Test GET /api/treebranchleaf/trees');
+    logger.debug('\n🌳 4. Test GET /api/treebranchleaf/trees');
     const treesResult = await testEndpoint(`${API_BASE}/treebranchleaf/trees`);
     results.push(treesResult);
 
     // 5. Tester les valeurs calculées pour chaque nœud
-    console.log('\n💾 5. Test calculated-value pour chaque nœud...');
+    logger.debug('\n💾 5. Test calculated-value pour chaque nœud...');
     
     for (const node of nodes.slice(0, 5)) { // Limiter à 5 pour éviter le spam
       const calcResult = await testEndpoint(`${API_BASE}/tree-nodes/${tree.id}/${node.id}/calculated-value`);
       results.push(calcResult);
       
       if (calcResult.success) {
-        console.log(`      Nœud ${node.label}: ${JSON.stringify(calcResult.data?.value || 'pas de valeur')}`);
+        logger.debug(`      Nœud ${node.label}: ${JSON.stringify(calcResult.data?.value || 'pas de valeur')}`);
       }
     }
 
     // 6. Tester un endpoint de stockage si on peut
-    console.log('\n💾 6. Test POST store-calculated-value...');
+    logger.debug('\n💾 6. Test POST store-calculated-value...');
     
     const firstNode = nodes[0];
     if (firstNode) {
@@ -153,7 +154,7 @@ async function main() {
     }
 
     // 7. Tester l'endpoint des soumissions
-    console.log('\n📝 7. Test soumissions...');
+    logger.debug('\n📝 7. Test soumissions...');
     
     const submission = await prisma.treeBranchLeafSubmission.findFirst({
       where: { treeId: tree.id }
@@ -165,64 +166,64 @@ async function main() {
     }
 
     // 8. Résumé des résultats
-    console.log('\n📊 === RÉSUMÉ DES TESTS ===');
+    logger.debug('\n📊 === RÉSUMÉ DES TESTS ===');
     
     const successful = results.filter(r => r.success).length;
     const failed = results.filter(r => !r.success).length;
     const avgResponseTime = results.reduce((sum, r) => sum + r.responseTime, 0) / results.length;
 
-    console.log(`✅ Succès: ${successful}/${results.length}`);
-    console.log(`❌ Échecs: ${failed}/${results.length}`);
-    console.log(`⏱️  Temps de réponse moyen: ${avgResponseTime.toFixed(0)}ms`);
+    logger.debug(`✅ Succès: ${successful}/${results.length}`);
+    logger.debug(`❌ Échecs: ${failed}/${results.length}`);
+    logger.debug(`⏱️  Temps de réponse moyen: ${avgResponseTime.toFixed(0)}ms`);
 
     // 9. Détails des échecs
     const failures = results.filter(r => !r.success);
     if (failures.length > 0) {
-      console.log('\n❌ DÉTAILS DES ÉCHECS:');
+      logger.debug('\n❌ DÉTAILS DES ÉCHECS:');
       failures.forEach(f => {
-        console.log(`   ${f.endpoint}`);
-        console.log(`      Status: ${f.status}`);
-        console.log(`      Error: ${f.error || f.data}`);
+        logger.debug(`   ${f.endpoint}`);
+        logger.debug(`      Status: ${f.status}`);
+        logger.debug(`      Error: ${f.error || f.data}`);
       });
     }
 
     // 10. Recommandations
-    console.log('\n🔧 === RECOMMANDATIONS ===');
+    logger.debug('\n🔧 === RECOMMANDATIONS ===');
     
     if (failed === 0) {
-      console.log('✅ Tous les tests API ont réussi !');
-      console.log('   → Les endpoints d\'affichage fonctionnent correctement');
+      logger.debug('✅ Tous les tests API ont réussi !');
+      logger.debug('   → Les endpoints d\'affichage fonctionnent correctement');
     } else {
-      console.log('❌ Certains endpoints échouent:');
+      logger.debug('❌ Certains endpoints échouent:');
       
       const calc404 = failures.find(f => f.endpoint.includes('calculated-value') && f.status === 404);
       if (calc404) {
-        console.log('   → Endpoint calculated-value non trouvé (404)');
-        console.log('   → Vérifier que le controller est monté dans api-server.ts');
+        logger.debug('   → Endpoint calculated-value non trouvé (404)');
+        logger.debug('   → Vérifier que le controller est monté dans api-server.ts');
       }
 
       const calc500 = failures.find(f => f.endpoint.includes('calculated-value') && f.status === 500);
       if (calc500) {
-        console.log('   → Erreur serveur sur calculated-value (500)');
-        console.log('   → Vérifier les logs serveur et la base de données');
+        logger.debug('   → Erreur serveur sur calculated-value (500)');
+        logger.debug('   → Vérifier les logs serveur et la base de données');
       }
 
       const authErrors = failures.filter(f => f.status === 401 || f.status === 403);
       if (authErrors.length > 0) {
-        console.log('   → Erreurs d\'authentification');
-        console.log('   → Vérifier les headers x-organization-id et l\'auth middleware');
+        logger.debug('   → Erreurs d\'authentification');
+        logger.debug('   → Vérifier les headers x-organization-id et l\'auth middleware');
       }
     }
 
-    console.log('\n🎯 Pour déboguer plus en détail:');
-    console.log('   npx tsx src/scripts/debug-display-fields.ts');
-    console.log('   npx tsx src/scripts/test-display-real-time.ts');
+    logger.debug('\n🎯 Pour déboguer plus en détail:');
+    logger.debug('   npx tsx src/scripts/debug-display-fields.ts');
+    logger.debug('   npx tsx src/scripts/test-display-real-time.ts');
 
   } catch (error) {
-    console.error('❌ Erreur pendant les tests API:', error);
+    logger.error('❌ Erreur pendant les tests API:', error);
   } finally {
     await prisma.$disconnect();
   }
 }
 
-main().catch(console.error);
+main().catch(logger.error);

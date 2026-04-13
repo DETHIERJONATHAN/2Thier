@@ -16,6 +16,7 @@ import { SaveOutlined, SendOutlined, LoadingOutlined, CloseOutlined, UploadOutli
 import { useDrafts, CreateDraftData, DraftData } from '../hooks/useDrafts';
 import SimpleHtmlEditor from './SimpleHtmlEditor';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../lib/logger';
 
 interface EmailComposerProps {
   open: boolean;
@@ -56,7 +57,7 @@ export const EmailComposer: React.FC<EmailComposerProps> = ({
 
     try {
       setAutoSaving(true);
-      console.log('[EmailComposer] 🔄 Déclenchement auto-sauvegarde...');
+      logger.debug('[EmailComposer] 🔄 Déclenchement auto-sauvegarde...');
       
       const values = form.getFieldsValue();
       
@@ -127,7 +128,7 @@ export const EmailComposer: React.FC<EmailComposerProps> = ({
       }
       
     } catch (error) {
-      console.error('[EmailComposer] Erreur auto-sauvegarde:', error);
+      logger.error('[EmailComposer] Erreur auto-sauvegarde:', error);
     } finally {
       setAutoSaving(false);
     }
@@ -137,7 +138,7 @@ export const EmailComposer: React.FC<EmailComposerProps> = ({
   const handleSend = async () => {
     try {
       setSending(true);
-      console.log('[EmailComposer] 📤 Envoi direct avec', attachmentFiles.length, 'pièces jointes');
+      logger.debug('[EmailComposer] 📤 Envoi direct avec', attachmentFiles.length, 'pièces jointes');
       
       const values = await form.validateFields();
       
@@ -147,14 +148,14 @@ export const EmailComposer: React.FC<EmailComposerProps> = ({
       
       // Si c'est une réponse ou un transfert, ajouter l'ancien message TEL QUEL
       if (prefilledData?.body) {
-        console.log('[EmailComposer] 📧 Ajout de l\'ancien message TEL QUEL');
+        logger.debug('[EmailComposer] 📧 Ajout de l\'ancien message TEL QUEL');
         
         // Détecter le format de l'ancien message ET du nouveau
         const originalIsHtml = /<[^>]+>/.test(prefilledData.body);
         const newMessageIsHtml = /<[^>]+>/.test(fullBody);
         
-        console.log('[EmailComposer] 🔍 Message original HTML?', originalIsHtml);
-        console.log('[EmailComposer] 🔍 Nouveau message HTML?', newMessageIsHtml);
+        logger.debug('[EmailComposer] 🔍 Message original HTML?', originalIsHtml);
+        logger.debug('[EmailComposer] 🔍 Nouveau message HTML?', newMessageIsHtml);
         
         // 🎯 NOUVEAU : Nettoyer le HTML simple pour le rendre lisible
         let cleanOriginalMessage = prefilledData.body;
@@ -203,8 +204,8 @@ export const EmailComposer: React.FC<EmailComposerProps> = ({
         isHtml: isHtmlContent
       };
       
-      console.log('[EmailComposer] 📄 Format détecté:', isHtmlContent ? 'HTML' : 'TEXTE');
-      console.log('[EmailComposer] 📄 Corps final EXACT:', fullBody.substring(0, 200) + '...');
+      logger.debug('[EmailComposer] 📄 Format détecté:', isHtmlContent ? 'HTML' : 'TEXTE');
+      logger.debug('[EmailComposer] 📄 Corps final EXACT:', fullBody.substring(0, 200) + '...');
       
       const success = await sendEmail(emailData);
       
@@ -218,7 +219,7 @@ export const EmailComposer: React.FC<EmailComposerProps> = ({
         onClose();
       }
     } catch (error) {
-      console.error('[EmailComposer] Erreur envoi:', error);
+      logger.error('[EmailComposer] Erreur envoi:', error);
       message.error('❌ Erreur lors de l\'envoi');
     } finally {
       setSending(false);
@@ -228,7 +229,7 @@ export const EmailComposer: React.FC<EmailComposerProps> = ({
   // 🔒 Fermeture avec sauvegarde
   const handleClose = async () => {
     if (hasUnsavedChanges) {
-      console.log('[EmailComposer] 🚨 Sauvegarde avant fermeture...');
+      logger.debug('[EmailComposer] 🚨 Sauvegarde avant fermeture...');
       await performAutoSave();
     }
     
@@ -256,7 +257,7 @@ export const EmailComposer: React.FC<EmailComposerProps> = ({
   useEffect(() => {
     if (editingDraft && open) {
       // Brouillon existant
-      console.log('[EmailComposer] 📝 Chargement du brouillon:', editingDraft);
+      logger.debug('[EmailComposer] 📝 Chargement du brouillon:', editingDraft);
       form.setFieldsValue({
         to: editingDraft.to,
         subject: editingDraft.subject,
@@ -268,7 +269,7 @@ export const EmailComposer: React.FC<EmailComposerProps> = ({
       setHasUnsavedChanges(false);
     } else if (prefilledData && open) {
       // Données pré-remplies (réponse, transfert)
-      console.log('[EmailComposer] 📧 Chargement données pré-remplies:', prefilledData);
+      logger.debug('[EmailComposer] 📧 Chargement données pré-remplies:', prefilledData);
       form.setFieldsValue({
         to: prefilledData.to || '',
         subject: prefilledData.subject || '',

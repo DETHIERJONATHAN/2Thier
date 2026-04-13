@@ -32,6 +32,7 @@
  */
 
 import { PrismaClient, Prisma } from '@prisma/client';
+import { logger } from './logger';
 
 // ============================================================================
 // CONFIGURATION
@@ -97,7 +98,7 @@ function buildDatabaseUrl(): string {
     const encodedPwd = encodeURIComponent(password);
     const url = `postgresql://${user}:${encodedPwd}@localhost/${db}?host=${encodeURIComponent(host)}`;
     
-    console.warn('[Database] Connexion via Unix socket Cloud SQL:', {
+    logger.warn('[Database] Connexion via Unix socket Cloud SQL:', {
       PGUSER: user,
       PGDATABASE: db,
       PGHOST: host,
@@ -164,18 +165,18 @@ function createPrismaInstance(): PrismaClient {
  */
 export async function connectDatabase(): Promise<void> {
   if (globalForDb.__db_initialized) {
-    console.log('[Database] ⚡ Connexion déjà établie (singleton)');
+    logger.debug('[Database] ⚡ Connexion déjà établie (singleton)');
     return;
   }
 
   globalForDb.__db_initialized = true;
   
   try {
-    console.log('[Database] 🔌 Connexion en cours...');
+    logger.debug('[Database] 🔌 Connexion en cours...');
     await db.$connect();
-    console.log('[Database] ✅ Connexion établie avec succès');
+    logger.debug('[Database] ✅ Connexion établie avec succès');
   } catch (err) {
-    console.error('[Database] ❌ Échec de connexion:', (err as Error)?.message);
+    logger.error('[Database] ❌ Échec de connexion:', (err as Error)?.message);
     throw err; // Propager l'erreur pour arrêter le démarrage du serveur
   }
 }
@@ -251,9 +252,9 @@ export type { PrismaClient };
 export async function disconnectDatabase(): Promise<void> {
   try {
     await db.$disconnect();
-    console.log('[Database] Connexion fermée proprement');
+    logger.debug('[Database] Connexion fermée proprement');
   } catch (err) {
-    console.error('[Database] Erreur lors de la fermeture:', (err as Error)?.message);
+    logger.error('[Database] Erreur lors de la fermeture:', (err as Error)?.message);
   }
 }
 
@@ -321,4 +322,4 @@ process.on('beforeExit', async () => {
 });
 
 // Log de l'adaptateur utilisé au démarrage
-console.log(`[Database] Adaptateur: ${CURRENT_ADAPTER} | Env: ${process.env.NODE_ENV || 'development'}`);
+logger.debug(`[Database] Adaptateur: ${CURRENT_ADAPTER} | Env: ${process.env.NODE_ENV || 'development'}`);

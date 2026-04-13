@@ -1,4 +1,5 @@
 import type { OAuth2ClientOptions } from 'google-auth-library';
+import { logger } from '../lib/logger';
 
 /**
  * Source unique de vérité pour la configuration Google OAuth / Workspace.
@@ -57,14 +58,14 @@ function computeRedirectUri(): string {
     // Format: https://<codespace-name>-4000.app.github.dev/api/google-auth/callback (backend direct, pas Vite proxy!)
     // ⚠️ OAuth callback DOIT aller au backend (port 4000), pas au frontend Vite (port 5173)
     const codespaceUrl = `https://${codespaceName}-4000.app.github.dev`;
-    console.log('[GoogleConfig] 🚀 Codespaces détecté, redirect_uri:', `${codespaceUrl}/api/google-auth/callback`);
+    logger.debug('[GoogleConfig] 🚀 Codespaces détecté, redirect_uri:', `${codespaceUrl}/api/google-auth/callback`);
     return `${codespaceUrl}/api/google-auth/callback`;
   }
 
   // PRIORITÉ 2: Variable d'environnement explicite
   const explicit = readEnv('GOOGLE_REDIRECT_URI');
   if (explicit) {
-    console.log('[GoogleConfig] 📌 GOOGLE_REDIRECT_URI explicite:', explicit);
+    logger.debug('[GoogleConfig] 📌 GOOGLE_REDIRECT_URI explicite:', explicit);
     return explicit;
   }
 
@@ -79,7 +80,7 @@ function computeRedirectUri(): string {
     : DEFAULT_DEV_API_BASE;
 
   const trimmedBase = (base || fallbackBase).replace(/\/$/, '');
-  console.log('[GoogleConfig] 🔧 Redirect URI déduit:', `${trimmedBase}/api/google-auth/callback`);
+  logger.debug('[GoogleConfig] 🔧 Redirect URI déduit:', `${trimmedBase}/api/google-auth/callback`);
   return `${trimmedBase}/api/google-auth/callback`;
 }
 

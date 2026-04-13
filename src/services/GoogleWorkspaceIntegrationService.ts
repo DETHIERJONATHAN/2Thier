@@ -1,6 +1,7 @@
 import { GoogleWorkspaceService } from './GoogleWorkspaceService.js';
 import { decrypt } from '../utils/crypto.js';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 /**
  * Service d'intégration automatique pour Google Workspace
@@ -50,7 +51,7 @@ export class GoogleWorkspaceIntegrationService {
       
       return true;
     } catch (error) {
-      console.error('❌ [GoogleWorkspaceIntegration] Erreur initialisation:', error);
+      logger.error('❌ [GoogleWorkspaceIntegration] Erreur initialisation:', error);
       this.isInitialized = false;
       return false;
     }
@@ -108,14 +109,14 @@ export class GoogleWorkspaceIntegrationService {
           workspaceUser: result.user
         };
       } else {
-        console.error(`❌ [GoogleWorkspaceIntegration] Échec création compte pour ${crmUser.email}:`, result.error);
+        logger.error(`❌ [GoogleWorkspaceIntegration] Échec création compte pour ${crmUser.email}:`, result.error);
         return {
           success: false,
           error: result.error || 'Erreur inconnue lors de la création du compte'
         };
       }
     } catch (error) {
-      console.error('❌ [GoogleWorkspaceIntegration] Erreur création utilisateur:', error);
+      logger.error('❌ [GoogleWorkspaceIntegration] Erreur création utilisateur:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -133,7 +134,7 @@ export class GoogleWorkspaceIntegrationService {
       });
       return !!config;
     } catch (error) {
-      console.error('❌ [GoogleWorkspaceIntegration] Erreur vérification statut:', error);
+      logger.error('❌ [GoogleWorkspaceIntegration] Erreur vérification statut:', error);
       return false;
     }
   }
@@ -155,7 +156,7 @@ export class GoogleWorkspaceIntegrationService {
 
       return await this.googleWorkspaceService!.updateUserPassword(email, newPassword);
     } catch (error) {
-      console.error('❌ [GoogleWorkspaceIntegration] Erreur mise à jour mot de passe:', error);
+      logger.error('❌ [GoogleWorkspaceIntegration] Erreur mise à jour mot de passe:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -201,7 +202,7 @@ export class GoogleWorkspaceIntegrationService {
       // Pour l'instant, on peut utiliser la table EmailAccount existante
       // ou créer une nouvelle table spécifique Google Workspace
     } catch (error) {
-      console.error('❌ [GoogleWorkspaceIntegration] Erreur sauvegarde infos Workspace:', error);
+      logger.error('❌ [GoogleWorkspaceIntegration] Erreur sauvegarde infos Workspace:', error);
     }
   }
 
@@ -240,7 +241,7 @@ export class GoogleWorkspaceIntegrationService {
       // });
       
     } catch (error) {
-      console.error('❌ [GoogleWorkspaceIntegration] Erreur envoi email de bienvenue:', error);
+      logger.error('❌ [GoogleWorkspaceIntegration] Erreur envoi email de bienvenue:', error);
     }
   }
 }

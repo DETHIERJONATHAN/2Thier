@@ -1,3 +1,4 @@
+import { logger } from '../lib/logger';
 // Ce fichier contient des utilitaires liés à l'authentification
 
 /**
@@ -27,7 +28,7 @@ export const hasValidAuthToken = (): boolean => {
     
     return Date.now() < expirationTime;
   } catch (e) {
-    console.error('Erreur lors de la vérification du token:', e);
+    logger.error('Erreur lors de la vérification du token:', e);
     return false;
   }
 };

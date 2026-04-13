@@ -10,6 +10,7 @@
  */
 import { detectAprilTagsMetreA4, type AprilTagDetectionResult } from './apriltag-detector-server';
 import { computeHomography, applyHomography } from '../utils/homographyUtils';
+import { logger } from './logger';
 
 export interface Point2D {
   x: number;
@@ -231,7 +232,7 @@ function buildFallbackFromLargeTag(
   largeSizePx: number
 ): MetreA4V10DetectionResult | null {
   try {
-    console.log('⚠️ [V10] Fallback: grand tag seul (prédiction des petits tags)');
+    logger.debug('⚠️ [V10] Fallback: grand tag seul (prédiction des petits tags)');
 
     const halfLarge = METRE_A4_V10_SPECS.largeTag.size_mm / 2;
     const largeCenterMm = METRE_A4_V10_SPECS.largeTag.center_mm;
@@ -328,7 +329,7 @@ function buildFallbackFromLargeTag(
       }
     };
   } catch (error) {
-    console.error('❌ [V10] Fallback grand tag échoué:', error);
+    logger.error('❌ [V10] Fallback grand tag échoué:', error);
     return null;
   }
 }
@@ -341,7 +342,7 @@ export async function detectMetreA4V10(
   const detectedTags = await detectAprilTagsMetreA4(data, width, height);
 
   if (!detectedTags.length) {
-    console.log('   ❌ [V10] Aucun AprilTag détecté');
+    logger.debug('   ❌ [V10] Aucun AprilTag détecté');
     return null;
   }
 
@@ -362,7 +363,7 @@ export async function detectMetreA4V10(
     .slice(0, 6);
 
   if (smallCandidates.length < 6) {
-    console.log(`   ⚠️ [V10] Seulement ${smallCandidates.length}/6 petits tags détectés`);
+    logger.debug(`   ⚠️ [V10] Seulement ${smallCandidates.length}/6 petits tags détectés`);
     const fallback = buildFallbackFromLargeTag(largeTag, largeSize);
     return fallback;
   }
@@ -377,7 +378,7 @@ export async function detectMetreA4V10(
   const [bottomLeft, bottomCenter, bottomRight] = bottomRow;
 
   if (!topLeft || !topCenter || !topRight || !bottomLeft || !bottomCenter || !bottomRight) {
-    console.log('   ❌ [V10] Impossible de classer les 6 tags en lignes');
+    logger.debug('   ❌ [V10] Impossible de classer les 6 tags en lignes');
     return null;
   }
 

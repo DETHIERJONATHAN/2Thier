@@ -46,6 +46,7 @@ import { updateSumDisplayFieldAfterCopyChange } from '../../sum-display-field-ro
 import { copyFormulaCapacity } from '../../copy-capacity-formula.js';
 import { copyConditionCapacity } from '../../copy-capacity-condition.js';
 import { copyTableCapacity } from '../../copy-capacity-table.js';
+import { logger } from '../../../../../../lib/logger';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 📋 TYPES ET INTERFACES
@@ -251,7 +252,7 @@ export async function copyVariableWithCapacities(
             }
           }
         } catch (cleanErr) {
-          console.warn(`⚠️ Impossible de nettoyer linkedVariableIds orphelins:`, (cleanErr as Error).message);
+          logger.warn(`⚠️ Impossible de nettoyer linkedVariableIds orphelins:`, (cleanErr as Error).message);
         }
       }
       
@@ -433,7 +434,7 @@ export async function copyVariableWithCapacities(
                 newSourceRef = applySuffixOnceToSourceRef(originalVar.sourceRef);
               }
             } catch (e) {
-              console.error(`❌ Exception copie table:`, (e as Error).message);
+              logger.error(`❌ Exception copie table:`, (e as Error).message);
               newSourceRef = applySuffixOnceToSourceRef(originalVar.sourceRef);
             }
           }
@@ -473,7 +474,7 @@ export async function copyVariableWithCapacities(
       
       // ⚠️ VÉRIFICATION: La variable DOIT avoir un nodeId pour créer un display node
       if (!originalVar.nodeId) {
-        console.warn(`⚠️ [AUTO-CREATE-DISPLAY] Variable ${originalVar.id} n'a PAS de nodeId! Impossible de créer display node. Fallback newNodeId.`);
+        logger.warn(`⚠️ [AUTO-CREATE-DISPLAY] Variable ${originalVar.id} n'a PAS de nodeId! Impossible de créer display node. Fallback newNodeId.`);
         finalNodeId = newNodeId;
       } else {
         try {
@@ -1252,7 +1253,7 @@ export async function copyVariableWithCapacities(
                       orderBy: { order: 'asc' }
                     });
                   } catch (findErr) {
-                    console.warn(`[VAR-COPY] Erreur recherche enfants de ${origParentId}:`, (findErr as Error).message);
+                    logger.warn(`[VAR-COPY] Erreur recherche enfants de ${origParentId}:`, (findErr as Error).message);
                     continue;
                   }
 
@@ -1424,7 +1425,7 @@ export async function copyVariableWithCapacities(
                           formulaIdMap.set(f.id, newSumFormulaId);
                           childFormulaIdMap.set(f.id, newSumFormulaId);
                           childCopiedFormulaIds.push(newSumFormulaId);
-                          console.log(`[VAR-COPY] ✅ Sum-total formule copiée SANS réécriture: ${f.id} → ${newSumFormulaId}`);
+                          logger.debug(`[VAR-COPY] ✅ Sum-total formule copiée SANS réécriture: ${f.id} → ${newSumFormulaId}`);
                         } else {
                           const formulaResult = await copyFormulaCapacity(
                             f.id,
@@ -1440,7 +1441,7 @@ export async function copyVariableWithCapacities(
                           }
                         }
                       } catch (fErr) {
-                        console.warn(`[VAR-COPY] Erreur copie formule enfant ${f.id}:`, (fErr as Error).message);
+                        logger.warn(`[VAR-COPY] Erreur copie formule enfant ${f.id}:`, (fErr as Error).message);
                       }
                     }
 
@@ -1531,20 +1532,20 @@ export async function copyVariableWithCapacities(
                       }
                     }
 
-                    console.log(`[VAR-COPY] ✅ Enfant display node ${child.label} → ${childCopyId} dupliqué`);
+                    logger.debug(`[VAR-COPY] ✅ Enfant display node ${child.label} → ${childCopyId} dupliqué`);
 
                     // ── Mettre à jour le champ sum-total de l'enfant ──
                     try {
                       await updateSumDisplayFieldAfterCopyChange(child.id, prisma);
                     } catch (sumErr) {
-                      console.warn(`[VAR-COPY] Erreur mise à jour sum-total enfant ${child.id}:`, (sumErr as Error).message);
+                      logger.warn(`[VAR-COPY] Erreur mise à jour sum-total enfant ${child.id}:`, (sumErr as Error).message);
                     }
 
                     // ── Ajouter enfants au BFS pour traitement récursif ──
                     bfsQueue.push({ origParentId: child.id, copyParentId: childCopyId });
                     } catch (perChildErr) {
                       // 🔴 FIX: Erreur per-child ne bloque PAS les autres enfants
-                      console.error(`[VAR-COPY] ⚠️ Erreur duplication enfant ${child.id} (${child.label}) → continue avec les suivants:`, (perChildErr as Error).message);
+                      logger.error(`[VAR-COPY] ⚠️ Erreur duplication enfant ${child.id} (${child.label}) → continue avec les suivants:`, (perChildErr as Error).message);
                       // Toujours ajouter au BFS même si la création a échoué,
                       // car les petits-enfants pourraient réussir indépendamment
                       const childCopyIdFallback = appendSuffixOnce(stripTrailingNumeric(child.id));
@@ -1555,13 +1556,13 @@ export async function copyVariableWithCapacities(
             }
 
           } catch (copyCapErr) {
-            console.warn(`[VAR-COPY] Erreur copie formules/conditions pour var ${originalVarId} → node ${finalNodeId}:`, (copyCapErr as Error).message);
+            logger.warn(`[VAR-COPY] Erreur copie formules/conditions pour var ${originalVarId} → node ${finalNodeId}:`, (copyCapErr as Error).message);
           }
         } else {
           // Fallback si nœud propriétaire introuvable
         }
         } catch (e) {
-          console.warn(`[VAR-COPY] Erreur création display node pour var ${originalVarId}:`, (e as Error).message);
+          logger.warn(`[VAR-COPY] Erreur création display node pour var ${originalVarId}:`, (e as Error).message);
         }
       }
     }
@@ -1577,7 +1578,7 @@ export async function copyVariableWithCapacities(
         newVarId = `${originalVarId}-${suffix}-${tail}`;
       }
     } catch (e) {
-      console.warn(`[VAR-COPY] Erreur vérification collision ID pour var ${originalVarId}:`, (e as Error).message);
+      logger.warn(`[VAR-COPY] Erreur vérification collision ID pour var ${originalVarId}:`, (e as Error).message);
     }
 
     try {
@@ -1589,7 +1590,7 @@ export async function copyVariableWithCapacities(
         newExposedKey = `${originalVar.exposedKey}-${suffix}-${tail}`;
       }
     } catch (e) {
-      console.warn(`[VAR-COPY] Erreur vérification collision exposedKey pour var ${originalVarId}:`, (e as Error).message);
+      logger.warn(`[VAR-COPY] Erreur vérification collision exposedKey pour var ${originalVarId}:`, (e as Error).message);
     }
 
     // PERF R13: Pre-claim IDs in collision sets BEFORE the create to prevent
@@ -1639,7 +1640,7 @@ export async function copyVariableWithCapacities(
               await addToNodeLinkedField(prisma, finalNodeId, 'linkedVariableIds', [existingForNode.id]);
             }
           } catch (e) {
-            console.warn(`[VAR-COPY] Erreur MAJ display node (réutilisation) pour var ${originalVarId}:`, (e as Error).message);
+            logger.warn(`[VAR-COPY] Erreur MAJ display node (réutilisation) pour var ${originalVarId}:`, (e as Error).message);
           }
 
           const cacheKey = `${originalVarId}|${finalNodeId}`;
@@ -1648,14 +1649,14 @@ export async function copyVariableWithCapacities(
           try {
             await prisma.treeBranchLeafNodeVariable.delete({ where: { id: existingForNode.id } });
           } catch (delError) {
-            console.warn(`[VAR-COPY] Erreur suppression variable existante ${existingForNode.id}:`, (delError as Error).message);
+            logger.warn(`[VAR-COPY] Erreur suppression variable existante ${existingForNode.id}:`, (delError as Error).message);
           }
           _reusingExistingVariable = false;
           _existingVariableForReuse = null;
         }
       }
     } catch (e) {
-      console.warn(`[VAR-COPY] Erreur vérification variable existante pour node ${finalNodeId}:`, (e as Error).message);
+      logger.warn(`[VAR-COPY] Erreur vérification variable existante pour node ${finalNodeId}:`, (e as Error).message);
     }
 
     // Utiliser la variable réutilisée ou en créer une nouvelle
@@ -1676,7 +1677,7 @@ export async function copyVariableWithCapacities(
         ? existingNodeIds.has(finalNodeId)
         : await prisma.treeBranchLeafNode.findUnique({ where: { id: finalNodeId }, select: { id: true } }).then(r => !!r);
       if (!nodeExists) {
-        console.warn(`⚠️ Cannot create variable: node ${finalNodeId} does not exist in database. Skipping variable creation.`);
+        logger.warn(`⚠️ Cannot create variable: node ${finalNodeId} does not exist in database. Skipping variable creation.`);
         return {
           success: false,
           error: `Node ${finalNodeId} does not exist`,
@@ -1878,7 +1879,7 @@ export async function copyVariableWithCapacities(
       try {
         await linkVariableToAllCapacityNodes(prisma, newVariable.id, newVariable.sourceRef);
       } catch (e) {
-        console.warn(`[VAR-COPY] Erreur liaison variable ${newVariable.id} → capacités:`, (e as Error).message);
+        logger.warn(`[VAR-COPY] Erreur liaison variable ${newVariable.id} → capacités:`, (e as Error).message);
       }
     }
     
@@ -1902,7 +1903,7 @@ export async function copyVariableWithCapacities(
         }
       });
     } catch (e) {
-      console.warn(`[VAR-COPY] Erreur MAJ display node ${finalNodeId}:`, (e as Error).message);
+      logger.warn(`[VAR-COPY] Erreur MAJ display node ${finalNodeId}:`, (e as Error).message);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1930,7 +1931,7 @@ export async function copyVariableWithCapacities(
           }
         }
       } catch (e) {
-        console.warn(`[VAR-COPY] Erreur linkage section display pour var ${newVariable.id}:`, (e as Error).message);
+        logger.warn(`[VAR-COPY] Erreur linkage section display pour var ${newVariable.id}:`, (e as Error).message);
       }
     } else if (autoCreateDisplayNode) {
       // Déjà géré ci-dessus: finalNodeId pointe vers le nœud d'affichage (copié ou créé)
@@ -1944,7 +1945,7 @@ export async function copyVariableWithCapacities(
           await addToNodeLinkedField(prisma, finalNodeId, 'linkedVariableIds', [newVariable.id]);
         }
       } catch (e) {
-        console.warn(`[VAR-COPY] Erreur linkage linkedVariableIds pour node ${finalNodeId}:`, (e as Error).message);
+        logger.warn(`[VAR-COPY] Erreur linkage linkedVariableIds pour node ${finalNodeId}:`, (e as Error).message);
       }
       // Hydratation capacités condition/table si applicable
       try {
@@ -1995,7 +1996,7 @@ export async function copyVariableWithCapacities(
                 }
               }
             } catch (e) {
-              console.warn(`[VAR-COPY] Erreur sync linkedVariableIds sur node ${newNodeId}:`, (e as Error).message);
+              logger.warn(`[VAR-COPY] Erreur sync linkedVariableIds sur node ${newNodeId}:`, (e as Error).message);
             }
             } else if (parsedCap.type === 'table') {
               // 🔧 FIX 06/01/2026: Vérifier que la table appartient bien à finalNodeId avant de mettre hasTable: true
@@ -2024,7 +2025,7 @@ export async function copyVariableWithCapacities(
           }
         }
       } catch (e) {
-        console.warn(`[VAR-COPY] Erreur sync capacités (condition/table) pour node ${finalNodeId}:`, (e as Error).message);
+        logger.warn(`[VAR-COPY] Erreur sync capacités (condition/table) pour node ${finalNodeId}:`, (e as Error).message);
       }
     }
 
@@ -2037,7 +2038,7 @@ export async function copyVariableWithCapacities(
         await replaceLinkedVariableId(prisma, finalNodeId, originalVarId, newVariable.id, suffix);
       }
     } catch (e) {
-      console.warn(`[VAR-COPY] Erreur replace linkedVariableIds pour var ${originalVarId} → ${newVariable.id}:`, (e as Error).message);
+      logger.warn(`[VAR-COPY] Erreur replace linkedVariableIds pour var ${originalVarId} → ${newVariable.id}:`, (e as Error).message);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -2090,7 +2091,7 @@ export async function copyVariableWithCapacities(
             }
           }
         } catch (e) {
-          console.warn(`[VAR-COPY] Erreur MAJ bidirectionnelle linked pour capacité ${capacityType}:`, (e as Error).message);
+          logger.warn(`[VAR-COPY] Erreur MAJ bidirectionnelle linked pour capacité ${capacityType}:`, (e as Error).message);
         }
       }
     }
@@ -2102,7 +2103,7 @@ export async function copyVariableWithCapacities(
         updateSumDisplayFieldAfterCopyChange(originalVar.nodeId, prisma).catch(() => {});
       }
     } catch (sumErr) {
-      console.warn(`[VAR-COPY] Erreur mise à jour champ Total pour node ${originalVar?.nodeId}:`, (sumErr as Error).message);
+      logger.warn(`[VAR-COPY] Erreur mise à jour champ Total pour node ${originalVar?.nodeId}:`, (sumErr as Error).message);
     }
 
     return {
@@ -2121,14 +2122,14 @@ export async function copyVariableWithCapacities(
     };
 
   } catch (error) {
-    console.error(`\n${'═'.repeat(80)}`);
-    console.error(`❌❌❌ ERREUR FATALE lors de la copie de la variable!`);
-    console.error(`Variable ID: ${originalVarId}`);
-    console.error(`Suffix: ${suffix}`);
-    console.error(`Display Node ID: ${finalNodeId || 'undefined'}`);
-    console.error(`Message d'erreur:`, error instanceof Error ? error.message : String(error));
-    console.error(`Stack trace:`, error instanceof Error ? error.stack : 'N/A');
-    console.error(`${'═'.repeat(80)}\n`);
+    logger.error(`\n${'═'.repeat(80)}`);
+    logger.error(`❌❌❌ ERREUR FATALE lors de la copie de la variable!`);
+    logger.error(`Variable ID: ${originalVarId}`);
+    logger.error(`Suffix: ${suffix}`);
+    logger.error(`Display Node ID: ${finalNodeId || 'undefined'}`);
+    logger.error(`Message d'erreur:`, error instanceof Error ? error.message : String(error));
+    logger.error(`Stack trace:`, error instanceof Error ? error.stack : 'N/A');
+    logger.error(`${'═'.repeat(80)}\n`);
     
     // ⚠️ RE-JETER L'EXCEPTION au lieu de retourner silencieusement success: false
     // Cela force le problème à remonter et à être visible
@@ -2297,7 +2298,7 @@ async function addToNodeLinkedField(
       nodeId
     );
   } catch (e) {
-    console.warn(`[VAR-COPY] Erreur addToNodeLinkedField ${field} sur node ${nodeId}:`, (e as Error).message);
+    logger.warn(`[VAR-COPY] Erreur addToNodeLinkedField ${field} sur node ${nodeId}:`, (e as Error).message);
   }
 }
 
@@ -2390,7 +2391,7 @@ export interface CopyLinkedVariablesResult {
  *   prisma,
  *   { formulaIdMap, conditionIdMap, tableIdMap }
  * );
- * console.log(`${result.count} variables copiées`);
+ * logger.debug(`${result.count} variables copiées`);
  * // Accéder à la map : result.variableIdMap.get('oldVarId') → 'oldVarId-1'
  */
 export async function copyLinkedVariablesFromNode(
@@ -2476,7 +2477,7 @@ export async function copyLinkedVariablesFromNode(
     };
 
   } catch (error) {
-    console.error(`❌ Erreur globale copyLinkedVariablesFromNode:`, error);
+    logger.error(`❌ Erreur globale copyLinkedVariablesFromNode:`, error);
     return {
       count: 0,
       variableIdMap: new Map(),

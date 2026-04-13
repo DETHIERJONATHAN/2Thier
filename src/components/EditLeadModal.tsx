@@ -3,6 +3,7 @@ import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { NotificationManager } from './Notifications';
 import { Lead } from '../types/leads';
 import { useLeadStatuses } from '../hooks/useLeadStatuses';
+import { logger } from '../lib/logger';
 
 interface EditLeadModalProps {
   isOpen: boolean;
@@ -73,7 +74,7 @@ export default function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated }: 
         throw new Error('Erreur lors de la mise à jour');
       }
     } catch (error: unknown) {
-      console.error('Erreur lors de la mise à jour du lead:', error);
+      logger.error('Erreur lors de la mise à jour du lead:', error);
       NotificationManager.error(error.message || 'Erreur lors de la mise à jour du lead');
     } finally {
       setIsSubmitting(false);

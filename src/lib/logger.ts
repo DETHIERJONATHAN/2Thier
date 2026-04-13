@@ -2,7 +2,7 @@
  * 🪵 LOGGER CENTRALISÉ
  *
  * Usage:
- *   import { logger } from '../lib/logger';
+ *   import { logger } from './logger';
  *   logger.debug('ma valeur:', val);   // silencieux en prod
  *   logger.info('Route démarrée');     // silencieux en prod
  *   logger.warn('Attention...');       // actif en dev + prod
@@ -12,10 +12,16 @@
  * En développement : tout s'affiche.
  *
  * Pour activer les logs debug en prod : LOG_LEVEL=debug
+ *
+ * Compatible navigateur (Vite) et serveur (Node).
  */
 
-const IS_PROD   = process.env.NODE_ENV === 'production';
-const LOG_LEVEL = process.env.LOG_LEVEL || (IS_PROD ? 'warn' : 'debug');
+/* eslint-disable no-restricted-globals */
+const _proc = typeof process !== 'undefined' ? process : undefined;
+const IS_PROD = (import.meta as unknown as { env?: { MODE?: string } })?.env?.MODE === 'production'
+  || _proc?.env?.NODE_ENV === 'production';
+
+const LOG_LEVEL = _proc?.env?.LOG_LEVEL || (IS_PROD ? 'warn' : 'debug');
 
 const LEVELS = { debug: 0, info: 1, warn: 2, error: 3 };
 const currentLevel = LEVELS[LOG_LEVEL as keyof typeof LEVELS] ?? LEVELS.debug;

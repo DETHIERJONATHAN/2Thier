@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/useAuth';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
 import { message } from 'antd';
+import { logger } from '../lib/logger';
 
 export interface DynamicSection {
   id: string;
@@ -126,13 +127,13 @@ export const useDynamicSections = () => {
         requiredPermissions: null
       }));
 
-      console.log(`� [useDynamicSections] Création de ${categoriesToCreate.length} Categories par défaut...`);
+      logger.debug(`� [useDynamicSections] Création de ${categoriesToCreate.length} Categories par défaut...`);
       const response = await api.post('/admin-modules/categories/bulk', {
         categories: categoriesToCreate
       });
 
       if (response?.success && Array.isArray(response.data)) {
-        console.log(`✅ [useDynamicSections] ${response.data.length} Categories créées avec succès`);
+        logger.debug(`✅ [useDynamicSections] ${response.data.length} Categories créées avec succès`);
 
         // ✅ Convertir les Categories vers DynamicSection
         const sectionsFromCategories: DynamicSection[] = response.data.map((category: Category) => ({
@@ -152,7 +153,7 @@ export const useDynamicSections = () => {
         message.success('Categories initialisées avec succès');
       }
     } catch (error) {
-      console.error('❌ [useDynamicSections] Erreur lors de l\'initialisation des Categories:', error);
+      logger.error('❌ [useDynamicSections] Erreur lors de l\'initialisation des Categories:', error);
       setError('Erreur lors de l\'initialisation des categories');
     }
   }, [currentOrganization?.id, api]);
@@ -167,13 +168,13 @@ export const useDynamicSections = () => {
     try {
       setLoading(true);
       setError(null);
-      console.log('� [useDynamicSections] Chargement des Categories depuis Prisma...');
+      logger.debug('� [useDynamicSections] Chargement des Categories depuis Prisma...');
       
       // ✅ NOUVEAU : Utiliser les routes Categories au lieu de /api/sections
       const response = await api.get(`/admin-modules/categories?organizationId=${currentOrganization.id}`);
       
       if (response?.success && Array.isArray(response.data) && response.data.length > 0) {
-        console.log(`✅ [useDynamicSections] ${response.data.length} Categories chargées depuis Prisma`);
+        logger.debug(`✅ [useDynamicSections] ${response.data.length} Categories chargées depuis Prisma`);
         
         // ✅ Convertir les Categories Prisma vers le format DynamicSection
         const sectionsFromCategories: DynamicSection[] = response.data.map((category: Category) => ({
@@ -191,15 +192,15 @@ export const useDynamicSections = () => {
         
         setSections(sectionsFromCategories.sort((a, b) => a.order - b.order));
       } else {
-        console.log('� [useDynamicSections] Aucune Category trouvée, création des categories par défaut...');
+        logger.debug('� [useDynamicSections] Aucune Category trouvée, création des categories par défaut...');
         await initializeDefaultCategories();
       }
     } catch (error) {
-      console.error('❌ [useDynamicSections] Erreur lors du chargement des Categories:', error);
+      logger.error('❌ [useDynamicSections] Erreur lors du chargement des Categories:', error);
       setError('Erreur lors du chargement des categories');
       
       // Fallback : utiliser les sections par défaut
-      console.log('⚠️ [useDynamicSections] Utilisation des sections par défaut (fallback)');
+      logger.debug('⚠️ [useDynamicSections] Utilisation des sections par défaut (fallback)');
       setSections(defaultDynamicSections as DynamicSection[]);
     } finally {
       setLoading(false);
@@ -209,20 +210,20 @@ export const useDynamicSections = () => {
   // Charger les modules depuis la base de données
   const loadModules = useCallback(async () => {
     if (!currentOrganization?.id || !api) {
-      console.warn('Pas d\'organisation courante, impossible de charger les modules');
+      logger.warn('Pas d\'organisation courante, impossible de charger les modules');
       return;
     }
 
     try {
-      console.log('📦 [useDynamicSections] Chargement modules pour org:', currentOrganization.id);
+      logger.debug('📦 [useDynamicSections] Chargement modules pour org:', currentOrganization.id);
       const modulesResponse = await api.get(`/api/modules?organizationId=${currentOrganization.id}`);
 
       if (modulesResponse.success && modulesResponse.data) {
-        console.log('📦 [useDynamicSections] Modules récupérés:', modulesResponse.data.length);
+        logger.debug('📦 [useDynamicSections] Modules récupérés:', modulesResponse.data.length);
         setModules(modulesResponse.data);
       }
     } catch (error) {
-      console.error('❌ [useDynamicSections] Erreur lors du chargement des modules:', error);
+      logger.error('❌ [useDynamicSections] Erreur lors du chargement des modules:', error);
       setError('Erreur lors du chargement des modules');
     }
   }, [currentOrganization?.id, api]);
@@ -232,10 +233,10 @@ export const useDynamicSections = () => {
     if (!api) return;
 
     try {
-      console.log(`🔄 [useDynamicSections] Toggle Category ${sectionId}...`);
+      logger.debug(`🔄 [useDynamicSections] Toggle Category ${sectionId}...`);
       const section = sections.find(s => s.id === sectionId);
       if (!section) {
-        console.error(`❌ [useDynamicSections] Category ${sectionId} introuvable`);
+        logger.error(`❌ [useDynamicSections] Category ${sectionId} introuvable`);
         return;
       }
 
@@ -245,7 +246,7 @@ export const useDynamicSections = () => {
       });
 
       if (response?.success) {
-        console.log(`✅ [useDynamicSections] Category ${sectionId} ${newActiveStatus ? 'activée' : 'désactivée'}`);
+        logger.debug(`✅ [useDynamicSections] Category ${sectionId} ${newActiveStatus ? 'activée' : 'désactivée'}`);
         setSections(prev => prev.map(s => 
           s.id === sectionId 
             ? { ...s, active: newActiveStatus }
@@ -254,7 +255,7 @@ export const useDynamicSections = () => {
         message.success(`Category ${newActiveStatus ? 'activée' : 'désactivée'} avec succès`);
       }
     } catch (error) {
-      console.error('❌ [useDynamicSections] Erreur lors du toggle Category:', error);
+      logger.error('❌ [useDynamicSections] Erreur lors du toggle Category:', error);
       message.error('Erreur lors de la mise à jour de la category');
     }
   }, [sections, api]);
@@ -264,16 +265,16 @@ export const useDynamicSections = () => {
     if (!api) return;
 
     try {
-      console.log(`🗑️ [useDynamicSections] Suppression Category ${sectionId}...`);
+      logger.debug(`🗑️ [useDynamicSections] Suppression Category ${sectionId}...`);
       const response = await api.delete(`/admin-modules/categories/${sectionId}`);
       
       if (response?.success) {
-        console.log(`✅ [useDynamicSections] Category ${sectionId} supprimée`);
+        logger.debug(`✅ [useDynamicSections] Category ${sectionId} supprimée`);
         setSections(prev => prev.filter(s => s.id !== sectionId));
         message.success('Category supprimée avec succès');
       }
     } catch (error) {
-      console.error('❌ [useDynamicSections] Erreur lors de la suppression Category:', error);
+      logger.error('❌ [useDynamicSections] Erreur lors de la suppression Category:', error);
       message.error('Erreur lors de la suppression de la category');
     }
   }, [api]);
@@ -281,7 +282,7 @@ export const useDynamicSections = () => {
   // Écouter les événements de synchronisation
   useEffect(() => {
     const handleSyncEvent = () => {
-      console.log('🔄 [useDynamicSections] Synchronisation demandée, rechargement...');
+      logger.debug('🔄 [useDynamicSections] Synchronisation demandée, rechargement...');
       loadSections();
     };
 
@@ -324,7 +325,7 @@ export const useDynamicSections = () => {
       }
     } catch (error) {
       message.error('Erreur lors de l\'ajout de la category');
-      console.error(error);
+      logger.error(error);
     }
   }, [api, loadSections, sections.length, currentOrganization?.id]);
 
@@ -340,7 +341,7 @@ export const useDynamicSections = () => {
       }
     } catch (error) {
       message.error('Erreur lors de la modification de la section');
-      console.error(error);
+      logger.error(error);
     }
   }, [api, loadSections]);
 
@@ -361,7 +362,7 @@ export const useDynamicSections = () => {
       }
     } catch (error) {
       message.error('Erreur lors de la réorganisation des sections');
-      console.error(error);
+      logger.error(error);
     }
   }, [api, loadSections]);
 

@@ -8,6 +8,7 @@ import { NotificationManager } from '../../components/Notifications';
 import { getErrorMessage, getErrorResponseDetails } from '../../utils/errorHandling';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { FaUsers, FaExclamationTriangle, FaCheckCircle, FaClock } from 'react-icons/fa';
+import { logger } from '../../lib/logger';
 
 interface LeadDashboardState {
   totalLeads: number;
@@ -51,14 +52,14 @@ export default function LeadsDashboard() {
   useEffect(() => {
     // ✅ PRODUCTION: Utiliser le hook useAuth au lieu de isAuthenticated()
     if (!user) {
-      console.log('Utilisateur non authentifié, abandon de la récupération des leads');
+      logger.debug('Utilisateur non authentifié, abandon de la récupération des leads');
       NotificationManager.warning("Authentification requise pour accéder aux données");
       return;
     }
     
     // Ne pas exécuter l'effet si l'organisation n'est pas définie et que l'utilisateur n'est pas super admin
     if (!currentOrganization && !isSuperAdmin) {
-      console.log('Aucune organisation sélectionnée, abandon de la récupération des leads');
+      logger.debug('Aucune organisation sélectionnée, abandon de la récupération des leads');
       return;
     }
     
@@ -68,7 +69,7 @@ export default function LeadsDashboard() {
         const response = await api.get('/leads?include=LeadStatus,assignedTo,TimelineEvent');
         const leadsData = Array.isArray(response) ? response : (response?.data || []);
         
-        console.log('📊 Leads récupérés avec relations Prisma:', leadsData.length, 'leads trouvés');
+        logger.debug('📊 Leads récupérés avec relations Prisma:', leadsData.length, 'leads trouvés');
         
         // 📊 Calculs basés sur les vraies données Prisma
         const totalLeads = leadsData.length;
@@ -224,12 +225,12 @@ export default function LeadsDashboard() {
           loading: false
         });
         
-        console.log('✅ Dashboard mis à jour avec les données Prisma');
+        logger.debug('✅ Dashboard mis à jour avec les données Prisma');
         
       } catch (error) {
         const errorMessage = getErrorMessage(error, 'Impossible de charger les données du dashboard. Veuillez réessayer.');
         const errorDetails = getErrorResponseDetails(error);
-        console.error('❌ Erreur lors du chargement des données du dashboard:', {
+        logger.error('❌ Erreur lors du chargement des données du dashboard:', {
           error,
           status: errorDetails.status,
           data: errorDetails.data,

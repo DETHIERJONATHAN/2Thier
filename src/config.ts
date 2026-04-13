@@ -3,6 +3,7 @@
 
 import * as prodConfig from './config.prod';
 import fs from 'fs';
+import { logger } from './lib/logger';
 
 // Déterminer si nous sommes en production
 const isProduction = process.env.NODE_ENV === 'production';
@@ -12,7 +13,7 @@ const getJWTSecretFromConfig = (): string => {
   // ✅ PRIORITÉ 1: process.env (variables d'environnement Google Secret Manager)
   let secret = process.env.JWT_SECRET;
   if (secret && secret.trim()) {
-    console.log('[CONFIG] ✅ JWT_SECRET trouvé dans process.env');
+    logger.debug('[CONFIG] ✅ JWT_SECRET trouvé dans process.env');
     return secret;
   }
 
@@ -22,17 +23,17 @@ const getJWTSecretFromConfig = (): string => {
     try {
       secret = fs.readFileSync(cloudRunSecretPath, 'utf-8').trim();
       if (secret) {
-        console.log('[CONFIG] ✅ JWT_SECRET trouvé dans /run/secrets/JWT_SECRET');
+        logger.debug('[CONFIG] ✅ JWT_SECRET trouvé dans /run/secrets/JWT_SECRET');
         return secret;
       }
     } catch (err) {
-      console.error('[CONFIG] ❌ Erreur à la lecture de /run/secrets/JWT_SECRET:', err);
+      logger.error('[CONFIG] ❌ Erreur à la lecture de /run/secrets/JWT_SECRET:', err);
     }
   }
 
   // ❌ FALLBACK: En production, JWT_SECRET est OBLIGATOIRE
   if (isProduction) {
-    console.error('[CONFIG] ❌ FATAL: JWT_SECRET non disponible en production — arrêt immédiat');
+    logger.error('[CONFIG] ❌ FATAL: JWT_SECRET non disponible en production — arrêt immédiat');
     process.exit(1);
   }
   const fallbackSecret = 'dev_secret_key';
@@ -64,9 +65,9 @@ export const SECURITY = {
 
 // Log du mode
 if (isProduction) {
-  console.log('Application en mode PRODUCTION');
+  logger.debug('Application en mode PRODUCTION');
 } else {
-  console.log('Application en mode DÉVELOPPEMENT');
+  logger.debug('Application en mode DÉVELOPPEMENT');
 }
 
 // Re-export la config prod pour usage externe si nécessaire

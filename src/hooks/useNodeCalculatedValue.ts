@@ -11,6 +11,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
 import { tblLog, isTBLDebugEnabled } from '../utils/tblDebug';
 import { batchFetchCalculatedValue } from './calculatedValueBatcher';
+import { logger } from '../lib/logger';
 
 // 🧠 Coalescing global (module-level): évite les bursts de requêtes identiques
 const lastFetchAtByKey = new Map<string, number>();
@@ -132,7 +133,7 @@ export function preSeedCalculatedValues(values: Record<string, unknown>): void {
     }
   }
   if (isTBLDebugEnabled()) {
-    console.log(`🚀 [preSeedCalculatedValues] Seeded ${count} values, map size: ${preSeededValues.size}`, Object.keys(values).slice(0, 5));
+    logger.debug(`🚀 [preSeedCalculatedValues] Seeded ${count} values, map size: ${preSeededValues.size}`, Object.keys(values).slice(0, 5));
   }
 }
 
@@ -343,7 +344,7 @@ export function useNodeCalculatedValue(
       // Batch ne retourne pas de 404 (renvoie null pour les nœuds introuvables)
       setError(errMsg);
       if (isTBLDebugEnabled()) {
-        console.error('[useNodeCalculatedValue] Erreur récupération:', {
+        logger.error('[useNodeCalculatedValue] Erreur récupération:', {
           nodeId,
           treeId,
           error: errMsg
@@ -369,7 +370,7 @@ export function useNodeCalculatedValue(
       const preSeeded = preSeededValues.get(nodeId);
       if (preSeeded && Date.now() < preSeeded.expiresAt) {
         if (isTBLDebugEnabled()) {
-          console.log(`🚀 [useNodeCalcValue] PRE-SEED HIT for ${nodeId}: value=`, preSeeded.value);
+          logger.debug(`🚀 [useNodeCalcValue] PRE-SEED HIT for ${nodeId}: value=`, preSeeded.value);
         }
         setValue(preSeeded.value);
         preSeededValues.delete(nodeId); // Consume the pre-seeded value
@@ -391,7 +392,7 @@ export function useNodeCalculatedValue(
       if (submissionIdChanged && submissionId && previousSubmissionId) {
         // submissionId changed from one real value to another - wait for broadcast inline
         if (isTBLDebugEnabled()) {
-          console.log(`⏳ [useNodeCalcValue] submissionIdChanged guard for ${nodeId}, waiting for broadcast`);
+          logger.debug(`⏳ [useNodeCalcValue] submissionIdChanged guard for ${nodeId}, waiting for broadcast`);
         }
         return;
       }

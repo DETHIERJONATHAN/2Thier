@@ -17,6 +17,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
+import { logger } from '../lib/logger';
 
 export type StorageProviderType = 'google_drive' | 'local';
 
@@ -62,7 +63,7 @@ export const useStorageProvider = (): StorageProviderInfo => {
           setMailProvider(data?.mailProvider || 'none');
         }
       } catch (err) {
-        console.error('[useStorageProvider] ❌ Erreur détection provider:', err);
+        logger.error('[useStorageProvider] ❌ Erreur détection provider:', err);
         if (!cancelled) {
           setError('Impossible de détecter le provider de stockage');
           setProvider('local');

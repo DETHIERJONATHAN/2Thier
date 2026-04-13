@@ -1,6 +1,7 @@
 import express from 'express';
 import { authMiddleware, requireRole, type AuthenticatedRequest } from '../../../../../middlewares/auth';
 import { db } from '../../../../../lib/database';
+import { logger } from '../../../../../lib/logger';
 
 const router = express.Router();
 
@@ -81,7 +82,7 @@ router.get('/variables', authMiddleware, requireRole(['user', 'admin', 'super_ad
     return res.json({ variables, count: variables.length, source: 'database' });
   } catch (e) {
     const err = e as Error;
-    console.error('❌ [TBL API] Erreur GET /variables:', err.message, err.stack);
+    logger.error('❌ [TBL API] Erreur GET /variables:', err.message, err.stack);
     return res.status(500).json({ error: 'Erreur serveur variables', details: err.message });
   }
 });
@@ -173,7 +174,7 @@ router.get(['/calculation-modes', '/modes'], authMiddleware, requireRole(['user'
     return res.json({ modes, count: modes.length, source: 'derived_capacity', generatedAt: new Date().toISOString() });
   } catch (e) {
     const err = e as Error;
-    console.error('❌ [TBL API] Erreur GET /calculation-modes (capacity detection):', err.message, err.stack);
+    logger.error('❌ [TBL API] Erreur GET /calculation-modes (capacity detection):', err.message, err.stack);
     return res.status(500).json({ error: 'Erreur serveur calculation-modes', details: err.message });
   }
 });
@@ -233,7 +234,7 @@ router.get('/fields', authMiddleware, requireRole(['user', 'admin', 'super_admin
 
     return res.json({ fields, count: fields.length, source: 'database' });
   } catch (e) {
-    console.error('❌ [TBL API] Erreur GET /fields:', e);
+    logger.error('❌ [TBL API] Erreur GET /fields:', e);
     return res.status(500).json({ error: 'Erreur serveur fields' });
   }
 });
@@ -266,7 +267,7 @@ router.post('/devis', authMiddleware, requireRole(['user', 'admin', 'super_admin
 
     return res.json({ success: true, ...payload, message: 'Devis TBL sauvegardé (simulation)' });
   } catch (error) {
-    console.error('❌ [TBL API] Erreur sauvegarde devis:', error);
+    logger.error('❌ [TBL API] Erreur sauvegarde devis:', error);
     return res.status(500).json({ success: false, error: 'Erreur serveur lors de la sauvegarde du devis' });
   }
 });
@@ -321,7 +322,7 @@ router.get('/devis/client/:clientId', authMiddleware, requireRole(['user', 'admi
     res.json([]);
 
   } catch (error) {
-    console.error('❌ [TBL API] Erreur récupération devis client:', error);
+    logger.error('❌ [TBL API] Erreur récupération devis client:', error);
     res.status(500).json({
       error: 'Erreur serveur lors de la récupération des devis'
     });
@@ -332,7 +333,7 @@ router.get('/devis/:devisId', authMiddleware, requireRole(['user', 'admin', 'sup
   try {
     const { devisId } = req.params;
 
-    // console.log('📖 [TBL API] Chargement devis:', devisId); // ✨ Log réduit
+    // logger.debug('📖 [TBL API] Chargement devis:', devisId); // ✨ Log réduit
 
     // Pour l'instant, retourner un devis vide
     res.json({
@@ -350,7 +351,7 @@ router.get('/devis/:devisId', authMiddleware, requireRole(['user', 'admin', 'sup
       updatedAt: new Date().toISOString()
     });
   } catch (error) {
-    console.error('❌ [TBL API] Erreur chargement devis:', error);
+    logger.error('❌ [TBL API] Erreur chargement devis:', error);
     res.status(500).json({
       error: 'Erreur serveur lors du chargement du devis'
     });
@@ -362,7 +363,7 @@ router.get('/clients/:clientId/access-check', authMiddleware, requireRole(['user
     const { clientId } = req.params;
     const { role } = req.user || {};
 
-    // console.log('🔍 [TBL API] Vérification accès client:', { clientId, userRole: role }); // ✨ Log réduit
+    // logger.debug('🔍 [TBL API] Vérification accès client:', { clientId, userRole: role }); // ✨ Log réduit
 
     // Pour l'instant, toujours autoriser l'accès
     res.json({
@@ -371,7 +372,7 @@ router.get('/clients/:clientId/access-check', authMiddleware, requireRole(['user
       userRole: role
     });
   } catch (error) {
-    console.error('❌ [TBL API] Erreur vérification accès client:', error);
+    logger.error('❌ [TBL API] Erreur vérification accès client:', error);
     res.status(500).json({
       error: 'Erreur serveur lors de la vérification d\'accès'
     });

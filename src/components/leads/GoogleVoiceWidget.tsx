@@ -18,6 +18,7 @@ import {
   UserOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 interface GoogleVoiceWidgetProps {
   leadPhone: string;
@@ -68,7 +69,7 @@ const GoogleVoiceWidget: React.FC<GoogleVoiceWidgetProps> = ({
       }
       
     } catch (error: unknown) {
-      console.error('Erreur lors de l\'appel:', error);
+      logger.error('Erreur lors de l\'appel:', error);
       message.error('Erreur lors de l\'initiation de l\'appel');
     } finally {
       setCalling(false);
@@ -102,7 +103,7 @@ const GoogleVoiceWidget: React.FC<GoogleVoiceWidgetProps> = ({
       }
       
     } catch (error: unknown) {
-      console.error('Erreur lors de l\'envoi SMS:', error);
+      logger.error('Erreur lors de l\'envoi SMS:', error);
       message.error('Erreur lors de l\'envoi du SMS');
     } finally {
       setSendingSMS(false);

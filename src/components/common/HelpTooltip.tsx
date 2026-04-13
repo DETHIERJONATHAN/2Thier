@@ -3,6 +3,7 @@ import DOMPurify from 'dompurify';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import { useImageModal } from './ImageModal';
 import { SF } from '../zhiive/ZhiiveTheme';
+import { logger } from '../../lib/logger';
 
 // 🎨 Composant interne pour le rendu riche (HTML) dans les tooltips
 // Convertit les \n en <br> pour respecter les retours à la ligne du texte brut
@@ -87,7 +88,7 @@ export const HelpTooltip: React.FC<HelpTooltipProps> = ({
   };
 
   const handleImageClick = (imageSrc: string) => {
-    console.log('🖼️ CLIC SUR IMAGE TOOLTIP!', imageSrc);
+    logger.debug('🖼️ CLIC SUR IMAGE TOOLTIP!', imageSrc);
     setIsTooltipVisible(false);
     openModal(imageSrc, 'Image d\'aide', 'Aide');
   };
@@ -95,7 +96,7 @@ export const HelpTooltip: React.FC<HelpTooltipProps> = ({
   // 🚀 FONCTION PRINCIPALE - Clic sur le contenu pour ouvrir en plein écran
   // Utilise openRichModal pour garder la MÊME mise en page que le tooltip (gras, italique, souligné, espaces)
   const handleContentClick = () => {
-    console.log('🖼️📝 CLIC SUR CONTENU TOOLTIP COMPLET!');
+    logger.debug('🖼️📝 CLIC SUR CONTENU TOOLTIP COMPLET!');
     setIsTooltipVisible(false);
     
     // Si on a juste une image, l'ouvrir directement

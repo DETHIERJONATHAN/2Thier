@@ -10,6 +10,7 @@ import { db } from '../../../../lib/database';
 import { authenticateToken } from '../../../../middleware/auth';
 import { getResolver } from '../../../../services/TreeBranchLeafResolver';
 import { getBackgroundJobService } from '../../../../services/TreeBranchLeafBackgroundJobService';
+import { logger } from '../../../../lib/logger';
 
 const router = Router();
 const prisma = db;
@@ -75,7 +76,7 @@ router.post('/submission-data', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Ã¢ÂÅ’ Failed to create submission data:', error);
+    logger.error('Ã¢ÂÅ’ Failed to create submission data:', error);
     res.status(500).json({ 
       error: 'Failed to create submission data',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -119,7 +120,7 @@ router.put('/submission-data/:id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Ã¢ÂÅ’ Failed to update submission data:', error);
+    logger.error('Ã¢ÂÅ’ Failed to update submission data:', error);
     res.status(500).json({ 
       error: 'Failed to update submission data',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -209,7 +210,7 @@ router.get('/submission-data/:id/resolved', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Ã¢ÂÅ’ Failed to get resolved submission data:', error);
+    logger.error('Ã¢ÂÅ’ Failed to get resolved submission data:', error);
     res.status(500).json({ 
       error: 'Failed to get resolved submission data',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -257,7 +258,7 @@ router.get('/submission-data/by-submission/:submissionId', async (req, res) => {
               item.operationSource
             );
           } catch (error) {
-            console.warn(`Failed to resolve operation for ${item.id}:`, error);
+            logger.warn(`Failed to resolve operation for ${item.id}:`, error);
           }
         }
       }
@@ -297,7 +298,7 @@ router.get('/submission-data/by-submission/:submissionId', async (req, res) => {
     }
 
   } catch (error) {
-    console.error('Ã¢ÂÅ’ Failed to get submission data:', error);
+    logger.error('Ã¢ÂÅ’ Failed to get submission data:', error);
     res.status(500).json({ 
       error: 'Failed to get submission data',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -329,7 +330,7 @@ router.post('/operations/invalidate-cache', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Ã¢ÂÅ’ Failed to invalidate cache:', error);
+    logger.error('Ã¢ÂÅ’ Failed to invalidate cache:', error);
     res.status(500).json({ 
       error: 'Failed to invalidate cache',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -351,7 +352,7 @@ router.post('/operations/resolve-background', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Ã¢ÂÅ’ Failed to run background resolution:', error);
+    logger.error('Ã¢ÂÅ’ Failed to run background resolution:', error);
     res.status(500).json({ 
       error: 'Failed to run background resolution',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -402,7 +403,7 @@ router.get('/operations/statistics', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Ã¢ÂÅ’ Failed to get statistics:', error);
+    logger.error('Ã¢ÂÅ’ Failed to get statistics:', error);
     res.status(500).json({ 
       error: 'Failed to get statistics',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -431,7 +432,7 @@ router.get('/background-jobs/status', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Ã¢ÂÅ’ Failed to get background jobs status:', error);
+    logger.error('Ã¢ÂÅ’ Failed to get background jobs status:', error);
     res.status(500).json({ 
       error: 'Failed to get background jobs status',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -455,7 +456,7 @@ router.post('/background-jobs/start', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Ã¢ÂÅ’ Failed to start background jobs:', error);
+    logger.error('Ã¢ÂÅ’ Failed to start background jobs:', error);
     res.status(500).json({ 
       error: 'Failed to start background jobs',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -477,7 +478,7 @@ router.post('/background-jobs/stop', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Ã¢ÂÅ’ Failed to stop background jobs:', error);
+    logger.error('Ã¢ÂÅ’ Failed to stop background jobs:', error);
     res.status(500).json({ 
       error: 'Failed to stop background jobs',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -507,7 +508,7 @@ router.post('/background-jobs/force-sync', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Ã¢ÂÅ’ Failed to force sync:', error);
+    logger.error('Ã¢ÂÅ’ Failed to force sync:', error);
     res.status(500).json({ 
       error: 'Failed to force sync',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -566,7 +567,7 @@ router.get('/submission-data/by-submission/:submissionId/variables', async (req,
     });
 
   } catch (error) {
-    console.error('Ã¢ÂÅ’ Failed to get variables:', error);
+    logger.error('Ã¢ÂÅ’ Failed to get variables:', error);
     res.status(500).json({ 
       error: 'Failed to get variables',
       details: error instanceof Error ? error.message : 'Unknown error'

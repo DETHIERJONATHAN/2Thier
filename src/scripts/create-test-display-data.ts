@@ -14,17 +14,18 @@
 
 import { db } from '../lib/database';
 import { randomUUID } from 'crypto';
+import { logger } from '../lib/logger';
 
 const prisma = db;
 
 async function createTestData() {
-  console.log('🏗️ === CRÉATION DONNÉES DE TEST ===\n');
+  logger.debug('🏗️ === CRÉATION DONNÉES DE TEST ===\n');
 
   try {
     const timestamp = Date.now();
     
     // 1. Créer une organisation de test
-    console.log('🏢 1. Création organisation de test...');
+    logger.debug('🏢 1. Création organisation de test...');
     const orgId = `test-org-${timestamp}`;
     
     await prisma.organization.upsert({
@@ -37,10 +38,10 @@ async function createTestData() {
         updatedAt: new Date()
       }
     });
-    console.log(`   ✅ Organisation créée: ${orgId}`);
+    logger.debug(`   ✅ Organisation créée: ${orgId}`);
 
     // 2. Créer un arbre de test
-    console.log('🌳 2. Création arbre de test...');
+    logger.debug('🌳 2. Création arbre de test...');
     const treeId = `test-tree-${timestamp}`;
     
     await prisma.treeBranchLeafTree.create({
@@ -54,10 +55,10 @@ async function createTestData() {
         updatedAt: new Date()
       }
     });
-    console.log(`   ✅ Arbre créé: ${treeId}`);
+    logger.debug(`   ✅ Arbre créé: ${treeId}`);
 
     // 3. Créer des nœuds de base
-    console.log('📊 3. Création nœuds de base...');
+    logger.debug('📊 3. Création nœuds de base...');
     
     // Nœud racine (onglet)
     const tabId = `tab-${timestamp}`;
@@ -120,10 +121,10 @@ async function createTestData() {
       }
     });
 
-    console.log(`   ✅ Nœuds créés: ${sourceNodeId}, ${formulaNodeId}`);
+    logger.debug(`   ✅ Nœuds créés: ${sourceNodeId}, ${formulaNodeId}`);
 
     // 4. Créer une formule de test
-    console.log('🧮 4. Création formule de test...');
+    logger.debug('🧮 4. Création formule de test...');
     
     const formulaId = `formula-test-${timestamp}`;
     await prisma.treeBranchLeafNodeFormula.create({
@@ -145,10 +146,10 @@ async function createTestData() {
         updatedAt: new Date()
       }
     });
-    console.log(`   ✅ Formule créée: ${formulaId}`);
+    logger.debug(`   ✅ Formule créée: ${formulaId}`);
 
     // 5. Créer une soumission de test
-    console.log('📝 5. Création soumission de test...');
+    logger.debug('📝 5. Création soumission de test...');
     
     const submissionId = `test-submission-${timestamp}`;
     await prisma.treeBranchLeafSubmission.create({
@@ -163,10 +164,10 @@ async function createTestData() {
         updatedAt: new Date()
       }
     });
-    console.log(`   ✅ Soumission créée: ${submissionId}`);
+    logger.debug(`   ✅ Soumission créée: ${submissionId}`);
 
     // 6. Créer des données de soumission avec operationResult
-    console.log('💾 6. Création données de soumission...');
+    logger.debug('💾 6. Création données de soumission...');
     
     // Données pour le nœud source
     await prisma.treeBranchLeafSubmissionData.create({
@@ -211,10 +212,10 @@ async function createTestData() {
       }
     });
 
-    console.log(`   ✅ Données de soumission créées`);
+    logger.debug(`   ✅ Données de soumission créées`);
 
     // 7. Créer des champs d'affichage
-    console.log('🖥️  7. Création champs d\'affichage...');
+    logger.debug('🖥️  7. Création champs d\'affichage...');
     
     const displayNodeId = `display-${sourceNodeId}`;
     await prisma.treeBranchLeafNode.create({
@@ -258,10 +259,10 @@ async function createTestData() {
       }
     });
 
-    console.log(`   ✅ Champs d'affichage créés: ${displayNodeId}, ${displayFormulaNodeId}`);
+    logger.debug(`   ✅ Champs d'affichage créés: ${displayNodeId}, ${displayFormulaNodeId}`);
 
     // 8. Créer des copies
-    console.log('📋 8. Création copies...');
+    logger.debug('📋 8. Création copies...');
     
     const copySourceId = `${sourceNodeId}-copy-1`;
     await prisma.treeBranchLeafNode.create({
@@ -317,10 +318,10 @@ async function createTestData() {
       }
     });
 
-    console.log(`   ✅ Copies créées: ${copySourceId}, ${copyFormulaId}`);
+    logger.debug(`   ✅ Copies créées: ${copySourceId}, ${copyFormulaId}`);
 
     // 9. Créer des données de soumission pour les copies
-    console.log('💾 9. Données de soumission pour les copies...');
+    logger.debug('💾 9. Données de soumission pour les copies...');
     
     await prisma.treeBranchLeafSubmissionData.create({
       data: {
@@ -365,34 +366,34 @@ async function createTestData() {
       }
     });
 
-    console.log(`   ✅ Données de soumission pour copies créées`);
+    logger.debug(`   ✅ Données de soumission pour copies créées`);
 
     // 10. Résumé
-    console.log('\n🎉 === CRÉATION TERMINÉE ===');
-    console.log(`🏢 Organisation: ${orgId}`);
-    console.log(`🌳 Arbre: ${treeId}`);
-    console.log(`📝 Soumission: ${submissionId}`);
-    console.log(`📊 Nœuds créés: 8 (source, formule, affichages, copies)`);
-    console.log(`💾 Données de soumission: 4 enregistrements`);
+    logger.debug('\n🎉 === CRÉATION TERMINÉE ===');
+    logger.debug(`🏢 Organisation: ${orgId}`);
+    logger.debug(`🌳 Arbre: ${treeId}`);
+    logger.debug(`📝 Soumission: ${submissionId}`);
+    logger.debug(`📊 Nœuds créés: 8 (source, formule, affichages, copies)`);
+    logger.debug(`💾 Données de soumission: 4 enregistrements`);
     
-    console.log('\n🔍 Pour tester, utilisez:');
-    console.log(`npx tsx src/scripts/debug-display-fields.ts`);
-    console.log(`npx tsx src/scripts/test-display-real-time.ts`);
+    logger.debug('\n🔍 Pour tester, utilisez:');
+    logger.debug(`npx tsx src/scripts/debug-display-fields.ts`);
+    logger.debug(`npx tsx src/scripts/test-display-real-time.ts`);
     
-    console.log('\n📋 IDs à retenir:');
-    console.log(`Tree ID: ${treeId}`);
-    console.log(`Source Node: ${sourceNodeId}`);
-    console.log(`Formula Node: ${formulaNodeId}`);
-    console.log(`Display Source: ${displayNodeId}`);
-    console.log(`Display Formula: ${displayFormulaNodeId}`);
-    console.log(`Copy Source: ${copySourceId}`);
-    console.log(`Copy Formula: ${copyFormulaId}`);
+    logger.debug('\n📋 IDs à retenir:');
+    logger.debug(`Tree ID: ${treeId}`);
+    logger.debug(`Source Node: ${sourceNodeId}`);
+    logger.debug(`Formula Node: ${formulaNodeId}`);
+    logger.debug(`Display Source: ${displayNodeId}`);
+    logger.debug(`Display Formula: ${displayFormulaNodeId}`);
+    logger.debug(`Copy Source: ${copySourceId}`);
+    logger.debug(`Copy Formula: ${copyFormulaId}`);
 
   } catch (error) {
-    console.error('❌ Erreur pendant la création:', error);
+    logger.error('❌ Erreur pendant la création:', error);
   } finally {
     await prisma.$disconnect();
   }
 }
 
-createTestData().catch(console.error);
+createTestData().catch(logger.error);

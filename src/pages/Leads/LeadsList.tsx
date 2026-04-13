@@ -13,6 +13,7 @@ import { getErrorMessage } from '../../utils/errorHandling';
 import { Lead } from '../../types/leads';
 import { LEAD_SOURCES } from './LeadsConfig';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 /**
  * Liste principale des leads avec fonctionnalités de filtre et recherche
@@ -47,26 +48,26 @@ export default function LeadsList() {
   // Récupérer les leads
   const fetchLeads = useCallback(async () => {
     if (!organizationId && !isSuperAdmin) {
-      console.log('[LeadsList] Aucune organisation ou super admin, pas de récupération de leads');
+      logger.debug('[LeadsList] Aucune organisation ou super admin, pas de récupération de leads');
       setLeads([]);
       return;
     }
 
     try {
       const orgIdParam = isSuperAdmin && !organizationId ? 'all' : organizationId;
-      console.log(`[LeadsList] Récupération des leads pour l'organisation: ${orgIdParam}, isSuperAdmin: ${isSuperAdmin}`);
+      logger.debug(`[LeadsList] Récupération des leads pour l'organisation: ${orgIdParam}, isSuperAdmin: ${isSuperAdmin}`);
       
       const data = await api.get(`/leads?organizationId=${orgIdParam}`);
-      console.log('[LeadsList] Réponse API:', data);
+      logger.debug('[LeadsList] Réponse API:', data);
       
       const leadsData = Array.isArray(data) ? data : [];
-      console.log(`[LeadsList] ${leadsData.length} leads récupérés`);
+      logger.debug(`[LeadsList] ${leadsData.length} leads récupérés`);
       
       setLeads(leadsData);
       applyFilters(leadsData, activeFilters, searchTerm);
     } catch (error: unknown) {
       const errorMsg = getErrorMessage(error, 'Erreur lors du chargement des leads');
-      console.error('[LeadsList] Erreur fetchLeads:', error);
+      logger.error('[LeadsList] Erreur fetchLeads:', error);
       setError(errorMsg);
       NotificationManager.error(errorMsg);
     }
@@ -101,7 +102,7 @@ export default function LeadsList() {
     if (user) {
       fetchLeads();
     } else {
-      console.log('[LeadsList] Utilisateur non connecté, attente de connexion');
+      logger.debug('[LeadsList] Utilisateur non connecté, attente de connexion');
       setError('Authentification requise. Veuillez vous connecter.');
     }
   }, [fetchLeads, user]);

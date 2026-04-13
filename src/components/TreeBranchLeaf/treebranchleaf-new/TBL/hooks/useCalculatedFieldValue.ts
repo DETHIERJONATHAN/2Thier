@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import { useTBLBatch } from '../contexts/TBLBatchContext';
+import { logger } from '../../../../../lib/logger';
 
 /**
  * 🎯 Hook pour récupérer la valeur calculée d'un champ depuis le backend
@@ -64,7 +65,7 @@ export const useCalculatedFieldValue = (
     
     const cachedValue = batchContext.getCalculatedValueForNode(nodeId);
     if (cachedValue) {
-      console.log(`🚀 [useCalculatedFieldValue] BATCH HIT pour ${nodeId}:`, cachedValue);
+      logger.debug(`🚀 [useCalculatedFieldValue] BATCH HIT pour ${nodeId}:`, cachedValue);
       // Prendre submissionValue en priorité, sinon calculatedValue
       return cachedValue.submissionValue ?? cachedValue.calculatedValue;
     }
@@ -103,7 +104,7 @@ export const useCalculatedFieldValue = (
       if (detail?.calculatedValues && nodeId && nodeId in detail.calculatedValues) {
         const inlineValue = detail.calculatedValues[nodeId];
         if (inlineValue !== undefined && inlineValue !== null) {
-          console.log(`📥 [useCalculatedFieldValue] Valeur inline pour nodeId=${nodeId}:`, inlineValue);
+          logger.debug(`📥 [useCalculatedFieldValue] Valeur inline pour nodeId=${nodeId}:`, inlineValue);
           setValue(inlineValue);
           setLoading(false);
           return; // 🎯 Ne PAS refetch
@@ -161,7 +162,7 @@ export const useCalculatedFieldValue = (
         setLoading(true);
         setError(null);
 
-        console.warn(`⚠️ [useCalculatedFieldValue] FALLBACK API pour nodeId: ${nodeId}`);
+        logger.warn(`⚠️ [useCalculatedFieldValue] FALLBACK API pour nodeId: ${nodeId}`);
 
         // ✅ Utiliser formDataRef.current pour toujours avoir la dernière version
         const responseData = await api.post<{
@@ -198,7 +199,7 @@ export const useCalculatedFieldValue = (
           setValue(undefined);
         }
       } catch (err) {
-        console.error('❌ [useCalculatedFieldValue] Erreur:', err);
+        logger.error('❌ [useCalculatedFieldValue] Erreur:', err);
         setError(err instanceof Error ? err.message : 'Erreur inconnue');
         setValue(undefined);
       } finally {

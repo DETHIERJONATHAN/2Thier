@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { FieldValidation } from "../../store/slices/types";
 import { validateValidation, getAPIHeaders, evaluateValidation } from '../../utils/validationValidator';
+import { logger } from '../../lib/logger';
 
 interface ValidationEvaluatorProps {
   validation: FieldValidation;
@@ -16,7 +17,7 @@ const ValidationEvaluator: React.FC<ValidationEvaluatorProps> = ({ validation })
   useEffect(() => {
     const fetchFields = async () => {
       try {
-        console.log(`[ValidationEvaluator] 🔍 Récupération des champs pour la validation ${validation.id}`);
+        logger.debug(`[ValidationEvaluator] 🔍 Récupération des champs pour la validation ${validation.id}`);
 
         // Collecter tous les IDs de champs utilisés dans la validation
         const fieldIds = new Set<string>();
@@ -35,7 +36,7 @@ const ValidationEvaluator: React.FC<ValidationEvaluatorProps> = ({ validation })
         
         // Si aucun champ n'est utilisé, on s'arrête là
         if (fieldIds.size === 0) {
-          console.log(`[ValidationEvaluator] ℹ️ Aucun champ utilisé dans la validation ${validation.id}`);
+          logger.debug(`[ValidationEvaluator] ℹ️ Aucun champ utilisé dans la validation ${validation.id}`);
           return;
         }
         
@@ -58,7 +59,7 @@ const ValidationEvaluator: React.FC<ValidationEvaluatorProps> = ({ validation })
               });
             })
             .catch(error => {
-              console.error(`[ValidationEvaluator] ❌ ${error.message}`);
+              logger.error(`[ValidationEvaluator] ❌ ${error.message}`);
               // Ajouter une entrée minimale pour ce champ
               fieldsData.push({
                 id: fieldId,
@@ -71,7 +72,7 @@ const ValidationEvaluator: React.FC<ValidationEvaluatorProps> = ({ validation })
         // Attendre que toutes les requêtes soient terminées
         await Promise.all(promises);
         
-        console.log(`[ValidationEvaluator] ✅ ${fieldsData.length} champs récupérés`);
+        logger.debug(`[ValidationEvaluator] ✅ ${fieldsData.length} champs récupérés`);
         setFieldsInfo(fieldsData);
         
         // Initialiser les valeurs de test
@@ -96,7 +97,7 @@ const ValidationEvaluator: React.FC<ValidationEvaluatorProps> = ({ validation })
         setTestValues(initialTestValues);
         
       } catch (error) {
-        console.error(`[ValidationEvaluator] ❌ Erreur lors de la récupération des champs:`, error);
+        logger.error(`[ValidationEvaluator] ❌ Erreur lors de la récupération des champs:`, error);
       }
     };
 
@@ -114,10 +115,10 @@ const ValidationEvaluator: React.FC<ValidationEvaluatorProps> = ({ validation })
     setIsEvaluating(true);
     try {
       const evaluationResult = evaluateValidation(validation, testValues);
-      console.log(`[ValidationEvaluator] 🧪 Résultat de l'évaluation:`, evaluationResult);
+      logger.debug(`[ValidationEvaluator] 🧪 Résultat de l'évaluation:`, evaluationResult);
       setResult(evaluationResult);
     } catch (error) {
-      console.error(`[ValidationEvaluator] ❌ Erreur lors de l'évaluation:`, error);
+      logger.error(`[ValidationEvaluator] ❌ Erreur lors de l'évaluation:`, error);
       setResult({
         isValid: false,
         error: `Erreur lors de l'évaluation: ${error}`,

@@ -33,6 +33,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -106,7 +107,7 @@ export default function LandingPagesPage() {
       const response = await api.get<{success: boolean, data: LandingPage[]}>('/api/landing-pages');
       setLandingPages(response.data);
     } catch (error) {
-      console.error('Erreur lors du chargement des landing pages:', error);
+      logger.error('Erreur lors du chargement des landing pages:', error);
       message.error('Impossible de charger les landing pages');
     } finally {
       setLoading(false);
@@ -118,7 +119,7 @@ export default function LandingPagesPage() {
       const response = await api.get<{success: boolean, data: LandingPageStats}>('/api/landing-pages/stats');
       setStats(response.data);
     } catch (error) {
-      console.error('Erreur lors du chargement des statistiques:', error);
+      logger.error('Erreur lors du chargement des statistiques:', error);
     }
   }, [api]);
 
@@ -143,7 +144,7 @@ export default function LandingPagesPage() {
       loadLandingPages();
       loadStats();
     } catch (error: unknown) {
-      console.error('Erreur:', error);
+      logger.error('Erreur:', error);
       const errorMessage = (error as {response?: {data?: {message?: string}}})?.response?.data?.message || 'Erreur lors de la sauvegarde';
       message.error(errorMessage);
     }
@@ -156,7 +157,7 @@ export default function LandingPagesPage() {
       loadLandingPages();
       loadStats();
     } catch (error: unknown) {
-      console.error('Erreur:', error);
+      logger.error('Erreur:', error);
       const errorMessage = (error as {response?: {data?: {message?: string}}})?.response?.data?.message || 'Erreur lors de la suppression';
       message.error(errorMessage);
     }
@@ -169,7 +170,7 @@ export default function LandingPagesPage() {
       loadLandingPages();
       loadStats();
     } catch (error: unknown) {
-      console.error('Erreur:', error);
+      logger.error('Erreur:', error);
       const errorMessage = (error as {response?: {data?: {message?: string}}})?.response?.data?.message || 'Erreur lors de la publication';
       message.error(errorMessage);
     }
@@ -187,7 +188,7 @@ export default function LandingPagesPage() {
       loadLandingPages();
       loadStats();
     } catch (error: unknown) {
-      console.error('Erreur:', error);
+      logger.error('Erreur:', error);
       const errorMessage = (error as {response?: {data?: {message?: string}}})?.response?.data?.message || 'Erreur lors du clonage';
       message.error(errorMessage);
     }

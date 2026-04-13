@@ -32,6 +32,7 @@ import type {
   KeywordDetection, 
   TranscriptionStats 
 } from '../types/CallTypes';
+import { logger } from '../../../lib/logger';
 
 const { Title, Text } = Typography;
 
@@ -71,7 +72,7 @@ export const VoiceAnalysisPanel: React.FC<VoiceAnalysisPanelProps> = ({
     lead || null,
     callInProgress,
     (transcription) => {
-      console.log('[VoiceAnalysisPanel] 📝 Nouvelle transcription:', transcription.text);
+      logger.debug('[VoiceAnalysisPanel] 📝 Nouvelle transcription:', transcription.text);
     }
   );
   

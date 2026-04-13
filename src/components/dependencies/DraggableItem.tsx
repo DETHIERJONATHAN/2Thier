@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { logger } from '../../lib/logger';
 
 interface DraggableItemProps {
   id: string;
@@ -71,14 +72,14 @@ const DraggableItem: React.FC<DraggableItemProps> = ({
       e.dataTransfer.setData('text/plain', `${type}:${id}`);
       
     } catch (err) {
-      console.error('Erreur lors du drag start:', err);
+      logger.error('Erreur lors du drag start:', err);
     }
     
     // Effet visuel pour le glisser
     e.dataTransfer.effectAllowed = 'copy';
     
     // Pour le debug
-    console.log(`Début du glissement: ${type} - ${id}`);
+    logger.debug(`Début du glissement: ${type} - ${id}`);
   };
   
   // Classes CSS selon le type et la couleur

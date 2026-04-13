@@ -1,5 +1,6 @@
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { useState, useCallback, useMemo, useRef } from 'react';
+import { logger } from '../lib/logger';
 
 // Interface pour les pièces jointes
 export interface EmailAttachment {
@@ -107,22 +108,22 @@ export const useGmailService = () => {
 
   // Fonction utilitaire stable qui utilise toujours la dernière version de l'API
   const handleApiCall = useCallback(async <T>(apiCall: () => Promise<T>): Promise<T | null> => {
-    console.log('[useGmailService] 🔄 handleApiCall - DEBUT');
+    logger.debug('[useGmailService] 🔄 handleApiCall - DEBUT');
     setIsLoading(true);
     setError(null);
     try {
-      console.log('[useGmailService] 🔄 handleApiCall - Exécution de l\'appel API...');
+      logger.debug('[useGmailService] 🔄 handleApiCall - Exécution de l\'appel API...');
       const result = await apiCall();
-      console.log('[useGmailService] ✅ handleApiCall - Résultat reçu:', result);
-      console.log('[useGmailService] ✅ handleApiCall - Type du résultat:', typeof result);
+      logger.debug('[useGmailService] ✅ handleApiCall - Résultat reçu:', result);
+      logger.debug('[useGmailService] ✅ handleApiCall - Type du résultat:', typeof result);
       return result;
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } }; message?: string };
-      console.error('[Gmail Service] ❌ Erreur API dans handleApiCall:', error);
+      logger.error('[Gmail Service] ❌ Erreur API dans handleApiCall:', error);
       setError(error.response?.data?.message || error.message || 'Erreur inconnue');
       return null;
     } finally {
-      console.log('[useGmailService] 🔄 handleApiCall - FIN');
+      logger.debug('[useGmailService] 🔄 handleApiCall - FIN');
       setIsLoading(false);
     }
   }, []); // Pas de dépendances = fonction stable
@@ -135,10 +136,10 @@ export const useGmailService = () => {
     pageToken?: string;
   } = {}) => {
     return handleApiCall(async () => {
-      console.log('[useGmailService] ========================================');
-      console.log('[useGmailService] 📤 FRONTEND REQUEST - getMessages');
-      console.log('[useGmailService] Input params:', params);
-      console.log('[useGmailService] ========================================');
+      logger.debug('[useGmailService] ========================================');
+      logger.debug('[useGmailService] 📤 FRONTEND REQUEST - getMessages');
+      logger.debug('[useGmailService] Input params:', params);
+      logger.debug('[useGmailService] ========================================');
       
       // Adapter les paramètres pour correspondre à l'API du serveur
       const serverParams: Record<string, string | number> = {
@@ -148,41 +149,41 @@ export const useGmailService = () => {
       // Le serveur attend 'mailbox' au lieu de 'labelIds'
       if (params.labelIds && params.labelIds.length > 0) {
         const labelId = params.labelIds[0];
-        console.log('[useGmailService] 🏷️ Converting labelId:', labelId);
+        logger.debug('[useGmailService] 🏷️ Converting labelId:', labelId);
         // Mapper les labels Gmail vers les noms attendus par le serveur
         switch (labelId) {
           case 'INBOX':
             serverParams.mailbox = 'inbox';
-            console.log('[useGmailService] ✅ INBOX -> inbox');
+            logger.debug('[useGmailService] ✅ INBOX -> inbox');
             break;
           case 'SENT':
             serverParams.mailbox = 'sent';
-            console.log('[useGmailService] ✅ SENT -> sent');
+            logger.debug('[useGmailService] ✅ SENT -> sent');
             break;
           case 'DRAFT':
             serverParams.mailbox = 'drafts'; // ⚠️ CORRECTION: 'drafts' au lieu de 'draft'
-            console.log('[useGmailService] ✅ DRAFT -> drafts');
+            logger.debug('[useGmailService] ✅ DRAFT -> drafts');
             break;
           case 'STARRED':
             serverParams.mailbox = 'starred';
-            console.log('[useGmailService] ✅ STARRED -> starred');
+            logger.debug('[useGmailService] ✅ STARRED -> starred');
             break;
           case 'TRASH':
             serverParams.mailbox = 'trash';
-            console.log('[useGmailService] ✅ TRASH -> trash');
+            logger.debug('[useGmailService] ✅ TRASH -> trash');
             break;
           case 'SPAM':
             serverParams.mailbox = 'spam';
-            console.log('[useGmailService] ✅ SPAM -> spam');
+            logger.debug('[useGmailService] ✅ SPAM -> spam');
             break;
           default:
             // Pour les labels personnalisés, utiliser l'ID du label directement
             serverParams.mailbox = labelId;
-            console.log('[useGmailService] ✅ CUSTOM:', labelId, '-> custom label');
+            logger.debug('[useGmailService] ✅ CUSTOM:', labelId, '-> custom label');
         }
       } else {
         serverParams.mailbox = 'inbox'; // Par défaut
-        console.log('[useGmailService] ⚠️ No labelIds, defaulting to inbox');
+        logger.debug('[useGmailService] ⚠️ No labelIds, defaulting to inbox');
       }
       
       if (params.q) {
@@ -193,11 +194,11 @@ export const useGmailService = () => {
         serverParams.pageToken = params.pageToken;
       }
       
-      console.log('[useGmailService] � FINAL SERVER PARAMS:', serverParams);
-      console.log('[useGmailService] 📡 Making API call to /api/gmail/messages...');
+      logger.debug('[useGmailService] � FINAL SERVER PARAMS:', serverParams);
+      logger.debug('[useGmailService] 📡 Making API call to /api/gmail/messages...');
       const response = await apiRef.current.get('/api/gmail/messages', { params: serverParams });
-      console.log('[useGmailService] � API RESPONSE received:', response);
-      console.log('[useGmailService] ========================================');
+      logger.debug('[useGmailService] � API RESPONSE received:', response);
+      logger.debug('[useGmailService] ========================================');
       return response;
     });
   }, [handleApiCall]);
@@ -321,7 +322,7 @@ export const useGmailService = () => {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
-      console.error('Erreur téléchargement pièce jointe:', error);
+      logger.error('Erreur téléchargement pièce jointe:', error);
       throw error;
     }
   }, []);
@@ -330,7 +331,7 @@ export const useGmailService = () => {
     return handleApiCall(async () => {
       // Si il y a des pièces jointes, utiliser FormData
       if (emailData.attachments && emailData.attachments.length > 0) {
-        console.log('[useGmailService] 📎 Envoi avec pièces jointes:', emailData.attachments.length);
+        logger.debug('[useGmailService] 📎 Envoi avec pièces jointes:', emailData.attachments.length);
         
         const formData = new FormData();
         
@@ -343,12 +344,12 @@ export const useGmailService = () => {
         
         // Ajouter les fichiers
         emailData.attachments.forEach((file) => {
-          console.log('[useGmailService] 📎 Ajout fichier:', file.name, 'taille:', file.size);
+          logger.debug('[useGmailService] 📎 Ajout fichier:', file.name, 'taille:', file.size);
           // IMPORTANT: le backend (Formidable) s'attend au champ "attachments"
           formData.append('attachments', file, file.name);
         });
         
-        console.log('[useGmailService] 📎 FormData préparé, envoi...');
+        logger.debug('[useGmailService] 📎 FormData préparé, envoi...');
         
         // Utiliser une approche différente pour FormData
         const response = await fetch(`${window.location.origin}/api/gmail/messages/send`, {
@@ -368,7 +369,7 @@ export const useGmailService = () => {
         return await response.json();
       } else {
         // Envoi standard sans pièces jointes
-        console.log('[useGmailService] 📧 Envoi sans pièces jointes');
+        logger.debug('[useGmailService] 📧 Envoi sans pièces jointes');
         const response = await apiRef.current.post('/api/gmail/messages/send', emailData);
         return response;
       }

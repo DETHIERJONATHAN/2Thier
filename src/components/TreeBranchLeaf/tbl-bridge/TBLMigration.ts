@@ -17,6 +17,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { CapacityDetector, TreeBranchLeafNode } from './capacities/CapacityDetector';
 import { TBLDecoder } from './TBLDecoder';
+import { logger } from '../../../lib/logger';
 
 interface MigrationConfig {
   dryRun: boolean;                    // Mode simulation
@@ -514,7 +515,7 @@ export class TBLMigration {
 
     const timestamp = new Date().toISOString();
     const prefix = this.config.dryRun ? '[DRY RUN]' : '[MIGRATION]';
-    console.log(`${timestamp} ${prefix} ${message}`);
+    logger.debug(`${timestamp} ${prefix} ${message}`);
   }
 }
 
@@ -527,33 +528,33 @@ export async function runMigration(config: Partial<MigrationConfig> = {}) {
   try {
     const result = await migration.migrate();
     
-    console.log('\n🎉 RAPPORT FINAL MIGRATION:');
-    console.log(`✅ Succès: ${result.success}`);
-    console.log(`📊 Total traités: ${result.totalProcessed}`);
-    console.log(`🔄 Total migrés: ${result.totalMigrated}`);
-    console.log(`💾 Backup: ${result.backupFile}`);
-    console.log(`📈 Confiance moyenne: ${result.statistics.averageConfidence}%`);
+    logger.debug('\n🎉 RAPPORT FINAL MIGRATION:');
+    logger.debug(`✅ Succès: ${result.success}`);
+    logger.debug(`📊 Total traités: ${result.totalProcessed}`);
+    logger.debug(`🔄 Total migrés: ${result.totalMigrated}`);
+    logger.debug(`💾 Backup: ${result.backupFile}`);
+    logger.debug(`📈 Confiance moyenne: ${result.statistics.averageConfidence}%`);
     
     if (result.errors.length > 0) {
-      console.log(`❌ Erreurs: ${result.errors.length}`);
-      result.errors.forEach(error => console.log(`  - ${error}`));
+      logger.debug(`❌ Erreurs: ${result.errors.length}`);
+      result.errors.forEach(error => logger.debug(`  - ${error}`));
     }
     
     if (result.warnings.length > 0) {
-      console.log(`⚠️ Avertissements: ${result.warnings.length}`);
-      result.warnings.forEach(warning => console.log(`  - ${warning}`));
+      logger.debug(`⚠️ Avertissements: ${result.warnings.length}`);
+      result.warnings.forEach(warning => logger.debug(`  - ${warning}`));
     }
 
-    console.log('\n📊 STATISTIQUES DÉTAILLÉES:');
-    console.log('Par type:', result.statistics.byType);
-    console.log('Par capacité:', result.statistics.byCapacity);
-    console.log(`Doublons résolus: ${result.statistics.duplicatesResolved}`);
-    console.log(`Auto-détectés: ${result.statistics.autoDetected}`);
+    logger.debug('\n📊 STATISTIQUES DÉTAILLÉES:');
+    logger.debug('Par type:', result.statistics.byType);
+    logger.debug('Par capacité:', result.statistics.byCapacity);
+    logger.debug(`Doublons résolus: ${result.statistics.duplicatesResolved}`);
+    logger.debug(`Auto-détectés: ${result.statistics.autoDetected}`);
     
     return result;
     
   } catch (error) {
-    console.error('💥 ÉCHEC MIGRATION:', error);
+    logger.error('💥 ÉCHEC MIGRATION:', error);
     throw error;
   }
 }
@@ -566,7 +567,7 @@ if (require.main === module) {
     logLevel: process.argv.includes('--debug') ? 'debug' : 'info'
   };
   
-  runMigration(config).catch(console.error);
+  runMigration(config).catch(logger.error);
 }
 
 /**

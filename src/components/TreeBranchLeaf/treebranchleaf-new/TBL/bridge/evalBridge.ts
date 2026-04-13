@@ -10,6 +10,7 @@
  */
 
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
+import { logger } from '../../../../../lib/logger';
 
 // ---- Types & Globals -------------------------------------------------------
 export interface BridgeEventBase { ts: number; type: string; [k: string]: unknown }
@@ -50,7 +51,7 @@ function ensureBridge(): BridgeAPI {
         if (this.events.length > this.limit) this.events.splice(0, this.events.length - this.limit);
         if (isDebug()) {
           // Log ultra concis (type + clé principale)
-          console.log(`🌉[BRIDGE] ${e.type}`, e.elementId ? `#${e.elementId}` : '');
+          logger.debug(`🌉[BRIDGE] ${e.type}`, e.elementId ? `#${e.elementId}` : '');
         }
       },
       dump(filter) {

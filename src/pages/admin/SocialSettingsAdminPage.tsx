@@ -19,6 +19,7 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 
 import { SF, FB } from '../../components/zhiive/ZhiiveTheme';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 // ── Responsive Hook ──
 function useScreenSize() {
@@ -231,7 +232,7 @@ export default function SocialSettingsAdminPage() {
         setSelectedOrgId(orgs[0].id);
       }
     } catch (error) {
-      console.error('Error loading orgs:', error);
+      logger.error('Error loading orgs:', error);
     }
   }, [api.api, isSuperAdmin, selectedOrgId]);
 
@@ -247,7 +248,7 @@ export default function SocialSettingsAdminPage() {
       setSettings(data);
       setDirty(false);
     } catch (error) {
-      console.error('Error loading settings:', error);
+      logger.error('Error loading settings:', error);
     } finally {
       setLoading(false);
     }
@@ -268,7 +269,7 @@ export default function SocialSettingsAdminPage() {
     try {
       await api.api.put(`/social-settings/${targetOrgId}`, { [key]: value });
     } catch (error) {
-      console.error('Error saving:', error);
+      logger.error('Error saving:', error);
       message.error('Erreur lors de la sauvegarde du paramètre');
       // Revert on error
       setSettings(settings);
@@ -306,7 +307,7 @@ export default function SocialSettingsAdminPage() {
       await api.api.put(`/social-settings/${targetOrgId}`, defaults);
       message.success('Section réinitialisée');
     } catch (error) {
-      console.error('Error resetting:', error);
+      logger.error('Error resetting:', error);
       message.error('Erreur lors de la réinitialisation');
       setSettings(settings);
     } finally {
@@ -324,7 +325,7 @@ export default function SocialSettingsAdminPage() {
       await api.api.put(`/social-settings/${targetOrgId}`, allDefaults);
       message.success('Tous les paramètres réinitialisés');
     } catch (error) {
-      console.error('Error resetting all:', error);
+      logger.error('Error resetting all:', error);
       message.error('Erreur lors de la réinitialisation globale');
       setSettings(settings);
     } finally {

@@ -1,13 +1,14 @@
+import { logger } from '../lib/logger';
 /**
  * Supprime les avertissements de compatibilité Ant Design avec React 19
  * Ces avertissements sont des faux positifs car Ant Design fonctionne correctement avec React 19
  */
 
-// Sauvegarder la méthode console.warn originale
-const originalWarn = console.warn;
+// Sauvegarder la méthode logger.warn originale
+const originalWarn = logger.warn;
 
-// Override console.warn pour filtrer les avertissements Ant Design
-console.warn = (...args: unknown[]) => {
+// Override logger.warn pour filtrer les avertissements Ant Design
+logger.warn = (...args: unknown[]) => {
   // Filtrer les avertissements de compatibilité Ant Design
   const message = args[0];
   if (typeof message === 'string') {
@@ -39,6 +40,6 @@ console.warn = (...args: unknown[]) => {
 
 export default function suppressAntdWarnings() {
   if (process.env.NODE_ENV === 'development') {
-    console.log('🔇 Avertissements Ant Design supprimés en mode développement');
+    logger.debug('🔇 Avertissements Ant Design supprimés en mode développement');
   }
 }

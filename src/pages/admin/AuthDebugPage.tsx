@@ -3,6 +3,7 @@ import { Card, Descriptions, Tag, Alert, Button } from 'antd';
 import { useAuth } from '../../auth/useAuth';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const AuthDebugPage: React.FC = () => {
   const { t } = useTranslation();
@@ -11,24 +12,24 @@ const AuthDebugPage: React.FC = () => {
 
   const testApiCall = async () => {
     try {
-      console.log("Test API - Appel de /users");
+      logger.debug("Test API - Appel de /users");
       const response = await api.get('/api/users');
-      console.log("Réponse:", response);
+      logger.debug("Réponse:", response);
       alert(`API Test réussi! ${Array.isArray(response) ? response.length : response?.data?.length || 0} utilisateurs trouvés.`);
     } catch (error) {
-      console.error("Erreur API:", error);
+      logger.error("Erreur API:", error);
       alert(`Erreur API: ${error}`);
     }
   };
 
   const testAuthCheck = async () => {
     try {
-      console.log("Test Auth - Appel de /auth/me");
+      logger.debug("Test Auth - Appel de /auth/me");
       const response = await api.get('/api/auth/me');
-      console.log("Réponse auth:", response);
+      logger.debug("Réponse auth:", response);
       alert(`Auth Test réussi! Utilisateur: ${response?.currentUser?.email || 'Unknown'}`);
     } catch (error) {
-      console.error("Erreur Auth:", error);
+      logger.error("Erreur Auth:", error);
       alert(`Erreur Auth: ${error}`);
     }
   };

@@ -7,6 +7,7 @@
 
 import { google } from 'googleapis';
 import { googleAuthManager } from '../index';
+import { logger } from '../../lib/logger';
 
 export interface CalendarEvent {
   id?: string;
@@ -42,7 +43,7 @@ export class GoogleCalendarService {
    * Obtient une instance de l'API Google Calendar pour un utilisateur dans une organisation
    */
   private async getCalendarAPI(organizationId: string, userId?: string) {
-    console.log(`[GoogleCalendarService] 📅 Création instance API Calendar pour organisation: ${organizationId}, utilisateur: ${userId || 'non spécifié'}`);
+    logger.debug(`[GoogleCalendarService] 📅 Création instance API Calendar pour organisation: ${organizationId}, utilisateur: ${userId || 'non spécifié'}`);
     
     const authClient = await googleAuthManager.getAuthenticatedClient(organizationId, userId);
     if (!authClient) {
@@ -89,7 +90,7 @@ export class GoogleCalendarService {
         })),
       }));
     } catch (error) {
-      console.error('[GoogleCalendarService] ❌ Erreur lors de la récupération des événements:', error);
+      logger.error('[GoogleCalendarService] ❌ Erreur lors de la récupération des événements:', error);
       throw error;
     }
   }
@@ -114,7 +115,7 @@ export class GoogleCalendarService {
 
       return response.data.id!;
     } catch (error) {
-      console.error('[GoogleCalendarService] ❌ Erreur lors de la création de l\'événement:', error);
+      logger.error('[GoogleCalendarService] ❌ Erreur lors de la création de l\'événement:', error);
       throw error;
     }
   }
@@ -138,7 +139,7 @@ export class GoogleCalendarService {
         },
       });
     } catch (error) {
-      console.error('[GoogleCalendarService] ❌ Erreur lors de la mise à jour de l\'événement:', error);
+      logger.error('[GoogleCalendarService] ❌ Erreur lors de la mise à jour de l\'événement:', error);
       throw error;
     }
   }
@@ -155,7 +156,7 @@ export class GoogleCalendarService {
         eventId: eventId,
       });
     } catch (error) {
-      console.error('[GoogleCalendarService] ❌ Erreur lors de la suppression de l\'événement:', error);
+      logger.error('[GoogleCalendarService] ❌ Erreur lors de la suppression de l\'événement:', error);
       throw error;
     }
   }
@@ -164,8 +165,8 @@ export class GoogleCalendarService {
    * Synchronise les événements avec Google Calendar
    */
   async syncEvents(organizationId: string, startDate: Date, endDate: Date, userId?: string): Promise<CalendarEvent[]> {
-    console.log(`[GoogleCalendarService] 🔄 Synchronisation des événements pour l'organisation: ${organizationId}, utilisateur: ${userId}`);
-    console.log(`[GoogleCalendarService] 📅 Période: ${startDate.toISOString()} -> ${endDate.toISOString()}`);
+    logger.debug(`[GoogleCalendarService] 🔄 Synchronisation des événements pour l'organisation: ${organizationId}, utilisateur: ${userId}`);
+    logger.debug(`[GoogleCalendarService] 📅 Période: ${startDate.toISOString()} -> ${endDate.toISOString()}`);
     
     return await this.getEvents(organizationId, startDate, endDate, userId);
   }

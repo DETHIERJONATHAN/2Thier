@@ -2,6 +2,7 @@
 import { App, Card, Typography, Row, Col, Tag, List, Space, Button, Alert, Input, Tooltip } from 'antd';
 import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
 import { GoogleOutlined, ThunderboltOutlined, AndroidOutlined, ReloadOutlined } from '@ant-design/icons';
+import { logger } from '../../../lib/logger';
 
 const { Title, Paragraph } = Typography;
 
@@ -201,7 +202,7 @@ function Devis1minuteAdminIntegrationsContent() {
         setAdsWarning(null);
       }
     } catch {
-      console.log('Pas d\'intégration Google Ads existante');
+      logger.debug('Pas d\'intégration Google Ads existante');
       setGoogleAdsIntegration(null);
       setAdsDiag(null);
       setAdsConnectionState('disconnected');
@@ -223,7 +224,7 @@ function Devis1minuteAdminIntegrationsContent() {
       setEnvCheck(envPayload || null);
       await fetchPromise;
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       message.error("Impossible de charger l'état des intégrations");
       setEnvCheck(null);
     } finally {
@@ -355,7 +356,7 @@ function Devis1minuteAdminIntegrationsContent() {
         setOauthInProgress(null);
       }, 30000);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       const detail = (e && typeof e === 'object') ?
         ((e as { message?: string; data?: { message?: string } }).data?.message ||
          (e as { message?: string }).message) : undefined;
@@ -651,7 +652,7 @@ function Devis1minuteAdminIntegrationsContent() {
                                 message.success('Compte Google Ads enregistré');
                                 fetchGoogleAdsIntegration();
                               } catch (err) {
-                                console.error(err);
+                                logger.error(err);
                                 message.error('Impossible d\'enregistrer le compte');
                               }
                             }}

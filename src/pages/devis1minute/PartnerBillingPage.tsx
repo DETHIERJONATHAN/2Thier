@@ -35,6 +35,7 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import dayjs from 'dayjs';
 import 'dayjs/locale/fr';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 dayjs.locale('fr');
 
@@ -268,7 +269,7 @@ export default function PartnerBillingPage() {
       setInvoices(invoicesData);
       setPacks(packsData);
     } catch (error) {
-      console.error('Erreur lors du chargement:', error);
+      logger.error('Erreur lors du chargement:', error);
       message.error('Impossible de charger les données de facturation');
     } finally {
       setLoading(false);
@@ -300,7 +301,7 @@ export default function PartnerBillingPage() {
         loadData(); // Recharger les données
       }
     } catch (error: unknown) {
-      console.error('Erreur lors de l\'achat:', error);
+      logger.error('Erreur lors de l\'achat:', error);
       const errorMessage = error instanceof Error && 'response' in error 
         ? (error as any).response?.data?.message 
         : 'Erreur lors de l\'achat de crédits';
@@ -325,7 +326,7 @@ export default function PartnerBillingPage() {
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Erreur lors du téléchargement:', error);
+      logger.error('Erreur lors du téléchargement:', error);
       message.error('Impossible de télécharger la facture');
     }
   };

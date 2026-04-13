@@ -3,6 +3,7 @@ import { Card, Row, Col, Statistic, Table, Button, Space, Tag, Modal, Form, Inpu
 import { ToolOutlined, BugOutlined, CheckCircleOutlined, ClockCircleOutlined, ExclamationCircleOutlined, PlusOutlined } from '@ant-design/icons';
 import PageHeader from '../components/PageHeader';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../lib/logger';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -189,7 +190,7 @@ const TechniquePage: React.FC = () => {
 
   const handleModalOk = () => {
     form.validateFields().then(values => {
-      console.log('Nouveau ticket:', values);
+      logger.debug('Nouveau ticket:', values);
       setIsModalVisible(false);
       form.resetFields();
     });

@@ -23,6 +23,7 @@ import {
   MobileOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 interface PeppolConfigData {
   enabled: boolean;
@@ -248,7 +249,7 @@ const PeppolSettings: React.FC = () => {
         setConfig(result.data);
       }
     } catch (error) {
-      console.error('[PeppolSettings] Error fetching config:', error);
+      logger.error('[PeppolSettings] Error fetching config:', error);
     } finally {
       setLoading(false);
     }
@@ -278,7 +279,7 @@ const PeppolSettings: React.FC = () => {
         autoSendEnabled: config.autoSendEnabled,
         autoReceiveEnabled: config.autoReceiveEnabled,
       };
-      console.log('[PeppolSettings] handleSave payload:', JSON.stringify(payload));
+      logger.debug('[PeppolSettings] handleSave payload:', JSON.stringify(payload));
       const result = await api.put<ApiResponse<PeppolConfigData>>('/api/peppol/config', payload);
       if (result?.success) {
         message.success('Configuration Peppol sauvegardée');
@@ -288,7 +289,7 @@ const PeppolSettings: React.FC = () => {
       }
     } catch (err: unknown) {
       const apiErr = err as { data?: { debug?: unknown; message?: string; errors?: unknown[] } };
-      console.error('[PeppolSettings] Save error details:', JSON.stringify(apiErr?.data));
+      logger.error('[PeppolSettings] Save error details:', JSON.stringify(apiErr?.data));
       message.error(apiErr?.data?.message || 'Erreur lors de la sauvegarde');
     } finally {
       setSaving(false);

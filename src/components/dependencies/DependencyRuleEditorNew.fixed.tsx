@@ -14,6 +14,7 @@ import {
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import useCRMStore from '../../store';
+import { logger } from '../../lib/logger';
 
 interface DependencyRuleEditorProps {
   dependency: Dependency;
@@ -91,7 +92,7 @@ function DependencyRuleEditorNew({ dependency, allFields, onUpdate, onDelete, on
     setActiveId(active.id as string);
     
     // Log détaillé pour le débogage
-    console.log("Drag started:", {
+    logger.debug("Drag started:", {
       id: active.id,
       data: active.data.current
     });
@@ -101,7 +102,7 @@ function DependencyRuleEditorNew({ dependency, allFields, onUpdate, onDelete, on
       
       // Normalisation des données d'élément externe
       if (data.fieldId || data.sectionId || data.formulaId) {
-        console.log("Élément externe détecté:", data);
+        logger.debug("Élément externe détecté:", data);
         
         // Pour les champs externes
         if (data.fieldId && !data.type) {
@@ -131,7 +132,7 @@ function DependencyRuleEditorNew({ dependency, allFields, onUpdate, onDelete, on
     setActiveId(null);
     
     // Log détaillé
-    console.log("Drag end event:", {
+    logger.debug("Drag end event:", {
       active: {
         id: active.id,
         data: active.data.current
@@ -208,19 +209,19 @@ function DependencyRuleEditorNew({ dependency, allFields, onUpdate, onDelete, on
         }
       }
       
-      console.log(`Type détecté: ${itemType}, ID: ${itemId}`);
+      logger.debug(`Type détecté: ${itemType}, ID: ${itemId}`);
       
       // Traitement de l'élément selon son type
       switch(itemType) {
         case 'action':
-          console.log(`Application de l'action: ${itemId}`);
+          logger.debug(`Application de l'action: ${itemId}`);
           onUpdate({
             id: dependency.id,
             action: itemId || activeData.id
           });
           break;
         case 'field':
-          console.log(`Ajout du champ comme condition: ${itemId}`);
+          logger.debug(`Ajout du champ comme condition: ${itemId}`);
           const newCondition: DependencyCondition = {
             id: `condition-${Date.now()}`,
             targetFieldId: itemId || activeData.id || activeData.fieldId,
@@ -230,19 +231,19 @@ function DependencyRuleEditorNew({ dependency, allFields, onUpdate, onDelete, on
           setConditions(prev => [...prev, newCondition]);
           break;
         case 'operator':
-          console.log(`Ajout de l'opérateur: ${itemId}`);
+          logger.debug(`Ajout de l'opérateur: ${itemId}`);
           alert(`Opérateur ${itemId} ajouté avec succès!`);
           break;
         case 'test':
-          console.log(`Ajout du test: ${itemId}`);
+          logger.debug(`Ajout du test: ${itemId}`);
           alert(`Test ${itemId} ajouté avec succès!`);
           break;
         case 'section':
-          console.log(`Section déposée: ${itemId}`);
+          logger.debug(`Section déposée: ${itemId}`);
           alert(`Section ${itemId} déposée avec succès!`);
           break;
         case 'formula':
-          console.log(`Formule déposée: ${itemId}`);
+          logger.debug(`Formule déposée: ${itemId}`);
           onUpdate({
             id: dependency.id,
             formulaId: itemId || activeData.id || activeData.formulaId
@@ -251,7 +252,7 @@ function DependencyRuleEditorNew({ dependency, allFields, onUpdate, onDelete, on
         default:
           // Pour les éléments non reconnus, essayer avec le nom
           if (activeData && activeData.name) {
-            console.log(`Élément avec nom trouvé: ${activeData.name}`);
+            logger.debug(`Élément avec nom trouvé: ${activeData.name}`);
             const fieldCondition: DependencyCondition = {
               id: `condition-${Date.now()}`,
               targetFieldId: activeData.id || `field-${Date.now()}`,

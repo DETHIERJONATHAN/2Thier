@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import prisma from '../prisma';
 import { JWT_SECRET as CONFIG_JWT_SECRET } from '../config';
+import { logger } from '../lib/logger';
 
 interface AuthenticatedRequest extends Request {
   user?: {
@@ -59,7 +60,7 @@ export const authenticateToken = (req: AuthenticatedRequest, res: Response, next
     req.user = { ...decoded, id: decoded.userId };
     next();
   } catch (error) {
-    console.error('[AUTH] ❌ Token invalide:', error.message);
+    logger.error('[AUTH] ❌ Token invalide:', error.message);
     return res.status(401).json({ error: 'Token invalide ou expiré' });
   }
 };
@@ -87,7 +88,7 @@ export const fetchFullUser = async (req: AuthenticatedRequest, res: Response, ne
     req.user = { ...userFromDb, ...req.user };
     next();
   } catch (error) {
-    console.error("[MIDDLEWARE] fetchFullUser: Erreur", error);
+    logger.error("[MIDDLEWARE] fetchFullUser: Erreur", error);
     res.status(500).json({ message: "Erreur interne du serveur." });
   }
 };

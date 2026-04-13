@@ -33,6 +33,7 @@ import type { TreeBranchLeafTree } from '../../types';
 
 import './TreeManager.css';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../../../../lib/logger';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -94,7 +95,7 @@ const TreeManager: React.FC<TreeManagerProps> = ({
   const snapshotRef = useRef<string>('');
 
   useEffect(() => {
-    // console.log('🌳 [TreeManager] props update', {
+    // logger.debug('🌳 [TreeManager] props update', {
     //   treeId: tree?.id,
     //   treesCount: trees.length,
     //   readOnly,
@@ -103,24 +104,24 @@ const TreeManager: React.FC<TreeManagerProps> = ({
   }, [tree?.id, trees.length, readOnly, organizationId]);
 
   useEffect(() => {
-    // console.log('🌳 [TreeManager] actionsMenuOpen ->', actionsMenuOpen);
+    // logger.debug('🌳 [TreeManager] actionsMenuOpen ->', actionsMenuOpen);
   }, [actionsMenuOpen]);
 
   useEffect(() => {
     if (createModalVisible) {
-      // console.log('🌳 [TreeManager] createModalVisible OPEN');
+      // logger.debug('🌳 [TreeManager] createModalVisible OPEN');
     }
   }, [createModalVisible]);
 
   useEffect(() => {
     if (editModalVisible) {
-      // console.log('🌳 [TreeManager] editModalVisible OPEN for tree', tree?.id);
+      // logger.debug('🌳 [TreeManager] editModalVisible OPEN for tree', tree?.id);
     }
   }, [editModalVisible, tree?.id]);
 
   useEffect(() => {
     if (deleteModalVisible) {
-      // console.log('🌳 [TreeManager] deleteModalVisible OPEN for tree', tree?.id);
+      // logger.debug('🌳 [TreeManager] deleteModalVisible OPEN for tree', tree?.id);
     }
   }, [deleteModalVisible, tree?.id]);
 
@@ -136,7 +137,7 @@ const TreeManager: React.FC<TreeManagerProps> = ({
   });
 
   if (snapshotRef.current !== stateSnapshot) {
-    // console.log('🌳 [TreeManager] render #%d state snapshot %o', renderCountRef.current, {
+    // logger.debug('🌳 [TreeManager] render #%d state snapshot %o', renderCountRef.current, {
     //   createModalVisible,
     //   editModalVisible,
     //   deleteModalVisible,
@@ -155,17 +156,17 @@ const TreeManager: React.FC<TreeManagerProps> = ({
   }, []);
 
   const openCreateModal = useCallback(() => {
-    // console.log('🌳 [TreeManager] openCreateModal');
+    // logger.debug('🌳 [TreeManager] openCreateModal');
     form.setFieldsValue(DEFAULT_CREATE_VALUES);
     setCreateModalVisible(true);
   }, [form]);
 
   const openEditModal = useCallback(() => {
     if (!tree) {
-      console.warn('🌳 [TreeManager] openEditModal without tree');
+      logger.warn('🌳 [TreeManager] openEditModal without tree');
       return;
     }
-    // console.log('🌳 [TreeManager] openEditModal for tree', tree.id);
+    // logger.debug('🌳 [TreeManager] openEditModal for tree', tree.id);
     editForm.setFieldsValue({
       name: tree.name,
       description: tree.description,
@@ -178,7 +179,7 @@ const TreeManager: React.FC<TreeManagerProps> = ({
   }, [editForm, tree]);
 
   const handleCreate = useCallback(async (values: CreateTreeFormValues) => {
-    // console.log('🌳 [TreeManager] handleCreate submit', values);
+    // logger.debug('🌳 [TreeManager] handleCreate submit', values);
     closeAllModals();
     form.resetFields();
     await onAction('create', {
@@ -189,10 +190,10 @@ const TreeManager: React.FC<TreeManagerProps> = ({
 
   const handleUpdate = useCallback(async (values: UpdateTreeFormValues) => {
     if (!tree) {
-      console.warn('🌳 [TreeManager] handleUpdate without tree');
+      logger.warn('🌳 [TreeManager] handleUpdate without tree');
       return;
     }
-    // console.log('🌳 [TreeManager] handleUpdate submit', tree.id, values);
+    // logger.debug('🌳 [TreeManager] handleUpdate submit', tree.id, values);
     closeAllModals();
     await onAction('update', {
       id: tree.id,
@@ -202,33 +203,33 @@ const TreeManager: React.FC<TreeManagerProps> = ({
 
   const handleDelete = useCallback(async () => {
     if (!tree) {
-      console.warn('🌳 [TreeManager] handleDelete without tree');
+      logger.warn('🌳 [TreeManager] handleDelete without tree');
       return;
     }
-    // console.log('🌳 [TreeManager] handleDelete', tree.id);
+    // logger.debug('🌳 [TreeManager] handleDelete', tree.id);
     closeAllModals();
     await onAction('delete');
   }, [closeAllModals, onAction, tree]);
 
   const handleDuplicate = useCallback(async () => {
     if (!tree) {
-      console.warn('🌳 [TreeManager] handleDuplicate without tree');
+      logger.warn('🌳 [TreeManager] handleDuplicate without tree');
       return;
     }
-    // console.log('🌳 [TreeManager] handleDuplicate', tree.id);
+    // logger.debug('🌳 [TreeManager] handleDuplicate', tree.id);
     await onAction('duplicate');
   }, [onAction, tree]);
 
   const _handleSave = useCallback(() => {
     if (!tree) {
-      console.warn('🌳 [TreeManager] handleSave without tree');
+      logger.warn('🌳 [TreeManager] handleSave without tree');
       return;
     }
     if (onSave) {
-      // console.log('🌳 [TreeManager] handleSave delegated to parent', tree.id);
+      // logger.debug('🌳 [TreeManager] handleSave delegated to parent', tree.id);
       onSave(tree);
     } else {
-      // console.log('🌳 [TreeManager] handleSave fallback to onAction update', tree.id);
+      // logger.debug('🌳 [TreeManager] handleSave fallback to onAction update', tree.id);
       onAction('update', { id: tree.id });
     }
   }, [onAction, onSave, tree]);
@@ -239,7 +240,7 @@ const TreeManager: React.FC<TreeManagerProps> = ({
       return;
     }
     if (onPreview) {
-      // console.log('🌳 [TreeManager] handlePreview delegated', tree.id);
+      // logger.debug('🌳 [TreeManager] handlePreview delegated', tree.id);
       onPreview(tree);
     } else {
       message.info('Prévisualisation non disponible');
@@ -267,14 +268,14 @@ const TreeManager: React.FC<TreeManagerProps> = ({
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
       if (actionsMenuRef.current?.contains(target)) {
-        // console.log('🌳 [TreeManager] pointerdown inside menu');
+        // logger.debug('🌳 [TreeManager] pointerdown inside menu');
         return;
       }
       if (actionsTriggerRef.current?.contains(target as HTMLElement)) {
-        // console.log('🌳 [TreeManager] pointerdown on trigger');
+        // logger.debug('🌳 [TreeManager] pointerdown on trigger');
         return;
       }
-      // console.log('🌳 [TreeManager] pointerdown outside -> closing menu');
+      // logger.debug('🌳 [TreeManager] pointerdown outside -> closing menu');
       setActionsMenuOpen(false);
     };
     document.addEventListener('pointerdown', handlePointerDown, { capture: true });
@@ -339,7 +340,7 @@ const TreeManager: React.FC<TreeManagerProps> = ({
 
   const handleTreeSelection = useCallback((treeId: string) => {
     const selected = trees.find((item) => item.id === treeId);
-    // console.log('� [TreeManager] tree selection change', treeId, 'found?', !!selected);
+    // logger.debug('� [TreeManager] tree selection change', treeId, 'found?', !!selected);
     if (selected && onTreeSelect) {
       onTreeSelect(selected);
     }

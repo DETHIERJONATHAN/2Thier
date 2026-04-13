@@ -1,3 +1,4 @@
+import { logger } from '../../../lib/logger';
 /**
  * 🔍 TBL DECODER - DÉCODEUR 2-CHIFFRES
  * 
@@ -370,7 +371,7 @@ export class TBLDecoder {
  * ```typescript
  * // Décodage d'un code TBL
  * const info = TBLDecoder.decode("62-prix-total-ht");
- * console.log(info);
+ * logger.debug(info);
  * // Output: {
  * //   type: "6", capacity: "2", name: "prix-total-ht",
  * //   typeLabel: "Champ données", capacityLabel: "Formule",
@@ -381,16 +382,16 @@ export class TBLDecoder {
  * 
  * // Génération d'un code TBL
  * const code = TBLDecoder.generate("3", "1", "Puissance kWh");
- * console.log(code); // "31-puissance-kwh"
+ * logger.debug(code); // "31-puissance-kwh"
  * 
  * // Validation par lot
  * const codes = ["62-prix-ht", "invalid", "73-resultats"];
  * const results = TBLDecoder.validateBatch(codes);
  * const stats = TBLDecoder.generateValidationStats(results);
- * console.log(stats); // { total: 3, valid: 2, invalid: 1, ... }
+ * logger.debug(stats); // { total: 3, valid: 2, invalid: 1, ... }
  * 
  * // Helpers pour composants
- * console.log(TBLDecoder.getRequiredComponent("62-prix-ht")); // "DataField"
- * console.log(TBLDecoder.shouldCalculate("62-prix-ht"));     // true
+ * logger.debug(TBLDecoder.getRequiredComponent("62-prix-ht")); // "DataField"
+ * logger.debug(TBLDecoder.shouldCalculate("62-prix-ht"));     // true
  * ```
  */

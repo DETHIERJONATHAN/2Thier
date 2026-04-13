@@ -31,6 +31,7 @@ interface SubmissionDataEntry {
   lastResolved?: Date | null;
 }
 import { evaluateVariableOperation, interpretReference, InterpretResult } from '../../treebranchleaf-new/api/operation-interpreter';
+import { logger } from '../../../../lib/logger';
 
 interface AuthenticatedRequest extends Request {
   user?: {
@@ -277,7 +278,7 @@ async function cloneCompletedSubmissionToDraft(params: {
       uniqueOriginalRows.push(r);
     }
     if (duplicateCount > 0) {
-      console.warn('⚠️ [TBL][REVISION] Doublons TreeBranchLeafSubmissionData détectés, dédupliqués', {
+      logger.warn('⚠️ [TBL][REVISION] Doublons TreeBranchLeafSubmissionData détectés, dédupliqués', {
         submissionId: original.id,
         duplicateCount,
         totalRows: originalRows.length,
@@ -871,7 +872,7 @@ async function evaluateCapacitiesForSubmission(
     prisma.treeBranchLeafSubmissionData.findMany({
       where: { submissionId },
       select: { nodeId: true, value: true, operationSource: true }
-    }).catch((e: Error) => { console.warn('⚠️ [EVALUATE] Hydratation DB échouée:', e?.message); return [] as { nodeId: string; value: string | null; operationSource: string | null }[]; })
+    }).catch((e: Error) => { logger.warn('⚠️ [EVALUATE] Hydratation DB échouée:', e?.message); return [] as { nodeId: string; value: string | null; operationSource: string | null }[]; })
   ]);
 
   // Charger le lead si leadId existe (requête séparée car pas de relation Prisma)
@@ -923,7 +924,7 @@ async function evaluateCapacitiesForSubmission(
       }
     }
   } catch (e) {
-    console.warn('⚠️ [EVALUATE] Chargement lead échoué (best-effort):', (e as Error)?.message || e);
+    logger.warn('⚠️ [EVALUATE] Chargement lead échoué (best-effort):', (e as Error)?.message || e);
   }
 
   // 🛡️ Collecter les DISPLAY nodeIds (déjà chargés en parallèle)
@@ -946,7 +947,7 @@ async function evaluateCapacitiesForSubmission(
       }
     }
   } catch (e) {
-    console.warn('⚠️ [EVALUATE] Hydratation DB du valueMap échouée (best-effort):', (e as Error)?.message || e);
+    logger.warn('⚠️ [EVALUATE] Hydratation DB du valueMap échouée (best-effort):', (e as Error)?.message || e);
   }
   
   // 🛡️ FIX 2026-01-31 v2: Collecter les valeurs DB restaurées pour les renvoyer au frontend
@@ -975,7 +976,7 @@ async function evaluateCapacitiesForSubmission(
       }
     }
     if (restoredCount > 0) {
-      // console.log(`🛡️ [FIX C] Restauré ${restoredCount} valeurs DB DISPLAY (clés absentes du formData)`);
+      // logger.debug(`🛡️ [FIX C] Restauré ${restoredCount} valeurs DB DISPLAY (clés absentes du formData)`);
     }
   }
   
@@ -1076,10 +1077,10 @@ async function evaluateCapacitiesForSubmission(
       }
     }
     if (linkResolvedCount > 0) {
-      // console.log(`🔗 [FIX R21b] ${linkResolvedCount} LINK field(s) résolus dans le valueMap (mode: ${mode})`);
+      // logger.debug(`🔗 [FIX R21b] ${linkResolvedCount} LINK field(s) résolus dans le valueMap (mode: ${mode})`);
     }
   } catch (e) {
-    console.warn('⚠️ [FIX R21b] Résolution LINK fields échouée (best-effort):', (e as Error)?.message || e);
+    logger.warn('⚠️ [FIX R21b] Résolution LINK fields échouée (best-effort):', (e as Error)?.message || e);
   }
   
   // �🔥 RÉCUPÉRER LES VARIABLES ET LES FORMULES
@@ -1183,7 +1184,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
           sumTotalFormulaTokensMap.set(n.id, n.formula_tokens as string[]);
         }
       }
-      // console.log(`🔗 [FIX R27] ${sumTotalFormulaTokensMap.size} sum-total nodes avec formula_tokens chargés`);
+      // logger.debug(`🔗 [FIX R27] ${sumTotalFormulaTokensMap.size} sum-total nodes avec formula_tokens chargés`);
     }
   }
 
@@ -1349,7 +1350,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
 
     const depsCountEarly = [...displayDeps.values()].reduce((sum, s) => sum + s.size, 0);
     if (depsCountEarly > 0) {
-      // console.log(`🔗 [FIX R14e] ${depsCountEarly} dépendances inter-display détectées depuis les formules (tous modes)`);
+      // logger.debug(`🔗 [FIX R14e] ${depsCountEarly} dépendances inter-display détectées depuis les formules (tous modes)`);
     }
   }
 
@@ -1469,7 +1470,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
   const changedFieldIdSet = new Set([...allChangedFieldIds, ...allChangedFieldIdBases]);
   
   if (allChangedFieldIds.length > 1) {
-    // console.log(`🔥 [FIX A] Multi-changedFieldIds: ${allChangedFieldIds.length} champs modifiés pendant le debounce: ${allChangedFieldIds.map(id => id.substring(0,12)).join(', ')}`);
+    // logger.debug(`🔥 [FIX A] Multi-changedFieldIds: ${allChangedFieldIds.length} champs modifiés pendant le debounce: ${allChangedFieldIds.map(id => id.substring(0,12)).join(', ')}`);
   }
   
   if (mode === 'change' && changedFieldId) {
@@ -1503,7 +1504,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
           }
         }
         if (addedCount > 0) {
-          console.log(`🔧 [FIX TRIGGER-COVERAGE] ${addedCount} display nodes ajoutés au trigger index (absents de capacitiesRaw)`);
+          logger.debug(`🔧 [FIX TRIGGER-COVERAGE] ${addedCount} display nodes ajoutés au trigger index (absents de capacitiesRaw)`);
         }
       }
     
@@ -1867,7 +1868,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       }
     }
     const depsCount = [...displayDeps.values()].reduce((sum, s) => sum + s.size, 0);
-    // console.log(`🔗 [FIX R14] ${depsCount} dépendances inter-display détectées via trigger index`);
+    // logger.debug(`🔗 [FIX R14] ${depsCount} dépendances inter-display détectées via trigger index`);
   }
 
   // 🔥 FIX R14: Recalculer la profondeur topologique avec les deps FIABLES
@@ -1915,13 +1916,13 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       }
       if (maxSourceDepth >= 0 && currentDepth <= maxSourceDepth) {
         const newDepth = maxSourceDepth + 1;
-        // console.log(`🔧 [FIX R30] ${sumTotalNodeId.substring(0, 12)}... depth ${currentDepth} → ${newDepth} (source maxDepth=${maxSourceDepth})`);
+        // logger.debug(`🔧 [FIX R30] ${sumTotalNodeId.substring(0, 12)}... depth ${currentDepth} → ${newDepth} (source maxDepth=${maxSourceDepth})`);
         topoOrder.set(sumTotalNodeId, newDepth);
         fixedCount++;
       }
     }
     if (fixedCount > 0) {
-      // console.log(`🔧 [FIX R30] ${fixedCount} sum-total depth(s) corrigée(s)`);
+      // logger.debug(`🔧 [FIX R30] ${fixedCount} sum-total depth(s) corrigée(s)`);
     }
   }
 
@@ -1952,7 +1953,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
     const displayOrder = capacities
       .filter(c => displayCapNodeIds.has(c.nodeId))
       .map(c => `${c.nodeId.substring(0,8)}(d=${topoOrder.get(c.nodeId)||0},sum=${c.sourceRef?.includes('sum-formula')||c.sourceRef?.includes('sum-total')?'Y':'N'})`);
-    // console.log(`[FIX R14b] Eval order: ${displayOrder.join(' -> ')}`);
+    // logger.debug(`[FIX R14b] Eval order: ${displayOrder.join(' -> ')}`);
   }
 
   // 🚀 FIX R12 + FIX A: Calculer la fermeture transitive des DISPLAY fields affectés
@@ -2007,7 +2008,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
             const refNodeId = token.slice(7);
             if (affectedDisplayFieldIds.has(refNodeId)) {
               affectedDisplayFieldIds.add(cap.nodeId);
-              // console.log(`🔥 [FIX R28] sum-total ${cap.nodeId.substring(0,12)}... forcé dans affectedDisplayFieldIds (dep ${refNodeId.substring(0,12)}... affecté)`);
+              // logger.debug(`🔥 [FIX R28] sum-total ${cap.nodeId.substring(0,12)}... forcé dans affectedDisplayFieldIds (dep ${refNodeId.substring(0,12)}... affecté)`);
               break;
             }
           }
@@ -2034,16 +2035,16 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
         }
       }
       if (forcedCount > 0) {
-        // console.log(`🔥 [FIX R29b] ${forcedCount} sum-total forcés dans affectedDisplayFieldIds (total sum-totals: ${[...affectedDisplayFieldIds].filter(id => isSumTotalNodeId(id)).length})`);
+        // logger.debug(`🔥 [FIX R29b] ${forcedCount} sum-total forcés dans affectedDisplayFieldIds (total sum-totals: ${[...affectedDisplayFieldIds].filter(id => isSumTotalNodeId(id)).length})`);
       }
     }
 
-    // console.log(`🚀 [FIX R12] mode=change: ${affectedDisplayFieldIds.size} DISPLAY fields affectés sur ${displayCapNodeIds.size} total (skip ${displayCapNodeIds.size - affectedDisplayFieldIds.size})`);
+    // logger.debug(`🚀 [FIX R12] mode=change: ${affectedDisplayFieldIds.size} DISPLAY fields affectés sur ${displayCapNodeIds.size} total (skip ${displayCapNodeIds.size - affectedDisplayFieldIds.size})`);
     
     // 🔥 FIX D: Si aucun DISPLAY field affecté trouvé mais qu'on a un changedFieldId,
     // c'est que le triggerIndex ne couvre pas ce champ → fallback vers évaluation complète
     if (affectedDisplayFieldIds.size === 0) {
-      console.warn(`⚠️ [FIX D] changedFieldId="${changedFieldId?.substring(0,12)}" n'est dans aucun trigger → fallback évaluation COMPLÈTE (comme mode='open')`);
+      logger.warn(`⚠️ [FIX D] changedFieldId="${changedFieldId?.substring(0,12)}" n'est dans aucun trigger → fallback évaluation COMPLÈTE (comme mode='open')`);
       affectedDisplayFieldIds = null; // null = évaluer TOUS les display fields
     }
   }
@@ -2060,13 +2061,13 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
           valueMap.delete(affectedId);
         }
       }
-      // console.log(`🔥 [FIX B] Suppression ciblée: ${affectedDisplayFieldIds.size} display values supprimés sur ${displayNodeIds.size} total`);
+      // logger.debug(`🔥 [FIX B] Suppression ciblée: ${affectedDisplayFieldIds.size} display values supprimés sur ${displayNodeIds.size} total`);
     } else {
       // Fallback complet (FIX D actif): supprimer TOUS les display values
       for (const displayNodeId of displayNodeIds) {
         valueMap.delete(displayNodeId);
       }
-      // console.log(`🔥 [FIX B] Suppression COMPLÈTE: ${displayNodeIds.size} display values (fallback FIX D)`);
+      // logger.debug(`🔥 [FIX B] Suppression COMPLÈTE: ${displayNodeIds.size} display values (fallback FIX D)`);
     }
   }
 
@@ -2099,7 +2100,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       }
       if (freshValue !== null && freshValue !== undefined) {
         valueMap.set(linkedNodeId, freshValue);
-        // console.log(`🔗 [FIX R20/R21] valueMap LINK pre-refresh: ${linkedNodeId.substring(0,8)} = "${freshValue}" (source: ${linkInfo.targetNodeId.substring(0,8)}, changedField: ${changedFieldId?.substring(0,8) || 'N/A'})`);
+        // logger.debug(`🔗 [FIX R20/R21] valueMap LINK pre-refresh: ${linkedNodeId.substring(0,8)} = "${freshValue}" (source: ${linkInfo.targetNodeId.substring(0,8)}, changedField: ${changedFieldId?.substring(0,8) || 'N/A'})`);
       }
     }
   }
@@ -2291,7 +2292,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
 
           // 🔍 DEBUG SUM-TOTAL: Tracer les valeurs pour diagnostiquer le lag
           if (debugParts.length > 0) {
-            // console.log(`🔍 [SUM-TOTAL DEBUG] ${capacity.nodeId.substring(0,12)}... tokens=${tokens.length} sum=${sum} parts=${JSON.stringify(debugParts.map(p => ({ ref: p.refId.substring(0,12), val: p.value, src: p.source })))}`);
+            // logger.debug(`🔍 [SUM-TOTAL DEBUG] ${capacity.nodeId.substring(0,12)}... tokens=${tokens.length} sum=${sum} parts=${JSON.stringify(debugParts.map(p => ({ ref: p.refId.substring(0,12), val: p.value, src: p.source })))}`);
           }
 
           capacityResult = {
@@ -2301,7 +2302,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
             operationResult: `Somme = ${sum}`
           };
         } catch (sumError) {
-          console.error(`❌ [SUM-TOTAL EVALUATOR] Erreur pour ${capacity.nodeId}:`, sumError);
+          logger.error(`❌ [SUM-TOTAL EVALUATOR] Erreur pour ${capacity.nodeId}:`, sumError);
           capacityResult = { value: 0, operationSource: 'formula' };
         }
       } else {
@@ -2416,7 +2417,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       // 🔍 DEBUG R26: Tracer Prix TVAC et ses deps sum-total
       if (capacity.nodeId === '2f0c0d37-ae97-405e-8fae-0a07680e2183' || capacity.nodeId.includes('-sum-total')) {
         const depthVal = topoOrder.get(capacity.nodeId) || 0;
-        // console.log(`🔍 [FIX R26 DEBUG] ${capacity.nodeId.substring(0,12)}... depth=${depthVal} → rawValue=${rawValue} hasValid=${hasValidValue} sourceRef=${capacity.sourceRef?.substring(0,30)}`);
+        // logger.debug(`🔍 [FIX R26 DEBUG] ${capacity.nodeId.substring(0,12)}... depth=${depthVal} → rawValue=${rawValue} hasValid=${hasValidValue} sourceRef=${capacity.sourceRef?.substring(0,30)}`);
       }
 
       const normalizedOperationSource: OperationSourceType = coerceOperationSource(
@@ -2515,7 +2516,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
         }
       }
     } catch (error) {
-      console.error(`[TBL CAPACITY ERROR] ${sourceRef}:`, error);
+      logger.error(`[TBL CAPACITY ERROR] ${sourceRef}:`, error);
     }
   }
 
@@ -2555,9 +2556,9 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
         }
       });
       await prisma.$transaction(operations);
-      // console.log(`🚀 [PERF] Batch upsert: ${pendingNonDisplayUpserts.length} non-display capacities en 1 transaction`);
+      // logger.debug(`🚀 [PERF] Batch upsert: ${pendingNonDisplayUpserts.length} non-display capacities en 1 transaction`);
     } catch (batchError) {
-      console.error('[PERF] Batch upsert échoué, fallback séquentiel:', batchError);
+      logger.error('[PERF] Batch upsert échoué, fallback séquentiel:', batchError);
       // Fallback séquentiel en cas d'erreur
       for (const op of pendingNonDisplayUpserts) {
         try {
@@ -2572,7 +2573,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
             });
           }
         } catch (seqError) {
-          console.error(`[TBL CAPACITY UPSERT] ${op.nodeId}:`, seqError);
+          logger.error(`[TBL CAPACITY UPSERT] ${op.nodeId}:`, seqError);
         }
       }
     }
@@ -2635,7 +2636,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       }
     }
     if (linkPersistedCount > 0) {
-      // console.log(`🔗 [FIX R25] ${linkPersistedCount} LINK DISPLAY field(s) persistés dans SubmissionData`);
+      // logger.debug(`🔗 [FIX R25] ${linkPersistedCount} LINK DISPLAY field(s) persistés dans SubmissionData`);
     }
   }
 
@@ -2699,7 +2700,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       const stored = await upsertComputedValuesForSubmission(submissionId, computedValuesToStore);
       results.displayFieldsUpdated = stored;
     } catch (computedStoreError) {
-      console.error('[COMPUTED VALUES] Erreur stockage:', computedStoreError);
+      logger.error('[COMPUTED VALUES] Erreur stockage:', computedStoreError);
     }
   }
 
@@ -2729,7 +2730,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
       }
     }
     if (addedExistingCount > 0) {
-      // console.log(`🚀 [FIX BROADCAST-COMPLET] ${computedValuesToStore.length} valeurs dans la réponse (${computedValuesToStore.length - addedExistingCount} fraîches + ${addedExistingCount} existantes inchangées)`);
+      // logger.debug(`🚀 [FIX BROADCAST-COMPLET] ${computedValuesToStore.length} valeurs dans la réponse (${computedValuesToStore.length - addedExistingCount} fraîches + ${addedExistingCount} existantes inchangées)`);
     }
   }
 
@@ -2862,7 +2863,7 @@ router.post('/submissions/:submissionId/evaluate-all', async (req, res) => {
         evaluatedCount++;
         
       } catch (error) {
-        console.error(`❌ [TBL EVALUATE ALL] Erreur pour ${data.sourceRef}:`, error);
+        logger.error(`❌ [TBL EVALUATE ALL] Erreur pour ${data.sourceRef}:`, error);
         
         results.push({
           id: data.id,
@@ -2888,7 +2889,7 @@ router.post('/submissions/:submissionId/evaluate-all', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ [TBL EVALUATE ALL] Erreur globale:', error);
+    logger.error('❌ [TBL EVALUATE ALL] Erreur globale:', error);
     return res.status(500).json({
       success: false,
       error: 'Erreur lors de l\'évaluation complète',
@@ -2955,7 +2956,7 @@ router.get('/submissions/:submissionId/verification', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ [TBL VERIFICATION] Erreur:', error);
+    logger.error('❌ [TBL VERIFICATION] Erreur:', error);
     return res.status(500).json({
       success: false,
       error: 'Erreur lors de la vérification'
@@ -3028,7 +3029,7 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
     // 🚀 FIX R9: Si une submissionId est fournie, on récupérera le treeId depuis la soumission existante
     // → Pas besoin de faire un findFirst() coûteux ici
     if (!effectiveTreeId && !hasExistingSubmission) {
-      // console.log('⚠️ [TBL CREATE-AND-EVALUATE] Aucun treeId fourni et pas de submissionId, recherche du premier arbre...');
+      // logger.debug('⚠️ [TBL CREATE-AND-EVALUATE] Aucun treeId fourni et pas de submissionId, recherche du premier arbre...');
       const firstTree = await prisma.treeBranchLeafTree.findFirst({
         select: { id: true, name: true }
       });
@@ -3056,7 +3057,7 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
     let effectiveUserId = userId;
     
     if (!clientId && !isDefaultDraft) {
-      // console.log('❌ [TBL CREATE-AND-EVALUATE] Aucun leadId fourni - REQUIS (sauf pour default-draft)');
+      // logger.debug('❌ [TBL CREATE-AND-EVALUATE] Aucun leadId fourni - REQUIS (sauf pour default-draft)');
       return res.status(400).json({
         success: false,
         error: 'Lead obligatoire',
@@ -3078,7 +3079,7 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
       ]);
       
       if (!leadExists) {
-        // console.log(`❌ [TBL CREATE-AND-EVALUATE] Lead ${clientId} introuvable`);
+        // logger.debug(`❌ [TBL CREATE-AND-EVALUATE] Lead ${clientId} introuvable`);
         return res.status(404).json({
           success: false,
           error: 'Lead introuvable',
@@ -3088,7 +3089,7 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
       
       // Vérifier que le lead appartient bien à la même organisation (sauf pour Super Admin)
       if (!isSuperAdmin && leadExists.organizationId !== organizationId) {
-        // console.log(`❌ [TBL CREATE-AND-EVALUATE] Le lead ${clientId} n'appartient pas à l'organisation ${organizationId}`);
+        // logger.debug(`❌ [TBL CREATE-AND-EVALUATE] Le lead ${clientId} n'appartient pas à l'organisation ${organizationId}`);
         return res.status(403).json({
           success: false,
           error: 'Lead non autorisé',
@@ -3103,7 +3104,7 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
       
       // User validation (résultat du Promise.all)
       if (effectiveUserId && !userExistsResult) {
-        // console.log(`❌ [TBL CREATE-AND-EVALUATE] User ${effectiveUserId} introuvable, soumission sans utilisateur`);
+        // logger.debug(`❌ [TBL CREATE-AND-EVALUATE] User ${effectiveUserId} introuvable, soumission sans utilisateur`);
         effectiveUserId = null;
       }
     } else {
@@ -3114,7 +3115,7 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
           select: { id: true, firstName: true, lastName: true }
         });
         if (!userExists) {
-          // console.log(`❌ [TBL CREATE-AND-EVALUATE] User ${effectiveUserId} introuvable`);
+          // logger.debug(`❌ [TBL CREATE-AND-EVALUATE] User ${effectiveUserId} introuvable`);
           effectiveUserId = null;
         }
       }
@@ -3356,7 +3357,7 @@ router.post('/submissions/create-and-evaluate', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ [TBL CREATE-AND-EVALUATE] Erreur:', error);
+    logger.error('❌ [TBL CREATE-AND-EVALUATE] Erreur:', error);
     return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Erreur interne'
@@ -3440,7 +3441,7 @@ router.put('/submissions/:submissionId/update-and-evaluate', async (req, res) =>
     });
 
   } catch (error) {
-    console.error('❌ [TBL UPDATE-AND-EVALUATE] Erreur:', error);
+    logger.error('❌ [TBL UPDATE-AND-EVALUATE] Erreur:', error);
     return res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'Erreur interne' });
   }
 });
@@ -3883,7 +3884,7 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
       }
     } catch (storeError) {
       // Silencieux - ne pas bloquer la réponse si le stockage échoue
-      console.error('[PREVIEW] Erreur stockage:', storeError);
+      logger.error('[PREVIEW] Erreur stockage:', storeError);
     }
 
     return res.json({
@@ -3896,7 +3897,7 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ [TBL PREVIEW-EVALUATE] Erreur:', error);
+    logger.error('❌ [TBL PREVIEW-EVALUATE] Erreur:', error);
     return res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'Erreur interne' });
   }
 });
@@ -4150,7 +4151,7 @@ router.get('/tables/:tableId', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ [GET TABLE] Erreur:', error);
+    logger.error('❌ [GET TABLE] Erreur:', error);
     return res.status(500).json({
       success: false,
       error: 'Erreur lors de la récupération de la table',

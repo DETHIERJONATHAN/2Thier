@@ -3,6 +3,7 @@ import { Button, Input, message, Typography, Card, Row, Col, Spin, Tabs, Tag } f
 import { MailOutlined, FileTextOutlined, SearchOutlined, ExperimentOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { PageHeader } from '../components/PageHeader';
+import { logger } from '../lib/logger';
 // import { StatCard } from '../components/StatCard';
 
 const { Paragraph } = Typography;
@@ -52,7 +53,7 @@ export const GoogleGeminiPage: React.FC = () => {
       msgApi.success('E-mail généré avec succès !');
     } catch (error) {
       msgApi.error('Erreur lors de la génération de l\'e-mail.');
-      console.error(error);
+      logger.error(error);
     } finally {
       setLoading(false);
     }
@@ -72,7 +73,7 @@ export const GoogleGeminiPage: React.FC = () => {
       msgApi.success(`Analyse du lead ${leadId} terminée.`);
     } catch (error) {
       msgApi.error('Erreur lors de l\'analyse du lead.');
-      console.error(error);
+      logger.error(error);
     } finally {
       setLoading(false);
     }
@@ -100,7 +101,7 @@ export const GoogleGeminiPage: React.FC = () => {
       msgApi.success('Proposition commerciale générée.');
     } catch (error) {
       msgApi.error('Erreur lors de la génération de la proposition.');
-      console.error(error);
+      logger.error(error);
     } finally {
       setLoading(false);
     }

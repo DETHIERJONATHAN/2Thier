@@ -9,6 +9,7 @@
 
 import cron from 'node-cron';
 import { db } from '../lib/database';
+import { logger } from '../lib/logger';
 
 const prisma = db;
 
@@ -18,15 +19,15 @@ const prisma = db;
  */
 export const cleanupExpiredStages = cron.schedule('0 * * * *', async () => {
   try {
-    console.log('🧹 [CRON] Démarrage nettoyage brouillons TBL...');
+    logger.debug('🧹 [CRON] Démarrage nettoyage brouillons TBL...');
     
     const result = await prisma.$executeRaw`
       SELECT cleanup_expired_tbl_stages();
     `;
     
-    console.log(`✅ [CRON] Nettoyage brouillons terminé: ${result} supprimés`);
+    logger.debug(`✅ [CRON] Nettoyage brouillons terminé: ${result} supprimés`);
   } catch (error) {
-    console.error('❌ [CRON] Erreur nettoyage brouillons:', error);
+    logger.error('❌ [CRON] Erreur nettoyage brouillons:', error);
   }
 }, {
   scheduled: true,
@@ -39,15 +40,15 @@ export const cleanupExpiredStages = cron.schedule('0 * * * *', async () => {
  */
 export const cleanupOldVersions = cron.schedule('0 3 * * *', async () => {
   try {
-    console.log('🧹 [CRON] Démarrage nettoyage versions TBL...');
+    logger.debug('🧹 [CRON] Démarrage nettoyage versions TBL...');
     
     const result = await prisma.$executeRaw`
       SELECT cleanup_old_tbl_versions();
     `;
     
-    console.log(`✅ [CRON] Nettoyage versions terminé: ${result} supprimées`);
+    logger.debug(`✅ [CRON] Nettoyage versions terminé: ${result} supprimées`);
   } catch (error) {
-    console.error('❌ [CRON] Erreur nettoyage versions:', error);
+    logger.error('❌ [CRON] Erreur nettoyage versions:', error);
   }
 }, {
   scheduled: true,
@@ -60,7 +61,7 @@ export const cleanupOldVersions = cron.schedule('0 3 * * *', async () => {
  */
 export const releaseExpiredLocks = cron.schedule('*/30 * * * *', async () => {
   try {
-    console.log('🔓 [CRON] Démarrage libération locks TBL...');
+    logger.debug('🔓 [CRON] Démarrage libération locks TBL...');
     
     // Libérer les locks de plus d'1h
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
@@ -80,9 +81,9 @@ export const releaseExpiredLocks = cron.schedule('*/30 * * * *', async () => {
       }
     });
     
-    console.log(`✅ [CRON] Libération locks terminée: ${result.count} locks libérés`);
+    logger.debug(`✅ [CRON] Libération locks terminée: ${result.count} locks libérés`);
   } catch (error) {
-    console.error('❌ [CRON] Erreur libération locks:', error);
+    logger.error('❌ [CRON] Erreur libération locks:', error);
   }
 }, {
   scheduled: true,
@@ -95,7 +96,7 @@ export const releaseExpiredLocks = cron.schedule('*/30 * * * *', async () => {
  */
 export const weeklyStats = cron.schedule('0 9 * * 1', async () => {
   try {
-    console.log('📊 [CRON] Génération statistiques TBL...');
+    logger.debug('📊 [CRON] Génération statistiques TBL...');
     
     // Compter les stages actifs
     const activeStages = await prisma.treeBranchLeafStage.count({
@@ -115,14 +116,14 @@ export const weeklyStats = cron.schedule('0 9 * * 1', async () => {
     // Moyenne de versions par submission
     const avgVersions = totalSubmissions > 0 ? (totalVersions / totalSubmissions).toFixed(2) : 0;
     
-    console.log('📊 [CRON] Statistiques TBL:');
-    console.log(`  - Brouillons actifs: ${activeStages}`);
-    console.log(`  - Submissions totales: ${totalSubmissions}`);
-    console.log(`  - Versions totales: ${totalVersions}`);
-    console.log(`  - Moyenne versions/submission: ${avgVersions}`);
+    logger.debug('📊 [CRON] Statistiques TBL:');
+    logger.debug(`  - Brouillons actifs: ${activeStages}`);
+    logger.debug(`  - Submissions totales: ${totalSubmissions}`);
+    logger.debug(`  - Versions totales: ${totalVersions}`);
+    logger.debug(`  - Moyenne versions/submission: ${avgVersions}`);
     
   } catch (error) {
-    console.error('❌ [CRON] Erreur génération stats:', error);
+    logger.error('❌ [CRON] Erreur génération stats:', error);
   }
 }, {
   scheduled: true,
@@ -133,51 +134,51 @@ export const weeklyStats = cron.schedule('0 9 * * 1', async () => {
  * 🚀 Démarrer tous les jobs
  */
 export function startTBLCronJobs() {
-  console.log('🚀 [CRON] Démarrage des jobs TBL...');
+  logger.debug('🚀 [CRON] Démarrage des jobs TBL...');
   
   cleanupExpiredStages.start();
-  console.log('  ✅ Nettoyage brouillons : Toutes les heures');
+  logger.debug('  ✅ Nettoyage brouillons : Toutes les heures');
   
   cleanupOldVersions.start();
-  console.log('  ✅ Nettoyage versions : Quotidien à 3h');
+  logger.debug('  ✅ Nettoyage versions : Quotidien à 3h');
   
   releaseExpiredLocks.start();
-  console.log('  ✅ Libération locks : Toutes les 30min');
+  logger.debug('  ✅ Libération locks : Toutes les 30min');
   
   weeklyStats.start();
-  console.log('  ✅ Statistiques : Hebdomadaire lundi 9h');
+  logger.debug('  ✅ Statistiques : Hebdomadaire lundi 9h');
   
-  console.log('✅ [CRON] Tous les jobs TBL sont actifs');
+  logger.debug('✅ [CRON] Tous les jobs TBL sont actifs');
 }
 
 /**
  * 🛑 Arrêter tous les jobs
  */
 export function stopTBLCronJobs() {
-  console.log('🛑 [CRON] Arrêt des jobs TBL...');
+  logger.debug('🛑 [CRON] Arrêt des jobs TBL...');
   
   cleanupExpiredStages.stop();
   cleanupOldVersions.stop();
   releaseExpiredLocks.stop();
   weeklyStats.stop();
   
-  console.log('✅ [CRON] Tous les jobs TBL sont arrêtés');
+  logger.debug('✅ [CRON] Tous les jobs TBL sont arrêtés');
 }
 
 /**
  * 🔧 Exécuter un nettoyage manuel (pour tests)
  */
 export async function runManualCleanup() {
-  console.log('🔧 [MANUAL] Nettoyage manuel TBL...');
+  logger.debug('🔧 [MANUAL] Nettoyage manuel TBL...');
   
   try {
     // Brouillons
     const stages = await prisma.$executeRaw`SELECT cleanup_expired_tbl_stages();`;
-    console.log(`  ✅ Brouillons: ${stages} supprimés`);
+    logger.debug(`  ✅ Brouillons: ${stages} supprimés`);
     
     // Versions
     const versions = await prisma.$executeRaw`SELECT cleanup_old_tbl_versions();`;
-    console.log(`  ✅ Versions: ${versions} supprimées`);
+    logger.debug(`  ✅ Versions: ${versions} supprimées`);
     
     // Locks
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
@@ -191,11 +192,11 @@ export async function runManualCleanup() {
         lockedAt: null
       }
     });
-    console.log(`  ✅ Locks: ${locks.count} libérés`);
+    logger.debug(`  ✅ Locks: ${locks.count} libérés`);
     
-    console.log('✅ [MANUAL] Nettoyage manuel terminé');
+    logger.debug('✅ [MANUAL] Nettoyage manuel terminé');
   } catch (error) {
-    console.error('❌ [MANUAL] Erreur nettoyage manuel:', error);
+    logger.error('❌ [MANUAL] Erreur nettoyage manuel:', error);
     throw error;
   }
 }

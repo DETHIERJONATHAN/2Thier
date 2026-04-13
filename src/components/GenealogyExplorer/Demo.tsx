@@ -3,6 +3,7 @@ import { Tabs, Card, Typography, Space, Switch } from 'antd';
 import { SettingOutlined, EyeOutlined } from '@ant-design/icons';
 import GenealogyExplorer from './index';
 import GenealogyUserView from './UserView';
+import { logger } from '../../lib/logger';
 
 const { Title, Text } = Typography;
 const { TabPane } = Tabs;
@@ -117,7 +118,7 @@ const GenealogyExplorerDemo: React.FC<{ fieldId: string }> = ({ fieldId }) => {
             <div className="p-6">
               <GenealogyExplorer
                 fieldId={fieldId}
-                onTreeChange={(tree) => console.log('Arbre modifié:', tree)}
+                onTreeChange={(tree) => logger.debug('Arbre modifié:', tree)}
               />
             </div>
           </TabPane>

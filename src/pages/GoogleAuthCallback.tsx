@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Spin, Result } from 'antd';
 import { CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { emergencyGoogleAuthReset, isInGoogleAuthLoop } from '../utils/googleAuthReset';
+import { logger } from '../lib/logger';
 
 const GoogleAuthCallback: React.FC = () => {
   const [isProcessing, setIsProcessing] = React.useState(false);
@@ -10,7 +11,7 @@ const GoogleAuthCallback: React.FC = () => {
     const processCallback = async () => {
       // Vérification de sécurité : détection de boucle
       if (isInGoogleAuthLoop()) {
-        console.warn('[GoogleAuthCallback] 🚨 BOUCLE DÉTECTÉE - Application du reset d\'urgence');
+        logger.warn('[GoogleAuthCallback] 🚨 BOUCLE DÉTECTÉE - Application du reset d\'urgence');
         emergencyGoogleAuthReset();
         return;
       }
@@ -24,7 +25,7 @@ const GoogleAuthCallback: React.FC = () => {
       const organizationId = urlParams.get('organizationId');
       const userEmail = urlParams.get('user') || urlParams.get('admin_email');
 
-      console.log('[GoogleAuthCallback] Paramètres reçus:', {
+      logger.debug('[GoogleAuthCallback] Paramètres reçus:', {
         hasCode: !!code,
         hasState: !!state,
         googleSuccess,
@@ -35,7 +36,7 @@ const GoogleAuthCallback: React.FC = () => {
 
       // CAS 1: Callback initial de Google (avec code et state)
       if (code && state && !googleSuccess && !googleError) {
-        console.log('[GoogleAuthCallback] 🔄 Traitement du code OAuth...');
+        logger.debug('[GoogleAuthCallback] 🔄 Traitement du code OAuth...');
         setIsProcessing(true);
         
         try {
@@ -54,7 +55,7 @@ const GoogleAuthCallback: React.FC = () => {
           // Si pas de redirection, vérifier la réponse
           if (response.ok) {
             const data = await response.json();
-            console.log('[GoogleAuthCallback] ✅ Tokens échangés avec succès');
+            logger.debug('[GoogleAuthCallback] ✅ Tokens échangés avec succès');
             
             // Marquer comme complété
             sessionStorage.setItem('google_auth_just_completed', JSON.stringify({
@@ -69,7 +70,7 @@ const GoogleAuthCallback: React.FC = () => {
             throw new Error(`Erreur serveur: ${response.status}`);
           }
         } catch (error) {
-          console.error('[GoogleAuthCallback] ❌ Erreur lors de l\'échange du code:', error);
+          logger.error('[GoogleAuthCallback] ❌ Erreur lors de l\'échange du code:', error);
           sessionStorage.setItem('google_auth_error', JSON.stringify({
             ts: Date.now(),
             error: 'callback_error',
@@ -116,14 +117,14 @@ const GoogleAuthCallback: React.FC = () => {
     // Communiquer avec la fenêtre parent (popup -> main window)
     if (window.opener && !window.opener.closed) {
       if (googleSuccess === '1') {
-        console.log('[GoogleAuthCallback] ✅ Succès - envoi message au parent');
+        logger.debug('[GoogleAuthCallback] ✅ Succès - envoi message au parent');
         window.opener.postMessage({
           type: 'GOOGLE_AUTH_SUCCESS',
           organizationId,
           userEmail
         }, window.location.origin);
       } else if (googleError) {
-        console.log('[GoogleAuthCallback] ❌ Erreur - envoi message au parent:', googleError);
+        logger.debug('[GoogleAuthCallback] ❌ Erreur - envoi message au parent:', googleError);
         window.opener.postMessage({
           type: 'GOOGLE_AUTH_ERROR',
           error: googleError
@@ -136,7 +137,7 @@ const GoogleAuthCallback: React.FC = () => {
       }, 1500);
     } else {
       // Mode redirection complète (pas de popup) - cas de Codespaces
-      console.log('[GoogleAuthCallback] Mode redirection complète (pas de popup)');
+      logger.debug('[GoogleAuthCallback] Mode redirection complète (pas de popup)');
       
       // Nettoyer le flag OAuth pending
       localStorage.removeItem('google_oauth_pending');
@@ -152,15 +153,15 @@ const GoogleAuthCallback: React.FC = () => {
         if (googleSuccess === '1' && (organizationId || savedOrgId)) {
           // Rediriger vers la page des organisations avec l'ID
           const targetOrgId = organizationId || savedOrgId;
-          console.log('[GoogleAuthCallback] ✅ Redirection vers la page organisations avec orgId:', targetOrgId);
+          logger.debug('[GoogleAuthCallback] ✅ Redirection vers la page organisations avec orgId:', targetOrgId);
           window.location.replace(`/super-admin/organizations?selected=${targetOrgId}&tab=workspace`);
         } else if (googleError) {
           // En cas d'erreur, rediriger vers la page principale avec un message
-          console.log('[GoogleAuthCallback] ❌ Redirection avec erreur vers la page principale');
+          logger.debug('[GoogleAuthCallback] ❌ Redirection avec erreur vers la page principale');
           window.location.replace('/');
         } else {
           // Redirection par défaut vers la page principale
-          console.log('[GoogleAuthCallback] Redirection vers la page principale...');
+          logger.debug('[GoogleAuthCallback] Redirection vers la page principale...');
           window.location.replace('/');
         }
       }, delay);

@@ -49,6 +49,7 @@ import ContactFormSelector from './ContactFormSelector';
 import SectionAnchorSelector from './SectionAnchorSelector';
 import SimulatorFormSelector from './SimulatorFormSelector';
 import AIAssistButton from '../../ai/AIAssistButton';
+import { logger } from '../../../lib/logger';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -127,7 +128,7 @@ export const FieldRenderer: React.FC<FieldRendererProps> = ({
     
     // 🔥 DEBUG POUR CONDITION
     if (field.id === 'formTarget' || field.id === 'sectionAnchor') {
-      console.log(`🔍 [FieldRenderer] Évaluation condition pour ${field.id}:`, {
+      logger.debug(`🔍 [FieldRenderer] Évaluation condition pour ${field.id}:`, {
         watchedValues,
         formValues,
         currentFormValues,
@@ -400,7 +401,7 @@ export const FieldRenderer: React.FC<FieldRendererProps> = ({
 
       // ==================== CONTACT FORM SELECTOR ====================
       case 'contact-form-selector':
-        console.log('🎯 [FieldRenderer] CONTACT FORM SELECTOR RENDU:', {
+        logger.debug('🎯 [FieldRenderer] CONTACT FORM SELECTOR RENDU:', {
           fieldId: field.id,
           name,
           currentValue: value,
@@ -423,7 +424,7 @@ export const FieldRenderer: React.FC<FieldRendererProps> = ({
       
       // ==================== SIMULATOR FORM SELECTOR ====================
       case 'simulator-form-selector':
-        console.log('📋 [FieldRenderer] SIMULATOR FORM SELECTOR:', { fieldId: field.id, name });
+        logger.debug('📋 [FieldRenderer] SIMULATOR FORM SELECTOR:', { fieldId: field.id, name });
         return (
           <Form.Item
             name={name}
@@ -442,18 +443,18 @@ export const FieldRenderer: React.FC<FieldRendererProps> = ({
         const resolvedWebsiteId = opts.websiteId || aiContext?.websiteId;
         
         // 🔍 DEBUG COMPLET
-        console.log('🔍 [FieldRenderer] section-anchor-selector RENDER:');
-        console.log('  1. Field ID:', field.id);
-        console.log('  2. Field Name Path:', name);
-        console.log('  3. opts.websiteId:', opts.websiteId);
-        console.log('  4. aiContext exists?', !!aiContext);
-        console.log('  5. aiContext?.websiteId:', aiContext?.websiteId);
-        console.log('  6. resolvedWebsiteId:', resolvedWebsiteId);
+        logger.debug('🔍 [FieldRenderer] section-anchor-selector RENDER:');
+        logger.debug('  1. Field ID:', field.id);
+        logger.debug('  2. Field Name Path:', name);
+        logger.debug('  3. opts.websiteId:', opts.websiteId);
+        logger.debug('  4. aiContext exists?', !!aiContext);
+        logger.debug('  5. aiContext?.websiteId:', aiContext?.websiteId);
+        logger.debug('  6. resolvedWebsiteId:', resolvedWebsiteId);
         
         if (aiContext) {
-          console.log('  7. aiContext keys:', Object.keys(aiContext));
-          console.log('  8. aiContext.websiteId direct:', aiContext.websiteId);
-          console.log('  9. Full aiContext:', JSON.stringify(aiContext, null, 2));
+          logger.debug('  7. aiContext keys:', Object.keys(aiContext));
+          logger.debug('  8. aiContext.websiteId direct:', aiContext.websiteId);
+          logger.debug('  9. Full aiContext:', JSON.stringify(aiContext, null, 2));
         }
         
         // Sauvegarder dans window pour inspection dans la console
@@ -543,7 +544,7 @@ export const FieldRenderer: React.FC<FieldRendererProps> = ({
           ? name.reduce((obj, key) => obj?.[key], currentFormValues)
           : currentFormValues;
         
-        console.log('🔍 [FieldRenderer GROUP]', {
+        logger.debug('🔍 [FieldRenderer GROUP]', {
           fieldId: field.id,
           name,
           valueKeys: typeof value === 'object' ? Object.keys(value) : typeof value,

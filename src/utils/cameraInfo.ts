@@ -1,3 +1,4 @@
+import { logger } from '../lib/logger';
 /**
  * 📷 Utilitaires pour extraire les informations de caméra/téléphone
  * et calculer la focale en pixels pour des mesures précises
@@ -329,7 +330,7 @@ export async function getCameraCapabilities(videoTrack: MediaStreamTrack): Promi
       ...(settings.width && { fovHorizontal: estimateFovFromResolution(settings.width, settings.height || settings.width) }),
     };
   } catch (err) {
-    console.warn('📷 [CameraInfo] Impossible de récupérer les capacités:', err);
+    logger.warn('📷 [CameraInfo] Impossible de récupérer les capacités:', err);
     return {};
   }
 }
@@ -363,7 +364,7 @@ export function getFocalLengthPx(
   if (exif) {
     const info = extractCameraInfoFromExif(exif, imageWidth);
     if (info.focalLengthPx) {
-      console.log(`📷 [CameraInfo] Focale depuis ${info.source}: ${info.focalLengthPx}px (${info.focalLength35mm}mm eq., conf=${(info.confidence * 100).toFixed(0)}%)`);
+      logger.debug(`📷 [CameraInfo] Focale depuis ${info.source}: ${info.focalLengthPx}px (${info.focalLength35mm}mm eq., conf=${(info.confidence * 100).toFixed(0)}%)`);
       return { 
         focalPx: info.focalLengthPx, 
         confidence: info.confidence, 
@@ -378,7 +379,7 @@ export function getFocalLengthPx(
     if (phone.make || phone.model) {
       const info = getDefaultCameraInfo(imageWidth, phone.make, phone.model);
       if (info.focalLengthPx && info.source === 'lookup') {
-        console.log(`📷 [CameraInfo] Focale depuis User-Agent: ${info.focalLengthPx}px (${phone.make} ${phone.model})`);
+        logger.debug(`📷 [CameraInfo] Focale depuis User-Agent: ${info.focalLengthPx}px (${phone.make} ${phone.model})`);
         return { 
           focalPx: info.focalLengthPx, 
           confidence: info.confidence * 0.8, // Réduire car moins fiable
@@ -390,7 +391,7 @@ export function getFocalLengthPx(
   
   // 3. Valeur par défaut
   const defaultInfo = getDefaultCameraInfo(imageWidth);
-  console.log(`📷 [CameraInfo] Focale par défaut: ${defaultInfo.focalLengthPx}px (26mm eq.)`);
+  logger.debug(`📷 [CameraInfo] Focale par défaut: ${defaultInfo.focalLengthPx}px (26mm eq.)`);
   return { 
     focalPx: defaultInfo.focalLengthPx!, 
     confidence: 0.5, 

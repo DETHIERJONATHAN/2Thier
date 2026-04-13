@@ -3,6 +3,7 @@ import { db } from '../lib/database';
 import { authMiddleware, AuthenticatedRequest } from '../middlewares/auth';
 import type { Response } from 'express';
 import { createBusinessAutoPost } from '../services/business-auto-post';
+import { logger } from '../lib/logger';
 
 const router = Router();
 const prisma = db;
@@ -124,7 +125,7 @@ router.get('/events', authMiddleware, async (req: AuthenticatedRequest, res: Res
 
     res.json(events);
   } catch (error) {
-    console.error('[Calendar API] Erreur lors de la récupération des événements:', error);
+    logger.error('[Calendar API] Erreur lors de la récupération des événements:', error);
     res.status(500).json({ error: 'Erreur serveur lors de la récupération des événements' });
   }
 });
@@ -236,11 +237,11 @@ router.post('/events', authMiddleware, async (req: AuthenticatedRequest, res: Re
       eventType: 'calendar_event',
       entityId: event.id,
       entityLabel: title || 'Événement',
-    }).catch(err => console.error('[Calendar API] Auto-post error:', err));
+    }).catch(err => logger.error('[Calendar API] Auto-post error:', err));
 
     res.status(201).json(fullEvent);
   } catch (error) {
-    console.error('[Calendar API] Erreur lors de la création de l\'événement:', error);
+    logger.error('[Calendar API] Erreur lors de la création de l\'événement:', error);
     res.status(500).json({ error: 'Erreur serveur lors de la création de l\'événement' });
   }
 });
@@ -354,7 +355,7 @@ router.put('/events/:id', authMiddleware, async (req: AuthenticatedRequest, res:
 
     res.json(updatedEvent);
   } catch (error) {
-    console.error('[Calendar API] Erreur lors de la modification de l\'événement:', error);
+    logger.error('[Calendar API] Erreur lors de la modification de l\'événement:', error);
     res.status(500).json({ error: 'Erreur serveur lors de la modification de l\'événement' });
   }
 });
@@ -395,7 +396,7 @@ router.delete('/events/:id', authMiddleware, async (req: AuthenticatedRequest, r
 
     res.json({ success: true });
   } catch (error) {
-    console.error('[Calendar API] Erreur lors de la suppression de l\'événement:', error);
+    logger.error('[Calendar API] Erreur lors de la suppression de l\'événement:', error);
     res.status(500).json({ error: 'Erreur serveur lors de la suppression de l\'événement' });
   }
 });
@@ -419,7 +420,7 @@ router.get('/types', authMiddleware, async (_req: AuthenticatedRequest, res: Res
 
     res.json(types);
   } catch (error) {
-    console.error('[Calendar API] Erreur lors de la récupération des types:', error);
+    logger.error('[Calendar API] Erreur lors de la récupération des types:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -515,7 +516,7 @@ router.get('/chantier-events', authMiddleware, async (req: AuthenticatedRequest,
 
     res.json(calendarFormatEvents);
   } catch (error) {
-    console.error('[Calendar API] Erreur lors de la récupération des événements chantier:', error);
+    logger.error('[Calendar API] Erreur lors de la récupération des événements chantier:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -584,7 +585,7 @@ router.get('/telnyx-calls', authMiddleware, async (req: AuthenticatedRequest, re
 
     res.json(calendarFormatCalls);
   } catch (error) {
-    console.error('[Calendar API] Erreur lors de la récupération des appels Telnyx:', error);
+    logger.error('[Calendar API] Erreur lors de la récupération des appels Telnyx:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

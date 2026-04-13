@@ -10,6 +10,7 @@
 import { db } from '../lib/database';
 import { v4 as uuidv4 } from 'uuid';
 import { sendPushToUser } from '../routes/push';
+import { logger } from '../lib/logger';
 
 type Priority = 'low' | 'normal' | 'high' | 'urgent';
 
@@ -55,7 +56,7 @@ async function createNotification(payload: NotifPayload): Promise<void> {
     }
   } catch (err) {
     // Ne jamais bloquer le flux principal
-    console.error(`[NotificationHelper] Erreur création notification (${payload.type}):`, err);
+    logger.error(`[NotificationHelper] Erreur création notification (${payload.type}):`, err);
   }
 }
 

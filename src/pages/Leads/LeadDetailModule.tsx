@@ -45,6 +45,7 @@ import { extractApiArray, unwrapApiData } from '../../utils/apiResponse';
 import type { ApiEnvelope } from '../../utils/apiResponse';
 import type { Lead, LeadAddress, LeadApiResponse } from '../../types/leads';
 import dayjs from 'dayjs';
+import { logger } from '../../lib/logger';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -147,7 +148,7 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
     } catch (err: unknown) {
       const errorMessage = getErrorMessage(err, 'Erreur lors du chargement du lead');
       const errorDetails = getErrorResponseDetails(err);
-      console.error('Erreur lors du chargement du lead:', {
+      logger.error('Erreur lors du chargement du lead:', {
         error: err,
         message: errorMessage,
         status: errorDetails.status,
@@ -183,7 +184,7 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
         NotificationManager.error('PDF non généré');
       }
     } catch (error) {
-      console.error('Erreur régénération PDF:', error);
+      logger.error('Erreur régénération PDF:', error);
       NotificationManager.error('Erreur lors de la génération du PDF');
     } finally {
       setRegeneratingFormPdf(false);
@@ -319,7 +320,7 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
   // Debug non intrusif pour comprendre la source du nom affiché
   if (typeof window !== 'undefined' && lead) {
     try {
-      console.log('[LeadDetailModule] 🧩 Debug nom', {
+      logger.debug('[LeadDetailModule] 🧩 Debug nom', {
         id: lead.id,
         firstName: lead.firstName,
         lastName: lead.lastName,
@@ -330,7 +331,7 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
         displayName
       });
     } catch (e) {
-      console.warn('[LeadDetailModule] Debug nom: erreur de log', e);
+      logger.warn('[LeadDetailModule] Debug nom: erreur de log', e);
     }
   }
 
@@ -424,7 +425,7 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
     } catch (error) {
       const errorMessage = getErrorMessage(error, 'Erreur lors de l\'ajout de la note');
       const errorDetails = getErrorResponseDetails(error);
-      console.error('Erreur lors de l\'ajout de la note:', {
+      logger.error('Erreur lors de l\'ajout de la note:', {
         error,
         status: errorDetails.status,
         data: errorDetails.data,
@@ -451,7 +452,7 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
     } catch (error) {
       const errorMessage = getErrorMessage(error, 'Erreur lors de l\'upload du document');
       const errorDetails = getErrorResponseDetails(error);
-      console.error('Erreur lors de l\'upload du document:', {
+      logger.error('Erreur lors de l\'upload du document:', {
         error,
         status: errorDetails.status,
         data: errorDetails.data,

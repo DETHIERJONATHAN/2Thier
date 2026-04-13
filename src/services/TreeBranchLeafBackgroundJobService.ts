@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { getResolver } from './TreeBranchLeafResolver';
+import { logger } from '../lib/logger';
 
 /**
  * Service de tâches en arrière-plan pour le système TreeBranchLeaf
@@ -20,7 +21,7 @@ export class TreeBranchLeafBackgroundJobService {
    */
   start(intervalMinutes = 15): void {
     if (this.isRunning) {
-      console.warn('⚠️ Background jobs are already running');
+      logger.warn('⚠️ Background jobs are already running');
       return;
     }
 
@@ -78,7 +79,7 @@ export class TreeBranchLeafBackgroundJobService {
       const duration = Date.now() - startTime;
 
     } catch (error) {
-      console.error('❌ Background tasks failed:', error);
+      logger.error('❌ Background tasks failed:', error);
     }
   }
 
@@ -110,7 +111,7 @@ export class TreeBranchLeafBackgroundJobService {
       }
 
     } catch (error) {
-      console.error('Failed to cleanup stale cache:', error);
+      logger.error('Failed to cleanup stale cache:', error);
     }
   }
 
@@ -135,7 +136,7 @@ export class TreeBranchLeafBackgroundJobService {
           await this.resolver.calculateAndCacheResult(entry.id);
           calculated++;
         } catch (error) {
-          console.error(`Failed to calculate result for entry ${entry.id}:`, error);
+          logger.error(`Failed to calculate result for entry ${entry.id}:`, error);
         }
       }
 
@@ -143,7 +144,7 @@ export class TreeBranchLeafBackgroundJobService {
       }
 
     } catch (error) {
-      console.error('Failed to recalculate stale results:', error);
+      logger.error('Failed to recalculate stale results:', error);
     }
   }
 
@@ -181,11 +182,11 @@ export class TreeBranchLeafBackgroundJobService {
 
       // Alertes si trop d'entrées non résolues
       if (unresolvedCount > 100) {
-        console.warn(`⚠️ High number of unresolved operations: ${unresolvedCount}`);
+        logger.warn(`⚠️ High number of unresolved operations: ${unresolvedCount}`);
       }
 
     } catch (error) {
-      console.error('Failed to generate statistics:', error);
+      logger.error('Failed to generate statistics:', error);
     }
   }
 
@@ -212,7 +213,7 @@ export class TreeBranchLeafBackgroundJobService {
       
       
     } catch (error) {
-      console.error('❌ Forced full synchronization failed:', error);
+      logger.error('❌ Forced full synchronization failed:', error);
       throw error;
     }
   }

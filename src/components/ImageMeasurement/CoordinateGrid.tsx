@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { SF } from '../zhiive/ZhiiveTheme';
+import { logger } from '../../lib/logger';
 
 interface Corner {
   x: number;
@@ -38,11 +39,11 @@ export const CoordinateGrid: React.FC<CoordinateGridProps> = ({
   // 🔍 DEBUG: Log les props quand ça change
   useEffect(() => {
     if (objectCorners) {
-      console.log('🎯 [CoordinateGrid] Props reçus:');
-      console.log('   objectCorners:', JSON.stringify(objectCorners, null, 2));
-      console.log('   pixelPerCmX:', pixelPerCmX.toFixed(4));
-      console.log('   pixelPerCmY:', pixelPerCmY.toFixed(4));
-      console.log('   scale:', scale);
+      logger.debug('🎯 [CoordinateGrid] Props reçus:');
+      logger.debug('   objectCorners:', JSON.stringify(objectCorners, null, 2));
+      logger.debug('   pixelPerCmX:', pixelPerCmX.toFixed(4));
+      logger.debug('   pixelPerCmY:', pixelPerCmY.toFixed(4));
+      logger.debug('   scale:', scale);
     }
   }, [objectCorners, pixelPerCmX, pixelPerCmY, scale]);
 

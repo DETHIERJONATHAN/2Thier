@@ -4,6 +4,7 @@ import { PhoneOutlined, MessageOutlined, UserOutlined, HistoryOutlined } from '@
 import GoogleVoiceWidget from './GoogleVoiceWidget';
 import LeadCallHistory from './LeadCallHistory';
 import { useGoogleVoiceIntegration } from '../../hooks/useGoogleVoiceIntegration';
+import { logger } from '../../lib/logger';
 
 interface Lead {
   id: string;
@@ -40,7 +41,7 @@ const LeadDetailWithVoice: React.FC<LeadDetailWithVoiceProps> = ({ lead, onLeadU
   };
 
   const handleCallComplete = (callData: unknown) => {
-    console.log('Appel terminé:', callData);
+    logger.debug('Appel terminé:', callData);
     // Ici on pourrait mettre à jour le statut du lead ou ajouter une note
     if (onLeadUpdate) {
       onLeadUpdate({

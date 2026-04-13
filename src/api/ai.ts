@@ -68,7 +68,7 @@ router.post('/generate', async (req, res) => {
         throw new Error('Pas de JSON trouvé');
       }
     } catch (parseError) {
-      console.warn('[AI] Réponse non-JSON, conversion en array');
+      logger.warn('[AI] Réponse non-JSON, conversion en array');
       // Si ce n'est pas du JSON, traiter comme du texte brut
       suggestions = parseNonJSONResponse(text, context);
     }
@@ -83,7 +83,7 @@ router.post('/generate', async (req, res) => {
     });
 
   } catch (error: unknown) {
-    console.error('[AI] Erreur:', error);
+    logger.error('[AI] Erreur:', error);
     res.status(500).json({
       success: false,
       error: error.message || 'Erreur lors de la génération IA',
@@ -265,7 +265,7 @@ router.post('/analyze-section', async (req, res) => {
         throw new Error('Pas de JSON trouvé');
       }
     } catch (parseError) {
-      console.warn('[AI Analyze] Parsing échoué, génération d\'analyse par défaut');
+      logger.warn('[AI Analyze] Parsing échoué, génération d\'analyse par défaut');
       analysis = generateFallbackAnalysis(sectionType, content);
     }
 
@@ -275,7 +275,7 @@ router.post('/analyze-section', async (req, res) => {
     res.json(validatedAnalysis);
 
   } catch (error: unknown) {
-    console.error('[AI Analyze] Erreur:', error);
+    logger.error('[AI Analyze] Erreur:', error);
     
     // Retourner analyse par défaut en cas d'erreur
     res.json(generateFallbackAnalysis(req.body.sectionType, req.body.content));
@@ -436,7 +436,7 @@ Format de réponse : JSON avec { metaTitle, metaDescription, keywords: [], slug,
     });
 
   } catch (error: unknown) {
-    console.error('[AI SEO] Erreur:', error);
+    logger.error('[AI SEO] Erreur:', error);
     res.status(500).json({
       success: false,
       error: error.message || 'Erreur lors de l\'optimisation SEO'
@@ -486,7 +486,7 @@ Retourne le contenu amélioré au format JSON identique à l'original.`;
     });
 
   } catch (error: unknown) {
-    console.error('[AI Improve] Erreur:', error);
+    logger.error('[AI Improve] Erreur:', error);
     res.status(500).json({
       success: false,
       error: error.message || 'Erreur lors de l\'amélioration du contenu'
@@ -555,7 +555,7 @@ Format de réponse : JSON array avec :
     });
 
   } catch (error: unknown) {
-    console.error('[AI Layout] Erreur:', error);
+    logger.error('[AI Layout] Erreur:', error);
     // Fallback en cas d'erreur
     res.json({
       success: true,
@@ -630,7 +630,7 @@ Format : JSON array avec :
     });
 
   } catch (error: unknown) {
-    console.error('[AI Palette] Erreur:', error);
+    logger.error('[AI Palette] Erreur:', error);
     res.json({
       success: true,
       palettes: generateFallbackPalettes(req.body.baseColor || '#1890ff')
@@ -733,6 +733,7 @@ function generateFallbackPalettes(baseColor: string): unknown[] {
 // =============================================================================
 
 import { getGeminiService } from '../services/GoogleGeminiService';
+import { logger } from '../lib/logger';
 
 const geminiMeasureService = getGeminiService();
 
@@ -794,7 +795,7 @@ router.post('/measure-image', async (req, res) => {
     const duration = Date.now() - startTime;
 
     if (!result.success) {
-      console.error(`❌ [AI Measure] Échec après ${duration}ms:`, result.error);
+      logger.error(`❌ [AI Measure] Échec après ${duration}ms:`, result.error);
       return res.status(500).json({
         success: false,
         error: result.error || 'Erreur lors de l\'analyse de l\'image',
@@ -818,7 +819,7 @@ router.post('/measure-image', async (req, res) => {
 
   } catch (error: unknown) {
     const duration = Date.now() - startTime;
-    console.error('❌ [AI Measure] Erreur:', error);
+    logger.error('❌ [AI Measure] Erreur:', error);
 
     return res.status(500).json({
       success: false,
@@ -894,7 +895,7 @@ router.post('/measure-image/apply', async (req, res) => {
     });
 
   } catch (error: unknown) {
-    console.error('❌ [AI Measure Apply] Erreur:', error);
+    logger.error('❌ [AI Measure Apply] Erreur:', error);
     return res.status(500).json({
       success: false,
       error: error.message || 'Erreur interne'

@@ -15,6 +15,7 @@ import SignatureCanvas, { type SignatureCanvasRef } from './SignatureCanvas';
 import SignedPdfPreviewModal from './SignedPdfPreviewModal';
 import { SF } from '../zhiive/ZhiiveTheme';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { logger } from '../../lib/logger';
 
 const { Text, Title } = Typography;
 const { Step } = Steps;
@@ -162,7 +163,7 @@ const SignatureModal: React.FC<SignatureModalProps> = ({
       message.success(`Code de vérification envoyé à ${signerEmail}`);
 
     } catch (err: unknown) {
-      console.error('[SignatureModal] Erreur initiation/OTP:', err);
+      logger.error('[SignatureModal] Erreur initiation/OTP:', err);
       message.error(err?.message || 'Erreur lors de l\'initiation');
     } finally {
       setInitiating(false);
@@ -257,7 +258,7 @@ const SignatureModal: React.FC<SignatureModalProps> = ({
         throw new Error(res?.message || 'Erreur signature');
       }
     } catch (err: unknown) {
-      console.error('[SignatureModal] Erreur signature:', err);
+      logger.error('[SignatureModal] Erreur signature:', err);
       message.error(err?.message || 'Erreur lors de la signature');
     } finally {
       setSigning(false);

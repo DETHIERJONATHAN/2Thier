@@ -1,3 +1,4 @@
+import { logger } from './logger';
 /**
  * 🎯 Politique de Duplication des Champs
  * 
@@ -76,14 +77,14 @@ export function getDuplicationNumber(fieldId: string): number | undefined {
  */
 export function debugFieldPolicy(fieldId: string | undefined): void {
   if (!fieldId) {
-    console.log('[fieldDuplicationPolicy] ❌ fieldId est undefined');
+    logger.debug('[fieldDuplicationPolicy] ❌ fieldId est undefined');
     return;
   }
   
   console.group(`[fieldDuplicationPolicy] Analyse: ${fieldId}`);
-  console.log('isDuplicated:', isDuplicatedField(fieldId));
-  console.log('canBeSelect:', canFieldBeSelect(fieldId));
-  console.log('baseFieldId:', getBaseFieldId(fieldId));
-  console.log('duplicationNumber:', getDuplicationNumber(fieldId));
+  logger.debug('isDuplicated:', isDuplicatedField(fieldId));
+  logger.debug('canBeSelect:', canFieldBeSelect(fieldId));
+  logger.debug('baseFieldId:', getBaseFieldId(fieldId));
+  logger.debug('duplicationNumber:', getDuplicationNumber(fieldId));
   console.groupEnd();
 }

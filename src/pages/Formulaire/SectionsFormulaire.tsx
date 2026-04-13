@@ -27,6 +27,7 @@ const BUILTIN_SECTION_TYPES = [
 ];
 
 import { iconForFieldType } from '../../utils/fieldTypeIcons';
+import { logger } from '../../lib/logger';
 
 type SelectedFieldRef = { sectionId: string | number; fieldId: string | number };
 
@@ -342,11 +343,11 @@ const FormSections = ({ selectedField, setSelectedField }: { selectedField: Sele
   // Déterminer le block sélectionné le plus tôt possible pour éviter les accès avant initialisation
   const block = blocks.find(b => String(b.id) === selectedBlockId);
 
-  console.log('[SectionsFormulaire] selectedBlockId:', selectedBlockId);
-  console.log('[SectionsFormulaire] blocks.length:', blocks.length);
-  console.log('[SectionsFormulaire] block found:', !!block);
+  logger.debug('[SectionsFormulaire] selectedBlockId:', selectedBlockId);
+  logger.debug('[SectionsFormulaire] blocks.length:', blocks.length);
+  logger.debug('[SectionsFormulaire] block found:', !!block);
   if (block) {
-    console.log('[SectionsFormulaire] block sections:', block.sections?.length || 0);
+    logger.debug('[SectionsFormulaire] block sections:', block.sections?.length || 0);
   }
 
   // Synchroniser la liste avec les types déjà présents dans le block (sans doublons)
@@ -492,7 +493,7 @@ const FormSections = ({ selectedField, setSelectedField }: { selectedField: Sele
         await removeField(fieldId);
         toast.success('Champ supprimé avec succès !');
       } catch (error) {
-        console.error(`Erreur lors de la suppression du champ ID: ${fieldId}`, error);
+        logger.error(`Erreur lors de la suppression du champ ID: ${fieldId}`, error);
         toast.error('Erreur lors de la suppression du champ.');
       } finally {
         // 3. Déverrouiller l'UI à la fin
@@ -521,7 +522,7 @@ const FormSections = ({ selectedField, setSelectedField }: { selectedField: Sele
         order: newOrder, // On envoie l'ordre au backend
       });
     } catch (error) {
-      console.error("Erreur lors de l'ajout du champ", error);
+      logger.error("Erreur lors de l'ajout du champ", error);
       alert("Impossible d'ajouter le champ.");
     }
   };
@@ -564,7 +565,7 @@ const FormSections = ({ selectedField, setSelectedField }: { selectedField: Sele
           setSelectedField(null);
         }
       } catch (error) {
-        console.error("Erreur lors de la suppression de la section:", error);
+        logger.error("Erreur lors de la suppression de la section:", error);
         toast.error('Erreur lors de la suppression de la section.');
         // L'erreur est déjà notifiée par le store
       }
@@ -646,7 +647,7 @@ const FormSections = ({ selectedField, setSelectedField }: { selectedField: Sele
       setShowDeleteFormModal(false);
       navigate('/formulaires'); // Redirection après suppression
     } catch (error) {
-      console.error("Erreur lors de la suppression du formulaire:", error);
+      logger.error("Erreur lors de la suppression du formulaire:", error);
       // La notification d'erreur est déjà gérée dans le store
     }
   };

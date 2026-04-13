@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
 import { useAuth } from '../auth/useAuth';
 import { message } from 'antd';
+import { logger } from '../lib/logger';
 
 interface GoogleConnectionStatus {
   isConnected: boolean;
@@ -46,7 +47,7 @@ export const useAutoGoogleAuth = () => {
   const response = await api.get(`/api/auto-google-auth/status?userId=${user.id}&organizationId=${currentOrganization?.id || ''}`) as GoogleConnectionStatus;
       return response;
     } catch (error) {
-      console.error('Erreur récupération statut Google:', error);
+      logger.error('Erreur récupération statut Google:', error);
       return {
         isConnected: false,
         needsReauth: true
@@ -94,7 +95,7 @@ export const useAutoGoogleAuth = () => {
 
       return response;
     } catch (error) {
-      console.error('Erreur connexion automatique Google:', error);
+      logger.error('Erreur connexion automatique Google:', error);
       const errorMsg = 'Erreur lors de la connexion automatique à Google';
       message.error(errorMsg);
       return {
@@ -166,13 +167,13 @@ export const useAutoGoogleAuth = () => {
     }
 
     const handleGoogleConnected = () => {
-      console.log('[useAutoGoogleAuth] Google connecté automatiquement détecté');
+      logger.debug('[useAutoGoogleAuth] Google connecté automatiquement détecté');
       refreshConnectionStatus();
       message.success('Google Workspace connecté automatiquement !');
     };
 
     const handleGoogleAuthRequired = () => {
-      console.log('[useAutoGoogleAuth] Autorisation Google manuelle requise détectée');
+      logger.debug('[useAutoGoogleAuth] Autorisation Google manuelle requise détectée');
       message.info('Connexion Google requise. Cliquez ici pour vous connecter.', 5);
     };
 

@@ -9,6 +9,7 @@
 import { Router, Request, Response } from 'express';
 import { randomUUID } from 'crypto';
 import { db } from '../lib/database';
+import { logger } from '../lib/logger';
 
 const router = Router();
 const prisma = db;
@@ -157,7 +158,7 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
     // 🔗 PRIORITÉ 0: Si le champ a un Link configuré, récupérer la valeur du champ cible
     // Ce bloc DOIT être exécuté AVANT toute autre logique de calcul
     if (node.hasLink && node.link_targetNodeId) {
-      // console.log(`🔗 [LINK] Champ "${node.label}" (${nodeId}) a un link vers ${node.link_targetNodeId}`);
+      // logger.debug(`🔗 [LINK] Champ "${node.label}" (${nodeId}) a un link vers ${node.link_targetNodeId}`);
       
       // Récupérer la valeur du champ cible depuis SubmissionData (valeur scopée)
       if (submissionId) {
@@ -167,7 +168,7 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
         });
         
         if (targetSubmissionData?.value) {
-          // console.log(`🔗 [LINK] Valeur trouvée dans SubmissionData: "${targetSubmissionData.value}"`);
+          // logger.debug(`🔗 [LINK] Valeur trouvée dans SubmissionData: "${targetSubmissionData.value}"`);
           return res.json({
             success: true,
             nodeId: node.id,
@@ -191,7 +192,7 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
       });
       
       if (targetNode?.calculatedValue) {
-        // console.log(`🔗 [LINK] Valeur trouvée dans TreeBranchLeafNode: "${targetNode.calculatedValue}"`);
+        // logger.debug(`🔗 [LINK] Valeur trouvée dans TreeBranchLeafNode: "${targetNode.calculatedValue}"`);
         return res.json({
           success: true,
           nodeId: node.id,
@@ -208,7 +209,7 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
       }
       
       // Aucune valeur trouvée pour le lien
-      // console.log(`⚠️ [LINK] Champ "${node.label}" - pas de valeur disponible pour le lien vers ${node.link_targetNodeId}`);
+      // logger.debug(`⚠️ [LINK] Champ "${node.label}" - pas de valeur disponible pour le lien vers ${node.link_targetNodeId}`);
     }
 
     // 🎯 PRIORITÉ 1: Champs Sum-Total (-sum-total)
@@ -269,7 +270,7 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
           // Les opérateurs "+", "-", etc. sont ignorés car on fait une somme simple
         }
 
-        // console.log(`🎯 [SUM-TOTAL DIRECT] ${nodeId} (${node.label}) = ${sum}`, debugParts);
+        // logger.debug(`🎯 [SUM-TOTAL DIRECT] ${nodeId} (${node.label}) = ${sum}`, debugParts);
 
         // Persister la valeur calculée sur le nœud pour les autres consommateurs
         await prisma.treeBranchLeafNode.update({
@@ -316,7 +317,7 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
           debugParts
         });
       } catch (sumTotalError) {
-        console.error(`❌ [SUM-TOTAL DIRECT] Erreur pour ${nodeId}:`, sumTotalError);
+        logger.error(`❌ [SUM-TOTAL DIRECT] Erreur pour ${nodeId}:`, sumTotalError);
         // Continue vers le flow normal en cas d'erreur
       }
     }
@@ -379,7 +380,7 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
         const resolved = hasValidScoped ? parsedScoped : fromOpResult;
 
         if (hasMeaningfulValue(resolved)) {
-          // console.log(`✅ [DISPLAY FIELD] ${nodeId} (${node.label}) retourne valeur SubmissionData: ${resolved}`);
+          // logger.debug(`✅ [DISPLAY FIELD] ${nodeId} (${node.label}) retourne valeur SubmissionData: ${resolved}`);
           return res.json({
             success: true,
             nodeId: node.id,
@@ -394,7 +395,7 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
           });
         }
         // Si pas de valeur dans SubmissionData, on continue vers le recalcul ci-dessous
-        // console.log(`⚠️ [DISPLAY FIELD] ${nodeId} (${node.label}) pas de valeur SubmissionData, recalcul nécessaire`);
+        // logger.debug(`⚠️ [DISPLAY FIELD] ${nodeId} (${node.label}) pas de valeur SubmissionData, recalcul nécessaire`);
       }
 
       // 🔥 FIX DONNÉES FANTÔMES: Pour les DISPLAY fields, NE JAMAIS retourner
@@ -507,7 +508,7 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
               freshCalculation: true
             });
           } catch (recomputeErr) {
-            console.error('❌ [CalculatedValueController] Recompute error:', recomputeErr);
+            logger.error('❌ [CalculatedValueController] Recompute error:', recomputeErr);
           }
         }
       }
@@ -648,7 +649,7 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
           });
         }
       } catch (recomputeErr) {
-        console.error('❌ [CalculatedValueController] Recompute (requiresFreshCalculation) error:', recomputeErr);
+        logger.error('❌ [CalculatedValueController] Recompute (requiresFreshCalculation) error:', recomputeErr);
       }
     }
     
@@ -691,7 +692,7 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
       (hasTableLookup || hasFormulaVariable || hasConditionVariable || hasTreeSourceVariable || node.hasFormula);
     
     if ((canRecalculateHere || canRecalculateDisplayField) && node.treeId && isRealSubmission) {
-      // console.log(`🔥 [CalculatedValueController] Node "${node.label}" - recalcul ${isDisplayField ? 'DISPLAY field' : 'table lookup'}:`, {
+      // logger.debug(`🔥 [CalculatedValueController] Node "${node.label}" - recalcul ${isDisplayField ? 'DISPLAY field' : 'table lookup'}:`, {
         // nodeId, 
         // hasTableLookup,
         // hasFormulaVariable,
@@ -710,7 +711,7 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
           prisma
         );
         
-        // console.log('🎯 [CalculatedValueController] Résultat operation-interpreter:', result);
+        // logger.debug('🎯 [CalculatedValueController] Résultat operation-interpreter:', result);
         
         // Si on a un résultat VALIDE, le stocker ET le retourner
         if (result && (result.value !== undefined || result.operationResult !== undefined)) {
@@ -777,7 +778,7 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
           });
         }
       } catch (operationErr) {
-        console.error('❌ [CalculatedValueController] Erreur operation-interpreter:', operationErr);
+        logger.error('❌ [CalculatedValueController] Erreur operation-interpreter:', operationErr);
         // Continue avec la valeur existante si échec du calcul
       }
     }
@@ -786,7 +787,7 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
     // 🔥 FIX DONNÉES FANTÔMES: Pour les DISPLAY fields, ne JAMAIS retourner la valeur GLOBALE
     // car elle n'est pas scopée par submission. Retourner null pour forcer le recalcul frontend.
     if (isDisplayField) {
-      // console.log(`⚠️ [CalculatedValueController] DISPLAY field "${node.label}" - pas de valeur scopée, retourne null`);
+      // logger.debug(`⚠️ [CalculatedValueController] DISPLAY field "${node.label}" - pas de valeur scopée, retourne null`);
       return res.json({
         success: true,
         nodeId: node.id,
@@ -811,7 +812,7 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
       fieldType: node.fieldType
     });
   } catch (error) {
-    console.error('[CalculatedValueController] GET erreur:', error);
+    logger.error('[CalculatedValueController] GET erreur:', error);
     return res.status(500).json({ error: String(error) });
   }
 });
@@ -891,7 +892,7 @@ router.post('/batch-calculated-values', async (req: Request, res: Response) => {
     
     return res.json({ success: true, results });
   } catch (error) {
-    console.error('[CalculatedValueController] BATCH GET erreur:', error);
+    logger.error('[CalculatedValueController] BATCH GET erreur:', error);
     return res.status(500).json({ error: String(error) });
   }
 });
@@ -915,7 +916,7 @@ router.post('/:nodeId/store-calculated-value', async (req: Request, res: Respons
     }
 
     // 🎯 Log: debug trace de la requête
-    // console.log('[CalculatedValueController] POST store-calculated-value', {
+    // logger.debug('[CalculatedValueController] POST store-calculated-value', {
       // nodeId,
       // calculatedValue,
       // calculatedBy,
@@ -943,7 +944,7 @@ router.post('/:nodeId/store-calculated-value', async (req: Request, res: Respons
       }
     });
 
-    // console.log('✅ [CalculatedValueController] Valeur stockée:', {
+    // logger.debug('✅ [CalculatedValueController] Valeur stockée:', {
       // nodeId,
       // calculatedValue,
       // calculatedBy,
@@ -958,7 +959,7 @@ router.post('/:nodeId/store-calculated-value', async (req: Request, res: Respons
       calculatedBy: updated.calculatedBy
     });
   } catch (error) {
-    console.error('[CalculatedValueController] POST erreur:', error);
+    logger.error('[CalculatedValueController] POST erreur:', error);
     return res.status(500).json({ error: String(error) });
   }
 });
@@ -1006,7 +1007,7 @@ router.post('/store-batch-calculated-values', async (req: Request, res: Response
       }
     }
 
-    // console.log('✅ [CalculatedValueController] BATCH stockage:', {
+    // logger.debug('✅ [CalculatedValueController] BATCH stockage:', {
       // submissionId,
       // total: values.length,
       // success: results.filter(r => r.success).length,
@@ -1019,7 +1020,7 @@ router.post('/store-batch-calculated-values', async (req: Request, res: Response
       submissionId
     });
   } catch (error) {
-    console.error('[CalculatedValueController] BATCH POST erreur:', error);
+    logger.error('[CalculatedValueController] BATCH POST erreur:', error);
     return res.status(500).json({ error: String(error) });
   }
 });

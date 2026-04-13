@@ -1,6 +1,7 @@
 import React from 'react';
 import { Spin } from 'antd';
 import { useBackendValue } from '../hooks/useBackendValue';
+import { logger } from '../../../../../lib/logger';
 
 interface BackendValueDisplayProps {
   /** ID du champ à afficher */
@@ -50,7 +51,7 @@ export const BackendValueDisplay: React.FC<BackendValueDisplayProps> = ({
   if (typeof value === 'object' && value !== null) {
     const obj = value as Record<string, unknown>;
     extractedValue = obj.value ?? obj.result ?? obj.calculatedValue ?? obj.text ?? obj.humanText ?? value;
-    console.log('🔍 [BackendValueDisplay] Objet détecté, valeur extraite:', extractedValue);
+    logger.debug('🔍 [BackendValueDisplay] Objet détecté, valeur extraite:', extractedValue);
   }
 
   // Formatage simple de la valeur

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { DependencyAction } from '../../utils/dependencyFunctions';
 import DependencyPalette from './DependencyPalette';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 interface AdvancedDependencyEditorProps {
   fieldId: string;
@@ -125,7 +126,7 @@ const AdvancedDependencyEditor = ({ fieldId, initialDependencies = [], onChange 
         }
       }
     } catch (error) {
-      console.error('Erreur lors de la gestion du drop', error);
+      logger.error('Erreur lors de la gestion du drop', error);
     }
   };
 

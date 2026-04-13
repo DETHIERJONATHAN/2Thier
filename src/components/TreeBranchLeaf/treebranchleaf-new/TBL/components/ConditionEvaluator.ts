@@ -6,6 +6,7 @@
  */
 
 import { FormulaEvaluator } from './FormulaEvaluator';
+import { logger } from '../../../../../lib/logger';
 
 interface ConditionWhen {
   id: string;
@@ -69,12 +70,12 @@ export class ConditionEvaluator {
     // Vérifier le cache d'abord avec TTL
     const cached = conditionCache.get(conditionId);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-      console.log(`🚀 [ConditionEvaluator] Cache hit pour condition ${conditionId}`);
+      logger.debug(`🚀 [ConditionEvaluator] Cache hit pour condition ${conditionId}`);
       return cached.condition;
     }
 
     try {
-      console.log(`⚠️ [ConditionEvaluator] Appel API pour condition ${conditionId}`);
+      logger.debug(`⚠️ [ConditionEvaluator] Appel API pour condition ${conditionId}`);
       // Appel API pour récupérer la condition
       const response = await this.api.get(`/treebranchleaf/conditions/${conditionId}`);
       const conditionSet = response.data;
@@ -103,7 +104,7 @@ export class ConditionEvaluator {
     for (const [id, condition] of Object.entries(conditions)) {
       conditionCache.set(id, { condition, timestamp: now });
     }
-    console.log(`🚀 [ConditionEvaluator] ${Object.keys(conditions).length} conditions injectées dans le cache`);
+    logger.debug(`🚀 [ConditionEvaluator] ${Object.keys(conditions).length} conditions injectées dans le cache`);
   }
 
   /**
@@ -200,7 +201,7 @@ export class ConditionEvaluator {
       case 'notContains':
         return !String(leftValue || '').toLowerCase().includes(String(rightValue || '').toLowerCase());
       default:
-        console.warn(`[ConditionEvaluator] Opération non supportée: ${op}`);
+        logger.warn(`[ConditionEvaluator] Opération non supportée: ${op}`);
         return false;
     }
   }

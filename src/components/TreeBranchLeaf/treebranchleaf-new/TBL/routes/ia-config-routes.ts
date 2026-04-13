@@ -7,6 +7,7 @@
 
 import express from 'express';
 import { db } from '../../../../../lib/database';
+import { logger } from '../../../../../lib/logger';
 
 const router = express.Router();
 
@@ -18,7 +19,7 @@ router.get('/nodes/:nodeId/ia-config', async (req, res) => {
   try {
     const { nodeId } = req.params;
     
-    console.log(`📊 [IA-CONFIG] Récupération config pour node ${nodeId}`);
+    logger.debug(`📊 [IA-CONFIG] Récupération config pour node ${nodeId}`);
     
     const node = await db.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
@@ -26,7 +27,7 @@ router.get('/nodes/:nodeId/ia-config', async (req, res) => {
     });
 
     if (!node) {
-      console.warn(`⚠️ [IA-CONFIG] Node ${nodeId} non trouvé`);
+      logger.warn(`⚠️ [IA-CONFIG] Node ${nodeId} non trouvé`);
       return res.status(404).json({ error: 'Node not found' });
     }
 
@@ -43,11 +44,11 @@ router.get('/nodes/:nodeId/ia-config', async (req, res) => {
     };
 
     const config = node.iaMesureConfig || defaultConfig;
-    console.log(`✅ [IA-CONFIG] Config récupérée:`, JSON.stringify(config).substring(0, 100));
+    logger.debug(`✅ [IA-CONFIG] Config récupérée:`, JSON.stringify(config).substring(0, 100));
     
     res.json(config);
   } catch (error) {
-    console.error('❌ [IA-CONFIG] Erreur récupération config:', error);
+    logger.error('❌ [IA-CONFIG] Erreur récupération config:', error);
     res.status(500).json({ error: 'Failed to fetch IA config' });
   }
 });
@@ -61,11 +62,11 @@ router.put('/nodes/:nodeId/ia-config', async (req, res) => {
     const { nodeId } = req.params;
     const config = req.body;
 
-    console.log(`💾 [IA-CONFIG] Mise à jour config pour node ${nodeId}`);
+    logger.debug(`💾 [IA-CONFIG] Mise à jour config pour node ${nodeId}`);
 
     // Validation basique
     if (!config || typeof config !== 'object') {
-      console.warn(`⚠️ [IA-CONFIG] Format de config invalide`);
+      logger.warn(`⚠️ [IA-CONFIG] Format de config invalide`);
       return res.status(400).json({ error: 'Invalid config format' });
     }
 
@@ -86,10 +87,10 @@ router.put('/nodes/:nodeId/ia-config', async (req, res) => {
       }
     });
 
-    console.log(`✅ [IA-CONFIG] Config sauvegardée avec succès`);
+    logger.debug(`✅ [IA-CONFIG] Config sauvegardée avec succès`);
     res.json({ success: true, config });
   } catch (error) {
-    console.error('❌ [IA-CONFIG] Erreur sauvegarde config:', error);
+    logger.error('❌ [IA-CONFIG] Erreur sauvegarde config:', error);
     res.status(500).json({ error: 'Failed to update IA config' });
   }
 });
@@ -102,7 +103,7 @@ router.delete('/nodes/:nodeId/ia-config', async (req, res) => {
   try {
     const { nodeId } = req.params;
     
-    console.log(`🗑️ [IA-CONFIG] Suppression config pour node ${nodeId}`);
+    logger.debug(`🗑️ [IA-CONFIG] Suppression config pour node ${nodeId}`);
 
     await db.treeBranchLeafNode.update({
       where: { id: nodeId },
@@ -112,10 +113,10 @@ router.delete('/nodes/:nodeId/ia-config', async (req, res) => {
       }
     });
 
-    console.log(`✅ [IA-CONFIG] Config supprimée`);
+    logger.debug(`✅ [IA-CONFIG] Config supprimée`);
     res.json({ success: true });
   } catch (error) {
-    console.error('❌ [IA-CONFIG] Erreur suppression config:', error);
+    logger.error('❌ [IA-CONFIG] Erreur suppression config:', error);
     res.status(500).json({ error: 'Failed to delete IA config' });
   }
 });

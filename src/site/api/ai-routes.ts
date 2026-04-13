@@ -20,6 +20,7 @@
 
 import { Request, Response, Express } from 'express';
 import OpenAI from 'openai';
+import { logger } from '../../lib/logger';
 
 // 🔑 Configuration OpenAI (ou autre provider)
 const openai = new OpenAI({
@@ -83,7 +84,7 @@ interface SuggestStylesRequest {
  */
 async function generateField(req: Request, res: Response) {
   try {
-    console.log('✨ [AI] Génération de champ:', req.body);
+    logger.debug('✨ [AI] Génération de champ:', req.body);
 
     const {
       fieldId,
@@ -104,7 +105,7 @@ async function generateField(req: Request, res: Response) {
     // 🤖 Construction du prompt
     const prompt = buildFieldPrompt(fieldType, fieldLabel, aiContext, currentValue);
 
-    console.log('🤖 [AI] Prompt:', prompt);
+    logger.debug('🤖 [AI] Prompt:', prompt);
 
     // 🚀 Appel OpenAI
     const completion = await openai.chat.completions.create({
@@ -125,7 +126,7 @@ async function generateField(req: Request, res: Response) {
 
     const generatedContent = completion.choices[0]?.message?.content || '';
 
-    console.log('✅ [AI] Contenu généré:', generatedContent);
+    logger.debug('✅ [AI] Contenu généré:', generatedContent);
 
     // 📊 Analyse de la qualité
     const analysis = {
@@ -146,7 +147,7 @@ async function generateField(req: Request, res: Response) {
     });
 
   } catch (error: unknown) {
-    console.error('❌ [AI] Erreur génération champ:', error);
+    logger.error('❌ [AI] Erreur génération champ:', error);
     return res.status(500).json({
       error: 'Erreur lors de la génération',
       message: error.message
@@ -160,7 +161,7 @@ async function generateField(req: Request, res: Response) {
  */
 async function generateSection(req: Request, res: Response) {
   try {
-    console.log('✨ [AI] Génération de section:', req.body);
+    logger.debug('✨ [AI] Génération de section:', req.body);
 
     const {
       sectionType,
@@ -190,7 +191,7 @@ async function generateSection(req: Request, res: Response) {
       keywords
     );
 
-    console.log('🤖 [AI] Prompt section:', prompt);
+    logger.debug('🤖 [AI] Prompt section:', prompt);
 
     // 🚀 Appel OpenAI avec JSON structuré
     const completion = await openai.chat.completions.create({
@@ -213,7 +214,7 @@ async function generateSection(req: Request, res: Response) {
     const rawContent = completion.choices[0]?.message?.content || '{}';
     const sectionContent = JSON.parse(rawContent);
 
-    console.log('✅ [AI] Section générée:', sectionContent);
+    logger.debug('✅ [AI] Section générée:', sectionContent);
 
     // 📸 Génération d'images si demandé
     if (includeImages) {
@@ -234,7 +235,7 @@ async function generateSection(req: Request, res: Response) {
     });
 
   } catch (error: unknown) {
-    console.error('❌ [AI] Erreur génération section:', error);
+    logger.error('❌ [AI] Erreur génération section:', error);
     return res.status(500).json({
       error: 'Erreur lors de la génération de section',
       message: error.message
@@ -248,7 +249,7 @@ async function generateSection(req: Request, res: Response) {
  */
 async function optimizeImage(req: Request, res: Response) {
   try {
-    console.log('🖼️ [AI] Optimisation image:', req.body);
+    logger.debug('🖼️ [AI] Optimisation image:', req.body);
 
     const {
       imageUrl,
@@ -290,7 +291,7 @@ async function optimizeImage(req: Request, res: Response) {
       visionAnalysis.choices[0]?.message?.content || '{}'
     );
 
-    console.log('✅ [AI] Analyse image:', analysis);
+    logger.debug('✅ [AI] Analyse image:', analysis);
 
     // Note: L'optimisation réelle (compression, resize) devrait être faite
     // avec Sharp ou un service comme Cloudinary
@@ -312,7 +313,7 @@ async function optimizeImage(req: Request, res: Response) {
     });
 
   } catch (error: unknown) {
-    console.error('❌ [AI] Erreur optimisation image:', error);
+    logger.error('❌ [AI] Erreur optimisation image:', error);
     return res.status(500).json({
       error: 'Erreur lors de l\'optimisation',
       message: error.message
@@ -326,7 +327,7 @@ async function optimizeImage(req: Request, res: Response) {
  */
 async function suggestStyles(req: Request, res: Response) {
   try {
-    console.log('🎨 [AI] Suggestions de styles:', req.body);
+    logger.debug('🎨 [AI] Suggestions de styles:', req.body);
 
     const {
       sectionType,
@@ -390,7 +391,7 @@ Génère 3 variations de styles (moderne, élégant, audacieux) au format JSON :
       completion.choices[0]?.message?.content || '{"variations":[]}'
     );
 
-    console.log('✅ [AI] Suggestions générées:', suggestions);
+    logger.debug('✅ [AI] Suggestions générées:', suggestions);
 
     return res.json({
       success: true,
@@ -403,7 +404,7 @@ Génère 3 variations de styles (moderne, élégant, audacieux) au format JSON :
     });
 
   } catch (error: unknown) {
-    console.error('❌ [AI] Erreur suggestions styles:', error);
+    logger.error('❌ [AI] Erreur suggestions styles:', error);
     return res.status(500).json({
       error: 'Erreur lors de la génération de suggestions',
       message: error.message
@@ -579,7 +580,7 @@ async function generateImagesForSection(
 
     return [image.data[0]?.url || ''];
   } catch (error) {
-    console.error('❌ [AI] Erreur génération image:', error);
+    logger.error('❌ [AI] Erreur génération image:', error);
     return [];
   }
 }
@@ -588,12 +589,12 @@ async function generateImagesForSection(
  * 🚀 ENREGISTREMENT DES ROUTES
  */
 export function registerAIRoutes(app: Express) {
-  console.log('🤖 [AI] Enregistrement des routes IA...');
+  logger.debug('🤖 [AI] Enregistrement des routes IA...');
 
   app.post('/api/ai/generate-field', generateField);
   app.post('/api/ai/generate-section', generateSection);
   app.post('/api/ai/optimize-image', optimizeImage);
   app.post('/api/ai/suggest-styles', suggestStyles);
 
-  console.log('✅ [AI] Routes IA enregistrées');
+  logger.debug('✅ [AI] Routes IA enregistrées');
 }

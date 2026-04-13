@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import DynamicFormField from '../../components/dependencies/DynamicFormField';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 /**
  * Page de démonstration du système de dépendances
@@ -51,7 +52,7 @@ const DependenciesDemo = () => {
   // Gestionnaire de soumission du formulaire
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Formulaire soumis avec les valeurs:', formValues);
+    logger.debug('Formulaire soumis avec les valeurs:', formValues);
     alert('Formulaire soumis avec succès!');
   };
 

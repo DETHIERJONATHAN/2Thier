@@ -44,6 +44,7 @@ import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/fr';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 dayjs.extend(relativeTime);
 dayjs.locale('fr');
@@ -122,7 +123,7 @@ const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
       }
       onCancel();
     } catch (error) {
-      console.error('Erreur de validation:', error);
+      logger.error('Erreur de validation:', error);
     }
   };
 
@@ -233,7 +234,7 @@ export default function PartnerLeadsPage() {
       setLeads(leadsData);
       setStats(statsData);
     } catch (error) {
-      console.error('Erreur lors du chargement:', error);
+      logger.error('Erreur lors du chargement:', error);
       message.error('Impossible de charger les données');
     } finally {
       setLoading(false);
@@ -250,7 +251,7 @@ export default function PartnerLeadsPage() {
       message.success('Lead mis à jour avec succès !');
       loadData(); // Recharger les données
     } catch (error) {
-      console.error('Erreur lors de la mise à jour:', error);
+      logger.error('Erreur lors de la mise à jour:', error);
       message.error('Erreur lors de la mise à jour du lead');
     }
   };
@@ -273,7 +274,7 @@ export default function PartnerLeadsPage() {
       
       message.success('Export terminé !');
     } catch (error) {
-      console.error('Erreur lors de l\'export:', error);
+      logger.error('Erreur lors de l\'export:', error);
       message.error('Erreur lors de l\'export');
     }
   };

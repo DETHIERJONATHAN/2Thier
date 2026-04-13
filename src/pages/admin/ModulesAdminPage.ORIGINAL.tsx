@@ -56,6 +56,7 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
 import { useModuleCategories } from '../../hooks/useModuleCategories'; // âœ… Nouveau hook categories
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Title, Text } = Typography;
 const { Panel } = Collapse;
@@ -229,14 +230,14 @@ const AdminModulesPageDynamic: React.FC = () => {
 
   // Debug effect pour tracer les changements d'Ã©tat
   useEffect(() => {
-    console.log('[ADMIN-MODULES-UI] ðŸ” Ã‰tat categories changÃ©:', {
+    logger.debug('[ADMIN-MODULES-UI] ðŸ” Ã‰tat categories changÃ©:', {
       length: allCategories.length,
       categories: allCategories.map(c => ({ name: c.name, active: c.active }))
     });
   }, [allCategories]);
 
   useEffect(() => {
-    console.log('[ADMIN-MODULES-UI] ðŸ” Ã‰tat loading changÃ©:', loading);
+    logger.debug('[ADMIN-MODULES-UI] ðŸ” Ã‰tat loading changÃ©:', loading);
   }, [loading]);
 
   // Fonctions CRUD
@@ -260,7 +261,7 @@ const AdminModulesPageDynamic: React.FC = () => {
       form.resetFields();
       loadModules();
     } catch (error: unknown) {
-      console.error('[ADMIN-MODULES-UI] Erreur sauvegarde:', error);
+      logger.error('[ADMIN-MODULES-UI] Erreur sauvegarde:', error);
       message.error(error.response?.data?.error || 'Erreur lors de la sauvegarde');
     }
   };
@@ -271,7 +272,7 @@ const AdminModulesPageDynamic: React.FC = () => {
       message.success('Module supprimÃ© avec succÃ¨s');
       loadModules();
     } catch (error: unknown) {
-      console.error('[ADMIN-MODULES-UI] Erreur suppression:', error);
+      logger.error('[ADMIN-MODULES-UI] Erreur suppression:', error);
       message.error(error.response?.data?.error || 'Erreur lors de la suppression');
     }
   };
@@ -334,7 +335,7 @@ const AdminModulesPageDynamic: React.FC = () => {
       const currentCategory = allCategories.find(c => c.modules.some(m => m.id === moduleId));
       
       if (!draggedModule || !currentCategory) {
-        console.error('[DRAG-DROP] Module ou catÃ©gorie non trouvÃ©e');
+        logger.error('[DRAG-DROP] Module ou catÃ©gorie non trouvÃ©e');
         return;
       }
       
@@ -343,7 +344,7 @@ const AdminModulesPageDynamic: React.FC = () => {
         await moveModuleToCategory(moduleId, targetCategoryName);
       } else {
         // RÃ©ordonnancement dans la mÃªme catÃ©gorie - sera gÃ©rÃ© par handleModuleDrop
-        console.log('[DRAG-DROP] RÃ©ordonnancement dans la mÃªme catÃ©gorie - pas d\'action');
+        logger.debug('[DRAG-DROP] RÃ©ordonnancement dans la mÃªme catÃ©gorie - pas d\'action');
       }
     }
     
@@ -367,7 +368,7 @@ const AdminModulesPageDynamic: React.FC = () => {
       const sourceModule = allCategories.flatMap(s => s.modules).find(m => m.id === sourceModuleId);
       
       if (!targetCategory || !sourceModule) {
-        console.error('[DRAG-DROP] Module source ou target non trouvÃ©');
+        logger.error('[DRAG-DROP] Module source ou target non trouvÃ©');
         return;
       }
       
@@ -387,7 +388,7 @@ const AdminModulesPageDynamic: React.FC = () => {
 
   const reorderModulesInCategory = async (categoryName: string, sourceModuleId: string, targetModuleId: string) => {
     try {
-      console.log('[DRAG-DROP] RÃ©ordonnancement modules:', sourceModuleId, '->', targetModuleId, 'dans', categoryName);
+      logger.debug('[DRAG-DROP] RÃ©ordonnancement modules:', sourceModuleId, '->', targetModuleId, 'dans', categoryName);
       
       const category = allCategories.find(c => c.name === categoryName);
       if (!category) return;
@@ -417,7 +418,7 @@ const AdminModulesPageDynamic: React.FC = () => {
       }
       
     } catch (error: unknown) {
-      console.error('[DRAG-DROP] Erreur rÃ©ordonnancement modules:', error);
+      logger.error('[DRAG-DROP] Erreur rÃ©ordonnancement modules:', error);
       message.error('Erreur lors du rÃ©ordonnancement des modules');
       await loadModules(); // Recharger en cas d'erreur
     }
@@ -426,18 +427,18 @@ const AdminModulesPageDynamic: React.FC = () => {
   // Nouvelles fonctions pour CATÃ‰GORIES utilisant le hook useModuleCategories
   const reorderCategories = async (sourceCategoryName: string, targetCategoryName: string) => {
     try {
-      console.log('[DRAG-DROP] RÃ©organisation catÃ©gories:', sourceCategoryName, '->', targetCategoryName);
+      logger.debug('[DRAG-DROP] RÃ©organisation catÃ©gories:', sourceCategoryName, '->', targetCategoryName);
       // Cette logique sera implementÃ©e via le hook useModuleCategories
       message.info('RÃ©organisation des catÃ©gories Ã  implÃ©menter');
     } catch (error: unknown) {
-      console.error('[DRAG-DROP] Erreur rÃ©organisation catÃ©gories:', error);
+      logger.error('[DRAG-DROP] Erreur rÃ©organisation catÃ©gories:', error);
       message.error('Erreur lors de la rÃ©organisation des catÃ©gories');
     }
   };
 
   const moveModuleToCategory = async (moduleId: string, targetCategoryName: string) => {
     try {
-      console.log('[DRAG-DROP] DÃ©placement module:', moduleId, '->', targetCategoryName);
+      logger.debug('[DRAG-DROP] DÃ©placement module:', moduleId, '->', targetCategoryName);
       
       const response = await api.put(`/api/admin-modules/${moduleId}`, {
         category: targetCategoryName,
@@ -449,7 +450,7 @@ const AdminModulesPageDynamic: React.FC = () => {
         message.success('Module dÃ©placÃ© avec succÃ¨s !');
       }
     } catch (error: unknown) {
-      console.error('[DRAG-DROP] Erreur dÃ©placement module:', error);
+      logger.error('[DRAG-DROP] Erreur dÃ©placement module:', error);
       message.error('Erreur lors du dÃ©placement du module');
     }
   };
@@ -480,7 +481,7 @@ const AdminModulesPageDynamic: React.FC = () => {
       // Recharger pour synchroniser avec la base
       await loadCategories();
     } catch (error: unknown) {
-      console.error('[CATEGORY-ACTION] Erreur toggle visibilitÃ©:', error);
+      logger.error('[CATEGORY-ACTION] Erreur toggle visibilitÃ©:', error);
       message.error('Erreur lors du changement de visibilitÃ© de la catÃ©gorie');
     }
   };
@@ -498,7 +499,7 @@ const AdminModulesPageDynamic: React.FC = () => {
       // Recharger pour synchroniser
       await loadCategories();
     } catch (error: unknown) {
-      console.error('[MODULE-SUPERADMIN] Erreur toggle:', error);
+      logger.error('[MODULE-SUPERADMIN] Erreur toggle:', error);
       message.error('Erreur lors du changement de statut Super Admin');
       
       // Recharger pour restaurer l'Ã©tat correct en cas d'erreur
@@ -509,11 +510,11 @@ const AdminModulesPageDynamic: React.FC = () => {
   const toggleCategorySuperAdminOnly = async (categoryName: string, superAdminOnly: boolean) => {
     try {
       // TODO: Mettre Ã  jour via le hook useModuleCategories
-      console.log('[CATEGORY-SUPERADMIN] Toggle category:', categoryName, superAdminOnly);
+      logger.debug('[CATEGORY-SUPERADMIN] Toggle category:', categoryName, superAdminOnly);
       
       message.success(`CatÃ©gorie ${superAdminOnly ? 'rÃ©servÃ©e aux' : 'accessible Ã  tous les'} super administrateurs`);
     } catch (error: unknown) {
-      console.error('[CATEGORY-SUPERADMIN] Erreur toggle:', error);
+      logger.error('[CATEGORY-SUPERADMIN] Erreur toggle:', error);
       message.error('Erreur lors du changement de statut Super Admin de la catÃ©gorie');
     }
   };
@@ -541,7 +542,7 @@ const AdminModulesPageDynamic: React.FC = () => {
       setCategoryModalVisible(false);
       categoryForm.resetFields();
     } catch (error: unknown) {
-      console.error('[CATEGORY-CREATE] Erreur création:', error);
+      logger.error('[CATEGORY-CREATE] Erreur création:', error);
       message.error('Erreur lors de la création');
     } finally {
       setLoading(false);
@@ -553,13 +554,13 @@ const AdminModulesPageDynamic: React.FC = () => {
       setLoading(true);
       
       // TODO: ImplÃ©menter la modification de catÃ©gorie via useModuleCategories
-      console.log('[CATEGORY-EDIT] Modification catÃ©gorie:', editingCategory?.name, values);
+      logger.debug('[CATEGORY-EDIT] Modification catÃ©gorie:', editingCategory?.name, values);
       
       message.success('CatÃ©gorie modifiÃ©e avec succÃ¨s !');
       setEditingCategoryModal(false);
       await loadModules();
     } catch (error: unknown) {
-      console.error('[CATEGORY-EDIT] Erreur modification:', error);
+      logger.error('[CATEGORY-EDIT] Erreur modification:', error);
       message.error('Erreur lors de la modification');
     } finally {
       setLoading(false);

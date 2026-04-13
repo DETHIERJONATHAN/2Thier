@@ -33,6 +33,7 @@ import {
   ThunderboltOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
+import { logger } from '../lib/logger';
 
 const { Option } = Select;
 const { Title, Text, Paragraph } = Typography;
@@ -134,13 +135,13 @@ const DynamicFormulaSystemComponent: React.FC = () => {
   const loadConfigurations = useCallback(async () => {
     try {
       setLoadingConfigs(true);
-      console.log('🔄 [DynamicFormula] Chargement des configurations...');
+      logger.debug('🔄 [DynamicFormula] Chargement des configurations...');
       
       const response = await stableApi.get('/dynamic-formulas/configurations');
       
       if (response.data?.success) {
         setConfigurations(response.data.data.configurations);
-        console.log('✅ [DynamicFormula] Configurations chargées:', response.data.data.totalFields);
+        logger.debug('✅ [DynamicFormula] Configurations chargées:', response.data.data.totalFields);
         
         notification.success({
           message: 'Configurations chargées',
@@ -149,7 +150,7 @@ const DynamicFormulaSystemComponent: React.FC = () => {
       }
       
     } catch (error) {
-      console.error('❌ [DynamicFormula] Erreur configurations:', error);
+      logger.error('❌ [DynamicFormula] Erreur configurations:', error);
       notification.error({
         message: 'Erreur de chargement',
         description: 'Impossible de charger les configurations des champs'
@@ -171,7 +172,7 @@ const DynamicFormulaSystemComponent: React.FC = () => {
       }
       
     } catch (error) {
-      console.error('❌ [DynamicFormula] Erreur analytics:', error);
+      logger.error('❌ [DynamicFormula] Erreur analytics:', error);
     }
   }, [stableApi]);
 
@@ -189,8 +190,8 @@ const DynamicFormulaSystemComponent: React.FC = () => {
 
     try {
       setLoading(true);
-      console.log('🧮 [DynamicFormula] Exécution des calculs...');
-      console.log('📝 Valeurs:', fieldValues);
+      logger.debug('🧮 [DynamicFormula] Exécution des calculs...');
+      logger.debug('📝 Valeurs:', fieldValues);
       
       const response = await stableApi.post('/dynamic-formulas/calculate', {
         fieldValues
@@ -198,7 +199,7 @@ const DynamicFormulaSystemComponent: React.FC = () => {
       
       if (response.data?.success) {
         setResults(response.data.data);
-        console.log('✅ [DynamicFormula] Calculs terminés:', response.data.data);
+        logger.debug('✅ [DynamicFormula] Calculs terminés:', response.data.data);
         
         notification.success({
           message: 'Calculs réussis',
@@ -207,7 +208,7 @@ const DynamicFormulaSystemComponent: React.FC = () => {
       }
       
     } catch (error) {
-      console.error('❌ [DynamicFormula] Erreur calculs:', error);
+      logger.error('❌ [DynamicFormula] Erreur calculs:', error);
       notification.error({
         message: 'Erreur de calcul',
         description: 'Une erreur est survenue lors des calculs'
@@ -231,7 +232,7 @@ const DynamicFormulaSystemComponent: React.FC = () => {
 
     try {
       setLoading(true);
-      console.log('⚡ [DynamicFormula] Calcul Prix Kw/h...');
+      logger.debug('⚡ [DynamicFormula] Calcul Prix Kw/h...');
       
       const response = await stableApi.post('/dynamic-formulas/calculate-prix-kwh', {
         selectedOption: prixKwhOption,
@@ -243,7 +244,7 @@ const DynamicFormulaSystemComponent: React.FC = () => {
       
       if (response.data?.success) {
         setPrixKwhResults(response.data.data);
-        console.log('✅ [Prix Kw/h] Résultat:', response.data.data);
+        logger.debug('✅ [Prix Kw/h] Résultat:', response.data.data);
         
         // Mettre à jour les valeurs avec le résultat
         const newFieldValues = { ...fieldValues };
@@ -257,7 +258,7 @@ const DynamicFormulaSystemComponent: React.FC = () => {
       }
       
     } catch (error) {
-      console.error('❌ [Prix Kw/h] Erreur:', error);
+      logger.error('❌ [Prix Kw/h] Erreur:', error);
       notification.error({
         message: 'Erreur Prix Kw/h',
         description: 'Erreur lors du calcul du prix Kw/h'

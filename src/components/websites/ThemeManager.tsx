@@ -4,6 +4,7 @@ import { Card, Space, Typography, ColorPicker, Input, Select, Button, message, S
 import { SaveOutlined, ReloadOutlined, BgColorsOutlined } from '@ant-design/icons';
 import type { Color } from 'antd/es/color-picker';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { logger } from '../../lib/logger';
 
 const { Text, Title } = Typography;
 const { TextArea } = Input;
@@ -35,7 +36,7 @@ const ThemeManager: React.FC<ThemeManagerProps> = ({ websiteId }) => {
       setTheme(response || getDefaultTheme());
       setHasChanges(false);
     } catch (error) {
-      console.error('❌ Erreur chargement thème:', error);
+      logger.error('❌ Erreur chargement thème:', error);
       // Si pas de thème, on utilise le défaut
       setTheme(getDefaultTheme());
     } finally {
@@ -78,7 +79,7 @@ const ThemeManager: React.FC<ThemeManagerProps> = ({ websiteId }) => {
       message.success('Thème enregistré avec succès !');
       await fetchTheme();
     } catch (error) {
-      console.error('❌ Erreur sauvegarde thème:', error);
+      logger.error('❌ Erreur sauvegarde thème:', error);
       message.error('Erreur lors de la sauvegarde du thème');
     } finally {
       setSaving(false);

@@ -19,6 +19,7 @@ import TestimonialsManager from '../../components/websites/TestimonialsManager';
 import FormsManager from '../../components/websites/FormsManager';
 import AIContentAssistant from '../../components/AIContentAssistant';
 import CloudRunDomainSelector from '../../components/websites/CloudRunDomainSelector';
+import { logger } from '../../lib/logger';
 
 const { Title, Text } = Typography;
 
@@ -65,7 +66,7 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
 
   // 🔥 CHARGEMENT INITIAL
   useEffect(() => {
-    console.log('🎨 [NoCodeBuilder v2] Initialisation websiteId:', websiteId);
+    logger.debug('🎨 [NoCodeBuilder v2] Initialisation websiteId:', websiteId);
     fetchSections();
     fetchWebsiteData();
   }, [websiteId]);
@@ -75,12 +76,12 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
    */
   const fetchWebsiteData = async () => {
     try {
-      console.log('📡 [NoCodeBuilder v2] Chargement données site...');
+      logger.debug('📡 [NoCodeBuilder v2] Chargement données site...');
       const response = await api.get(`/api/websites/id/${websiteId}`);
-      console.log('✅ [NoCodeBuilder v2] Données site chargées:', response);
+      logger.debug('✅ [NoCodeBuilder v2] Données site chargées:', response);
       setWebsiteData(response);
     } catch (error) {
-      console.error('❌ [NoCodeBuilder v2] Erreur chargement site:', error);
+      logger.error('❌ [NoCodeBuilder v2] Erreur chargement site:', error);
     }
   };
 
@@ -90,7 +91,7 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
   const fetchSections = async () => {
     setLoading(true);
     try {
-      console.log('📡 [NoCodeBuilder v2] Chargement sections...');
+      logger.debug('📡 [NoCodeBuilder v2] Chargement sections...');
       const response = await api.get(`/api/website-sections/${websiteId}`);
       
       // Tri par displayOrder
@@ -98,10 +99,10 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
         a.displayOrder - b.displayOrder
       );
       
-      console.log('✅ [NoCodeBuilder v2] Sections chargées:', sorted.length);
+      logger.debug('✅ [NoCodeBuilder v2] Sections chargées:', sorted.length);
       setSections(sorted);
     } catch (error) {
-      console.error('❌ [NoCodeBuilder v2] Erreur chargement:', error);
+      logger.error('❌ [NoCodeBuilder v2] Erreur chargement:', error);
       message.error('Impossible de charger les sections');
     } finally {
       setLoading(false);
@@ -113,7 +114,7 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
    */
   const handleAddSection = async (sectionType: string, defaultContent: unknown) => {
     try {
-      console.log('➕ [NoCodeBuilder v2] Ajout section type:', sectionType);
+      logger.debug('➕ [NoCodeBuilder v2] Ajout section type:', sectionType);
 
       const newSection = {
         websiteId,
@@ -127,7 +128,7 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
       };
 
       const response = await api.post('/api/website-sections', newSection);
-      console.log('✅ [NoCodeBuilder v2] Section créée ID:', response.id);
+      logger.debug('✅ [NoCodeBuilder v2] Section créée ID:', response.id);
 
       setSections([...sections, response]);
       message.success(`Section "${sectionType}" ajoutée !`);
@@ -136,7 +137,7 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
       setSelectedSection(response);
       setEditorVisible(true);
     } catch (error) {
-      console.error('❌ [NoCodeBuilder v2] Erreur ajout:', error);
+      logger.error('❌ [NoCodeBuilder v2] Erreur ajout:', error);
       message.error('Erreur lors de l\'ajout de la section');
     }
   };
@@ -145,7 +146,7 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
    * ✏️ ÉDITION D'UNE SECTION
    */
   const handleEditSection = (section: SectionInstance) => {
-    console.log('✏️ [NoCodeBuilder v2] Édition section:', section.type, section.id);
+    logger.debug('✏️ [NoCodeBuilder v2] Édition section:', section.type, section.id);
     setSelectedSection(section);
     setEditorVisible(true);
   };
@@ -157,9 +158,9 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
     if (!selectedSection) return;
 
     try {
-      console.log('💾 [NoCodeBuilder v2] Sauvegarde section ID:', selectedSection.id);
-      console.log('💾 [DEBUG] updatedContent reçu:', updatedContent);
-      console.log('💾 [DEBUG] updatedContent.style:', updatedContent.style);
+      logger.debug('💾 [NoCodeBuilder v2] Sauvegarde section ID:', selectedSection.id);
+      logger.debug('💾 [DEBUG] updatedContent reçu:', updatedContent);
+      logger.debug('💾 [DEBUG] updatedContent.style:', updatedContent.style);
 
       // 🔥 FIX: Récupérer la réponse API avec les données mergées
       const response = await api.put(`/api/website-sections/${selectedSection.id}`, {
@@ -167,19 +168,19 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
         content: updatedContent
       });
 
-      console.log('🔍 [DEBUG] Response complète:', response);
-      console.log('🔍 [DEBUG] response.data:', response.data);
-      console.log('🔍 [DEBUG] Type de response:', typeof response);
+      logger.debug('🔍 [DEBUG] Response complète:', response);
+      logger.debug('🔍 [DEBUG] response.data:', response.data);
+      logger.debug('🔍 [DEBUG] Type de response:', typeof response);
 
       // 🔥 FIX: useAuthenticatedApi retourne DIRECTEMENT les données, pas response.data
       const mergedSection = response; // ✅ Pas response.data !
       
-      console.log('🔍 [DEBUG] mergedSection:', mergedSection);
-      console.log('🔍 [DEBUG] mergedSection.content:', mergedSection.content);
-      console.log('🔍 [DEBUG] mergedSection.content.style:', mergedSection.content?.style);
+      logger.debug('🔍 [DEBUG] mergedSection:', mergedSection);
+      logger.debug('🔍 [DEBUG] mergedSection.content:', mergedSection.content);
+      logger.debug('🔍 [DEBUG] mergedSection.content.style:', mergedSection.content?.style);
 
       if (!mergedSection || !mergedSection.id) {
-        console.error('❌ [DEBUG] mergedSection invalide!', mergedSection);
+        logger.error('❌ [DEBUG] mergedSection invalide!', mergedSection);
         throw new Error('Réponse API invalide');
       }
       
@@ -193,7 +194,7 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
 
       message.success('Section mise à jour !');
     } catch (error) {
-      console.error('❌ [NoCodeBuilder v2] Erreur sauvegarde:', error);
+      logger.error('❌ [NoCodeBuilder v2] Erreur sauvegarde:', error);
       message.error('Erreur lors de la sauvegarde');
     }
   };
@@ -203,7 +204,7 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
    */
   const handleReorder = async (reorderedSections: SectionInstance[]) => {
     try {
-      console.log('🔄 [NoCodeBuilder v2] Réorganisation...');
+      logger.debug('🔄 [NoCodeBuilder v2] Réorganisation...');
 
       // Mise à jour locale immédiate (optimistic update)
       const withNewOrder = reorderedSections.map((s, index) => ({
@@ -219,7 +220,7 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
 
       message.success('Ordre mis à jour');
     } catch (error) {
-      console.error('❌ [NoCodeBuilder v2] Erreur réorganisation:', error);
+      logger.error('❌ [NoCodeBuilder v2] Erreur réorganisation:', error);
       message.error('Erreur lors de la réorganisation');
       // Rollback
       await fetchSections();
@@ -231,13 +232,13 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
    */
   const handleDuplicateSection = async (section: SectionInstance) => {
     try {
-      console.log('📋 [NoCodeBuilder v2] Duplication section ID:', section.id);
+      logger.debug('📋 [NoCodeBuilder v2] Duplication section ID:', section.id);
 
       const response = await api.post(`/api/website-sections/${section.id}/duplicate`);
       setSections([...sections, response]);
       message.success('Section dupliquée !');
     } catch (error) {
-      console.error('❌ [NoCodeBuilder v2] Erreur duplication:', error);
+      logger.error('❌ [NoCodeBuilder v2] Erreur duplication:', error);
       message.error('Erreur lors de la duplication');
     }
   };
@@ -252,7 +253,7 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
     }
 
     try {
-      console.log('🗑️ [NoCodeBuilder v2] Suppression section ID:', section.id);
+      logger.debug('🗑️ [NoCodeBuilder v2] Suppression section ID:', section.id);
 
       await api.delete(`/api/website-sections/${section.id}`);
       setSections(sections.filter(s => s.id !== section.id));
@@ -264,7 +265,7 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
 
       message.success('Section supprimée');
     } catch (error) {
-      console.error('❌ [NoCodeBuilder v2] Erreur suppression:', error);
+      logger.error('❌ [NoCodeBuilder v2] Erreur suppression:', error);
       message.error('Erreur lors de la suppression');
     }
   };
@@ -275,7 +276,7 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
   const handleToggleSection = async (section: SectionInstance) => {
     try {
       const newIsActive = !section.isActive;
-      console.log('👁️ [NoCodeBuilder v2] Toggle section ID:', section.id, '→', newIsActive);
+      logger.debug('👁️ [NoCodeBuilder v2] Toggle section ID:', section.id, '→', newIsActive);
 
       // Optimistic update
       setSections(sections.map(s =>
@@ -285,7 +286,7 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
       await api.put(`/api/website-sections/${section.id}`, { isActive: newIsActive });
       message.success(`Section ${newIsActive ? 'activée' : 'désactivée'}`);
     } catch (error) {
-      console.error('❌ [NoCodeBuilder v2] Erreur toggle:', error);
+      logger.error('❌ [NoCodeBuilder v2] Erreur toggle:', error);
       message.error('Erreur lors de la modification');
       // Rollback
       await fetchSections();
@@ -298,7 +299,7 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
   const handleLockSection = async (section: SectionInstance) => {
     try {
       const newIsLocked = !section.isLocked;
-      console.log('🔒 [NoCodeBuilder v2] Lock section ID:', section.id, '→', newIsLocked);
+      logger.debug('🔒 [NoCodeBuilder v2] Lock section ID:', section.id, '→', newIsLocked);
 
       setSections(sections.map(s =>
         s.id === section.id ? { ...s, isLocked: newIsLocked } : s
@@ -307,7 +308,7 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
       await api.put(`/api/website-sections/${section.id}`, { isLocked: newIsLocked });
       message.success(`Section ${newIsLocked ? 'verrouillée' : 'déverrouillée'}`);
     } catch (error) {
-      console.error('❌ [NoCodeBuilder v2] Erreur lock:', error);
+      logger.error('❌ [NoCodeBuilder v2] Erreur lock:', error);
       message.error('Erreur lors de la modification');
       await fetchSections();
     }
@@ -317,7 +318,7 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
    * 🌐 PRÉVISUALISATION PLEIN ÉCRAN
    */
   const handleFullPreview = () => {
-    console.log('🌐 [NoCodeBuilder v2] Ouverture prévisualisation');
+    logger.debug('🌐 [NoCodeBuilder v2] Ouverture prévisualisation');
     setPreviewMode(true);
   };
 
@@ -334,7 +335,7 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
   const handleSaveSettings = async (cloudRunData: unknown) => {
     setSavingSettings(true);
     try {
-      console.log('💾 [NoCodeBuilder v2] Sauvegarde paramètres site:', cloudRunData);
+      logger.debug('💾 [NoCodeBuilder v2] Sauvegarde paramètres site:', cloudRunData);
       
       // ⚠️ IMPORTANT: N'envoyer QUE les champs autorisés par le schéma Prisma
       // Ne PAS spreader websiteData car il contient des relations imbriquées
@@ -344,12 +345,12 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
         cloudRunRegion: cloudRunData?.cloudRunRegion
       };
       
-      console.log('📤 [NoCodeBuilder v2] Payload envoyé:', payload);
+      logger.debug('📤 [NoCodeBuilder v2] Payload envoyé:', payload);
       await api.put(`/api/websites/${websiteId}`, payload);
       message.success('Paramètres du site sauvegardés !');
       await fetchWebsiteData();
     } catch (error) {
-      console.error('❌ [NoCodeBuilder v2] Erreur sauvegarde:', error);
+      logger.error('❌ [NoCodeBuilder v2] Erreur sauvegarde:', error);
       message.error('Erreur lors de la sauvegarde');
     } finally {
       setSavingSettings(false);
@@ -603,7 +604,7 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
                   industry="transition énergétique"
                   onContentGenerated={(suggestions) => {
                     message.success('Suggestions SEO générées !');
-                    console.log('SEO:', suggestions);
+                    logger.debug('SEO:', suggestions);
                   }}
                 />
               </Space>
@@ -657,7 +658,7 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
                       cloudRunRegion: websiteData.cloudRunRegion
                     }}
                     onChange={(newValue) => {
-                      console.log('🔄 CloudRunDomainSelector onChange:', newValue);
+                      logger.debug('🔄 CloudRunDomainSelector onChange:', newValue);
                       setWebsiteData({
                         ...websiteData,
                         ...newValue

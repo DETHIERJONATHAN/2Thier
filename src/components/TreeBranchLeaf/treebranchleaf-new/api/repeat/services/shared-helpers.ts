@@ -1,4 +1,5 @@
 import { Prisma, PrismaClient } from '@prisma/client';
+import { logger } from '../../../../../../lib/logger';
 
 export type MinimalReqUser = {
   organizationId?: string | null;
@@ -150,7 +151,7 @@ export async function setNodeLinkedField(
       data: { [field]: { set: uniq(values) } } as unknown as Prisma.TreeBranchLeafNodeUpdateInput
     });
   } catch (e) {
-    console.warn('[TreeBranchLeaf API] setNodeLinkedField skipped:', { nodeId, field, error: (e as Error).message });
+    logger.warn('[TreeBranchLeaf API] setNodeLinkedField skipped:', { nodeId, field, error: (e as Error).message });
   }
 }
 
@@ -227,7 +228,7 @@ export function buildResponseFromColumns(node: unknown): Record<string, unknown>
           const parsed = JSON.parse(node.repeater_templateNodeIds);
           return Array.isArray(parsed) ? parsed : [];
         } catch (e) {
-          console.error('ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ [buildResponseFromColumns] Erreur parse repeater_templateNodeIds:', e);
+          logger.error('ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ [buildResponseFromColumns] Erreur parse repeater_templateNodeIds:', e);
           return [];
         }
       }
@@ -243,7 +244,7 @@ export function buildResponseFromColumns(node: unknown): Record<string, unknown>
           const parsedLabels = JSON.parse(node.repeater_templateNodeLabels);
           return parsedLabels && typeof parsedLabels === 'object' ? parsedLabels : null;
         } catch (e) {
-          console.error('ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ [buildResponseFromColumns] Erreur parse repeater_templateNodeLabels:', e);
+          logger.error('ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ [buildResponseFromColumns] Erreur parse repeater_templateNodeLabels:', e);
         }
       }
       const legacyLabels = legacyRepeater?.templateNodeLabels;
@@ -533,7 +534,7 @@ export function buildResponseFromColumns(node: unknown): Record<string, unknown>
 
     (result as any).capabilities = mergedCaps;
   } catch (e) {
-    console.error('ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ [buildResponseFromColumns] Erreur adaptation legacy capabilities:', e);
+    logger.error('ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ [buildResponseFromColumns] Erreur adaptation legacy capabilities:', e);
   }
 
   if (node.sharedReferenceIds && node.sharedReferenceIds.length > 0) {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Card, Form, InputNumber, Input, Select, Typography } from 'antd';
 import TextPanel from './TextPanel';
+import { logger } from '../../../../../../../lib/logger';
 
 const { Title, Text } = Typography;
 
@@ -42,7 +43,7 @@ const RepeaterPanel: React.FC<RepeaterPanelProps> = ({ value = {}, onChange, rea
           form={form}
           layout="vertical"
           onValuesChange={(changedValues, allValues) => {
-            console.log('🔁 [RepeaterPanel] Changement détecté:', changedValues, 'Toutes valeurs:', allValues);
+            logger.debug('🔁 [RepeaterPanel] Changement détecté:', changedValues, 'Toutes valeurs:', allValues);
             // Fusionner avec les valeurs existantes
             onChange?.({ ...value, ...allValues });
           }}

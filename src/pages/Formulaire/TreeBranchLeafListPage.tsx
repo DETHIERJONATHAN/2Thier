@@ -32,6 +32,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -78,18 +79,18 @@ const TreeBranchLeafListPage: React.FC = () => {
   const fetchTrees = useCallback(async () => {
     try {
       setLoading(true);
-      console.log('🔍 [TreeBranchLeaf] Chargement des arbres...');
+      logger.debug('🔍 [TreeBranchLeaf] Chargement des arbres...');
       
       const response = await api.get('/api/treebranchleaf/trees');
-      console.log('🔍 [TreeBranchLeaf] Réponse API:', response);
+      logger.debug('🔍 [TreeBranchLeaf] Réponse API:', response);
       
       // La réponse est directement un tableau
       const treesData = Array.isArray(response) ? response : [];
       
-      console.log('🔍 [TreeBranchLeaf] Arbres récupérés:', treesData.length);
+      logger.debug('🔍 [TreeBranchLeaf] Arbres récupérés:', treesData.length);
       setTrees(treesData);
     } catch (error) {
-      console.error('[TREEBRANCHLEAF] Erreur lors du chargement des arbres:', error);
+      logger.error('[TREEBRANCHLEAF] Erreur lors du chargement des arbres:', error);
       message.error('Erreur lors du chargement des arbres');
       setTrees([]);
     } finally {
@@ -105,14 +106,14 @@ const TreeBranchLeafListPage: React.FC = () => {
   // Créer un nouvel arbre
   const handleCreateTree = async (values: CreateTreeForm) => {
     try {
-      console.log('🔍 [TreeBranchLeaf] Création arbre:', values);
+      logger.debug('🔍 [TreeBranchLeaf] Création arbre:', values);
       await api.post('/api/treebranchleaf/trees', values);
       message.success('Arbre créé avec succès');
       setCreateModalVisible(false);
       form.resetFields();
       fetchTrees();
     } catch (error) {
-      console.error('[TREEBRANCHLEAF] Erreur lors de la création:', error);
+      logger.error('[TREEBRANCHLEAF] Erreur lors de la création:', error);
       message.error('Erreur lors de la création de l\'arbre');
     }
   };
@@ -129,7 +130,7 @@ const TreeBranchLeafListPage: React.FC = () => {
       editForm.resetFields();
       fetchTrees();
     } catch (error) {
-      console.error('[TREEBRANCHLEAF] Erreur lors de la mise à jour:', error);
+      logger.error('[TREEBRANCHLEAF] Erreur lors de la mise à jour:', error);
       message.error('Erreur lors de la mise à jour de l\'arbre');
     }
   };
@@ -141,7 +142,7 @@ const TreeBranchLeafListPage: React.FC = () => {
       message.success('Arbre supprimé avec succès');
       fetchTrees();
     } catch (error) {
-      console.error('[TREEBRANCHLEAF] Erreur lors de la suppression:', error);
+      logger.error('[TREEBRANCHLEAF] Erreur lors de la suppression:', error);
       message.error('Erreur lors de la suppression de l\'arbre');
     }
   };
@@ -158,7 +159,7 @@ const TreeBranchLeafListPage: React.FC = () => {
       message.success(`Arbre dupliqué avec succès (${nodesCount} nœuds copiés)`);
       fetchTrees();
     } catch (error) {
-      console.error('[TREEBRANCHLEAF] Erreur lors de la duplication:', error);
+      logger.error('[TREEBRANCHLEAF] Erreur lors de la duplication:', error);
       message.error('Erreur lors de la duplication de l\'arbre');
     }
   };

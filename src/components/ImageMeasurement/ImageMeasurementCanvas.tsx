@@ -66,6 +66,7 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { CoordinateGrid } from './CoordinateGrid';
 import { useTranslation } from 'react-i18next';
 import { SF } from '../zhiive/ZhiiveTheme';
+import { logger } from '../../lib/logger';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -245,9 +246,9 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
   // 🔍 Log quand on active la grille (APRÈS la déclaration de referenceCorners)
   useEffect(() => {
     if (showCoordinateGrid) {
-      console.log('📊 GRILLE ACTIVÉE');
-      console.log('   Référence V10:', referenceCorners ? `TL(${referenceCorners.topLeft.x.toFixed(0)},${referenceCorners.topLeft.y.toFixed(0)}) TR(${referenceCorners.topRight.x.toFixed(0)},${referenceCorners.topRight.y.toFixed(0)}) BR(${referenceCorners.bottomRight.x.toFixed(0)},${referenceCorners.bottomRight.y.toFixed(0)}) BL(${referenceCorners.bottomLeft.x.toFixed(0)},${referenceCorners.bottomLeft.y.toFixed(0)})` : 'AUCUN');
-      console.log('   pixelPerCmX:', pixelPerCmX.toFixed(4), '| pixelPerCmY:', pixelPerCmY.toFixed(4));
+      logger.debug('📊 GRILLE ACTIVÉE');
+      logger.debug('   Référence V10:', referenceCorners ? `TL(${referenceCorners.topLeft.x.toFixed(0)},${referenceCorners.topLeft.y.toFixed(0)}) TR(${referenceCorners.topRight.x.toFixed(0)},${referenceCorners.topRight.y.toFixed(0)}) BR(${referenceCorners.bottomRight.x.toFixed(0)},${referenceCorners.bottomRight.y.toFixed(0)}) BL(${referenceCorners.bottomLeft.x.toFixed(0)},${referenceCorners.bottomLeft.y.toFixed(0)})` : 'AUCUN');
+      logger.debug('   pixelPerCmX:', pixelPerCmX.toFixed(4), '| pixelPerCmY:', pixelPerCmY.toFixed(4));
     }
   }, [showCoordinateGrid, referenceCorners, pixelPerCmX, pixelPerCmY]);
 
@@ -263,7 +264,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
   const [workflowStep, setWorkflowStep] = useState<WorkflowStep>(() => {
     // Si référence déjà détectée, passer directement à la sélection de l'objet à mesurer
     if (fusedCorners && homographyReady) {
-      console.log('🚀 [Canvas] Initialisation: référence pré-détectée → workflowStep = selectMeasureZone');
+      logger.debug('🚀 [Canvas] Initialisation: référence pré-détectée → workflowStep = selectMeasureZone');
       return 'selectMeasureZone';
     }
     return 'selectReferenceZone';
@@ -413,11 +414,11 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     
     // Si le gradient max est trop faible, garder la position originale
     if (maxGradient < 15) {
-      console.log(`   ⚠️ Gradient trop faible (${maxGradient.toFixed(1)}), pas de snap`);
+      logger.debug(`   ⚠️ Gradient trop faible (${maxGradient.toFixed(1)}), pas de snap`);
       return direction === 'horizontal' ? startX : startY;
     }
     
-    console.log(`   ✅ Edge trouvé: ${bestPos} (gradient: ${maxGradient.toFixed(1)})`);
+    logger.debug(`   ✅ Edge trouvé: ${bestPos} (gradient: ${maxGradient.toFixed(1)})`);
     return bestPos;
   }, []);
 
@@ -427,7 +428,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
   const snapRectangleToEdges = useCallback((box: { x: number; y: number; width: number; height: number }) => {
     if (!image) return box;
     
-    console.log('🔍 [Canvas] SNAP TO EDGES - Recherche des vrais bords...');
+    logger.debug('🔍 [Canvas] SNAP TO EDGES - Recherche des vrais bords...');
     
     // Créer un canvas temporaire pour analyser l'image
     const tempCanvas = document.createElement('canvas');
@@ -446,19 +447,19 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     const searchRange = 25; // Pixels de recherche autour du bord actuel
     
     // Bord gauche (vertical)
-    console.log('   Recherche bord GAUCHE...');
+    logger.debug('   Recherche bord GAUCHE...');
     const leftEdge = findEdgeByContrast(imgData, box.x, box.y + box.height / 2, 'horizontal', searchRange);
     
     // Bord droit (vertical)
-    console.log('   Recherche bord DROIT...');
+    logger.debug('   Recherche bord DROIT...');
     const rightEdge = findEdgeByContrast(imgData, box.x + box.width, box.y + box.height / 2, 'horizontal', searchRange);
     
     // Bord haut (horizontal)
-    console.log('   Recherche bord HAUT...');
+    logger.debug('   Recherche bord HAUT...');
     const topEdge = findEdgeByContrast(imgData, box.x + box.width / 2, box.y, 'vertical', searchRange);
     
     // Bord bas (horizontal)
-    console.log('   Recherche bord BAS...');
+    logger.debug('   Recherche bord BAS...');
     const bottomEdge = findEdgeByContrast(imgData, box.x + box.width / 2, box.y + box.height, 'vertical', searchRange);
     
     const snappedBox = {
@@ -468,7 +469,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       height: bottomEdge - topEdge
     };
     
-    console.log('🎯 [Canvas] Rectangle snappé:', {
+    logger.debug('🎯 [Canvas] Rectangle snappé:', {
       avant: `x=${box.x.toFixed(0)}, y=${box.y.toFixed(0)}, ${box.width.toFixed(0)}x${box.height.toFixed(0)}`,
       apres: `x=${snappedBox.x.toFixed(0)}, y=${snappedBox.y.toFixed(0)}, ${snappedBox.width.toFixed(0)}x${snappedBox.height.toFixed(0)}`
     });
@@ -550,7 +551,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     }
     
     if (edgePoints.length === 0) {
-      console.log(`⚠️ [Canvas] Aucun bord trouvé près de (${x.toFixed(0)}, ${y.toFixed(0)})`);
+      logger.debug(`⚠️ [Canvas] Aucun bord trouvé près de (${x.toFixed(0)}, ${y.toFixed(0)})`);
       return { x, y, snapped: false };
     }
     
@@ -656,7 +657,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       }
     }
     
-    console.log(`🎯 [Canvas] Point snappé: (${x.toFixed(0)}, ${y.toFixed(0)}) → (${finalPoint.x.toFixed(0)}, ${finalPoint.y.toFixed(0)}) gradient=${finalPoint.gradient.toFixed(1)}, distance=${Math.hypot(finalPoint.x - x, finalPoint.y - y).toFixed(1)}px`);
+    logger.debug(`🎯 [Canvas] Point snappé: (${x.toFixed(0)}, ${y.toFixed(0)}) → (${finalPoint.x.toFixed(0)}, ${finalPoint.y.toFixed(0)}) gradient=${finalPoint.gradient.toFixed(1)}, distance=${Math.hypot(finalPoint.x - x, finalPoint.y - y).toFixed(1)}px`);
     return { x: finalPoint.x, y: finalPoint.y, snapped: true };
   }, [image, imageDimensions]);
 
@@ -820,7 +821,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                            Math.abs(imageDimensions.height - expectedHeight) < 1;
     
     if (!dimensionsMatch) {
-      console.log('⏳ [Canvas] Image chargée mais imageDimensions pas encore mises à jour, skip...');
+      logger.debug('⏳ [Canvas] Image chargée mais imageDimensions pas encore mises à jour, skip...');
       return;
     }
     
@@ -829,11 +830,11 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       return;
     }
     
-    console.log('🎯 [Canvas] ULTRA-PRECISION: Initialisation automatique avec fusedCorners !');
-    console.log('   📍 fusedCorners (% de l\'image):', fusedCorners);
-    console.log('   📐 imageDimensions pour conversion:', imageDimensions);
-    console.log('   📐 scale appliqué:', imageDimensions.scale);
-    console.log('   📐 Image réelle:', image.width, '×', image.height);
+    logger.debug('🎯 [Canvas] ULTRA-PRECISION: Initialisation automatique avec fusedCorners !');
+    logger.debug('   📍 fusedCorners (% de l\'image):', fusedCorners);
+    logger.debug('   📐 imageDimensions pour conversion:', imageDimensions);
+    logger.debug('   📐 scale appliqué:', imageDimensions.scale);
+    logger.debug('   📐 Image réelle:', image.width, '×', image.height);
     
     // Convertir les corners de % (0-100) vers pixels (de l'image SCALÉE affichée sur le canvas)
     const cornersInPixels = {
@@ -855,8 +856,8 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       }
     };
     
-    console.log('   📍 cornersInPixels (canvas scalé):', cornersInPixels);
-    console.log('   🔍 DEBUG: TL.x = fusedCorners.topLeft.x(', fusedCorners.topLeft.x, '%) / 100 * imageDimensions.width(', imageDimensions.width, ') =', cornersInPixels.topLeft.x);
+    logger.debug('   📍 cornersInPixels (canvas scalé):', cornersInPixels);
+    logger.debug('   🔍 DEBUG: TL.x = fusedCorners.topLeft.x(', fusedCorners.topLeft.x, '%) / 100 * imageDimensions.width(', imageDimensions.width, ') =', cornersInPixels.topLeft.x);
     
     // Initialiser les coins de référence
     setReferenceCorners(cornersInPixels);
@@ -880,16 +881,16 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     // 🎯 Calibration basée sur la référence réelle
     const refWidth = Math.max(0.01, Number(localReferenceRealSize?.width || 13));
     const refHeight = Math.max(0.01, Number(localReferenceRealSize?.height || 20.5));
-    console.log(`🎯 [Canvas] Calibration référence (${refWidth}cm × ${refHeight}cm)`);
+    logger.debug(`🎯 [Canvas] Calibration référence (${refWidth}cm × ${refHeight}cm)`);
     
     const newPixelPerCmX = fusedBox.width / refWidth;
     const newPixelPerCmY = fusedBox.height / refHeight;
     // 🔧 CORRECTION ASYMÉTRIE: Utiliser pixelPerCmX pour les deux dimensions
     // Raison: la référence peut être asymétrique en Y (perspective/distortion), mais X est généralement correct
     const newPixelPerCm = newPixelPerCmX;  // ✅ UTILISER X POUR LES DEUX
-    console.log(`   📏 Box: ${fusedBox.width.toFixed(0)}×${fusedBox.height.toFixed(0)}px`);
-    console.log(`   📏 pixelPerCmX: ${newPixelPerCmX.toFixed(2)}, pixelPerCmY: ${newPixelPerCmY.toFixed(2)}`);
-    console.log(`   🔧 APPLIQUÉ: pixelPerCm = ${newPixelPerCm.toFixed(2)} (utilise X pour corriger asymétrie Y)`);
+    logger.debug(`   📏 Box: ${fusedBox.width.toFixed(0)}×${fusedBox.height.toFixed(0)}px`);
+    logger.debug(`   📏 pixelPerCmX: ${newPixelPerCmX.toFixed(2)}, pixelPerCmY: ${newPixelPerCmY.toFixed(2)}`);
+    logger.debug(`   🔧 APPLIQUÉ: pixelPerCm = ${newPixelPerCm.toFixed(2)} (utilise X pour corriger asymétrie Y)`);
     
     // Appliquer la calibration avec les setters existants
     // 🔧 CORRECTION: Utiliser newPixelPerCmX pour les deux (Y est asymétrique du marqueur)
@@ -898,7 +899,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     setPixelPerCm(newPixelPerCm);
 
     // 🚀 PASSER DIRECTEMENT À L'ÉTAPE DE MESURE (skip la sélection de référence)
-    console.log('🚀 [Canvas] Passage automatique à l\'étape selectMeasureZone');
+    logger.debug('🚀 [Canvas] Passage automatique à l\'étape selectMeasureZone');
     setWorkflowStep('selectMeasureZone');
     
   }, [fusedCorners, homographyReady, imageDimensions, referenceCorners, quadrilateralMode, image, localReferenceRealSize]);
@@ -906,7 +907,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
   // � SECOURS: Si référence pré-détectée et qu'on est encore en selectReferenceZone, forcer le passage
   useEffect(() => {
     if (fusedCorners && homographyReady && workflowStep === 'selectReferenceZone') {
-      console.log('🔧 [Canvas] SECOURS: fusedCorners présent mais workflowStep=selectReferenceZone → Forcer selectMeasureZone');
+      logger.debug('🔧 [Canvas] SECOURS: fusedCorners présent mais workflowStep=selectReferenceZone → Forcer selectMeasureZone');
       setWorkflowStep('selectMeasureZone');
     }
   }, [fusedCorners, homographyReady, workflowStep]);
@@ -925,7 +926,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     
     const refWidth = isLandscape ? localReferenceRealSize.height : localReferenceRealSize.width;
     const refHeight = isLandscape ? localReferenceRealSize.width : localReferenceRealSize.height;
-    console.log(`🎯 [Canvas] Référence: ${refWidth}cm × ${refHeight}cm`);
+    logger.debug(`🎯 [Canvas] Référence: ${refWidth}cm × ${refHeight}cm`);
     
     // 🆕 ÉTAPE 2: CALCUL HOMOGRAPHIE - Transformation perspective exacte
     // Les 4 coins du rectangle détecté (en pixels)
@@ -952,19 +953,19 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     // 🚨 Si le rectangle source est trop "parfait" (pas de perspective), skip l'homographie
     // car la matrice sera singulière
     if (maxPerspectiveDeform < 3) {
-      console.log('📐 [Canvas] Rectangle source trop parfait (pas de perspective visible), homographie non applicable');
-      console.log(`   Déformation max: ${maxPerspectiveDeform.toFixed(1)}px < 3px seuil`);
-      console.log('   → Utilisation de la calibration par DIAGONALE uniquement');
+      logger.debug('📐 [Canvas] Rectangle source trop parfait (pas de perspective visible), homographie non applicable');
+      logger.debug(`   Déformation max: ${maxPerspectiveDeform.toFixed(1)}px < 3px seuil`);
+      logger.debug('   → Utilisation de la calibration par DIAGONALE uniquement');
       // Ne pas calculer d'homographie, utiliser uniquement le fallback
     } else {
       try {
         const homography = computeHomography(srcPoints, dstPoints);
         setHomographyResult(homography);
         
-        console.log(`🎯 [Canvas] HOMOGRAPHIE calculée:`);
-        console.log(`   Qualité: ${homography.quality.toFixed(1)}%`);
-        console.log(`   Incertitude: ±${homography.uncertainty.toFixed(1)}%`);
-        console.log(`   Déformation perspective: ${maxPerspectiveDeform.toFixed(1)}px`);
+        logger.debug(`🎯 [Canvas] HOMOGRAPHIE calculée:`);
+        logger.debug(`   Qualité: ${homography.quality.toFixed(1)}%`);
+        logger.debug(`   Incertitude: ±${homography.uncertainty.toFixed(1)}%`);
+        logger.debug(`   Déformation perspective: ${maxPerspectiveDeform.toFixed(1)}px`);
         
         // Générer la grille de debug si activé
         if (debugMode) {
@@ -972,7 +973,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
           setDebugGrid(grid);
         }
       } catch (err) {
-        console.error('❌ [Canvas] Erreur calcul homographie:', err);
+        logger.error('❌ [Canvas] Erreur calcul homographie:', err);
         setHomographyResult(null);
       }
     }
@@ -996,15 +997,15 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     const newPixelPerCmY = correctedBox.height / refHeight;
     const newPixelPerCmMoyen = pixelPerCmDiagonale; // Garder pour compatibilité
     
-    console.log(`📐 [Canvas] CALIBRATION AVEC FACTEURS X/Y SÉPARÉS:`);
-    console.log(`   Rectangle détecté: ${correctedBox.width.toFixed(0)}x${correctedBox.height.toFixed(0)}px`);
-    console.log(`   Référence réelle: ${refWidth}x${refHeight}cm (diagonale: ${diagonaleCmReelle.toFixed(1)}cm)`);
-    console.log(`   Ratio détecté: ${detectedRatio.toFixed(3)} vs attendu: ${expectedRatio.toFixed(3)} (écart ${(ratioError * 100).toFixed(1)}%)`);
-    console.log(`   🎯 pixelPerCmX: ${newPixelPerCmX.toFixed(2)} px/cm (pour largeur)`);
-    console.log(`   🎯 pixelPerCmY: ${newPixelPerCmY.toFixed(2)} px/cm (pour hauteur)`);
-    console.log(`   📐 pixelPerCm moyen (diagonale): ${pixelPerCmDiagonale.toFixed(2)} px/cm`);
+    logger.debug(`📐 [Canvas] CALIBRATION AVEC FACTEURS X/Y SÉPARÉS:`);
+    logger.debug(`   Rectangle détecté: ${correctedBox.width.toFixed(0)}x${correctedBox.height.toFixed(0)}px`);
+    logger.debug(`   Référence réelle: ${refWidth}x${refHeight}cm (diagonale: ${diagonaleCmReelle.toFixed(1)}cm)`);
+    logger.debug(`   Ratio détecté: ${detectedRatio.toFixed(3)} vs attendu: ${expectedRatio.toFixed(3)} (écart ${(ratioError * 100).toFixed(1)}%)`);
+    logger.debug(`   🎯 pixelPerCmX: ${newPixelPerCmX.toFixed(2)} px/cm (pour largeur)`);
+    logger.debug(`   🎯 pixelPerCmY: ${newPixelPerCmY.toFixed(2)} px/cm (pour hauteur)`);
+    logger.debug(`   📐 pixelPerCm moyen (diagonale): ${pixelPerCmDiagonale.toFixed(2)} px/cm`);
     if (ratioError > 0.05) {
-      console.log(`   ⚠️ Écart de ratio ${(ratioError * 100).toFixed(1)}% → Utilisation des facteurs X/Y séparés pour compenser la perspective`);
+      logger.debug(`   ⚠️ Écart de ratio ${(ratioError * 100).toFixed(1)}% → Utilisation des facteurs X/Y séparés pour compenser la perspective`);
     }
     
     setPixelPerCmX(newPixelPerCmX);
@@ -1027,7 +1028,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       // 🆕 Passer pixelPerCmX en base 1000 (le parent recalculera)
       const pixelPerCmX_base1000 = newPixelPerCmX * (1000 / imageDimensions.width);
       const pixelPerCmY_base1000 = newPixelPerCmY * (1000 / imageDimensions.height);
-      console.log(`   🆕 Callback parent: pixelPerCmX_base1000=${pixelPerCmX_base1000.toFixed(2)}, pixelPerCmY_base1000=${pixelPerCmY_base1000.toFixed(2)}`);
+      logger.debug(`   🆕 Callback parent: pixelPerCmX_base1000=${pixelPerCmX_base1000.toFixed(2)}, pixelPerCmY_base1000=${pixelPerCmY_base1000.toFixed(2)}`);
       onReferenceAdjusted(boxBase1000, pixelPerCmX_base1000, pixelPerCmY_base1000);
     }
   }, [localReferenceRealSize, imageDimensions, onReferenceAdjusted, image, snapRectangleToEdges, debugMode]);
@@ -1039,7 +1040,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     bottomLeft: { x: number; y: number };
     bottomRight: { x: number; y: number };
   }) => {
-    console.log('🔄 [Canvas] RECALCUL HOMOGRAPHIE depuis 4 coins ajustés:', corners);
+    logger.debug('🔄 [Canvas] RECALCUL HOMOGRAPHIE depuis 4 coins ajustés:', corners);
     
     // Points source = les 4 coins ajustés par l'utilisateur (quadrilatère avec perspective)
     const srcPoints: [[number, number], [number, number], [number, number], [number, number]] = [
@@ -1056,10 +1057,10 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     const rightEdgeDx = Math.abs(srcPoints[2][0] - srcPoints[1][0]);
     const maxPerspectiveDeform = Math.max(topEdgeDy, bottomEdgeDy, leftEdgeDx, rightEdgeDx);
     
-    console.log('📐 [Canvas] Analyse perspective des 4 coins:');
-    console.log(`   topEdgeDy: ${topEdgeDy.toFixed(1)}px, bottomEdgeDy: ${bottomEdgeDy.toFixed(1)}px`);
-    console.log(`   leftEdgeDx: ${leftEdgeDx.toFixed(1)}px, rightEdgeDx: ${rightEdgeDx.toFixed(1)}px`);
-    console.log(`   maxPerspectiveDeform: ${maxPerspectiveDeform.toFixed(1)}px`);
+    logger.debug('📐 [Canvas] Analyse perspective des 4 coins:');
+    logger.debug(`   topEdgeDy: ${topEdgeDy.toFixed(1)}px, bottomEdgeDy: ${bottomEdgeDy.toFixed(1)}px`);
+    logger.debug(`   leftEdgeDx: ${leftEdgeDx.toFixed(1)}px, rightEdgeDx: ${rightEdgeDx.toFixed(1)}px`);
+    logger.debug(`   maxPerspectiveDeform: ${maxPerspectiveDeform.toFixed(1)}px`);
     
     // Détecter l'orientation à partir du quadrilatère
     const avgWidth = ((corners.topRight.x - corners.topLeft.x) + (corners.bottomRight.x - corners.bottomLeft.x)) / 2;
@@ -1072,23 +1073,23 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     const areaRatio = area / imageArea;
     
     const expectedRatio = Math.abs(localReferenceRealSize.width / localReferenceRealSize.height);
-    console.log(`   Ratio largeur/hauteur: ${ratio.toFixed(2)} (attendu ~${expectedRatio.toFixed(2)})`);
-    console.log(`   Surface relative: ${(areaRatio * 100).toFixed(1)}% de l'image`);
+    logger.debug(`   Ratio largeur/hauteur: ${ratio.toFixed(2)} (attendu ~${expectedRatio.toFixed(2)})`);
+    logger.debug(`   Surface relative: ${(areaRatio * 100).toFixed(1)}% de l'image`);
 
     // Tolérance large (la référence n'est pas forcément un V10)
     const ratioError = Math.abs(ratio - expectedRatio) / expectedRatio;
     if (!Number.isFinite(ratioError) || ratioError > 0.8) {
-      console.warn(`⚠️ [Canvas] Ratio très éloigné (${ratio.toFixed(2)} vs ~${expectedRatio.toFixed(2)}) - vérifier les coins/référence`);
+      logger.warn(`⚠️ [Canvas] Ratio très éloigné (${ratio.toFixed(2)} vs ~${expectedRatio.toFixed(2)}) - vérifier les coins/référence`);
       return;
     }
     if (areaRatio > 0.5 || areaRatio < 0.001) {  // Permettre des marqueurs plus petits
-      console.warn(`⚠️ [Canvas] Surface aberrante - le quadrilatère est trop grand ou trop petit`);
+      logger.warn(`⚠️ [Canvas] Surface aberrante - le quadrilatère est trop grand ou trop petit`);
       return;
     }
 
     const dstPoints = getReferenceDestinationPointsMm();
-    console.log(`   📐 Référence utilisée: ${localReferenceRealSize.width}×${localReferenceRealSize.height}cm`);
-    console.log(`   📐 Points destination:`, dstPoints.map(p => `(${p[0]}, ${p[1]})`).join(', '));
+    logger.debug(`   📐 Référence utilisée: ${localReferenceRealSize.width}×${localReferenceRealSize.height}cm`);
+    logger.debug(`   📐 Points destination:`, dstPoints.map(p => `(${p[0]}, ${p[1]})`).join(', '));
     
     try {
       const homography = computeHomography(srcPoints, dstPoints);
@@ -1098,12 +1099,12 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       const topRightReal = applyHomography(homography.matrix, srcPoints[1]);
       const verifyDistanceMm = Math.hypot(topRightReal[0] - topLeftReal[0], topRightReal[1] - topLeftReal[1]);
       const expectedDistanceMm = Math.abs(dstPoints[1][0] - dstPoints[0][0]);
-      console.log(`   🔍 VÉRIFICATION HOMOGRAPHIE: distance TL↔TR = ${verifyDistanceMm.toFixed(1)}mm (attendu: ${expectedDistanceMm}mm)`);
+      logger.debug(`   🔍 VÉRIFICATION HOMOGRAPHIE: distance TL↔TR = ${verifyDistanceMm.toFixed(1)}mm (attendu: ${expectedDistanceMm}mm)`);
       if (Math.abs(verifyDistanceMm - expectedDistanceMm) > 1) {
-        console.warn(`   ⚠️ ERREUR HOMOGRAPHIE: écart de ${Math.abs(verifyDistanceMm - expectedDistanceMm).toFixed(1)}mm !`);
+        logger.warn(`   ⚠️ ERREUR HOMOGRAPHIE: écart de ${Math.abs(verifyDistanceMm - expectedDistanceMm).toFixed(1)}mm !`);
       }
       
-      console.log('✅ [Canvas] HOMOGRAPHIE depuis 4 coins:', {
+      logger.debug('✅ [Canvas] HOMOGRAPHIE depuis 4 coins:', {
         quality: homography.quality.toFixed(1) + '%',
         uncertainty: homography.uncertainty.toFixed(1) + '%',
         perspectiveDeform: maxPerspectiveDeform.toFixed(1) + 'px'
@@ -1118,10 +1119,10 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
           setDebugGrid(grid);
         }
       } else {
-        console.warn('⚠️ [Canvas] Qualité homographie faible, vérifier les coins');
+        logger.warn('⚠️ [Canvas] Qualité homographie faible, vérifier les coins');
       }
     } catch (err) {
-      console.error('❌ [Canvas] Erreur calcul homographie:', err);
+      logger.error('❌ [Canvas] Erreur calcul homographie:', err);
     }
     
     // Calculer aussi la calibration par diagonale (fallback)
@@ -1131,7 +1132,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     const diagonalCm = Math.sqrt(refWidth * refWidth + refHeight * refHeight);
     const pixelPerCmUnique = diagonal / diagonalCm;
     
-    console.log(`   🎯 pixelPerCm (diagonale): ${pixelPerCmUnique.toFixed(2)} px/cm`);
+    logger.debug(`   🎯 pixelPerCm (diagonale): ${pixelPerCmUnique.toFixed(2)} px/cm`);
     
     setPixelPerCmX(pixelPerCmUnique);
     setPixelPerCmY(pixelPerCmUnique);
@@ -1147,7 +1148,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     // 🆕 WORKFLOW GUIDÉ: Ne pas initialiser automatiquement si on est dans le mode sélection par zone
     // L'utilisateur doit dessiner lui-même les zones
     if (workflowStep === 'selectReferenceZone' || workflowStep === 'selectMeasureZone') {
-      console.log('🎯 [Canvas] Mode workflow guidé actif - pas d\'initialisation automatique des références');
+      logger.debug('🎯 [Canvas] Mode workflow guidé actif - pas d\'initialisation automatique des références');
       return;
     }
 
@@ -1162,14 +1163,14 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     }
     
     // Convertir de base 1000 vers pixels d'affichage
-    console.log('📐 [Canvas] DIAGNOSTIC DÉTAILLÉ:');
-    console.log(`   imageDimensions: ${imageDimensions.width.toFixed(0)}x${imageDimensions.height.toFixed(0)}px (ratio=${(imageDimensions.width/imageDimensions.height).toFixed(3)})`);
-    console.log(`   referenceDetected.boundingBox (base1000): x=${referenceDetected.boundingBox.x}, y=${referenceDetected.boundingBox.y}, w=${referenceDetected.boundingBox.width}, h=${referenceDetected.boundingBox.height}`);
+    logger.debug('📐 [Canvas] DIAGNOSTIC DÉTAILLÉ:');
+    logger.debug(`   imageDimensions: ${imageDimensions.width.toFixed(0)}x${imageDimensions.height.toFixed(0)}px (ratio=${(imageDimensions.width/imageDimensions.height).toFixed(3)})`);
+    logger.debug(`   referenceDetected.boundingBox (base1000): x=${referenceDetected.boundingBox.x}, y=${referenceDetected.boundingBox.y}, w=${referenceDetected.boundingBox.width}, h=${referenceDetected.boundingBox.height}`);
     
     // 🆕 HOMOGRAPHIE: Si on a des fusedCorners de la fusion multi-photos, les utiliser !
     if (fusedCorners && homographyReady) {
-      console.log('🎯 [Canvas] UTILISATION DES CORNERS FUSIONNÉS PAR L\'IA MULTI-PHOTOS pour homographie !');
-      console.log('   fusedCorners:', fusedCorners);
+      logger.debug('🎯 [Canvas] UTILISATION DES CORNERS FUSIONNÉS PAR L\'IA MULTI-PHOTOS pour homographie !');
+      logger.debug('   fusedCorners:', fusedCorners);
       
       // Convertir les corners de % (0-100) vers pixels
       const srcPoints: [[number, number], [number, number], [number, number], [number, number]] = [
@@ -1188,7 +1189,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       };
       setReferenceCorners(cornersInPixels);
       setQuadrilateralMode(true); // Activer le mode quadrilatère automatiquement
-      console.log('🔄 [Canvas] Mode QUADRILATÈRE activé avec les coins IA');
+      logger.debug('🔄 [Canvas] Mode QUADRILATÈRE activé avec les coins IA');
       
       // 🔧 VÉRIFICATION: Les corners de l'IA doivent avoir une PERSPECTIVE visible
       // Sinon l'homographie est dégénérée
@@ -1198,25 +1199,25 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       const rightEdgeDx = Math.abs(srcPoints[2][0] - srcPoints[1][0]);
       const maxPerspectiveDeform = Math.max(topEdgeDy, bottomEdgeDy, leftEdgeDx, rightEdgeDx);
       
-      console.log('📐 [Canvas] Analyse perspective des corners IA:');
-      console.log(`   topEdgeDy: ${topEdgeDy.toFixed(1)}px, bottomEdgeDy: ${bottomEdgeDy.toFixed(1)}px`);
-      console.log(`   leftEdgeDx: ${leftEdgeDx.toFixed(1)}px, rightEdgeDx: ${rightEdgeDx.toFixed(1)}px`);
-      console.log(`   maxPerspectiveDeform: ${maxPerspectiveDeform.toFixed(1)}px`);
+      logger.debug('📐 [Canvas] Analyse perspective des corners IA:');
+      logger.debug(`   topEdgeDy: ${topEdgeDy.toFixed(1)}px, bottomEdgeDy: ${bottomEdgeDy.toFixed(1)}px`);
+      logger.debug(`   leftEdgeDx: ${leftEdgeDx.toFixed(1)}px, rightEdgeDx: ${rightEdgeDx.toFixed(1)}px`);
+      logger.debug(`   maxPerspectiveDeform: ${maxPerspectiveDeform.toFixed(1)}px`);
       
       // 🆕 Détecter l'orientation à partir des dimensions des srcPoints EN PIXELS (pas fusedCorners qui est en %)
       const avgWidth = ((srcPoints[1][0] - srcPoints[0][0]) + (srcPoints[2][0] - srcPoints[3][0])) / 2;
       const avgHeight = ((srcPoints[3][1] - srcPoints[0][1]) + (srcPoints[2][1] - srcPoints[1][1])) / 2;
-      console.log(`   📐 Référence (configurée) (${localReferenceRealSize.width}×${localReferenceRealSize.height}cm) (${avgWidth.toFixed(0)}x${avgHeight.toFixed(0)}px)`);
+      logger.debug(`   📐 Référence (configurée) (${localReferenceRealSize.width}×${localReferenceRealSize.height}cm) (${avgWidth.toFixed(0)}x${avgHeight.toFixed(0)}px)`);
       
       // Si perspective suffisante (>5px), calculer l'homographie
       if (maxPerspectiveDeform > 5) {
         const dstPoints = getReferenceDestinationPointsMm();
-        console.log('   📐 Points destination référence:', dstPoints.map(p => `(${p[0]}, ${p[1]})`).join(', '));
+        logger.debug('   📐 Points destination référence:', dstPoints.map(p => `(${p[0]}, ${p[1]})`).join(', '));
         
         // Calculer l'homographie directement depuis les corners fusionnés
         const homography = computeHomography(srcPoints, dstPoints);
         
-        console.log('✅ [Canvas] HOMOGRAPHIE depuis fusion IA:', {
+        logger.debug('✅ [Canvas] HOMOGRAPHIE depuis fusion IA:', {
           quality: homography.quality.toFixed(1) + '%',
           uncertainty: homography.uncertainty.toFixed(1) + '%',
           perspectiveDeform: maxPerspectiveDeform.toFixed(1) + 'px'
@@ -1231,11 +1232,11 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
             setDebugGrid(grid);
           }
         } else {
-          console.warn('⚠️ [Canvas] Qualité homographie trop faible, fallback diagonale');
+          logger.warn('⚠️ [Canvas] Qualité homographie trop faible, fallback diagonale');
         }
       } else {
-        console.warn('⚠️ [Canvas] Corners IA sans perspective visible (rectangle parfait), skip homographie');
-        console.log('   → L\'IA a probablement retourné des "correctedCorners" au lieu des "rawCorners"');
+        logger.warn('⚠️ [Canvas] Corners IA sans perspective visible (rectangle parfait), skip homographie');
+        logger.debug('   → L\'IA a probablement retourné des "correctedCorners" au lieu des "rawCorners"');
       }
       
       // Créer le bounding box à partir des corners fusionnés
@@ -1266,14 +1267,14 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       height: (referenceDetected.boundingBox.height / 1000) * imageDimensions.height
     };
     
-    console.log(`   rawBox (pixels): x=${rawBox.x.toFixed(0)}, y=${rawBox.y.toFixed(0)}, ${rawBox.width.toFixed(0)}x${rawBox.height.toFixed(0)}px (ratio=${(rawBox.width/rawBox.height).toFixed(3)})`);
-    console.log(`   ➡️ L'A4 devrait avoir ratio=${(21/29.7).toFixed(3)} (portrait) ou ${(29.7/21).toFixed(3)} (paysage)`);
+    logger.debug(`   rawBox (pixels): x=${rawBox.x.toFixed(0)}, y=${rawBox.y.toFixed(0)}, ${rawBox.width.toFixed(0)}x${rawBox.height.toFixed(0)}px (ratio=${(rawBox.width/rawBox.height).toFixed(3)})`);
+    logger.debug(`   ➡️ L'A4 devrait avoir ratio=${(21/29.7).toFixed(3)} (portrait) ou ${(29.7/21).toFixed(3)} (paysage)`);
     
     // 🆕 AUTO-SNAP aux vrais bords de l'A4 !
     // Ceci corrige les imprécisions de détection de l'IA
     const snappedBox = snapRectangleToEdges(rawBox);
     
-    console.log('🎯 [Canvas] Rectangle A4 auto-snappé:', {
+    logger.debug('🎯 [Canvas] Rectangle A4 auto-snappé:', {
       avant: `${rawBox.width.toFixed(0)}x${rawBox.height.toFixed(0)}`,
       apres: `${snappedBox.width.toFixed(0)}x${snappedBox.height.toFixed(0)}`
     });
@@ -1294,7 +1295,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       return;
     }
     
-    console.log('📐 [Canvas] 🆕 Recalcul calibration + HOMOGRAPHIE depuis referenceCorners (workflow guidé)...');
+    logger.debug('📐 [Canvas] 🆕 Recalcul calibration + HOMOGRAPHIE depuis referenceCorners (workflow guidé)...');
     
     // 🆕 IMPORTANT: Calculer les dimensions réelles du quadrilatère (pas du bounding box !)
     // car le quadrilatère peut avoir de la perspective (côtés non parallèles)
@@ -1321,9 +1322,9 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     );
     const avgHeightPx = (leftEdgeLength + rightEdgeLength) / 2;
     
-    console.log(`📐 [Canvas] Dimensions RÉELLES du quadrilatère (moyenne des côtés):`);
-    console.log(`   Côtés horizontaux: top=${topEdgeLength.toFixed(1)}px, bottom=${bottomEdgeLength.toFixed(1)}px → moyenne=${avgWidthPx.toFixed(1)}px`);
-    console.log(`   Côtés verticaux: left=${leftEdgeLength.toFixed(1)}px, right=${rightEdgeLength.toFixed(1)}px → moyenne=${avgHeightPx.toFixed(1)}px`);
+    logger.debug(`📐 [Canvas] Dimensions RÉELLES du quadrilatère (moyenne des côtés):`);
+    logger.debug(`   Côtés horizontaux: top=${topEdgeLength.toFixed(1)}px, bottom=${bottomEdgeLength.toFixed(1)}px → moyenne=${avgWidthPx.toFixed(1)}px`);
+    logger.debug(`   Côtés verticaux: left=${leftEdgeLength.toFixed(1)}px, right=${rightEdgeLength.toFixed(1)}px → moyenne=${avgHeightPx.toFixed(1)}px`);
     
     // Détecter l'orientation (paysage ou portrait)
     const isLandscape = avgWidthPx > avgHeightPx;
@@ -1342,12 +1343,12 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       const tmp = refWidth;
       refWidth = refHeight;
       refHeight = tmp;
-      console.log(`🔄 [Canvas] Rectangle PAYSAGE détecté, dimensions: ${refWidth}x${refHeight}cm`);
+      logger.debug(`🔄 [Canvas] Rectangle PAYSAGE détecté, dimensions: ${refWidth}x${refHeight}cm`);
     } else if (!isLandscape && !dimensionsArePortrait) {
       const tmp = refWidth;
       refWidth = refHeight;
       refHeight = tmp;
-      console.log(`🔄 [Canvas] Rectangle PORTRAIT détecté, dimensions: ${refWidth}x${refHeight}cm`);
+      logger.debug(`🔄 [Canvas] Rectangle PORTRAIT détecté, dimensions: ${refWidth}x${refHeight}cm`);
     }
     
     // 🎯 Calculer les facteurs X/Y basés sur les VRAIES longueurs des côtés
@@ -1361,12 +1362,12 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     const expectedRatio = refWidth / refHeight;
     const ratioError = Math.abs(detectedRatio - expectedRatio) / expectedRatio;
     
-    console.log(`📐 [Canvas] CALIBRATION QUADRILATÈRE (côtés réels):`);
-    console.log(`   Quadrilatère: ${avgWidthPx.toFixed(1)}x${avgHeightPx.toFixed(1)}px (moyenne des côtés)`);
-    console.log(`   Référence réelle: ${refWidth}x${refHeight}cm`);
-    console.log(`   Ratio détecté: ${detectedRatio.toFixed(3)} vs attendu: ${expectedRatio.toFixed(3)} (écart ${(ratioError * 100).toFixed(1)}%)`);
-    console.log(`   🎯 pixelPerCmX: ${newPixelPerCmX.toFixed(2)} px/cm (basé sur côtés horizontaux)`);
-    console.log(`   🎯 pixelPerCmY: ${newPixelPerCmY.toFixed(2)} px/cm (basé sur côtés verticaux)`);
+    logger.debug(`📐 [Canvas] CALIBRATION QUADRILATÈRE (côtés réels):`);
+    logger.debug(`   Quadrilatère: ${avgWidthPx.toFixed(1)}x${avgHeightPx.toFixed(1)}px (moyenne des côtés)`);
+    logger.debug(`   Référence réelle: ${refWidth}x${refHeight}cm`);
+    logger.debug(`   Ratio détecté: ${detectedRatio.toFixed(3)} vs attendu: ${expectedRatio.toFixed(3)} (écart ${(ratioError * 100).toFixed(1)}%)`);
+    logger.debug(`   🎯 pixelPerCmX: ${newPixelPerCmX.toFixed(2)} px/cm (basé sur côtés horizontaux)`);
+    logger.debug(`   🎯 pixelPerCmY: ${newPixelPerCmY.toFixed(2)} px/cm (basé sur côtés verticaux)`);
     
     // 🆕 HOMOGRAPHIE: Calculer la matrice de transformation perspective !
     // Cette matrice permet de corriger PRÉCISÉMENT la déformation due à l'angle de prise de vue
@@ -1387,21 +1388,21 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     const rightEdgeDx = Math.abs(referenceCorners.bottomRight.x - referenceCorners.topRight.x);
     const maxPerspectiveDeform = Math.max(topEdgeDy, bottomEdgeDy, leftEdgeDx, rightEdgeDx);
     
-    console.log('📐 [Canvas] Analyse PERSPECTIVE référence:');
-    console.log(`   Déformation haut: ${topEdgeDy.toFixed(1)}px, bas: ${bottomEdgeDy.toFixed(1)}px`);
-    console.log(`   Déformation gauche: ${leftEdgeDx.toFixed(1)}px, droite: ${rightEdgeDx.toFixed(1)}px`);
-    console.log(`   🎯 Déformation MAX: ${maxPerspectiveDeform.toFixed(1)}px`);
+    logger.debug('📐 [Canvas] Analyse PERSPECTIVE référence:');
+    logger.debug(`   Déformation haut: ${topEdgeDy.toFixed(1)}px, bas: ${bottomEdgeDy.toFixed(1)}px`);
+    logger.debug(`   Déformation gauche: ${leftEdgeDx.toFixed(1)}px, droite: ${rightEdgeDx.toFixed(1)}px`);
+    logger.debug(`   🎯 Déformation MAX: ${maxPerspectiveDeform.toFixed(1)}px`);
     
     // TOUJOURS calculer l'homographie si déformation > 1px (seuil très bas !)
     if (maxPerspectiveDeform > 1) {
-      console.log(`🎯 [Canvas] ACTIVATION HOMOGRAPHIE (déformation ${maxPerspectiveDeform.toFixed(1)}px > 1px seuil)`);
+      logger.debug(`🎯 [Canvas] ACTIVATION HOMOGRAPHIE (déformation ${maxPerspectiveDeform.toFixed(1)}px > 1px seuil)`);
       
       const homography = computeHomography(srcPoints, dstPoints);
       
-      console.log(`✅ [Canvas] HOMOGRAPHIE CALCULÉE depuis referenceCorners:`);
-      console.log(`   Qualité: ${homography.quality.toFixed(1)}%`);
-      console.log(`   Incertitude: ±${homography.uncertainty.toFixed(1)}%`);
-      console.log(`   Perspective détectée: ${maxPerspectiveDeform.toFixed(1)}px`);
+      logger.debug(`✅ [Canvas] HOMOGRAPHIE CALCULÉE depuis referenceCorners:`);
+      logger.debug(`   Qualité: ${homography.quality.toFixed(1)}%`);
+      logger.debug(`   Incertitude: ±${homography.uncertainty.toFixed(1)}%`);
+      logger.debug(`   Perspective détectée: ${maxPerspectiveDeform.toFixed(1)}px`);
       
       // 🔬 DIAGNOSTIC: Vérifier que l'homographie transforme correctement le marqueur
       // Les 4 coins du marqueur (srcPoints) devraient devenir un carré parfait (dstPoints)
@@ -1419,34 +1420,34 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       const markerWidthMM = Math.abs(dstPoints[1][0] - dstPoints[0][0]);
       const markerHeightMM = Math.abs(dstPoints[3][1] - dstPoints[0][1]);
       
-      console.log(`🔬 [DIAGNOSTIC HOMOGRAPHIE] Vérification transformation marqueur:`);
-      console.log(`   Coins originaux (px): ${srcPoints.map(p => `(${p[0].toFixed(1)},${p[1].toFixed(1)})`).join(' ')}`);
-      console.log(`   Coins transformés (mm): ${transformedCorners.map(p => `(${p[0].toFixed(1)},${p[1].toFixed(1)})`).join(' ')}`);
-      console.log(`   Largeur haut: ${tTopWidth.toFixed(2)}mm (attendu: ${markerWidthMM}mm, écart: ${((tTopWidth/markerWidthMM - 1) * 100).toFixed(2)}%)`);
-      console.log(`   Largeur bas: ${tBottomWidth.toFixed(2)}mm (attendu: ${markerWidthMM}mm, écart: ${((tBottomWidth/markerWidthMM - 1) * 100).toFixed(2)}%)`);
-      console.log(`   Hauteur gauche: ${tLeftHeight.toFixed(2)}mm (attendu: ${markerHeightMM}mm, écart: ${((tLeftHeight/markerHeightMM - 1) * 100).toFixed(2)}%)`);
-      console.log(`   Hauteur droite: ${tRightHeight.toFixed(2)}mm (attendu: ${markerHeightMM}mm, écart: ${((tRightHeight/markerHeightMM - 1) * 100).toFixed(2)}%)`);
+      logger.debug(`🔬 [DIAGNOSTIC HOMOGRAPHIE] Vérification transformation marqueur:`);
+      logger.debug(`   Coins originaux (px): ${srcPoints.map(p => `(${p[0].toFixed(1)},${p[1].toFixed(1)})`).join(' ')}`);
+      logger.debug(`   Coins transformés (mm): ${transformedCorners.map(p => `(${p[0].toFixed(1)},${p[1].toFixed(1)})`).join(' ')}`);
+      logger.debug(`   Largeur haut: ${tTopWidth.toFixed(2)}mm (attendu: ${markerWidthMM}mm, écart: ${((tTopWidth/markerWidthMM - 1) * 100).toFixed(2)}%)`);
+      logger.debug(`   Largeur bas: ${tBottomWidth.toFixed(2)}mm (attendu: ${markerWidthMM}mm, écart: ${((tBottomWidth/markerWidthMM - 1) * 100).toFixed(2)}%)`);
+      logger.debug(`   Hauteur gauche: ${tLeftHeight.toFixed(2)}mm (attendu: ${markerHeightMM}mm, écart: ${((tLeftHeight/markerHeightMM - 1) * 100).toFixed(2)}%)`);
+      logger.debug(`   Hauteur droite: ${tRightHeight.toFixed(2)}mm (attendu: ${markerHeightMM}mm, écart: ${((tRightHeight/markerHeightMM - 1) * 100).toFixed(2)}%)`);
       
       // Vérifier l'asymétrie intrinsèque du marqueur (ratio X/Y en pixels)
       const markerRatioXY = avgWidthPx / avgHeightPx;
       const markerAsymmetry = Math.abs(markerRatioXY - 1.0);
-      console.log(`   📊 Asymétrie marqueur: ratio=${markerRatioXY.toFixed(4)} (écart de ${(markerAsymmetry * 100).toFixed(2)}% vs carré parfait)`);
+      logger.debug(`   📊 Asymétrie marqueur: ratio=${markerRatioXY.toFixed(4)} (écart de ${(markerAsymmetry * 100).toFixed(2)}% vs carré parfait)`);
       
       // Si l'asymétrie est significative (> 2%), c'est probablement de la distorsion de l'objectif
       if (markerAsymmetry > 0.02) {
-        console.log(`   ⚠️ ALERTE: Asymétrie > 2% détectée ! Probable distorsion objectif.`);
-        console.log(`   💡 Cette asymétrie sera amplifiée pour les objets plus grands que le marqueur.`);
+        logger.debug(`   ⚠️ ALERTE: Asymétrie > 2% détectée ! Probable distorsion objectif.`);
+        logger.debug(`   💡 Cette asymétrie sera amplifiée pour les objets plus grands que le marqueur.`);
       }
       
       if (homography.quality > 20) {
         setHomographyResult(homography);
         setUseHomography(true);
-        console.log(`🎯 [Canvas] HOMOGRAPHIE ACTIVÉE ! Les mesures seront corrigées de la perspective.`);
+        logger.debug(`🎯 [Canvas] HOMOGRAPHIE ACTIVÉE ! Les mesures seront corrigées de la perspective.`);
       } else {
-        console.warn(`⚠️ [Canvas] Qualité homographie trop faible (${homography.quality.toFixed(1)}%), fallback sur moyenne des côtés`);
+        logger.warn(`⚠️ [Canvas] Qualité homographie trop faible (${homography.quality.toFixed(1)}%), fallback sur moyenne des côtés`);
       }
     } else {
-      console.log(`📐 [Canvas] Pas de perspective significative (${maxPerspectiveDeform.toFixed(1)}px), homographie non nécessaire`);
+      logger.debug(`📐 [Canvas] Pas de perspective significative (${maxPerspectiveDeform.toFixed(1)}px), homographie non nécessaire`);
     }
     
     // Mettre à jour les facteurs
@@ -1481,7 +1482,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       };
       const pixelPerCmX_base1000 = newPixelPerCmX * (1000 / imageDimensions.width);
       const pixelPerCmY_base1000 = newPixelPerCmY * (1000 / imageDimensions.height);
-      console.log(`   🆕 Callback parent: pixelPerCmX_base1000=${pixelPerCmX_base1000.toFixed(2)}, pixelPerCmY_base1000=${pixelPerCmY_base1000.toFixed(2)}`);
+      logger.debug(`   🆕 Callback parent: pixelPerCmX_base1000=${pixelPerCmX_base1000.toFixed(2)}, pixelPerCmY_base1000=${pixelPerCmY_base1000.toFixed(2)}`);
       onReferenceAdjusted(boxBase1000, pixelPerCmX_base1000, pixelPerCmY_base1000);
     }
     
@@ -1495,14 +1496,14 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     // 🔒 Si on vient de faire un ajustement manuel, ne pas re-convertir !
     // Les valeurs sont déjà correctes en pixels réels
     if (isManuallyCalibrated) {
-      console.log('🔒 [Canvas] Calibration manuelle active - skip re-conversion');
+      logger.debug('🔒 [Canvas] Calibration manuelle active - skip re-conversion');
       return;
     }
     
     // 🔧 CRITICAL: Attendre que l'image soit chargée pour avoir les vraies dimensions !
     // Sinon on convertit avec les dimensions initiales (800x600) qui sont fausses
     if (!image) {
-      console.log('⏳ [Canvas] Image pas encore chargée, skip conversion calibration');
+      logger.debug('⏳ [Canvas] Image pas encore chargée, skip conversion calibration');
       return;
     }
     
@@ -1520,10 +1521,10 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       // 🔧 CORRECTION ASYMÉTRIE: Utiliser adjustedPixelPerCmX pour les deux
       const adjustedPixelPerCm = adjustedPixelPerCmX;  // ✅ UTILISER X POUR LES DEUX
       
-      console.log(`📏 [Canvas] Calibration ajustée (depuis parent):`);
-      console.log(`   Base 1000: pixelPerCmX=${calPixelPerCmX.toFixed(2)}, pixelPerCmY=${calPixelPerCmY.toFixed(2)}`);
-      console.log(`   → Réel: pixelPerCmX=${adjustedPixelPerCmX.toFixed(2)}, pixelPerCmY=${adjustedPixelPerCmY.toFixed(2)} px/cm`);
-      console.log(`   Ratios: X=${ratioX.toFixed(3)}, Y=${ratioY.toFixed(3)}`);
+      logger.debug(`📏 [Canvas] Calibration ajustée (depuis parent):`);
+      logger.debug(`   Base 1000: pixelPerCmX=${calPixelPerCmX.toFixed(2)}, pixelPerCmY=${calPixelPerCmY.toFixed(2)}`);
+      logger.debug(`   → Réel: pixelPerCmX=${adjustedPixelPerCmX.toFixed(2)}, pixelPerCmY=${adjustedPixelPerCmY.toFixed(2)} px/cm`);
+      logger.debug(`   Ratios: X=${ratioX.toFixed(3)}, Y=${ratioY.toFixed(3)}`);
       
       setPixelPerCmX(adjustedPixelPerCmX);
       setPixelPerCmY(adjustedPixelPerCmY);
@@ -1543,7 +1544,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     // � CRITICAL: Attendre que l'image soit chargée pour avoir les vraies dimensions !
     // Les dimensions initiales (800x600) sont des placeholders, pas les vraies valeurs
     if (!image) {
-      console.log('⏳ [Canvas] Image pas encore chargée, skip scaling des points');
+      logger.debug('⏳ [Canvas] Image pas encore chargée, skip scaling des points');
       return;
     }
     
@@ -1559,10 +1560,10 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       const heightChange = Math.abs(imageDimensions.height - lastScaledDimensions.height) / lastScaledDimensions.height;
       
       if (widthChange < 0.1 && heightChange < 0.1) {
-        console.log('🔒 [Canvas] Points initiaux déjà appliqués et dimensions stables, skip');
+        logger.debug('🔒 [Canvas] Points initiaux déjà appliqués et dimensions stables, skip');
         return;
       }
-      console.log(`🔄 [Canvas] Dimensions changées significativement (w: ${(widthChange*100).toFixed(0)}%, h: ${(heightChange*100).toFixed(0)}%), re-scaling points...`);
+      logger.debug(`🔄 [Canvas] Dimensions changées significativement (w: ${(widthChange*100).toFixed(0)}%, h: ${(heightChange*100).toFixed(0)}%), re-scaling points...`);
     }
     
     // Les points de l'IA sont en base 1000x1000, on les convertit aux dimensions réelles
@@ -1572,7 +1573,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       y: (p.y / 1000) * imageDimensions.height
     }));
     
-    console.log('📐 [Canvas] Points scalés de base 1000 vers pixels:', {
+    logger.debug('📐 [Canvas] Points scalés de base 1000 vers pixels:', {
       original: initialPoints.map(p => ({ x: p.x.toFixed(0), y: p.y.toFixed(0) })),
       scaled: scaledPoints.map(p => ({ x: p.x.toFixed(0), y: p.y.toFixed(0) })),
       imageDimensions: { width: imageDimensions.width.toFixed(0), height: imageDimensions.height.toFixed(0) }
@@ -1642,8 +1643,8 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     const maxPointY = Math.max(...polygonPoints.map(p => p.y));
     
     if (maxPointX > imageDimensions.width * 1.1 || maxPointY > imageDimensions.height * 1.1) {
-      console.warn(`⚠️ [Canvas] Points pas encore scalés ! maxX=${maxPointX.toFixed(0)} > width=${imageDimensions.width}, maxY=${maxPointY.toFixed(0)} > height=${imageDimensions.height}`);
-      console.warn(`   → Les mesures seront recalculées après le scaling`);
+      logger.warn(`⚠️ [Canvas] Points pas encore scalés ! maxX=${maxPointX.toFixed(0)} > width=${imageDimensions.width}, maxY=${maxPointY.toFixed(0)} > height=${imageDimensions.height}`);
+      logger.warn(`   → Les mesures seront recalculées après le scaling`);
       return {}; // Ne pas calculer avec des valeurs incohérentes
     }
 
@@ -1659,16 +1660,16 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     const FORCE_NO_HOMOGRAPHY = true;  // ← 🔴 FORCÉ ACTIF: Désactiver FORMULE 1 frontend, utiliser UNIQUEMENT backend RANSAC
     const useHomographyCalc = !FORCE_NO_HOMOGRAPHY && useHomography && homographyResult && homographyResult.quality > 50;
     
-    console.log(`📏 [Canvas] === CALCUL MESURES ===`);
+    logger.debug(`📏 [Canvas] === CALCUL MESURES ===`);
     if (FORCE_NO_HOMOGRAPHY) {
-      console.log(`   🚀 [MODE BACKEND ONLY] FORMULE 1 DÉSACTIVÉE - Utilisation EXCLUSIVE du backend RANSAC+Homographie fusionnées`);
+      logger.debug(`   🚀 [MODE BACKEND ONLY] FORMULE 1 DÉSACTIVÉE - Utilisation EXCLUSIVE du backend RANSAC+Homographie fusionnées`);
     }
     const modeString = useHomographyCalc ? '🎯 HOMOGRAPHIE (précis)' : `🚀 BACKEND RANSAC+HOMOGRAPHIE FUSIONNÉS`;
-    console.log(`   Mode: ${modeString}`);
+    logger.debug(`   Mode: ${modeString}`);
     if (homographyResult && !FORCE_NO_HOMOGRAPHY) {
-      console.log(`   Qualité homographie: ${homographyResult.quality.toFixed(1)}%, Incertitude: ±${homographyResult.uncertainty.toFixed(1)}%`);
+      logger.debug(`   Qualité homographie: ${homographyResult.quality.toFixed(1)}%, Incertitude: ±${homographyResult.uncertainty.toFixed(1)}%`);
     }
-    console.log(`   Points: ${polygonPoints.map(p => `${p.label || p.id}(${p.x.toFixed(1)}, ${p.y.toFixed(1)})`).join(', ')}`);
+    logger.debug(`   Points: ${polygonPoints.map(p => `${p.label || p.id}(${p.x.toFixed(1)}, ${p.y.toFixed(1)})`).join(', ')}`);
 
     // Base d'échelle locale (calibration A4)
     const effectivePixelPerCmAvg = pixelPerCmX && pixelPerCmY
@@ -1706,22 +1707,22 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
         const bottomLeft: [number, number] = [bottomPoints[0].x, bottomPoints[0].y];
         const bottomRight: [number, number] = [bottomPoints[1].x, bottomPoints[1].y];
         
-        console.log(`   🔍 [HOMOGRAPHIE] Coins triés (en pixels image):`);
-        console.log(`      TopLeft: (${topLeft[0].toFixed(0)}, ${topLeft[1].toFixed(0)})`);
-        console.log(`      TopRight: (${topRight[0].toFixed(0)}, ${topRight[1].toFixed(0)})`);
-        console.log(`      BottomLeft: (${bottomLeft[0].toFixed(0)}, ${bottomLeft[1].toFixed(0)})`);
-        console.log(`      BottomRight: (${bottomRight[0].toFixed(0)}, ${bottomRight[1].toFixed(0)})`);
+        logger.debug(`   🔍 [HOMOGRAPHIE] Coins triés (en pixels image):`);
+        logger.debug(`      TopLeft: (${topLeft[0].toFixed(0)}, ${topLeft[1].toFixed(0)})`);
+        logger.debug(`      TopRight: (${topRight[0].toFixed(0)}, ${topRight[1].toFixed(0)})`);
+        logger.debug(`      BottomLeft: (${bottomLeft[0].toFixed(0)}, ${bottomLeft[1].toFixed(0)})`);
+        logger.debug(`      BottomRight: (${bottomRight[0].toFixed(0)}, ${bottomRight[1].toFixed(0)})`);
         
         // 🆕 DEBUG: Afficher les coordonnées transformées par l'homographie
         const realTopLeft = applyHomography(homographyResult.matrix, topLeft);
         const realTopRight = applyHomography(homographyResult.matrix, topRight);
         const realBottomLeft = applyHomography(homographyResult.matrix, bottomLeft);
         const realBottomRight = applyHomography(homographyResult.matrix, bottomRight);
-        console.log(`   🔄 [HOMOGRAPHIE] Coins TRANSFORMÉS (en mm dans le plan réel):`);
-        console.log(`      TopLeft: (${realTopLeft[0].toFixed(1)}, ${realTopLeft[1].toFixed(1)}) mm`);
-        console.log(`      TopRight: (${realTopRight[0].toFixed(1)}, ${realTopRight[1].toFixed(1)}) mm`);
-        console.log(`      BottomLeft: (${realBottomLeft[0].toFixed(1)}, ${realBottomLeft[1].toFixed(1)}) mm`);
-        console.log(`      BottomRight: (${realBottomRight[0].toFixed(1)}, ${realBottomRight[1].toFixed(1)}) mm`);
+        logger.debug(`   🔄 [HOMOGRAPHIE] Coins TRANSFORMÉS (en mm dans le plan réel):`);
+        logger.debug(`      TopLeft: (${realTopLeft[0].toFixed(1)}, ${realTopLeft[1].toFixed(1)}) mm`);
+        logger.debug(`      TopRight: (${realTopRight[0].toFixed(1)}, ${realTopRight[1].toFixed(1)}) mm`);
+        logger.debug(`      BottomLeft: (${realBottomLeft[0].toFixed(1)}, ${realBottomLeft[1].toFixed(1)}) mm`);
+        logger.debug(`      BottomRight: (${realBottomRight[0].toFixed(1)}, ${realBottomRight[1].toFixed(1)}) mm`);
         
         // Calculer largeur avec homographie (haut et bas, prendre moyenne)
         const widthTop = computeRealDistanceWithUncertainty(
@@ -1731,8 +1732,8 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
           homographyResult.matrix, bottomLeft, bottomRight, homographyResult.uncertainty
         );
         
-        console.log(`   📏 [HOMOGRAPHIE] Largeur haut: ${(widthTop.distance / 10).toFixed(2)} cm`);
-        console.log(`   📏 [HOMOGRAPHIE] Largeur bas: ${(widthBottom.distance / 10).toFixed(2)} cm`);
+        logger.debug(`   📏 [HOMOGRAPHIE] Largeur haut: ${(widthTop.distance / 10).toFixed(2)} cm`);
+        logger.debug(`   📏 [HOMOGRAPHIE] Largeur bas: ${(widthBottom.distance / 10).toFixed(2)} cm`);
         
         const avgWidthMM = (widthTop.distance + widthBottom.distance) / 2;
         results.largeur_cm = avgWidthMM / 10; // mm → cm
@@ -1746,8 +1747,8 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
           homographyResult.matrix, topRight, bottomRight, homographyResult.uncertainty
         );
         
-        console.log(`   📏 [HOMOGRAPHIE] Hauteur gauche: ${(heightLeft.distance / 10).toFixed(2)} cm`);
-        console.log(`   📏 [HOMOGRAPHIE] Hauteur droite: ${(heightRight.distance / 10).toFixed(2)} cm`);
+        logger.debug(`   📏 [HOMOGRAPHIE] Hauteur gauche: ${(heightLeft.distance / 10).toFixed(2)} cm`);
+        logger.debug(`   📏 [HOMOGRAPHIE] Hauteur droite: ${(heightRight.distance / 10).toFixed(2)} cm`);
         
         const avgHeightMM = (heightLeft.distance + heightRight.distance) / 2;
         results.hauteur_cm = avgHeightMM / 10; // mm → cm
@@ -1763,8 +1764,8 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
         // - Correction facteurs appliqués côté backend UNIQUEMENT
         // ════════════════════════════════════════════════════════════════════════════════════════════════════
         
-        console.log(`\n   ❌ [FORMULE 1] DÉSACTIVÉE - Pas de calculs frontend`);
-        console.log(`   🔄 Le backend RANSAC+Homographie fusionnés est la source UNIQUE`);
+        logger.debug(`\n   ❌ [FORMULE 1] DÉSACTIVÉE - Pas de calculs frontend`);
+        logger.debug(`   🔄 Le backend RANSAC+Homographie fusionnés est la source UNIQUE`);
         
         // Analyse de cohérence uniquement pour INFO (pas de modification des mesures)
         if (referenceCorners && imageDimensions.width > 0 && imageDimensions.height > 0) {
@@ -1793,26 +1794,26 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
           const widthVariation = Math.abs(widthTop.distance - widthBottom.distance) / avgWidthMM;
           const heightVariation = Math.abs(heightLeft.distance - heightRight.distance) / avgHeightMM;
           
-          console.log(`   📊 [ANALYSE COHÉRENCE] Données réelles du marqueur:`);
-          console.log(`      Dimensions px: ${avgMarkerWidth.toFixed(1)} × ${avgMarkerHeight.toFixed(1)} px`);
-          console.log(`      Ratio W/H: ${markerPixelRatio.toFixed(4)} (attendu: 1.0, écart: ${((markerPixelRatio - 1) * 100).toFixed(2)}%)`);
-          console.log(`   📊 [ANALYSE COHÉRENCE] Variation mesures opposées:`);
-          console.log(`      Largeur (haut vs bas): ${(widthVariation * 100).toFixed(2)}%`);
-          console.log(`      Hauteur (gauche vs droite): ${(heightVariation * 100).toFixed(2)}%`);
+          logger.debug(`   📊 [ANALYSE COHÉRENCE] Données réelles du marqueur:`);
+          logger.debug(`      Dimensions px: ${avgMarkerWidth.toFixed(1)} × ${avgMarkerHeight.toFixed(1)} px`);
+          logger.debug(`      Ratio W/H: ${markerPixelRatio.toFixed(4)} (attendu: 1.0, écart: ${((markerPixelRatio - 1) * 100).toFixed(2)}%)`);
+          logger.debug(`   📊 [ANALYSE COHÉRENCE] Variation mesures opposées:`);
+          logger.debug(`      Largeur (haut vs bas): ${(widthVariation * 100).toFixed(2)}%`);
+          logger.debug(`      Hauteur (gauche vs droite): ${(heightVariation * 100).toFixed(2)}%`);
           
           // 🏎️ FORMULE 1: Alertes INFORMATIVES uniquement (pas de corrections)
           if (widthVariation > 0.05 || heightVariation > 0.05) {
-            console.log(`   ⚠️ INFO: Variation > 5% entre côtés opposés (mesure directe conservée)`);
+            logger.debug(`   ⚠️ INFO: Variation > 5% entre côtés opposés (mesure directe conservée)`);
           }
           
           const markerAsymmetry = Math.abs(markerPixelRatio - 1.0);
           if (markerAsymmetry > 0.03) {
-            console.log(`   ⚠️ INFO: Asymétrie marqueur ${(markerAsymmetry * 100).toFixed(1)}% détectée (mesure directe conservée)`);
+            logger.debug(`   ⚠️ INFO: Asymétrie marqueur ${(markerAsymmetry * 100).toFixed(1)}% détectée (mesure directe conservée)`);
           }
         }
         
-        console.log(`   🎯 [HOMOGRAPHIE] Largeur FINALE: ${results.largeur_cm.toFixed(2)} ± ${results.incertitude_largeur_cm?.toFixed(1)} cm`);
-        console.log(`   🎯 [HOMOGRAPHIE] Hauteur FINALE: ${results.hauteur_cm.toFixed(2)} ± ${results.incertitude_hauteur_cm?.toFixed(1)} cm`);
+        logger.debug(`   🎯 [HOMOGRAPHIE] Largeur FINALE: ${results.largeur_cm.toFixed(2)} ± ${results.incertitude_largeur_cm?.toFixed(1)} cm`);
+        logger.debug(`   🎯 [HOMOGRAPHIE] Hauteur FINALE: ${results.hauteur_cm.toFixed(2)} ± ${results.incertitude_hauteur_cm?.toFixed(1)} cm`);
         
       } else {
         // 📐 MÉTHODE FALLBACK: Calcule les VRAIES longueurs des côtés du quadrilatère !
@@ -1840,24 +1841,24 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
         const avgWidthPx = (topEdgeLength + bottomEdgeLength) / 2;
         const avgHeightPx = (leftEdgeLength + rightEdgeLength) / 2;
         
-        console.log(`   📐 [FALLBACK] Côtés du quadrilatère (vraies longueurs):`);
-        console.log(`      Haut: ${topEdgeLength.toFixed(1)}px, Bas: ${bottomEdgeLength.toFixed(1)}px → moyenne: ${avgWidthPx.toFixed(1)}px`);
-        console.log(`      Gauche: ${leftEdgeLength.toFixed(1)}px, Droite: ${rightEdgeLength.toFixed(1)}px → moyenne: ${avgHeightPx.toFixed(1)}px`);
+        logger.debug(`   📐 [FALLBACK] Côtés du quadrilatère (vraies longueurs):`);
+        logger.debug(`      Haut: ${topEdgeLength.toFixed(1)}px, Bas: ${bottomEdgeLength.toFixed(1)}px → moyenne: ${avgWidthPx.toFixed(1)}px`);
+        logger.debug(`      Gauche: ${leftEdgeLength.toFixed(1)}px, Droite: ${rightEdgeLength.toFixed(1)}px → moyenne: ${avgHeightPx.toFixed(1)}px`);
         
         // ⚠️ DEBUG: Comparer avec la bounding box pour montrer la différence
         const boundingBoxWidth = maxX - minX;
         const boundingBoxHeight = maxY - minY;
-        console.log(`      ⚠️ Bounding box (ANCIEN): ${boundingBoxWidth.toFixed(0)}x${boundingBoxHeight.toFixed(0)}px`);
-        console.log(`      ✅ Quadrilatère (NOUVEAU): ${avgWidthPx.toFixed(0)}x${avgHeightPx.toFixed(0)}px`);
+        logger.debug(`      ⚠️ Bounding box (ANCIEN): ${boundingBoxWidth.toFixed(0)}x${boundingBoxHeight.toFixed(0)}px`);
+        logger.debug(`      ✅ Quadrilatère (NOUVEAU): ${avgWidthPx.toFixed(0)}x${avgHeightPx.toFixed(0)}px`);
         
         // Calculer les mesures avec les VRAIES longueurs
         results.largeur_cm = avgWidthPx / effectivePixelPerCmX;
         results.incertitude_largeur_cm = results.largeur_cm * 0.05;
-        console.log(`   📐 [FALLBACK] Largeur: ${avgWidthPx.toFixed(0)}px ÷ ${effectivePixelPerCmX.toFixed(2)} (X) = ${results.largeur_cm.toFixed(2)} cm`);
+        logger.debug(`   📐 [FALLBACK] Largeur: ${avgWidthPx.toFixed(0)}px ÷ ${effectivePixelPerCmX.toFixed(2)} (X) = ${results.largeur_cm.toFixed(2)} cm`);
         
         results.hauteur_cm = avgHeightPx / effectivePixelPerCmY;
         results.incertitude_hauteur_cm = results.hauteur_cm * 0.05;
-        console.log(`   📐 [FALLBACK] Hauteur: ${avgHeightPx.toFixed(0)}px ÷ ${effectivePixelPerCmY.toFixed(2)} (Y) = ${results.hauteur_cm.toFixed(2)} cm`);
+        logger.debug(`   📐 [FALLBACK] Hauteur: ${avgHeightPx.toFixed(0)}px ÷ ${effectivePixelPerCmY.toFixed(2)} (Y) = ${results.hauteur_cm.toFixed(2)} cm`);
       }
       
       // Surface = largeur_cm × hauteur_cm
@@ -1969,23 +1970,23 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
         perimetre_m: measurements._poly_perimetre_cm ? measurements._poly_perimetre_cm / 100 : 2 * (backendMeasurements.largeur_cm + backendMeasurements.hauteur_cm) / 100,
       };
       
-      console.log('🔔 [Canvas] ENVOI mesures BACKEND + SURFACE POLYGONE au parent:');
-      console.log(`   ✅ Largeur: ${backendResults.largeur_cm?.toFixed(2)} cm`);
-      console.log(`   ✅ Hauteur: ${backendResults.hauteur_cm?.toFixed(2)} cm`);
+      logger.debug('🔔 [Canvas] ENVOI mesures BACKEND + SURFACE POLYGONE au parent:');
+      logger.debug(`   ✅ Largeur: ${backendResults.largeur_cm?.toFixed(2)} cm`);
+      logger.debug(`   ✅ Hauteur: ${backendResults.hauteur_cm?.toFixed(2)} cm`);
       if (backendResults.surface_brute_m2 !== undefined) {
-        console.log(`   🟦 Surface: ${backendResults.surface_brute_m2.toFixed(3)} m²`);
+        logger.debug(`   🟦 Surface: ${backendResults.surface_brute_m2.toFixed(3)} m²`);
       }
       if (backendResults.perimetre_cm !== undefined) {
-        console.log(`   📏 Périmètre: ${backendResults.perimetre_cm.toFixed(1)} cm`);
+        logger.debug(`   📏 Périmètre: ${backendResults.perimetre_cm.toFixed(1)} cm`);
       }
-      console.log(`   📊 Méthode: ${backendMeasurements.method}`);
+      logger.debug(`   📊 Méthode: ${backendMeasurements.method}`);
       
       onMeasurementsChange?.(backendResults);
     } else if (measurements.largeur_cm && measurements.largeur_cm > 0) {
       // Fallback temporaire pendant le chargement
-      console.log('🔔 [Canvas] ENVOI mesures locales (en attente du backend):');
-      console.log(`   ⏳ Largeur: ${measurements.largeur_cm?.toFixed(2)} cm`);
-      console.log(`   ⏳ Hauteur: ${measurements.hauteur_cm?.toFixed(2)} cm`);
+      logger.debug('🔔 [Canvas] ENVOI mesures locales (en attente du backend):');
+      logger.debug(`   ⏳ Largeur: ${measurements.largeur_cm?.toFixed(2)} cm`);
+      logger.debug(`   ⏳ Hauteur: ${measurements.hauteur_cm?.toFixed(2)} cm`);
       onMeasurementsChange?.(measurements);
     }
   }, [backendMeasurements, measurements, onMeasurementsChange]);
@@ -1997,7 +1998,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
   useEffect(() => {
     // Si on vient de passer de <4 points à ≥4 points, déclencher un calcul
     if (prevPointsLengthRef.current < 4 && points.length >= 4 && fusedCorners && !isDraggingPoint) {
-      console.log('🎯 [Canvas] 4 points atteints, déclenchement calcul initial');
+      logger.debug('🎯 [Canvas] 4 points atteints, déclenchement calcul initial');
       setComputeTrigger(prev => prev + 1);
     }
     prevPointsLengthRef.current = points.length;
@@ -2024,19 +2025,19 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     
     // 🔒 NE PAS calculer si un point est en cours de drag
     if (isDraggingPoint) {
-      console.log('🖐️ [Canvas] Point en cours de drag, calcul différé');
+      logger.debug('🖐️ [Canvas] Point en cours de drag, calcul différé');
       return;
     }
     
     // 🔒 Vérifier si un calcul est déjà en cours via REF (plus fiable que state)
     if (isComputingRef.current) {
-      console.log('⏳ [Canvas] Calcul déjà en cours, ignoré');
+      logger.debug('⏳ [Canvas] Calcul déjà en cours, ignoré');
       return;
     }
     
     const apiInstance = api || authenticatedApi;
     if (!apiInstance) {
-      console.warn('⚠️ [Canvas] Pas d\'API disponible pour le calcul backend');
+      logger.warn('⚠️ [Canvas] Pas d\'API disponible pour le calcul backend');
       return;
     }
     
@@ -2065,7 +2066,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     });
     
     if (dataSignature === lastComputedDataRef.current) {
-      console.log('✅ [Canvas] Données identiques, pas de recalcul nécessaire');
+      logger.debug('✅ [Canvas] Données identiques, pas de recalcul nécessaire');
       return;
     }
     
@@ -2075,9 +2076,9 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       setIsComputingBackend(true);
       
       try {
-        console.log('\n' + '='.repeat(60));
-        console.log('🎯 [Canvas] APPEL BACKEND compute-dimensions-simple (trigger:', computeTrigger, ')');
-        console.log('='.repeat(60));
+        logger.debug('\n' + '='.repeat(60));
+        logger.debug('🎯 [Canvas] APPEL BACKEND compute-dimensions-simple (trigger:', computeTrigger, ')');
+        logger.debug('='.repeat(60));
         
         // Scale du canvas (points sont en coordonnées canvas, il faut les convertir en pixels image)
         const canvasScale = imageDimensions.scale || 1;
@@ -2085,11 +2086,11 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
         const imageWidth = image.naturalWidth || image.width;
         const imageHeight = image.naturalHeight || image.height;
 
-        console.log('📤 Envoi au backend:');
-        console.log(`   fusedCorners (% image): TL=(${fusedCorners.topLeft.x.toFixed(1)}%, ${fusedCorners.topLeft.y.toFixed(1)}%)`);
-        console.log(`   objectPoints (px canvas): ${objectPoints.map(p => `(${p.x}, ${p.y})`).join(', ')}`);
-        console.log(`   imageSize: ${imageWidth}×${imageHeight}, canvasScale: ${canvasScale}`);
-        console.log('   🎯 Métré A4 V10: 13×20.5cm (centres 6 tags)');
+        logger.debug('📤 Envoi au backend:');
+        logger.debug(`   fusedCorners (% image): TL=(${fusedCorners.topLeft.x.toFixed(1)}%, ${fusedCorners.topLeft.y.toFixed(1)}%)`);
+        logger.debug(`   objectPoints (px canvas): ${objectPoints.map(p => `(${p.x}, ${p.y})`).join(', ')}`);
+        logger.debug(`   imageSize: ${imageWidth}×${imageHeight}, canvasScale: ${canvasScale}`);
+        logger.debug('   🎯 Métré A4 V10: 13×20.5cm (centres 6 tags)');
 
         const response = await apiInstance.post('/api/measurement-reference/compute-dimensions-simple', {
           fusedCorners,
@@ -2114,13 +2115,13 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
           confidence = response.confidence || 0.8;
           method = response.method || 'homography';
           
-          console.log('✅ [Canvas] BACKEND RÉPONSE (MÉTRÉ A4 V10):');
-          console.log(`   📏 Largeur: ${largeur_cm.toFixed(2)} cm (±${incertitude_largeur_cm.toFixed(2)} cm)`);
-          console.log(`   📏 Hauteur: ${hauteur_cm.toFixed(2)} cm (±${incertitude_hauteur_cm.toFixed(2)} cm)`);
-          console.log(`   📊 Méthode: ${method}, Confiance: ${(confidence * 100).toFixed(0)}%`);
+          logger.debug('✅ [Canvas] BACKEND RÉPONSE (MÉTRÉ A4 V10):');
+          logger.debug(`   📏 Largeur: ${largeur_cm.toFixed(2)} cm (±${incertitude_largeur_cm.toFixed(2)} cm)`);
+          logger.debug(`   📏 Hauteur: ${hauteur_cm.toFixed(2)} cm (±${incertitude_hauteur_cm.toFixed(2)} cm)`);
+          logger.debug(`   📊 Méthode: ${method}, Confiance: ${(confidence * 100).toFixed(0)}%`);
 
           if (response.warnings?.length > 0) {
-            console.log(`   ⚠️ Warnings: ${response.warnings.join(', ')}`);
+            logger.debug(`   ⚠️ Warnings: ${response.warnings.join(', ')}`);
           }
 
           setBackendMeasurements({
@@ -2135,12 +2136,12 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
             depth: response.depth
           });
         } else {
-          console.warn('⚠️ [Canvas] Backend n\'a pas retourné de mesures valides:', response);
+          logger.warn('⚠️ [Canvas] Backend n\'a pas retourné de mesures valides:', response);
           setBackendMeasurements(null);
         }
         
       } catch (error) {
-        console.error('❌ [Canvas] Erreur appel backend:', error);
+        logger.error('❌ [Canvas] Erreur appel backend:', error);
         setBackendMeasurements(null);
       } finally {
         isComputingRef.current = false;
@@ -2221,7 +2222,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     });
     setZoom(zoomLevel);
     
-    console.log(`🔍 [Canvas] Zoom automatique x${zoomLevel} centré sur (${pointX.toFixed(0)}, ${pointY.toFixed(0)})`);
+    logger.debug(`🔍 [Canvas] Zoom automatique x${zoomLevel} centré sur (${pointX.toFixed(0)}, ${pointY.toFixed(0)})`);
   }, [imageDimensions]);
 
   // 🆕 Réinitialiser zoom et position
@@ -2230,7 +2231,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     setStagePosition({ x: 0, y: 0 });
     setPointBeingPlaced(null);
     setPointPlacementState(null);
-    console.log('🔍 [Canvas] Zoom réinitialisé');
+    logger.debug('🔍 [Canvas] Zoom réinitialisé');
   }, []);
 
   // 🔒 VERROUILLAGE: Basculer le verrouillage d'un point
@@ -2263,7 +2264,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     
     // Si on clique sur le même point qu'on est en train d'éditer → DÉZOOM et confirme
     if (pointBeingPlaced === pointId) {
-      console.log(`✅ [Canvas] Point ${pointId} confirmé, retour vue complète`);
+      logger.debug(`✅ [Canvas] Point ${pointId} confirmé, retour vue complète`);
       message.success({ content: '✅ Position confirmée !', duration: 1.5 });
       setComputeTrigger(prev => prev + 1); // 🔄 Déclenche le recalcul
       setPointBeingPlaced(null);
@@ -2280,7 +2281,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       resetZoom();
     }
     
-    console.log(`🎯 [Canvas] Point ${pointId} sélectionné pour repositionnement`);
+    logger.debug(`🎯 [Canvas] Point ${pointId} sélectionné pour repositionnement`);
     setPointBeingPlaced(pointId);
     setPointPlacementState('zoomed');
     setSelectedPointId(pointId);
@@ -2299,7 +2300,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     const finalX = snapped.x;
     const finalY = snapped.y;
     
-    console.log(`📍 [Canvas] Point ${pointBeingPlaced} déplacé vers (${finalX.toFixed(0)}, ${finalY.toFixed(0)})`);
+    logger.debug(`📍 [Canvas] Point ${pointBeingPlaced} déplacé vers (${finalX.toFixed(0)}, ${finalY.toFixed(0)})`);
     
     // Mettre à jour le point
     const newPoints = points.map(p => 
@@ -2327,7 +2328,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
   // Annuler le placement en cours (clic sur fond)
   const cancelPointPlacement = useCallback(() => {
     if (pointBeingPlaced) {
-      console.log('❌ [Canvas] Placement annulé, retour vue complète');
+      logger.debug('❌ [Canvas] Placement annulé, retour vue complète');
       setPointBeingPlaced(null);
       setPointPlacementState(null);
       setSelectedPointId(null);
@@ -2453,7 +2454,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     targetType: 'reference' | 'measurement'
   ) => {
     if (!api || !imageBase64) {
-      console.warn('❌ API ou imageBase64 non disponible pour la détection de coins');
+      logger.warn('❌ API ou imageBase64 non disponible pour la détection de coins');
       message.error('Détection IA non disponible');
       return null;
     }
@@ -2504,20 +2505,20 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
         }
       }
       
-      console.log(`🎯 [Canvas] Détection IA des coins pour ${targetType}:`, { objectType, objectDescription });
-      console.log(`📐 [Canvas] Zone sélectionnée:`, zone);
+      logger.debug(`🎯 [Canvas] Détection IA des coins pour ${targetType}:`, { objectType, objectDescription });
+      logger.debug(`📐 [Canvas] Zone sélectionnée:`, zone);
       
       // � APPEL API: Détecter les coins automatiquement avec edge detection
       if (!imageBase64) {
-        console.warn('❌ Pas d\'imageBase64 pour détection coins');
+        logger.warn('❌ Pas d\'imageBase64 pour détection coins');
         return null;
       }
       
-      console.log('⚠️ [Canvas] Détection automatique des coins désactivée (V10 only)');
+      logger.debug('⚠️ [Canvas] Détection automatique des coins désactivée (V10 only)');
       return null;
       
     } catch (error) {
-      console.error('❌ [Canvas] Erreur détection coins:', error);
+      logger.error('❌ [Canvas] Erreur détection coins:', error);
       message.error('Erreur lors de la détection IA des coins');
       return null;
     } finally {
@@ -2530,7 +2531,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     
     // 🆕 Protection contre les appels multiples
     if (isProcessingZone) {
-      console.log('⏳ [Canvas] Zone déjà en cours de traitement, ignoré');
+      logger.debug('⏳ [Canvas] Zone déjà en cours de traitement, ignoré');
       return;
     }
 
@@ -2538,7 +2539,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     const width = Math.abs(end[0] - start[0]);
     const height = Math.abs(end[1] - start[1]);
 
-    console.log('🎨 [Canvas] finishDrawingZone appelé:', {
+    logger.debug('🎨 [Canvas] finishDrawingZone appelé:', {
       start, end, width, height,
       workflowStep,
       hasApi: !!api,
@@ -2546,7 +2547,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     });
 
     if (width < 10 || height < 10) {
-      console.log('⚠️ [Canvas] Zone trop petite, ignorée');
+      logger.debug('⚠️ [Canvas] Zone trop petite, ignorée');
       setDrawingZone(null);
       return;
     }
@@ -2557,7 +2558,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
 
     // 🆕 WORKFLOW GUIDÉ: Détection IA selon l'étape
     if (workflowStep === 'selectReferenceZone' || workflowStep === 'selectMeasureZone') {
-      console.log('🎯 [Canvas] Mode workflow guidé détecté, appel API...');
+      logger.debug('🎯 [Canvas] Mode workflow guidé détecté, appel API...');
       // Convertir les coordonnées pixels en pourcentages (0-100)
       const zonePercent = {
         x: (Math.min(start[0], end[0]) / imageDimensions.width) * 100,
@@ -2582,7 +2583,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
             bottomRight: result.corners[2],
             bottomLeft: result.corners[3]
           };
-          console.log('🔧 [Canvas] Corners convertis depuis Array:', cornersObj);
+          logger.debug('🔧 [Canvas] Corners convertis depuis Array:', cornersObj);
         } else {
           // Format objet déjà correct
           cornersObj = result.corners;
@@ -2611,15 +2612,15 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
         if (workflowStep === 'selectReferenceZone') {
           // Étape 1: Référence détectée → passer à l'étape 2
           const refType = `${localReferenceRealSize.width}×${localReferenceRealSize.height}cm`;
-          console.log(`📐 [Canvas] Référence (${refType}) détectée, coins:`, cornersPixels);
-          console.log('📐 [Canvas] Confiance:', result.confidence, '% - Objet trouvé:', result.objectFound);
+          logger.debug(`📐 [Canvas] Référence (${refType}) détectée, coins:`, cornersPixels);
+          logger.debug('📐 [Canvas] Confiance:', result.confidence, '% - Objet trouvé:', result.objectFound);
           setReferenceCorners(cornersPixels);
           setQuadrilateralMode(true);
           message.success(`✅ Référence détectée (confiance: ${Math.round(result.confidence || 0)}%)`);
           setWorkflowStep('selectMeasureZone');
         } else {
           // Étape 2: Objet à mesurer détecté → passer à l'étape 3
-          console.log('📏 [Canvas] Objet à mesurer détecté, coins:', cornersPixels);
+          logger.debug('📏 [Canvas] Objet à mesurer détecté, coins:', cornersPixels);
           
           // Créer 4 points de mesure aux coins détectés - AVEC draggable: true !
           const newPoints: MeasurementPoint[] = [
@@ -2629,8 +2630,8 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
             { id: 'corner_bl', x: cornersPixels.bottomLeft.x, y: cornersPixels.bottomLeft.y, label: 'D', type: 'primary', color: '#52c41a', draggable: true }
           ];
           
-          console.log('🎯 [Canvas] Points créés pour objet:', newPoints);
-          console.log('🎯 [Canvas] Confiance:', result.confidence, '% - Objet trouvé:', result.objectFound);
+          logger.debug('🎯 [Canvas] Points créés pour objet:', newPoints);
+          logger.debug('🎯 [Canvas] Confiance:', result.confidence, '% - Objet trouvé:', result.objectFound);
           
           setPoints(newPoints);
           saveToHistory(newPoints, exclusionZones);
@@ -2721,7 +2722,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
 
     // 🆕 MODE PLACEMENT DE POINT: PRIORITÉ ABSOLUE - toujours placer le point, peu importe où on clique
     if (pointBeingPlaced) {
-      console.log(`📍 [Canvas] Placement du point ${pointBeingPlaced} à (${x.toFixed(0)}, ${y.toFixed(0)})`);
+      logger.debug(`📍 [Canvas] Placement du point ${pointBeingPlaced} à (${x.toFixed(0)}, ${y.toFixed(0)})`);
       placePointAt(x, y);
       return;
     }
@@ -2733,14 +2734,14 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     
     // Si on a cliqué sur un élément interactif (pas le stage ni l'image de fond), ne rien faire
     if (!clickedOnStage && !clickedOnImage) {
-      console.log('🎯 [Canvas] Clic sur élément interactif, ignoré par Stage handler');
+      logger.debug('🎯 [Canvas] Clic sur élément interactif, ignoré par Stage handler');
       return;
     }
 
     // 🆕 WORKFLOW GUIDÉ: Dessiner zone pour détection IA
     if (workflowStep === 'selectReferenceZone' || workflowStep === 'selectMeasureZone') {
       if (!drawingZone && !isDetectingCorners) {
-        console.log(`🎯 [Canvas] Début dessin zone pour ${workflowStep}`);
+        logger.debug(`🎯 [Canvas] Début dessin zone pour ${workflowStep}`);
         startDrawingZone(x, y);
       }
       return;
@@ -2958,8 +2959,8 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
         return;
       }
 
-      console.log(`🎯 [Canvas] Snap ${target}: envoi de ${pointsToSnap.length} points à l'IA`);
-      console.log('📍 Points approximatifs (base 1000):', pointsToSnap);
+      logger.debug(`🎯 [Canvas] Snap ${target}: envoi de ${pointsToSnap.length} points à l'IA`);
+      logger.debug('📍 Points approximatifs (base 1000):', pointsToSnap);
 
       // Appeler l'API snap-to-edges
       const response = await api.post('/api/measurement-reference/snap-to-edges', {
@@ -2970,7 +2971,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
         objectDescription: target === 'measurement' ? 'porte ou fenêtre à mesurer' : undefined
       });
 
-      console.log('📩 [Canvas] Réponse snap:', response);
+      logger.debug('📩 [Canvas] Réponse snap:', response);
 
       if (response?.success && response.points && response.points.length > 0) {
         // Appliquer les points snappés
@@ -2989,7 +2990,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
             height: ((maxY - minY) / 1000) * imageDimensions.height
           };
           
-          console.log('✅ [Canvas] Rectangle référence snappé:', newBox);
+          logger.debug('✅ [Canvas] Rectangle référence snappé:', newBox);
           setAdjustableRefBox(newBox);
           recalculateCalibration(newBox, true); // Skip snap local car déjà snappé par l'IA
           message.success('🎯 Référence ajustée avec précision par l\'IA !');
@@ -3005,7 +3006,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
             draggable: true
           }));
           
-          console.log('✅ [Canvas] Points de mesure snappés:', snappedMeasurementPoints);
+          logger.debug('✅ [Canvas] Points de mesure snappés:', snappedMeasurementPoints);
           setPoints(snappedMeasurementPoints);
           saveToHistory(snappedMeasurementPoints, exclusionZones);
           message.success('🎯 Points de mesure ajustés avec précision par l\'IA !');
@@ -3014,7 +3015,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
         message.warning('⚠️ L\'IA n\'a pas pu ajuster les points. Essayez de les replacer.');
       }
     } catch (error) {
-      console.error('❌ [Canvas] Erreur snap-to-edges:', error);
+      logger.error('❌ [Canvas] Erreur snap-to-edges:', error);
       message.error('Erreur lors du snap IA');
     } finally {
       setIsSnapping(false);
@@ -3029,7 +3030,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
   // 🆕 Exporter l'image avec les annotations dessinées
   const exportAnnotatedImage = useCallback(async (): Promise<string | null> => {
     if (!stageRef.current) {
-      console.warn('❌ [Canvas] Stage ref non disponible pour export');
+      logger.warn('❌ [Canvas] Stage ref non disponible pour export');
       return null;
     }
     
@@ -3053,10 +3054,10 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       stageRef.current.scale({ x: originalZoom, y: originalZoom });
       stageRef.current.position(originalPosition);
       
-      console.log('📸 [Canvas] Image annotée exportée:', dataURL.substring(0, 50) + '...');
+      logger.debug('📸 [Canvas] Image annotée exportée:', dataURL.substring(0, 50) + '...');
       return dataURL;
     } catch (error) {
-      console.error('❌ [Canvas] Erreur export image:', error);
+      logger.error('❌ [Canvas] Erreur export image:', error);
       return null;
     }
   }, [zoom, stagePosition]);
@@ -3086,9 +3087,9 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       imageDimensions: imageDimensions
     };
 
-    console.log('✅ [Canvas] Validation avec image annotée:', annotatedImageBase64 ? 'OUI' : 'NON');
-    console.log('   📍 referenceCorners:', referenceCorners ? 'OUI' : 'NON');
-    console.log('   📐 imageDimensions:', imageDimensions);
+    logger.debug('✅ [Canvas] Validation avec image annotée:', annotatedImageBase64 ? 'OUI' : 'NON');
+    logger.debug('   📍 referenceCorners:', referenceCorners ? 'OUI' : 'NON');
+    logger.debug('   📐 imageDimensions:', imageDimensions);
     onValidate?.(annotations);
   }, [imageUrl, calibration, pixelPerCm, points, exclusionZones, measurements, onValidate, exportAnnotatedImage, referenceCorners, imageDimensions]);
 
@@ -3452,7 +3453,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
             {/* Bouton Menu hamburger */}
             <div
               role="button" tabIndex={0} onClick={() => {
-                console.log('📱 Menu cliqué! mobileMenuOpen:', mobileMenuOpen);
+                logger.debug('📱 Menu cliqué! mobileMenuOpen:', mobileMenuOpen);
                 setMobileMenuOpen(true);
               }}
               style={{
@@ -3872,7 +3873,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                 };
                 
                 // 🔍 DEBUG: Log les coordonnées exactes
-                console.log('📍 OBJET MESURÉ - Coordonnées pixel:');
+                logger.debug('📍 OBJET MESURÉ - Coordonnées pixel:');
                 console.table({
                   'Top-Left (A)': `(${objectCorners.topLeft.x.toFixed(1)}, ${objectCorners.topLeft.y.toFixed(1)})`,
                   'Top-Right (B)': `(${objectCorners.topRight.x.toFixed(1)}, ${objectCorners.topRight.y.toFixed(1)})`,
@@ -3880,30 +3881,30 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                   'Bottom-Left (C)': `(${objectCorners.bottomLeft.x.toFixed(1)}, ${objectCorners.bottomLeft.y.toFixed(1)})`
                 });
                 
-                console.log('📐 OBJET MESURÉ - Dimensions en pixel:');
+                logger.debug('📐 OBJET MESURÉ - Dimensions en pixel:');
                 const widthTop = objectCorners.topRight.x - objectCorners.topLeft.x;
                 const widthBottom = objectCorners.bottomRight.x - objectCorners.bottomLeft.x;
                 const heightLeft = objectCorners.bottomLeft.y - objectCorners.topLeft.y;
                 const heightRight = objectCorners.bottomRight.y - objectCorners.topRight.y;
-                console.log(`  Haut: ${widthTop.toFixed(1)}px = ${(widthTop / pixelPerCmX).toFixed(1)}cm = ${(widthTop / pixelPerCmX * 10).toFixed(1)}mm`);
-                console.log(`  Bas: ${widthBottom.toFixed(1)}px = ${(widthBottom / pixelPerCmX).toFixed(1)}cm = ${(widthBottom / pixelPerCmX * 10).toFixed(1)}mm`);
-                console.log(`  Gauche: ${heightLeft.toFixed(1)}px = ${(heightLeft / pixelPerCmY).toFixed(1)}cm = ${(heightLeft / pixelPerCmY * 10).toFixed(1)}mm`);
-                console.log(`  Droite: ${heightRight.toFixed(1)}px = ${(heightRight / pixelPerCmY).toFixed(1)}cm = ${(heightRight / pixelPerCmY * 10).toFixed(1)}mm`);
+                logger.debug(`  Haut: ${widthTop.toFixed(1)}px = ${(widthTop / pixelPerCmX).toFixed(1)}cm = ${(widthTop / pixelPerCmX * 10).toFixed(1)}mm`);
+                logger.debug(`  Bas: ${widthBottom.toFixed(1)}px = ${(widthBottom / pixelPerCmX).toFixed(1)}cm = ${(widthBottom / pixelPerCmX * 10).toFixed(1)}mm`);
+                logger.debug(`  Gauche: ${heightLeft.toFixed(1)}px = ${(heightLeft / pixelPerCmY).toFixed(1)}cm = ${(heightLeft / pixelPerCmY * 10).toFixed(1)}mm`);
+                logger.debug(`  Droite: ${heightRight.toFixed(1)}px = ${(heightRight / pixelPerCmY).toFixed(1)}cm = ${(heightRight / pixelPerCmY * 10).toFixed(1)}mm`);
                 
-                console.log('🔍 ============ DIAGNOSTIC CALIBRATION ============');
-                console.log(`  pixelPerCmX: ${pixelPerCmX.toFixed(4)} px/cm (LARGEUR)`);
-                console.log(`  pixelPerCmY: ${pixelPerCmY.toFixed(4)} px/cm (HAUTEUR)`);
-                console.log(`  RATIO Y/X: ${(pixelPerCmY / pixelPerCmX).toFixed(4)} ${pixelPerCmY > pixelPerCmX ? '❌ TOO HIGH (hauteur sous-estimée)' : '✅ normal'}`);
-                console.log(`  Si vous mesurez 202cm (hauteur réelle) mais obtenez 181cm:`);
-                console.log(`    → Problème: pixelPerCmY est ${((pixelPerCmY / 5.58) * 100).toFixed(1)}% trop élevé`);
+                logger.debug('🔍 ============ DIAGNOSTIC CALIBRATION ============');
+                logger.debug(`  pixelPerCmX: ${pixelPerCmX.toFixed(4)} px/cm (LARGEUR)`);
+                logger.debug(`  pixelPerCmY: ${pixelPerCmY.toFixed(4)} px/cm (HAUTEUR)`);
+                logger.debug(`  RATIO Y/X: ${(pixelPerCmY / pixelPerCmX).toFixed(4)} ${pixelPerCmY > pixelPerCmX ? '❌ TOO HIGH (hauteur sous-estimée)' : '✅ normal'}`);
+                logger.debug(`  Si vous mesurez 202cm (hauteur réelle) mais obtenez 181cm:`);
+                logger.debug(`    → Problème: pixelPerCmY est ${((pixelPerCmY / 5.58) * 100).toFixed(1)}% trop élevé`);
                 
                 // 🔥 NEW DIAGNOSTIC: Calculer ce que DEVRAIT être pixelPerCmY
                 const heightPx = heightLeft;  // pixels mesurés
                 const expectedHeightCm = 202;  // réalité
                 const correctPixelPerCmY = heightPx / expectedHeightCm;
-                console.log(`  🔥 CALC: ${heightPx.toFixed(1)}px pour 202cm attendus → pixelPerCmY DEVRAIT être ${correctPixelPerCmY.toFixed(4)}`);
-                console.log(`  🔥 MAIS vous avez ${pixelPerCmY.toFixed(4)} → ERREUR de ${((pixelPerCmY - correctPixelPerCmY) / correctPixelPerCmY * 100).toFixed(1)}%`);
-                console.log('🔍 ================================================');
+                logger.debug(`  🔥 CALC: ${heightPx.toFixed(1)}px pour 202cm attendus → pixelPerCmY DEVRAIT être ${correctPixelPerCmY.toFixed(4)}`);
+                logger.debug(`  🔥 MAIS vous avez ${pixelPerCmY.toFixed(4)} → ERREUR de ${((pixelPerCmY - correctPixelPerCmY) / correctPixelPerCmY * 100).toFixed(1)}%`);
+                logger.debug('🔍 ================================================');
                 
                 return (
                   <CoordinateGrid
@@ -4218,17 +4219,17 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
               <Group
                 onClick={(e) => {
                   e.cancelBubble = true;
-                  console.log('🎯 [Canvas] Clic sur GROUP de référence!');
+                  logger.debug('🎯 [Canvas] Clic sur GROUP de référence!');
                   setIsRefSelected(!isRefSelected);
                 }}
                 onTap={(e) => {
                   e.cancelBubble = true;
-                  console.log('🎯 [Canvas] Tap sur GROUP de référence!');
+                  logger.debug('🎯 [Canvas] Tap sur GROUP de référence!');
                   setIsRefSelected(!isRefSelected);
                 }}
                 onMouseDown={(e) => {
                   e.cancelBubble = true;
-                  console.log('🎯 [Canvas] MouseDown sur GROUP de référence!');
+                  logger.debug('🎯 [Canvas] MouseDown sur GROUP de référence!');
                 }}
               >
                 {/* Rectangle principal - draggable */}
@@ -4247,7 +4248,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                   listening={true}
                   onDragStart={(e) => {
                     e.cancelBubble = true;
-                    console.log('🎯 [Canvas] Drag start rectangle de référence');
+                    logger.debug('🎯 [Canvas] Drag start rectangle de référence');
                   }}
                   onDragEnd={(e) => {
                     e.cancelBubble = true;

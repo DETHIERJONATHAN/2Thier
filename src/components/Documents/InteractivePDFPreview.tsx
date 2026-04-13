@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { message } from 'antd';
 import PDFPreview from './PDFPreview';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { logger } from '../../lib/logger';
 
 interface InteractivePDFPreviewProps {
   sections: unknown[];
@@ -71,7 +72,7 @@ const InteractivePDFPreview = ({
       y: offsetY
     });
     
-    console.log('[InteractivePDF] 🎯 Drag started:', {
+    logger.debug('[InteractivePDF] 🎯 Drag started:', {
       element: elementName,
       clickPos: { x: e.clientX, y: e.clientY },
       elementRect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
@@ -113,14 +114,14 @@ const InteractivePDFPreview = ({
     
     // Si c'est le premier mouvement, log le passage en mode custom
     if (initialDragRef.current && !initialDragRef.current.hasMoved) {
-      console.log('[InteractivePDF] 🔄 Premier mouvement - passage en mode custom:', {
+      logger.debug('[InteractivePDF] 🔄 Premier mouvement - passage en mode custom:', {
         initialPos: initialDragRef.current,
         newPos: { x, y }
       });
       initialDragRef.current.hasMoved = true;
     }
     
-    console.log('[InteractivePDF] 🔀 Dragging:', {
+    logger.debug('[InteractivePDF] 🔀 Dragging:', {
       element: draggingElement,
       mousePos: { x: e.clientX, y: e.clientY },
       containerPos: { left: containerRect.left, top: containerRect.top },
@@ -145,7 +146,7 @@ const InteractivePDFPreview = ({
 
   const handleDragEnd = async () => {
     if (isDragging && draggingElement) {
-      console.log('[InteractivePDF] ✅ Drag ended');
+      logger.debug('[InteractivePDF] ✅ Drag ended');
       const draggedElement = draggingElement;
       setIsDragging(false);
       setDraggingElement(null);
@@ -155,14 +156,14 @@ const InteractivePDFPreview = ({
       const section = sections[0]; // On édite toujours la première section en mode interactif
       if (section && !section.id.startsWith('temp-') && templateId) {
         try {
-          console.log('[InteractivePDF] 💾 Sauvegarde automatique de la position...');
+          logger.debug('[InteractivePDF] 💾 Sauvegarde automatique de la position...');
           await api.put(`/api/documents/templates/${templateId}/sections/${section.id}`, {
             order: section.order,
             config: section.config
           });
           message.success(`✅ Position de "${draggedElement}" sauvegardée !`);
         } catch (error) {
-          console.error('[InteractivePDF] ❌ Erreur sauvegarde position:', error);
+          logger.error('[InteractivePDF] ❌ Erreur sauvegarde position:', error);
           message.error('Erreur lors de la sauvegarde');
         }
       } else {
@@ -193,7 +194,7 @@ const InteractivePDFPreview = ({
       mouseY: e.clientY
     });
     
-    console.log('[InteractivePDF] 📏 Resize started:', { element: elementName, currentSize });
+    logger.debug('[InteractivePDF] 📏 Resize started:', { element: elementName, currentSize });
   };
 
   const handleResizeMove = (e: React.MouseEvent) => {
@@ -241,12 +242,12 @@ const InteractivePDFPreview = ({
       });
     }
     
-    console.log('[InteractivePDF] 📏 Resizing:', { element: resizingElement, updates });
+    logger.debug('[InteractivePDF] 📏 Resizing:', { element: resizingElement, updates });
   };
 
   const handleResizeEnd = async () => {
     if (isResizing && resizingElement) {
-      console.log('[InteractivePDF] ✅ Resize ended');
+      logger.debug('[InteractivePDF] ✅ Resize ended');
       const resizedElement = resizingElement;
       setIsResizing(false);
       setResizingElement(null);
@@ -255,14 +256,14 @@ const InteractivePDFPreview = ({
       const section = sections[0];
       if (section && !section.id.startsWith('temp-') && templateId) {
         try {
-          console.log('[InteractivePDF] 💾 Sauvegarde automatique du redimensionnement...');
+          logger.debug('[InteractivePDF] 💾 Sauvegarde automatique du redimensionnement...');
           await api.put(`/api/documents/templates/${templateId}/sections/${section.id}`, {
             order: section.order,
             config: section.config
           });
           message.success(`✅ Taille de "${resizedElement}" sauvegardée !`);
         } catch (error) {
-          console.error('[InteractivePDF] ❌ Erreur sauvegarde taille:', error);
+          logger.error('[InteractivePDF] ❌ Erreur sauvegarde taille:', error);
           message.error('Erreur lors de la sauvegarde');
         }
       }
@@ -314,7 +315,7 @@ const InteractivePDFPreview = ({
         });
         message.success(`🗑️ Élément "${elementName}" masqué !`);
       } catch (error) {
-        console.error('[InteractivePDF] ❌ Erreur masquage:', error);
+        logger.error('[InteractivePDF] ❌ Erreur masquage:', error);
         message.error('Erreur lors du masquage');
       }
     } else {

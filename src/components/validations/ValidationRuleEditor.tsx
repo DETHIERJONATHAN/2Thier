@@ -4,6 +4,7 @@ import ValidationZone from './ValidationZone';
 import ValidationPreview from './ValidationPreview';
 
 import { ValidationRuleConfig } from '../../config/validationRules';
+import { logger } from '../../lib/logger';
 
 interface ValidationRuleEditorProps {
   validation: Validation;
@@ -45,7 +46,7 @@ const ValidationRuleEditor: React.FC<ValidationRuleEditorProps> = ({
         }
       }
     } catch (e) {
-      console.error('Erreur lors du parsing de la séquence de validation:', e);
+      logger.error('Erreur lors du parsing de la séquence de validation:', e);
     }
     return [];
   });
@@ -68,7 +69,7 @@ const ValidationRuleEditor: React.FC<ValidationRuleEditorProps> = ({
       valueToUpdate = JSON.stringify(newSequence);
     }
     
-    console.log(`[ValidationRuleEditor] Mise à jour de la séquence pour ${validation.id}:`, valueToUpdate);
+    logger.debug(`[ValidationRuleEditor] Mise à jour de la séquence pour ${validation.id}:`, valueToUpdate);
     
     onUpdate({
       id: validation.id,
@@ -106,14 +107,14 @@ const ValidationRuleEditor: React.FC<ValidationRuleEditorProps> = ({
         });
         
         if (!response.ok) {
-          console.error('Erreur lors du chargement des formules:', response.statusText);
+          logger.error('Erreur lors du chargement des formules:', response.statusText);
           return;
         }
         
         const formulasData = await response.json();
         setAllFormulas(formulasData);
       } catch (error) {
-        console.error('Erreur lors du chargement des formules:', error);
+        logger.error('Erreur lors du chargement des formules:', error);
         // En cas d'erreur, utiliser des données de test
         const mockFormulas = [
           { id: 'form-1', name: 'Calcul de prix HT', fieldId: 'price-field', fieldLabel: 'Prix' },
@@ -148,7 +149,7 @@ const ValidationRuleEditor: React.FC<ValidationRuleEditorProps> = ({
   // Utilisation de validationRules pour le debugging si disponible
   useEffect(() => {
     if (validationRules && validationRules.length > 0) {
-      console.log(`[ValidationRuleEditor] Règles de validation disponibles pour ${validation.id}:`, 
+      logger.debug(`[ValidationRuleEditor] Règles de validation disponibles pour ${validation.id}:`, 
         validationRules.map(rule => rule.label).join(', ')
       );
     }
@@ -177,7 +178,7 @@ const ValidationRuleEditor: React.FC<ValidationRuleEditorProps> = ({
         if (validation.value.startsWith('[') || validation.value.startsWith('{')) {
           const parsedSequence = JSON.parse(validation.value);
           setValidationSequence(parsedSequence);
-          console.log(`[ValidationRuleEditor] Séquence mise à jour depuis JSON pour ${validation.id}`);
+          logger.debug(`[ValidationRuleEditor] Séquence mise à jour depuis JSON pour ${validation.id}`);
         } else {
           // Si ce n'est pas un JSON, créons un élément simple
           setValidationSequence([{
@@ -186,14 +187,14 @@ const ValidationRuleEditor: React.FC<ValidationRuleEditorProps> = ({
             value: validation.value,
             label: validation.value
           }]);
-          console.log(`[ValidationRuleEditor] Séquence mise à jour depuis valeur simple pour ${validation.id}: ${validation.value}`);
+          logger.debug(`[ValidationRuleEditor] Séquence mise à jour depuis valeur simple pour ${validation.id}: ${validation.value}`);
         }
       } else {
         setValidationSequence([]);
-        console.log(`[ValidationRuleEditor] Séquence vidée pour ${validation.id}`);
+        logger.debug(`[ValidationRuleEditor] Séquence vidée pour ${validation.id}`);
       }
     } catch (e) {
-      console.error('Erreur lors de la mise à jour de la séquence de validation:', e);
+      logger.error('Erreur lors de la mise à jour de la séquence de validation:', e);
     }
   }, [validation.value, validation.id, validationSequence]);
   

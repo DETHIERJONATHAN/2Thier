@@ -16,6 +16,7 @@ import UniversalNotificationService from './UniversalNotificationService';
 import GoogleGmailNotificationService from './GoogleGmailNotificationService';
 import GoogleCalendarNotificationService from './GoogleCalendarNotificationService';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 interface SystemStats {
   gmail: {
@@ -101,7 +102,7 @@ export class NotificationMasterOrchestrator extends EventEmitter {
       this.emit('system-started', this.getSystemStatus());
 
     } catch (error) {
-      console.error('❌ [MasterOrchestrator] ERREUR CRITIQUE démarrage système:', error);
+      logger.error('❌ [MasterOrchestrator] ERREUR CRITIQUE démarrage système:', error);
       this.isRunning = false;
       throw error;
     }
@@ -126,12 +127,12 @@ export class NotificationMasterOrchestrator extends EventEmitter {
 
     // Monitoring des erreurs globales
     process.on('unhandledRejection', (reason, promise) => {
-      console.error('❌ [MasterOrchestrator] Rejection non gérée:', reason);
+      logger.error('❌ [MasterOrchestrator] Rejection non gérée:', reason);
       this.emit('error', { type: 'unhandled-rejection', reason, promise });
     });
 
     process.on('uncaughtException', (error) => {
-      console.error('❌ [MasterOrchestrator] Exception non capturée:', error);
+      logger.error('❌ [MasterOrchestrator] Exception non capturée:', error);
       this.emit('error', { type: 'uncaught-exception', error });
     });
   }
@@ -214,7 +215,7 @@ export class NotificationMasterOrchestrator extends EventEmitter {
       this.stats.ai.leadsCreated += Math.floor(Math.random() * 2);
 
     } catch (error) {
-      console.error('❌ [MasterOrchestrator] Erreur mise à jour stats:', error);
+      logger.error('❌ [MasterOrchestrator] Erreur mise à jour stats:', error);
     }
   }
 
@@ -237,7 +238,7 @@ export class NotificationMasterOrchestrator extends EventEmitter {
         await prisma.$queryRaw`SELECT 1`;
         health.database = true;
       } catch (error) {
-        console.error('❌ [MasterOrchestrator] Base de données inaccessible:', error);
+        logger.error('❌ [MasterOrchestrator] Base de données inaccessible:', error);
       }
 
       // Test services Gmail (simplifié)
@@ -254,13 +255,13 @@ export class NotificationMasterOrchestrator extends EventEmitter {
 
       const healthScore = Object.values(health).filter(Boolean).length / 4;
       if (healthScore < 0.8) {
-        console.warn(`⚠️ [MasterOrchestrator] Santé système dégradée: ${Math.round(healthScore * 100)}%`);
+        logger.warn(`⚠️ [MasterOrchestrator] Santé système dégradée: ${Math.round(healthScore * 100)}%`);
         this.emit('health-warning', { score: healthScore, details: health });
       } else {
       }
 
     } catch (error) {
-      console.error('❌ [MasterOrchestrator] Erreur vérification santé:', error);
+      logger.error('❌ [MasterOrchestrator] Erreur vérification santé:', error);
     }
   }
 
@@ -301,7 +302,7 @@ export class NotificationMasterOrchestrator extends EventEmitter {
       this.emit('ai-analysis-complete', insights);
 
     } catch (error) {
-      console.error('❌ [MasterOrchestrator] Erreur analyse IA:', error);
+      logger.error('❌ [MasterOrchestrator] Erreur analyse IA:', error);
     }
   }
 
@@ -389,7 +390,7 @@ export class NotificationMasterOrchestrator extends EventEmitter {
       this.emit('ai-optimization-complete', performanceData);
 
     } catch (error) {
-      console.error('❌ [MasterOrchestrator] Erreur optimisation IA:', error);
+      logger.error('❌ [MasterOrchestrator] Erreur optimisation IA:', error);
     }
   }
 
@@ -414,7 +415,7 @@ export class NotificationMasterOrchestrator extends EventEmitter {
       this.emit('daily-ai-report', report);
 
     } catch (error) {
-      console.error('❌ [MasterOrchestrator] Erreur génération rapport:', error);
+      logger.error('❌ [MasterOrchestrator] Erreur génération rapport:', error);
     }
   }
 
@@ -439,7 +440,7 @@ export class NotificationMasterOrchestrator extends EventEmitter {
 
 
     } catch (error) {
-      console.error('❌ [MasterOrchestrator] Erreur nettoyage système:', error);
+      logger.error('❌ [MasterOrchestrator] Erreur nettoyage système:', error);
     }
   }
 
@@ -482,7 +483,7 @@ export class NotificationMasterOrchestrator extends EventEmitter {
         efficiency: todayNotifications > 0 ? (todayEmails / todayNotifications) : 0
       };
     } catch (error) {
-      console.error('❌ [MasterOrchestrator] Erreur calcul tendances:', error);
+      logger.error('❌ [MasterOrchestrator] Erreur calcul tendances:', error);
       return { notificationsToday: 0, emailsToday: 0, efficiency: 0 };
     }
   }
@@ -537,7 +538,7 @@ export class NotificationMasterOrchestrator extends EventEmitter {
    */
   async handleCalendarWebhook(_data: unknown): Promise<void> {
     // handleCalendarWebhook not yet implemented on GoogleCalendarNotificationService
-    console.warn('[MasterOrchestrator] Calendar webhook handler not yet implemented');
+    logger.warn('[MasterOrchestrator] Calendar webhook handler not yet implemented');
   }
 
   /**

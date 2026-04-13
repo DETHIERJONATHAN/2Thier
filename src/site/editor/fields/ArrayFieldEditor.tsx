@@ -59,6 +59,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { FieldDefinition } from '../../schemas/types';
 import FieldRenderer from './FieldRenderer';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../../lib/logger';
 
 /**
  * 🔧 Props de l'ArrayFieldEditor
@@ -119,7 +120,7 @@ const SortableItem: React.FC<SortableItemProps> = ({
   parentName = []
 }) => {
   const { t } = useTranslation();
-  console.log('🔥 [SortableItem] Item', index, '- parentName reçu:', parentName, 'typeof:', typeof parentName, 'isArray:', Array.isArray(parentName));
+  logger.debug('🔥 [SortableItem] Item', index, '- parentName reçu:', parentName, 'typeof:', typeof parentName, 'isArray:', Array.isArray(parentName));
   
   const {
     attributes,
@@ -194,7 +195,7 @@ const SortableItem: React.FC<SortableItemProps> = ({
                   // 🔥 Construire le chemin complet : ['items', 0, 'value']
                   const fullPath = [...parentName, index, key];
                   
-                  console.log(`🔍 [ArrayFieldEditor] Item ${index} - Field ${key}:`, {
+                  logger.debug(`🔍 [ArrayFieldEditor] Item ${index} - Field ${key}:`, {
                     value: item[key],
                     fieldDef: fieldDef.type,
                     itemKeys: Object.keys(item),

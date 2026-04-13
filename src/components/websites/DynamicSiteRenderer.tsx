@@ -2,6 +2,7 @@ import { SF, WEBSITE_DEFAULTS } from '../zhiive/ZhiiveTheme';
 import React, { useEffect, useState, useMemo } from 'react';
 import { Spin, Alert } from 'antd';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { logger } from '../../lib/logger';
 
 interface Section {
   id: number;
@@ -34,7 +35,7 @@ const DynamicSiteRenderer: React.FC<DynamicSiteRendererProps> = ({ websiteId }) 
   // Fonction de chargement des sections (réutilisable)
   const fetchSections = async () => {
     try {
-      console.log('🔄 DynamicSiteRenderer: Rechargement sections websiteId:', websiteId);
+      logger.debug('🔄 DynamicSiteRenderer: Rechargement sections websiteId:', websiteId);
       const response = await api.get(`/api/website-sections/${websiteId}`);
       
       // Filtrer uniquement les sections actives et trier par displayOrder
@@ -42,11 +43,11 @@ const DynamicSiteRenderer: React.FC<DynamicSiteRendererProps> = ({ websiteId }) 
         .filter((s: Section) => s.isActive)
         .sort((a: Section, b: Section) => a.displayOrder - b.displayOrder);
       
-      console.log('✅ Sections actives:', activeSections.length, 'sections');
+      logger.debug('✅ Sections actives:', activeSections.length, 'sections');
       setSections(activeSections);
       setError(null);
     } catch (err) {
-      console.error('❌ Erreur chargement sections:', err);
+      logger.error('❌ Erreur chargement sections:', err);
       setError('Impossible de charger les sections du site');
     } finally {
       setLoading(false);
@@ -108,7 +109,7 @@ const SectionRenderer: React.FC<{ section: Section }> = ({ section }) => {
     color: textColor || undefined,
   };
 
-  console.log('🖼️ Rendering section:', section.key, 'type:', type);
+  logger.debug('🖼️ Rendering section:', section.key, 'type:', type);
 
   switch (type) {
     case 'header':
@@ -130,7 +131,7 @@ const SectionRenderer: React.FC<{ section: Section }> = ({ section }) => {
       return <FooterSection content={content} style={sectionStyle} />;
     
     default:
-      console.warn('⚠️ Type de section inconnu:', type);
+      logger.warn('⚠️ Type de section inconnu:', type);
       return null;
   }
 };

@@ -8,6 +8,7 @@ import { ModuleInstance } from './types';
 import { ModuleDefinition } from './ModuleRegistry';
 import { ConditionalConfig, ConditionRule } from './ConditionEditorModal';
 import { SF } from '../zhiive/ZhiiveTheme';
+import { logger } from '../../lib/logger';
 
 interface ModuleRendererProps {
   module: ModuleInstance;
@@ -239,7 +240,7 @@ const ModuleRenderer = ({
   const conditionResult = useMemo(() => {
     // Debug: afficher la config conditionnelle
     if (conditionalConfig?.enabled) {
-      console.log('🔍 [ModuleRenderer] Condition trouvée:', {
+      logger.debug('🔍 [ModuleRenderer] Condition trouvée:', {
         moduleId: module.moduleId,
         isEditing,
         conditionalConfig,
@@ -255,13 +256,13 @@ const ModuleRenderer = ({
     }
     
     const result = evaluateConditions(conditionalConfig, documentData);
-    console.log('🔍 [ModuleRenderer] Résultat évaluation:', result);
+    logger.debug('🔍 [ModuleRenderer] Résultat évaluation:', result);
     return result;
   }, [conditionalConfig, documentData, isEditing, module.moduleId]);
   
   // Si la condition dit de ne pas rendre le module
   if (!conditionResult.shouldRender) {
-    console.log('🚫 [ModuleRenderer] Module masqué par condition:', module.moduleId);
+    logger.debug('🚫 [ModuleRenderer] Module masqué par condition:', module.moduleId);
     // Si un contenu alternatif est défini, on l'affiche
     if (conditionResult.content) {
       return (

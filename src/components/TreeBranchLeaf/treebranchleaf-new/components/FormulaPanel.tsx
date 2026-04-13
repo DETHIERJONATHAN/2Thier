@@ -5,6 +5,7 @@ import TokenChip from '../shared/TokenChip';
 import { useOptimizedApi } from '../hooks/useOptimizedApi';
 import NodeTreeSelector, { NodeTreeSelectorValue } from '../shared/NodeTreeSelector';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../../../lib/logger';
 
 const { Title, Text } = Typography;
 
@@ -138,7 +139,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
           setIsLoaded(true);
         }
       } catch (err) {
-        console.error('Erreur chargement formule:', err);
+        logger.error('Erreur chargement formule:', err);
         if (mounted) {
           setIsLoaded(true);
         }
@@ -215,7 +216,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
             
             setInstances(updated);
           } catch (err) {
-            // console.warn('⚠️ Erreur mise à jour metadata', err); // ✨ Log réduit
+            // logger.warn('⚠️ Erreur mise à jour metadata', err); // ✨ Log réduit
           }
         }
 
@@ -228,9 +229,9 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
           onChange?.({ tokens: nextTokens, name: nextName });
         }
         
-        // console.log('✅ FormulaPanel: Sauvegarde réussie'); // ✨ Log réduit,
+        // logger.debug('✅ FormulaPanel: Sauvegarde réussie'); // ✨ Log réduit,
       } catch (err) {
-        console.error('❌ FormulaPanel: Erreur sauvegarde', err);
+        logger.error('❌ FormulaPanel: Erreur sauvegarde', err);
         if (mountedRef.current) {
           message.error('Erreur de sauvegarde de la formule');
         }
@@ -345,7 +346,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
 
   // Supprimer une formule avec modal contrôlé - VERSION MODERNE
   const deleteFormula = useCallback(() => {
-    // console.log(...) // ✨ Log réduit
+    // logger.debug(...) // ✨ Log réduit
 
     // {
       // activeId,
@@ -357,11 +358,11 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
 
     // Protection contre les clics multiples
     if (!activeId || isDeleting) {
-      // console.log('🗑️ NOUVELLE VERSION: Arrêt - pas d\'activeId ou déjà en cours de suppression', { activeId, isDeleting }); // ✨ Log réduit
+      // logger.debug('🗑️ NOUVELLE VERSION: Arrêt - pas d\'activeId ou déjà en cours de suppression', { activeId, isDeleting }); // ✨ Log réduit
       return;
     }
     
-    // console.log('🗑️ NOUVELLE VERSION: Ouverture du modal de confirmation contrôlé...'); // ✨ Log réduit
+    // logger.debug('🗑️ NOUVELLE VERSION: Ouverture du modal de confirmation contrôlé...'); // ✨ Log réduit
     setFormulaToDelete(activeId);
     setShowDeleteModal(true);
   }, [activeId, instances, nodeId, isDeleting]);
@@ -370,7 +371,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
   const confirmDelete = useCallback(async () => {
     if (!formulaToDelete) return;
 
-    // console.log('🗑️ FormulaPanel: Suppression confirmée, appel API...'); // ✨ Log réduit
+    // logger.debug('🗑️ FormulaPanel: Suppression confirmée, appel API...'); // ✨ Log réduit
     setIsDeleting(true);
     setShowDeleteModal(false);
     
@@ -378,7 +379,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
       // ✅ NOUVEAU: Supprimer de la table TreeBranchLeafNodeFormula
       await api.delete(`/api/treebranchleaf/nodes/${nodeId}/formulas/${formulaToDelete}`);
       
-      // console.log('🗑️ FormulaPanel: Formule supprimée de la table avec succès'); // ✨ Log réduit
+      // logger.debug('🗑️ FormulaPanel: Formule supprimée de la table avec succès'); // ✨ Log réduit
       
       // Mettre à jour les instances locales
       const remaining = instances.filter(f => f.id !== formulaToDelete);
@@ -403,7 +404,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
       onChange?.({ tokens: nextActive?.tokens || [], name: nextActive?.name || '' });
       message.success('Formule supprimée de la table');
     } catch (err) {
-      console.error('🗑️ FormulaPanel: Erreur suppression:', err);
+      logger.error('🗑️ FormulaPanel: Erreur suppression:', err);
       message.error('Impossible de supprimer la formule');
     } finally {
       setIsDeleting(false);
@@ -413,7 +414,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
 
   // Annulation de suppression
   const cancelDelete = useCallback(() => {
-    // console.log('🗑️ FormulaPanel: Suppression annulée'); // ✨ Log réduit
+    // logger.debug('🗑️ FormulaPanel: Suppression annulée'); // ✨ Log réduit
     setShowDeleteModal(false);
     setFormulaToDelete(null);
   }, []);
@@ -514,7 +515,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
         const roleKey = match ? `calculated_${match[1]}` : `calculated_${afterPrefix.replace(/[^A-Za-z0-9]/g, '_')}`;
         rolesMap[roleKey] = rawToken;
         parts.push(`{{${roleKey}}}`);
-        console.log(`🔧 [CALCULATED] Token: "${rawToken}" → roleKey: "${roleKey}"`);
+        logger.debug(`🔧 [CALCULATED] Token: "${rawToken}" → roleKey: "${roleKey}"`);
         continue;
       }
 
@@ -525,7 +526,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
           const roleKey = `table_${nodeId.replace(/[^A-Za-z0-9]/g, '_')}`;
           rolesMap[roleKey] = rawToken;
           parts.push(`{{${roleKey}}}`);
-          console.log(`🔧 [TABLE] Token: "${rawToken}" → roleKey: "${roleKey}"`);
+          logger.debug(`🔧 [TABLE] Token: "${rawToken}" → roleKey: "${roleKey}"`);
         }
         continue;
       }

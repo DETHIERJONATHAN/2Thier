@@ -5,6 +5,7 @@ import TokenChip from '../shared/TokenChip';
 import { useOptimizedApi } from '../../../hooks/useOptimizedApi';
 import NodeTreeSelector, { NodeTreeSelectorValue } from '../shared/NodeTreeSelector';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../../../../../lib/logger';
 
 const { Title, Text } = Typography;
 
@@ -166,7 +167,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
           lastSavedTargetProperty.current = firstFormula.targetProperty || '';
           lastSavedConstraintMessage.current = firstFormula.constraintMessage || '';
           
-          console.log('✅ FormulaPanel: Formules chargées:', existingFormulas.length, existingFormulas);
+          logger.debug('✅ FormulaPanel: Formules chargées:', existingFormulas.length, existingFormulas);
         } else {
           // Aucune formule existante
           setInstances([]);
@@ -175,10 +176,10 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
           setLocalName('');
           setLocalTargetProperty('');
           setLocalConstraintMessage('');
-          console.log('ℹ️ FormulaPanel: Aucune formule existante pour ce nœud');
+          logger.debug('ℹ️ FormulaPanel: Aucune formule existante pour ce nœud');
         }
       } catch (err) {
-        console.error('❌ FormulaPanel: Erreur chargement formules:', err);
+        logger.error('❌ FormulaPanel: Erreur chargement formules:', err);
         // En cas d'erreur, on réinitialise
         setInstances([]);
         setActiveId(null);
@@ -274,9 +275,9 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
           onChange?.({ tokens: nextTokens, name: finalName, targetProperty: targetProp, constraintMessage: constraintMsg });
         }
 
-        console.log('✅ FormulaPanel: Sauvegarde réussie', { activeId, tokens: nextTokens.length });
+        logger.debug('✅ FormulaPanel: Sauvegarde réussie', { activeId, tokens: nextTokens.length });
       } catch (err) {
-        console.error('❌ FormulaPanel: Erreur sauvegarde', err);
+        logger.error('❌ FormulaPanel: Erreur sauvegarde', err);
         if (mountedRef.current) {
           message.error('Erreur de sauvegarde de la formule');
         }
@@ -341,7 +342,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
             label: gestionnaireLabel.trim(),
           });
         } catch (err) {
-          console.warn('[FormulaPanel] Could not save const label:', err);
+          logger.warn('[FormulaPanel] Could not save const label:', err);
         }
       }
 
@@ -380,7 +381,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
       message.success(isCurrentlyExposed ? 'Retiré du Gestionnaire' : 'Exposé dans le Gestionnaire');
       setGestionnaireModal({ open: false, token: '', nodeId: '' });
     } catch (err) {
-      console.error('[FormulaPanel] Gestionnaire expose error:', err);
+      logger.error('[FormulaPanel] Gestionnaire expose error:', err);
       message.error('Erreur lors de la mise à jour');
     }
   }, [api, gestionnaireModal, gestionnaireLabel, exposedNodeIds, localTokens, handleTokensChange, nodeId, treeId]);
@@ -500,7 +501,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
 
   // Supprimer une formule UNIQUEMENT de la table TreeBranchLeafNodeFormula
   const deleteFormula = useCallback(() => {
-    // console.log(...) // ✨ Log réduit
+    // logger.debug(...) // ✨ Log réduit
 
     // {
       // activeId,
@@ -512,11 +513,11 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
 
     // Protection contre les clics multiples
     if (!activeId || isDeleting) {
-      // console.log('🗑️ FormulaPanel: Arrêt - pas d\'activeId ou déjà en cours de suppression', { activeId, isDeleting }); // ✨ Log réduit
+      // logger.debug('🗑️ FormulaPanel: Arrêt - pas d\'activeId ou déjà en cours de suppression', { activeId, isDeleting }); // ✨ Log réduit
       return;
     }
     
-    // console.log('🗑️ FormulaPanel: Ouverture du modal de confirmation...'); // ✨ Log réduit
+    // logger.debug('🗑️ FormulaPanel: Ouverture du modal de confirmation...'); // ✨ Log réduit
     setFormulaToDelete(activeId);
     setShowDeleteModal(true);
   }, [activeId, isDeleting]);
@@ -525,7 +526,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
   const confirmDelete = useCallback(async () => {
     if (!formulaToDelete) return;
 
-    // console.log('🗑️ FormulaPanel: Suppression confirmée, appel API...'); // ✨ Log réduit
+    // logger.debug('🗑️ FormulaPanel: Suppression confirmée, appel API...'); // ✨ Log réduit
     setIsDeleting(true);
     setShowDeleteModal(false);
     
@@ -533,7 +534,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
       // ✅ UNIQUEMENT: Supprimer de la table TreeBranchLeafNodeFormula
       await api.delete(`/api/treebranchleaf/nodes/${nodeId}/formulas/${formulaToDelete}`);
       
-      // console.log('🗑️ FormulaPanel: Formule supprimée de la table avec succès'); // ✨ Log réduit
+      // logger.debug('🗑️ FormulaPanel: Formule supprimée de la table avec succès'); // ✨ Log réduit
       
       // Mettre à jour les instances locales
       const remaining = instances.filter(f => f.id !== formulaToDelete);
@@ -562,7 +563,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
       onChange?.({ tokens: nextActive?.tokens || [], name: nextActive?.name || '', targetProperty: nextActive?.targetProperty || '' });
       message.success('Formule supprimée');
     } catch (err) {
-      console.error('🗑️ FormulaPanel: Erreur suppression:', err);
+      logger.error('🗑️ FormulaPanel: Erreur suppression:', err);
       message.error('Impossible de supprimer la formule');
     } finally {
       setIsDeleting(false);
@@ -572,7 +573,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
 
   // Annulation de suppression
   const cancelDelete = useCallback(() => {
-    // console.log('🗑️ FormulaPanel: Suppression annulée'); // ✨ Log réduit
+    // logger.debug('🗑️ FormulaPanel: Suppression annulée'); // ✨ Log réduit
     setShowDeleteModal(false);
     setFormulaToDelete(null);
   }, []);
@@ -651,7 +652,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
     };
 
     // 🔍 DEBUG: Voir tous les tokens bruts - INSPECTING TOKEN STRUCTURE
-    console.log('🔍 [buildEvaluationExpression] Tokens bruts traités:', localTokens.map((t, i) => {
+    logger.debug('🔍 [buildEvaluationExpression] Tokens bruts traités:', localTokens.map((t, i) => {
       let tokenValue = '';
       if (typeof t === 'string') {
         tokenValue = t;
@@ -678,12 +679,12 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
       
       // 🔍 DEBUG: Voir la valeur extraite
       if (typeof tokenStr === 'string' && tokenStr.includes('shared-ref')) {
-        console.log(`🔎 [TOKEN-DEBUG] Raw:`, rawToken, `| Extracted: "${tokenStr}" | Type: ${typeof tokenStr} | Starts with {{: ${tokenStr.startsWith('{{')}`);
+        logger.debug(`🔎 [TOKEN-DEBUG] Raw:`, rawToken, `| Extracted: "${tokenStr}" | Type: ${typeof tokenStr} | Starts with {{: ${tokenStr.startsWith('{{')}`);
       }
       
       // CRITICAL: Remove {{ }} if present (tokens are stored WITH braces in DB)
       if (tokenStr.startsWith('{{') && tokenStr.endsWith('}}')) {
-        console.log(`🔧 [BRACE-STRIP] "${tokenStr}" → "${tokenStr.slice(2, -2)}"`);
+        logger.debug(`🔧 [BRACE-STRIP] "${tokenStr}" → "${tokenStr.slice(2, -2)}"`);
         tokenStr = tokenStr.slice(2, -2);
       }
       
@@ -730,7 +731,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
         // Stocker le token complet comme valeur pour la résolution
         rolesMap[roleKey] = tokenStr;
         parts.push(`{{${roleKey}}}`);
-        console.log(`🔧 [CALCULATED] Token: "${tokenStr}" → roleKey: "${roleKey}"`);
+        logger.debug(`🔧 [CALCULATED] Token: "${tokenStr}" → roleKey: "${roleKey}"`);
         continue;
       }
 
@@ -741,7 +742,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
           const roleKey = `table_${nodeId.replace(/[^A-Za-z0-9]/g, '_')}`;
           rolesMap[roleKey] = tokenStr;
           parts.push(`{{${roleKey}}}`);
-          console.log(`🔧 [TABLE] Token: "${tokenStr}" → roleKey: "${roleKey}"`);
+          logger.debug(`🔧 [TABLE] Token: "${tokenStr}" → roleKey: "${roleKey}"`);
         }
         continue;
       }
@@ -876,7 +877,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
         }
 
       // 🔍 DEBUG COMPLET: Voir exactement ce qui est envoyé
-      console.log('📤 [FormulaPanel] Payload complet envoyé à /evaluate/formula:', {
+      logger.debug('📤 [FormulaPanel] Payload complet envoyé à /evaluate/formula:', {
         expr: payload.expr,
         rolesMap: payload.rolesMap,
         rolesMapStringified: JSON.stringify(payload.rolesMap, null, 2),
@@ -897,10 +898,10 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
       // Note: utilisez `nodeId` (le nœud parent), anciennement `selectedNodeId` (inexistant)
       if (value !== null && value !== undefined) {
         if (!nodeId) {
-          console.warn('⚠️ FormulaPanel: nodeId indisponible, impossible de sauvegarder la valeur calculée.');
+          logger.warn('⚠️ FormulaPanel: nodeId indisponible, impossible de sauvegarder la valeur calculée.');
         } else {
           try {
-            console.log('🧭 [FormulaPanel] Tentative sauvegarde calculatedValue -> nodeId:', nodeId, 'value:', value);
+            logger.debug('🧭 [FormulaPanel] Tentative sauvegarde calculatedValue -> nodeId:', nodeId, 'value:', value);
             // Avant de patcher calculatedValue, s'assurer que la formule persistée correspond
             try {
               const tokensJson = JSON.stringify(localTokens || []);
@@ -909,14 +910,14 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
                 const inst = instances.find(i => i.id === activeId);
                 const persistedTokensJson = JSON.stringify(inst?.tokens || []);
                 if (persistedTokensJson !== tokensJson || (inst?.name || '') !== desiredName) {
-                  console.log('🔧 [FormulaPanel] Mise à jour de la formule persistée (PUT) avant patch du calculatedValue', { nodeId, activeId });
+                  logger.debug('🔧 [FormulaPanel] Mise à jour de la formule persistée (PUT) avant patch du calculatedValue', { nodeId, activeId });
                   await api.put(`/api/treebranchleaf/nodes/${nodeId}/formulas/${activeId}`, { tokens: localTokens, name: desiredName });
                   setInstances(prev => prev.map(p => p.id === activeId ? { ...p, tokens: localTokens, name: desiredName } : p));
                   lastSavedTokens.current = tokensJson;
                   lastSavedName.current = desiredName;
                 }
               } else {
-                console.log('🔧 [FormulaPanel] Création d\'une nouvelle formule (POST) avant patch du calculatedValue', { nodeId });
+                logger.debug('🔧 [FormulaPanel] Création d\'une nouvelle formule (POST) avant patch du calculatedValue', { nodeId });
                 const created = await api.post(`/api/treebranchleaf/nodes/${nodeId}/formulas`, { tokens: localTokens, name: desiredName, description: 'Auto-save on evaluate', isDefault: instances.length === 0, order: instances.length + 1 }) as FormulaInstance;
                 if (created?.id) {
                   setActiveId(created.id);
@@ -926,7 +927,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
                 }
               }
             } catch (syncErr) {
-              console.warn('⚠️ [FormulaPanel] Échec sync formule persistée (non bloquant):', syncErr);
+              logger.warn('⚠️ [FormulaPanel] Échec sync formule persistée (non bloquant):', syncErr);
             }
 
             // Fetch node info to determine if this is a copy of another (copiedFromNodeId)
@@ -942,7 +943,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
               if (origId && typeof origId === 'string') {
                 // If this node is a copy, add the origin node to the targets to patch as well
                 targetNodeIds = Array.from(new Set([...targetNodeIds, origId]));
-                console.log('🔁 [FormulaPanel] Node is a copy of', origId, '— will patch origin and copy');
+                logger.debug('🔁 [FormulaPanel] Node is a copy of', origId, '— will patch origin and copy');
               }
             } catch (getInfoErr) {
               // ignore, we'll just patch the node itself
@@ -957,11 +958,11 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
                   calculatedValue: String(value),
                   calculatedBy: 'formula-panel'
                 }) as unknown;
-                console.log('✅ [FormulaPanel] Valeur calculée sauvegardée via store-calculated-value:', tid, resp);
+                logger.debug('✅ [FormulaPanel] Valeur calculée sauvegardée via store-calculated-value:', tid, resp);
                 // Invalidate local cache for GET endpoints that might be stale
                 try { clearCache(); } catch (e) { /* noop */ }
               } catch (errPost) {
-                console.warn('⚠️ [FormulaPanel] Échec store-calculated-value (POST). Tentative fallback PATCH…', tid, errPost);
+                logger.warn('⚠️ [FormulaPanel] Échec store-calculated-value (POST). Tentative fallback PATCH…', tid, errPost);
                 // Fallback: si l'implémentation d'api expose patch (ex: useAuthenticatedApi direct), on tente
                 try {
                   // @ts-ignore - fallback sur un api.patch si disponible
@@ -970,16 +971,16 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
                       calculatedValue: String(value),
                       lastCalculationDate: new Date().toISOString()
                     });
-                    console.log('✅ [FormulaPanel] Fallback PATCH réussi pour node:', tid, value);
+                    logger.debug('✅ [FormulaPanel] Fallback PATCH réussi pour node:', tid, value);
                     continue;
                   }
-                  console.warn('⚠️ [FormulaPanel] Fallback PATCH non disponible sur api. Aucune sauvegarde effectuée pour node:', tid);
+                  logger.warn('⚠️ [FormulaPanel] Fallback PATCH non disponible sur api. Aucune sauvegarde effectuée pour node:', tid);
                 } catch (errPatch) {
-                  console.error('❌ [FormulaPanel] Fallback PATCH a échoué pour node:', tid, errPatch);
+                  logger.error('❌ [FormulaPanel] Fallback PATCH a échoué pour node:', tid, errPatch);
                 }
               }
             }
-            console.log('✅ [FormulaPanel] Valeur calculée sauvegardée:', value);
+            logger.debug('✅ [FormulaPanel] Valeur calculée sauvegardée:', value);
             // 🔄 NOTIFIER le parent pour qu'il recharge les données
             if (onChange) {
               onChange({ calculatedValue: String(value) });
@@ -989,7 +990,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
               for (const tid of (targetNodeIds || [nodeId])) {
                 // Add a unique debug id to track events across the system
                 const eventDebugId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-                console.log('📣 [FormulaPanel] Dispatching tbl-node-updated + tbl-force-retransform', { nodeId: tid, eventDebugId });
+                logger.debug('📣 [FormulaPanel] Dispatching tbl-node-updated + tbl-force-retransform', { nodeId: tid, eventDebugId });
                 window.dispatchEvent(new CustomEvent('tbl-node-updated', { detail: { node: { id: tid, calculatedValue: String(value) }, eventDebugId, source: 'formulaPanel' } }));
                 window.dispatchEvent(new CustomEvent('tbl-force-retransform', { detail: { nodeId: tid, eventDebugId, source: 'formulaPanel', forceRemote: true } }));
               }
@@ -998,7 +999,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
             } catch (e) { /* noop */ }
             message.success('Valeur calculée sauvegardée !', 1.2);
           } catch (saveErr) {
-            console.error('❌ [FormulaPanel] Erreur lors de la sauvegarde:', saveErr);
+            logger.error('❌ [FormulaPanel] Erreur lors de la sauvegarde:', saveErr);
             message.error('Erreur lors de la sauvegarde de la valeur');
           }
         }
@@ -1049,7 +1050,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
   }, [referencedNodeIds, loadNode]);
 
   // Debug final avant rendu
-  // console.log(...) // ✨ Log réduit
+  // logger.debug(...) // ✨ Log réduit
 
   // {
     // activeId,
@@ -1080,7 +1081,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
             label: `${it.name || 'Sans nom'} (${(it.tokens || []).length} éléments)` 
           }))}
           onChange={(id) => {
-            // console.log('🔄 FormulaPanel: Changement d\'instance:', { newId: id, availableInstances: instances.length }); // ✨ Log réduit
+            // logger.debug('🔄 FormulaPanel: Changement d\'instance:', { newId: id, availableInstances: instances.length }); // ✨ Log réduit
             setActiveId(id);
             const it = instances.find(x => x.id === id);
             if (it) { 
@@ -1090,7 +1091,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
               lastSavedTokens.current = JSON.stringify(it.tokens || []);
               lastSavedName.current = it.name || '';
               lastSavedTargetProperty.current = it.targetProperty || '';
-              // console.log('✅ FormulaPanel: Instance sélectionnée:', { name: it.name, tokensCount: (it.tokens || []).length }); // ✨ Log réduit
+              // logger.debug('✅ FormulaPanel: Instance sélectionnée:', { name: it.name, tokensCount: (it.tokens || []).length }); // ✨ Log réduit
             }
           }}
           placeholder={instances.length === 0 ? "Aucune formule disponible" : "Sélectionner une instance"}
@@ -1121,7 +1122,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
             
             message.success('Nouvelle formule créée');
           } catch (err) {
-            console.error('Erreur création formule:', err);
+            logger.error('Erreur création formule:', err);
             message.error('Impossible de créer une nouvelle formule');
           }
         }}>Ajouter</Button>

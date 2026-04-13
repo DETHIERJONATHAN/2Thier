@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Button, Tooltip, message, Modal, List, Space, Tag, Typography, Divider } from 'antd';
 import { ThunderboltOutlined, StarFilled, CheckCircleOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { logger } from '../../lib/logger';
 
 const { Text, Paragraph } = Typography;
 
@@ -64,7 +65,7 @@ const AIAssistButton: React.FC<AIAssistButtonProps> = ({
   const handleGenerate = async () => {
     setLoading(true);
     try {
-      console.log('🤖 [AI] Génération pour:', fieldId, fieldType, aiContext);
+      logger.debug('🤖 [AI] Génération pour:', fieldId, fieldType, aiContext);
       
       // 📡 Appel à l'API route
       const response = await api.post('/api/ai/generate-field', {
@@ -75,7 +76,7 @@ const AIAssistButton: React.FC<AIAssistButtonProps> = ({
         aiContext
       });
 
-      console.log('✅ [AI] Réponse API:', response);
+      logger.debug('✅ [AI] Réponse API:', response);
 
       // � Stocker les suggestions et l'analyse
       if (response.suggestions && response.suggestions.length > 0) {
@@ -92,7 +93,7 @@ const AIAssistButton: React.FC<AIAssistButtonProps> = ({
       }
 
     } catch (error: unknown) {
-      console.error('❌ [AI] Erreur génération:', error);
+      logger.error('❌ [AI] Erreur génération:', error);
       
       // Gestion des erreurs spécifiques
       if (error.response?.status === 429) {

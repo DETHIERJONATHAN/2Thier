@@ -11,6 +11,7 @@ import { getModuleById } from './ModuleRegistry';
 import ModuleRenderer from './ModuleRenderer';
 import { useTranslation } from 'react-i18next';
 import { SF } from '../zhiive/ZhiiveTheme';
+import { logger } from '../../lib/logger';
 
 // Taille de la grille en pixels (pour A4 à 96dpi: 794 x 1123 px)
 const GRID_SIZE = 20; // Taille d'une cellule de grille
@@ -76,8 +77,8 @@ const GridPagePreview = ({
 
   // Style de la page A4 avec grille
   const pageStyle = useMemo(() => {
-    console.log('🖼️ [GridPagePreview] page.backgroundImage:', page.backgroundImage?.substring(0, 60) || 'NONE');
-    console.log('🖼️ [GridPagePreview] page.backgroundColor:', page.backgroundColor);
+    logger.debug('🖼️ [GridPagePreview] page.backgroundImage:', page.backgroundImage?.substring(0, 60) || 'NONE');
+    logger.debug('🖼️ [GridPagePreview] page.backgroundColor:', page.backgroundColor);
     
     // Déterminer le background - peut être une URL, un gradient ou du base64
     const getBackgroundImageValue = () => {
@@ -97,7 +98,7 @@ const GridPagePreview = ({
     };
 
     const bgImageValue = getBackgroundImageValue();
-    console.log('🖼️ [GridPagePreview] bgImageValue computed:', bgImageValue?.substring(0, 60) || 'NONE');
+    logger.debug('🖼️ [GridPagePreview] bgImageValue computed:', bgImageValue?.substring(0, 60) || 'NONE');
     
     const isGradient = bgImageValue?.startsWith('linear-gradient') || bgImageValue?.startsWith('radial-gradient');
 

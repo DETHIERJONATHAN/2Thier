@@ -5,6 +5,7 @@ import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
 import { ReloadOutlined, CheckCircleOutlined, StopOutlined, DeleteOutlined, FilterOutlined } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
 import { useNavigate } from 'react-router-dom';
+import { logger } from '../../../lib/logger';
 
 const { Title, Paragraph } = Typography;
 
@@ -54,7 +55,7 @@ export default function Devis1minuteAdminIntake() {
       const res = await api.get<{ success: boolean; data: LeadRow[] }>('/api/leads', { params });
       setRows(res?.data || []);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       message.error("Impossible de charger les leads");
     } finally {
       setLoading(false);
@@ -87,7 +88,7 @@ export default function Devis1minuteAdminIntake() {
           label: [u.firstName, u.lastName].filter(Boolean).join(' ') || (u.email || 'Utilisateur')
         })));
       } catch (err) {
-        console.error(err);
+        logger.error(err);
         // Options non bloquantes
       }
     })();
@@ -116,7 +117,7 @@ export default function Devis1minuteAdminIntake() {
       setSelectedRowKeys([]);
       load();
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       message.error("Échec de la mise à jour du statut");
     }
   }, [api, load]);

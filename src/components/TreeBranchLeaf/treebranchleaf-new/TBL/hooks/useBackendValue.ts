@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import { useTBLBatchOptional } from '../contexts/TBLBatchContext';
 import { isChangeInProgress } from '../../../../../hooks/useNodeCalculatedValue';
+import { logger } from '../../../../../lib/logger';
 
 /**
  * 🎯 SYSTÈME ULTRA-SIMPLE : Récupère la valeur calculée par le backend
@@ -44,7 +45,7 @@ export const useBackendValue = (
       !(Array.isArray(lastValidValue.current) && lastValidValue.current.length === 0);
     
     if (isEmptyValue && hasValidLastValue) {
-      console.log(`🛡️ [useBackendValue] PROTECTION REF: garder lastValidValue pour ${nodeId}`, lastValidValue.current);
+      logger.debug(`🛡️ [useBackendValue] PROTECTION REF: garder lastValidValue pour ${nodeId}`, lastValidValue.current);
       setValue(lastValidValue.current); // Garder l'ancienne valeur
       return;
     }
@@ -135,10 +136,10 @@ export const useBackendValue = (
         // 🔒 Ne pas vider les champs protégés
         const protectedIds = (detail as unknown)?.protectedNodeIds;
         if (Array.isArray(protectedIds) && protectedIds.includes(nodeId)) {
-          console.log(`🔒 [useBackendValue] Skip clear pour nœud protégé: nodeId=${nodeId}`);
+          logger.debug(`🔒 [useBackendValue] Skip clear pour nœud protégé: nodeId=${nodeId}`);
           return;
         }
-        console.log(`🧹 [useBackendValue] Clear display field: nodeId=${nodeId}`);
+        logger.debug(`🧹 [useBackendValue] Clear display field: nodeId=${nodeId}`);
         lastValidValue.current = undefined; // 🎯 Crucial: vider le ref pour empêcher setValueSafely de restaurer
         setValue(undefined);
         return;
@@ -150,7 +151,7 @@ export const useBackendValue = (
       if (detail?.calculatedValues && nodeId && nodeId in detail.calculatedValues) {
         const inlineValue = detail.calculatedValues[nodeId];
         if (inlineValue !== undefined && inlineValue !== null) {
-          console.log(`📥 [useBackendValue] Valeur inline pour nodeId=${nodeId}:`, inlineValue);
+          logger.debug(`📥 [useBackendValue] Valeur inline pour nodeId=${nodeId}:`, inlineValue);
           setValueSafely(inlineValue);
           setLoading(false);
           return; // 🎯 Ne PAS faire de refetch, on a la bonne valeur directement
@@ -189,7 +190,7 @@ export const useBackendValue = (
     // 🚀 BATCH MODE : Si on a une valeur batch et pas de refresh forcé, l'utiliser directement
     if (batchValue !== undefined && refreshToken === 0) {
       if (!usedBatch.current) {
-        // console.log(`🚀 [useBackendValue] Mode BATCH - valeur pour ${nodeId}:`, batchValue);
+        // logger.debug(`🚀 [useBackendValue] Mode BATCH - valeur pour ${nodeId}:`, batchValue);
       }
       usedBatch.current = true;
       setValueSafely(batchValue);
@@ -212,7 +213,7 @@ export const useBackendValue = (
     // 🎯 FIX OFF-BY-ONE: Ne pas fetch depuis la DB pendant qu'un changement est en cours
     // La DB contient encore les ANCIENNES valeurs. Les bonnes viendront via le broadcast inline.
     if (isChangeInProgress()) {
-      console.log(`🚫 [useBackendValue] GET BLOQUÉ pour nodeId=${nodeId} - changement en cours, attente du broadcast inline`);
+      logger.debug(`🚫 [useBackendValue] GET BLOQUÉ pour nodeId=${nodeId} - changement en cours, attente du broadcast inline`);
       return;
     }
 
@@ -259,7 +260,7 @@ export const useBackendValue = (
             }
             // Si valeur vide mais on a déjà une valeur en state, la garder
             if (isEmptyValue && value !== undefined && value !== null && value !== '' && value !== '[]') {
-              console.log(`🛡️ [useBackendValue] Protection: garder ancienne valeur pour ${nodeId}`);
+              logger.debug(`🛡️ [useBackendValue] Protection: garder ancienne valeur pour ${nodeId}`);
               setLoading(false);
               return;
             }
@@ -334,7 +335,7 @@ export const useBackendValue = (
               !(Array.isArray(value) && value.length === 0);
             
             if (isEmptyBackendValue && hasValidCurrentValue) {
-              console.log(`🛡️ [useBackendValue] PROTECTION: garder valeur existante pour ${nodeId} (backend retourné vide)`);
+              logger.debug(`🛡️ [useBackendValue] PROTECTION: garder valeur existante pour ${nodeId} (backend retourné vide)`);
               setLoading(false);
               return; // ⛔ Ne PAS écraser !
             }
@@ -348,7 +349,7 @@ export const useBackendValue = (
               !(Array.isArray(value) && value.length === 0);
             
             if (hasValidCurrentValue) {
-              console.log(`🛡️ [useBackendValue] PROTECTION: garder valeur existante pour ${nodeId} (non trouvé dans results)`);
+              logger.debug(`🛡️ [useBackendValue] PROTECTION: garder valeur existante pour ${nodeId} (non trouvé dans results)`);
               setLoading(false);
               return;
             }
@@ -361,14 +362,14 @@ export const useBackendValue = (
             !(Array.isArray(value) && value.length === 0);
           
           if (hasValidCurrentValue) {
-            console.log(`🛡️ [useBackendValue] PROTECTION: garder valeur existante pour ${nodeId} (pas de results)`);
+            logger.debug(`🛡️ [useBackendValue] PROTECTION: garder valeur existante pour ${nodeId} (pas de results)`);
             setLoading(false);
             return;
           }
           setValueSafely(undefined);
         }
       } catch (err) {
-        console.error('❌ [useBackendValue] Erreur:', err);
+        logger.error('❌ [useBackendValue] Erreur:', err);
         setValueSafely(undefined);
       } finally {
         setLoading(false);

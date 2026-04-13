@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { logger } from '../../../../../../lib/logger';
 
 /**
  * Service pour forcer le recalcul immÃƒÂ©diat des nÃ…â€œuds copiÃƒÂ©s avec leurs propres donnÃƒÂ©es
@@ -205,7 +206,7 @@ export async function forceAllNodesRecalculationWithOwnData(
     }
 
   } catch (error) {
-    console.error('Ã¢ÂÅ’ [FORCE-RECALC-ALL] Erreur gÃƒÂ©nÃƒÂ©rale:', error);
+    logger.error('Ã¢ÂÅ’ [FORCE-RECALC-ALL] Erreur gÃƒÂ©nÃƒÂ©rale:', error);
   }
 
   return report;

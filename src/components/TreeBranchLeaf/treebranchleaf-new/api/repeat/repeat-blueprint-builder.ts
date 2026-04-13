@@ -4,6 +4,7 @@ import {
   type RepeatTemplateBlueprint,
   type TotalFieldConfig
 } from '../registry/repeat-id-registry.js';
+import { logger } from '../../../../../lib/logger';
 
 /**
  * Turns the raw events stored in the repeat registry into a normalized
@@ -42,7 +43,7 @@ export async function buildBlueprintForRepeater(
 ): Promise<RepeatBlueprint | null> {
   
   if (!repeaterNodeId) {
-    console.warn(`[repeat-blueprint-builder] Missing repeaterNodeId`);
+    logger.warn(`[repeat-blueprint-builder] Missing repeaterNodeId`);
     return null;
   }
 
@@ -78,7 +79,7 @@ export async function buildBlueprintForRepeater(
       };
     }
 
-    console.warn('[repeat-blueprint-builder] Cached blueprint invalid, falling back to Prisma lookup', {
+    logger.warn('[repeat-blueprint-builder] Cached blueprint invalid, falling back to Prisma lookup', {
       repeaterNodeId,
       candidateTemplateIds
     });
@@ -95,7 +96,7 @@ export async function buildBlueprintForRepeater(
   });
   
   if (!repeaterNode) {
-    console.warn(`[repeat-blueprint-builder] Ã¢ÂÅ’ Repeater node not found: ${repeaterNodeId}`);
+    logger.warn(`[repeat-blueprint-builder] Ã¢ÂÅ’ Repeater node not found: ${repeaterNodeId}`);
     return null;
   }
   
@@ -115,7 +116,7 @@ export async function buildBlueprintForRepeater(
   );
 
   if (!templateNodeIds.length) {
-    console.warn(`[repeat-blueprint-builder] Ã¢Å¡Â Ã¯Â¸Â No valid templates found!`);
+    logger.warn(`[repeat-blueprint-builder] Ã¢Å¡Â Ã¯Â¸Â No valid templates found!`);
     return {
       repeaterNodeId,
       templateNodeIds: [],
@@ -294,7 +295,7 @@ function extractTemplateIds(node: { repeater_templateNodeIds: Nullable<string>; 
     return fromColumn;
   }
 
-  console.warn(`Ã¢ÂÅ’ [extractTemplateIds] Aucun template trouvÃƒÂ© !`);
+  logger.warn(`Ã¢ÂÅ’ [extractTemplateIds] Aucun template trouvÃƒÂ© !`);
   return [];
 }
 
@@ -368,7 +369,7 @@ async function enrichTemplateIdsWithExistingCopies(
       }
     }
   } catch (error) {
-    console.warn('[repeat-blueprint-builder] Unable to derive template IDs from existing copies:', error);
+    logger.warn('[repeat-blueprint-builder] Unable to derive template IDs from existing copies:', error);
   }
 
   return Array.from(templateSet);
@@ -394,7 +395,7 @@ async function filterExistingTemplateNodeIds(
   const missingIds = normalized.filter(id => !existingSet.has(id));
 
   if (missingIds.length) {
-    console.warn('[repeat-blueprint-builder] Missing template nodes detected', {
+    logger.warn('[repeat-blueprint-builder] Missing template nodes detected', {
       repeaterNodeId,
       missingCount: missingIds.length,
       missingIds

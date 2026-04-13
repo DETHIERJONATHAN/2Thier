@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FiZap } from 'react-icons/fi';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
+import { logger } from '../lib/logger';
 
 const HeaderAICoach: React.FC = () => {
   const { api } = useAuthenticatedApi();
@@ -16,7 +17,7 @@ const HeaderAICoach: React.FC = () => {
         context: { currentPage: window.location.pathname }
       });
     } catch (error) {
-      console.error('Erreur AI Coach:', error);
+      logger.error('Erreur AI Coach:', error);
     } finally {
       setLoading(false);
       setOpen(true);

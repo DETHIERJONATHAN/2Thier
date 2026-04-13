@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import DOMPurify from 'dompurify';
 import { Modal } from 'antd';
+import { logger } from '../../lib/logger';
 
 /**
  * 🖼️ COMPOSANT MODAL POUR IMAGES ET CONTENU RICHE EN PLEIN ÉCRAN
@@ -40,7 +41,7 @@ export const useImageModal = () => {
    * @param category Catégorie pour debug/logging
    */
   const openModal = useCallback((src: string, title: string, category: string = 'Image') => {
-    console.log(`🖼️ Ouverture modal ${category}:`, { src: src.substring(0, 50) + '...', title });
+    logger.debug(`🖼️ Ouverture modal ${category}:`, { src: src.substring(0, 50) + '...', title });
     setModalState({
       visible: true,
       src,
@@ -62,7 +63,7 @@ export const useImageModal = () => {
     category?: string;
   }) => {
     const { title, htmlContent, imageSrc, category = 'Aide' } = options;
-    console.log(`🖼️📝 Ouverture modal riche ${category}:`, { title, hasHtml: !!htmlContent, hasImage: !!imageSrc });
+    logger.debug(`🖼️📝 Ouverture modal riche ${category}:`, { title, hasHtml: !!htmlContent, hasImage: !!imageSrc });
     setModalState({
       visible: true,
       src: imageSrc || '',
@@ -77,7 +78,7 @@ export const useImageModal = () => {
    * 🔒 FERMER LA MODAL
    */
   const closeModal = useCallback(() => {
-    console.log('🔒 Fermeture modal image');
+    logger.debug('🔒 Fermeture modal image');
     setModalState(prev => ({ ...prev, visible: false }));
   }, []);
 
@@ -139,7 +140,7 @@ export const useImageModal = () => {
                     border: '1px solid #f0f0f0',
                   }}
                   onError={(e) => {
-                    console.error('❌ Erreur chargement image modal:', modalState.imageSrc);
+                    logger.error('❌ Erreur chargement image modal:', modalState.imageSrc);
                     (e.target as HTMLImageElement).style.display = 'none';
                   }}
                 />
@@ -166,7 +167,7 @@ export const useImageModal = () => {
                 objectFit: 'contain'
               }}
               onError={(e) => {
-                console.error('❌ Erreur chargement image modal:', modalState.src);
+                logger.error('❌ Erreur chargement image modal:', modalState.src);
                 (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2Y1ZjVmNSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5JbWFnZSBub24gZGlzcG9uaWJsZTwvdGV4dD48L3N2Zz4=';
               }}
             />

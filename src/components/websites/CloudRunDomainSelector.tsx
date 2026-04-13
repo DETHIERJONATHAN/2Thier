@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { Select, Space, Tag, Button, Alert, Spin, message, Tooltip } from 'antd';
 import { CloudOutlined, CheckCircleOutlined, WarningOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { logger } from '../../lib/logger';
 
 interface CloudRunDomain {
   domain: string;
@@ -47,7 +48,7 @@ export const CloudRunDomainSelector: React.FC<CloudRunDomainSelectorProps> = ({
       const response = await api.get('/api/cloud-run-domains');
       setDomains(response.domains || []);
     } catch (error) {
-      console.error('❌ Erreur chargement domaines Cloud Run:', error);
+      logger.error('❌ Erreur chargement domaines Cloud Run:', error);
       message.error('Erreur lors du chargement des domaines Cloud Run');
     } finally {
       setLoading(false);
@@ -83,7 +84,7 @@ export const CloudRunDomainSelector: React.FC<CloudRunDomainSelectorProps> = ({
         message.warning(`⚠️ Le domaine ${value.cloudRunDomain} n'est pas accessible`);
       }
     } catch (error) {
-      console.error('❌ Erreur vérification domaine:', error);
+      logger.error('❌ Erreur vérification domaine:', error);
       message.error('Erreur lors de la vérification du domaine');
     } finally {
       setVerifying(false);

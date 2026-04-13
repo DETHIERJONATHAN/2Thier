@@ -6,6 +6,7 @@ import { useDebouncedCallback } from '../../../../hooks/useDebouncedCallback';
 import { FlexibleTooltip } from './FlexibleTooltip';
 import { TOOLTIP_CONFIGS } from './tooltipConfigs';
 import { TooltipRichEditor } from '../../../../../../common/TooltipRichEditor';
+import { logger } from '../../../../../../../lib/logger';
 
 const { Title, Text } = Typography;
 
@@ -194,27 +195,27 @@ const TextPanel: React.FC<TextPanelProps> = ({ value = {}, onChange, readOnly })
 
   // Sauvegarde debounced pour éviter les appels trop fréquents
   const debouncedSave = useDebouncedCallback((vals: Record<string, unknown>) => {
-    console.log('🔄 [TextPanel] Sauvegarde debounced:', vals);
+    logger.debug('🔄 [TextPanel] Sauvegarde debounced:', vals);
     onChange?.(vals);
   }, 500); // 500ms de délai comme pour les autres paramètres
 
   // Gestionnaire de changement avec mise à jour locale immédiate
   const handleValuesChange = useCallback((changedValues: Record<string, unknown>, allValues: Record<string, unknown>) => {
-    console.log('📝 [TextPanel] Changement:', { changedValues, allValues });
+    logger.debug('📝 [TextPanel] Changement:', { changedValues, allValues });
     
     // 🛑 BLOQUER si on est en train de supprimer l'image
     if (isRemovingImage) {
-      console.log('🛑 [TextPanel] Suppression en cours, skip onChange');
+      logger.debug('🛑 [TextPanel] Suppression en cours, skip onChange');
       return;
     }
     
     // Log spécial pour les images
     if (changedValues.helpTooltipImage) {
-      console.log('🖼️ [TextPanel] Image dans changedValues, taille:', String(changedValues.helpTooltipImage).length, 'caractères');
+      logger.debug('🖼️ [TextPanel] Image dans changedValues, taille:', String(changedValues.helpTooltipImage).length, 'caractères');
     }
     if (allValues.helpTooltipImage) {
-      console.log('🖼️ [TextPanel] Image dans allValues, taille:', String(allValues.helpTooltipImage).length, 'caractères');
-      console.log('🖼️ [TextPanel] Début de l\'image:', String(allValues.helpTooltipImage).substring(0, 50) + '...');
+      logger.debug('🖼️ [TextPanel] Image dans allValues, taille:', String(allValues.helpTooltipImage).length, 'caractères');
+      logger.debug('🖼️ [TextPanel] Début de l\'image:', String(allValues.helpTooltipImage).substring(0, 50) + '...');
     }
     
     // Mise à jour immédiate de l'état local pour l'UI
@@ -222,7 +223,7 @@ const TextPanel: React.FC<TextPanelProps> = ({ value = {}, onChange, readOnly })
     
     // Ne pas utiliser debounce si on est en train d'uploader image (pour éviter conflit)
     if (isUploadingImage) {
-      console.log('🖼️ [TextPanel] Upload en cours, skip debounce');
+      logger.debug('🖼️ [TextPanel] Upload en cours, skip debounce');
       return;
     }
     
@@ -357,7 +358,7 @@ Utilisez **gras**, *italique* ou <u>souligné</u>"
               const reader = new FileReader();
               reader.onload = (e) => {
                 const base64 = e.target?.result as string;
-                console.log('🖼️ [TextPanel] Image convertie en base64, taille:', base64.length, 'caractères');
+                logger.debug('🖼️ [TextPanel] Image convertie en base64, taille:', base64.length, 'caractères');
                 
                 // 🔥 Mettre à jour uploadFileList avec la nouvelle image
                 setUploadFileList([{
@@ -385,14 +386,14 @@ Utilisez **gras**, *italique* ou <u>souligné</u>"
                 
                 // Puis déclencher la sauvegarde immédiate (sans debounce)
                 if (onChange) {
-                  console.log('🖼️ [TextPanel] Sauvegarde immédiate de l\'image');
+                  logger.debug('🖼️ [TextPanel] Sauvegarde immédiate de l\'image');
                   onChange(cleanValues);
                 }
                 
                 // Réactiver le debounce après 1 seconde
                 setTimeout(() => {
                   setIsUploadingImage(false);
-                  console.log('🖼️ [TextPanel] Upload terminé, debounce réactivé');
+                  logger.debug('🖼️ [TextPanel] Upload terminé, debounce réactivé');
                 }, 1000);
               };
               reader.readAsDataURL(file);
@@ -406,7 +407,7 @@ Utilisez **gras**, *italique* ou <u>souligné</u>"
               showDownloadIcon: false
             }}
             onRemove={() => {
-              console.log('🗑️ [TextPanel] Suppression de l\'image tooltip');
+              logger.debug('🗑️ [TextPanel] Suppression de l\'image tooltip');
               
               // Activer le flag de blocage
               setIsRemovingImage(true);
@@ -422,13 +423,13 @@ Utilisez **gras**, *italique* ou <u>souligné</u>"
               
               // Forcer la sauvegarde immédiate
               const currentValues = { ...form.getFieldsValue(), helpTooltipImage: null };
-              console.log('💾 [TextPanel] Valeurs envoyées pour suppression:', JSON.stringify(currentValues, null, 2));
+              logger.debug('💾 [TextPanel] Valeurs envoyées pour suppression:', JSON.stringify(currentValues, null, 2));
               onChange?.(currentValues);
               
               // Désactiver le flag après un court délai
               setTimeout(() => {
                 setIsRemovingImage(false);
-                console.log('✅ [TextPanel] Flag de suppression désactivé');
+                logger.debug('✅ [TextPanel] Flag de suppression désactivé');
               }, 100);
               
               return true; // Confirmer la suppression

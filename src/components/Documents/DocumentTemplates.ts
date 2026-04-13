@@ -7,6 +7,7 @@
 
 import { MODULE_REGISTRY } from './ModuleRegistry';
 import { ModuleInstance } from './types';
+import { logger } from '../../lib/logger';
 
 export interface DocumentTemplate {
   id: string;
@@ -673,7 +674,7 @@ export const instantiateTemplate = (template: DocumentTemplate): ModuleInstance[
   return template.modules.map((tm, index) => {
     const moduleDefinition = MODULE_REGISTRY.find(m => m.id === tm.moduleType);
     if (!moduleDefinition) {
-      console.warn(`Module type "${tm.moduleType}" not found in registry`);
+      logger.warn(`Module type "${tm.moduleType}" not found in registry`);
       return null;
     }
 

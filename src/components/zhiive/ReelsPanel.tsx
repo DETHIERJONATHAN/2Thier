@@ -16,6 +16,7 @@ import { useSocialIdentity } from '../../contexts/SocialIdentityContext';
 import { SF } from './ZhiiveTheme';
 import { useDoubleTap } from './shared/useDoubleTap';
 import HeartBurstOverlay, { heartBurstKeyframes } from './shared/HeartBurstOverlay';
+import { logger } from '../../lib/logger';
 
 interface Reel {
   id: string;
@@ -368,7 +369,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
       // Recharger les reels
       loadReels();
     } catch (err) {
-      console.error('[REELS] Erreur publication:', err);
+      logger.error('[REELS] Erreur publication:', err);
       showToast(t('reels.publishError'), 'err');
     } finally {
       setSubmitting(false);

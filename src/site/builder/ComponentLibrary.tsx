@@ -18,6 +18,7 @@ import {
 } from '@ant-design/icons';
 import { getAllSchemas, getSchemasByCategory } from '../schemas';
 import type { SectionSchema } from '../schemas/types';
+import { logger } from '../../lib/logger';
 
 const { Title, Text } = Typography;
 const { Search } = Input;
@@ -92,7 +93,7 @@ export const ComponentLibrary: React.FC<ComponentLibraryProps> = ({ onSelectComp
    * 🎯 SÉLECTION D'UN COMPOSANT
    */
   const handleSelect = (schema: SectionSchema) => {
-    console.log('📚 [ComponentLibrary] Sélection:', schema.type);
+    logger.debug('📚 [ComponentLibrary] Sélection:', schema.type);
     
     // Passer le type et le contenu par défaut
     onSelectComponent(schema.type, schema.defaults);

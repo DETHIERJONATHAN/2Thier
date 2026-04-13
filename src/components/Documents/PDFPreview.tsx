@@ -1,6 +1,7 @@
 import { Empty } from 'antd';
 import { DocumentGlobalTheme } from '../Documents/DocumentGlobalThemeEditor';
 import { SF } from '../zhiive/ZhiiveTheme';
+import { logger } from '../../lib/logger';
 
 interface PDFPreviewProps {
   sections: unknown[];
@@ -9,8 +10,8 @@ interface PDFPreviewProps {
 }
 
 const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
-  console.log('[PDFPreview] Rendering with sections:', sections);
-  console.log('[PDFPreview] Global theme:', globalTheme);
+  logger.debug('[PDFPreview] Rendering with sections:', sections);
+  logger.debug('[PDFPreview] Global theme:', globalTheme);
   
   // Fonction helper pour calculer la position du logo
   const getLogoPosition = (position: string, x?: number, y?: number) => {
@@ -121,7 +122,7 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
 
   // Obtenir les styles basés sur la variante visuelle sélectionnée
   const getVariantStyles = (sectionType: string, variant: string = 'modern'): any => {
-    console.log(`[PDFPreview] Applying variant '${variant}' for section type '${sectionType}'`);
+    logger.debug(`[PDFPreview] Applying variant '${variant}' for section type '${sectionType}'`);
     
     // Styles pour COVER_PAGE
     if (sectionType === 'COVER_PAGE') {
@@ -273,15 +274,15 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
 
   const renderSection = (section: unknown, index: number) => {
     const config = section.config || {};
-    console.log(`[PDFPreview] Rendering section ${index} (${section.type}):`, config);
-    console.log(`[PDFPreview] Section ${index} - companyImage:`, config.companyImage);
-    console.log(`[PDFPreview] Section ${index} - backgroundImage:`, config.backgroundImage);
-    console.log(`[PDFPreview] Section ${index} - styleVariant:`, config.styleVariant);
-    console.log(`[PDFPreview] Section ${index} - _fieldStyles:`, config._fieldStyles);
+    logger.debug(`[PDFPreview] Rendering section ${index} (${section.type}):`, config);
+    logger.debug(`[PDFPreview] Section ${index} - companyImage:`, config.companyImage);
+    logger.debug(`[PDFPreview] Section ${index} - backgroundImage:`, config.backgroundImage);
+    logger.debug(`[PDFPreview] Section ${index} - styleVariant:`, config.styleVariant);
+    logger.debug(`[PDFPreview] Section ${index} - _fieldStyles:`, config._fieldStyles);
 
     // Récupérer les styles de variante
     const variantStyles = getVariantStyles(section.type, config.styleVariant || 'modern');
-    console.log(`[PDFPreview] Section ${index} - Variant styles applied:`, variantStyles);
+    logger.debug(`[PDFPreview] Section ${index} - Variant styles applied:`, variantStyles);
     
     switch (section.type) {
       case 'COVER_PAGE':
@@ -422,10 +423,10 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
                   src={config.companyImage} 
                   alt="Logo" 
                   onLoad={() => {
-                    console.log('[PDFPreview] ✅ Logo chargé avec succès:', config.companyImage);
+                    logger.debug('[PDFPreview] ✅ Logo chargé avec succès:', config.companyImage);
                   }}
                   onError={(e) => {
-                    console.error('[PDFPreview] ❌ Erreur chargement logo:', config.companyImage);
+                    logger.error('[PDFPreview] ❌ Erreur chargement logo:', config.companyImage);
                   }}
                   style={{ 
                     maxHeight: config._fieldStyles?.companyImage?.maxHeight || 100, 

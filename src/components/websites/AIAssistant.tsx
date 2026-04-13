@@ -25,6 +25,7 @@ import {
   ReloadOutlined,
   BulbOutlined
 } from '@ant-design/icons';
+import { logger } from '../../lib/logger';
 
 export type AIContext = 
   | 'title' 
@@ -99,7 +100,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
         throw new Error(data.error || 'Aucune suggestion générée');
       }
     } catch (err: unknown) {
-      console.error('AI Generation Error:', err);
+      logger.error('AI Generation Error:', err);
       setError(err.message || 'Erreur lors de la génération des suggestions');
       message.error('Erreur IA : ' + (err.message || 'Erreur inconnue'));
     } finally {

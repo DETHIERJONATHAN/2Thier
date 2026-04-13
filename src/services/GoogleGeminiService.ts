@@ -5,6 +5,7 @@
 
 // Import pour l'API Google Generative AI
 import { GoogleGenerativeAI, type GenerativeModel } from '@google/generative-ai';
+import { logger } from '../lib/logger';
 
 // Types légers partagés
 export interface LeadLike { name?: string; company?: string; industry?: string; sector?: string; service?: string; notes?: string }
@@ -195,11 +196,11 @@ export class GoogleGeminiService {
       }
       
       // Fallback en cas d'erreur API
-      console.warn('⚠️ Erreur API Gemini, fallback vers démo');
+      logger.warn('⚠️ Erreur API Gemini, fallback vers démo');
       return { ...this.generateDemoEmail(leadData, emailType), model: 'demo' };
       
     } catch (error) {
-      console.error('❌ Erreur génération email:', error);
+      logger.error('❌ Erreur génération email:', error);
       return { success: false, error: (error as Error).message };
     }
   }
@@ -219,7 +220,7 @@ export class GoogleGeminiService {
       return { success: false, error: 'Vertex AI non configuré' };
       
     } catch (error) {
-      console.error('❌ Erreur analyse lead:', error);
+      logger.error('❌ Erreur analyse lead:', error);
       return { success: false, error: (error as Error).message };
     }
   }
@@ -239,7 +240,7 @@ export class GoogleGeminiService {
       return { success: false, error: 'Vertex AI non configuré' };
       
     } catch (error) {
-      console.error('❌ Erreur génération proposition:', error);
+      logger.error('❌ Erreur génération proposition:', error);
       return { success: false, error: (error as Error).message };
     }
   }
@@ -259,7 +260,7 @@ export class GoogleGeminiService {
       return { success: false, error: 'Vertex AI non configuré' };
       
     } catch (error) {
-      console.error('❌ Erreur analyse sentiment:', error);
+      logger.error('❌ Erreur analyse sentiment:', error);
       return { success: false, error: (error as Error).message };
     }
   }
@@ -279,7 +280,7 @@ export class GoogleGeminiService {
       return { success: false, error: 'Vertex AI non configuré' };
       
     } catch (error) {
-      console.error('❌ Erreur suggestion email:', error);
+      logger.error('❌ Erreur suggestion email:', error);
       return { success: false, error: (error as Error).message };
     }
   }
@@ -585,7 +586,7 @@ Bien à vous`;
 
       // Circuit breaker actif ?
       if (this.degradedUntil && Date.now() < this.degradedUntil) {
-        console.warn('⚠️ [Gemini Vision] Circuit breaker actif, retour mode démo');
+        logger.warn('⚠️ [Gemini Vision] Circuit breaker actif, retour mode démo');
         return {
           ...this.generateDemoImageMeasures(measureKeys),
           error: this.lastError || 'circuit-breaker-active'
@@ -614,7 +615,7 @@ Bien à vous`;
 
       // Fallback en cas d'erreur
       this.recordFailure(result.error || 'unknown-vision-error');
-      console.warn('⚠️ [Gemini Vision] Erreur API, fallback vers démo');
+      logger.warn('⚠️ [Gemini Vision] Erreur API, fallback vers démo');
       return {
         ...this.generateDemoImageMeasures(measureKeys),
         error: result.error
@@ -622,7 +623,7 @@ Bien à vous`;
 
     } catch (error) {
       const msg = (error as Error).message;
-      console.error('❌ [Gemini Vision] Erreur:', msg);
+      logger.error('❌ [Gemini Vision] Erreur:', msg);
       this.recordFailure(msg);
       return {
         success: false,
@@ -641,7 +642,7 @@ Bien à vous`;
   ): Promise<{ success: boolean; content?: string; error?: string; modelUsed: string }> {
     try {
       if (!this.genAI) {
-        console.error('❌ [Gemini Vision] genAI non initialisé — clé API manquante ?');
+        logger.error('❌ [Gemini Vision] genAI non initialisé — clé API manquante ?');
         return { success: false, error: 'API Gemini non initialisée (clé API manquante)', modelUsed: this.primaryModelName };
       }
 
@@ -677,16 +678,16 @@ Bien à vous`;
       // Vérifier les safety ratings / finish reason
       const finishReason = response.candidates?.[0]?.finishReason;
       if (finishReason === 'SAFETY') {
-        console.warn('⚠️ [Gemini Vision] Bloqué par safety filter:', JSON.stringify(response.candidates[0].safetyRatings));
+        logger.warn('⚠️ [Gemini Vision] Bloqué par safety filter:', JSON.stringify(response.candidates[0].safetyRatings));
         return { success: false, error: 'Image bloquée par les filtres de sécurité', modelUsed: visionModelName };
       }
       if (finishReason === 'MAX_TOKENS') {
-        console.warn('⚠️ [Gemini Vision] Réponse tronquée (MAX_TOKENS) — augmenter maxOutputTokens');
+        logger.warn('⚠️ [Gemini Vision] Réponse tronquée (MAX_TOKENS) — augmenter maxOutputTokens');
       }
 
       const text = response.text();
       if (!text || text.trim().length === 0) {
-        console.warn('⚠️ [Gemini Vision] Réponse vide');
+        logger.warn('⚠️ [Gemini Vision] Réponse vide');
         return { success: false, error: 'Réponse vide de Gemini', modelUsed: visionModelName };
       }
 
@@ -694,7 +695,7 @@ Bien à vous`;
 
     } catch (error: unknown) {
       const errMsg = error?.message || String(error);
-      console.error('❌ [Gemini Vision API] Erreur:', errMsg);
+      logger.error('❌ [Gemini Vision API] Erreur:', errMsg);
       // Retry avec modèle fallback si disponible
       if (this.fallbackModelNames.length > 0 && !errMsg.includes('API key')) {
         const fallback = this.fallbackModelNames[0];
@@ -717,7 +718,7 @@ Bien à vous`;
             return { success: true, content: t2, modelUsed: fallback };
           }
         } catch (e2: unknown) {
-          console.error(`❌ [Gemini Vision] Fallback ${fallback} échoué:`, e2?.message);
+          logger.error(`❌ [Gemini Vision] Fallback ${fallback} échoué:`, e2?.message);
         }
       }
       return { success: false, error: errMsg, modelUsed: this.primaryModelName };
@@ -774,7 +775,7 @@ Analyse maintenant cette image et ESTIME toutes les dimensions:`;
       // Chercher le JSON dans la réponse
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
-        console.warn('⚠️ [Gemini Vision] Pas de JSON trouvé dans la réponse');
+        logger.warn('⚠️ [Gemini Vision] Pas de JSON trouvé dans la réponse');
         return this.createEmptyMeasurements(measureKeys);
       }
 
@@ -792,7 +793,7 @@ Analyse maintenant cette image et ESTIME toutes les dimensions:`;
       return measurements;
 
     } catch (error) {
-      console.warn('⚠️ [Gemini Vision] Erreur parsing JSON:', error);
+      logger.warn('⚠️ [Gemini Vision] Erreur parsing JSON:', error);
       return this.createEmptyMeasurements(measureKeys);
     }
   }
@@ -860,12 +861,12 @@ Analyse maintenant cette image et ESTIME toutes les dimensions:`;
       const result = await this.callGeminiAPIWithRetries(prompt, candidate);
       if (result.success) {
         if (candidate !== this.primaryModelName) {
-          console.warn(`↪️  [Gemini API] Basculé sur le modèle de secours ${candidate}`);
+          logger.warn(`↪️  [Gemini API] Basculé sur le modèle de secours ${candidate}`);
         }
         return result;
       }
       lastError = result.error;
-      console.warn(`⚠️ [Gemini API] Échec avec ${candidate}: ${lastError || 'erreur inconnue'}`);
+      logger.warn(`⚠️ [Gemini API] Échec avec ${candidate}: ${lastError || 'erreur inconnue'}`);
     }
 
     return {
@@ -889,7 +890,7 @@ Analyse maintenant cette image et ESTIME toutes les dimensions:`;
       return { success: true, content: text, modelUsed: modelName };
       
     } catch (error) {
-      console.error('❌ [Gemini API] Erreur:', error);
+      logger.error('❌ [Gemini API] Erreur:', error);
       return { success: false, error: (error as Error).message, modelUsed: modelName };
     }
   }
@@ -1031,7 +1032,7 @@ L'email doit être en français et adapté au marché belge.`;
         tone: this.extractFromContent(content, 'tone', 'professionnel')
       };
     } catch (error) {
-      console.warn('⚠️ Erreur parsing réponse Gemini:', error);
+      logger.warn('⚠️ Erreur parsing réponse Gemini:', error);
       return {
         subject: 'Email généré par IA',
         body: content,

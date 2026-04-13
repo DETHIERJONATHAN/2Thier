@@ -1,4 +1,5 @@
 import React from 'react';
+import { logger } from '../../../lib/logger';
 
 /**
  * 🎨 RENDER TEXT HELPER
@@ -74,12 +75,12 @@ export const RenderText: React.FC<RenderTextProps> = ({
 
   // 🔍 Cas 4: Objet sans propriété text (ancienne structure?)
   if (typeof value === 'object') {
-    console.warn('[RenderText] Objet texte sans propriété "text":', value);
+    logger.warn('[RenderText] Objet texte sans propriété "text":', value);
     return <Component style={defaultStyle} className={className}>{defaultValue}</Component>;
   }
 
   // 🔍 Cas 5: Type inconnu
-  console.warn('[RenderText] Type de valeur inconnu:', typeof value, value);
+  logger.warn('[RenderText] Type de valeur inconnu:', typeof value, value);
   return <Component style={defaultStyle} className={className}>{String(value)}</Component>;
 };
 

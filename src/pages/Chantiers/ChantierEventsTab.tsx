@@ -14,6 +14,7 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
 import dayjs, { Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -134,7 +135,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
       const res = await api.get(`/api/chantier-workflow/chantiers/${chantierId}/events`);
       setEvents(res.data || []);
     } catch {
-      console.error('Erreur chargement événements');
+      logger.error('Erreur chargement événements');
     } finally {
       setLoading(false);
     }
@@ -203,7 +204,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
           });
           calendarEventId = calRes.id || calRes.data?.id || null;
         } catch (calErr) {
-          console.warn('Erreur création CalendarEvent (non bloquant):', calErr);
+          logger.warn('Erreur création CalendarEvent (non bloquant):', calErr);
           // On continue quand même — l'événement chantier sera créé sans lien calendrier
         }
       }

@@ -5,6 +5,7 @@ import MainLayoutNew from './pages/page2thier/MainLayoutNew';
 import StoreInitializer from './components/StoreInitializer';
 import { NotificationsContainer } from './components/Notifications';
 import NotFoundPage from './pages/NotFoundPage';
+import { logger } from './lib/logger';
 
 
 // 🚀 LAZY IMPORTS POUR RÉDUIRE LE BUNDLE INITIAL
@@ -139,13 +140,13 @@ export default function AppLayout() {
   const visibleModules = modules;
 
   if (loading) {
-    console.log('[AppLayout] LOADING: true');
+    logger.debug('[AppLayout] LOADING: true');
     return <div className="flex items-center justify-center h-screen text-lg text-gray-500">Chargement de l'application...</div>;
   }
 
   // 🔒 Gestion des utilisateurs non connectés
   if (!user) {
-    console.error('[AppLayout] PROBLÈME: Aucun utilisateur connecté');
+    logger.error('[AppLayout] PROBLÈME: Aucun utilisateur connecté');
     return <div className="flex items-center justify-center h-screen text-red-600 font-bold">Erreur de session. Veuillez vous reconnecter.</div>;
   }
 
@@ -153,13 +154,13 @@ export default function AppLayout() {
   const isFreeUser = !currentOrganization && !isSuperAdmin;
 
   if (isFreeUser) {
-    console.log('[AppLayout] Utilisateur réseau (libre) détecté - accès réseau social uniquement');
+    logger.debug('[AppLayout] Utilisateur réseau (libre) détecté - accès réseau social uniquement');
   } else {
-    console.log('[AppLayout] ✅ Layout complet initialisé');
+    logger.debug('[AppLayout] ✅ Layout complet initialisé');
   }
-  console.log('[AppLayout] User:', user?.firstName, user?.lastName, 'ID:', user?.id);
-  console.log('[AppLayout] Organization:', currentOrganization?.name || '(libre)', 'ID:', currentOrganization?.id || 'none');
-  console.log('[AppLayout] Modules visibles:', visibleModules.length);
+  logger.debug('[AppLayout] User:', user?.firstName, user?.lastName, 'ID:', user?.id);
+  logger.debug('[AppLayout] Organization:', currentOrganization?.name || '(libre)', 'ID:', currentOrganization?.id || 'none');
+  logger.debug('[AppLayout] Modules visibles:', visibleModules.length);
 
   return (
     <>

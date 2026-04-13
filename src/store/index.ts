@@ -5,9 +5,9 @@ import { devtools } from 'zustand/middleware';
 import { CRMState, Block, MetaState, MetaUIState } from './slices/types';
 
 // Import des slices
-console.log('🔍 [DEBUG] store/index.ts - Tentative d\'import de createBlocksSlice...');
+logger.debug('🔍 [DEBUG] store/index.ts - Tentative d\'import de createBlocksSlice...');
 import { createBlocksSlice, BlocksSlice } from './slices/blocksSlice';
-console.log('🔍 [DEBUG] store/index.ts - createBlocksSlice importé:', typeof createBlocksSlice);
+logger.debug('🔍 [DEBUG] store/index.ts - createBlocksSlice importé:', typeof createBlocksSlice);
 import { createSectionsSlice, SectionsSlice } from './slices/sectionsSlice';
 import { createFieldsSlice, FieldsSlice } from './slices/fieldsSlice';
 import { createFormulasSlice, FormulasSlice } from './slices/formulasSlice';
@@ -15,6 +15,7 @@ import { createValidationSlice, ValidationSlice } from './slices/validationsSlic
 import { createDependenciesSlice, DependenciesSlice } from './slices/dependenciesSlice';
 import { createMetaSlice, MetaSlice } from './slices/metaSlice';
 import { createUtilsSlice, UtilsSlice } from './slices/utilsSlice';
+import { logger } from '../lib/logger';
 
 // État initial
 const initialState: Partial<CRMState> = {

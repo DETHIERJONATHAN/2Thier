@@ -8,6 +8,7 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { Modal } from 'antd';
 import { ExclamationCircleOutlined } from '@ant-design/icons';
+import { logger } from '../lib/logger';
 
 export interface UseBeforeUnloadOptions {
   /**
@@ -53,7 +54,7 @@ export interface UseBeforeUnloadOptions {
  *       setDirty(false);
  *     },
  *     onDiscard: () => {
- *       console.log('Données abandonnées');
+ *       logger.debug('Données abandonnées');
  *     }
  *   });
  *   
@@ -121,7 +122,7 @@ export function useBeforeUnload(options: UseBeforeUnloadOptions) {
               await onSave();
               resolve(true);
             } catch (error) {
-              console.error('[useBeforeUnload] Erreur lors de la sauvegarde:', error);
+              logger.error('[useBeforeUnload] Erreur lors de la sauvegarde:', error);
               Modal.error({
                 title: 'Erreur de sauvegarde',
                 content: 'Impossible de sauvegarder les modifications. Veuillez réessayer.'

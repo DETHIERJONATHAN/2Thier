@@ -9,6 +9,7 @@ import { renderIconNode } from '../utils/icon';
 import { Row, Col, Space } from 'antd';
 import { motion } from 'framer-motion';
 import { SF } from '../../../components/zhiive/ZhiiveTheme';
+import { logger } from '../../../lib/logger';
 
 /**
  * 🎨 FOOTER RENDERER V2 - AVEC WAVE ANIMATIONS
@@ -51,7 +52,7 @@ export const FooterRenderer: React.FC<FooterRendererProps> = ({ content }) => {
   };
   
   // 🔍 DEBUG
-  console.log('🦶 [FooterRenderer] Social data:', {
+  logger.debug('🦶 [FooterRenderer] Social data:', {
     raw: social,
     computed: socialData,
     enabled: socialData?.enabled,

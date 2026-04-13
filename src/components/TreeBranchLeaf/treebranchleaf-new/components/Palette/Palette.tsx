@@ -12,6 +12,7 @@ import { Card, Typography, Tooltip } from 'antd';
 import { useDraggable } from '@dnd-kit/core';
 // (icônes inutilisées supprimées)
 import type { NodeTypeKey, TreeBranchLeafRegistry } from '../../types';
+import { logger } from '../../../../../lib/logger';
 
 const { Text } = Typography;
 
@@ -58,9 +59,9 @@ const PaletteItem: React.FC<PaletteItemProps> = ({
   });
 
   // Debug logs
-  // console.log(`🎨 PaletteItem ${nodeType} - isDragging: ${isDragging}, disabled: ${readOnly}`);
+  // logger.debug(`🎨 PaletteItem ${nodeType} - isDragging: ${isDragging}, disabled: ${readOnly}`);
   if (isDragging) {
-    console.log(`🔥 PALETTE ITEM EN COURS DE DRAG:`, { nodeType, label });
+    logger.debug(`🔥 PALETTE ITEM EN COURS DE DRAG:`, { nodeType, label });
   }
 
   const style = {

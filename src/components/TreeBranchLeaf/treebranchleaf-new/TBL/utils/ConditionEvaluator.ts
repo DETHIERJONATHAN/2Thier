@@ -1,3 +1,4 @@
+import { logger } from '../../../../../lib/logger';
 /**
  * 🔀 ÉVALUATEUR DE CONDITIONS DYNAMIQUE
  * 
@@ -139,7 +140,7 @@ export class ConditionEvaluator {
     }
     
     if (debug) {
-      console.log(`[ConditionEvaluator] op=${op}, leftValue=${leftValue}, rightValue=${rightValue}`);
+      logger.debug(`[ConditionEvaluator] op=${op}, leftValue=${leftValue}, rightValue=${rightValue}`);
     }
     
     switch (op) {
@@ -197,7 +198,7 @@ export class ConditionEvaluator {
         
       default:
         if (debug) {
-          console.warn(`[ConditionEvaluator] Opérateur non supporté: ${op}`);
+          logger.warn(`[ConditionEvaluator] Opérateur non supporté: ${op}`);
         }
         return false;
     }
@@ -224,7 +225,7 @@ export class ConditionEvaluator {
       // Chercher dans formData par nodeId direct
       if (formData[nodeId] !== undefined) {
         if (debug) {
-          console.log(`[resolveReference] Trouvé ${nodeId} = ${formData[nodeId]}`);
+          logger.debug(`[resolveReference] Trouvé ${nodeId} = ${formData[nodeId]}`);
         }
         return formData[nodeId];
       }
@@ -233,14 +234,14 @@ export class ConditionEvaluator {
       for (const [key, value] of Object.entries(formData)) {
         if (key.includes(nodeId)) {
           if (debug) {
-            console.log(`[resolveReference] Trouvé via clé ${key} = ${value}`);
+            logger.debug(`[resolveReference] Trouvé via clé ${key} = ${value}`);
           }
           return value;
         }
       }
       
       if (debug) {
-        console.log(`[resolveReference] Non trouvé: ${nodeId}`);
+        logger.debug(`[resolveReference] Non trouvé: ${nodeId}`);
       }
       
       return null;

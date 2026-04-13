@@ -19,6 +19,7 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { SF } from './ZhiiveTheme';
 import { useAuth } from '../../auth/useAuth';
+import { logger } from '../../lib/logger';
 
 // ── Types ──
 interface BeeMarker {
@@ -536,7 +537,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
         });
         map.setTerrain({ source: 'terrain-dem', exaggeration: 1.8 });
       } catch (e) {
-        console.warn('[Wax] Terrain DEM failed:', e);
+        logger.warn('[Wax] Terrain DEM failed:', e);
       }
 
       // Ensure pitch is applied after style load

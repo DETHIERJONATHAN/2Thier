@@ -59,6 +59,7 @@ import type {
   NodeTypeKey
 } from '../../types';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../../../../lib/logger';
 
 const EMPTY_SUBTAB_LIST: string[] = [];
 
@@ -199,7 +200,7 @@ const SortableSubTabTag: React.FC<{
           title="Supprimer le sous-onglet ?"
           description={`Supprimer « ${label} » ? Les champs affectés ne seront plus visibles dans cet onglet.`}
           onConfirm={() => {
-            console.log('🗑️ [SortableSubTabTag] Suppression confirmée:', label);
+            logger.debug('🗑️ [SortableSubTabTag] Suppression confirmée:', label);
             onRemove(label);
           }}
           okText={t('common.delete')}
@@ -272,17 +273,17 @@ const SubTabsEditor: React.FC<{ value?: string[]; onChange: (next: string[]) => 
 
   const add = () => {
     const trimmed = (input || '').trim();
-    console.log('🔹 [SubTabsEditor] Tentative d\'ajout:', { input, trimmed, currentValue: localValue });
+    logger.debug('🔹 [SubTabsEditor] Tentative d\'ajout:', { input, trimmed, currentValue: localValue });
     if (!trimmed) {
-      console.warn('🔹 [SubTabsEditor] Input vide, abandon');
+      logger.warn('🔹 [SubTabsEditor] Input vide, abandon');
       return;
     }
     if (localValue.includes(trimmed)) {
-      console.warn('🔹 [SubTabsEditor] Valeur déjà présente:', trimmed);
+      logger.warn('🔹 [SubTabsEditor] Valeur déjà présente:', trimmed);
       setInput('');
       return;
     }
-    console.log('🔹 [SubTabsEditor] Ajout du sous-onglet:', trimmed);
+    logger.debug('🔹 [SubTabsEditor] Ajout du sous-onglet:', trimmed);
     const newValue = [...localValue, trimmed];
     setLocalValue(newValue);
     onChange(newValue);
@@ -290,9 +291,9 @@ const SubTabsEditor: React.FC<{ value?: string[]; onChange: (next: string[]) => 
   };
 
   const remove = (label: string) => {
-    console.log('🗑️ [SubTabsEditor] Suppression du sous-onglet:', label, 'avant:', localValue);
+    logger.debug('🗑️ [SubTabsEditor] Suppression du sous-onglet:', label, 'avant:', localValue);
     const newValue = localValue.filter(v => v !== label);
-    console.log('🗑️ [SubTabsEditor] Suppression - après:', newValue);
+    logger.debug('🗑️ [SubTabsEditor] Suppression - après:', newValue);
     setLocalValue(newValue);
     onChange(newValue);
   };
@@ -302,7 +303,7 @@ const SubTabsEditor: React.FC<{ value?: string[]; onChange: (next: string[]) => 
       Modal.warning({ title: 'Nom déjà utilisé', content: `Un sous-onglet « ${newLabel} » existe déjà.` });
       return;
     }
-    console.log('✏️ [SubTabsEditor] Renommage:', oldLabel, '→', newLabel);
+    logger.debug('✏️ [SubTabsEditor] Renommage:', oldLabel, '→', newLabel);
     const newValue = localValue.map(v => v === oldLabel ? newLabel : v);
     setLocalValue(newValue);
     onChange(newValue);
@@ -410,15 +411,15 @@ const Parameters: React.FC<ParametersProps> = (props) => {
   // Log to verify callback is provided
   const metadataCallbackProvidedOnMountRef = useRef<boolean>(!!onNodeMetadataUpdated);
   useEffect(() => {
-    console.error(`🎯 [Parameters] Mounted, callback provided: ${metadataCallbackProvidedOnMountRef.current}`);
+    logger.error(`🎯 [Parameters] Mounted, callback provided: ${metadataCallbackProvidedOnMountRef.current}`);
     return () => {
-      console.error('🎯 [Parameters] Unmounting');
+      logger.error('🎯 [Parameters] Unmounting');
     };
   }, []);
 
   useEffect(() => {
     if (selectedNode?.id) {
-      console.error(`🎯 [Parameters] Selected node changed: ${selectedNode.id}`);
+      logger.error(`🎯 [Parameters] Selected node changed: ${selectedNode.id}`);
     }
   }, [selectedNode?.id]);
   
@@ -481,35 +482,35 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       setLocalTriggerNodeIds([]);
       setIsLoadingTriggerIds(true);
       
-      console.log('🔄 [TriggerField] Chargement des triggerNodeIds pour:', selectedNode.id);
+      logger.debug('🔄 [TriggerField] Chargement des triggerNodeIds pour:', selectedNode.id);
       
       // Fetch indépendant des metadata - ESSAYER /full d'abord
       api.get(`/api/treebranchleaf/nodes/${selectedNode.id}/full`)
         .then((response: unknown) => {
-          console.log('📦 [TriggerField] Réponse /full complète:', response);
+          logger.debug('📦 [TriggerField] Réponse /full complète:', response);
           // L'endpoint /full retourne {nodes: [nodeData]} - extraire le premier
           const nodeData = response?.nodes?.[0];
-          console.log('📦 [TriggerField] Node extrait:', nodeData);
-          console.log('📦 [TriggerField] Metadata:', nodeData?.metadata);
+          logger.debug('📦 [TriggerField] Node extrait:', nodeData);
+          logger.debug('📦 [TriggerField] Metadata:', nodeData?.metadata);
           const triggerIds = nodeData?.metadata?.triggerNodeIds || [];
-          console.log('✅ [TriggerField] Chargés depuis API:', triggerIds);
+          logger.debug('✅ [TriggerField] Chargés depuis API:', triggerIds);
           setLocalTriggerNodeIds(triggerIds);
           setIsLoadingTriggerIds(false);
         })
         .catch((error) => {
-          console.error('❌ [TriggerField] Erreur chargement /full, essai avec /nodes:', error);
+          logger.error('❌ [TriggerField] Erreur chargement /full, essai avec /nodes:', error);
           // Fallback sur l'endpoint normal
           api.get(`/api/treebranchleaf/nodes/${selectedNode.id}`)
             .then((nodeData: TreeBranchLeafNode) => {
-              console.log('📦 [TriggerField] Réponse de /nodes:', nodeData);
-              console.log('📦 [TriggerField] Metadata:', nodeData?.metadata);
+              logger.debug('📦 [TriggerField] Réponse de /nodes:', nodeData);
+              logger.debug('📦 [TriggerField] Metadata:', nodeData?.metadata);
               const triggerIds = nodeData?.metadata?.triggerNodeIds || [];
-              console.log('✅ [TriggerField] Chargés depuis API (fallback):', triggerIds);
+              logger.debug('✅ [TriggerField] Chargés depuis API (fallback):', triggerIds);
               setLocalTriggerNodeIds(triggerIds);
               setIsLoadingTriggerIds(false);
             })
             .catch((err2) => {
-              console.error('❌ [TriggerField] Erreur chargement (fallback):', err2);
+              logger.error('❌ [TriggerField] Erreur chargement (fallback):', err2);
               setLocalTriggerNodeIds([]);
               setIsLoadingTriggerIds(false);
             });
@@ -556,7 +557,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       const detail = (event as CustomEvent).detail;
       if (!detail || !detail.deletedIds || !detail.nodeId) return;
       
-      console.log('🗑️ [Parameters] Événement delete-copy-group-finished détecté:', {
+      logger.debug('🗑️ [Parameters] Événement delete-copy-group-finished détecté:', {
         nodeId: detail.nodeId,
         deletedCount: detail.deletedIds.length,
         selectedRepeaterId: selectedNode?.id
@@ -567,7 +568,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
         recentlyDeletedIdsRef.current.add(id);
       });
       
-      console.log('🗑️ [Parameters] IDs marqués comme supprimés:', detail.deletedIds.length, '→ Total:', recentlyDeletedIdsRef.current.size);
+      logger.debug('🗑️ [Parameters] IDs marqués comme supprimés:', detail.deletedIds.length, '→ Total:', recentlyDeletedIdsRef.current.size);
       
       // 🔧 FIX: NE PAS appeler refreshTree() pour les suppressions.
       // Le handler tbl-repeater-updated dans useTBLDataPrismaComplete gère déjà
@@ -592,7 +593,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       const targetId = (updatedNode?.id as string) || nodeId;
       if (!targetId || targetId !== selectedNode?.id) return;
       
-      console.log('🔔 [Parameters] Événement tbl-node-updated reçu pour ce nœud:', {
+      logger.debug('🔔 [Parameters] Événement tbl-node-updated reçu pour ce nœud:', {
         nodeId: targetId,
         hasLink: updatedNode?.hasLink,
         hasData: updatedNode?.hasData
@@ -612,7 +613,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
         if (updatedNode?.hasAPI !== undefined) next.api = !!updatedNode.hasAPI;
         if (updatedNode?.hasMarkers !== undefined) next.markers = !!updatedNode.hasMarkers;
         
-        console.log('🔗 [Parameters] capsState mis à jour via événement:', next);
+        logger.debug('🔗 [Parameters] capsState mis à jour via événement:', next);
         return next;
       });
     };
@@ -664,7 +665,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       toAssign.push({ id: node.id, meta: nextMeta });
     }
     if (!toAssign.length) return;
-    console.log('🔄 [cascadeSubTabAssignments] Propagation du subtab à', toAssign.length, 'nœuds:', toAssign.map(t => t.id));
+    logger.debug('🔄 [cascadeSubTabAssignments] Propagation du subtab à', toAssign.length, 'nœuds:', toAssign.map(t => t.id));
     try {
       for (const item of toAssign) {
         if (typeof onNodeUpdate === 'function') {
@@ -680,7 +681,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
         /* noop */
       }
     } catch (err) {
-      console.error('❌ [Parameters] Erreur cascade sous-onglet:', err);
+      logger.error('❌ [Parameters] Erreur cascade sous-onglet:', err);
     }
   }, [onNodeUpdate, refreshTree, selectedNode, tree?.id]);
 
@@ -688,7 +689,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     if (!selectedNode) return;
     // Vérifier si le nœud est protégé
     if ((selectedNode.metadata as Record<string, unknown>)?.isProtected) {
-      console.warn('🔒 [Parameters] Suppression bloquée: nœud protégé');
+      logger.warn('🔒 [Parameters] Suppression bloquée: nœud protégé');
       return;
     }
     try {
@@ -704,7 +705,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
         }
       }
     } catch (e) {
-      console.error('❌ [Parameters] Erreur suppression nœud:', e);
+      logger.error('❌ [Parameters] Erreur suppression nœud:', e);
     }
   }, [api, onDeleteNode, refreshTree, selectedNode, tree]);
 
@@ -713,21 +714,21 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     if (!selectedNode?.id || !api) return;
     
     try {
-      console.log('🔁 [duplicateTemplatesPhysically] Début duplication:', templateNodeIds);
+      logger.debug('🔁 [duplicateTemplatesPhysically] Début duplication:', templateNodeIds);
       
       const response = await api.post(`/api/treebranchleaf/nodes/${selectedNode.id}/duplicate-templates`, {
         templateNodeIds
       });
       
-      console.log('✅ [duplicateTemplatesPhysically] Duplication réussie:', response);
+      logger.debug('✅ [duplicateTemplatesPhysically] Duplication réussie:', response);
       const created: Array<{ id: string; sourceTemplateId?: string }> = Array.isArray(response?.duplicated) ? response.duplicated : [];
 
       // 🔍 Log chaque copie retournée
-      console.log('🔍 [duplicateTemplatesPhysically] Copies retournées du serveur:');
+      logger.debug('🔍 [duplicateTemplatesPhysically] Copies retournées du serveur:');
       created.forEach((copy, idx) => {
-        console.log(`  [${idx}] ID: ${copy.id}, Template: ${copy.sourceTemplateId}`);
+        logger.debug(`  [${idx}] ID: ${copy.id}, Template: ${copy.sourceTemplateId}`);
       });
-      console.log(`Total copies créées: ${created.length}, attendues: ${templateNodeIds.length}`);
+      logger.debug(`Total copies créées: ${created.length}, attendues: ${templateNodeIds.length}`);
 
       // 🧹 NE PAS NETTOYER L'IN-FLIGHT ICI !
       // Raison: Il faut attendre que `nodes` soit hydraté AVANT de retirer l'in-flight.
@@ -740,9 +741,9 @@ const Parameters: React.FC<ParametersProps> = (props) => {
         await Promise.all(
           created.map((c) => api.post(`/api/treebranchleaf/nodes/${c.id}/apply-shared-references-from-original`))
         );
-        console.log('🔗 [duplicateTemplatesPhysically] Références partagées appliquées sur copies');
+        logger.debug('🔗 [duplicateTemplatesPhysically] Références partagées appliquées sur copies');
       } catch (e) {
-        console.warn('⚠️ [duplicateTemplatesPhysically] Échec application références sur certaines copies (non bloquant):', e);
+        logger.warn('⚠️ [duplicateTemplatesPhysically] Échec application références sur certaines copies (non bloquant):', e);
       }
       
       // Rafraîchir l'arbre pour afficher les nouveaux enfants IMMÉDIATEMENT
@@ -751,7 +752,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
           await Promise.resolve(refreshTree());
         }
       } catch (e) {
-        console.warn('⚠️ [duplicateTemplatesPhysically] refreshTree a échoué, aucun impact fonctionnel', e);
+        logger.warn('⚠️ [duplicateTemplatesPhysically] refreshTree a échoué, aucun impact fonctionnel', e);
       }
 
       // 🚀 Auto-expand du parent repeater et sélectionner la dernière copie créée
@@ -762,11 +763,11 @@ const Parameters: React.FC<ParametersProps> = (props) => {
           if (typeof onSelectNodeId === 'function') onSelectNodeId(lastId);
         }
       } catch (e) {
-        console.warn('⚠️ [duplicateTemplatesPhysically] Auto expand/select non disponible:', e);
+        logger.warn('⚠️ [duplicateTemplatesPhysically] Auto expand/select non disponible:', e);
       }
     } catch (error) {
       const axiosErr = error as unknown;
-      console.error('❌ [duplicateTemplatesPhysically] Erreur:', axiosErr?.response?.data || axiosErr);
+      logger.error('❌ [duplicateTemplatesPhysically] Erreur:', axiosErr?.response?.data || axiosErr);
       // 🧹 En cas d'échec, retirer les templates tentés de l'in-flight (ils pourront être retentés)
       try {
         if (selectedNode?.id) {
@@ -775,11 +776,11 @@ const Parameters: React.FC<ParametersProps> = (props) => {
           if (set) {
             templateNodeIds.forEach(id => set.delete(id));
             if (set.size === 0) map.delete(selectedNode.id); else map.set(selectedNode.id, set);
-            console.log('🧹 [duplicateTemplatesPhysically] Nettoyage in-flight après erreur:', templateNodeIds);
+            logger.debug('🧹 [duplicateTemplatesPhysically] Nettoyage in-flight après erreur:', templateNodeIds);
           }
         }
       } catch (e) {
-        console.warn('⚠️ [duplicateTemplatesPhysically] Nettoyage in-flight (erreur) échoué:', e);
+        logger.warn('⚠️ [duplicateTemplatesPhysically] Nettoyage in-flight (erreur) échoué:', e);
       }
     }
   }, [selectedNode, api, refreshTree, onExpandNodeId, onSelectNodeId]);
@@ -795,7 +796,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     if (!selectedNodeId) return;
     
     // ✅ Log pour debug repeater
-    console.log('🔄 [Parameters] Sauvegarde:', selectedNodeId, payload);
+    logger.debug('🔄 [Parameters] Sauvegarde:', selectedNodeId, payload);
     
     try {
       // 🔄 NOUVEAU : Mapper appearanceConfig.repeater vers metadata.repeater pour le backend
@@ -811,7 +812,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
             repeater: appearanceConfig.repeater,
             appearance: payload.appearanceConfig
           };
-          console.log('🔁 [Parameters] Metadata repeater mappé:', appearanceConfig.repeater);
+          logger.debug('🔁 [Parameters] Metadata repeater mappé:', appearanceConfig.repeater);
         } else {
           apiData.metadata = {
             ...(apiData.metadata as Record<string, unknown> || {}),
@@ -827,12 +828,12 @@ const Parameters: React.FC<ParametersProps> = (props) => {
           ...(apiData.metadata as Record<string, unknown> || {}),
           ...payloadMeta
         };
-        console.log('🎯 [Parameters] Metadata complet après fusion:', apiData.metadata);
-        console.log('🔍 [Parameters] triggerNodeIds dans metadata:', (apiData.metadata as unknown)?.triggerNodeIds);
+        logger.debug('🎯 [Parameters] Metadata complet après fusion:', apiData.metadata);
+        logger.debug('🔍 [Parameters] triggerNodeIds dans metadata:', (apiData.metadata as unknown)?.triggerNodeIds);
       }
       
       // 🔍 LOG FINAL DU PAYLOAD AVANT ENVOI API
-      console.log('📤 [Parameters] PAYLOAD FINAL ENVOYÉ À L\'API:', {
+      logger.debug('📤 [Parameters] PAYLOAD FINAL ENVOYÉ À L\'API:', {
         id: selectedNodeId,
         metadata: apiData.metadata,
         payloadComplet: apiData
@@ -842,7 +843,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       const _updated = await onNodeUpdateRef.current({ ...apiData, id: selectedNodeId });
       
       // 🔍 LOG DE LA RÉPONSE API
-      console.log('📥 [Parameters] RÉPONSE DE L\'API:', {
+      logger.debug('📥 [Parameters] RÉPONSE DE L\'API:', {
         id: _updated?.id,
         metadata: _updated?.metadata,
         triggerNodeIds: (_updated?.metadata as unknown)?.triggerNodeIds
@@ -860,10 +861,10 @@ const Parameters: React.FC<ParametersProps> = (props) => {
           metadata: mergedMetadata,
           ...(payload.appearanceConfig ? { appearanceConfig: payload.appearanceConfig } : {})
         };
-        if (process.env.NODE_ENV === 'development') console.log('🔔 [Parameters] Emission tbl-node-updated pour:', (nodeToEmit as any).id);
+        if (process.env.NODE_ENV === 'development') logger.debug('🔔 [Parameters] Emission tbl-node-updated pour:', (nodeToEmit as any).id);
         window.dispatchEvent(new CustomEvent('tbl-node-updated', { detail: { node: nodeToEmit, treeId: tree?.id } }));
       } catch { /* noop */ }
-      console.log('✅ [Parameters] Sauvegarde OK');
+      logger.debug('✅ [Parameters] Sauvegarde OK');
 
       // Rafraîchir l'arbre uniquement lorsque la structure des sous-onglets change (et non chaque affectation)
       try {
@@ -872,15 +873,15 @@ const Parameters: React.FC<ParametersProps> = (props) => {
         const hasCascadeUpdate = Boolean((payload as unknown)?.cascadeSubTab);
         if (hasSubTabStructureChange || hasCascadeUpdate) {
           if (typeof refreshTree === 'function') {
-            console.log('🔁 [Parameters] Déclencher refreshTree suite à modification de la structure des subTabs');
+            logger.debug('🔁 [Parameters] Déclencher refreshTree suite à modification de la structure des subTabs');
             await Promise.resolve(refreshTree());
           }
         }
       } catch (e) {
-        console.warn('⚠️ [Parameters] refreshTree échoué après mise à jour subTabs', e);
+        logger.warn('⚠️ [Parameters] refreshTree échoué après mise à jour subTabs', e);
       }
     } catch (error) {
-      console.error('❌ [Parameters] Erreur lors de la sauvegarde:', error);
+      logger.error('❌ [Parameters] Erreur lors de la sauvegarde:', error);
     }
   }, 800); // ✅ 800ms = assez pour éviter spam, assez rapide pour sauvegarder chaque champ
 
@@ -973,7 +974,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     if (!selectedNode) return;
     // ✅ Autoriser les repeaters sur tous les types de nœuds (branch, section, leaf_repeater, etc.)
     
-    console.log('📝 [commitRepeaterMetadata] ENTRÉE:', {
+    logger.debug('📝 [commitRepeaterMetadata] ENTRÉE:', {
       partial,
       'selectedNode.type': selectedNode.type,
       'selectedNode.metadata': selectedNode.metadata
@@ -991,7 +992,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       ...partial
     };
 
-    console.log('📝 [commitRepeaterMetadata] APRÈS MERGE:', {
+    logger.debug('📝 [commitRepeaterMetadata] APRÈS MERGE:', {
       'partial.templateNodeIds (paramètre passé)': partial.templateNodeIds,
       'repeaterTemplateIds (state React - PEUT ÊTRE STALE)': repeaterTemplateIds,
       'merged.templateNodeIds (résultat final)': merged.templateNodeIds,
@@ -1039,13 +1040,13 @@ const Parameters: React.FC<ParametersProps> = (props) => {
         const hasNested = hasNestedRepeater(id);
         if (hasNested) {
           const node = nodes?.find(n => n.id === id);
-          console.error(`🚨 [commitRepeaterMetadata] REJET: Tentative de sauvegarder un champ imbriqué: ${node?.label} (${id})`);
+          logger.error(`🚨 [commitRepeaterMetadata] REJET: Tentative de sauvegarder un champ imbriqué: ${node?.label} (${id})`);
         }
         return !hasNested;
       });
       
       if (merged.templateNodeIds.length < beforeCount) {
-        console.error(`🚨 [commitRepeaterMetadata] REJET TOTAL: ${beforeCount - merged.templateNodeIds.length} champ(s) imbriqué(s) ont été rejeté(s)!`);
+        logger.error(`🚨 [commitRepeaterMetadata] REJET TOTAL: ${beforeCount - merged.templateNodeIds.length} champ(s) imbriqué(s) ont été rejeté(s)!`);
       }
       
       if (merged.templateNodeIds.length === 0) {
@@ -1082,7 +1083,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
           return rest;
         })();
 
-    console.log('📝 [commitRepeaterMetadata] METADATA FINALE:', nextMetadata);
+    logger.debug('📝 [commitRepeaterMetadata] METADATA FINALE:', nextMetadata);
 
     // 🔥 IMPORTANT : Enregistrer AUSSI dans les colonnes dédiées de la base
     // 🔥 FILTRE: Ne sauvegarder les templateNodeLabels que pour les IDs qui sont restés après le filtre
@@ -1112,7 +1113,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
         : null
     };
 
-    console.log('💾 [commitRepeaterMetadata] PAYLOAD COMPLET:', payload);
+    logger.debug('💾 [commitRepeaterMetadata] PAYLOAD COMPLET:', payload);
     
     patchNode(payload);
     emitMetadataUpdate(nextMetadata);
@@ -1129,7 +1130,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
         }
       })
     );
-    console.log('🔔 [commitRepeaterMetadata] Événement tbl-repeater-updated émis');
+    logger.debug('🔔 [commitRepeaterMetadata] Événement tbl-repeater-updated émis');
     
     // 🔁 DUPLICATION PHYSIQUE (IDEMPOTENTE)
     // Ne dupliquer que les gabarits qui n'ont PAS déjà de copie sous ce répéteur
@@ -1159,7 +1160,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
         childrenOfRepeater.forEach(n => {
           // Ignorer les nœuds supprimés récemment
           if (recentlyDeleted.has(n.id)) {
-            console.log('🗑️ [commitRepeaterMetadata] Ignorer nœud supprimé récemment:', n.id, n.label);
+            logger.debug('🗑️ [commitRepeaterMetadata] Ignorer nœud supprimé récemment:', n.id, n.label);
             return;
           }
           
@@ -1174,7 +1175,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
         const inflightSet = inFlightDupByRepeaterRef.current.get(repeaterId);
         if (inflightSet && inflightSet.size > 0) {
           inflightSet.forEach(id => existingSourceTemplateIds.add(id));
-          console.log('🛡️ [commitRepeaterMetadata] In-flight protégés:', Array.from(inflightSet));
+          logger.debug('🛡️ [commitRepeaterMetadata] In-flight protégés:', Array.from(inflightSet));
         }
 
         // 4) Calculer les gabarits à créer (sélectionnés - déjà existants)
@@ -1183,7 +1184,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
         // 5) 🗑️ NOUVEAU : Calculer les copies à SUPPRIMER (existantes mais plus sélectionnées)
         // On compare les sourceTemplateIds des copies existantes avec les templates sélectionnés
         const selectedSet = new Set(merged.templateNodeIds);
-        console.log('👀 [commitRepeaterMetadata] Détection des copies à supprimer:', {
+        logger.debug('👀 [commitRepeaterMetadata] Détection des copies à supprimer:', {
           'merged.templateNodeIds': merged.templateNodeIds,
           'selectedSet': Array.from(selectedSet),
           'childrenOfRepeater.length': childrenOfRepeater.length,
@@ -1195,7 +1196,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
         childrenOfRepeater.forEach(n => {
           // Ignorer les nœuds déjà marqués comme supprimés
           if (recentlyDeleted.has(n.id)) {
-            console.log(`⏭️ [commitRepeaterMetadata] Ignoré (déjà supprimé): ${n.label} (${n.id})`);
+            logger.debug(`⏭️ [commitRepeaterMetadata] Ignoré (déjà supprimé): ${n.label} (${n.id})`);
             return;
           }
           
@@ -1203,7 +1204,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
           const sourceTemplateId = meta?.sourceTemplateId;
           
           // Log détaillé pour chaque enfant
-          console.log(`🔍 [commitRepeaterMetadata] Analyse enfant: ${n.label}`, {
+          logger.debug(`🔍 [commitRepeaterMetadata] Analyse enfant: ${n.label}`, {
             id: n.id,
             parentId: n.parentId,
             sourceTemplateId: sourceTemplateId || '(aucun)',
@@ -1213,12 +1214,12 @@ const Parameters: React.FC<ParametersProps> = (props) => {
           
           // Si c'est une copie (a un sourceTemplateId) ET que son template n'est plus sélectionné
           if (n.parentId === repeaterId && sourceTemplateId && !selectedSet.has(sourceTemplateId)) {
-            console.log(`🗑️ [commitRepeaterMetadata] Copie à supprimer: ${n.label} (${n.id.substring(0,8)}...) - template source: ${sourceTemplateId.substring(0,8)}...`);
+            logger.debug(`🗑️ [commitRepeaterMetadata] Copie à supprimer: ${n.label} (${n.id.substring(0,8)}...) - template source: ${sourceTemplateId.substring(0,8)}...`);
             nodesToDelete.push(n);
           }
         });
         
-        console.log('🧙 [commitRepeaterMetadata] Récapitulatif des suppressions:', {
+        logger.debug('🧙 [commitRepeaterMetadata] Récapitulatif des suppressions:', {
           'Total copies à supprimer': nodesToDelete.length,
           'Détails': nodesToDelete.map(n => ({
             id: n.id.substring(0, 8) + '...',
@@ -1227,7 +1228,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
           }))
         });
         
-        console.log('🧙 [commitRepeaterMetadata] Récapitulatif des suppressions:', {
+        logger.debug('🧙 [commitRepeaterMetadata] Récapitulatif des suppressions:', {
           'Total copies à supprimer': nodesToDelete.length,
           'Détails': nodesToDelete.map(n => ({
             id: n.id.substring(0, 8) + '...',
@@ -1236,7 +1237,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
           }))
         });
 
-        console.log('🧪 [commitRepeaterMetadata] Check idempotence:', {
+        logger.debug('🧪 [commitRepeaterMetadata] Check idempotence:', {
           repeaterId: repeaterId.substring(0, 8) + '...',
           'selectedTemplateIds': merged.templateNodeIds.map(id => id.substring(0, 8) + '...'),
           'existingSourceTemplateIds': Array.from(existingSourceTemplateIds).map(id => id.substring(0, 8) + '...'),
@@ -1251,13 +1252,13 @@ const Parameters: React.FC<ParametersProps> = (props) => {
         // 6) 🔄 SÉQUENCE : Supprimer d'abord, puis créer après
         // CRITIQUE : On doit attendre que les suppressions soient terminées AVANT de créer
         const performDeletionsThenCreation = async () => {
-          console.log('📦 [performDeletionsThenCreation] Début séquence:', {
+          logger.debug('📦 [performDeletionsThenCreation] Début séquence:', {
             'nodesToDelete.length': nodesToDelete.length,
             'toCreate.length': toCreate.length
           });
           // Étape A : Supprimer les copies désélectionnées
           if (nodesToDelete.length > 0 && onDeleteNode) {
-            console.log('🗑️ [commitRepeaterMetadata] Suppression des copies désélectionnées:', nodesToDelete.map(n => `${n.label} (${n.id})`));
+            logger.debug('🗑️ [commitRepeaterMetadata] Suppression des copies désélectionnées:', nodesToDelete.map(n => `${n.label} (${n.id})`));
             
             // Marquer immédiatement comme supprimés
             nodesToDelete.forEach(n => recentlyDeletedIdsRef.current.add(n.id));
@@ -1267,9 +1268,9 @@ const Parameters: React.FC<ParametersProps> = (props) => {
               nodesToDelete.map(async (node) => {
                 try {
                   await Promise.resolve(onDeleteNode(node));
-                  console.log(`✅ [commitRepeaterMetadata] Copie ${node.label} (${node.id}) supprimée avec succès`);
+                  logger.debug(`✅ [commitRepeaterMetadata] Copie ${node.label} (${node.id}) supprimée avec succès`);
                 } catch (err) {
-                  console.error(`❌ [commitRepeaterMetadata] Échec suppression ${node.label}:`, err);
+                  logger.error(`❌ [commitRepeaterMetadata] Échec suppression ${node.label}:`, err);
                   // Retirer du tracking en cas d'échec
                   recentlyDeletedIdsRef.current.delete(node.id);
                 }
@@ -1277,7 +1278,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
             );
             
             // Rafraîchir l'arbre après suppression
-            console.log('🔄 [commitRepeaterMetadata] Suppressions terminées, rafraîchissement...');
+            logger.debug('🔄 [commitRepeaterMetadata] Suppressions terminées, rafraîchissement...');
             await refreshTree?.();
             
             // ⏳ Petit délai pour laisser l'état se stabiliser
@@ -1287,20 +1288,20 @@ const Parameters: React.FC<ParametersProps> = (props) => {
           // Étape B : NE PAS créer automatiquement les copies
           // Les copies seront créées UNIQUEMENT quand l'utilisateur clique sur le bouton "Ajouter"
           if (toCreate.length > 0) {
-            console.log('📋 [commitRepeaterMetadata] Templates à dupliquer (attente clic "Ajouter"):', toCreate);
+            logger.debug('📋 [commitRepeaterMetadata] Templates à dupliquer (attente clic "Ajouter"):', toCreate);
             // NOTE: On ne duplique plus automatiquement ici
             // duplicateTemplatesPhysically sera appelé par le bouton "Ajouter" dans TBLSectionRenderer
           } else if (nodesToDelete.length === 0) {
-            console.log('✅ [commitRepeaterMetadata] Aucune modification nécessaire (idempotent)');
+            logger.debug('✅ [commitRepeaterMetadata] Aucune modification nécessaire (idempotent)');
           }
         };
 
         // Lancer la séquence
         performDeletionsThenCreation().catch(err => {
-          console.error('❌ [commitRepeaterMetadata] Erreur durant la séquence suppression/création:', err);
+          logger.error('❌ [commitRepeaterMetadata] Erreur durant la séquence suppression/création:', err);
         });
       } catch (e) {
-        console.warn('⚠️ [commitRepeaterMetadata] Échec contrôle idempotence:', e);
+        logger.warn('⚠️ [commitRepeaterMetadata] Échec contrôle idempotence:', e);
         // Plus de fallback de duplication automatique - on laisse le bouton "Ajouter" gérer
       }
     }
@@ -1350,10 +1351,10 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     if (cleaned) {
       if (inflightSet.size === 0) {
         inFlightDupByRepeaterRef.current.delete(repeaterId);
-        console.log('🧹 [Parameters] Nettoyage in-flight COMPLET après hydratation de nodes');
+        logger.debug('🧹 [Parameters] Nettoyage in-flight COMPLET après hydratation de nodes');
       } else {
         inFlightDupByRepeaterRef.current.set(repeaterId, inflightSet);
-        console.log('🧹 [Parameters] Nettoyage in-flight PARTIEL:', Array.from(inflightSet));
+        logger.debug('🧹 [Parameters] Nettoyage in-flight PARTIEL:', Array.from(inflightSet));
       }
     }
     
@@ -1386,7 +1387,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       
       const cleanedCount = initialSize - remainingIds.size;
       if (cleanedCount > 0) {
-        console.log(`🗑️ [Parameters] Nettoyage IDs supprimés confirmés: ${cleanedCount} → Reste: ${recentlyDeletedIdsRef.current.size}`);
+        logger.debug(`🗑️ [Parameters] Nettoyage IDs supprimés confirmés: ${cleanedCount} → Reste: ${recentlyDeletedIdsRef.current.size}`);
       }
     }
   }, [nodes, selectedNode?.id]);
@@ -1415,7 +1416,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       || (selectedNode.metadata?.fieldType as string | undefined)
       || nodeType?.defaultFieldType
       || selectedNode.type; // ✅ FALLBACK: utiliser le type du nœud si pas de fieldType
-    console.log('🔍 [Parameters] FieldType détecté:', { 
+    logger.debug('🔍 [Parameters] FieldType détecté:', { 
       type: selectedNode.type, 
       subType: selectedNode.subType, 
       metadataFieldType: selectedNode.metadata?.fieldType, 
@@ -1443,7 +1444,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     const now = Date.now();
     const skipUntil = skipCapsReinitUntilRef.current;
     if (now < skipUntil) {
-      console.log('⏭️ [Parameters] Réinitialisation capsState ignorée (blocage actif)', { now, skipUntil, diff: skipUntil - now });
+      logger.debug('⏭️ [Parameters] Réinitialisation capsState ignorée (blocage actif)', { now, skipUntil, diff: skipUntil - now });
     } else {
       const newCapsState = {
         data: !!selectedNode.hasData,
@@ -1460,10 +1461,10 @@ const Parameters: React.FC<ParametersProps> = (props) => {
         const keys = Object.keys(newCapsState) as Array<keyof typeof newCapsState>;
         const changed = keys.some(k => prev[k] !== newCapsState[k]);
         if (!changed) {
-          console.log('⏭️ [Parameters] capsState identique, skip re-render');
+          logger.debug('⏭️ [Parameters] capsState identique, skip re-render');
           return prev; // même référence → pas de re-render
         }
-        console.log('🔄 [Parameters] capsState réinitialisé via hydratation:', newCapsState, { 
+        logger.debug('🔄 [Parameters] capsState réinitialisé via hydratation:', newCapsState, { 
           'selectedNode.hasLink': selectedNode.hasLink,
           'selectedNode.id': selectedNode.id 
         });
@@ -1478,17 +1479,17 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     if (selectedNode.type === 'leaf_repeater') {
       // 🆕 Ignorer l'hydratation si on vient de modifier
       if (skipNextHydrationRef.current) {
-        console.log('⏭️ [Parameters] Hydratation ignorée (modification en cours)');
+        logger.debug('⏭️ [Parameters] Hydratation ignorée (modification en cours)');
         return;
       }
       
-      console.log('🔍 [Parameters] Hydratation repeater:', {
+      logger.debug('🔍 [Parameters] Hydratation repeater:', {
         'selectedNode.metadata': JSON.stringify(selectedNode.metadata, null, 2),
         'selectedNode.metadata?.repeater': JSON.stringify(selectedNode.metadata?.repeater, null, 2)
       });
       
       const repeaterMeta = (selectedNode.metadata?.repeater as RepeaterMetadata) || {};
-      console.log('🔍 [Parameters] repeaterMeta après cast:', JSON.stringify(repeaterMeta, null, 2));
+      logger.debug('🔍 [Parameters] repeaterMeta après cast:', JSON.stringify(repeaterMeta, null, 2));
 
       // 🔥 FONCTION DE NETTOYAGE STRICTE: Rejeter TOUS les champs avec repeaters imbriqués
       const filterOutNestedRepeaters = (ids: string[] | undefined): string[] => {
@@ -1525,10 +1526,10 @@ const Parameters: React.FC<ParametersProps> = (props) => {
         const filtered = ids.filter(id => !hasNestedRepeater(id));
         if (filtered.length < ids.length) {
           const removed = ids.filter(id => !filtered.includes(id));
-          console.error(`🚨 [Parameters] NETTOYAGE CRITIQUE: ${removed.length} champ(s) imbriqué(s) rejeté(s) de templateNodeIds!`);
+          logger.error(`🚨 [Parameters] NETTOYAGE CRITIQUE: ${removed.length} champ(s) imbriqué(s) rejeté(s) de templateNodeIds!`);
           removed.forEach(id => {
             const node = nodes?.find(n => n.id === id);
-            console.error(`   ❌ REJETÉ: ${node?.label} (${id})`);
+            logger.error(`   ❌ REJETÉ: ${node?.label} (${id})`);
           });
         }
         
@@ -1552,7 +1553,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
           // 🔥 NETTOYAGE À LA SOURCE: Rejeter immédiatement les champs imbriqués
           return filterOutNestedRepeaters(ids);
         } catch (err) {
-          console.warn('⚠️ [Parameters] Impossible de parser repeater_templateNodeIds:', err);
+          logger.warn('⚠️ [Parameters] Impossible de parser repeater_templateNodeIds:', err);
         }
         return undefined;
       };
@@ -1578,7 +1579,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       // 🔥 NETTOYAGE SUPPLÉMENTAIRE: Même si templateIds vient de repeaterMeta, nettoyer
       templateIds = filterOutNestedRepeaters(templateIds);
 
-      console.log('🔍 [Parameters] Template IDs extraits:', {
+      logger.debug('🔍 [Parameters] Template IDs extraits:', {
         templateIds,
         'columnTemplateIds (PRIORITÉ)': columnTemplateIds,
         'Array.isArray(repeaterMeta.templateNodeIds)': Array.isArray(repeaterMeta.templateNodeIds),
@@ -1726,7 +1727,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                     await api.post(`/api/treebranchleaf/nodes/${selectedNode.id}/apply-shared-references-from-original`);
                     if (typeof refreshTree === 'function') await Promise.resolve(refreshTree());
                   } catch (e) {
-                    console.error('❌ [Parameters] Erreur application références partagées:', e);
+                    logger.error('❌ [Parameters] Erreur application références partagées:', e);
                   } finally {
                     setApplyingSharedRefs(false);
                   }
@@ -1751,7 +1752,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                   await api.post(`/api/treebranchleaf/nodes/${selectedNode.id}/unlink-shared-references`, { deleteOrphans: true });
                   if (typeof refreshTree === 'function') await Promise.resolve(refreshTree());
                 } catch (e) {
-                  console.error('❌ [Parameters] Erreur délier/suppression références partagées:', e);
+                  logger.error('❌ [Parameters] Erreur délier/suppression références partagées:', e);
                 } finally {
                   setUnlinkingSharedRefs(false);
                 }
@@ -2178,7 +2179,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                 patchNode(data);
               }}
               onNodeUpdate={async (updates) => {
-                console.log('🔗 [Parameters] onNodeUpdate appelé:', updates);
+                logger.debug('🔗 [Parameters] onNodeUpdate appelé:', updates);
                 patchNode(updates);
               }}
               readOnly={props.readOnly}
@@ -2263,14 +2264,14 @@ const Parameters: React.FC<ParametersProps> = (props) => {
             {/* Liste des champs déclencheurs sélectionnés */}
             <div style={{ marginBottom: 8 }}>
               {(() => {
-                console.log('🔍 [TriggerField] État:', {
+                logger.debug('🔍 [TriggerField] État:', {
                   isLoading: isLoadingTriggerIds,
                   count: localTriggerNodeIds.length,
                   ids: localTriggerNodeIds
                 });
                 
                 if (isLoadingTriggerIds) {
-                  console.log('⏳ [TriggerField] Chargement en cours...');
+                  logger.debug('⏳ [TriggerField] Chargement en cours...');
                   return (
                     <div style={{ padding: '8px 12px', backgroundColor: '#f0f5ff', border: '1px solid #d6e4ff', borderRadius: 4, fontSize: 11, color: '#1890ff' }}>
                       Chargement...
@@ -2279,7 +2280,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                 }
                 
                 if (localTriggerNodeIds.length === 0) {
-                  console.log('⚠️ [TriggerField] Aucun champ sélectionné - affichage du message par défaut');
+                  logger.debug('⚠️ [TriggerField] Aucun champ sélectionné - affichage du message par défaut');
                   return (
                     <div style={{ padding: '8px 12px', backgroundColor: '#fafafa', border: '1px dashed #d9d9d9', borderRadius: 4, fontSize: 11, color: '#999' }}>
                       Aucun champ sélectionné - Recalcul à chaque modification
@@ -2287,11 +2288,11 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                   );
                 }
                 
-                console.log('✅ [TriggerField] Affichage de', localTriggerNodeIds.length, 'tag(s)');
+                logger.debug('✅ [TriggerField] Affichage de', localTriggerNodeIds.length, 'tag(s)');
                 return (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                     {localTriggerNodeIds.map(idOrRef => {
-                      console.log('🏷️ [TriggerField] Affichage tag pour:', idOrRef);
+                      logger.debug('🏷️ [TriggerField] Affichage tag pour:', idOrRef);
                       
                       // Si ça commence par @value., extraire le nodeId
                       let displayLabel = idOrRef;
@@ -2317,7 +2318,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                           key={idOrRef}
                           closable
                           onClose={() => {
-                            console.log('🗑️ [TriggerField] Suppression tag:', idOrRef);
+                            logger.debug('🗑️ [TriggerField] Suppression tag:', idOrRef);
                             const newIds = localTriggerNodeIds.filter(id => id !== idOrRef);
                             setLocalTriggerNodeIds(newIds);
                             
@@ -2331,10 +2332,10 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                             if (selectedNodeId) {
                               onNodeUpdateRef.current({ metadata: nextMeta, id: selectedNodeId })
                                 .then((resp: unknown) => {
-                                  console.log('✅ [TriggerField] triggerNodeIds supprimé et sauvegardé:', resp?.metadata?.triggerNodeIds);
+                                  logger.debug('✅ [TriggerField] triggerNodeIds supprimé et sauvegardé:', resp?.metadata?.triggerNodeIds);
                                 })
                                 .catch((err: unknown) => {
-                                  console.error('❌ [TriggerField] Erreur sauvegarde après suppression:', err);
+                                  logger.error('❌ [TriggerField] Erreur sauvegarde après suppression:', err);
                                 });
                             }
                             emitMetadataUpdate(nextMeta);
@@ -2408,16 +2409,16 @@ const Parameters: React.FC<ParametersProps> = (props) => {
               <SubTabsEditor
                 value={Array.isArray(selectedNode?.metadata?.subTabs) ? (selectedNode?.metadata?.subTabs as string[]) : EMPTY_SUBTAB_LIST}
                 onChange={(next) => {
-                  console.log('🎯 [SubTabsEditor onChange] Avant patchNode:', { next, currentNode: selectedNode?.id, currentMetadata: selectedNode?.metadata });
+                  logger.debug('🎯 [SubTabsEditor onChange] Avant patchNode:', { next, currentNode: selectedNode?.id, currentMetadata: selectedNode?.metadata });
                   const nextMetadata = { ...(selectedNode?.metadata || {}), subTabs: next } as Record<string, unknown>;
-                  console.log('🎯 [SubTabsEditor onChange] Métadonnées à envoyer:', nextMetadata);
+                  logger.debug('🎯 [SubTabsEditor onChange] Métadonnées à envoyer:', nextMetadata);
                   patchNode({ metadata: nextMetadata });
-                  console.log('🎯 [SubTabsEditor onChange] Après patchNode appelé');
+                  logger.debug('🎯 [SubTabsEditor onChange] Après patchNode appelé');
                   emitMetadataUpdate(nextMetadata);
                   // Émettre un événement pour que TBL refetch si besoin
                   try {
                     window.dispatchEvent(new CustomEvent('tbl-subtabs-updated', { detail: { nodeId: selectedNode?.id, treeId: selectedNode?.tree_id } }));
-                    console.log('🔔 [Parameters] Événement tbl-subtabs-updated émis');
+                    logger.debug('🔔 [Parameters] Événement tbl-subtabs-updated émis');
                   } catch { /* noop */ }
                 }}
               />
@@ -2439,9 +2440,9 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                       patchNode({ metadata: nextMetaBranch });
                       emitMetadataUpdate(nextMetaBranch);
                       await cascadeSubTabAssignments([val]);
-                      console.log('✅ [Parameters] Affectation bulk appliquée:', val);
+                      logger.debug('✅ [Parameters] Affectation bulk appliquée:', val);
                     } catch (e) {
-                      console.error('❌ [Parameters] Erreur lors de l\'affectation bulk:', e);
+                      logger.error('❌ [Parameters] Erreur lors de l\'affectation bulk:', e);
                     }
                   }}>
                     {((Array.isArray(selectedNode?.metadata?.subTabs) ? selectedNode?.metadata?.subTabs as string[] : [])).map(st => (
@@ -2495,7 +2496,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                 onChange={(e) => {
                   const next: Record<string, unknown> = { ...(selectedNode?.metadata || {}) };
                   if (e.target.checked) next.displayAlways = true; else delete next.displayAlways;
-                  console.log('🔔 [Parameters] displayAlways toggled:', e.target.checked, 'for node', selectedNode?.id);
+                  logger.debug('🔔 [Parameters] displayAlways toggled:', e.target.checked, 'for node', selectedNode?.id);
                   // Save change immediately (bypass debounce for displayAlways since it affects layout)
                   (async () => {
                     if (!selectedNodeId) return;
@@ -2507,7 +2508,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                         metadata: { ...(selectedNode?.metadata || {}), ...next }
                       };
                       
-                      console.log('🔔 [Parameters] Emission tbl-node-updated IMMEDIATELY (optimistic) for displayAlways:', { 
+                      logger.debug('🔔 [Parameters] Emission tbl-node-updated IMMEDIATELY (optimistic) for displayAlways:', { 
                         id: updatedNode.id, 
                         displayAlways: updatedNode.metadata?.displayAlways,
                         treeId: tree?.id
@@ -2518,11 +2519,11 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                       
                       // 🔥 DIRECT CALLBACK first (most reliable)
                       if (onNodeMetadataUpdated) {
-                        console.error('📞 [Parameters] Calling onNodeMetadataUpdated callback directly for:', updatedNode.id);
+                        logger.error('📞 [Parameters] Calling onNodeMetadataUpdated callback directly for:', updatedNode.id);
                         onNodeMetadataUpdated(updatedNode as unknown);
-                        console.error('✅ [Parameters] onNodeMetadataUpdated callback completed');
+                        logger.error('✅ [Parameters] onNodeMetadataUpdated callback completed');
                       } else {
-                        console.error('❌ [Parameters] onNodeMetadataUpdated callback NOT PROVIDED!');
+                        logger.error('❌ [Parameters] onNodeMetadataUpdated callback NOT PROVIDED!');
                       }
                       
                       // Then emit event as fallback
@@ -2532,7 +2533,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                       
                       // 🔥 FORCE RETRANSFORMATION: Signal any listening component to retransform
                       // This works even if the hook isn't mounted yet
-                      console.error('🔥 [Parameters] DISPATCHING tbl-force-retransform event for:', updatedNode.id);
+                      logger.error('🔥 [Parameters] DISPATCHING tbl-force-retransform event for:', updatedNode.id);
                       
                       // Store update in global state that TBL can access
                       if (typeof window !== 'undefined') {
@@ -2541,22 +2542,22 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                           fieldName: 'displayAlways',
                           timestamp: Date.now()
                         };
-                        console.error('✅ [Parameters] Stored force-retransform signal in window.__tblForceRetransformSignal');
+                        logger.error('✅ [Parameters] Stored force-retransform signal in window.__tblForceRetransformSignal');
                       }
                       
                       // Also try window event as backup
                       window.dispatchEvent(new CustomEvent('tbl-force-retransform', {
                         detail: { nodeId: updatedNode.id, fieldName: 'displayAlways', forceRemote: true }
                       }));
-                      console.error('✅ [Parameters] tbl-force-retransform event dispatched');
+                      logger.error('✅ [Parameters] tbl-force-retransform event dispatched');
                       
                       // THEN save to server asynchronously (don't wait for response)
-                      console.log('🔄 [Parameters] Calling onNodeUpdateRef for server persistence');
+                      logger.debug('🔄 [Parameters] Calling onNodeUpdateRef for server persistence');
                       onNodeUpdateRef.current?.({ metadata: next, id: selectedNodeId });
                       
-                      console.log('✅ [Parameters] displayAlways update emitted and queued');
+                      logger.debug('✅ [Parameters] displayAlways update emitted and queued');
                     } catch (e) {
-                      console.warn('[Parameters] Failed to update displayAlways:', e);
+                      logger.warn('[Parameters] Failed to update displayAlways:', e);
                     }
                   })();
                 }}
@@ -2597,11 +2598,11 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                     <LazyAppearancePanel 
                       value={hydratedAppearanceConfig}
                       onChange={(config: Record<string, unknown>) => {
-                        console.log('🎨 [Apparence] Changement détecté:', config);
+                        logger.debug('🎨 [Apparence] Changement détecté:', config);
                         
                         // Mapper vers les champs TBL
                         const tblMapping = TreeBranchLeafRegistry.mapAppearanceConfigToTBL(config);
-                        console.log('🎨 [Apparence] Mapping TBL généré:', tblMapping);
+                        logger.debug('🎨 [Apparence] Mapping TBL généré:', tblMapping);
                         
                         // ✅ EXTRAIRE LES PARAMÈTRES REPEATER POUR LES COLONNES DÉDIÉES
                         // RepeaterPanel envoie les valeurs DIRECTEMENT à la racine de config
@@ -2614,7 +2615,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                           repeater_minItems: config.minItems != null ? Number(config.minItems) : repeaterMinItems ?? 0,
                           repeater_maxItems: config.maxItems != null ? Number(config.maxItems) : repeaterMaxItems ?? null,
                         };
-                        console.warn('🔁 [Apparence] Colonnes repeater extraites:', repeaterColumns);
+                        logger.warn('🔁 [Apparence] Colonnes repeater extraites:', repeaterColumns);
                         
                         // ✅ SAUVEGARDE AVEC COLONNES REPEATER
                         const payload = { 
@@ -2622,7 +2623,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                           ...tblMapping,
                           ...repeaterColumns
                         };
-                        console.warn('💾 [Apparence] PAYLOAD COMPLET ENVOYÉ:', payload);
+                        logger.warn('💾 [Apparence] PAYLOAD COMPLET ENVOYÉ:', payload);
                         
                         patchNode(payload);
                       }}
@@ -2679,7 +2680,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
               const polluted = repeaterTemplateIds.filter(id => hasNestedRepeater(id));
               
               if (polluted.length > 0) {
-                console.error(`🚨🚨🚨 [REPEATER SECTION] POLLUTION AU RENDU: ${polluted.length} champ(s) imbriqué(s)!`, polluted);
+                logger.error(`🚨🚨🚨 [REPEATER SECTION] POLLUTION AU RENDU: ${polluted.length} champ(s) imbriqué(s)!`, polluted);
                 polluted.forEach(id => {
                   const node = (function findNode(list?: TreeBranchLeafNode[]): TreeBranchLeafNode | undefined {
                     if (!list) return undefined;
@@ -2690,12 +2691,12 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                     }
                     return undefined;
                   })(nodes);
-                  console.error(`   🚫 REJET DÉFINITIF: "${node?.label}" (${id})`);
+                  logger.error(`   🚫 REJET DÉFINITIF: "${node?.label}" (${id})`);
                 });
                 
                 // AUTO-CORRECTION: Nettoyer l'état si pollution détectée
                 if (cleanedIds.length !== repeaterTemplateIds.length) {
-                  console.warn(`[AUTO-CORRECT] Nettoyage de l'état: ${repeaterTemplateIds.length} -> ${cleanedIds.length}`);
+                  logger.warn(`[AUTO-CORRECT] Nettoyage de l'état: ${repeaterTemplateIds.length} -> ${cleanedIds.length}`);
                   setRepeaterTemplateIds(cleanedIds);
                   // Aussi nettoyer en base
                   commitRepeaterMetadata({ 
@@ -2750,7 +2751,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                     
                     const isNested = checkHasRepeater(node);
                     if (isNested) {
-                      console.error(`[Select Render] 🚫 Filtre anti-pollution: ${node.label} (${id}) est un champ imbriqué - REJET`);
+                      logger.error(`[Select Render] 🚫 Filtre anti-pollution: ${node.label} (${id}) est un champ imbriqué - REJET`);
                     }
                     return !isNested;
                   })}
@@ -2758,7 +2759,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                   placeholder="Sélectionnez les champs gabarit"
                   disabled={props.readOnly}
                   onChange={async (values) => {
-                    console.log('🎯 [Select onChange] Valeurs sélectionnées:', values);
+                    logger.debug('🎯 [Select onChange] Valeurs sélectionnées:', values);
                     const nextIds = values as string[];
                     const prevIds = repeaterTemplateIds;
                     setRepeaterTemplateIds(nextIds);
@@ -2767,15 +2768,15 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                     if (hydrationTimeoutRef.current) window.clearTimeout(hydrationTimeoutRef.current);
                     hydrationTimeoutRef.current = window.setTimeout(() => {
                       skipNextHydrationRef.current = false;
-                      console.log('✅ [Parameters] Hydratation réactivée');
+                      logger.debug('✅ [Parameters] Hydratation réactivée');
                     }, 1000);
                     
                     // Construire un map des labels pour chaque template node
                     const templateNodeLabels: Record<string, string> = {};
                     const selectedIds = nextIds;
                     
-                    console.log('🏷️ [Parameters] onChange appelé - construction des labels pour:', selectedIds);
-                    console.log('🏷️ [Parameters] Nodes disponibles:', nodes?.length || 0);
+                    logger.debug('🏷️ [Parameters] onChange appelé - construction des labels pour:', selectedIds);
+                    logger.debug('🏷️ [Parameters] Nodes disponibles:', nodes?.length || 0);
                     
                     selectedIds.forEach(nodeId => {
                       // Trouver le nœud dans l'arbre pour récupérer son chemin complet
@@ -2795,14 +2796,14 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                       };
                       
                       const path = findNodePath(nodes, nodeId, []);
-                      console.log(`🏷️ [Parameters] Node ${nodeId} -> path trouvé:`, path);
+                      logger.debug(`🏷️ [Parameters] Node ${nodeId} -> path trouvé:`, path);
                       if (path) {
                         templateNodeLabels[nodeId] = path.join(' / ');
                       }
                     });
                     
-                    console.log('🏷️ [Parameters] Template node labels FINAL:', templateNodeLabels);
-                    console.log('🏁 [onChange] Prêt à appeler commitRepeaterMetadata:', {
+                    logger.debug('🏷️ [Parameters] Template node labels FINAL:', templateNodeLabels);
+                    logger.debug('🏁 [onChange] Prêt à appeler commitRepeaterMetadata:', {
                       'selectedIds (passé en param)': selectedIds,
                       'templateNodeLabels': templateNodeLabels,
                       'repeaterTemplateIds (state actuel - STALE !)': repeaterTemplateIds,
@@ -2814,7 +2815,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                       templateNodeLabels
                     });
                     
-                    console.log('🎯 [onChange] ========== FIN CHANGEMENT TEMPLATE ==========');
+                    logger.debug('🎯 [onChange] ========== FIN CHANGEMENT TEMPLATE ==========');
                   }}
                   allowClear
                 >
@@ -2887,7 +2888,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
 
                       const childrenOfRepeater = deriveChildrenByParentId(nodes, selectedNodeFromTree?.id);
 
-                      console.log('🔎 [Parameters] Copies detection START', {
+                      logger.debug('🔎 [Parameters] Copies detection START', {
                         selectedNodeId: selectedNodeFromTree?.id,
                         childrenCount: childrenOfRepeater.length,
                         childrenLabels: childrenOfRepeater.map(c => c.label),
@@ -2909,7 +2910,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                           sourceTemplateId: (c.metadata as unknown)?.sourceTemplateId,
                           metadataKeys: Object.keys(c.metadata || {})
                         }));
-                        console.log('🔎 [Parameters] ALL CHILDREN DETAILED JSON:', JSON.stringify(detailed, null, 2));
+                        logger.debug('🔎 [Parameters] ALL CHILDREN DETAILED JSON:', JSON.stringify(detailed, null, 2));
                       } catch {
                         // ignore JSON stringify issues
                       }
@@ -2929,7 +2930,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                         let copies = childrenOfRepeater.filter(n => {
                           const meta = (n.metadata || {}) as unknown;
                           const matches = meta?.sourceTemplateId === tplId;
-                          console.log('🔎 [Parameters] Copy filter DEBUG', {
+                          logger.debug('🔎 [Parameters] Copy filter DEBUG', {
                             nodeId: n.id,
                             nodeLabel: n.label,
                             sourceTemplateId: meta?.sourceTemplateId,
@@ -2961,7 +2962,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                           if (fallback.length > 0) {
                             const existingIds = new Set(copies.map(c => c.id));
                             const merged = [...copies, ...fallback.filter(f => !existingIds.has(f.id))];
-                            console.warn('🛟 [Parameters] Fallback copies used (global scan by metadata):', merged.map(m => ({ id: m.id, label: m.label })));
+                            logger.warn('🛟 [Parameters] Fallback copies used (global scan by metadata):', merged.map(m => ({ id: m.id, label: m.label })));
                             copies = merged;
                           }
                         }
@@ -3007,7 +3008,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                                             await Promise.resolve(refreshTree());
                                           }
                                         } catch (e) {
-                                          console.error('❌ [Repeater] Erreur suppression copie:', e);
+                                          logger.error('❌ [Repeater] Erreur suppression copie:', e);
                                         }
                                       }}
                                     >
@@ -3091,7 +3092,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                   onClose={() => setRepeaterCountSelectorOpen(false)}
                   selectionContext="nodeId"
                   onSelect={(val) => {
-                    console.log('⚡ [Pre-load] Champ source sélectionné via NodeTreeSelector:', val);
+                    logger.debug('⚡ [Pre-load] Champ source sélectionné via NodeTreeSelector:', val);
                     // Extraire le nodeId du ref (format: @value.{nodeId})
                     const nodeId = val.ref.replace('@value.', '').replace('@select.', '');
                     setRepeaterCountSourceNodeId(nodeId);
@@ -3124,11 +3125,11 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                       type="primary"
                       size="small"
                       onClick={async () => {
-                        console.log('🔴🔴🔴 BOUTON CLIQUÉ! selectedNode:', selectedNode?.id);
+                        logger.debug('🔴🔴🔴 BOUTON CLIQUÉ! selectedNode:', selectedNode?.id);
                         const input = document.getElementById('preload-test-count') as HTMLInputElement;
-                        console.log('🔴 Input trouvé:', input, 'value:', input?.value);
+                        logger.debug('🔴 Input trouvé:', input, 'value:', input?.value);
                         const targetCount = parseInt(input?.value || '0', 10);
-                        console.log('🔴 targetCount:', targetCount);
+                        logger.debug('🔴 targetCount:', targetCount);
                         if (!targetCount || targetCount < 1) {
                           alert('Entrez un nombre >= 1');
                           return;
@@ -3137,17 +3138,17 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                           alert('Aucun repeater sélectionné');
                           return;
                         }
-                        console.log(`⚡ [PRELOAD TEST] Déclenchement pour ${selectedNode.id} avec cible ${targetCount}`);
+                        logger.debug(`⚡ [PRELOAD TEST] Déclenchement pour ${selectedNode.id} avec cible ${targetCount}`);
                         try {
                           const result = await api.post(`/api/repeat/${selectedNode.id}/preload-copies`, {
                             targetCount
                           });
-                          console.log('⚡ [PRELOAD TEST] Résultat:', result);
+                          logger.debug('⚡ [PRELOAD TEST] Résultat:', result);
                           alert(`✅ ${result.createdCopies} copies créées! Total: ${result.totalCopies}`);
                           // Rafraîchir l'arbre
                           if (refreshTree) refreshTree();
                         } catch (error) {
-                          console.error('❌ [PRELOAD TEST] Erreur:', error);
+                          logger.error('❌ [PRELOAD TEST] Erreur:', error);
                           alert('❌ Erreur: ' + ((error as Error).message || 'Erreur inconnue'));
                         }
                       }}
@@ -3324,13 +3325,13 @@ const Parameters: React.FC<ParametersProps> = (props) => {
           nodeId={selectedNode.id}
           open={triggerNodeSelectorOpen}
           onClose={() => {
-            console.log('🔍 [TriggerNodeSelector] Modal fermé');
+            logger.debug('🔍 [TriggerNodeSelector] Modal fermé');
             setTriggerNodeSelectorOpen(false);
           }}
           onSelect={(val: NodeTreeSelectorValue) => {
-            console.log('🔍 [TriggerNodeSelector] onSelect appelé:', val);
-            console.log('🔍 [TriggerNodeSelector] val.ref:', val.ref);
-            console.log('🔍 [TriggerNodeSelector] val.kind:', val.kind);
+            logger.debug('🔍 [TriggerNodeSelector] onSelect appelé:', val);
+            logger.debug('🔍 [TriggerNodeSelector] val.ref:', val.ref);
+            logger.debug('🔍 [TriggerNodeSelector] val.kind:', val.kind);
             
             let nodeId: string | null = null;
             
@@ -3339,12 +3340,12 @@ const Parameters: React.FC<ParametersProps> = (props) => {
             const matchValue = val.ref.match(/@value\.(.+)/);
             if (matchValue) {
               nodeId = matchValue[1];
-              console.log('🔍 [TriggerNodeSelector] nodeId extrait (format @value):', nodeId);
+              logger.debug('🔍 [TriggerNodeSelector] nodeId extrait (format @value):', nodeId);
             } else {
               // Format 2: {lead.xxx} ou autres variables
               // On stocke le ref complet sans transformation
               nodeId = val.ref;
-              console.log('🔍 [TriggerNodeSelector] Ref complet conservé:', nodeId);
+              logger.debug('🔍 [TriggerNodeSelector] Ref complet conservé:', nodeId);
             }
             
             if (nodeId) {
@@ -3354,37 +3355,37 @@ const Parameters: React.FC<ParametersProps> = (props) => {
               const currentIds = localTriggerNodeIds.length > 0 ? localTriggerNodeIds : 
                                  (Array.isArray(nextMeta.triggerNodeIds) ? nextMeta.triggerNodeIds as string[] : []);
               
-              console.log('🔍 [TriggerNodeSelector] currentIds (depuis état local):', currentIds);
-              console.log('🔍 [TriggerNodeSelector] localTriggerNodeIds:', localTriggerNodeIds);
+              logger.debug('🔍 [TriggerNodeSelector] currentIds (depuis état local):', currentIds);
+              logger.debug('🔍 [TriggerNodeSelector] localTriggerNodeIds:', localTriggerNodeIds);
               
               // Ajouter le nodeId s'il n'est pas déjà présent
               if (!currentIds.includes(nodeId)) {
                 const newIds = [...currentIds, nodeId];
                 nextMeta.triggerNodeIds = newIds;
-                console.log('🔍 [TriggerNodeSelector] nextMeta.triggerNodeIds:', nextMeta.triggerNodeIds);
+                logger.debug('🔍 [TriggerNodeSelector] nextMeta.triggerNodeIds:', nextMeta.triggerNodeIds);
                 
                 // Update local state immediately (optimistic)
                 setLocalTriggerNodeIds(newIds);
-                console.log('🎯 [TriggerNodeSelector] État local mis à jour avec TOUS les champs:', newIds);
+                logger.debug('🎯 [TriggerNodeSelector] État local mis à jour avec TOUS les champs:', newIds);
                 
                 // 🔥 FIX: Sauvegarder immédiatement via l'API (pas de debounce)
                 // patchNode est debounced et peut être annulé par un autre appel dans les 400ms
                 if (selectedNodeId) {
                   onNodeUpdateRef.current({ metadata: nextMeta, id: selectedNodeId })
                     .then((resp: unknown) => {
-                      console.log('✅ [TriggerNodeSelector] triggerNodeIds sauvegardé en DB:', resp?.metadata?.triggerNodeIds);
+                      logger.debug('✅ [TriggerNodeSelector] triggerNodeIds sauvegardé en DB:', resp?.metadata?.triggerNodeIds);
                     })
                     .catch((err: unknown) => {
-                      console.error('❌ [TriggerNodeSelector] Erreur sauvegarde triggerNodeIds:', err);
+                      logger.error('❌ [TriggerNodeSelector] Erreur sauvegarde triggerNodeIds:', err);
                     });
                 }
                 emitMetadataUpdate(nextMeta);
-                console.log('✅ [TriggerNodeSelector] Champ ajouté avec succès!');
+                logger.debug('✅ [TriggerNodeSelector] Champ ajouté avec succès!');
               } else {
-                console.log('⚠️ [TriggerNodeSelector] Le champ est déjà dans la liste');
+                logger.debug('⚠️ [TriggerNodeSelector] Le champ est déjà dans la liste');
               }
             } else {
-              console.warn('❌ [TriggerNodeSelector] Impossible d\'extraire le nodeId depuis:', val.ref);
+              logger.warn('❌ [TriggerNodeSelector] Impossible d\'extraire le nodeId depuis:', val.ref);
             }
             
             // Ne pas fermer le modal pour permettre plusieurs sélections

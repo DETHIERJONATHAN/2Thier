@@ -35,6 +35,7 @@ import { PrismaClient } from '@prisma/client';
 import { copyFormulaCapacity } from './copy-capacity-formula.js';
 import { copyConditionCapacity } from './copy-capacity-condition.js';
 import { copyTableCapacity } from './copy-capacity-table.js';
+import { logger } from '../../../../lib/logger';
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ðŸ“‹ TYPES ET INTERFACES
@@ -326,7 +327,7 @@ export async function copyVariableWithCapacities(
     });
 
     if (!originalVar) {
-      console.error(`âŒ Variable introuvable: ${originalVarId}`);
+      logger.error(`âŒ Variable introuvable: ${originalVarId}`);
       return {
         variableId: '',
         exposedKey: '',
@@ -401,7 +402,7 @@ export async function copyVariableWithCapacities(
                 newSourceRef = applySuffixToSourceRef(originalVar.sourceRef, Number(suffix));
               }
             } catch (e) {
-              console.error(`âŒ [COPY-VAR] Exception copie formule:`, (e as Error).message, (e as Error).stack);
+              logger.error(`âŒ [COPY-VAR] Exception copie formule:`, (e as Error).message, (e as Error).stack);
               newSourceRef = applySuffixToSourceRef(originalVar.sourceRef, Number(suffix));
             }
           }
@@ -432,7 +433,7 @@ export async function copyVariableWithCapacities(
                 newSourceRef = applySuffixToSourceRef(originalVar.sourceRef, suffix);
               }
             } catch (e) {
-              console.error(`âŒ Exception copie condition:`, (e as Error).message);
+              logger.error(`âŒ Exception copie condition:`, (e as Error).message);
               newSourceRef = applySuffixToSourceRef(originalVar.sourceRef, suffix);
             }
           }
@@ -463,7 +464,7 @@ export async function copyVariableWithCapacities(
                 newSourceRef = applySuffixToSourceRef(originalVar.sourceRef, suffix);
               }
             } catch (e) {
-              console.error(`âŒ Exception copie table:`, (e as Error).message);
+              logger.error(`âŒ Exception copie table:`, (e as Error).message);
               newSourceRef = applySuffixToSourceRef(originalVar.sourceRef, suffix);
             }
           }
@@ -690,10 +691,10 @@ export async function copyVariableWithCapacities(
                 if (tableResult.success) {
                   tableIdMap.set(originalTableId, tableResult.newTableId);
                 } else {
-                  console.warn(`âš ï¸ [COPY-TABLES] Ã‰chec copie table ${originalTableId}: ${tableResult.error}`);
+                  logger.warn(`âš ï¸ [COPY-TABLES] Ã‰chec copie table ${originalTableId}: ${tableResult.error}`);
                 }
               } catch (e) {
-                console.error(`âŒ [COPY-TABLES] Exception copie table ${originalTableId}:`, (e as Error).message);
+                logger.error(`âŒ [COPY-TABLES] Exception copie table ${originalTableId}:`, (e as Error).message);
               }
             }
             
@@ -704,10 +705,10 @@ export async function copyVariableWithCapacities(
             });
           }
         } else {
-          console.warn(`âš ï¸ Impossible de rÃ©cupÃ©rer le nÅ“ud propriÃ©taire original ${originalVar.nodeId}. Fallback newNodeId.`);
+          logger.warn(`âš ï¸ Impossible de rÃ©cupÃ©rer le nÅ“ud propriÃ©taire original ${originalVar.nodeId}. Fallback newNodeId.`);
         }
       } catch (e) {
-        console.warn(`âš ï¸ Erreur lors de la crÃ©ation du nÅ“ud d'affichage dÃ©diÃ©:`, (e as Error).message);
+        logger.warn(`âš ï¸ Erreur lors de la crÃ©ation du nÅ“ud d'affichage dÃ©diÃ©:`, (e as Error).message);
       }
     } else {
     }
@@ -727,7 +728,7 @@ export async function copyVariableWithCapacities(
                 newVarId = adjusted;
       }
     } catch (e) {
-      console.warn(`âš ï¸ VÃ©rification collision id variable Ã©chouÃ©e:`, (e as Error).message);
+      logger.warn(`âš ï¸ VÃ©rification collision id variable Ã©chouÃ©e:`, (e as Error).message);
     }
 
     try {
@@ -738,7 +739,7 @@ export async function copyVariableWithCapacities(
                 newExposedKey = adjustedKey;
       }
     } catch (e) {
-      console.warn(`âš ï¸ VÃ©rification collision exposedKey Ã©chouÃ©e:`, (e as Error).message);
+      logger.warn(`âš ï¸ VÃ©rification collision exposedKey Ã©chouÃ©e:`, (e as Error).message);
     }
 
     // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -773,7 +774,7 @@ export async function copyVariableWithCapacities(
           });
           await addToNodeLinkedField(prisma, finalNodeId, 'linkedVariableIds', [existingForNode.id]);
         } catch (e) {
-          console.warn(`âš ï¸ Erreur MAJ display node (rÃ©utilisation):`, (e as Error).message);
+          logger.warn(`âš ï¸ Erreur MAJ display node (rÃ©utilisation):`, (e as Error).message);
         }
 
         // Mettre en cache l'ID rÃ©utilisÃ© pour Ã©viter d'autres crÃ©ations
@@ -783,7 +784,7 @@ export async function copyVariableWithCapacities(
         // pour ce nouveau nÅ“ud/contexte !
       }
     } catch (e) {
-      console.warn(`âš ï¸ VÃ©rification variable existante par nodeId Ã©chouÃ©e:`, (e as Error).message);
+      logger.warn(`âš ï¸ VÃ©rification variable existante par nodeId Ã©chouÃ©e:`, (e as Error).message);
     }
 
     // Utiliser la variable rÃ©utilisÃ©e, la variable en cache, ou en crÃ©er une nouvelle
@@ -827,7 +828,7 @@ export async function copyVariableWithCapacities(
     });
     if (verification) {
     } else {
-      console.error(`âŒâŒâŒ PROBLÃˆME GRAVE: Variable ${newVariable.id} N'EXISTE PAS aprÃ¨s crÃ©ation !`);
+      logger.error(`âŒâŒâŒ PROBLÃˆME GRAVE: Variable ${newVariable.id} N'EXISTE PAS aprÃ¨s crÃ©ation !`);
     }
 
     // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -850,7 +851,7 @@ export async function copyVariableWithCapacities(
         }
       });
     } catch (e) {
-      console.warn(`âš ï¸ Erreur lors de la mise Ã  jour des paramÃ¨tres capacitÃ© (display node):`, (e as Error).message);
+      logger.warn(`âš ï¸ Erreur lors de la mise Ã  jour des paramÃ¨tres capacitÃ© (display node):`, (e as Error).message);
     }
 
     // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -879,7 +880,7 @@ export async function copyVariableWithCapacities(
           }
         }
       } catch (e) {
-        console.warn(`âš ï¸ Erreur lors du linkage vers la section d'affichage:`, (e as Error).message);
+        logger.warn(`âš ï¸ Erreur lors du linkage vers la section d'affichage:`, (e as Error).message);
       }
     } else if (autoCreateDisplayNode) {
       // DÃ©jÃ  gÃ©rÃ© ci-dessus: finalNodeId pointe vers le nÅ“ud d'affichage (copiÃ© ou crÃ©Ã©)
@@ -887,7 +888,7 @@ export async function copyVariableWithCapacities(
       try {
         await addToNodeLinkedField(prisma, finalNodeId, 'linkedVariableIds', [newVariable.id]);
       } catch (e) {
-        console.warn(`âš ï¸ Erreur linkage variableâ†’display node:`, (e as Error).message);
+        logger.warn(`âš ï¸ Erreur linkage variableâ†’display node:`, (e as Error).message);
       }
       // Hydratation capacitÃ©s condition/table si applicable
       try {
@@ -931,7 +932,7 @@ export async function copyVariableWithCapacities(
           }
         }
       } catch (e) {
-        console.warn(`âš ï¸ Synchronisation capacitÃ©s condition/table sur le nÅ“ud d'affichage:`, (e as Error).message);
+        logger.warn(`âš ï¸ Synchronisation capacitÃ©s condition/table sur le nÅ“ud d'affichage:`, (e as Error).message);
       }
     }
 
@@ -980,7 +981,7 @@ export async function copyVariableWithCapacities(
             }
           }
         } catch (e) {
-          console.warn(`âš ï¸ Erreur MAJ bidirectionnelle:`, (e as Error).message);
+          logger.warn(`âš ï¸ Erreur MAJ bidirectionnelle:`, (e as Error).message);
         }
       }
     }
@@ -996,7 +997,7 @@ export async function copyVariableWithCapacities(
     };
 
   } catch (error) {
-    console.error(`âŒ Erreur lors de la copie de la variable:`, error);
+    logger.error(`âŒ Erreur lors de la copie de la variable:`, error);
     return {
       variableId: '',
       exposedKey: '',
@@ -1163,7 +1164,7 @@ async function addToNodeLinkedField(
   });
 
   if (!node) {
-    console.warn(`âš ï¸ NÅ“ud ${nodeId} introuvable pour MAJ ${field}`);
+    logger.warn(`âš ï¸ NÅ“ud ${nodeId} introuvable pour MAJ ${field}`);
     return;
   }
 
@@ -1243,7 +1244,7 @@ export interface CopyLinkedVariablesResult {
  *   prisma,
  *   { formulaIdMap, conditionIdMap, tableIdMap }
  * );
- * console.log(`${result.count} variables copiÃ©es`);
+ * logger.debug(`${result.count} variables copiÃ©es`);
  * // AccÃ©der Ã  la map : result.variableIdMap.get('oldVarId') â†’ 'oldVarId-1'
  */
 export async function copyLinkedVariablesFromNode(
@@ -1265,7 +1266,7 @@ export async function copyLinkedVariablesFromNode(
     });
 
     if (!sourceNode) {
-      console.error(`âŒ NÅ“ud source introuvable: ${sourceNodeId}`);
+      logger.error(`âŒ NÅ“ud source introuvable: ${sourceNodeId}`);
       return {
         count: 0,
         variableIdMap: new Map(),
@@ -1309,12 +1310,12 @@ export async function copyLinkedVariablesFromNode(
         if (result.success) {
           variableIdMap.set(varId, result.variableId);
         } else {
-          console.error(`âŒ Ã‰chec copie: ${result.error}`);
+          logger.error(`âŒ Ã‰chec copie: ${result.error}`);
         }
 
         results.push(result);
       } catch (e) {
-        console.error(`âŒ Exception lors de la copie: ${(e as Error).message}`);
+        logger.error(`âŒ Exception lors de la copie: ${(e as Error).message}`);
         results.push({
           variableId: '',
           exposedKey: '',
@@ -1350,7 +1351,7 @@ export async function copyLinkedVariablesFromNode(
     };
 
   } catch (error) {
-    console.error(`âŒ Erreur globale lors de la copie de variables liÃ©es:`, error);
+    logger.error(`âŒ Erreur globale lors de la copie de variables liÃ©es:`, error);
     return {
       count: 0,
       variableIdMap: new Map(),

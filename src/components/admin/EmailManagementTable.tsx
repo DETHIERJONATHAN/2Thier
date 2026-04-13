@@ -24,6 +24,7 @@ import {
   ExperimentOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { logger } from '../../lib/logger';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -74,7 +75,7 @@ const YandexConfigModal: React.FC<YandexConfigModalProps> = ({
       onClose();
       form.resetFields();
     } catch (error) {
-      console.error('Erreur configuration Yandex:', error);
+      logger.error('Erreur configuration Yandex:', error);
       message.error('Erreur lors de la configuration Yandex');
     } finally {
       setLoading(false);
@@ -143,7 +144,7 @@ const EmailManagementTable: React.FC = () => {
       const response = await api.get('/api/admin-password/users-emails');
       setUsers(response || []);
     } catch (error) {
-      console.error('Erreur chargement utilisateurs:', error);
+      logger.error('Erreur chargement utilisateurs:', error);
       message.error('Erreur lors du chargement des utilisateurs');
     } finally {
       setLoading(false);
@@ -182,9 +183,9 @@ const EmailManagementTable: React.FC = () => {
         generatedEmail: generateEmail(user)
       };
 
-      console.log('=== DEBUG Frontend - Données envoyées à l\'API ===');
-      console.log('User trouvé:', user);
-      console.log('Données à envoyer:', dataToSend);
+      logger.debug('=== DEBUG Frontend - Données envoyées à l\'API ===');
+      logger.debug('User trouvé:', user);
+      logger.debug('Données à envoyer:', dataToSend);
 
       await api.post('/api/admin-password/update-email-config', dataToSend);
 
@@ -192,7 +193,7 @@ const EmailManagementTable: React.FC = () => {
       setEditingKey('');
       loadUsers(); // Recharger les données
     } catch (error) {
-      console.error('Erreur lors de la sauvegarde:', error);
+      logger.error('Erreur lors de la sauvegarde:', error);
       message.error('Erreur lors de la sauvegarde');
     }
   };
@@ -203,7 +204,7 @@ const EmailManagementTable: React.FC = () => {
       await api.post('/yandex/test', { email: user.generatedEmail });
       message.success('Test de connexion réussi !');
     } catch (err) {
-      console.error('Test connexion error:', err);
+      logger.error('Test connexion error:', err);
       message.error('Échec du test de connexion');
     }
   };
@@ -214,7 +215,7 @@ const EmailManagementTable: React.FC = () => {
       await api.post('/yandex/sync', { userId: user.id });
       message.success('Synchronisation réussie !');
     } catch (err) {
-      console.error('Sync error:', err);
+      logger.error('Sync error:', err);
       message.error('Erreur lors de la synchronisation');
     }
   };

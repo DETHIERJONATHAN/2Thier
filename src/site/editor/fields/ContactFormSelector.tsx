@@ -3,6 +3,7 @@ import { Button, Form, Input, Modal, Select, Space, Typography, message, Tabs, S
 import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, ArrowUpOutlined, ArrowDownOutlined, CopyOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../../lib/logger';
 
 const { Option } = Select;
 
@@ -124,7 +125,7 @@ const ContactFormSelector: React.FC<ContactFormSelectorProps> = ({
         : [];
       setForms([...list].sort((a, b) => a.name.localeCompare(b.name)));
     } catch (error) {
-      console.error('[ContactFormSelector] load error', error);
+      logger.error('[ContactFormSelector] load error', error);
       message.error('Impossible de récupérer les formulaires.');
     } finally {
       setLoading(false);
@@ -223,7 +224,7 @@ const ContactFormSelector: React.FC<ContactFormSelectorProps> = ({
         setEditingFormId(null);
         form.resetFields();
       } catch (error) {
-        console.error('[ContactFormSelector] save error', error);
+        logger.error('[ContactFormSelector] save error', error);
         const fallback = error instanceof Error ? error.message : "Erreur lors de l'enregistrement du formulaire.";
         message.error(fallback);
       } finally {
@@ -274,7 +275,7 @@ const ContactFormSelector: React.FC<ContactFormSelectorProps> = ({
       fieldForm.resetFields();
       message.success(editingFieldIndex !== null ? 'Champ modifié' : 'Champ ajouté');
     } catch (error) {
-      console.error('Validation error:', error);
+      logger.error('Validation error:', error);
     }
   }, [fieldForm, editingFieldIndex, editingFields]);
 
@@ -339,7 +340,7 @@ const ContactFormSelector: React.FC<ContactFormSelectorProps> = ({
       setCreateModalOpen(true);
       setActiveTab('general');
     } catch (error) {
-      console.error('[ContactFormSelector] edit error', error);
+      logger.error('[ContactFormSelector] edit error', error);
       message.error('Impossible de charger le formulaire');
     } finally {
       setLoading(false);
@@ -358,7 +359,7 @@ const ContactFormSelector: React.FC<ContactFormSelectorProps> = ({
         emitValue(undefined);
       }
     } catch (error) {
-      console.error('[ContactFormSelector] delete error', error);
+      logger.error('[ContactFormSelector] delete error', error);
       message.error('Impossible de supprimer le formulaire');
     }
   }, [stableApi, normalizedValue, emitValue]);
@@ -411,7 +412,7 @@ const ContactFormSelector: React.FC<ContactFormSelectorProps> = ({
       
       message.success(`Formulaire dupliqué en "${newName}". Vous pouvez modifier le nom avant de créer.`);
     } catch (error) {
-      console.error('[ContactFormSelector] duplicate error', error);
+      logger.error('[ContactFormSelector] duplicate error', error);
       message.error('Impossible de dupliquer le formulaire');
     } finally {
       setLoading(false);

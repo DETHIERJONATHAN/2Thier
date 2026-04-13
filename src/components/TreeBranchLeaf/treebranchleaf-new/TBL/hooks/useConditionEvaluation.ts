@@ -12,6 +12,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import { useTBLBatch } from '../contexts/TBLBatchContext';
 import type { TBLFormData } from './useTBLSave';
+import { logger } from '../../../../../lib/logger';
 
 interface ConditionEvaluationResult {
   isLoading: boolean;
@@ -143,7 +144,7 @@ export function useConditionEvaluation(conditionId: string | null, formData: TBL
       const condition = batchContext.getConditionById(conditionId);
       
       if (condition) {
-        console.log(`🚀 [useConditionEvaluation] Évaluation LOCALE condition ${conditionId} (batch)`);
+        logger.debug(`🚀 [useConditionEvaluation] Évaluation LOCALE condition ${conditionId} (batch)`);
         
         const { conditionMet, result } = evaluateConditionLocally(condition, formData);
         
@@ -164,7 +165,7 @@ export function useConditionEvaluation(conditionId: string | null, formData: TBL
       setState(prev => ({ ...prev, isLoading: true, error: null }));
       
       try {
-        console.log(`⚠️ [useConditionEvaluation] Fallback API pour condition ${conditionId}`);
+        logger.debug(`⚠️ [useConditionEvaluation] Fallback API pour condition ${conditionId}`);
         
         const response = await api.post(`/api/tbl/evaluate/condition/${conditionId}`, {
           submissionId: 'df833cac-0b44-4b2b-bb1c-de3878f00182',
@@ -184,7 +185,7 @@ export function useConditionEvaluation(conditionId: string | null, formData: TBL
         });
 
       } catch (error) {
-        console.error(`❌ [useConditionEvaluation] Erreur pour ${conditionId}:`, error);
+        logger.error(`❌ [useConditionEvaluation] Erreur pour ${conditionId}:`, error);
         setState({
           isLoading: false,
           result: null,

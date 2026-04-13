@@ -5,6 +5,7 @@ import { useAuth } from '../../../auth/useAuth';
 import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
 import { DynamicSection, ModuleWithStatus, SectionWithModules } from './types';
 import { AdminModulesService } from './services/AdminModulesService';
+import { logger } from '../../../lib/logger';
 
 // Type brut renvoyé par l'API pouvant avoir des clés alternatives
 type RawSection = Partial<SectionWithModules> & {
@@ -50,12 +51,12 @@ export const useModulesAdmin = () => {
     try {
       setLoading(true);
       setError(null);
-      console.log('[useModulesAdmin] Chargement des sections...');
+      logger.debug('[useModulesAdmin] Chargement des sections...');
       
       const data = await service.getModulesBySections(orgId);
       if (data) {
   const sec = Array.isArray(data.sections) ? data.sections : [];
-        console.log('[useModulesAdmin] Données brutes sections:', sec.length);
+        logger.debug('[useModulesAdmin] Données brutes sections:', sec.length);
         // Normaliser les propriétés attendues pour l'affichage (titre, description, icônes, ordre, actif)
   const normalized: SectionWithModules[] = (sec as RawSection[]).map((s, idx) => {
           const modulesRaw = Array.isArray(s?.modules) ? s.modules : [];
@@ -141,14 +142,14 @@ export const useModulesAdmin = () => {
         const normalizedSorted = normalized.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   setSections(normalizedSorted);
         const flat = normalizedSorted.flatMap(s => Array.isArray(s.modules) ? s.modules : []);
-        console.log('[useModulesAdmin] Modules à plat:', flat.length);
+        logger.debug('[useModulesAdmin] Modules à plat:', flat.length);
         setModules(flat);
-        console.log(`[useModulesAdmin] ${data.totalSections} sections chargées avec ${data.totalModules} modules`);
+        logger.debug(`[useModulesAdmin] ${data.totalSections} sections chargées avec ${data.totalModules} modules`);
       } else {
-        console.warn('[useModulesAdmin] Aucune donnée reçue de getModulesBySections');
+        logger.warn('[useModulesAdmin] Aucune donnée reçue de getModulesBySections');
       }
     } catch (error) {
-      console.error('[useModulesAdmin] Erreur loadSections:', error);
+      logger.error('[useModulesAdmin] Erreur loadSections:', error);
       setError('Erreur lors du chargement des sections');
     } finally {
       setLoading(false);
@@ -157,7 +158,7 @@ export const useModulesAdmin = () => {
 
   const loadModules = useCallback(async () => {
     // Les modules sont déjà chargés avec les sections
-    console.log('[useModulesAdmin] Modules déjà chargés avec les sections');
+    logger.debug('[useModulesAdmin] Modules déjà chargés avec les sections');
   }, []);
 
   // ===== SECTIONS CRUD =====
@@ -181,7 +182,7 @@ export const useModulesAdmin = () => {
         NotificationManager.success(`Catégorie ${newActiveStatus ? 'activée' : 'désactivée'}`);
       }
     } catch (error) {
-      console.error('[useModulesAdmin] Erreur toggleSectionActive:', error);
+      logger.error('[useModulesAdmin] Erreur toggleSectionActive:', error);
       NotificationManager.error('Erreur lors de la mise à jour de la catégorie');
     }
   }, [sections, service]);
@@ -214,7 +215,7 @@ export const useModulesAdmin = () => {
         NotificationManager.success('Catégorie supprimée avec succès');
       }
     } catch (error) {
-      console.error('[useModulesAdmin] Erreur deleteSection:', error);
+      logger.error('[useModulesAdmin] Erreur deleteSection:', error);
       NotificationManager.error('Erreur lors de la suppression');
     }
   }, [service, sections]);
@@ -239,7 +240,7 @@ export const useModulesAdmin = () => {
         NotificationManager.success('Catégorie ajoutée avec succès');
       }
     } catch (error) {
-      console.error('[useModulesAdmin] Erreur addSection:', error);
+      logger.error('[useModulesAdmin] Erreur addSection:', error);
       NotificationManager.error('Erreur lors de l\'ajout de la catégorie');
     }
   }, [currentOrganization?.id, sections.length, service, loadSections]);
@@ -261,7 +262,7 @@ export const useModulesAdmin = () => {
         NotificationManager.success('Catégorie mise à jour');
       }
     } catch (error) {
-      console.error('[useModulesAdmin] Erreur updateSectionProperties:', error);
+      logger.error('[useModulesAdmin] Erreur updateSectionProperties:', error);
       NotificationManager.error('Erreur lors de la mise à jour de la catégorie');
     }
   }, [service, loadSections, sections]);
@@ -276,7 +277,7 @@ export const useModulesAdmin = () => {
         NotificationManager.success('Module mis à jour');
       }
     } catch (error) {
-      console.error('[useModulesAdmin] Erreur updateModuleProperties:', error);
+      logger.error('[useModulesAdmin] Erreur updateModuleProperties:', error);
       NotificationManager.error('Erreur lors de la mise à jour du module');
     }
   }, [service, loadSections]);
@@ -285,7 +286,7 @@ export const useModulesAdmin = () => {
     try {
       await updateModuleProperties(moduleId, { active: !currentActive });
     } catch (error) {
-      console.error('[useModulesAdmin] Erreur toggleModuleActive:', error);
+      logger.error('[useModulesAdmin] Erreur toggleModuleActive:', error);
       NotificationManager.error('Erreur lors du toggle du module');
     }
   }, [updateModuleProperties]);
@@ -294,7 +295,7 @@ export const useModulesAdmin = () => {
     try {
       await updateModuleProperties(moduleId, { superAdminOnly: value });
     } catch (error) {
-      console.error('[useModulesAdmin] Erreur toggleModuleSuperAdminOnly:', error);
+      logger.error('[useModulesAdmin] Erreur toggleModuleSuperAdminOnly:', error);
       NotificationManager.error('Erreur lors du toggle SuperAdmin Only');
     }
   }, [updateModuleProperties]);
@@ -303,7 +304,7 @@ export const useModulesAdmin = () => {
     try {
       await updateModuleProperties(moduleId, { placement });
     } catch (error) {
-      console.error('[useModulesAdmin] Erreur updateModulePlacement:', error);
+      logger.error('[useModulesAdmin] Erreur updateModulePlacement:', error);
       NotificationManager.error('Erreur lors du changement de placement');
     }
   }, [updateModuleProperties]);
@@ -332,7 +333,7 @@ export const useModulesAdmin = () => {
         NotificationManager.success('Nom de catégorie mis à jour');
       }
     } catch (error) {
-      console.error('[useModulesAdmin] Erreur updateSectionName:', error);
+      logger.error('[useModulesAdmin] Erreur updateSectionName:', error);
       NotificationManager.error('Erreur lors de la mise à jour du nom');
     }
   }, [service, sections]);
@@ -379,7 +380,7 @@ export const useModulesAdmin = () => {
       await loadSections(currentOrganization?.id);
       NotificationManager.success('Catégorie créée et modules migrés');
     } catch (e) {
-      console.error('[useModulesAdmin] Erreur createCategoryFromSection:', e);
+      logger.error('[useModulesAdmin] Erreur createCategoryFromSection:', e);
       NotificationManager.error("Erreur lors de la création de la catégorie");
     }
   }, [sections, service, loadSections, currentOrganization?.id, isUuid]);
@@ -389,8 +390,8 @@ export const useModulesAdmin = () => {
       // Mettre à jour l'ordre dans l'état immédiatement pour un feedback visuel instantané
       setSections(newOrder);
       
-      console.log('🔄 [reorderSections] Début de la réorganisation des sections');
-      console.log('📋 [reorderSections] Nouvel ordre:', newOrder.map((s, i) => `${i + 1}. ${s.title} (ID: ${s.id})`));
+      logger.debug('🔄 [reorderSections] Début de la réorganisation des sections');
+      logger.debug('📋 [reorderSections] Nouvel ordre:', newOrder.map((s, i) => `${i + 1}. ${s.title} (ID: ${s.id})`));
       
       // Sauvegarder l'ordre en base avec des valeurs espacées pour éviter les conflits
       // Utiliser des incréments de 10 : 10, 20, 30, 40... pour permettre des insertions futures
@@ -402,26 +403,26 @@ export const useModulesAdmin = () => {
         })
         .filter((x): x is { id: string; order: number } => !!x);
       
-      console.log('💾 [reorderSections] Payload de sauvegarde:', updatesPayload);
+      logger.debug('💾 [reorderSections] Payload de sauvegarde:', updatesPayload);
       
       if (service.reorderSections && updatesPayload.length > 0) {
         await service.reorderSections(updatesPayload);
-        console.log('✅ [reorderSections] Ordre sauvegardé via endpoint dédié');
+        logger.debug('✅ [reorderSections] Ordre sauvegardé via endpoint dédié');
       } else {
         // Sauvegarder individuellement chaque section
         await Promise.all(updatesPayload.map(async (u) => {
-          console.log(`💾 [reorderSections] Sauvegarde section ${u.id} -> ordre ${u.order}`);
+          logger.debug(`💾 [reorderSections] Sauvegarde section ${u.id} -> ordre ${u.order}`);
           return service.updateCategory(u.id, { order: u.order });
         }));
-        console.log('✅ [reorderSections] Ordre sauvegardé via mises à jour individuelles');
+        logger.debug('✅ [reorderSections] Ordre sauvegardé via mises à jour individuelles');
       }
       
       // Recharger pour confirmer la sauvegarde côté serveur
-      console.log('🔄 [reorderSections] Rechargement pour validation...');
+      logger.debug('🔄 [reorderSections] Rechargement pour validation...');
       await loadSections(currentOrganization?.id);
-      console.log('✅ [reorderSections] Ordre des sections sauvegardé et validé');
+      logger.debug('✅ [reorderSections] Ordre des sections sauvegardé et validé');
     } catch (error) {
-      console.error('[useModulesAdmin] Erreur reorderSections:', error);
+      logger.error('[useModulesAdmin] Erreur reorderSections:', error);
       NotificationManager.error('Erreur lors de la réorganisation des sections');
       // Recharger pour resynchroniser en cas d'erreur
       await loadSections(currentOrganization?.id);
@@ -435,7 +436,7 @@ export const useModulesAdmin = () => {
     toSectionId: string,
     toIndex: number
   ) => {
-    console.log('🚀 [moveModule] DEBUT', { moduleId, fromSectionId, toSectionId, toIndex });
+    logger.debug('🚀 [moveModule] DEBUT', { moduleId, fromSectionId, toSectionId, toIndex });
     
     try {
       // Construire le prochain état de manière déterministe
@@ -443,7 +444,7 @@ export const useModulesAdmin = () => {
       const from = nextSections.find(s => String(s.id) === String(fromSectionId));
       const to = nextSections.find(s => String(s.id) === String(toSectionId));
       
-      console.log('🔍 [moveModule] Sections trouvées:', { 
+      logger.debug('🔍 [moveModule] Sections trouvées:', { 
         from: from?.title, 
         to: to?.title,
         fromId: from?.id,
@@ -453,46 +454,46 @@ export const useModulesAdmin = () => {
       });
       
       if (!from || !to) {
-        console.error('❌ [moveModule] Section source ou cible introuvable');
+        logger.error('❌ [moveModule] Section source ou cible introuvable');
         return;
       }
       
       const mIdx = from.modules.findIndex(m => String(m.id) === String(moduleId));
       if (mIdx === -1) {
-        console.error('❌ [moveModule] Module introuvable dans section source');
+        logger.error('❌ [moveModule] Module introuvable dans section source');
         return;
       }
       
       const [moved] = from.modules.splice(mIdx, 1);
-      console.log('📦 [moveModule] Module déplacé:', moved.label);
+      logger.debug('📦 [moveModule] Module déplacé:', moved.label);
       
       // Insérer au bon index dans la section cible
       const insertAt = Math.max(0, Math.min(toIndex, to.modules.length));
       to.modules.splice(insertAt, 0, { ...moved, categoryId: toSectionId });
-      console.log('📍 [moveModule] Inséré à l\'index:', insertAt);
+      logger.debug('📍 [moveModule] Inséré à l\'index:', insertAt);
       
       setSections(nextSections);
 
       // PERSISTER via mise à jour individuelle (l'endpoint /reorder n'existe pas)
-      console.log('💾 [moveModule] Démarrage persistence...');
-      console.log('🔍 [moveModule] Sections disponibles pour mapping:');
+      logger.debug('💾 [moveModule] Démarrage persistence...');
+      logger.debug('🔍 [moveModule] Sections disponibles pour mapping:');
       nextSections.forEach(s => {
-        console.log(`  - ${s.id}: ${s.title} (backendCategoryId: ${s.backendCategoryId})`);
+        logger.debug(`  - ${s.id}: ${s.title} (backendCategoryId: ${s.backendCategoryId})`);
       });
       
       const getBackendCategoryId = (secId: string) => {
         const s = nextSections.find(x => String(x.id) === String(secId));
-        console.log(`🔍 [moveModule] Section ${secId}:`, { title: s?.title, backendCategoryId: s?.backendCategoryId, id: s?.id });
+        logger.debug(`🔍 [moveModule] Section ${secId}:`, { title: s?.title, backendCategoryId: s?.backendCategoryId, id: s?.id });
         
         // Utiliser backendCategoryId s'il existe, sinon l'ID de section
         const categoryId = s?.backendCategoryId || s?.id;
-        console.log(`💡 [moveModule] categoryId utilisé pour ${secId}:`, categoryId);
+        logger.debug(`💡 [moveModule] categoryId utilisé pour ${secId}:`, categoryId);
         return categoryId;
       };
       
       // Mettre à jour le module déplacé avec sa nouvelle catégorie et son nouvel ordre
       const newCategoryId = getBackendCategoryId(toSectionId);
-      console.log(`🎯 [moveModule] Mise à jour module ${moved.id} -> catégorie ${newCategoryId}`);
+      logger.debug(`🎯 [moveModule] Mise à jour module ${moved.id} -> catégorie ${newCategoryId}`);
       
       // Utiliser un ordre espacé (par multiples de 10) pour éviter les conflits
       const newOrder = (insertAt + 1) * 10;
@@ -500,33 +501,33 @@ export const useModulesAdmin = () => {
         categoryId: newCategoryId,
         order: newOrder
       });
-      console.log(`📍 [moveModule] Module ${moved.label} -> ordre ${newOrder}`);
+      logger.debug(`📍 [moveModule] Module ${moved.label} -> ordre ${newOrder}`);
       
       // Mettre à jour l'ordre des autres modules dans la section cible avec espacement
-      console.log('📋 [moveModule] Mise à jour ordre section cible:', to.title);
+      logger.debug('📋 [moveModule] Mise à jour ordre section cible:', to.title);
       for (let i = 0; i < to.modules.length; i++) {
         const mod = to.modules[i];
         if (String(mod.id) !== String(moved.id)) { // Skip le module qu'on vient de déplacer
           const moduleOrder = (i + 1) * 10;
           await service.updateModule(String(mod.id), { order: moduleOrder });
-          console.log(`  ↳ ${mod.label}: ordre ${moduleOrder}`);
+          logger.debug(`  ↳ ${mod.label}: ordre ${moduleOrder}`);
         }
       }
       
       // Mettre à jour l'ordre dans la section source avec espacement
-      console.log('📋 [moveModule] Mise à jour ordre section source:', from.title);
+      logger.debug('📋 [moveModule] Mise à jour ordre section source:', from.title);
       for (let i = 0; i < from.modules.length; i++) {
         const mod = from.modules[i];
         const moduleOrder = (i + 1) * 10;
         await service.updateModule(String(mod.id), { order: moduleOrder });
-        console.log(`  ↳ ${mod.label}: ordre ${moduleOrder}`);
+        logger.debug(`  ↳ ${mod.label}: ordre ${moduleOrder}`);
       }
       
-      console.log('✅ [moveModule] Persistence terminée avec succès');
+      logger.debug('✅ [moveModule] Persistence terminée avec succès');
   // Recharger pour refléter la sauvegarde côté serveur (catégorie/ordre)
   await loadSections(currentOrganization?.id);
     } catch (error) {
-      console.error('[useModulesAdmin] Erreur moveModule:', error);
+      logger.error('[useModulesAdmin] Erreur moveModule:', error);
   NotificationManager.error('Erreur lors du déplacement du module');
       // Recharger pour resynchroniser si besoin
       await loadSections();
@@ -548,7 +549,7 @@ export const useModulesAdmin = () => {
       return;
     }
     try {
-      console.log('🧹 [purgeFallbackSection] Suppression modules (fallback):', {
+      logger.debug('🧹 [purgeFallbackSection] Suppression modules (fallback):', {
         sectionId,
         title: section.title,
         count: mods.length,
@@ -570,7 +571,7 @@ export const useModulesAdmin = () => {
         NotificationManager.error('Échec de la suppression des modules de la section');
       }
     } catch (e) {
-      console.error('[useModulesAdmin] Erreur purgeFallbackSection:', e);
+      logger.error('[useModulesAdmin] Erreur purgeFallbackSection:', e);
       NotificationManager.error('Erreur lors de la suppression des modules de la section');
     }
   }, [sections, service, loadSections, currentOrganization?.id, isUuid]);
@@ -602,58 +603,58 @@ export const useModulesAdmin = () => {
         NotificationManager.success(`Module ${!currentStatus ? 'activé' : 'désactivé'}`);
       }
     } catch (error) {
-      console.error('[useModulesAdmin] Erreur toggleModule:', error);
+      logger.error('[useModulesAdmin] Erreur toggleModule:', error);
       NotificationManager.error('Erreur lors de la mise à jour du module');
     }
   }, [currentOrganization?.id, service]);
 
   const handleEditModule = useCallback((module: ModuleWithStatus) => {
     // TODO: Ouvrir modal d'édition
-    console.log('[useModulesAdmin] Edit module:', module.label);
+    logger.debug('[useModulesAdmin] Edit module:', module.label);
   }, []);
 
   const handleDeleteModule = useCallback((module: ModuleWithStatus) => {
-    console.log('🗑️ [useModulesAdmin] Tentative de suppression du module:', module);
+    logger.debug('🗑️ [useModulesAdmin] Tentative de suppression du module:', module);
     setModuleToDelete(module);
     setIsDeleteModalVisible(true);
   }, []);
 
   const handleConfirmDelete = useCallback(async () => {
     if (!moduleToDelete) {
-      console.log('🗑️ [useModulesAdmin] Aucun module à supprimer');
+      logger.debug('🗑️ [useModulesAdmin] Aucun module à supprimer');
       return;
     }
 
-    console.log('🗑️ [useModulesAdmin] Confirmation reçue, début de la suppression...');
+    logger.debug('🗑️ [useModulesAdmin] Confirmation reçue, début de la suppression...');
     
     try {
-  console.log('🗑️ [useModulesAdmin] Envoi de la requête DELETE:', `/api/modules/${moduleToDelete.id}`);
+  logger.debug('🗑️ [useModulesAdmin] Envoi de la requête DELETE:', `/api/modules/${moduleToDelete.id}`);
   // Utiliser l'endpoint principal des modules (DELETE /api/modules/:id)
   // Un alias backend existe aussi sur /api/admin-modules/modules/:id pour compatibilité
   const response = await api.delete(`/api/modules/${moduleToDelete.id}`);
       
-      console.log('🗑️ [useModulesAdmin] Réponse de l\'API:', response);
+      logger.debug('🗑️ [useModulesAdmin] Réponse de l\'API:', response);
       
       if (response.success) {
-        console.log('🗑️ [useModulesAdmin] Suppression réussie, mise à jour de l\'état...');
+        logger.debug('🗑️ [useModulesAdmin] Suppression réussie, mise à jour de l\'état...');
         
         // Mettre à jour l'état local
         setModules(prev => {
           const updated = prev.filter(m => m.id !== moduleToDelete.id);
-          console.log('🗑️ [useModulesAdmin] Modules restants:', updated.length);
+          logger.debug('🗑️ [useModulesAdmin] Modules restants:', updated.length);
           return updated;
         });
         
         NotificationManager.success('Module supprimé avec succès');
-        console.log('🗑️ [useModulesAdmin] Module supprimé avec succès');
+        logger.debug('🗑️ [useModulesAdmin] Module supprimé avec succès');
         // Recharger les sections pour refléter l'état côté serveur
         await loadSections(currentOrganization?.id);
       } else {
-        console.error('🗑️ [useModulesAdmin] Échec de suppression - réponse:', response);
+        logger.error('🗑️ [useModulesAdmin] Échec de suppression - réponse:', response);
         NotificationManager.error(response.error || 'Erreur lors de la suppression du module');
       }
     } catch (error) {
-      console.error('🗑️ [useModulesAdmin] Erreur lors de la suppression du module:', error);
+      logger.error('🗑️ [useModulesAdmin] Erreur lors de la suppression du module:', error);
       NotificationManager.error('Erreur lors de la suppression du module');
     } finally {
       // Fermer le modal quoi qu'il arrive
@@ -663,7 +664,7 @@ export const useModulesAdmin = () => {
   }, [moduleToDelete, api, loadSections, currentOrganization?.id]);
 
   const handleCancelDelete = useCallback(() => {
-    console.log('🗑️ [useModulesAdmin] Suppression annulée par l\'utilisateur');
+    logger.debug('🗑️ [useModulesAdmin] Suppression annulée par l\'utilisateur');
     setIsDeleteModalVisible(false);
     setModuleToDelete(null);
   }, []);

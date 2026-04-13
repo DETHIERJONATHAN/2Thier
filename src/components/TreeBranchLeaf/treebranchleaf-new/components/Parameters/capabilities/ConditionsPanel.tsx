@@ -17,6 +17,7 @@ import { useAuthenticatedApi } from '../../../../../../hooks/useAuthenticatedApi
 import { useDebouncedCallback } from '../../../hooks/useDebouncedCallback';
 import type { ConditionSet } from '../../../types';
 import ConditionsDnDComposer from './conditions/ConditionsDnDComposer';
+import { logger } from '../../../../../../lib/logger';
 
 const { Title, Text } = Typography;
 
@@ -83,7 +84,7 @@ const ConditionsPanel: React.FC<ConditionsPanelProps> = ({ treeId, nodeId, value
               await api.put(`/api/treebranchleaf/trees/${treeId}/nodes/${nodeId}`, { metadata: nextMd });
             } catch { /* noop */ }
           } else {
-            console.log('🛡️ [ConditionsPanel] Pas de condition réelle, skip persistence metadata pour', nodeId);
+            logger.debug('🛡️ [ConditionsPanel] Pas de condition réelle, skip persistence metadata pour', nodeId);
           }
           onChange?.({ ...(value || {}), conditionSet: cs, name: first.name });
         }

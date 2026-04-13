@@ -1,3 +1,4 @@
+import { logger } from '../lib/logger';
 /**
  * Utilitaires pour réinitialiser l'état d'authentification Google en cas de boucle
  */
@@ -15,9 +16,9 @@ export function resetGoogleAuthState(): void {
       window.__googleAutoConnectAttemptCount = 0;
     }
     
-    console.log('[GoogleAuthReset] État Google réinitialisé');
+    logger.debug('[GoogleAuthReset] État Google réinitialisé');
   } catch (error) {
-    console.error('[GoogleAuthReset] Erreur lors de la réinitialisation:', error);
+    logger.error('[GoogleAuthReset] Erreur lors de la réinitialisation:', error);
   }
 }
 
@@ -77,5 +78,5 @@ export function emergencyGoogleAuthReset(): void {
     window.history.replaceState({}, document.title, cleanUrl);
   }
   
-  console.log('[GoogleAuthReset] Reset d\'urgence effectué');
+  logger.debug('[GoogleAuthReset] Reset d\'urgence effectué');
 }

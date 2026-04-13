@@ -13,6 +13,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
 import type { Lead, AIScheduleRecommendation } from '../types/CallTypes';
 import dayjs, { Dayjs } from 'dayjs';
+import { logger } from '../../../lib/logger';
 
 interface UseAIRecommendationsReturn {
   aiRecommendations: AIScheduleRecommendation[];
@@ -122,7 +123,7 @@ export const useAIRecommendations = (
 
     try {
       const leadName = `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || lead.company || 'Lead inconnu';
-      console.log('[useAIRecommendations] 🤖 Génération recommandations IA pour:', leadName);
+      logger.debug('[useAIRecommendations] 🤖 Génération recommandations IA pour:', leadName);
 
       // 📊 Préparation des données d'analyse
       const analysisParams = generateAnalysisParams(lead);
@@ -152,7 +153,7 @@ export const useAIRecommendations = (
       });
 
       if (response.success && response.data?.recommendations) {
-        console.log('[useAIRecommendations] ✅ Recommandations IA reçues:', response.data.recommendations.length);
+        logger.debug('[useAIRecommendations] ✅ Recommandations IA reçues:', response.data.recommendations.length);
         
         // 🎯 Tri par priorité et confiance
         const sortedRecommendations = response.data.recommendations
@@ -172,7 +173,7 @@ export const useAIRecommendations = (
         
         // 📊 Log des métadonnées d'analyse
         if (response.data?.metadata) {
-          console.log('[useAIRecommendations] 📊 Métadonnées IA:', {
+          logger.debug('[useAIRecommendations] 📊 Métadonnées IA:', {
             tempsAnalyse: `${response.data.metadata.analysisTime}ms`,
             confianceGlobale: `${Math.round(response.data.metadata.confidence * 100)}%`,
             facteursConsidérés: response.data.metadata.factorsConsidered
@@ -180,19 +181,19 @@ export const useAIRecommendations = (
         }
         
       } else {
-        console.warn('[useAIRecommendations] ⚠️ Pas de recommandations retournées');
+        logger.warn('[useAIRecommendations] ⚠️ Pas de recommandations retournées');
         setAIRecommendations([]);
       }
 
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
-      console.error('[useAIRecommendations] ❌ Erreur génération:', errorMessage);
+      logger.error('[useAIRecommendations] ❌ Erreur génération:', errorMessage);
       
       setError(`Erreur génération recommandations IA: ${errorMessage}`);
       setAIRecommendations([]);
       
       // 🔄 Fallback : recommandations basiques sans IA
-      console.log('[useAIRecommendations] 🔄 Génération recommandations fallback...');
+      logger.debug('[useAIRecommendations] 🔄 Génération recommandations fallback...');
       generateFallbackRecommendations();
       
     } finally {
@@ -223,7 +224,7 @@ export const useAIRecommendations = (
       return 'Analyse détaillée indisponible';
       
     } catch (error) {
-      console.error('[useAIRecommendations] ❌ Erreur insight:', error);
+      logger.error('[useAIRecommendations] ❌ Erreur insight:', error);
       return 'Erreur lors de l\'analyse du créneau';
     }
   }, [api]);
@@ -256,7 +257,7 @@ export const useAIRecommendations = (
   // 🎯 Log des stats pour debug
   useEffect(() => {
     if (aiRecommendations.length > 0) {
-      console.log('[useAIRecommendations] 📊 Stats recommandations:', recommendationStats);
+      logger.debug('[useAIRecommendations] 📊 Stats recommandations:', recommendationStats);
     }
   }, [recommendationStats, aiRecommendations.length]);
 

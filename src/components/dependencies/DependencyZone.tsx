@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Dependency, DependencyCondition } from './types';
 import DependenciesPalette from './DependenciesPalette';
+import { logger } from '../../lib/logger';
 
 // Types pour les éléments draggables
 interface DraggableAction {
@@ -59,7 +60,7 @@ const DependencyZone: React.FC<DependencyZoneProps> = ({
     // Petit délai pour s'assurer que tout est bien rendu
     const readyTimer = setTimeout(() => {
       setIsReady(true);
-      console.log(`Zone de dépendance ${dependencyId} prête`);
+      logger.debug(`Zone de dépendance ${dependencyId} prête`);
     }, 300);
     
     return () => clearTimeout(readyTimer);
@@ -94,19 +95,19 @@ const DependencyZone: React.FC<DependencyZoneProps> = ({
     setIsOver(false);
     
     if (!isReady) {
-      console.warn("La zone de dépôt n'est pas encore prête");
+      logger.warn("La zone de dépôt n'est pas encore prête");
       return;
     }
     
     try {
       // Afficher tous les types de données disponibles pour le debug
-      console.log('Types de données disponibles:', e.dataTransfer.types);
+      logger.debug('Types de données disponibles:', e.dataTransfer.types);
       
       // Vérifier directement si nous avons une action de dépendance (prioritaire)
       const actionType = e.dataTransfer.getData('dependency-action');
       
       if (actionType) {
-        console.log(`Action de dépendance détectée: ${actionType}`);
+        logger.debug(`Action de dépendance détectée: ${actionType}`);
         
         // Récupérer d'autres attributs visuels si disponibles
         const actionColor = e.dataTransfer.getData('action-color') || '';
@@ -125,7 +126,7 @@ const DependencyZone: React.FC<DependencyZoneProps> = ({
           bubbles: true
         });
         
-        console.log(`Dispatching action event for: ${actionType} on dependency: ${dependencyId}`);
+        logger.debug(`Dispatching action event for: ${actionType} on dependency: ${dependencyId}`);
         document.dispatchEvent(actionEvent);
         
         // Feedback visuel temporaire
@@ -147,7 +148,7 @@ const DependencyZone: React.FC<DependencyZoneProps> = ({
       // Vérifier s'il s'agit d'un opérateur
       const operatorType = e.dataTransfer.getData('dependency-operator');
       if (operatorType) {
-        console.log(`Opérateur de dépendance détecté: ${operatorType}`);
+        logger.debug(`Opérateur de dépendance détecté: ${operatorType}`);
         
         // Créer et déclencher un événement personnalisé
         const operatorEvent = new CustomEvent('dependency-operator-added', {
@@ -173,7 +174,7 @@ const DependencyZone: React.FC<DependencyZoneProps> = ({
       // Vérifier s'il s'agit d'un test
       const testType = e.dataTransfer.getData('dependency-test');
       if (testType) {
-        console.log(`Test de dépendance détecté: ${testType}`);
+        logger.debug(`Test de dépendance détecté: ${testType}`);
         
         // Créer et déclencher un événement personnalisé
         const testEvent = new CustomEvent('dependency-test-added', {
@@ -203,10 +204,10 @@ const DependencyZone: React.FC<DependencyZoneProps> = ({
       if (data) {
         try {
           itemData = JSON.parse(data);
-          console.log('Données de l\'élément déposé (format JSON):', itemData);
+          logger.debug('Données de l\'élément déposé (format JSON):', itemData);
         } catch (error) {
-          console.error('Erreur lors du parsing JSON:', error);
-          console.log('Données brutes:', data);
+          logger.error('Erreur lors du parsing JSON:', error);
+          logger.debug('Données brutes:', data);
         }
       } else {
         // Essayer le format des champs
@@ -214,7 +215,7 @@ const DependencyZone: React.FC<DependencyZoneProps> = ({
         const fieldName = e.dataTransfer.getData('field-name') || e.dataTransfer.getData('field-label');
         
         if (fieldId) {
-          console.log('Données de l\'élément déposé (format champ):', { fieldId, fieldName });
+          logger.debug('Données de l\'élément déposé (format champ):', { fieldId, fieldName });
           itemData = {
             type: 'field',
             id: fieldId,
@@ -225,7 +226,7 @@ const DependencyZone: React.FC<DependencyZoneProps> = ({
         // Vérifier si c'est une action de dépendance
         const actionType = e.dataTransfer.getData('dependency-action');
         if (actionType) {
-          console.log('Action de dépendance détectée:', actionType);
+          logger.debug('Action de dépendance détectée:', actionType);
           itemData = {
             type: 'action',
             id: actionType,
@@ -234,13 +235,13 @@ const DependencyZone: React.FC<DependencyZoneProps> = ({
         }
         
         if (!itemData) {
-          console.warn("Aucune donnée valide n'a été trouvée dans le transfert.");
+          logger.warn("Aucune donnée valide n'a été trouvée dans le transfert.");
           return;
         }
       }
       
       if (!itemData) {
-        console.warn("Les données de l'élément ne sont pas valides");
+        logger.warn("Les données de l'élément ne sont pas valides");
         return;
       }
       
@@ -277,7 +278,7 @@ const DependencyZone: React.FC<DependencyZoneProps> = ({
             cancelable: true
           });
           
-          console.log(`Dispatching action event for: ${itemData.id} on dependency: ${dependencyId}`);
+          logger.debug(`Dispatching action event for: ${itemData.id} on dependency: ${dependencyId}`);
           
           // Dispatch l'événement directement sur document pour assurer sa propagation
           document.dispatchEvent(actionEvent);
@@ -320,7 +321,7 @@ const DependencyZone: React.FC<DependencyZoneProps> = ({
       
       // Si nous avons une nouvelle condition, l'ajouter à la liste
       if (newCondition) {
-        console.log('Nouvelle condition ajoutée:', newCondition);
+        logger.debug('Nouvelle condition ajoutée:', newCondition);
         const newConditions = [...displayConditions, newCondition];
         onConditionsChange(newConditions);
         
@@ -334,7 +335,7 @@ const DependencyZone: React.FC<DependencyZoneProps> = ({
         }
       }
     } catch (error) {
-      console.error("Erreur lors de la gestion du glisser-déposer:", error);
+      logger.error("Erreur lors de la gestion du glisser-déposer:", error);
     }
   };
 

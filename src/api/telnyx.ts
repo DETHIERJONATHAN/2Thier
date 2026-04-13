@@ -9,6 +9,7 @@ import { getBackendBaseUrl, joinUrl } from '../utils/baseUrl';
 import crypto from 'crypto';
 import { notify } from '../services/NotificationHelper';
 import { sendPushToUser } from '../routes/push';
+import { logger } from '../lib/logger';
 
 const router = Router();
 const prisma = db;
@@ -134,7 +135,7 @@ async function ensureTelnyxCascadeSchema() {
           END IF;
         END $$;`);
       } catch (e) {
-        console.warn('⚠️ [Telnyx API] Impossible de garantir le schéma Telnyx cascade (continuation best-effort):', (e as Error).message);
+        logger.warn('⚠️ [Telnyx API] Impossible de garantir le schéma Telnyx cascade (continuation best-effort):', (e as Error).message);
       }
     })();
   }
@@ -453,7 +454,7 @@ async function transferCallToLeg(params: {
     const status = error?.response?.status;
     const details = error?.response?.data;
     const errors = Array.isArray(details?.errors) ? details.errors : undefined;
-    console.warn('⚠️ [Telnyx Transfer] échec', {
+    logger.warn('⚠️ [Telnyx Transfer] échec', {
       status,
       callControlId,
       legType: leg.type,
@@ -695,7 +696,7 @@ function shouldDebugTelnyxWebhooks(): boolean {
 function telnyxWebhookDebugLog(...args: unknown[]) {
   if (!shouldDebugTelnyxWebhooks()) return;
   // eslint-disable-next-line no-console
-  console.log('🧷 [Telnyx Webhook Debug]', ...args);
+  logger.debug('🧷 [Telnyx Webhook Debug]', ...args);
 }
 
 async function patchTelnyxCallControlApplicationWebhook(params: {
@@ -879,11 +880,11 @@ interface TelnyxCallUpdateData {
 // --- CONNEXIONS ---
 router.get('/connections', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    console.log('🔍 [Telnyx API] Récupération des connexions...');
+    logger.debug('🔍 [Telnyx API] Récupération des connexions...');
 
     const organizationId = getOrganizationIdFromRequest(req);
     if (!organizationId) return res.status(401).json({ error: 'Non autorisé' });
-    console.log('[Telnyx API] organizationId:', organizationId);
+    logger.debug('[Telnyx API] organizationId:', organizationId);
     
     const auth = await getTelnyxAuth(organizationId);
     if (!auth.ok) {
@@ -945,14 +946,14 @@ router.get('/connections', async (req: AuthenticatedRequest, res: Response) => {
           },
         });
       } catch (dbError) {
-        console.warn('⚠️ [Telnyx API] Connexion non sauvegardée en DB:', conn.id, dbError);
+        logger.warn('⚠️ [Telnyx API] Connexion non sauvegardée en DB:', conn.id, dbError);
       }
     }
 
-    console.log(`✅ [Telnyx API] ${connections.length} connexions synchronisées`);
+    logger.debug(`✅ [Telnyx API] ${connections.length} connexions synchronisées`);
     res.json(connections);
   } catch (error) {
-    console.error('❌ [Telnyx API] Erreur connexions:', error);
+    logger.error('❌ [Telnyx API] Erreur connexions:', error);
     const organizationId = getOrganizationIdFromRequest(req);
     if (!organizationId) return res.status(401).json({ error: 'Non autorisé' });
     const cached = await prisma.telnyxConnection.findMany({
@@ -991,7 +992,7 @@ router.get('/connections', async (req: AuthenticatedRequest, res: Response) => {
 // --- NUMÉROS DE TÉLÉPHONE ---
 router.get('/phone-numbers', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    console.log('🔍 [Telnyx API] Récupération des numéros...');
+    logger.debug('🔍 [Telnyx API] Récupération des numéros...');
 
     const organizationId = getOrganizationIdFromRequest(req);
     if (!organizationId) return res.status(401).json({ error: 'Non autorisé' });
@@ -1070,14 +1071,14 @@ router.get('/phone-numbers', async (req: AuthenticatedRequest, res: Response) =>
           },
         });
       } catch (dbError) {
-        console.warn('⚠️ [Telnyx API] Numéro non sauvegardé en DB:', number.id, dbError);
+        logger.warn('⚠️ [Telnyx API] Numéro non sauvegardé en DB:', number.id, dbError);
       }
     }
 
-    console.log(`✅ [Telnyx API] ${phoneNumbers.length} numéros synchronisés`);
+    logger.debug(`✅ [Telnyx API] ${phoneNumbers.length} numéros synchronisés`);
     res.json(phoneNumbers);
   } catch (error) {
-    console.error('❌ [Telnyx API] Erreur numéros:', error);
+    logger.error('❌ [Telnyx API] Erreur numéros:', error);
     const organizationId = getOrganizationIdFromRequest(req);
     if (!organizationId) return res.status(401).json({ error: 'Non autorisé' });
     const cached = await prisma.telnyxPhoneNumber.findMany({
@@ -1127,7 +1128,7 @@ router.post('/phone-numbers/purchase', async (req: AuthenticatedRequest, res: Re
     }
 
     const data = parsed.data;
-    console.log('🛒 [Telnyx API] Achat de numéro:', data);
+    logger.debug('🛒 [Telnyx API] Achat de numéro:', data);
 
     const organizationId = getOrganizationIdFromRequest(req);
     if (!organizationId) return res.status(401).json({ error: 'Non autorisé' });
@@ -1158,14 +1159,14 @@ router.post('/phone-numbers/purchase', async (req: AuthenticatedRequest, res: Re
       phone_numbers: [{ phone_number: availableNumber.phone_number }]
     }, { headers: auth.headers });
 
-    console.log('✅ [Telnyx API] Numéro acheté:', availableNumber.phone_number);
+    logger.debug('✅ [Telnyx API] Numéro acheté:', availableNumber.phone_number);
     res.json({ 
       success: true, 
       phone_number: availableNumber.phone_number,
       order_id: purchaseResponse.data.data.id 
     });
   } catch (error) {
-    console.error('❌ [Telnyx API] Erreur achat numéro:', error);
+    logger.error('❌ [Telnyx API] Erreur achat numéro:', error);
     return respondTelnyxAxiosError(res, error, "Erreur lors de l'achat du numéro");
   }
 });
@@ -1176,7 +1177,7 @@ router.get('/calls', async (req: AuthenticatedRequest, res: Response) => {
     const limit = parseInt(req.query.limit as string) || 50;
     const organizationId = getOrganizationIdFromRequest(req);
     if (!organizationId) return res.status(401).json({ error: 'Non autorisé' });
-    console.log(`🔍 [Telnyx API] Récupération des appels (${limit})...`);
+    logger.debug(`🔍 [Telnyx API] Récupération des appels (${limit})...`);
     
     const calls = await prisma.telnyxCall.findMany({
       where: { organizationId: organizationId },
@@ -1199,10 +1200,10 @@ router.get('/calls', async (req: AuthenticatedRequest, res: Response) => {
       lead_id: call.leadId
     }));
 
-    console.log(`✅ [Telnyx API] ${formattedCalls.length} appels récupérés`);
+    logger.debug(`✅ [Telnyx API] ${formattedCalls.length} appels récupérés`);
     res.json(formattedCalls);
   } catch (error) {
-    console.error('❌ [Telnyx API] Erreur récupération appels:', error);
+    logger.error('❌ [Telnyx API] Erreur récupération appels:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des appels' });
   }
 });
@@ -1212,7 +1213,7 @@ router.post('/calls', async (req: AuthenticatedRequest, res: Response) => {
     const data = makeCallSchema.parse(req.body);
     const organizationId = getOrganizationIdFromRequest(req);
     if (!organizationId) return res.status(401).json({ error: 'Non autorisé' });
-    console.log('📞 [Telnyx API] Initiation appel AVEC CASCADE:', data);
+    logger.debug('📞 [Telnyx API] Initiation appel AVEC CASCADE:', data);
 
     // 🧠 UTILISER LE SERVICE DE CASCADE TELNYX
     const result = await TelnyxCascadeService.initiateCallWithCascade({
@@ -1222,7 +1223,7 @@ router.post('/calls', async (req: AuthenticatedRequest, res: Response) => {
       leadId: data.lead_id
     }, req);
 
-    console.log('✅ [Telnyx API] Appel initié avec cascade:', result.callControlId);
+    logger.debug('✅ [Telnyx API] Appel initié avec cascade:', result.callControlId);
     
     res.json({
       success: true,
@@ -1234,7 +1235,7 @@ router.post('/calls', async (req: AuthenticatedRequest, res: Response) => {
       cascade: result.cascade
     });
   } catch (error) {
-    console.error('❌ [Telnyx API] Erreur initiation appel:', error);
+    logger.error('❌ [Telnyx API] Erreur initiation appel:', error);
     return respondTelnyxAxiosError(res, error, "Erreur lors de l'initiation de l'appel");
   }
 });
@@ -1310,7 +1311,7 @@ router.post('/calls/hangup-active', async (req: AuthenticatedRequest, res: Respo
       errors,
     });
   } catch (error) {
-    console.error('❌ [Telnyx API] Erreur hangup-active:', error);
+    logger.error('❌ [Telnyx API] Erreur hangup-active:', error);
     return respondTelnyxAxiosError(res, error, 'Erreur lors du raccrochage des appels actifs');
   }
 });
@@ -1320,7 +1321,7 @@ router.post('/calls/:callId/hangup', async (req: AuthenticatedRequest, res: Resp
     const { callId } = req.params;
     const organizationId = getOrganizationIdFromRequest(req);
     if (!organizationId) return res.status(401).json({ error: 'Non autorisé' });
-    console.log('☎️ [Telnyx API] Raccrocher appel:', callId);
+    logger.debug('☎️ [Telnyx API] Raccrocher appel:', callId);
 
     // Rechercher l'appel en base
     const call = await prisma.telnyxCall.findFirst({
@@ -1354,10 +1355,10 @@ router.post('/calls/:callId/hangup', async (req: AuthenticatedRequest, res: Resp
       }
     });
 
-    console.log('✅ [Telnyx API] Appel raccroché:', callId);
+    logger.debug('✅ [Telnyx API] Appel raccroché:', callId);
     res.json({ success: true });
   } catch (error) {
-    console.error('❌ [Telnyx API] Erreur raccrocher:', error);
+    logger.error('❌ [Telnyx API] Erreur raccrocher:', error);
     return respondTelnyxAxiosError(res, error, 'Erreur lors du raccrochage');
   }
 });
@@ -1367,7 +1368,7 @@ router.post('/calls/:callId/mute', async (req: AuthenticatedRequest, res: Respon
     const { callId } = req.params;
     const organizationId = getOrganizationIdFromRequest(req);
     if (!organizationId) return res.status(401).json({ error: 'Non autorisé' });
-    console.log('🔇 [Telnyx API] Couper micro:', callId);
+    logger.debug('🔇 [Telnyx API] Couper micro:', callId);
 
     const auth = await getTelnyxAuth(organizationId);
     if (!auth.ok) {
@@ -1378,10 +1379,10 @@ router.post('/calls/:callId/mute', async (req: AuthenticatedRequest, res: Respon
       headers: auth.headers
     });
 
-    console.log('✅ [Telnyx API] Micro coupé:', callId);
+    logger.debug('✅ [Telnyx API] Micro coupé:', callId);
     res.json({ success: true });
   } catch (error) {
-    console.error('❌ [Telnyx API] Erreur mute:', error);
+    logger.error('❌ [Telnyx API] Erreur mute:', error);
     return respondTelnyxAxiosError(res, error, 'Erreur lors de la coupure du micro');
   }
 });
@@ -1391,7 +1392,7 @@ router.post('/calls/:callId/unmute', async (req: AuthenticatedRequest, res: Resp
     const { callId } = req.params;
     const organizationId = getOrganizationIdFromRequest(req);
     if (!organizationId) return res.status(401).json({ error: 'Non autorisé' });
-    console.log('🔊 [Telnyx API] Activer micro:', callId);
+    logger.debug('🔊 [Telnyx API] Activer micro:', callId);
 
     const auth = await getTelnyxAuth(organizationId);
     if (!auth.ok) {
@@ -1402,10 +1403,10 @@ router.post('/calls/:callId/unmute', async (req: AuthenticatedRequest, res: Resp
       headers: auth.headers
     });
 
-    console.log('✅ [Telnyx API] Micro activé:', callId);
+    logger.debug('✅ [Telnyx API] Micro activé:', callId);
     res.json({ success: true });
   } catch (error) {
-    console.error('❌ [Telnyx API] Erreur unmute:', error);
+    logger.error('❌ [Telnyx API] Erreur unmute:', error);
     return respondTelnyxAxiosError(res, error, "Erreur lors de l'activation du micro");
   }
 });
@@ -1416,7 +1417,7 @@ router.get('/messages', async (req: AuthenticatedRequest, res: Response) => {
     const limit = parseInt(req.query.limit as string) || 50;
     const organizationId = getOrganizationIdFromRequest(req);
     if (!organizationId) return res.status(401).json({ error: 'Non autorisé' });
-    console.log(`🔍 [Telnyx API] Récupération des messages (${limit})...`);
+    logger.debug(`🔍 [Telnyx API] Récupération des messages (${limit})...`);
     
     const messages = await prisma.telnyxMessage.findMany({
       where: { organizationId: organizationId },
@@ -1440,10 +1441,10 @@ router.get('/messages', async (req: AuthenticatedRequest, res: Response) => {
       lead_id: msg.leadId
     }));
 
-    console.log(`✅ [Telnyx API] ${formattedMessages.length} messages récupérés`);
+    logger.debug(`✅ [Telnyx API] ${formattedMessages.length} messages récupérés`);
     res.json(formattedMessages);
   } catch (error) {
-    console.error('❌ [Telnyx API] Erreur récupération messages:', error);
+    logger.error('❌ [Telnyx API] Erreur récupération messages:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des messages' });
   }
 });
@@ -1453,7 +1454,7 @@ router.post('/messages', async (req: AuthenticatedRequest, res: Response) => {
     const data = sendMessageSchema.parse(req.body);
     const organizationId = getOrganizationIdFromRequest(req);
     if (!organizationId) return res.status(401).json({ error: 'Non autorisé' });
-    console.log('💬 [Telnyx API] Envoi message:', data);
+    logger.debug('💬 [Telnyx API] Envoi message:', data);
 
     const auth = await getTelnyxAuth(organizationId);
     if (!auth.ok) {
@@ -1492,14 +1493,14 @@ router.post('/messages', async (req: AuthenticatedRequest, res: Response) => {
       }
     });
 
-    console.log('✅ [Telnyx API] Message envoyé:', message.messageId);
+    logger.debug('✅ [Telnyx API] Message envoyé:', message.messageId);
     res.json({
       id: message.id,
       message_id: message.messageId,
       status: message.status
     });
   } catch (error) {
-    console.error('❌ [Telnyx API] Erreur envoi message:', error);
+    logger.error('❌ [Telnyx API] Erreur envoi message:', error);
     return respondTelnyxAxiosError(res, error, "Erreur lors de l'envoi du message");
   }
 });
@@ -1508,7 +1509,7 @@ router.post('/messages', async (req: AuthenticatedRequest, res: Response) => {
 router.post('/webhooks/calls', async (req: Request, res: Response) => {
   try {
     const webhook = req.body;
-    console.log('🪝 [Telnyx Webhook] Appel:', webhook.data?.event_type);
+    logger.debug('🪝 [Telnyx Webhook] Appel:', webhook.data?.event_type);
 
     const callData = webhook.data?.payload;
     if (!callData) {
@@ -1539,7 +1540,7 @@ router.post('/webhooks/calls', async (req: Request, res: Response) => {
         data: updateData
       });
 
-      console.log(`✅ [Telnyx Webhook] Appel mis à jour: ${call.callId} -> ${callData.state}`);
+      logger.debug(`✅ [Telnyx Webhook] Appel mis à jour: ${call.callId} -> ${callData.state}`);
 
       // 🔔 Notification: appel manqué
       if (['hangup', 'completed'].includes(callData.state) && updateData.duration === 0 && call.organizationId) {
@@ -1553,7 +1554,7 @@ router.post('/webhooks/calls', async (req: Request, res: Response) => {
 
     res.json({ received: true });
   } catch (error) {
-    console.error('❌ [Telnyx Webhook] Erreur appel:', error);
+    logger.error('❌ [Telnyx Webhook] Erreur appel:', error);
     res.status(500).json({ error: 'Erreur webhook appel' });
   }
 });
@@ -1561,7 +1562,7 @@ router.post('/webhooks/calls', async (req: Request, res: Response) => {
 router.post('/webhooks/messages', async (req: Request, res: Response) => {
   try {
     const webhook = req.body;
-    console.log('🪝 [Telnyx Webhook] Message:', webhook.data?.event_type);
+    logger.debug('🪝 [Telnyx Webhook] Message:', webhook.data?.event_type);
 
     const messageData = webhook.data?.payload;
     if (!messageData) {
@@ -1574,7 +1575,7 @@ router.post('/webhooks/messages', async (req: Request, res: Response) => {
     if (eventType === 'message.received') {
       const organizationId = await getOrganizationIdFromMessagePayload(messageData);
       if (!organizationId) {
-        console.warn('⚠️ [Telnyx Webhook] SMS entrant: org introuvable, skip:', messageData?.id);
+        logger.warn('⚠️ [Telnyx Webhook] SMS entrant: org introuvable, skip:', messageData?.id);
         return res.json({ received: true });
       }
       // Message entrant
@@ -1596,7 +1597,7 @@ router.post('/webhooks/messages', async (req: Request, res: Response) => {
         }
       });
 
-      console.log('✅ [Telnyx Webhook] Message entrant sauvegardé:', messageData.id);
+      logger.debug('✅ [Telnyx Webhook] Message entrant sauvegardé:', messageData.id);
 
       // 🔔 Notification: SMS reçu
       notify.incomingSms(
@@ -1619,13 +1620,13 @@ router.post('/webhooks/messages', async (req: Request, res: Response) => {
           }
         });
 
-        console.log('✅ [Telnyx Webhook] Message livré:', messageData.id);
+        logger.debug('✅ [Telnyx Webhook] Message livré:', messageData.id);
       }
     }
 
     res.json({ received: true });
   } catch (error) {
-    console.error('❌ [Telnyx Webhook] Erreur message:', error);
+    logger.error('❌ [Telnyx Webhook] Erreur message:', error);
     res.status(500).json({ error: 'Erreur webhook message' });
   }
 });
@@ -1633,7 +1634,7 @@ router.post('/webhooks/messages', async (req: Request, res: Response) => {
 // --- SYNCHRONISATION ---
 router.post('/sync', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    console.log('🔄 [Telnyx API] Synchronisation complète...');
+    logger.debug('🔄 [Telnyx API] Synchronisation complète...');
 
     const organizationId = getOrganizationIdFromRequest(req);
     if (!organizationId) return res.status(401).json({ error: 'Non autorisé' });
@@ -1676,7 +1677,7 @@ router.post('/sync', async (req: AuthenticatedRequest, res: Response) => {
           },
         });
       } catch (dbError) {
-        console.warn('⚠️ [Telnyx API] Connexion non sauvegardée en DB:', conn.id, dbError);
+        logger.warn('⚠️ [Telnyx API] Connexion non sauvegardée en DB:', conn.id, dbError);
       }
     }
 
@@ -1714,18 +1715,18 @@ router.post('/sync', async (req: AuthenticatedRequest, res: Response) => {
           },
         });
       } catch (dbError) {
-        console.warn('⚠️ [Telnyx API] Numéro non sauvegardé en DB:', number.id, dbError);
+        logger.warn('⚠️ [Telnyx API] Numéro non sauvegardé en DB:', number.id, dbError);
       }
     }
 
-    console.log('✅ [Telnyx API] Synchronisation terminée');
+    logger.debug('✅ [Telnyx API] Synchronisation terminée');
     res.json({ 
       success: true,
       connections: connectionsRes.data.data.length,
       numbers: numbersRes.data.data.length
     });
   } catch (error) {
-    console.error('❌ [Telnyx API] Erreur synchronisation:', error);
+    logger.error('❌ [Telnyx API] Erreur synchronisation:', error);
     return respondTelnyxAxiosError(res, error, 'Erreur lors de la synchronisation');
   }
 });
@@ -1862,7 +1863,7 @@ router.post('/config', async (req: AuthenticatedRequest, res: Response) => {
     });
   } catch (error) {
     const errorId = crypto.randomUUID();
-    console.error(`❌ [Telnyx API] Erreur sauvegarde configuration (errorId=${errorId}):`, error);
+    logger.error(`❌ [Telnyx API] Erreur sauvegarde configuration (errorId=${errorId}):`, error);
 
     const anyErr: unknown = error as unknown;
     const prismaCode = anyErr?.code as string | undefined;
@@ -2180,7 +2181,7 @@ router.post('/provision', async (req: AuthenticatedRequest, res: Response) => {
       warnings,
     });
   } catch (error) {
-    console.error('❌ [Telnyx API] Erreur provisioning:', error);
+    logger.error('❌ [Telnyx API] Erreur provisioning:', error);
     return respondTelnyxAxiosError(res, error, 'Erreur provisioning Telnyx');
   }
 });
@@ -2217,7 +2218,7 @@ router.get('/users', async (req: AuthenticatedRequest, res: Response) => {
 
     return res.json(users);
   } catch (error) {
-    console.error('❌ [Telnyx API] Erreur récupération users org:', error);
+    logger.error('❌ [Telnyx API] Erreur récupération users org:', error);
     return res.status(500).json({ error: 'Erreur lors de la récupération des utilisateurs' });
   }
 });
@@ -2229,7 +2230,7 @@ router.post('/user-config', async (req: AuthenticatedRequest, res: Response) => 
     const organizationId = getOrganizationIdFromRequest(req);
     if (!organizationId) return res.status(401).json({ error: 'Non autorisé' });
 
-    console.log('⚙️ [Telnyx API] Configuration utilisateur:', { userId, assignedNumber });
+    logger.debug('⚙️ [Telnyx API] Configuration utilisateur:', { userId, assignedNumber });
 
     // Créer ou mettre à jour la configuration utilisateur Telnyx
     const userConfig = await prisma.telnyxUserConfig.upsert({
@@ -2293,10 +2294,10 @@ router.post('/user-config', async (req: AuthenticatedRequest, res: Response) => 
       });
     }
 
-    console.log('✅ [Telnyx API] Configuration utilisateur sauvegardée');
+    logger.debug('✅ [Telnyx API] Configuration utilisateur sauvegardée');
     res.json({ success: true, config: userConfig });
   } catch (error) {
-    console.error('❌ [Telnyx API] Erreur config utilisateur:', error);
+    logger.error('❌ [Telnyx API] Erreur config utilisateur:', error);
     res.status(500).json({ error: 'Erreur lors de la sauvegarde de la configuration' });
   }
 });
@@ -2307,7 +2308,7 @@ router.get('/user-config/:userId', async (req: AuthenticatedRequest, res: Respon
     const organizationId = getOrganizationIdFromRequest(req);
     if (!organizationId) return res.status(401).json({ error: 'Non autorisé' });
 
-    console.log('🔍 [Telnyx API] Récupération config utilisateur:', userId);
+    logger.debug('🔍 [Telnyx API] Récupération config utilisateur:', userId);
 
     const userConfig = await prisma.telnyxUserConfig.findFirst({
       where: { 
@@ -2325,7 +2326,7 @@ router.get('/user-config/:userId', async (req: AuthenticatedRequest, res: Respon
       monthlyLimit: null
     });
   } catch (error) {
-    console.error('❌ [Telnyx API] Erreur récupération config:', error);
+    logger.error('❌ [Telnyx API] Erreur récupération config:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération de la configuration' });
   }
 });
@@ -2334,7 +2335,7 @@ router.get('/stats', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const organizationId = getOrganizationIdFromRequest(req);
     if (!organizationId) return res.status(401).json({ error: 'Non autorisé' });
-    console.log('📊 [Telnyx API] Récupération statistiques...');
+    logger.debug('📊 [Telnyx API] Récupération statistiques...');
 
     const [totalCalls, totalSms, activeNumbers] = await Promise.all([
       prisma.telnyxCall.count({
@@ -2378,7 +2379,7 @@ router.get('/stats', async (req: AuthenticatedRequest, res: Response) => {
     const numbersCost = numbers.reduce((sum, number) => sum + (number.monthlyCost || 0), 0);
     const monthlyCost = callsCost + numbersCost;
 
-    console.log('✅ [Telnyx API] Statistiques récupérées');
+    logger.debug('✅ [Telnyx API] Statistiques récupérées');
     res.json({
       totalCalls,
       totalSms,
@@ -2386,7 +2387,7 @@ router.get('/stats', async (req: AuthenticatedRequest, res: Response) => {
       monthlyCost
     });
   } catch (error) {
-    console.error('❌ [Telnyx API] Erreur stats:', error);
+    logger.error('❌ [Telnyx API] Erreur stats:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des statistiques' });
   }
 });
@@ -2399,7 +2400,7 @@ router.post('/webhooks', async (req: Request, res: Response) => {
   const payload = webhook?.data?.payload;
 
   if (debug) {
-    console.log('🧷 [Telnyx Webhook Debug] inbound', {
+    logger.debug('🧷 [Telnyx Webhook Debug] inbound', {
       path: req.path,
       originalUrl: req.originalUrl,
       method: req.method,
@@ -2411,7 +2412,7 @@ router.post('/webhooks', async (req: Request, res: Response) => {
   }
 
   try {
-    console.log('🪝 [Telnyx Webhook]', eventType, payload?.call_control_id || payload?.id);
+    logger.debug('🪝 [Telnyx Webhook]', eventType, payload?.call_control_id || payload?.id);
 
     // Gestion des événements d'appel (CALL LEGS TRACKING)
     if (eventType?.startsWith('call.')) {
@@ -2424,12 +2425,12 @@ router.post('/webhooks', async (req: Request, res: Response) => {
     }
 
     else {
-      console.log('🪝 [Telnyx Webhook] Événement non géré:', eventType);
+      logger.debug('🪝 [Telnyx Webhook] Événement non géré:', eventType);
     }
   } catch (error) {
-    console.error('❌ [Telnyx Webhook] Erreur:', error);
+    logger.error('❌ [Telnyx Webhook] Erreur:', error);
     if (debug) {
-      console.error('🧷 [Telnyx Webhook Debug] failed', {
+      logger.error('🧷 [Telnyx Webhook Debug] failed', {
         eventType,
         callControlId: payload?.call_control_id || payload?.id || null,
       });
@@ -2475,13 +2476,13 @@ async function handleCallWebhook(eventType: string, callData: unknown, req?: Req
     const directionRaw = typeof callData.direction === 'string' ? callData.direction : 'incoming';
     const isInbound = directionRaw === 'incoming' || directionRaw === 'inbound';
     if (!isInbound) {
-      console.warn(`⚠️ [Telnyx Webhook] Call non trouvé (non-inbound): ${callControlId}`);
+      logger.warn(`⚠️ [Telnyx Webhook] Call non trouvé (non-inbound): ${callControlId}`);
       return;
     }
 
     const organizationId = await getOrganizationIdFromCallPayload(callData);
     if (!organizationId) {
-      console.warn(`⚠️ [Telnyx Webhook] Impossible de déterminer l'organisation pour inbound: ${callControlId}`);
+      logger.warn(`⚠️ [Telnyx Webhook] Impossible de déterminer l'organisation pour inbound: ${callControlId}`);
       return;
     }
 
@@ -2528,12 +2529,12 @@ async function handleCallWebhook(eventType: string, callData: unknown, req?: Req
             { action: 'answer', title: 'Répondre' },
             { action: 'decline', title: 'Refuser' },
           ],
-        }).catch(err => console.warn('[PUSH] Error sending incoming Telnyx call notification:', err));
+        }).catch(err => logger.warn('[PUSH] Error sending incoming Telnyx call notification:', err));
       }
     }
   }
 
-  console.log(`🪝 [Telnyx Webhook] ${eventType} pour call ${call.id} -> state: ${state}`);
+  logger.debug(`🪝 [Telnyx Webhook] ${eventType} pour call ${call.id} -> state: ${state}`);
   const mainCallControlId = call.callId;
 
   // Mettre à jour le call selon l'événement
@@ -2550,7 +2551,7 @@ async function handleCallWebhook(eventType: string, callData: unknown, req?: Req
             await TelnyxCascadeService.updateCallLegStatus(call.callId, destination, 'dialing', new Date());
           }
         } catch (e) {
-          console.warn('⚠️ [Telnyx Webhook] call.initiated (leg): tracking leg failed:', e);
+          logger.warn('⚠️ [Telnyx Webhook] call.initiated (leg): tracking leg failed:', e);
         }
         break;
       }
@@ -2648,13 +2649,13 @@ async function handleCallWebhook(eventType: string, callData: unknown, req?: Req
                   }
                 }
               } catch (e2) {
-                console.warn('⚠️ [Telnyx Webhook] Impossible de basculer vers le leg suivant après échec transfer:', e2);
+                logger.warn('⚠️ [Telnyx Webhook] Impossible de basculer vers le leg suivant après échec transfer:', e2);
               }
             }
           }
         }
       } catch (e) {
-        console.warn('⚠️ [Telnyx Webhook] Impossible de démarrer la cascade inbound:', e);
+        logger.warn('⚠️ [Telnyx Webhook] Impossible de démarrer la cascade inbound:', e);
       }
       break;
 
@@ -2666,7 +2667,7 @@ async function handleCallWebhook(eventType: string, callData: unknown, req?: Req
             await TelnyxCascadeService.updateCallLegStatus(call.callId, destination, 'dialing', new Date());
           }
         } catch (e) {
-          console.warn('⚠️ [Telnyx Webhook] call.ringing (leg): tracking leg failed:', e);
+          logger.warn('⚠️ [Telnyx Webhook] call.ringing (leg): tracking leg failed:', e);
         }
         break;
       }
@@ -2717,7 +2718,7 @@ async function handleCallWebhook(eventType: string, callData: unknown, req?: Req
           }
         }
       } catch (e) {
-        console.warn('⚠️ [Telnyx Webhook] call.ringing: tracking leg failed:', e);
+        logger.warn('⚠️ [Telnyx Webhook] call.ringing: tracking leg failed:', e);
       }
       break;
 
@@ -2819,16 +2820,16 @@ async function handleCallWebhook(eventType: string, callData: unknown, req?: Req
           }
         }
       } catch (e) {
-        console.warn('⚠️ [Telnyx Webhook] Next-leg cascade failed:', e);
+        logger.warn('⚠️ [Telnyx Webhook] Next-leg cascade failed:', e);
       }
       break;
 
     case 'call.machine.detection.ended':
       // Détection répondeur
       if (callData.result === 'human') {
-        console.log('✅ [Telnyx Webhook] Humain détecté');
+        logger.debug('✅ [Telnyx Webhook] Humain détecté');
       } else {
-        console.log('🤖 [Telnyx Webhook] Répondeur/machine détecté');
+        logger.debug('🤖 [Telnyx Webhook] Répondeur/machine détecté');
       }
       break;
   }
@@ -2839,7 +2840,7 @@ async function handleCallWebhook(eventType: string, callData: unknown, req?: Req
     data: updateData
   });
 
-  console.log(`✅ [Telnyx Webhook] Call mis à jour: ${call.callId} -> ${updateData.status || state}`);
+  logger.debug(`✅ [Telnyx Webhook] Call mis à jour: ${call.callId} -> ${updateData.status || state}`);
 }
 
 // Handler pour les webhooks de message (inchangé)
@@ -2850,7 +2851,7 @@ async function handleMessageWebhook(eventType: string, messageData: unknown): Pr
 
   const organizationId = await getOrganizationIdFromMessagePayload(messageData);
   if (!organizationId) {
-    console.warn('⚠️ [Telnyx Webhook] Message: org introuvable, skip:', messageData?.id, eventType);
+    logger.warn('⚠️ [Telnyx Webhook] Message: org introuvable, skip:', messageData?.id, eventType);
     return;
   }
 
@@ -2874,7 +2875,7 @@ async function handleMessageWebhook(eventType: string, messageData: unknown): Pr
       }
     });
 
-    console.log('✅ [Telnyx Webhook] Message entrant sauvegardé:', messageData.id);
+    logger.debug('✅ [Telnyx Webhook] Message entrant sauvegardé:', messageData.id);
   } else if (eventType === 'message.sent') {
     // Mettre à jour le statut du message sortant
     const message = await prisma.telnyxMessage.findFirst({
@@ -2891,7 +2892,7 @@ async function handleMessageWebhook(eventType: string, messageData: unknown): Pr
         }
       });
 
-      console.log('✅ [Telnyx Webhook] Message sortant mis à jour:', messageData.id);
+      logger.debug('✅ [Telnyx Webhook] Message sortant mis à jour:', messageData.id);
     }
   }
 }
@@ -2956,7 +2957,7 @@ router.get('/sip-endpoints', async (req: AuthenticatedRequest, res: Response) =>
 
     res.json(formattedEndpoints);
   } catch (error) {
-    console.error('❌ [Telnyx API] Erreur récupération SIP endpoints:', error);
+    logger.error('❌ [Telnyx API] Erreur récupération SIP endpoints:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des endpoints SIP' });
   }
 });
@@ -3019,7 +3020,7 @@ router.get('/recent-calls', async (req: AuthenticatedRequest, res: Response) => 
 
     res.json({ calls });
   } catch (error) {
-    console.error('❌ [Telnyx API] recent-calls error:', error);
+    logger.error('❌ [Telnyx API] recent-calls error:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des derniers appels' });
   }
 });
@@ -3062,7 +3063,7 @@ router.post('/sip-endpoints', async (req: AuthenticatedRequest, res: Response) =
       }
     });
 
-    console.log('✅ [Telnyx API] SIP endpoint créé:', endpoint.id);
+    logger.debug('✅ [Telnyx API] SIP endpoint créé:', endpoint.id);
     res.json({
       success: true,
       endpoint: {
@@ -3080,7 +3081,7 @@ router.post('/sip-endpoints', async (req: AuthenticatedRequest, res: Response) =
       },
     });
   } catch (error) {
-    console.error('❌ [Telnyx API] Erreur création SIP endpoint:', error);
+    logger.error('❌ [Telnyx API] Erreur création SIP endpoint:', error);
     res.status(500).json({ error: 'Erreur lors de la création de l\'endpoint SIP' });
   }
 });
@@ -3121,7 +3122,7 @@ router.put('/sip-endpoints/:id', async (req: AuthenticatedRequest, res: Response
       data: updateData
     });
 
-    console.log('✅ [Telnyx API] SIP endpoint modifié:', id);
+    logger.debug('✅ [Telnyx API] SIP endpoint modifié:', id);
     res.json({
       success: true,
       endpoint: {
@@ -3139,7 +3140,7 @@ router.put('/sip-endpoints/:id', async (req: AuthenticatedRequest, res: Response
       },
     });
   } catch (error) {
-    console.error('❌ [Telnyx API] Erreur modification SIP endpoint:', error);
+    logger.error('❌ [Telnyx API] Erreur modification SIP endpoint:', error);
     res.status(500).json({ error: 'Erreur lors de la modification de l\'endpoint SIP' });
   }
 });
@@ -3163,10 +3164,10 @@ router.delete('/sip-endpoints/:id', async (req: AuthenticatedRequest, res: Respo
       where: { id }
     });
 
-    console.log('✅ [Telnyx API] SIP endpoint supprimé:', id);
+    logger.debug('✅ [Telnyx API] SIP endpoint supprimé:', id);
     res.json({ success: true });
   } catch (error) {
-    console.error('❌ [Telnyx API] Erreur suppression SIP endpoint:', error);
+    logger.error('❌ [Telnyx API] Erreur suppression SIP endpoint:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression de l\'endpoint SIP' });
   }
 });
@@ -3239,7 +3240,7 @@ router.post('/sip-endpoints/:id/test', async (req: AuthenticatedRequest, res: Re
       ? Math.max(5, Math.min(120, Math.floor(autoHangupSecsRaw)))
       : 25;
 
-    console.log('🧪 [Telnyx API] Test SIP endpoint (appel):', { toSipUri, fromNumber, connectionId });
+    logger.debug('🧪 [Telnyx API] Test SIP endpoint (appel):', { toSipUri, fromNumber, connectionId });
 
     try {
       const response = await axios.post(`${TELNYX_API_URL}/calls`, {
@@ -3306,7 +3307,7 @@ router.post('/sip-endpoints/:id/test', async (req: AuthenticatedRequest, res: Re
       return respondTelnyxAxiosError(res, error, 'Erreur lors du test (appel SIP)');
     }
   } catch (error) {
-    console.error('❌ [Telnyx API] Erreur test SIP endpoint:', error);
+    logger.error('❌ [Telnyx API] Erreur test SIP endpoint:', error);
     res.status(500).json({ error: 'Erreur lors du test de l\'endpoint SIP' });
   } finally {
     if (lockOrgId) releaseSipTestLock(lockOrgId, lockToken);

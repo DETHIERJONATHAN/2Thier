@@ -1,3 +1,4 @@
+import { logger } from '../lib/logger';
 /**
  * 🎨 Utilitaires de conversion de couleurs
  * Convertit les couleurs en format hexadécimal pour compatibilité HTML5 color input
@@ -113,7 +114,7 @@ export function cleanColor(color?: string, defaultColor: string = '#ffffff'): st
   }
 
   // Si tout échoue, retourner la couleur par défaut
-  console.warn(`⚠️ Couleur invalide: "${color}", utilisation de ${defaultColor}`);
+  logger.warn(`⚠️ Couleur invalide: "${color}", utilisation de ${defaultColor}`);
   return defaultColor;
 }
 

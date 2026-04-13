@@ -49,6 +49,7 @@ import { useAuth } from '../../auth/useAuth';
 import dayjs from 'dayjs';
 import 'dayjs/locale/fr';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 dayjs.locale('fr');
 
@@ -202,7 +203,7 @@ const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
       };
       onSubmit(formData);
     } catch (error) {
-      console.error('Erreur de validation:', error);
+      logger.error('Erreur de validation:', error);
     }
   };
 
@@ -460,7 +461,7 @@ export default function PublicFormsPage() {
       setForms(formsData);
       setStats(statsData);
     } catch (error) {
-      console.error('Erreur lors du chargement:', error);
+      logger.error('Erreur lors du chargement:', error);
       message.error('Impossible de charger les formulaires');
     } finally {
       setLoading(false);
@@ -472,7 +473,7 @@ export default function PublicFormsPage() {
       const submissionsData = await api.get<FormSubmission[]>(`/api/website-forms/${formId}/submissions`);
       setSubmissions(submissionsData);
     } catch (error) {
-      console.error('Erreur lors du chargement des soumissions:', error);
+      logger.error('Erreur lors du chargement des soumissions:', error);
       message.error('Impossible de charger les soumissions');
     }
   }, [api]);
@@ -489,7 +490,7 @@ export default function PublicFormsPage() {
       setFormModalVisible(false);
       loadData();
     } catch (error: unknown) {
-      console.error('Erreur lors de la création:', error);
+      logger.error('Erreur lors de la création:', error);
       const errorMessage = error instanceof Error && 'response' in error 
         ? (error as any).response?.data?.message 
         : 'Erreur lors de la création du formulaire';
@@ -511,7 +512,7 @@ export default function PublicFormsPage() {
       setIsEditMode(false);
       loadData();
     } catch (error: unknown) {
-      console.error('Erreur lors de la mise à jour:', error);
+      logger.error('Erreur lors de la mise à jour:', error);
       const errorMessage = error instanceof Error && 'response' in error 
         ? (error as any).response?.data?.message 
         : 'Erreur lors de la mise à jour du formulaire';
@@ -527,7 +528,7 @@ export default function PublicFormsPage() {
       message.success(`Formulaire ${!form.isActive ? 'activé' : 'désactivé'} !`);
       loadData();
     } catch (error) {
-      console.error('Erreur lors du basculement:', error);
+      logger.error('Erreur lors du basculement:', error);
       message.error('Erreur lors du changement de statut');
     }
   };
@@ -538,7 +539,7 @@ export default function PublicFormsPage() {
       message.success('Formulaire supprimé avec succès !');
       loadData();
     } catch (error) {
-      console.error('Erreur lors de la suppression:', error);
+      logger.error('Erreur lors de la suppression:', error);
       message.error('Erreur lors de la suppression');
     }
   };

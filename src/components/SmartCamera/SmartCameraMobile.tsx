@@ -23,6 +23,7 @@ import {
 import { useDeviceOrientation } from '../../hooks/useDeviceOrientation';
 import { useMobileModalLock } from '../../hooks/useMobileModalLock';
 import { SF } from '../zhiive/ZhiiveTheme';
+import { logger } from '../../lib/logger';
 
 const { Text, Title } = Typography;
 
@@ -79,10 +80,10 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        console.log('📱 [SmartCamera] Restauration de', parsed.length, 'photos depuis cache mémoire');
+        logger.debug('📱 [SmartCamera] Restauration de', parsed.length, 'photos depuis cache mémoire');
         return parsed;
       } catch (e) {
-        console.warn('📱 [SmartCamera] Erreur restauration photos:', e);
+        logger.warn('📱 [SmartCamera] Erreur restauration photos:', e);
       }
     }
     return [];
@@ -93,14 +94,14 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
   useEffect(() => {
     if (photos.length > 0) {
       photosMemoryCache.set(PHOTOS_CACHE_KEY, JSON.stringify(photos));
-      console.log('📱 [SmartCamera] Sauvegarde de', photos.length, 'photos en mémoire');
+      logger.debug('📱 [SmartCamera] Sauvegarde de', photos.length, 'photos en mémoire');
     }
   }, [photos]);
 
   // 🔒 Nettoyer le cache quand on quitte (annuler ou valider)
   const clearPersistedPhotos = useCallback(() => {
     photosMemoryCache.delete(PHOTOS_CACHE_KEY);
-    console.log('📱 [SmartCamera] Photos supprimées du cache mémoire');
+    logger.debug('📱 [SmartCamera] Photos supprimées du cache mémoire');
   }, []);
 
   
@@ -122,7 +123,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
   useEffect(() => {
     if (isAvailable && !hasPermission) {
       // On ne demande pas automatiquement, on attend un clic
-      console.log('📱 [SmartCamera] Gyroscope disponible, permission non accordée');
+      logger.debug('📱 [SmartCamera] Gyroscope disponible, permission non accordée');
     }
   }, [isAvailable, hasPermission]);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -145,7 +146,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
     
     try {
       setCameraError(null);
-      console.log('📹 [SmartCamera] Démarrage caméra in-browser...');
+      logger.debug('📹 [SmartCamera] Démarrage caméra in-browser...');
       
       // 📱 IMPORTANT: Sur mobile portrait, demander la PLUS HAUTE résolution possible
       // Le navigateur adaptera automatiquement selon l'orientation
@@ -166,7 +167,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
       // Log des capacités réelles obtenues
       const videoTrack = stream.getVideoTracks()[0];
       const settings = videoTrack.getSettings();
-      console.log('📹 [SmartCamera] Résolution obtenue:', settings.width, 'x', settings.height);
+      logger.debug('📹 [SmartCamera] Résolution obtenue:', settings.width, 'x', settings.height);
       
       // 📸 NOUVEAU: Extraire TOUTES les capacités de la caméra pour calcul de focale
       try {
@@ -181,44 +182,44 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
         // getCapabilities() contient les ranges (focal, zoom) - pas supporté partout
         if ('getCapabilities' in videoTrack) {
           const fullCaps = (videoTrack as any).getCapabilities();
-          console.log('📸 [SmartCamera] Capacités caméra complètes:', fullCaps);
+          logger.debug('📸 [SmartCamera] Capacités caméra complètes:', fullCaps);
           
           // Extraire focale si disponible (Android Chrome principalement)
           if (fullCaps.focusDistance) {
             // focusDistance en dioptries, conversion approximative vers focal mm
             // Note: ce n'est pas la focale exacte mais un proxy
-            console.log('📸 [SmartCamera] Focus distance range:', fullCaps.focusDistance);
+            logger.debug('📸 [SmartCamera] Focus distance range:', fullCaps.focusDistance);
           }
           
           // Zoom range
           if (fullCaps.zoom) {
             caps.zoomRange = { min: fullCaps.zoom.min, max: fullCaps.zoom.max };
-            console.log('📸 [SmartCamera] Zoom range:', caps.zoomRange);
+            logger.debug('📸 [SmartCamera] Zoom range:', caps.zoomRange);
           }
           
           // Résolution max
           if (fullCaps.width && fullCaps.height) {
-            console.log(`📸 [SmartCamera] Résolution max: ${fullCaps.width.max}x${fullCaps.height.max}`);
+            logger.debug(`📸 [SmartCamera] Résolution max: ${fullCaps.width.max}x${fullCaps.height.max}`);
           }
         }
         
         setCameraCapabilities(caps);
-        console.log('📸 [SmartCamera] Capacités stockées:', caps);
+        logger.debug('📸 [SmartCamera] Capacités stockées:', caps);
       } catch (capErr) {
-        console.warn('📸 [SmartCamera] Impossible d\'extraire les capacités:', capErr);
+        logger.warn('📸 [SmartCamera] Impossible d\'extraire les capacités:', capErr);
       }
       
       setCameraStream(stream);
       setCameraActive(true);
       // NOTE: Le stream sera attaché au video element via useEffect ci-dessous
       
-      console.log('📹 [SmartCamera] Caméra démarrée avec succès');
+      logger.debug('📹 [SmartCamera] Caméra démarrée avec succès');
     } catch (err: unknown) {
-      console.error('📹 [SmartCamera] Erreur caméra:', err);
+      logger.error('📹 [SmartCamera] Erreur caméra:', err);
       
       // 🔄 Fallback si exact: 'environment' échoue (certains navigateurs)
       try {
-        console.log('📹 [SmartCamera] Tentative fallback sans exact...');
+        logger.debug('📹 [SmartCamera] Tentative fallback sans exact...');
         const fallbackStream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: 'environment',
@@ -229,10 +230,10 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
         });
         setCameraStream(fallbackStream);
         setCameraActive(true);
-        console.log('📹 [SmartCamera] Fallback réussi');
+        logger.debug('📹 [SmartCamera] Fallback réussi');
         return;
       } catch (fallbackErr) {
-        console.error('📹 [SmartCamera] Fallback échoué aussi:', fallbackErr);
+        logger.error('📹 [SmartCamera] Fallback échoué aussi:', fallbackErr);
       }
       
       setCameraError(err.message || 'Impossible d\'accéder à la caméra');
@@ -246,10 +247,10 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
   // (Le video element n'existe pas au moment où startCamera() est appelé car cameraActive=false)
   useEffect(() => {
     if (cameraStream && videoRef.current) {
-      console.log('📹 [SmartCamera] Attachement du stream au video element...');
+      logger.debug('📹 [SmartCamera] Attachement du stream au video element...');
       videoRef.current.srcObject = cameraStream;
       videoRef.current.play().catch(err => {
-        console.error('📹 [SmartCamera] Erreur play():', err);
+        logger.error('📹 [SmartCamera] Erreur play():', err);
       });
     }
   }, [cameraStream, cameraActive]); // cameraActive déclenche le rendu du video element
@@ -261,7 +262,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
       setCameraStream(null);
     }
     setCameraActive(false);
-    console.log('📹 [SmartCamera] Caméra arrêtée');
+    logger.debug('📹 [SmartCamera] Caméra arrêtée');
   }, [cameraStream]);
   
   // 📸 État pour le compte à rebours et la capture
@@ -348,18 +349,18 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
         setCountdown(Math.max(1, 3 - Math.floor(attempts / 2)));
         
         const currentSharpness = calculateSharpness(video, canvas);
-        console.log(`🔍 [SmartCamera] Netteté: ${currentSharpness.toFixed(1)} (essai ${attempts})`);
+        logger.debug(`🔍 [SmartCamera] Netteté: ${currentSharpness.toFixed(1)} (essai ${attempts})`);
         
         // Si la netteté est bonne (>15) ou stable, on capture
         if (currentSharpness > 15) {
-          console.log(`✅ [SmartCamera] Netteté suffisante: ${currentSharpness.toFixed(1)}`);
+          logger.debug(`✅ [SmartCamera] Netteté suffisante: ${currentSharpness.toFixed(1)}`);
           setFocusStatus('ready');
           break;
         }
         
         // Si la netteté se stabilise (variation < 10%), on capture
         if (attempts > 2 && Math.abs(currentSharpness - bestSharpness) < bestSharpness * 0.1) {
-          console.log(`✅ [SmartCamera] Netteté stabilisée: ${currentSharpness.toFixed(1)}`);
+          logger.debug(`✅ [SmartCamera] Netteté stabilisée: ${currentSharpness.toFixed(1)}`);
           setFocusStatus('ready');
           break;
         }
@@ -373,7 +374,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       
-      console.log(`📸 [SmartCamera] Capture à ${canvas.width}x${canvas.height}px`);
+      logger.debug(`📸 [SmartCamera] Capture à ${canvas.width}x${canvas.height}px`);
       
       // 🎨 Dessiner la frame actuelle avec qualité maximale
       const ctx = canvas.getContext('2d', { 
@@ -398,7 +399,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
       
       // Log de la taille pour debug
       const sizeKB = Math.round(base64.length * 0.75 / 1024);
-      console.log(`📸 [SmartCamera] Image: ${canvas.width}x${canvas.height}, ${sizeKB}KB, netteté=${finalSharpness.toFixed(1)}`);
+      logger.debug(`📸 [SmartCamera] Image: ${canvas.width}x${canvas.height}, ${sizeKB}KB, netteté=${finalSharpness.toFixed(1)}`);
       
       // ⚠️ Avertir si la photo est floue
       if (finalSharpness < 10) {
@@ -439,9 +440,9 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
       setPhotos(prev => [...prev, newPhoto]);
       message.success(`📸 Photo ${photos.length + 1}/${minPhotos} (netteté: ${finalSharpness.toFixed(0)})`);
       
-      console.log(`📸 [SmartCamera] Photo capturée (${photos.length + 1}/${minPhotos})`);
+      logger.debug(`📸 [SmartCamera] Photo capturée (${photos.length + 1}/${minPhotos})`);
     } catch (err) {
-      console.error('📸 [SmartCamera] Erreur capture:', err);
+      logger.error('📸 [SmartCamera] Erreur capture:', err);
       message.error('Erreur lors de la capture');
     } finally {
       setIsCapturing(false);
@@ -474,7 +475,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
     try {
       const files = Array.from(e.target.files || []);
       if (files.length === 0) {
-        console.log('📸 [SmartCamera] Aucun fichier (utilisateur a annulé)');
+        logger.debug('📸 [SmartCamera] Aucun fichier (utilisateur a annulé)');
         return;
       }
 
@@ -504,7 +505,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
     }
 
     setIsProcessing(true);
-    console.log(`📸 [SmartCamera] Traitement de ${filesToProcess.length} fichier(s) via caméra native...`);
+    logger.debug(`📸 [SmartCamera] Traitement de ${filesToProcess.length} fichier(s) via caméra native...`);
     
     // 📱 Capturer l'orientation actuelle du téléphone (gyroscope)
     let currentOrientation = {
@@ -521,9 +522,9 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
         gamma: orientation.gamma,
         quality: analyze().quality
       };
-      console.log(`📱 [SmartCamera] Gyroscope: beta=${currentOrientation.beta.toFixed(1)}°`);
+      logger.debug(`📱 [SmartCamera] Gyroscope: beta=${currentOrientation.beta.toFixed(1)}°`);
     } catch (gyroErr) {
-      console.warn('📱 [SmartCamera] Gyroscope non dispo, valeurs par défaut');
+      logger.warn('📱 [SmartCamera] Gyroscope non dispo, valeurs par défaut');
     }
     
     // 🔒 Conversion en base64 avec timeout de sécurité
@@ -538,9 +539,9 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
         ]);
       });
       base64s = await Promise.all(conversionPromises);
-      console.log(`📸 [SmartCamera] ${base64s.length} image(s) converties`);
+      logger.debug(`📸 [SmartCamera] ${base64s.length} image(s) converties`);
     } catch (convErr) {
-      console.error('📸 [SmartCamera] Erreur conversion:', convErr);
+      logger.error('📸 [SmartCamera] Erreur conversion:', convErr);
       message.error('Erreur traitement image. Réessayez.');
       setIsProcessing(false);
       if (inputRef.current) inputRef.current.value = '';
@@ -568,10 +569,10 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
             cameraCapabilities: cameraCapabilities || undefined
           }
         }));
-        console.log(`📸 Total photos: ${prev.length + newPhotos.length}`);
+        logger.debug(`📸 Total photos: ${prev.length + newPhotos.length}`);
         return [...prev, ...newPhotos];
       } catch (e) {
-        console.error('📸 Erreur state:', e);
+        logger.error('📸 Erreur state:', e);
         return prev;
       }
     });
@@ -584,7 +585,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
     }
 
   } catch (globalErr) {
-    console.error('📸 ERREUR GLOBALE:', globalErr);
+    logger.error('📸 ERREUR GLOBALE:', globalErr);
     message.error('Erreur inattendue. Réessayez.');
   } finally {
     setIsProcessing(false);
@@ -629,7 +630,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
         requestPermission();
       }
       
-      console.log('📸 [SmartCamera] Ouverture caméra native Android...');
+      logger.debug('📸 [SmartCamera] Ouverture caméra native Android...');
       
       // Utiliser l'input file avec capture="environment" (caméra native)
       if (inputRef.current) {
@@ -638,7 +639,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
         message.error('Erreur: input caméra non disponible');
       }
     } catch (err) {
-      console.error('📸 [SmartCamera] Erreur ouverture caméra:', err);
+      logger.error('📸 [SmartCamera] Erreur ouverture caméra:', err);
       message.error('Erreur lors de l\'ouverture de la caméra');
     }
   }, [isAvailable, hasPermission, requestPermission]);

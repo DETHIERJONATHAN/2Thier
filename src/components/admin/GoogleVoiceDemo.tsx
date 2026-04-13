@@ -17,6 +17,7 @@ import {
   PlayCircleOutlined,
   UserAddOutlined
 } from '@ant-design/icons';
+import { logger } from '../../lib/logger';
 
 const { Title, Paragraph } = Typography;
 
@@ -40,7 +41,7 @@ const GoogleVoiceDemo: React.FC = () => {
       }
     } catch (error: unknown) {
       message.destroy();
-      console.error('Erreur test connexion:', error);
+      logger.error('Erreur test connexion:', error);
       message.error('❌ Erreur lors du test de connexion');
     } finally {
       setLoading(false);
@@ -63,7 +64,7 @@ const GoogleVoiceDemo: React.FC = () => {
       form.resetFields();
     } catch (error: unknown) {
       message.destroy();
-      console.error('Erreur initialisation:', error);
+      logger.error('Erreur initialisation:', error);
       message.error(`❌ ${error.response?.data?.error || 'Erreur lors de l\'initialisation'}`);
     } finally {
       setLoading(false);
@@ -84,7 +85,7 @@ const GoogleVoiceDemo: React.FC = () => {
       message.success(`📞 Appel de test initié - ID: ${response.callRecord?.id}`);
     } catch (error: unknown) {
       message.destroy();
-      console.error('Erreur appel:', error);
+      logger.error('Erreur appel:', error);
       message.error('❌ Erreur lors de l\'appel de test');
     } finally {
       setLoading(false);
@@ -106,7 +107,7 @@ const GoogleVoiceDemo: React.FC = () => {
       message.success(`💬 SMS de test envoyé - ID: ${response.smsMessage?.id}`);
     } catch (error: unknown) {
       message.destroy();
-      console.error('Erreur SMS:', error);
+      logger.error('Erreur SMS:', error);
       message.error('❌ Erreur lors du SMS de test');
     } finally {
       setLoading(false);

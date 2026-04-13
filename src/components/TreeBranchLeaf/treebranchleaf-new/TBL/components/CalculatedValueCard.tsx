@@ -4,6 +4,7 @@ import { CalendarOutlined, UserOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import { tblLog } from '../../../../../utils/tblDebug';
 import dayjs from 'dayjs';
+import { logger } from '../../../../../lib/logger';
 
 interface CalculatedValueCardProps {
   /** ID du nœud à afficher */
@@ -92,7 +93,7 @@ export const CalculatedValueCard: React.FC<CalculatedValueCardProps> = ({
       const parsed = JSON.parse(json);
       return { signature: json, normalizedFormData: parsed as Record<string, unknown> };
     } catch (err) {
-      console.warn('⚠️ [CalculatedValueCard] Impossible de sérialiser formData:', err);
+      logger.warn('⚠️ [CalculatedValueCard] Impossible de sérialiser formData:', err);
       return { signature: String(Date.now()), normalizedFormData: formData };
     }
   }, [formData]);
@@ -190,7 +191,7 @@ export const CalculatedValueCard: React.FC<CalculatedValueCardProps> = ({
         }
       } catch (err) {
         if (!cancelled) {
-          console.error(`❌ [CalculatedValueCard] Erreur récupération Prisma:`, err);
+          logger.error(`❌ [CalculatedValueCard] Erreur récupération Prisma:`, err);
           setError('Erreur lors du chargement');
           setValue(undefined);
         }
@@ -255,7 +256,7 @@ export const CalculatedValueCard: React.FC<CalculatedValueCardProps> = ({
         }
       } catch (err) {
         if (!cancelled) {
-          console.error(`❌ [CalculatedValueCard] Erreur preview-evaluate:`, err);
+          logger.error(`❌ [CalculatedValueCard] Erreur preview-evaluate:`, err);
         }
       } finally {
         if (!cancelled) {

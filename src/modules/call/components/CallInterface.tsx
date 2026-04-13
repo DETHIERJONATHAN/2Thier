@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, Button, Avatar, Spin, Typography } from 'antd';
 import { PhoneOutlined, PhoneFilled } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../../hooks/useAuthenticatedApi';
+import { logger } from '../../../lib/logger';
 
 const { Title, Text } = Typography;
 
@@ -37,7 +38,7 @@ export const CallInterface: React.FC<CallInterfaceProps> = ({ leadId }) => {
       const response = await api.get(`/api/leads/${leadId}`);
       setLead(response.data);
     } catch (error) {
-      console.error('Erreur lors du chargement du lead:', error);
+      logger.error('Erreur lors du chargement du lead:', error);
     }
   };
 
@@ -52,7 +53,7 @@ export const CallInterface: React.FC<CallInterfaceProps> = ({ leadId }) => {
       setCallActive(true);
       setCallDuration(0);
     } catch (error) {
-      console.error('Erreur lors de l\'appel:', error);
+      logger.error('Erreur lors de l\'appel:', error);
     } finally {
       setCalling(false);
     }
@@ -63,7 +64,7 @@ export const CallInterface: React.FC<CallInterfaceProps> = ({ leadId }) => {
       await api.post('/api/telnyx/hangup', { leadId });
       setCallActive(false);
     } catch (error) {
-      console.error('Erreur lors de la fin d\'appel:', error);
+      logger.error('Erreur lors de la fin d\'appel:', error);
     }
   };
 

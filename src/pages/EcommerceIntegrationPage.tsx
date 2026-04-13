@@ -3,6 +3,7 @@ import { Card, Row, Col, Button, Table, Tag, Space, Modal, Form, Input, Select, 
 import { ShopOutlined, PlusOutlined, LinkOutlined, SyncOutlined, ShoppingCartOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { ECOMMERCE_PLATFORMS } from '../services/ecommerceService';
+import { logger } from '../lib/logger';
 
 const { Title, Text } = Typography;
 const { TabPane } = Tabs;
@@ -41,7 +42,7 @@ const EcommerceIntegrationPage: React.FC = () => {
         setIntegrations(response.integrations || []);
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des intégrations:', error);
+      logger.error('Erreur lors du chargement des intégrations:', error);
       // Données de démonstration
       setIntegrations([
         {
@@ -117,7 +118,7 @@ const EcommerceIntegrationPage: React.FC = () => {
         loadIntegrations();
       }
     } catch (error) {
-      console.error('Erreur création intégration:', error);
+      logger.error('Erreur création intégration:', error);
       msgApi.error('Erreur lors de la création de l\'intégration');
     }
   };
@@ -135,7 +136,7 @@ const EcommerceIntegrationPage: React.FC = () => {
       
       loadIntegrations();
     } catch (error) {
-      console.error('Erreur test connexion:', error);
+      logger.error('Erreur test connexion:', error);
       msgApi.error('Erreur lors du test de connexion');
     } finally {
       setTestLoading(null);
@@ -152,7 +153,7 @@ const EcommerceIntegrationPage: React.FC = () => {
         loadIntegrations();
       }
     } catch (error) {
-      console.error('Erreur synchronisation produits:', error);
+      logger.error('Erreur synchronisation produits:', error);
       msgApi.error('Erreur lors de la synchronisation des produits');
     } finally {
       setSyncLoading(null);
@@ -169,7 +170,7 @@ const EcommerceIntegrationPage: React.FC = () => {
         loadIntegrations();
       }
     } catch (error) {
-      console.error('Erreur synchronisation commandes:', error);
+      logger.error('Erreur synchronisation commandes:', error);
       msgApi.error('Erreur lors de la synchronisation des commandes');
     } finally {
       setSyncLoading(null);

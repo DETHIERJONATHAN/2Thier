@@ -1,4 +1,5 @@
 import { Formula, FormulaItem, FormulaValidationResult } from '../types/formula';
+import { logger } from '../lib/logger';
 
 /**
  * Vérifie si une formule est valide pour être manipulée
@@ -8,7 +9,7 @@ import { Formula, FormulaItem, FormulaValidationResult } from '../types/formula'
  */
 export const validateFormula = (formula: unknown, source: string = 'Validator'): FormulaValidationResult => {
     if (!formula) {
-        console.error(`[${source}] ❌ Formule invalide: non définie`);
+        logger.error(`[${source}] ❌ Formule invalide: non définie`);
         return { 
             isValid: false, 
             message: 'Formule non définie',
@@ -18,7 +19,7 @@ export const validateFormula = (formula: unknown, source: string = 'Validator'):
 
     // Vérification de l'ID
     if (!formula.id || typeof formula.id !== 'string' || formula.id.trim() === '') {
-        console.error(`[${source}] ❌ Formule invalide: ID manquant ou invalide`, { 
+        logger.error(`[${source}] ❌ Formule invalide: ID manquant ou invalide`, { 
             id: formula.id, 
             type: typeof formula.id 
         });
@@ -32,7 +33,7 @@ export const validateFormula = (formula: unknown, source: string = 'Validator'):
 
     // Validation de la structure de la séquence
     if (formula.sequence && !Array.isArray(formula.sequence)) {
-        console.error(`[${source}] ❌ Formule invalide: la séquence n'est pas un tableau`, {
+        logger.error(`[${source}] ❌ Formule invalide: la séquence n'est pas un tableau`, {
             sequence: formula.sequence,
             type: typeof formula.sequence
         });
@@ -54,35 +55,35 @@ export const validateFormula = (formula: unknown, source: string = 'Validator'):
         );
         
         if (invalidItems.length > 0) {
-            console.error(`[${source}] ⚠️ Formule avec ${invalidItems.length} éléments de séquence sans ID valide`, {
+            logger.error(`[${source}] ⚠️ Formule avec ${invalidItems.length} éléments de séquence sans ID valide`, {
                 invalidItems,
                 formulaId: formula.id
             });
             // Ne pas bloquer l'opération, mais signaler le problème
-            console.warn(`[${source}] 🔍 La formule ${formula.id} contient des éléments invalides`);
+            logger.warn(`[${source}] 🔍 La formule ${formula.id} contient des éléments invalides`);
         }
         
         // Vérifier la cohérence des types d'éléments
         if (sequenceAnalysis.hasInvalidTypes) {
-            console.warn(`[${source}] ⚠️ La formule ${formula.id} contient des types d'éléments inconnus`, {
+            logger.warn(`[${source}] ⚠️ La formule ${formula.id} contient des types d'éléments inconnus`, {
                 invalidTypes: sequenceAnalysis.invalidTypes
             });
         }
 
         // Vérifier l'alternance champ/opérateur
         if (sequenceAnalysis.hasOperatorSequenceIssues) {
-            console.warn(`[${source}] ⚠️ La formule ${formula.id} présente des problèmes de séquence d'opérateurs`, {
+            logger.warn(`[${source}] ⚠️ La formule ${formula.id} présente des problèmes de séquence d'opérateurs`, {
                 sequenceDetails: sequenceAnalysis.operatorSequenceIssues
             });
         }
 
         // Vérifier la présence d'au moins un champ
         if (formula.sequence.length > 0 && sequenceAnalysis.typeCounts.field === 0) {
-            console.warn(`[${source}] ⚠️ La formule ${formula.id} ne contient aucun champ`);
+            logger.warn(`[${source}] ⚠️ La formule ${formula.id} ne contient aucun champ`);
         }
 
         // Statistiques générales
-        console.log(`[${source}] 📊 Statistiques de la formule ${formula.id}:`, {
+        logger.debug(`[${source}] 📊 Statistiques de la formule ${formula.id}:`, {
             totalElements: formula.sequence.length,
             typeCounts: sequenceAnalysis.typeCounts,
         });
@@ -90,11 +91,11 @@ export const validateFormula = (formula: unknown, source: string = 'Validator'):
 
     // Validation du nom
     if (!formula.name || typeof formula.name !== 'string') {
-        console.warn(`[${source}] ⚠️ Formule ${formula.id} sans nom ou avec nom invalide`);
+        logger.warn(`[${source}] ⚠️ Formule ${formula.id} sans nom ou avec nom invalide`);
     }
 
     // Succès
-    console.log(`[${source}] ✅ Formule valide: ${formula.id}`, {
+    logger.debug(`[${source}] ✅ Formule valide: ${formula.id}`, {
         name: formula.name || 'Sans nom',
         sequenceLength: formula.sequence?.length || 0,
         targetProperty: formula.targetProperty
@@ -185,7 +186,7 @@ const analyzeSequence = (sequence: FormulaItem[]) => {
  */
 export const prepareFormulaForAPI = (formula: Formula, source: string = 'Validator'): Formula => {
     if (!formula) {
-        console.error(`[${source}] ❌ Impossible de préparer une formule undefined`);
+        logger.error(`[${source}] ❌ Impossible de préparer une formule undefined`);
         throw new Error('Formule non définie');
     }
 
@@ -193,16 +194,16 @@ export const prepareFormulaForAPI = (formula: Formula, source: string = 'Validat
 
     // S'assurer que l'ID est présent
     if (!preparedFormula.id || typeof preparedFormula.id !== 'string' || preparedFormula.id.trim() === '') {
-        console.error(`[${source}] ❌ Impossible de préparer une formule sans ID valide`);
+        logger.error(`[${source}] ❌ Impossible de préparer une formule sans ID valide`);
         throw new Error('ID de formule invalide');
     }
 
     // S'assurer que la séquence est un tableau
     if (!preparedFormula.sequence) {
         preparedFormula.sequence = [];
-        console.warn(`[${source}] ⚠️ Initialisation d'une séquence vide pour la formule ${preparedFormula.id}`);
+        logger.warn(`[${source}] ⚠️ Initialisation d'une séquence vide pour la formule ${preparedFormula.id}`);
     } else if (!Array.isArray(preparedFormula.sequence)) {
-        console.warn(`[${source}] ⚠️ Conversion de la séquence en tableau pour la formule ${preparedFormula.id}`);
+        logger.warn(`[${source}] ⚠️ Conversion de la séquence en tableau pour la formule ${preparedFormula.id}`);
         preparedFormula.sequence = [];
     }
 
@@ -210,7 +211,7 @@ export const prepareFormulaForAPI = (formula: Formula, source: string = 'Validat
     if (Array.isArray(preparedFormula.sequence)) {
         preparedFormula.sequence = preparedFormula.sequence.map((item, index) => {
             if (!item) {
-                console.warn(`[${source}] ⚠️ Élément null ou undefined à l'index ${index}, remplacement par un opérateur par défaut`);
+                logger.warn(`[${source}] ⚠️ Élément null ou undefined à l'index ${index}, remplacement par un opérateur par défaut`);
                 return {
                     id: `auto-fix-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
                     type: 'operator',
@@ -220,7 +221,7 @@ export const prepareFormulaForAPI = (formula: Formula, source: string = 'Validat
             }
 
             if (!item.id || typeof item.id !== 'string' || item.id.trim() === '') {
-                console.warn(`[${source}] ⚠️ Élément sans ID valide à l'index ${index}, ajout d'un ID`);
+                logger.warn(`[${source}] ⚠️ Élément sans ID valide à l'index ${index}, ajout d'un ID`);
                 return {
                     ...item,
                     id: `auto-fix-${item.type || 'item'}-${Date.now()}-${index}-${Math.random().toString(36).substring(2, 9)}`
@@ -229,7 +230,7 @@ export const prepareFormulaForAPI = (formula: Formula, source: string = 'Validat
 
             // S'assurer que l'élément a un type valide
             if (!item.type || !['field', 'operator', 'value', 'function'].includes(item.type)) {
-                console.warn(`[${source}] ⚠️ Élément avec type invalide (${item.type}) à l'index ${index}, correction en 'value'`);
+                logger.warn(`[${source}] ⚠️ Élément avec type invalide (${item.type}) à l'index ${index}, correction en 'value'`);
                 return {
                     ...item,
                     type: 'value' as const
@@ -238,7 +239,7 @@ export const prepareFormulaForAPI = (formula: Formula, source: string = 'Validat
 
             // S'assurer que l'élément a une valeur (même si c'est une chaîne vide)
             if (item.value === undefined || item.value === null) {
-                console.warn(`[${source}] ⚠️ Élément sans valeur à l'index ${index}, ajout d'une valeur par défaut`);
+                logger.warn(`[${source}] ⚠️ Élément sans valeur à l'index ${index}, ajout d'une valeur par défaut`);
                 return {
                     ...item,
                     value: item.type === 'operator' ? '+' : ''
@@ -252,16 +253,16 @@ export const prepareFormulaForAPI = (formula: Formula, source: string = 'Validat
     // S'assurer qu'il y a un nom
     if (!preparedFormula.name || preparedFormula.name.trim() === '') {
         preparedFormula.name = 'Formule sans nom';
-        console.warn(`[${source}] ⚠️ Ajout d'un nom par défaut à la formule ${preparedFormula.id}`);
+        logger.warn(`[${source}] ⚠️ Ajout d'un nom par défaut à la formule ${preparedFormula.id}`);
     }
 
     // S'assurer qu'il y a une targetProperty (même si vide)
     if (preparedFormula.targetProperty === undefined || preparedFormula.targetProperty === null) {
         preparedFormula.targetProperty = '';
-        console.warn(`[${source}] ⚠️ Initialisation de targetProperty pour la formule ${preparedFormula.id}`);
+        logger.warn(`[${source}] ⚠️ Initialisation de targetProperty pour la formule ${preparedFormula.id}`);
     }
 
-    console.log(`[${source}] ✅ Formule préparée pour l'API: ${preparedFormula.id}`, {
+    logger.debug(`[${source}] ✅ Formule préparée pour l'API: ${preparedFormula.id}`, {
         name: preparedFormula.name,
         sequenceLength: preparedFormula.sequence.length,
         targetProperty: preparedFormula.targetProperty || '(non définie)'

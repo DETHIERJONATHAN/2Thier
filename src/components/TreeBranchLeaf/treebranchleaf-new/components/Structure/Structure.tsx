@@ -5,11 +5,11 @@
  * - Affichage hiérarchique avec ►/▼
  * - Drag & Drop pour réorganiser
  * - Badges pour les capacit      result.push({ node, level });
-      // console.log(`🔧 [Structure flattenNodes] Added ${node.label} at level ${level}, hasChildren: ${!!node.children?.length}, isExpanded: ${expandedNodes.has(node.id)}`);
+      // logger.debug(`🔧 [Structure flattenNodes] Added ${node.label} at level ${level}, hasChildren: ${!!node.children?.length}, isExpanded: ${expandedNodes.has(node.id)}`);
 
       // Récursion pour les enfants uniquement si le nœud est marqué comme étendu
       if (node.children && expandedNodes.has(node.id)) {
-        // console.log(`🔧 [Structure flattenNodes] Recursing into ${node.children.length} children of ${node.label}`);
+        // logger.debug(`🔧 [Structure flattenNodes] Recursing into ${node.children.length} children of ${node.label}`);
         flattenNodes(node.children, level + 1, result);
       }es
  * - Recherche et filtres
@@ -47,6 +47,7 @@ import type {
   CapabilityKey
 } from '../../types';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../../../../lib/logger';
 
 const { Text } = Typography;
 
@@ -228,9 +229,9 @@ const StructureComponent: React.FC<StructureProps> = ({
   });
 
   // Debug logs pour la zone de drop (réduits)
-  // console.log(`🎯 Structure drop zone - isOver: ${isMainDropOver}, active: ${mainDropActive?.id}`);
+  // logger.debug(`🎯 Structure drop zone - isOver: ${isMainDropOver}, active: ${mainDropActive?.id}`);
   // if (isMainDropOver) {
-  //   console.log(`🔥 STRUCTURE MAIN DROP - HOVER DÉTECTÉ !`);
+  //   logger.debug(`🔥 STRUCTURE MAIN DROP - HOVER DÉTECTÉ !`);
   // }
 
   // Fonctions manquantes pour les boutons

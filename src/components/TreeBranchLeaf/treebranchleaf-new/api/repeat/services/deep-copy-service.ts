@@ -14,6 +14,7 @@ import { deriveRepeatContextFromMetadata } from './repeat-context-utils.js';
 import { copyFormulaCapacity } from '../../copy-capacity-formula.js';
 import { TableLookupDuplicationService } from './table-lookup-duplication-service';
 import { applySuffixToSourceRef } from '../utils/source-ref.js';
+import { logger } from '../../../../../../lib/logger';
 
 export interface DeepCopyOptions {
   targetParentId?: string | null;
@@ -647,7 +648,7 @@ export async function deepCopyNodeInternal(
         });
         return JSON.parse(replaced) as Prisma.InputJsonValue;
       } catch {
-        console.warn('[fieldConfig] Erreur traitement fieldConfig, copie tel quel');
+        logger.warn('[fieldConfig] Erreur traitement fieldConfig, copie tel quel');
         return oldNode.fieldConfig as Prisma.InputJsonValue;
       }
     })(),
@@ -799,7 +800,7 @@ export async function deepCopyNodeInternal(
       for (const mapping of mappings) {
         if (!mapping.targetRef) continue;
         const originalTargetField = await prisma.treeBranchLeafNode.findUnique({ where: { id: mapping.targetRef } });
-        if (!originalTargetField) { console.warn(`[DEEP-COPY] Champ cible ${mapping.targetRef} introuvable`); continue; }
+        if (!originalTargetField) { logger.warn(`[DEEP-COPY] Champ cible ${mapping.targetRef} introuvable`); continue; }
         const duplicatedTargetId = `${mapping.targetRef}${suffixToken}`;
         const existingDup = await prisma.treeBranchLeafNode.findUnique({ where: { id: duplicatedTargetId } });
         if (existingDup) continue;
@@ -837,7 +838,7 @@ export async function deepCopyNodeInternal(
         });
       }
     } catch (aiMeasureError) {
-      console.error(`[DEEP-COPY] Erreur duplication champs AI Measure:`, aiMeasureError);
+      logger.error(`[DEEP-COPY] Erreur duplication champs AI Measure:`, aiMeasureError);
     }
   }
 
@@ -1013,10 +1014,10 @@ export async function deepCopyNodeInternal(
             // Silent: formula ref collection for batch linking
           }
         } else {
-          console.error(`Ã¢ÂÅ’ Erreur copie formule centralisÃƒÂ©e: ${f.id}`);
+          logger.error(`Ã¢ÂÅ’ Erreur copie formule centralisÃƒÂ©e: ${f.id}`);
         }
       } catch (error) {
-        console.error(`Ã¢ÂÅ’ Exception copie formule ${f.id}:`, error);
+        logger.error(`Ã¢ÂÅ’ Exception copie formule ${f.id}:`, error);
       }
     }
     
@@ -1117,7 +1118,7 @@ export async function deepCopyNodeInternal(
           pendingLinkedConditionUpdates.get(normalizedRefId)!.add(newConditionId);
         }
       } catch (e) {
-        console.warn('[TreeBranchLeaf API] Warning updating linkedConditionIds during deep copy:', (e as Error).message);
+        logger.warn('[TreeBranchLeaf API] Warning updating linkedConditionIds during deep copy:', (e as Error).message);
       }
     }
     
@@ -1281,7 +1282,7 @@ export async function deepCopyNodeInternal(
               nodeExists = { id: tableOwnerNodeId };
               existingNodeIds.add(tableOwnerNodeId);
             } else {
-              console.error(`[DEEP-COPY] ❌ Failed to create stub node ${tableOwnerNodeId}: ${err.message}`);
+              logger.error(`[DEEP-COPY] ❌ Failed to create stub node ${tableOwnerNodeId}: ${err.message}`);
               throw err;
             }
           }
@@ -1289,7 +1290,7 @@ export async function deepCopyNodeInternal(
       }
 
       if (!nodeExists) {
-        console.warn(
+        logger.warn(
           `[DEEP-COPY] ⚠️ Cannot create table "${t.name}": owner node "${tableOwnerNodeId}" doesn't exist. ` +
           `Original nodeId: "${t.nodeId}", oldId: "${oldId}", newId: "${newId}"`
         );
@@ -1337,7 +1338,7 @@ export async function deepCopyNodeInternal(
               
               return metaObj as Prisma.InputJsonValue;
             } catch (err) {
-              console.warn('[table.meta] Erreur traitement meta, copie tel quel:', err);
+              logger.warn('[table.meta] Erreur traitement meta, copie tel quel:', err);
               return t.meta as Prisma.InputJsonValue;
             }
           })(),
@@ -1495,7 +1496,7 @@ export async function deepCopyNodeInternal(
               }
             }
           } catch (initDisplayErr) {
-            console.warn('[DEEP-COPY SelectConfig] Erreur initialisation displayColumn:', (initDisplayErr as Error).message);
+            logger.warn('[DEEP-COPY SelectConfig] Erreur initialisation displayColumn:', (initDisplayErr as Error).message);
           }
         } catch (selectConfigErr) {
           
@@ -1686,7 +1687,7 @@ export async function deepCopyNodeInternal(
         }
       }
     }
-    console.log(`[DEEP-COPY] PERF R8: Executed ${varCopyTasks.length} variable copies in parallel chunks of 5`);
+    logger.debug(`[DEEP-COPY] PERF R8: Executed ${varCopyTasks.length} variable copies in parallel chunks of 5`);
   }
 
   // PERF R7: Execute ALL merged updates in single $transaction (1 round-trip instead of N)
@@ -1694,7 +1695,7 @@ export async function deepCopyNodeInternal(
     try {
       await prisma.$transaction(pendingFinalUpdateOps);
     } catch (e) {
-      console.warn('[DEEP-COPY] PERF R7: Batch merged update error:', (e as Error).message);
+      logger.warn('[DEEP-COPY] PERF R7: Batch merged update error:', (e as Error).message);
     }
   }
 
@@ -1707,12 +1708,12 @@ export async function deepCopyNodeInternal(
     for (const refNodeId of pendingLinkedConditionUpdates.keys()) {
       if (!existingNodeIds.has(refNodeId)) { pendingLinkedConditionUpdates.delete(refNodeId); condSkipped++; }
     }
-    if (condSkipped > 0) console.log(`[DEEP-COPY] PERF R8: Skipped ${condSkipped} non-existent nodes for linkedConditionIds`);
+    if (condSkipped > 0) logger.debug(`[DEEP-COPY] PERF R8: Skipped ${condSkipped} non-existent nodes for linkedConditionIds`);
     const batchPromises: Promise<void>[] = [];
     for (const [refNodeId, conditionIds] of pendingLinkedConditionUpdates) {
       batchPromises.push(
         addToNodeLinkedField(prisma, refNodeId, 'linkedConditionIds', Array.from(conditionIds))
-          .catch(e => console.warn('[DEEP-COPY] Warning batch linkedConditionIds:', (e as Error).message))
+          .catch(e => logger.warn('[DEEP-COPY] Warning batch linkedConditionIds:', (e as Error).message))
       );
     }
     await Promise.all(batchPromises);
@@ -1723,16 +1724,16 @@ export async function deepCopyNodeInternal(
     for (const refNodeId of pendingLinkedFormulaUpdates.keys()) {
       if (!existingNodeIds.has(refNodeId)) { pendingLinkedFormulaUpdates.delete(refNodeId); formSkipped++; }
     }
-    if (formSkipped > 0) console.log(`[DEEP-COPY] PERF R8: Skipped ${formSkipped} non-existent nodes for linkedFormulaIds`);
+    if (formSkipped > 0) logger.debug(`[DEEP-COPY] PERF R8: Skipped ${formSkipped} non-existent nodes for linkedFormulaIds`);
     const batchFormulaPromises: Promise<void>[] = [];
     for (const [refNodeId, formulaIds] of pendingLinkedFormulaUpdates) {
       batchFormulaPromises.push(
         addToNodeLinkedField(prisma, refNodeId, 'linkedFormulaIds', Array.from(formulaIds))
-          .catch(e => console.warn('[DEEP-COPY] Warning batch linkedFormulaIds:', (e as Error).message))
+          .catch(e => logger.warn('[DEEP-COPY] Warning batch linkedFormulaIds:', (e as Error).message))
       );
     }
     await Promise.all(batchFormulaPromises);
-    console.log(`[DEEP-COPY] PERF R8: Batch-flushed linkedFormulaIds for ${pendingLinkedFormulaUpdates.size} nodes (instead of per-formula linking)`);
+    logger.debug(`[DEEP-COPY] PERF R8: Batch-flushed linkedFormulaIds for ${pendingLinkedFormulaUpdates.size} nodes (instead of per-formula linking)`);
   }
 
   const rootNewId = idMap.get(source.id)!;
@@ -1814,7 +1815,7 @@ export async function deepCopyNodeInternal(
           }
         }));
       } catch (varError) {
-        console.error('[DEEP-COPY] Erreur creation variable pour ' + nodeId + ':', varError);
+        logger.error('[DEEP-COPY] Erreur creation variable pour ' + nodeId + ':', varError);
       }
     }
     // PERF R8: Execute all display node creates + updates in single $transaction
@@ -1822,7 +1823,7 @@ export async function deepCopyNodeInternal(
       try {
         await prisma.$transaction(postProcessOps);
       } catch (ppErr) {
-        console.warn('[DEEP-COPY] PERF R8: Post-process batch error, falling back to sequential:', (ppErr as Error).message);
+        logger.warn('[DEEP-COPY] PERF R8: Post-process batch error, falling back to sequential:', (ppErr as Error).message);
         // Fallback: ignore (ops already attempted)
       }
     }
@@ -1873,7 +1874,7 @@ export async function deepCopyNodeInternal(
       }
     }
   } catch (syncPassThroughError) {
-    console.warn('[DEEP-COPY] Post-copy data sync skipped:', (syncPassThroughError as Error).message);
+    logger.warn('[DEEP-COPY] Post-copy data sync skipped:', (syncPassThroughError as Error).message);
   }
 
   return {

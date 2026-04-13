@@ -4,6 +4,7 @@ import { UploadOutlined } from '@ant-design/icons';
 import { useDebouncedCallback } from '../../../../hooks/useDebouncedCallback';
 import { TooltipRichEditor } from '../../../../../../common/TooltipRichEditor';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../../../../../../lib/logger';
 
 const { Title, Text } = Typography;
 
@@ -644,17 +645,17 @@ const UniversalPanel: React.FC<UniversalPanelProps> = ({ value = {}, onChange, r
                   reader.onload = () => {
                     const result = typeof reader.result === 'string' ? reader.result : '';
                     if (!result || !result.startsWith('data:image')) {
-                      console.error('❌ [Upload] Fichier non valide ou lecture échouée');
+                      logger.error('❌ [Upload] Fichier non valide ou lecture échouée');
                       return;
                     }
-                    console.log('✅ [Upload] Image convertie en base64:', result.substring(0, 50) + '...');
+                    logger.debug('✅ [Upload] Image convertie en base64:', result.substring(0, 50) + '...');
                     form.setFieldValue('displayIcon', result);
                     const nextValues = { ...localValues, displayIcon: result };
                     setLocalValues(nextValues);
                     debouncedSave(nextValues);
                   };
                   reader.onerror = () => {
-                    console.error('❌ [Upload] Erreur lecture fichier');
+                    logger.error('❌ [Upload] Erreur lecture fichier');
                   };
                   reader.readAsDataURL(file);
                   return false; // Empêcher l'upload auto

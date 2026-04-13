@@ -8,6 +8,7 @@ import { summaryTranslations, permissionActionTranslations, moduleTranslations, 
 import DebugAuthNew from './DebugAuthNew';
 import { useDebouncedCallback } from 'use-debounce';
 import '../../styles/user-rights-summary.css';
+import { logger } from '../../lib/logger';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -80,7 +81,7 @@ const UserRightsSummaryPageNew: React.FC = React.memo(() => {
   const fetchInitialData = useCallback(async () => {
     setIsFetchingData(true);
     setError(null);
-    console.log("[UserRightsSummaryPage] Fetching initial data...");
+    logger.debug("[UserRightsSummaryPage] Fetching initial data...");
 
     try {
       const [usersResponse, orgsResponse] = await Promise.all([
@@ -88,25 +89,25 @@ const UserRightsSummaryPageNew: React.FC = React.memo(() => {
         api.get('/api/organizations')
       ]);
 
-      console.log("[UserRightsSummaryPage] Users response:", usersResponse);
-      console.log("[UserRightsSummaryPage] Organizations response:", orgsResponse);
+      logger.debug("[UserRightsSummaryPage] Users response:", usersResponse);
+      logger.debug("[UserRightsSummaryPage] Organizations response:", orgsResponse);
 
       if (Array.isArray(usersResponse)) {
         setUsers(usersResponse);
       } else {
-        console.warn("[UserRightsSummaryPage] Users response is not an array:", usersResponse);
+        logger.warn("[UserRightsSummaryPage] Users response is not an array:", usersResponse);
         setUsers([]);
       }
 
       if (Array.isArray(orgsResponse)) {
         setOrganizations(orgsResponse);
       } else {
-        console.warn("[UserRightsSummaryPage] Organizations response is not an array:", orgsResponse);
+        logger.warn("[UserRightsSummaryPage] Organizations response is not an array:", orgsResponse);
         setOrganizations([]);
       }
 
     } catch (error) {
-      console.error('[UserRightsSummaryPage] Error fetching initial data:', error);
+      logger.error('[UserRightsSummaryPage] Error fetching initial data:', error);
       setError('Erreur lors du chargement des données initiales');
     } finally {
       setIsFetchingData(false);
@@ -122,7 +123,7 @@ const UserRightsSummaryPageNew: React.FC = React.memo(() => {
 
     setIsLoading(true);
     setError(null);
-    console.log(`[UserRightsSummaryPage] Fetching rights for user ${selectedUserId} in org ${selectedOrgId}`);
+    logger.debug(`[UserRightsSummaryPage] Fetching rights for user ${selectedUserId} in org ${selectedOrgId}`);
 
     try {
       const [summaryResponse, modulesResponse] = await Promise.all([
@@ -130,14 +131,14 @@ const UserRightsSummaryPageNew: React.FC = React.memo(() => {
         api.get(`/organizations/${selectedOrgId}/modules`)
       ]);
 
-      console.log("[UserRightsSummaryPage] Rights summary response:", summaryResponse);
-      console.log("[UserRightsSummaryPage] Organization modules response:", modulesResponse);
+      logger.debug("[UserRightsSummaryPage] Rights summary response:", summaryResponse);
+      logger.debug("[UserRightsSummaryPage] Organization modules response:", modulesResponse);
 
       setRightsSummary(summaryResponse);
       setOrganizationModules(Array.isArray(modulesResponse) ? modulesResponse : []);
 
     } catch (error) {
-      console.error('[UserRightsSummaryPage] Error fetching rights summary:', error);
+      logger.error('[UserRightsSummaryPage] Error fetching rights summary:', error);
       setError('Erreur lors de la récupération du résumé des droits');
       setRightsSummary(null);
     } finally {
@@ -174,7 +175,7 @@ const UserRightsSummaryPageNew: React.FC = React.memo(() => {
 
   const handleExport = useCallback(() => {
     // Logique d'exportation à implémenter
-    console.log('Export functionality to be implemented');
+    logger.debug('Export functionality to be implemented');
   }, []);
 
   // Données filtrées pour la recherche

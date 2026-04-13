@@ -4,6 +4,7 @@ import type { Formula as StoreFormula } from '../../store/slices/types';
 import FormulaItemEditor from './FormulaItemEditor';
 import { PlusCircleIcon } from '@heroicons/react/24/outline';
 import { getAPIHeaders } from '../../utils/formulaValidator';
+import { logger } from '../../lib/logger';
 
 // Étendre l'interface pour inclure le fieldId
 interface Formula extends StoreFormula {
@@ -29,18 +30,18 @@ const FieldFormulasEditorNew: React.FC<FieldFormulasEditorNewProps> = ({ fieldId
   // Recherche des formules dans le store global
   const findFieldAndFormulas = useCallback(() => {
     const blocks = useCRMStore.getState().blocks;
-    console.log(`[DEBUG_STORE] Blocks from store:`, blocks.map(b => b.name));
+    logger.debug(`[DEBUG_STORE] Blocks from store:`, blocks.map(b => b.name));
     
     for (const block of blocks) {
       for (const section of block.sections) {
         const field = section.fields.find(f => f.id === fieldId);
         if (field) {
-          console.log(`[DEBUG_STORE] Found field ${fieldId} with formulas:`, field.formulas?.length || 0);
+          logger.debug(`[DEBUG_STORE] Found field ${fieldId} with formulas:`, field.formulas?.length || 0);
           return field.formulas || [];
         }
       }
     }
-    console.log(`[DEBUG_STORE] Field ${fieldId} not found in store blocks`);
+    logger.debug(`[DEBUG_STORE] Field ${fieldId} not found in store blocks`);
     return [];
   }, [fieldId]);
 
@@ -52,7 +53,7 @@ const FieldFormulasEditorNew: React.FC<FieldFormulasEditorNewProps> = ({ fieldId
     try {
       // Si demandé, contourner le store et aller directement chercher les formules via l'API
       if (options?.bypassStore) {
-        console.log(`[FieldFormulasEditorNew] Chargement direct des formules depuis l'API pour le champ ${fieldId}`);
+        logger.debug(`[FieldFormulasEditorNew] Chargement direct des formules depuis l'API pour le champ ${fieldId}`);
         
         // Utiliser l'utilitaire getAPIHeaders() du validateur de formule
         const headers = getAPIHeaders();
@@ -75,13 +76,13 @@ const FieldFormulasEditorNew: React.FC<FieldFormulasEditorNewProps> = ({ fieldId
             }
             
             formulasData = await response.json() as Formula[];
-            console.log(`[FieldFormulasEditorNew] API a retourné ${formulasData.length} formules:`, 
+            logger.debug(`[FieldFormulasEditorNew] API a retourné ${formulasData.length} formules:`, 
               formulasData.map((f: Formula) => f.id));
             
             // Si on a obtenu des données, on sort de la boucle
             break;
           } catch (apiError) {
-            console.error(`[FieldFormulasEditorNew] Tentative ${retries + 1} échouée:`, apiError);
+            logger.error(`[FieldFormulasEditorNew] Tentative ${retries + 1} échouée:`, apiError);
             retries++;
             
             // Continuer sans délai pour le mode production
@@ -99,7 +100,7 @@ const FieldFormulasEditorNew: React.FC<FieldFormulasEditorNewProps> = ({ fieldId
       const belongs = String(f.fieldId || f.targetFieldId) === String(fieldId);
             if(!belongs){
               if(process.env.NODE_ENV==='development'){
-        console.warn(`[FieldFormulasEditorNew] ⚠️ Formule ignorée (autre champ):`, { formulaId: f.id, fieldIdProp: f.fieldId, targetFieldId: f.targetFieldId, expected: fieldId });
+        logger.warn(`[FieldFormulasEditorNew] ⚠️ Formule ignorée (autre champ):`, { formulaId: f.id, fieldIdProp: f.fieldId, targetFieldId: f.targetFieldId, expected: fieldId });
               }
             }
             return belongs;
@@ -115,12 +116,12 @@ const FieldFormulasEditorNew: React.FC<FieldFormulasEditorNewProps> = ({ fieldId
         try {
           await fetchBlocks();
         } catch (storeError) {
-          console.warn("[FieldFormulasEditorNew] Impossible de rafraîchir le store:", storeError);
+          logger.warn("[FieldFormulasEditorNew] Impossible de rafraîchir le store:", storeError);
         }
         
         return finalFormulas; // **CORRECTIF : Retourner les formules chargées**
       } else {
-        console.log(`[FieldFormulasEditorNew] Chargement des formules via le store pour le champ ${fieldId}`);
+        logger.debug(`[FieldFormulasEditorNew] Chargement des formules via le store pour le champ ${fieldId}`);
         
         // Méthode standard via le store
         await fetchBlocks(); // Recharger les blocs pour avoir les données fraîches
@@ -128,12 +129,12 @@ const FieldFormulasEditorNew: React.FC<FieldFormulasEditorNewProps> = ({ fieldId
         // Continuer sans délai en mode production
         
         const fieldFormulas = findFieldAndFormulas();
-        console.log(`[FieldFormulasEditorNew] Store a retourné ${fieldFormulas.length} formules`, 
+        logger.debug(`[FieldFormulasEditorNew] Store a retourné ${fieldFormulas.length} formules`, 
           fieldFormulas.map(f => ({ id: f.id, name: f.name })));
         
         // Si le store n'a pas retourné de formules, essayons directement l'API
         if (fieldFormulas.length === 0) {
-          console.warn(`[FieldFormulasEditorNew] Store vide, tentative de chargement direct depuis l'API...`);
+          logger.warn(`[FieldFormulasEditorNew] Store vide, tentative de chargement direct depuis l'API...`);
           return loadFormulas({ bypassStore: true });
         }
         
@@ -141,14 +142,14 @@ const FieldFormulasEditorNew: React.FC<FieldFormulasEditorNewProps> = ({ fieldId
         const scoped = (fieldFormulas as (Formula & { fieldId?: string; targetFieldId?: string })[])
           .filter(f => String(f.fieldId || f.targetFieldId) === String(fieldId));
         if(scoped.length !== fieldFormulas.length){
-          console.warn(`[FieldFormulasEditorNew] ${fieldFormulas.length - scoped.length} formule(s) supprimée(s) car hors champ`, { fieldId });
+          logger.warn(`[FieldFormulasEditorNew] ${fieldFormulas.length - scoped.length} formule(s) supprimée(s) car hors champ`, { fieldId });
         }
         setFormulas(scoped);
         return scoped; // **Retourner uniquement les formules scopées**
       }
     } catch (err) {
       setError("Impossible de charger les formules");
-      console.error(`[FieldFormulasEditorNew] Erreur de chargement des formules:`, err);
+      logger.error(`[FieldFormulasEditorNew] Erreur de chargement des formules:`, err);
     } finally {
       setLoading(false);
     }
@@ -159,7 +160,7 @@ const FieldFormulasEditorNew: React.FC<FieldFormulasEditorNewProps> = ({ fieldId
       const loadedFormulas = await loadFormulas({ bypassStore: true });
       setOpenFormulaIds([]);
       if (process.env.NODE_ENV === 'development') {
-        console.log('[FieldFormulasEditorNew] ✅ Chargement initial formules:', loadedFormulas?.length || 0);
+        logger.debug('[FieldFormulasEditorNew] ✅ Chargement initial formules:', loadedFormulas?.length || 0);
       }
     };
     loadOnce();
@@ -175,11 +176,11 @@ const FieldFormulasEditorNew: React.FC<FieldFormulasEditorNewProps> = ({ fieldId
       // Vérifier que l'événement concerne bien notre fieldId
       const eventFieldId = detail?.fieldId;
       if (eventFieldId && eventFieldId !== fieldId) {
-        console.log(`[AUDIT_PARENT] ⏭️ Ignorer l'événement de rechargement pour un autre champ: ${eventFieldId}`);
+        logger.debug(`[AUDIT_PARENT] ⏭️ Ignorer l'événement de rechargement pour un autre champ: ${eventFieldId}`);
         return;
       }
       
-      console.log(`[AUDIT_PARENT] 🔥 Événement formula-force-reload reçu: ${JSON.stringify(detail)}`);
+      logger.debug(`[AUDIT_PARENT] 🔥 Événement formula-force-reload reçu: ${JSON.stringify(detail)}`);
       
       // Incrémenter le compteur de rechargement
       reloadCount++;
@@ -187,21 +188,21 @@ const FieldFormulasEditorNew: React.FC<FieldFormulasEditorNewProps> = ({ fieldId
       
       try {
         // Premier rechargement immédiat
-        console.log(`[AUDIT_PARENT] 🔄 Premier rechargement forcé (${currentReloadCount})`);
+        logger.debug(`[AUDIT_PARENT] 🔄 Premier rechargement forcé (${currentReloadCount})`);
         await loadFormulas({ bypassStore: true });
         
         // Continuer sans délai en mode production
         
         // Vérifier si un autre rechargement a été demandé entre-temps
         if (currentReloadCount === reloadCount) {
-          console.log(`[AUDIT_PARENT] 🔄 Second rechargement forcé (${currentReloadCount})`);
+          logger.debug(`[AUDIT_PARENT] 🔄 Second rechargement forcé (${currentReloadCount})`);
           await loadFormulas({ bypassStore: true });
-          console.log('[AUDIT_PARENT] ✅ Double rechargement forcé terminé avec succès');
+          logger.debug('[AUDIT_PARENT] ✅ Double rechargement forcé terminé avec succès');
         } else {
-          console.log(`[AUDIT_PARENT] ⏩ Rechargement ${currentReloadCount} annulé, un plus récent est en cours`);
+          logger.debug(`[AUDIT_PARENT] ⏩ Rechargement ${currentReloadCount} annulé, un plus récent est en cours`);
         }
       } catch (err) {
-        console.error(`[AUDIT_PARENT] ❌ Erreur lors du rechargement forcé:`, err);
+        logger.error(`[AUDIT_PARENT] ❌ Erreur lors du rechargement forcé:`, err);
       }
     };
     
@@ -210,21 +211,21 @@ const FieldFormulasEditorNew: React.FC<FieldFormulasEditorNewProps> = ({ fieldId
       const customEvent = event as CustomEvent;
       const detail = customEvent.detail;
       
-      console.log('[AUDIT_PARENT] 📣 Événement formula-updated reçu:', detail);
+      logger.debug('[AUDIT_PARENT] 📣 Événement formula-updated reçu:', detail);
       
       // Traitement prioritaire pour les événements de drag-and-drop et essentiels
       if (detail?.isDragEvent || detail?.isEssential) {
-        console.log(`[AUDIT_PARENT] ⚡ Événement prioritaire détecté (drag/essentiel)`);
+        logger.debug(`[AUDIT_PARENT] ⚡ Événement prioritaire détecté (drag/essentiel)`);
         
         // Si l'événement est marqué comme forceLocal, on ne recharge pas du tout car la mise à jour est déjà faite localement
         if (detail?.forceLocal) {
-          console.log(`[AUDIT_PARENT] ✅ Utilisation des données locales, pas de rechargement API`);
+          logger.debug(`[AUDIT_PARENT] ✅ Utilisation des données locales, pas de rechargement API`);
           
           // Vérifier si le formulaId est mentionné, dans ce cas s'assurer qu'il est ouvert
           if (detail?.formulaId) {
             setOpenFormulaIds(ids => {
               if (!ids.includes(detail.formulaId)) {
-                console.log(`[AUDIT_PARENT] 📂 Ouverture automatique de la formule ${detail.formulaId}`);
+                logger.debug(`[AUDIT_PARENT] 📂 Ouverture automatique de la formule ${detail.formulaId}`);
                 return [...ids, detail.formulaId];
               }
               return ids;
@@ -235,7 +236,7 @@ const FieldFormulasEditorNew: React.FC<FieldFormulasEditorNewProps> = ({ fieldId
         }
         
         // Si on arrive ici, c'est qu'on doit recharger depuis l'API
-        console.log(`[AUDIT_PARENT] 🔄 Rechargement depuis l'API`);
+        logger.debug(`[AUDIT_PARENT] 🔄 Rechargement depuis l'API`);
         await loadFormulas({ bypassStore: true });
         return; // Ne pas continuer avec le traitement standard
       }
@@ -246,7 +247,7 @@ const FieldFormulasEditorNew: React.FC<FieldFormulasEditorNewProps> = ({ fieldId
       
       try {
         // Premier rechargement immédiat
-        console.log(`[AUDIT_PARENT] 🔄 Premier rechargement standard (${currentReloadCount})`);
+        logger.debug(`[AUDIT_PARENT] 🔄 Premier rechargement standard (${currentReloadCount})`);
         const formulas = await loadFormulas({ bypassStore: true });
         
         // Réouvrir les formules qui étaient ouvertes avant le rechargement
@@ -260,24 +261,24 @@ const FieldFormulasEditorNew: React.FC<FieldFormulasEditorNewProps> = ({ fieldId
         }
         
         // Vérifier les données chargées
-        console.log(`[AUDIT_PARENT] ✓ Rechargement a retourné ${formulas?.length || 0} formules`);
+        logger.debug(`[AUDIT_PARENT] ✓ Rechargement a retourné ${formulas?.length || 0} formules`);
         
         // Mode production: exécution immédiate sans délai
         // Vérifier si un autre rechargement a été demandé entre-temps
         if (currentReloadCount === reloadCount) {
-          console.log(`[AUDIT_PARENT] 🔄 Second rechargement standard immédiat (${currentReloadCount})`);
+          logger.debug(`[AUDIT_PARENT] 🔄 Second rechargement standard immédiat (${currentReloadCount})`);
           await loadFormulas({ bypassStore: true });
-          console.log('[AUDIT_PARENT] ✅ Double rechargement standard terminé avec succès');
+          logger.debug('[AUDIT_PARENT] ✅ Double rechargement standard terminé avec succès');
         } else {
-          console.log(`[AUDIT_PARENT] ⏩ Rechargement ${currentReloadCount} annulé, un plus récent est en cours`);
+          logger.debug(`[AUDIT_PARENT] ⏩ Rechargement ${currentReloadCount} annulé, un plus récent est en cours`);
         }
       } catch (err) {
-        console.error(`[AUDIT_PARENT] ❌ Erreur lors du rechargement standard:`, err);
+        logger.error(`[AUDIT_PARENT] ❌ Erreur lors du rechargement standard:`, err);
       }
       
   // Si action=delete, traitement spécial avec mise à jour optimiste
       if (detail?.action === 'delete') {
-        console.log('[AUDIT_PARENT] 🗑️ Suppression détectée');
+        logger.debug('[AUDIT_PARENT] 🗑️ Suppression détectée');
         
         // Mise à jour optimiste locale pour une UI réactive
         if (detail?.formulaId && typeof detail?.index === 'number') {
@@ -291,7 +292,7 @@ const FieldFormulasEditorNew: React.FC<FieldFormulasEditorNewProps> = ({ fieldId
                 // S'assurer que l'index est valide avant de supprimer
                 if (detail.index < newSequence.length) {
                   newSequence.splice(detail.index, 1);
-                  console.log(`[AUDIT_PARENT] ✂️ Mise à jour optimiste. Nouvelle longueur: ${newSequence.length}`);
+                  logger.debug(`[AUDIT_PARENT] ✂️ Mise à jour optimiste. Nouvelle longueur: ${newSequence.length}`);
                 }
                 
                 return { ...f, sequence: newSequence };
@@ -302,29 +303,29 @@ const FieldFormulasEditorNew: React.FC<FieldFormulasEditorNewProps> = ({ fieldId
         }
         
         // Mode production: exécution immédiate sans délai
-        console.log('[AUDIT_PARENT] 🔄 Rechargement immédiat depuis API après suppression...');
+        logger.debug('[AUDIT_PARENT] 🔄 Rechargement immédiat depuis API après suppression...');
         try {
           // Recharger les formules et récupérer les données fraîches
           const reloadedFormulas = await loadFormulas({ bypassStore: true });
           
-          console.log('[AUDIT_PARENT] ✅ Rechargement terminé.');
+          logger.debug('[AUDIT_PARENT] ✅ Rechargement terminé.');
           
           // **CORRECTIF : Utiliser les données rechargées directement pour mettre à jour l'état ouvert**
           if (reloadedFormulas && reloadedFormulas.length > 0) {
             const reloadedFormulaIds = reloadedFormulas.map(f => f.id);
-            console.log(`[AUDIT_PARENT] 📂 Maintien des formules ouvertes:`, reloadedFormulaIds);
+            logger.debug(`[AUDIT_PARENT] 📂 Maintien des formules ouvertes:`, reloadedFormulaIds);
             setOpenFormulaIds(reloadedFormulaIds);
           } else {
-             console.log(`[AUDIT_PARENT] 📂 Aucune formule retournée, fermeture des éditeurs.`);
+             logger.debug(`[AUDIT_PARENT] 📂 Aucune formule retournée, fermeture des éditeurs.`);
              setOpenFormulaIds([]);
           }
 
           } catch (err) {
-            console.error('[AUDIT_PARENT] ❌ Erreur lors du rechargement:', err);
+            logger.error('[AUDIT_PARENT] ❌ Erreur lors du rechargement:', err);
           }
       } else {
         // Pour les autres actions (add, etc.), rechargement immédiat en mode production
-        console.log(`[AUDIT_PARENT] 📝 Action ${detail?.action} détectée, rechargement immédiat`);
+        logger.debug(`[AUDIT_PARENT] 📝 Action ${detail?.action} détectée, rechargement immédiat`);
         await loadFormulas({ bypassStore: true });
       }
     };
@@ -344,7 +345,7 @@ const FieldFormulasEditorNew: React.FC<FieldFormulasEditorNewProps> = ({ fieldId
   const handleAddFormula = async () => {
     try {
       if (!fieldId) {
-        console.error("Impossible de créer une formule: fieldId manquant");
+        logger.error("Impossible de créer une formule: fieldId manquant");
         return;
       }
       
@@ -372,7 +373,7 @@ const FieldFormulasEditorNew: React.FC<FieldFormulasEditorNewProps> = ({ fieldId
       }
     } catch (err) {
       setError("Impossible de créer la formule");
-      console.error(err);
+      logger.error(err);
     }
   };
 
@@ -390,7 +391,7 @@ const FieldFormulasEditorNew: React.FC<FieldFormulasEditorNewProps> = ({ fieldId
         throw new Error(`Erreur API lors de la suppression: ${response.statusText}`);
       }
 
-      console.log(`[FieldFormulasEditorNew] Formule ${formulaId} supprimée avec succès via API.`);
+      logger.debug(`[FieldFormulasEditorNew] Formule ${formulaId} supprimée avec succès via API.`);
 
       // Mise à jour de l'état local pour une réactivité immédiate
       setFormulas(formulas.filter(f => f.id !== formulaId));
@@ -401,7 +402,7 @@ const FieldFormulasEditorNew: React.FC<FieldFormulasEditorNewProps> = ({ fieldId
 
     } catch (err) {
       setError("Impossible de supprimer la formule");
-      console.error(err);
+      logger.error(err);
     }
   };
 

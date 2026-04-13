@@ -11,6 +11,7 @@
 
 import { getTBLSyncService } from './TBLSyncService';
 import { type TreeBranchLeafNode } from '../index';
+import { logger } from '../../../../lib/logger';
 
 interface TBLInjectionConfig {
   enabled: boolean;
@@ -47,7 +48,7 @@ class TBLAutoInjector {
   // 🔧 LOGGING
   private log(message: string): void {
     if (this.config.debugMode) {
-      console.log(`[TBL Auto-Injector] ${message}`);
+      logger.debug(`[TBL Auto-Injector] ${message}`);
     }
   }
 

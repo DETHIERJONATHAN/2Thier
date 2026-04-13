@@ -27,6 +27,7 @@ import PartenairesSection from '../../components/devis1minute/PartenairesSection
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Title, Paragraph, Text } = Typography;
 const { TextArea } = Input;
@@ -214,7 +215,7 @@ export default function LandingPage() {
       navigate('/devis1minute/merci');
       
     } catch (error) {
-      console.error('Erreur lors de l\'envoi:', error);
+      logger.error('Erreur lors de l\'envoi:', error);
       msgApi.error('Erreur lors de l\'envoi de votre demande. Veuillez réessayer.');
     } finally {
       setIsSubmitting(false);

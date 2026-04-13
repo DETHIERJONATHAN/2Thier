@@ -30,6 +30,37 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
+// src/lib/logger.ts
+function shouldLog(level) {
+  return LEVELS[level] >= currentLevel;
+}
+var import_meta, _proc, IS_PROD, LOG_LEVEL, LEVELS, currentLevel, logger;
+var init_logger = __esm({
+  "src/lib/logger.ts"() {
+    "use strict";
+    import_meta = {};
+    _proc = typeof process !== "undefined" ? process : void 0;
+    IS_PROD = import_meta?.env?.MODE === "production" || _proc?.env?.NODE_ENV === "production";
+    LOG_LEVEL = _proc?.env?.LOG_LEVEL || (IS_PROD ? "warn" : "debug");
+    LEVELS = { debug: 0, info: 1, warn: 2, error: 3 };
+    currentLevel = LEVELS[LOG_LEVEL] ?? LEVELS.debug;
+    logger = {
+      debug: (...args) => {
+        if (shouldLog("debug")) console.log("[DEBUG]", ...args);
+      },
+      info: (...args) => {
+        if (shouldLog("info")) console.log("[INFO]", ...args);
+      },
+      warn: (...args) => {
+        if (shouldLog("warn")) console.warn("[WARN]", ...args);
+      },
+      error: (...args) => {
+        if (shouldLog("error")) console.error("[ERROR]", ...args);
+      }
+    };
+  }
+});
+
 // src/lib/database.ts
 var database_exports = {};
 __export(database_exports, {
@@ -54,7 +85,7 @@ function buildDatabaseUrl() {
   if (host.startsWith("/cloudsql/")) {
     const encodedPwd2 = encodeURIComponent(password);
     const url = `postgresql://${user}:${encodedPwd2}@localhost/${db2}?host=${encodeURIComponent(host)}`;
-    console.warn("[Database] Connexion via Unix socket Cloud SQL:", {
+    logger.warn("[Database] Connexion via Unix socket Cloud SQL:", {
       PGUSER: user,
       PGDATABASE: db2,
       PGHOST: host
@@ -85,25 +116,25 @@ function createPrismaInstance() {
 }
 async function connectDatabase() {
   if (globalForDb.__db_initialized) {
-    console.log("[Database] \u26A1 Connexion d\xE9j\xE0 \xE9tablie (singleton)");
+    logger.debug("[Database] \u26A1 Connexion d\xE9j\xE0 \xE9tablie (singleton)");
     return;
   }
   globalForDb.__db_initialized = true;
   try {
-    console.log("[Database] \u{1F50C} Connexion en cours...");
+    logger.debug("[Database] \u{1F50C} Connexion en cours...");
     await db.$connect();
-    console.log("[Database] \u2705 Connexion \xE9tablie avec succ\xE8s");
+    logger.debug("[Database] \u2705 Connexion \xE9tablie avec succ\xE8s");
   } catch (err) {
-    console.error("[Database] \u274C \xC9chec de connexion:", err?.message);
+    logger.error("[Database] \u274C \xC9chec de connexion:", err?.message);
     throw err;
   }
 }
 async function disconnectDatabase() {
   try {
     await db.$disconnect();
-    console.log("[Database] Connexion ferm\xE9e proprement");
+    logger.debug("[Database] Connexion ferm\xE9e proprement");
   } catch (err) {
-    console.error("[Database] Erreur lors de la fermeture:", err?.message);
+    logger.error("[Database] Erreur lors de la fermeture:", err?.message);
   }
 }
 async function checkDatabaseConnection() {
@@ -126,6 +157,7 @@ var init_database = __esm({
   "src/lib/database.ts"() {
     "use strict";
     import_client = require("@prisma/client");
+    init_logger();
     CURRENT_ADAPTER = "prisma";
     DB_CONFIG = {
       development: {
@@ -166,7 +198,7 @@ var init_database = __esm({
     process.on("beforeExit", async () => {
       await disconnectDatabase();
     });
-    console.log(`[Database] Adaptateur: ${CURRENT_ADAPTER} | Env: ${process.env.NODE_ENV || "development"}`);
+    logger.debug(`[Database] Adaptateur: ${CURRENT_ADAPTER} | Env: ${process.env.NODE_ENV || "development"}`);
   }
 });
 
@@ -188,6 +220,7 @@ var init_PostalEmailService = __esm({
     "use strict";
     init_database();
     import_crypto2 = __toESM(require("crypto"), 1);
+    init_logger();
     PostalEmailService = class {
       apiUrl;
       apiKey;
@@ -195,7 +228,7 @@ var init_PostalEmailService = __esm({
         this.apiUrl = apiUrl || process.env.POSTAL_API_URL || "";
         this.apiKey = apiKey || process.env.POSTAL_API_KEY || "";
         if (!this.apiUrl || !this.apiKey) {
-          console.warn("\u26A0\uFE0F [POSTAL] Configuration manquante: POSTAL_API_URL ou POSTAL_API_KEY");
+          logger.warn("\u26A0\uFE0F [POSTAL] Configuration manquante: POSTAL_API_URL ou POSTAL_API_KEY");
         }
       }
       // ─── Envoi d'email ───────────────────────────────────────
@@ -297,7 +330,7 @@ var init_PostalEmailService = __esm({
             select: { userId: true, emailAddress: true }
           });
           if (!emailAccount) {
-            console.warn(`\u26A0\uFE0F [POSTAL] Aucun compte trouv\xE9 pour ${recipientEmail}`);
+            logger.warn(`\u26A0\uFE0F [POSTAL] Aucun compte trouv\xE9 pour ${recipientEmail}`);
             return null;
           }
           const existing = await db.email.findFirst({
@@ -327,7 +360,7 @@ var init_PostalEmailService = __esm({
           });
           return email.id;
         } catch (error) {
-          console.error("\u274C [POSTAL] Erreur traitement email entrant:", error);
+          logger.error("\u274C [POSTAL] Erreur traitement email entrant:", error);
           throw error;
         }
       }
@@ -340,7 +373,7 @@ var init_PostalEmailService = __esm({
           const result = await this.apiCall("deliverability/domain_check", { domain: "test.com" });
           return result.status === "success";
         } catch (error) {
-          console.error("\u274C [POSTAL] Erreur connexion:", error);
+          logger.error("\u274C [POSTAL] Erreur connexion:", error);
           return false;
         }
       }
@@ -395,9 +428,9 @@ function getStorage() {
           projectId: process.env.GCLOUD_PROJECT || "thiernew",
           authClient: new GcloudAuth(token)
         });
-        console.log("\u{1F4E6} [Storage] \u2705 Auth via gcloud access token");
+        logger.debug("\u{1F4E6} [Storage] \u2705 Auth via gcloud access token");
       } catch {
-        console.warn("\u{1F4E6} [Storage] \u26A0\uFE0F gcloud token failed, trying default credentials");
+        logger.warn("\u{1F4E6} [Storage] \u26A0\uFE0F gcloud token failed, trying default credentials");
         storage = new import_storage.Storage();
       }
     }
@@ -414,11 +447,11 @@ async function uploadFile(buffer, key2, mimeType) {
       metadata: { cacheControl: "no-cache" }
     });
     const url = `https://storage.googleapis.com/${GCS_BUCKET}/${key2}`;
-    console.log(`\u{1F4E6} [Storage] \u2705 Upload OK: ${key2} (${(buffer.length / 1024).toFixed(1)} KB)`);
+    logger.debug(`\u{1F4E6} [Storage] \u2705 Upload OK: ${key2} (${(buffer.length / 1024).toFixed(1)} KB)`);
     return url;
   } catch (err) {
     if (!isProduction2 && (err?.code === 401 || err?.message?.includes("token") || err?.message?.includes("auth"))) {
-      console.warn("\u{1F4E6} [Storage] \u26A0\uFE0F Auth error detected, resetting storage for re-auth");
+      logger.warn("\u{1F4E6} [Storage] \u26A0\uFE0F Auth error detected, resetting storage for re-auth");
       storage = null;
     }
     throw err;
@@ -436,7 +469,7 @@ async function deleteFile(keyOrUrl) {
   if (!key2) return;
   try {
     await getStorage().bucket(GCS_BUCKET).file(key2).delete();
-    console.log(`\u{1F4E6} [Storage] \u{1F5D1}\uFE0F Deleted: ${key2}`);
+    logger.debug(`\u{1F4E6} [Storage] \u{1F5D1}\uFE0F Deleted: ${key2}`);
   } catch {
   }
 }
@@ -458,9 +491,10 @@ var init_storage = __esm({
     import_storage = require("@google-cloud/storage");
     import_child_process = require("child_process");
     import_promises = __toESM(require("fs/promises"), 1);
+    init_logger();
     isProduction2 = process.env.NODE_ENV === "production";
     GCS_BUCKET = process.env.GCS_BUCKET || "crm-2thier-uploads";
-    console.log(`\u{1F4E6} [Storage] Mode: GCS 100% (${isProduction2 ? "production" : "dev"}) | Bucket: ${GCS_BUCKET}`);
+    logger.debug(`\u{1F4E6} [Storage] Mode: GCS 100% (${isProduction2 ? "production" : "dev"}) | Bucket: ${GCS_BUCKET}`);
     GcloudAuth = class {
       token;
       tokenExpiry;
@@ -476,9 +510,9 @@ var init_storage = __esm({
               env: { ...process.env, GOOGLE_APPLICATION_CREDENTIALS: void 0 }
             }).trim();
             this.tokenExpiry = Date.now() + 50 * 60 * 1e3;
-            console.log("\u{1F4E6} [Storage] \u{1F504} Token refreshed");
+            logger.debug("\u{1F4E6} [Storage] \u{1F504} Token refreshed");
           } catch (e) {
-            console.error("\u{1F4E6} [Storage] \u26A0\uFE0F Token refresh failed:", e);
+            logger.error("\u{1F4E6} [Storage] \u26A0\uFE0F Token refresh failed:", e);
           }
         }
       }
@@ -510,7 +544,7 @@ function encrypt(text) {
     if (process.env.NODE_ENV === "production") {
       throw new Error("ENCRYPTION_KEY absente/invalide: chiffrement indisponible. Configurez une cl\xE9 de 32 caract\xE8res.");
     }
-    console.warn("[CRYPTO] encrypt() appel\xE9 sans cl\xE9 valide en environnement non-production. Retour en clair.");
+    logger.warn("[CRYPTO] encrypt() appel\xE9 sans cl\xE9 valide en environnement non-production. Retour en clair.");
     return text;
   }
   const iv = crypto3.randomBytes(IV_LENGTH);
@@ -525,7 +559,7 @@ function decrypt(text) {
       return text;
     }
     if (!key) {
-      console.warn("[CRYPTO] decrypt() appel\xE9 sans cl\xE9 valide. Retour du texte original.");
+      logger.warn("[CRYPTO] decrypt() appel\xE9 sans cl\xE9 valide. Retour du texte original.");
       return text;
     }
     const textParts = text.split(":");
@@ -543,7 +577,7 @@ function decrypt(text) {
     decrypted += decipher.final("utf8");
     return decrypted;
   } catch (error) {
-    console.error("Decryption failed:", error);
+    logger.error("Decryption failed:", error);
     return text;
   }
 }
@@ -552,6 +586,7 @@ var init_crypto = __esm({
   "src/utils/crypto.ts"() {
     "use strict";
     crypto3 = __toESM(require("crypto"), 1);
+    init_logger();
     ALGORITHM = "aes-256-cbc";
     IV_LENGTH = 16;
     ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
@@ -561,11 +596,11 @@ var init_crypto = __esm({
         if (ENCRYPTION_KEY && Buffer.from(ENCRYPTION_KEY, "utf8").length === 32) {
           key = Buffer.from(ENCRYPTION_KEY, "utf8");
         } else {
-          console.warn("[CRYPTO] ENCRYPTION_KEY manquante ou invalide (32 chars requis). Le chiffrement est indisponible jusqu'\xE0 configuration.");
+          logger.warn("[CRYPTO] ENCRYPTION_KEY manquante ou invalide (32 chars requis). Le chiffrement est indisponible jusqu'\xE0 configuration.");
           key = null;
         }
       } catch (e) {
-        console.warn("[CRYPTO] Impossible d'initialiser la cl\xE9 de chiffrement:", e?.message);
+        logger.warn("[CRYPTO] Impossible d'initialiser la cl\xE9 de chiffrement:", e?.message);
         key = null;
       }
     })();
@@ -575,7 +610,7 @@ var init_crypto = __esm({
 // src/auth/googleConfig.ts
 function readEnvFromImportMeta(key2) {
   try {
-    const meta = import_meta;
+    const meta = import_meta2;
     const candidate = meta?.env?.[key2];
     if (typeof candidate === "string" && candidate.trim()) {
       return candidate.trim();
@@ -606,18 +641,18 @@ function computeRedirectUri() {
   const codespaceName = readEnv("CODESPACE_NAME");
   if (codespaceName) {
     const codespaceUrl = `https://${codespaceName}-4000.app.github.dev`;
-    console.log("[GoogleConfig] \u{1F680} Codespaces d\xE9tect\xE9, redirect_uri:", `${codespaceUrl}/api/google-auth/callback`);
+    logger.debug("[GoogleConfig] \u{1F680} Codespaces d\xE9tect\xE9, redirect_uri:", `${codespaceUrl}/api/google-auth/callback`);
     return `${codespaceUrl}/api/google-auth/callback`;
   }
   const explicit = readEnv("GOOGLE_REDIRECT_URI");
   if (explicit) {
-    console.log("[GoogleConfig] \u{1F4CC} GOOGLE_REDIRECT_URI explicite:", explicit);
+    logger.debug("[GoogleConfig] \u{1F4CC} GOOGLE_REDIRECT_URI explicite:", explicit);
     return explicit;
   }
   const base = readEnv("API_URL") || readEnv("BACKEND_URL") || readEnv("FRONTEND_URL");
   const fallbackBase = (readEnv("NODE_ENV") || "").toLowerCase() === "production" ? DEFAULT_PROD_API_BASE : DEFAULT_DEV_API_BASE;
   const trimmedBase = (base || fallbackBase).replace(/\/$/, "");
-  console.log("[GoogleConfig] \u{1F527} Redirect URI d\xE9duit:", `${trimmedBase}/api/google-auth/callback`);
+  logger.debug("[GoogleConfig] \u{1F527} Redirect URI d\xE9duit:", `${trimmedBase}/api/google-auth/callback`);
   return `${trimmedBase}/api/google-auth/callback`;
 }
 function buildOAuthOptions(clientId, clientSecret, redirectUri) {
@@ -640,11 +675,12 @@ function describeGoogleOAuthConfig() {
     isConfigured: isGoogleOAuthConfigured()
   };
 }
-var import_meta, envCache, DEFAULT_PROD_API_BASE, DEFAULT_DEV_API_BASE, GOOGLE_OAUTH_SCOPES, googleOAuthConfig;
+var import_meta2, envCache, DEFAULT_PROD_API_BASE, DEFAULT_DEV_API_BASE, GOOGLE_OAUTH_SCOPES, googleOAuthConfig;
 var init_googleConfig = __esm({
   "src/auth/googleConfig.ts"() {
     "use strict";
-    import_meta = {};
+    init_logger();
+    import_meta2 = {};
     envCache = /* @__PURE__ */ new Map();
     DEFAULT_PROD_API_BASE = "https://www.zhiive.com";
     DEFAULT_DEV_API_BASE = "http://localhost:4000";
@@ -697,6 +733,7 @@ var init_GoogleOAuthCore = __esm({
     init_database();
     init_crypto();
     init_googleConfig();
+    init_logger();
     ({ clientId: GOOGLE_CLIENT_ID, clientSecret: GOOGLE_CLIENT_SECRET, redirectUri: GOOGLE_REDIRECT_URI } = googleOAuthConfig);
     GOOGLE_SCOPES_LIST = [...GOOGLE_OAUTH_SCOPES];
     SCOPES = GOOGLE_SCOPES_LIST;
@@ -704,7 +741,7 @@ var init_GoogleOAuthCore = __esm({
       oauth2Client;
       constructor() {
         if (!isGoogleOAuthConfigured()) {
-          console.warn("[GoogleOAuthService] \u26A0\uFE0F Configuration Google OAuth incompl\xE8te", describeGoogleOAuthConfig());
+          logger.warn("[GoogleOAuthService] \u26A0\uFE0F Configuration Google OAuth incompl\xE8te", describeGoogleOAuthConfig());
         }
         this.oauth2Client = new import_googleapis3.google.auth.OAuth2(
           GOOGLE_CLIENT_ID,
@@ -740,9 +777,9 @@ var init_GoogleOAuthCore = __esm({
           enable_granular_consent: true
           // ✅ Protection multicompte
         });
-        console.log("[GoogleOAuthService] \u{1F517} URL d'autorisation g\xE9n\xE9r\xE9e:", authUrl);
-        console.log("[GoogleOAuthService] \u{1F3AF} Redirect URI configur\xE9:", GOOGLE_REDIRECT_URI);
-        console.log("[GoogleOAuthService] \u{1F504} Force consent:", forceConsent);
+        logger.debug("[GoogleOAuthService] \u{1F517} URL d'autorisation g\xE9n\xE9r\xE9e:", authUrl);
+        logger.debug("[GoogleOAuthService] \u{1F3AF} Redirect URI configur\xE9:", GOOGLE_REDIRECT_URI);
+        logger.debug("[GoogleOAuthService] \u{1F504} Force consent:", forceConsent);
         return authUrl;
       }
       // Échanger le code contre des tokens
@@ -806,7 +843,7 @@ var init_GoogleOAuthCore = __esm({
             }
           });
         }
-        console.log(`[GoogleOAuthService] Tokens sauvegard\xE9s/mis \xE0 jour pour l'utilisateur ${userId} (org: ${organizationId}, email: ${googleEmail})`);
+        logger.debug(`[GoogleOAuthService] Tokens sauvegard\xE9s/mis \xE0 jour pour l'utilisateur ${userId} (org: ${organizationId}, email: ${googleEmail})`);
       }
       // Récupérer les tokens par userId et organizationId
       async getUserTokens(userId, organizationId) {
@@ -827,7 +864,7 @@ var init_GoogleOAuthCore = __esm({
           }
         });
         if (!userWithOrg || !userWithOrg.UserOrganization[0]) {
-          console.log(`[GoogleOAuthService] Utilisateur ${userId} ou organisation non trouv\xE9`);
+          logger.debug(`[GoogleOAuthService] Utilisateur ${userId} ou organisation non trouv\xE9`);
           return null;
         }
         const defaultOrgId = userWithOrg.UserOrganization[0].organizationId;
@@ -856,7 +893,7 @@ var init_GoogleOAuthCore = __esm({
         const clientId = googleConfig.clientId ? decrypt(googleConfig.clientId) : null;
         const clientSecret = googleConfig.clientSecret ? decrypt(googleConfig.clientSecret) : null;
         if (!clientId || !clientSecret) {
-          console.warn("[GoogleOAuthService] \u274C clientId/clientSecret manquants pour org", organizationId);
+          logger.warn("[GoogleOAuthService] \u274C clientId/clientSecret manquants pour org", organizationId);
           return null;
         }
         let tokens2;
@@ -903,7 +940,7 @@ var init_GoogleOAuthCore = __esm({
               });
             }
           } catch (error) {
-            console.error(`[GoogleOAuthService] \u274C \xC9chec du rafra\xEEchissement pour admin ${googleConfig.adminEmail}:`, this.formatOAuthError(error));
+            logger.error(`[GoogleOAuthService] \u274C \xC9chec du rafra\xEEchissement pour admin ${googleConfig.adminEmail}:`, this.formatOAuthError(error));
             return null;
           }
         }
@@ -913,7 +950,7 @@ var init_GoogleOAuthCore = __esm({
       async getAuthenticatedClient(userId, organizationId) {
         const tokens2 = await this.getUserTokens(userId, organizationId);
         if (!tokens2) {
-          console.log(`[GoogleOAuthService] \u274C Aucun token trouv\xE9 pour l'utilisateur ${userId}`);
+          logger.debug(`[GoogleOAuthService] \u274C Aucun token trouv\xE9 pour l'utilisateur ${userId}`);
           return null;
         }
         let orgId = organizationId;
@@ -930,27 +967,27 @@ var init_GoogleOAuthCore = __esm({
           orgId = userWithOrg?.UserOrganization?.[0]?.organizationId;
         }
         if (!orgId) {
-          console.log(`[GoogleOAuthService] \u274C Impossible de d\xE9terminer l'organisation pour l'utilisateur ${userId}`);
+          logger.debug(`[GoogleOAuthService] \u274C Impossible de d\xE9terminer l'organisation pour l'utilisateur ${userId}`);
           return null;
         }
         const googleConfig = await db.googleWorkspaceConfig.findUnique({ where: { organizationId: orgId } });
         const clientId = googleConfig?.clientId ? decrypt(googleConfig.clientId) : null;
         const clientSecret = googleConfig?.clientSecret ? decrypt(googleConfig.clientSecret) : null;
         if (!clientId || !clientSecret) {
-          console.warn("[GoogleOAuthService] \u274C clientId/clientSecret manquants pour org", orgId);
+          logger.warn("[GoogleOAuthService] \u274C clientId/clientSecret manquants pour org", orgId);
           return null;
         }
-        console.log(`[GoogleOAuthService] \u{1F50D} Tokens trouv\xE9s pour ${userId}:`);
-        console.log(`[GoogleOAuthService] - Access token: ${tokens2.accessToken ? "Pr\xE9sent" : "MANQUANT"}`);
-        console.log(`[GoogleOAuthService] - Refresh token: ${tokens2.refreshToken ? "Pr\xE9sent" : "MANQUANT"}`);
-        console.log(`[GoogleOAuthService] - Expires at: ${tokens2.expiresAt}`);
+        logger.debug(`[GoogleOAuthService] \u{1F50D} Tokens trouv\xE9s pour ${userId}:`);
+        logger.debug(`[GoogleOAuthService] - Access token: ${tokens2.accessToken ? "Pr\xE9sent" : "MANQUANT"}`);
+        logger.debug(`[GoogleOAuthService] - Refresh token: ${tokens2.refreshToken ? "Pr\xE9sent" : "MANQUANT"}`);
+        logger.debug(`[GoogleOAuthService] - Expires at: ${tokens2.expiresAt}`);
         const credentials = {
           access_token: tokens2.accessToken,
           refresh_token: tokens2.refreshToken,
           token_type: tokens2.tokenType,
           expiry_date: tokens2.expiresAt?.getTime()
         };
-        console.log(`[GoogleOAuthService] \u{1F527} Configuration credentials:`, {
+        logger.debug(`[GoogleOAuthService] \u{1F527} Configuration credentials:`, {
           hasAccessToken: !!credentials.access_token,
           hasRefreshToken: !!credentials.refresh_token,
           tokenType: credentials.token_type,
@@ -958,15 +995,15 @@ var init_GoogleOAuthCore = __esm({
         });
         const userOAuth2Client = new import_googleapis3.google.auth.OAuth2(clientId, clientSecret);
         userOAuth2Client.setCredentials(credentials);
-        console.log(`[GoogleOAuthService] \u{1F4CB} Credentials d\xE9finies sur nouveau OAuth2Client`);
+        logger.debug(`[GoogleOAuthService] \u{1F4CB} Credentials d\xE9finies sur nouveau OAuth2Client`);
         const now = /* @__PURE__ */ new Date();
         const expiryDate = tokens2.expiresAt;
-        console.log(`[GoogleOAuthService] \u23F0 V\xE9rification expiration: maintenant=${now.toISOString()}, expiry=${expiryDate?.toISOString()}`);
+        logger.debug(`[GoogleOAuthService] \u23F0 V\xE9rification expiration: maintenant=${now.toISOString()}, expiry=${expiryDate?.toISOString()}`);
         if (expiryDate && expiryDate <= now) {
-          console.log(`[GoogleOAuthService] \u26A0\uFE0F Token expir\xE9 pour l'utilisateur ${userId}, rafra\xEEchissement...`);
+          logger.debug(`[GoogleOAuthService] \u26A0\uFE0F Token expir\xE9 pour l'utilisateur ${userId}, rafra\xEEchissement...`);
           try {
             const { credentials: credentials2 } = await userOAuth2Client.refreshAccessToken();
-            console.log(`[GoogleOAuthService] \u2705 Rafra\xEEchissement r\xE9ussi, nouvelles credentials:`, {
+            logger.debug(`[GoogleOAuthService] \u2705 Rafra\xEEchissement r\xE9ussi, nouvelles credentials:`, {
               hasAccessToken: !!credentials2.access_token,
               hasRefreshToken: !!credentials2.refresh_token,
               newExpiry: credentials2.expiry_date ? new Date(credentials2.expiry_date).toISOString() : "NON_D\xC9FINI"
@@ -979,18 +1016,18 @@ var init_GoogleOAuthCore = __esm({
                 tokenType: credentials2.token_type || "Bearer",
                 expiresAt: new Date(credentials2.expiry_date)
               });
-              console.log(`[GoogleOAuthService] \u2705 Token rafra\xEEchi avec succ\xE8s pour l'utilisateur ${userId}`);
+              logger.debug(`[GoogleOAuthService] \u2705 Token rafra\xEEchi avec succ\xE8s pour l'utilisateur ${userId}`);
             }
           } catch (error) {
-            console.error(`[GoogleOAuthService] \u274C \xC9chec du rafra\xEEchissement du token pour ${userId}:`, this.formatOAuthError(error));
+            logger.error(`[GoogleOAuthService] \u274C \xC9chec du rafra\xEEchissement du token pour ${userId}:`, this.formatOAuthError(error));
             return null;
           }
         } else if (expiryDate) {
-          console.log(`[GoogleOAuthService] \u2705 Token encore valide pour ${userId} (expire dans ${Math.round((expiryDate.getTime() - now.getTime()) / 1e3 / 60)} minutes)`);
+          logger.debug(`[GoogleOAuthService] \u2705 Token encore valide pour ${userId} (expire dans ${Math.round((expiryDate.getTime() - now.getTime()) / 1e3 / 60)} minutes)`);
         } else {
-          console.log(`[GoogleOAuthService] \u26A0\uFE0F Pas de date d'expiration d\xE9finie pour ${userId}`);
+          logger.debug(`[GoogleOAuthService] \u26A0\uFE0F Pas de date d'expiration d\xE9finie pour ${userId}`);
         }
-        console.log(`[GoogleOAuthService] \u{1F680} Retour du nouveau client OAuth2 configur\xE9 pour ${userId}`);
+        logger.debug(`[GoogleOAuthService] \u{1F680} Retour du nouveau client OAuth2 configur\xE9 pour ${userId}`);
         return userOAuth2Client;
       }
       // Méthode pour mettre à jour les tokens existants
@@ -1029,10 +1066,10 @@ var init_GoogleOAuthCore = __esm({
           const tokens2 = await this.getUserTokens(userId);
           if (tokens2?.refreshToken) {
             await this.oauth2Client.revokeToken(tokens2.refreshToken);
-            console.log(`[GoogleOAuthService] Token r\xE9voqu\xE9 pour l'utilisateur ${userId}`);
+            logger.debug(`[GoogleOAuthService] Token r\xE9voqu\xE9 pour l'utilisateur ${userId}`);
           }
         } catch (error) {
-          console.error(`[GoogleOAuthService] \xC9chec de la r\xE9vocation du token pour ${userId}:`, error);
+          logger.error(`[GoogleOAuthService] \xC9chec de la r\xE9vocation du token pour ${userId}:`, error);
         }
         const userWithOrg = await db.user.findUnique({
           where: { id: userId },
@@ -1049,9 +1086,9 @@ var init_GoogleOAuthCore = __esm({
           await db.googleToken.delete({
             where: { userId_organizationId: { userId, organizationId } }
           });
-          console.log(`[GoogleOAuthService] Tokens supprim\xE9s de la DB pour l'utilisateur ${userId} (org: ${organizationId})`);
+          logger.debug(`[GoogleOAuthService] Tokens supprim\xE9s de la DB pour l'utilisateur ${userId} (org: ${organizationId})`);
         } else {
-          console.log(`[GoogleOAuthService] Impossible de trouver l'organization pour l'utilisateur ${userId}`);
+          logger.debug(`[GoogleOAuthService] Impossible de trouver l'organization pour l'utilisateur ${userId}`);
         }
       }
       // Tester la connexion
@@ -1063,7 +1100,7 @@ var init_GoogleOAuthCore = __esm({
           const response = await oauth2.userinfo.get();
           return { success: true, userInfo: response.data };
         } catch (error) {
-          console.error(`[GoogleOAuthService] Erreur lors du test de connexion pour ${userId}:`, error);
+          logger.error(`[GoogleOAuthService] Erreur lors du test de connexion pour ${userId}:`, error);
           if (error instanceof Error) {
             return { success: false, error: error.message };
           }
@@ -2155,7 +2192,7 @@ async function identifyReferenceTypeFromDB(id, prisma50) {
     }
     return "field";
   } catch (error) {
-    console.error(`[IDENTIFY] \xC3\xA2\xC2\x9D\xC5\u2019 Erreur lors de l'identification en BD:`, error);
+    logger.error(`[IDENTIFY] \xC3\xA2\xC2\x9D\xC5\u2019 Erreur lors de l'identification en BD:`, error);
     return "field";
   }
 }
@@ -2317,7 +2354,7 @@ async function enrichDataFromSubmission(submissionId, prisma50, valueMap, labelM
       }
     }
   } catch (error) {
-    console.error(`[ENRICHMENT] \xC3\xA2\xC2\x9D\xC5\u2019 Erreur enrichissement:`, error);
+    logger.error(`[ENRICHMENT] \xC3\xA2\xC2\x9D\xC5\u2019 Erreur enrichissement:`, error);
   }
 }
 async function getNodeValue(nodeId, submissionId, prisma50, valueMap, options) {
@@ -2369,7 +2406,7 @@ async function getNodeLabel(nodeId, prisma50, labelMap) {
 }
 async function interpretReference(ref, submissionId, prisma50, valuesCache = /* @__PURE__ */ new Map(), depth = 0, valueMap, labelMap, knownType) {
   if (depth > 10) {
-    console.error(`[INTERPR\xC3\u0192\xE2\u20AC\xB0TATION] \xC3\xA2\xC2\x9D\xC5\u2019 R\xC3\u0192\xC2\xA9cursion trop profonde (depth=${depth}) pour ref:`, ref);
+    logger.error(`[INTERPR\xC3\u0192\xE2\u20AC\xB0TATION] \xC3\xA2\xC2\x9D\xC5\u2019 R\xC3\u0192\xC2\xA9cursion trop profonde (depth=${depth}) pour ref:`, ref);
     return {
       result: "\u2205",
       humanText: "\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F R\xC3\u0192\xC2\xA9cursion trop profonde",
@@ -2406,7 +2443,7 @@ async function interpretReference(ref, submissionId, prisma50, valuesCache = /* 
         result = await interpretField(cleanRef, submissionId, prisma50, valueMap, labelMap);
         break;
       default:
-        console.error(`[INTERPR\xC3\u0192\xE2\u20AC\xB0TATION] \xC3\xA2\xC2\x9D\xC5\u2019 Type inconnu: ${type}`);
+        logger.error(`[INTERPR\xC3\u0192\xE2\u20AC\xB0TATION] \xC3\xA2\xC2\x9D\xC5\u2019 Type inconnu: ${type}`);
         result = {
           result: "\u2205",
           humanText: `Type inconnu: ${type}`,
@@ -2414,7 +2451,7 @@ async function interpretReference(ref, submissionId, prisma50, valuesCache = /* 
         };
     }
   } catch (error) {
-    console.error(`[INTERPR\xC3\u0192\xE2\u20AC\xB0TATION] \xC3\xA2\xC2\x9D\xC5\u2019 Erreur lors de l'interpr\xC3\u0192\xC2\xA9tation:`, error);
+    logger.error(`[INTERPR\xC3\u0192\xE2\u20AC\xB0TATION] \xC3\xA2\xC2\x9D\xC5\u2019 Erreur lors de l'interpr\xC3\u0192\xC2\xA9tation:`, error);
     result = {
       result: "\u2205",
       humanText: `Erreur: ${error instanceof Error ? error.message : "Inconnue"}`,
@@ -2499,7 +2536,7 @@ async function interpretReference(ref, submissionId, prisma50, valuesCache = /* 
         }
       }
     } catch (calcError) {
-      console.warn(`[CALCULATED-FALLBACK] \u26A0\uFE0F Erreur fallback pour ${cleanRef}:`, calcError);
+      logger.warn(`[CALCULATED-FALLBACK] \u26A0\uFE0F Erreur fallback pour ${cleanRef}:`, calcError);
     }
   }
   if (isCalculatedRef && valueMap && result) {
@@ -3120,7 +3157,7 @@ async function interpretFormula(formulaId, submissionId, prisma50, valuesCache, 
         formula = byNode;
       }
     } catch (e) {
-      console.warn("[FORMULE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F R\xC3\u0192\xC2\xA9solution implicite \xC3\u0192\xC2\xA9chou\xC3\u0192\xC2\xA9e:", e instanceof Error ? e.message : e);
+      logger.warn("[FORMULE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F R\xC3\u0192\xC2\xA9solution implicite \xC3\u0192\xC2\xA9chou\xC3\u0192\xC2\xA9e:", e instanceof Error ? e.message : e);
     }
   }
   if (!formula) {
@@ -3133,7 +3170,7 @@ async function interpretFormula(formulaId, submissionId, prisma50, valuesCache, 
   const tokens2 = Array.isArray(formula.tokens) ? formula.tokens : [];
   const buildResult = buildFormulaExpression(tokens2);
   if (!buildResult.expression.trim()) {
-    console.warn("[FORMULE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Expression vide, retour 0");
+    logger.warn("[FORMULE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Expression vide, retour 0");
     return {
       result: "0",
       humanText: "0",
@@ -3187,7 +3224,7 @@ async function interpretFormula(formulaId, submissionId, prisma50, valuesCache, 
           }
         }
       } catch (e) {
-        console.warn("[FORMULE] \u26A0\uFE0F Gestionnaire constant override check failed:", e instanceof Error ? e.message : e);
+        logger.warn("[FORMULE] \u26A0\uFE0F Gestionnaire constant override check failed:", e instanceof Error ? e.message : e);
       }
       valueCacheByEncoded.set(encoded, safeOriginal);
       labelCacheByEncoded.set(encoded, meta.label || meta.originalValue || String(safeOriginal));
@@ -3237,7 +3274,7 @@ async function interpretFormula(formulaId, submissionId, prisma50, valuesCache, 
       }
       return safeValue;
     } catch (error) {
-      console.error("[FORMULE] \xC3\xA2\xC2\x9D\xC5\u2019 Erreur r\xC3\u0192\xC2\xA9solution variable:", { encoded, error });
+      logger.error("[FORMULE] \xC3\xA2\xC2\x9D\xC5\u2019 Erreur r\xC3\u0192\xC2\xA9solution variable:", { encoded, error });
       valueCacheByEncoded.set(encoded, 0);
       labelCacheByEncoded.set(encoded, meta?.rawToken || encoded);
       return 0;
@@ -3251,7 +3288,7 @@ async function interpretFormula(formulaId, submissionId, prisma50, valuesCache, 
       strictVariables: false
     });
   } catch (error) {
-    console.error("[FORMULE] \xC3\xA2\xC2\x9D\xC5\u2019 Erreur evaluateExpression:", error);
+    logger.error("[FORMULE] \xC3\xA2\xC2\x9D\xC5\u2019 Erreur evaluateExpression:", error);
     return {
       result: "\u2205",
       humanText: "Erreur de calcul de la formule",
@@ -3326,7 +3363,7 @@ async function getSourceValue(sourceOption, lookupConfig, fieldId, submissionId,
       );
       return capacityResult.result;
     } catch (error) {
-      console.error(`[TABLE] \xC3\xA2\xC2\x9D\xC5\u2019 Erreur ex\xC3\u0192\xC2\xA9cution capacit\xC3\u0192\xC2\xA9 ${sourceOption.capacityRef}:`, error);
+      logger.error(`[TABLE] \xC3\xA2\xC2\x9D\xC5\u2019 Erreur ex\xC3\u0192\xC2\xA9cution capacit\xC3\u0192\xC2\xA9 ${sourceOption.capacityRef}:`, error);
       return null;
     }
   }
@@ -3442,7 +3479,7 @@ async function interpretTable(tableId, submissionId, prisma50, valuesCache, dept
         table = byNode;
       }
     } catch (e) {
-      console.warn("[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F R\xC3\u0192\xC2\xA9solution implicite \xC3\u0192\xC2\xA9chou\xC3\u0192\xC2\xA9e:", e instanceof Error ? e.message : e);
+      logger.warn("[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F R\xC3\u0192\xC2\xA9solution implicite \xC3\u0192\xC2\xA9chou\xC3\u0192\xC2\xA9e:", e instanceof Error ? e.message : e);
     }
   }
   if (!table && baseId !== cleanId) {
@@ -3473,7 +3510,7 @@ async function interpretTable(tableId, submissionId, prisma50, valuesCache, dept
         table = byNode;
       }
     } catch (e) {
-      console.warn("[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F R\xC3\u0192\xC2\xA9solution implicite (baseId) \xC3\u0192\xC2\xA9chou\xC3\u0192\xC2\xA9e:", e instanceof Error ? e.message : e);
+      logger.warn("[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F R\xC3\u0192\xC2\xA9solution implicite (baseId) \xC3\u0192\xC2\xA9chou\xC3\u0192\xC2\xA9e:", e instanceof Error ? e.message : e);
     }
   }
   if (!table) {
@@ -3504,7 +3541,7 @@ async function interpretTable(tableId, submissionId, prisma50, valuesCache, dept
         table.tableRows = sourceTable.tableRows;
       }
     } catch (e) {
-      console.warn("[TABLE] \u26A0\uFE0F R\xE9solution vue \xE9chou\xE9e pour sourceTableId:", tableSourceId, e instanceof Error ? e.message : e);
+      logger.warn("[TABLE] \u26A0\uFE0F R\xE9solution vue \xE9chou\xE9e pour sourceTableId:", tableSourceId, e instanceof Error ? e.message : e);
     }
   }
   let columns = table.tableColumns.map((col) => col.name);
@@ -3535,7 +3572,7 @@ async function interpretTable(tableId, submissionId, prisma50, valuesCache, dept
         data.push([]);
       }
     } catch (error) {
-      console.error("[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur parsing cells:", error);
+      logger.error("[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur parsing cells:", error);
       rows.push(`Row ${row.rowIndex}`);
       data.push([]);
     }
@@ -3569,18 +3606,18 @@ async function interpretTable(tableId, submissionId, prisma50, valuesCache, dept
             rows.push(label);
             data.push(Array.isArray(od.data[i]) ? od.data[i] : []);
           }
-          console.log(`[TABLE] \u{1F4CB} Gestionnaire override appliqu\xE9 pour table ${table.name} (org: ${orgId}): ${rows.length} lignes, ${columns.length} colonnes`);
+          logger.debug(`[TABLE] \u{1F4CB} Gestionnaire override appliqu\xE9 pour table ${table.name} (org: ${orgId}): ${rows.length} lignes, ${columns.length} colonnes`);
         }
       }
     }
   } catch (e) {
-    console.warn("[TABLE] \u26A0\uFE0F Erreur v\xE9rification gestionnaire override:", e instanceof Error ? e.message : e);
+    logger.warn("[TABLE] \u26A0\uFE0F Erreur v\xE9rification gestionnaire override:", e instanceof Error ? e.message : e);
   }
   const meta = table.meta;
   const lookup = meta?.lookup;
   const isLookupActive = lookup && (lookup.enabled === true || lookup.columnLookupEnabled === true || lookup.rowLookupEnabled === true);
   if (!isLookupActive) {
-    console.error(`[TABLE] \xC3\xA2\xC2\x9D\xC5\u2019 Lookup non configur\xC3\u0192\xC2\xA9 ou d\xC3\u0192\xC2\xA9sactiv\xC3\u0192\xC2\xA9`);
+    logger.error(`[TABLE] \xC3\xA2\xC2\x9D\xC5\u2019 Lookup non configur\xC3\u0192\xC2\xA9 ou d\xC3\u0192\xC2\xA9sactiv\xC3\u0192\xC2\xA9`);
     return {
       result: "\u2205",
       humanText: `Lookup non configur\xC3\u0192\xC2\xA9 pour table ${table.name}`,
@@ -3612,7 +3649,7 @@ async function interpretTable(tableId, submissionId, prisma50, valuesCache, dept
       }
     }
   } catch (e) {
-    console.warn("[TABLE] \u26A0\uFE0F Inf\xE9rence selectors lookup \xE9chou\xE9e:", e instanceof Error ? e.message : e);
+    logger.warn("[TABLE] \u26A0\uFE0F Inf\xE9rence selectors lookup \xE9chou\xE9e:", e instanceof Error ? e.message : e);
   }
   const hasRowSelector = Boolean(rowFieldId || rowSourceOption && rowSourceOption.type && rowSourceOption.type !== "select");
   const hasColSelector = Boolean(colFieldId || colSourceOption && colSourceOption.type && colSourceOption.type !== "select");
@@ -3642,7 +3679,7 @@ async function interpretTable(tableId, submissionId, prisma50, valuesCache, dept
           colSelectorValue2 = optionNode.label;
         }
       } catch (e) {
-        console.warn(`[TABLE] \u26A0\uFE0F Impossible de r\xE9soudre UUID ${colSelectorValue2}:`, e);
+        logger.warn(`[TABLE] \u26A0\uFE0F Impossible de r\xE9soudre UUID ${colSelectorValue2}:`, e);
       }
     }
     const displayColumns = Array.isArray(lookup.displayColumn) ? lookup.displayColumn : [lookup.displayColumn];
@@ -3679,7 +3716,7 @@ async function interpretTable(tableId, submissionId, prisma50, valuesCache, dept
           return matches;
         });
       } else {
-        console.warn(`[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F \xC3\u0192\xE2\u20AC\xB0TAPE 2.5 - Colonne de filtrage non trouv\xC3\u0192\xC2\xA9e: "${colSourceOption.filterColumn}"`);
+        logger.warn(`[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F \xC3\u0192\xE2\u20AC\xB0TAPE 2.5 - Colonne de filtrage non trouv\xC3\u0192\xC2\xA9e: "${colSourceOption.filterColumn}"`);
       }
     }
     const results = [];
@@ -3691,7 +3728,7 @@ async function interpretTable(tableId, submissionId, prisma50, valuesCache, dept
       const colMatchInRows2 = findClosestIndexInLabels(colSelectorValue2, rows);
       let finalColIndex2 = colMatchInCols2?.index ?? colMatchInRows2?.index ?? -1;
       if (finalColIndex2 === -1) {
-        console.warn(`[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F MODE 1 extract - colonne non trouv\xC3\u0192\xC2\xA9e pour selector ${colSelectorValue2}`);
+        logger.warn(`[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F MODE 1 extract - colonne non trouv\xC3\u0192\xC2\xA9e pour selector ${colSelectorValue2}`);
       } else {
         const dataColIndex2 = finalColIndex2 - 1;
         let foundRowIndex = -1;
@@ -3775,7 +3812,7 @@ async function interpretTable(tableId, submissionId, prisma50, valuesCache, dept
           targetColIndex = colSelectorIndex;
         }
       } else {
-        console.warn(`[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F MODE 1 - Colonne de comparaison non trouv\xC3\u0192\xC2\xA9e: ${comparisonColName}`);
+        logger.warn(`[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F MODE 1 - Colonne de comparaison non trouv\xC3\u0192\xC2\xA9e: ${comparisonColName}`);
       }
     }
     if (targetColIndex === -1) {
@@ -3808,7 +3845,7 @@ async function interpretTable(tableId, submissionId, prisma50, valuesCache, dept
           }
           targetColIndex = 0;
         } else {
-          console.warn(`[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F MODE 1 ${optionLabel} - Impossible de trouver une ligne pour ${colSelectorValue2}`);
+          logger.warn(`[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F MODE 1 ${optionLabel} - Impossible de trouver une ligne pour ${colSelectorValue2}`);
         }
       }
       if (targetColIndex === -1) {
@@ -3883,7 +3920,7 @@ async function interpretTable(tableId, submissionId, prisma50, valuesCache, dept
           rowSelectorValue2 = optionNode.label;
         }
       } catch (e) {
-        console.warn(`[TABLE] \u26A0\uFE0F Impossible de r\xE9soudre UUID row ${rowSelectorValue2}:`, e);
+        logger.warn(`[TABLE] \u26A0\uFE0F Impossible de r\xE9soudre UUID row ${rowSelectorValue2}:`, e);
       }
     }
     const displayRows = Array.isArray(lookup.displayRow) ? lookup.displayRow : [lookup.displayRow];
@@ -3903,7 +3940,7 @@ async function interpretTable(tableId, submissionId, prisma50, valuesCache, dept
       const rowMatchInCols2 = findClosestIndexInLabels(rowSelectorValue2, columns, columnIndices2);
       let finalRowIndex2 = rowMatchInRows2?.index ?? rowMatchInCols2?.index ?? -1;
       if (finalRowIndex2 === -1) {
-        console.warn(`[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F MODE 2 extract - ligne non trouv\xC3\u0192\xC2\xA9e pour selector ${rowSelectorValue2}`);
+        logger.warn(`[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F MODE 2 extract - ligne non trouv\xC3\u0192\xC2\xA9e pour selector ${rowSelectorValue2}`);
       } else {
         const dataRowIndex2 = finalRowIndex2;
         let foundColIndex = -1;
@@ -3985,7 +4022,7 @@ async function interpretTable(tableId, submissionId, prisma50, valuesCache, dept
           targetRowIndex = rowSelectorIndex;
         }
       } else {
-        console.warn(`[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F MODE 2 - Ligne de comparaison non trouv\xC3\u0192\xC2\xA9e: ${comparisonRowName}`);
+        logger.warn(`[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F MODE 2 - Ligne de comparaison non trouv\xC3\u0192\xC2\xA9e: ${comparisonRowName}`);
       }
     }
     if (targetRowIndex === -1) {
@@ -4028,7 +4065,7 @@ async function interpretTable(tableId, submissionId, prisma50, valuesCache, dept
             }
           };
         } else {
-          console.warn(`[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F MODE 2 ${optionLabel} - Impossible de trouver une ligne pour ${rowSelectorValue2}`);
+          logger.warn(`[TABLE] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F MODE 2 ${optionLabel} - Impossible de trouver une ligne pour ${rowSelectorValue2}`);
         }
       }
       for (const fixedColValue of displayRows) {
@@ -4077,7 +4114,7 @@ async function interpretTable(tableId, submissionId, prisma50, valuesCache, dept
       }
     };
   } else {
-    console.error(`[TABLE] \xC3\xA2\xC2\x9D\xC5\u2019 Configuration lookup invalide`);
+    logger.error(`[TABLE] \xC3\xA2\xC2\x9D\xC5\u2019 Configuration lookup invalide`);
     return {
       result: "\u2205",
       humanText: `Configuration lookup invalide pour table ${table.name}`,
@@ -4189,7 +4226,7 @@ async function interpretTable(tableId, submissionId, prisma50, valuesCache, dept
   const dataRowIndex = finalRowIndex;
   const dataColIndex = finalColIndex - 1;
   if (dataRowIndex < 0 || dataColIndex < 0 || !data[dataRowIndex]) {
-    console.error(`[TABLE] \xC3\xA2\xC2\x9D\xC5\u2019 Index hors limites`);
+    logger.error(`[TABLE] \xC3\xA2\xC2\x9D\xC5\u2019 Index hors limites`);
     return {
       result: "\u2205",
       humanText: `Table "${table.name}"[${actualRowValue}, ${actualColValue}] = hors limites`,
@@ -4290,7 +4327,7 @@ async function evaluateVariableOperation(variableNodeId, submissionId, prisma50,
     }
   });
   if (!variable) {
-    console.warn(`\u26A0\uFE0F [VARIABLE MANQUANTE] nodeId: ${variableNodeId} - retour valeur par d\xE9faut (null)`);
+    logger.warn(`\u26A0\uFE0F [VARIABLE MANQUANTE] nodeId: ${variableNodeId} - retour valeur par d\xE9faut (null)`);
     return {
       value: null,
       operationDetail: { type: "missing-variable", nodeId: variableNodeId },
@@ -4319,7 +4356,7 @@ async function evaluateVariableOperation(variableNodeId, submissionId, prisma50,
         };
       }
     } catch (err) {
-      console.warn("[operation-interpreter] Gestionnaire override lookup failed:", err);
+      logger.warn("[operation-interpreter] Gestionnaire override lookup failed:", err);
     }
   }
   if (variable.sourceType === "fixed" && variable.fixedValue) {
@@ -4388,6 +4425,7 @@ var init_operation_interpreter = __esm({
   "src/components/TreeBranchLeaf/treebranchleaf-new/api/operation-interpreter.ts"() {
     "use strict";
     init_formulaEngine();
+    init_logger();
     normalizeLookupValue = (value) => {
       const raw = String(value ?? "").trim().toLowerCase();
       if (!raw) return "";
@@ -4415,6 +4453,7 @@ var init_GoogleAuthManager = __esm({
   "src/google-auth/core/GoogleAuthManager.ts"() {
     "use strict";
     init_GoogleOAuthCore();
+    init_logger();
     GoogleAuthManager = class _GoogleAuthManager {
       static instance;
       constructor() {
@@ -4434,14 +4473,14 @@ var init_GoogleAuthManager = __esm({
        */
       async getAuthenticatedClient(organizationId, userId) {
         if (!organizationId) {
-          console.error("[GoogleAuthManager] \u274C organizationId est requis");
+          logger.error("[GoogleAuthManager] \u274C organizationId est requis");
           return null;
         }
-        console.log(`[GoogleAuthManager] \u{1F510} Demande de client authentifi\xE9 pour l'organisation: ${organizationId}, utilisateur: ${userId || "non sp\xE9cifi\xE9"}`);
+        logger.debug(`[GoogleAuthManager] \u{1F510} Demande de client authentifi\xE9 pour l'organisation: ${organizationId}, utilisateur: ${userId || "non sp\xE9cifi\xE9"}`);
         try {
           return await googleOAuthService.getAuthenticatedClientForOrganization(organizationId, userId);
         } catch (error) {
-          console.error("[GoogleAuthManager] \u274C Erreur lors de l'obtention du client authentifi\xE9:", error);
+          logger.error("[GoogleAuthManager] \u274C Erreur lors de l'obtention du client authentifi\xE9:", error);
           return null;
         }
       }
@@ -4480,6 +4519,7 @@ var init_GoogleCalendarService = __esm({
     "use strict";
     import_googleapis5 = require("googleapis");
     init_google_auth();
+    init_logger();
     GoogleCalendarService = class _GoogleCalendarService {
       static instance;
       constructor() {
@@ -4494,7 +4534,7 @@ var init_GoogleCalendarService = __esm({
        * Obtient une instance de l'API Google Calendar pour un utilisateur dans une organisation
        */
       async getCalendarAPI(organizationId, userId) {
-        console.log(`[GoogleCalendarService] \u{1F4C5} Cr\xE9ation instance API Calendar pour organisation: ${organizationId}, utilisateur: ${userId || "non sp\xE9cifi\xE9"}`);
+        logger.debug(`[GoogleCalendarService] \u{1F4C5} Cr\xE9ation instance API Calendar pour organisation: ${organizationId}, utilisateur: ${userId || "non sp\xE9cifi\xE9"}`);
         const authClient = await googleAuthManager.getAuthenticatedClient(organizationId, userId);
         if (!authClient) {
           throw new Error("Connexion Google non configur\xE9e.");
@@ -4535,7 +4575,7 @@ var init_GoogleCalendarService = __esm({
             }))
           }));
         } catch (error) {
-          console.error("[GoogleCalendarService] \u274C Erreur lors de la r\xE9cup\xE9ration des \xE9v\xE9nements:", error);
+          logger.error("[GoogleCalendarService] \u274C Erreur lors de la r\xE9cup\xE9ration des \xE9v\xE9nements:", error);
           throw error;
         }
       }
@@ -4557,7 +4597,7 @@ var init_GoogleCalendarService = __esm({
           });
           return response.data.id;
         } catch (error) {
-          console.error("[GoogleCalendarService] \u274C Erreur lors de la cr\xE9ation de l'\xE9v\xE9nement:", error);
+          logger.error("[GoogleCalendarService] \u274C Erreur lors de la cr\xE9ation de l'\xE9v\xE9nement:", error);
           throw error;
         }
       }
@@ -4579,7 +4619,7 @@ var init_GoogleCalendarService = __esm({
             }
           });
         } catch (error) {
-          console.error("[GoogleCalendarService] \u274C Erreur lors de la mise \xE0 jour de l'\xE9v\xE9nement:", error);
+          logger.error("[GoogleCalendarService] \u274C Erreur lors de la mise \xE0 jour de l'\xE9v\xE9nement:", error);
           throw error;
         }
       }
@@ -4594,7 +4634,7 @@ var init_GoogleCalendarService = __esm({
             eventId
           });
         } catch (error) {
-          console.error("[GoogleCalendarService] \u274C Erreur lors de la suppression de l'\xE9v\xE9nement:", error);
+          logger.error("[GoogleCalendarService] \u274C Erreur lors de la suppression de l'\xE9v\xE9nement:", error);
           throw error;
         }
       }
@@ -4602,8 +4642,8 @@ var init_GoogleCalendarService = __esm({
        * Synchronise les événements avec Google Calendar
        */
       async syncEvents(organizationId, startDate, endDate, userId) {
-        console.log(`[GoogleCalendarService] \u{1F504} Synchronisation des \xE9v\xE9nements pour l'organisation: ${organizationId}, utilisateur: ${userId}`);
-        console.log(`[GoogleCalendarService] \u{1F4C5} P\xE9riode: ${startDate.toISOString()} -> ${endDate.toISOString()}`);
+        logger.debug(`[GoogleCalendarService] \u{1F504} Synchronisation des \xE9v\xE9nements pour l'organisation: ${organizationId}, utilisateur: ${userId}`);
+        logger.debug(`[GoogleCalendarService] \u{1F4C5} P\xE9riode: ${startDate.toISOString()} -> ${endDate.toISOString()}`);
         return await this.getEvents(organizationId, startDate, endDate, userId);
       }
     };
@@ -4623,6 +4663,7 @@ var init_GoogleDriveService = __esm({
     "use strict";
     import_googleapis6 = require("googleapis");
     init_google_auth();
+    init_logger();
     GoogleDriveService = class _GoogleDriveService {
       static instance;
       constructor() {
@@ -4637,7 +4678,7 @@ var init_GoogleDriveService = __esm({
        * Obtient une instance de l'API Google Drive pour un utilisateur dans une organisation
        */
       async getDriveAPI(organizationId, userId) {
-        console.log(`[GoogleDriveService] \u{1F4C1} Cr\xE9ation instance API Drive pour organisation: ${organizationId}, utilisateur: ${userId || "non sp\xE9cifi\xE9"}`);
+        logger.debug(`[GoogleDriveService] \u{1F4C1} Cr\xE9ation instance API Drive pour organisation: ${organizationId}, utilisateur: ${userId || "non sp\xE9cifi\xE9"}`);
         const authClient = await googleAuthManager.getAuthenticatedClient(organizationId, userId);
         if (!authClient) {
           throw new Error("Connexion Google non configur\xE9e.");
@@ -4649,7 +4690,7 @@ var init_GoogleDriveService = __esm({
        */
       async getFiles(organizationId, folderId = "root", pageSize = 50, pageToken, userId) {
         try {
-          console.log(`[GoogleDriveService] \u{1F50D} R\xE9cup\xE9ration des fichiers pour folder: ${folderId}, userId: ${userId}`);
+          logger.debug(`[GoogleDriveService] \u{1F50D} R\xE9cup\xE9ration des fichiers pour folder: ${folderId}, userId: ${userId}`);
           const drive = await this.getDriveAPI(organizationId, userId);
           const query = folderId === "root" ? "'root' in parents and trashed = false" : `'${folderId}' in parents and trashed = false`;
           const response = await drive.files.list({
@@ -4676,13 +4717,13 @@ var init_GoogleDriveService = __esm({
             shared: file.shared || false,
             ownedByMe: file.ownedByMe || false
           }));
-          console.log(`[GoogleDriveService] \u2705 ${files.length} fichiers r\xE9cup\xE9r\xE9s`);
+          logger.debug(`[GoogleDriveService] \u2705 ${files.length} fichiers r\xE9cup\xE9r\xE9s`);
           return {
             files,
             nextPageToken: response.data.nextPageToken || void 0
           };
         } catch (error) {
-          console.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration des fichiers:", error);
+          logger.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration des fichiers:", error);
           throw error;
         }
       }
@@ -4691,7 +4732,7 @@ var init_GoogleDriveService = __esm({
        */
       async getSharedFiles(organizationId, pageSize = 50, pageToken, userId) {
         try {
-          console.log(`[GoogleDriveService] \u{1F50D} R\xE9cup\xE9ration des fichiers partag\xE9s`);
+          logger.debug(`[GoogleDriveService] \u{1F50D} R\xE9cup\xE9ration des fichiers partag\xE9s`);
           const drive = await this.getDriveAPI(organizationId, userId);
           const response = await drive.files.list({
             q: "sharedWithMe = true and trashed = false",
@@ -4717,13 +4758,13 @@ var init_GoogleDriveService = __esm({
             shared: true,
             ownedByMe: false
           }));
-          console.log(`[GoogleDriveService] \u2705 ${files.length} fichiers partag\xE9s r\xE9cup\xE9r\xE9s`);
+          logger.debug(`[GoogleDriveService] \u2705 ${files.length} fichiers partag\xE9s r\xE9cup\xE9r\xE9s`);
           return {
             files,
             nextPageToken: response.data.nextPageToken || void 0
           };
         } catch (error) {
-          console.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration des fichiers partag\xE9s:", error);
+          logger.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration des fichiers partag\xE9s:", error);
           throw error;
         }
       }
@@ -4732,7 +4773,7 @@ var init_GoogleDriveService = __esm({
        */
       async getSharedDrives(organizationId, pageSize = 50, userId) {
         try {
-          console.log(`[GoogleDriveService] \u{1F50D} R\xE9cup\xE9ration des drives partag\xE9s`);
+          logger.debug(`[GoogleDriveService] \u{1F50D} R\xE9cup\xE9ration des drives partag\xE9s`);
           const drive = await this.getDriveAPI(organizationId, userId);
           const response = await drive.drives.list({
             pageSize,
@@ -4742,10 +4783,10 @@ var init_GoogleDriveService = __esm({
             id: d.id || "",
             name: d.name || "Drive partag\xE9"
           }));
-          console.log(`[GoogleDriveService] \u2705 ${drives.length} drives partag\xE9s r\xE9cup\xE9r\xE9s`);
+          logger.debug(`[GoogleDriveService] \u2705 ${drives.length} drives partag\xE9s r\xE9cup\xE9r\xE9s`);
           return { drives };
         } catch (error) {
-          console.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration des drives partag\xE9s:", error);
+          logger.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration des drives partag\xE9s:", error);
           throw error;
         }
       }
@@ -4754,7 +4795,7 @@ var init_GoogleDriveService = __esm({
        */
       async getSharedDriveFiles(organizationId, driveId, folderId, pageSize = 50, pageToken, userId) {
         try {
-          console.log(`[GoogleDriveService] \u{1F50D} R\xE9cup\xE9ration des fichiers du drive partag\xE9: ${driveId}, folder: ${folderId || "root"}`);
+          logger.debug(`[GoogleDriveService] \u{1F50D} R\xE9cup\xE9ration des fichiers du drive partag\xE9: ${driveId}, folder: ${folderId || "root"}`);
           const drive = await this.getDriveAPI(organizationId, userId);
           const parentId = folderId || driveId;
           const query = `'${parentId}' in parents and trashed = false`;
@@ -4784,13 +4825,13 @@ var init_GoogleDriveService = __esm({
             shared: true,
             ownedByMe: false
           }));
-          console.log(`[GoogleDriveService] \u2705 ${files.length} fichiers r\xE9cup\xE9r\xE9s du drive partag\xE9`);
+          logger.debug(`[GoogleDriveService] \u2705 ${files.length} fichiers r\xE9cup\xE9r\xE9s du drive partag\xE9`);
           return {
             files,
             nextPageToken: response.data.nextPageToken || void 0
           };
         } catch (error) {
-          console.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration des fichiers du drive partag\xE9:", error);
+          logger.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration des fichiers du drive partag\xE9:", error);
           throw error;
         }
       }
@@ -4799,7 +4840,7 @@ var init_GoogleDriveService = __esm({
        */
       async searchFiles(organizationId, searchQuery, pageSize = 50, userId) {
         try {
-          console.log(`[GoogleDriveService] \u{1F50E} Recherche: "${searchQuery}"`);
+          logger.debug(`[GoogleDriveService] \u{1F50E} Recherche: "${searchQuery}"`);
           const drive = await this.getDriveAPI(organizationId, userId);
           const response = await drive.files.list({
             q: `name contains '${searchQuery}' and trashed = false`,
@@ -4820,10 +4861,10 @@ var init_GoogleDriveService = __esm({
             parents: file.parents || void 0,
             shared: file.shared || false
           }));
-          console.log(`[GoogleDriveService] \u2705 ${files.length} fichiers trouv\xE9s`);
+          logger.debug(`[GoogleDriveService] \u2705 ${files.length} fichiers trouv\xE9s`);
           return files;
         } catch (error) {
-          console.error("[GoogleDriveService] \u274C Erreur lors de la recherche:", error);
+          logger.error("[GoogleDriveService] \u274C Erreur lors de la recherche:", error);
           throw error;
         }
       }
@@ -4832,7 +4873,7 @@ var init_GoogleDriveService = __esm({
        */
       async createFolder(organizationId, name, parentId = "root", userId) {
         try {
-          console.log(`[GoogleDriveService] \u{1F4C2} Cr\xE9ation du dossier: "${name}"`);
+          logger.debug(`[GoogleDriveService] \u{1F4C2} Cr\xE9ation du dossier: "${name}"`);
           const drive = await this.getDriveAPI(organizationId, userId);
           const response = await drive.files.create({
             requestBody: {
@@ -4842,7 +4883,7 @@ var init_GoogleDriveService = __esm({
             },
             fields: "id, name, mimeType, modifiedTime, webViewLink"
           });
-          console.log(`[GoogleDriveService] \u2705 Dossier cr\xE9\xE9: ${response.data.id}`);
+          logger.debug(`[GoogleDriveService] \u2705 Dossier cr\xE9\xE9: ${response.data.id}`);
           return {
             id: response.data.id || "",
             name: response.data.name || name,
@@ -4851,7 +4892,7 @@ var init_GoogleDriveService = __esm({
             webViewLink: response.data.webViewLink || void 0
           };
         } catch (error) {
-          console.error("[GoogleDriveService] \u274C Erreur lors de la cr\xE9ation du dossier:", error);
+          logger.error("[GoogleDriveService] \u274C Erreur lors de la cr\xE9ation du dossier:", error);
           throw error;
         }
       }
@@ -4860,7 +4901,7 @@ var init_GoogleDriveService = __esm({
        */
       async deleteFile(organizationId, fileId, userId) {
         try {
-          console.log(`[GoogleDriveService] \u{1F5D1}\uFE0F Suppression du fichier: ${fileId}`);
+          logger.debug(`[GoogleDriveService] \u{1F5D1}\uFE0F Suppression du fichier: ${fileId}`);
           const drive = await this.getDriveAPI(organizationId, userId);
           await drive.files.update({
             fileId,
@@ -4869,10 +4910,10 @@ var init_GoogleDriveService = __esm({
               trashed: true
             }
           });
-          console.log(`[GoogleDriveService] \u2705 Fichier mis \xE0 la corbeille`);
+          logger.debug(`[GoogleDriveService] \u2705 Fichier mis \xE0 la corbeille`);
           return true;
         } catch (error) {
-          console.error("[GoogleDriveService] \u274C Erreur lors de la suppression:", error);
+          logger.error("[GoogleDriveService] \u274C Erreur lors de la suppression:", error);
           throw error;
         }
       }
@@ -4902,7 +4943,7 @@ var init_GoogleDriveService = __esm({
             ownedByMe: response.data.ownedByMe || false
           };
         } catch (error) {
-          console.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration des infos:", error);
+          logger.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration des infos:", error);
           throw error;
         }
       }
@@ -4923,7 +4964,7 @@ var init_GoogleDriveService = __esm({
             usageInTrash: quota?.usageInTrash || "0"
           };
         } catch (error) {
-          console.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration du stockage:", error);
+          logger.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration du stockage:", error);
           throw error;
         }
       }
@@ -4932,7 +4973,7 @@ var init_GoogleDriveService = __esm({
        */
       async uploadFile(organizationId, fileName, mimeType, fileBuffer, parentId = "root", userId) {
         try {
-          console.log(`[GoogleDriveService] \u{1F4E4} Upload du fichier: "${fileName}"`);
+          logger.debug(`[GoogleDriveService] \u{1F4E4} Upload du fichier: "${fileName}"`);
           const drive = await this.getDriveAPI(organizationId, userId);
           const { Readable } = await import("stream");
           const stream = Readable.from(fileBuffer);
@@ -4947,7 +4988,7 @@ var init_GoogleDriveService = __esm({
             },
             fields: "id, name, mimeType, size, modifiedTime, webViewLink, webContentLink, iconLink, thumbnailLink"
           });
-          console.log(`[GoogleDriveService] \u2705 Fichier upload\xE9: ${response.data.id}`);
+          logger.debug(`[GoogleDriveService] \u2705 Fichier upload\xE9: ${response.data.id}`);
           return {
             id: response.data.id || "",
             name: response.data.name || fileName,
@@ -4960,7 +5001,7 @@ var init_GoogleDriveService = __esm({
             thumbnailLink: response.data.thumbnailLink || void 0
           };
         } catch (error) {
-          console.error("[GoogleDriveService] \u274C Erreur lors de l'upload:", error);
+          logger.error("[GoogleDriveService] \u274C Erreur lors de l'upload:", error);
           throw error;
         }
       }
@@ -4969,7 +5010,7 @@ var init_GoogleDriveService = __esm({
        */
       async renameFile(organizationId, fileId, newName, userId) {
         try {
-          console.log(`[GoogleDriveService] \u270F\uFE0F Renommer fichier ${fileId} en "${newName}"`);
+          logger.debug(`[GoogleDriveService] \u270F\uFE0F Renommer fichier ${fileId} en "${newName}"`);
           const drive = await this.getDriveAPI(organizationId, userId);
           const response = await drive.files.update({
             fileId,
@@ -4979,7 +5020,7 @@ var init_GoogleDriveService = __esm({
             },
             fields: "id, name, mimeType, size, modifiedTime, webViewLink"
           });
-          console.log(`[GoogleDriveService] \u2705 Fichier renomm\xE9`);
+          logger.debug(`[GoogleDriveService] \u2705 Fichier renomm\xE9`);
           return {
             id: response.data.id || "",
             name: response.data.name || newName,
@@ -4988,7 +5029,7 @@ var init_GoogleDriveService = __esm({
             webViewLink: response.data.webViewLink || void 0
           };
         } catch (error) {
-          console.error("[GoogleDriveService] \u274C Erreur lors du renommage:", error);
+          logger.error("[GoogleDriveService] \u274C Erreur lors du renommage:", error);
           throw error;
         }
       }
@@ -4997,7 +5038,7 @@ var init_GoogleDriveService = __esm({
        */
       async moveFile(organizationId, fileId, newParentId, userId) {
         try {
-          console.log(`[GoogleDriveService] \u{1F4E6} D\xE9placer fichier ${fileId} vers ${newParentId}`);
+          logger.debug(`[GoogleDriveService] \u{1F4E6} D\xE9placer fichier ${fileId} vers ${newParentId}`);
           const drive = await this.getDriveAPI(organizationId, userId);
           const file = await drive.files.get({
             fileId,
@@ -5012,7 +5053,7 @@ var init_GoogleDriveService = __esm({
             removeParents: previousParents,
             fields: "id, name, mimeType, parents, webViewLink"
           });
-          console.log(`[GoogleDriveService] \u2705 Fichier d\xE9plac\xE9`);
+          logger.debug(`[GoogleDriveService] \u2705 Fichier d\xE9plac\xE9`);
           return {
             id: response.data.id || "",
             name: response.data.name || "",
@@ -5021,7 +5062,7 @@ var init_GoogleDriveService = __esm({
             webViewLink: response.data.webViewLink || void 0
           };
         } catch (error) {
-          console.error("[GoogleDriveService] \u274C Erreur lors du d\xE9placement:", error);
+          logger.error("[GoogleDriveService] \u274C Erreur lors du d\xE9placement:", error);
           throw error;
         }
       }
@@ -5030,7 +5071,7 @@ var init_GoogleDriveService = __esm({
        */
       async copyFile(organizationId, fileId, newName, userId) {
         try {
-          console.log(`[GoogleDriveService] \u{1F4CB} Copier fichier ${fileId}`);
+          logger.debug(`[GoogleDriveService] \u{1F4CB} Copier fichier ${fileId}`);
           const drive = await this.getDriveAPI(organizationId, userId);
           const response = await drive.files.copy({
             fileId,
@@ -5038,7 +5079,7 @@ var init_GoogleDriveService = __esm({
             requestBody: newName ? { name: newName } : {},
             fields: "id, name, mimeType, size, modifiedTime, webViewLink"
           });
-          console.log(`[GoogleDriveService] \u2705 Fichier copi\xE9: ${response.data.id}`);
+          logger.debug(`[GoogleDriveService] \u2705 Fichier copi\xE9: ${response.data.id}`);
           return {
             id: response.data.id || "",
             name: response.data.name || "",
@@ -5048,7 +5089,7 @@ var init_GoogleDriveService = __esm({
             webViewLink: response.data.webViewLink || void 0
           };
         } catch (error) {
-          console.error("[GoogleDriveService] \u274C Erreur lors de la copie:", error);
+          logger.error("[GoogleDriveService] \u274C Erreur lors de la copie:", error);
           throw error;
         }
       }
@@ -5057,7 +5098,7 @@ var init_GoogleDriveService = __esm({
        */
       async getShareLink(organizationId, fileId, userId) {
         try {
-          console.log(`[GoogleDriveService] \u{1F517} Obtenir lien de partage pour ${fileId}`);
+          logger.debug(`[GoogleDriveService] \u{1F517} Obtenir lien de partage pour ${fileId}`);
           const drive = await this.getDriveAPI(organizationId, userId);
           const response = await drive.files.get({
             fileId,
@@ -5069,7 +5110,7 @@ var init_GoogleDriveService = __esm({
             webContentLink: response.data.webContentLink || void 0
           };
         } catch (error) {
-          console.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration du lien:", error);
+          logger.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration du lien:", error);
           throw error;
         }
       }
@@ -5078,7 +5119,7 @@ var init_GoogleDriveService = __esm({
        */
       async makePublic(organizationId, fileId, userId) {
         try {
-          console.log(`[GoogleDriveService] \u{1F310} Rendre public ${fileId}`);
+          logger.debug(`[GoogleDriveService] \u{1F310} Rendre public ${fileId}`);
           const drive = await this.getDriveAPI(organizationId, userId);
           await drive.permissions.create({
             fileId,
@@ -5093,12 +5134,12 @@ var init_GoogleDriveService = __esm({
             supportsAllDrives: true,
             fields: "webViewLink"
           });
-          console.log(`[GoogleDriveService] \u2705 Fichier rendu public`);
+          logger.debug(`[GoogleDriveService] \u2705 Fichier rendu public`);
           return {
             webViewLink: response.data.webViewLink || ""
           };
         } catch (error) {
-          console.error("[GoogleDriveService] \u274C Erreur lors du partage:", error);
+          logger.error("[GoogleDriveService] \u274C Erreur lors du partage:", error);
           throw error;
         }
       }
@@ -5107,7 +5148,7 @@ var init_GoogleDriveService = __esm({
        */
       async getRecentFiles(organizationId, pageSize = 50, userId) {
         try {
-          console.log(`[GoogleDriveService] \u{1F550} R\xE9cup\xE9ration des fichiers r\xE9cents`);
+          logger.debug(`[GoogleDriveService] \u{1F550} R\xE9cup\xE9ration des fichiers r\xE9cents`);
           const drive = await this.getDriveAPI(organizationId, userId);
           const response = await drive.files.list({
             pageSize,
@@ -5128,10 +5169,10 @@ var init_GoogleDriveService = __esm({
             parents: file.parents || void 0,
             shared: file.shared || false
           }));
-          console.log(`[GoogleDriveService] \u2705 ${files.length} fichiers r\xE9cents r\xE9cup\xE9r\xE9s`);
+          logger.debug(`[GoogleDriveService] \u2705 ${files.length} fichiers r\xE9cents r\xE9cup\xE9r\xE9s`);
           return files;
         } catch (error) {
-          console.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration des fichiers r\xE9cents:", error);
+          logger.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration des fichiers r\xE9cents:", error);
           throw error;
         }
       }
@@ -5140,7 +5181,7 @@ var init_GoogleDriveService = __esm({
        */
       async getStarredFiles(organizationId, pageSize = 50, userId) {
         try {
-          console.log(`[GoogleDriveService] \u2B50 R\xE9cup\xE9ration des fichiers favoris`);
+          logger.debug(`[GoogleDriveService] \u2B50 R\xE9cup\xE9ration des fichiers favoris`);
           const drive = await this.getDriveAPI(organizationId, userId);
           const response = await drive.files.list({
             pageSize,
@@ -5161,10 +5202,10 @@ var init_GoogleDriveService = __esm({
             parents: file.parents || void 0,
             shared: file.shared || false
           }));
-          console.log(`[GoogleDriveService] \u2705 ${files.length} fichiers favoris r\xE9cup\xE9r\xE9s`);
+          logger.debug(`[GoogleDriveService] \u2705 ${files.length} fichiers favoris r\xE9cup\xE9r\xE9s`);
           return files;
         } catch (error) {
-          console.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration des fichiers favoris:", error);
+          logger.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration des fichiers favoris:", error);
           throw error;
         }
       }
@@ -5173,7 +5214,7 @@ var init_GoogleDriveService = __esm({
        */
       async toggleStar(organizationId, fileId, starred, userId) {
         try {
-          console.log(`[GoogleDriveService] \u2B50 ${starred ? "Ajouter aux" : "Retirer des"} favoris: ${fileId}`);
+          logger.debug(`[GoogleDriveService] \u2B50 ${starred ? "Ajouter aux" : "Retirer des"} favoris: ${fileId}`);
           const drive = await this.getDriveAPI(organizationId, userId);
           await drive.files.update({
             fileId,
@@ -5182,10 +5223,10 @@ var init_GoogleDriveService = __esm({
               starred
             }
           });
-          console.log(`[GoogleDriveService] \u2705 Favori mis \xE0 jour`);
+          logger.debug(`[GoogleDriveService] \u2705 Favori mis \xE0 jour`);
           return true;
         } catch (error) {
-          console.error("[GoogleDriveService] \u274C Erreur lors de la mise \xE0 jour du favori:", error);
+          logger.error("[GoogleDriveService] \u274C Erreur lors de la mise \xE0 jour du favori:", error);
           throw error;
         }
       }
@@ -5194,7 +5235,7 @@ var init_GoogleDriveService = __esm({
        */
       async getTrash(organizationId, pageSize = 50, userId) {
         try {
-          console.log(`[GoogleDriveService] \u{1F5D1}\uFE0F R\xE9cup\xE9ration de la corbeille`);
+          logger.debug(`[GoogleDriveService] \u{1F5D1}\uFE0F R\xE9cup\xE9ration de la corbeille`);
           const drive = await this.getDriveAPI(organizationId, userId);
           const response = await drive.files.list({
             pageSize,
@@ -5212,10 +5253,10 @@ var init_GoogleDriveService = __esm({
             iconLink: file.iconLink || void 0,
             thumbnailLink: file.thumbnailLink || void 0
           }));
-          console.log(`[GoogleDriveService] \u2705 ${files.length} fichiers dans la corbeille`);
+          logger.debug(`[GoogleDriveService] \u2705 ${files.length} fichiers dans la corbeille`);
           return files;
         } catch (error) {
-          console.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration de la corbeille:", error);
+          logger.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration de la corbeille:", error);
           throw error;
         }
       }
@@ -5224,7 +5265,7 @@ var init_GoogleDriveService = __esm({
        */
       async restoreFile(organizationId, fileId, userId) {
         try {
-          console.log(`[GoogleDriveService] \u267B\uFE0F Restaurer fichier: ${fileId}`);
+          logger.debug(`[GoogleDriveService] \u267B\uFE0F Restaurer fichier: ${fileId}`);
           const drive = await this.getDriveAPI(organizationId, userId);
           await drive.files.update({
             fileId,
@@ -5233,10 +5274,10 @@ var init_GoogleDriveService = __esm({
               trashed: false
             }
           });
-          console.log(`[GoogleDriveService] \u2705 Fichier restaur\xE9`);
+          logger.debug(`[GoogleDriveService] \u2705 Fichier restaur\xE9`);
           return true;
         } catch (error) {
-          console.error("[GoogleDriveService] \u274C Erreur lors de la restauration:", error);
+          logger.error("[GoogleDriveService] \u274C Erreur lors de la restauration:", error);
           throw error;
         }
       }
@@ -5245,16 +5286,16 @@ var init_GoogleDriveService = __esm({
        */
       async deleteFilePermanently(organizationId, fileId, userId) {
         try {
-          console.log(`[GoogleDriveService] \u274C Suppression d\xE9finitive: ${fileId}`);
+          logger.debug(`[GoogleDriveService] \u274C Suppression d\xE9finitive: ${fileId}`);
           const drive = await this.getDriveAPI(organizationId, userId);
           await drive.files.delete({
             fileId,
             supportsAllDrives: true
           });
-          console.log(`[GoogleDriveService] \u2705 Fichier supprim\xE9 d\xE9finitivement`);
+          logger.debug(`[GoogleDriveService] \u2705 Fichier supprim\xE9 d\xE9finitivement`);
           return true;
         } catch (error) {
-          console.error("[GoogleDriveService] \u274C Erreur lors de la suppression d\xE9finitive:", error);
+          logger.error("[GoogleDriveService] \u274C Erreur lors de la suppression d\xE9finitive:", error);
           throw error;
         }
       }
@@ -5263,13 +5304,13 @@ var init_GoogleDriveService = __esm({
        */
       async emptyTrash(organizationId, userId) {
         try {
-          console.log(`[GoogleDriveService] \u{1F5D1}\uFE0F Vider la corbeille`);
+          logger.debug(`[GoogleDriveService] \u{1F5D1}\uFE0F Vider la corbeille`);
           const drive = await this.getDriveAPI(organizationId, userId);
           await drive.files.emptyTrash();
-          console.log(`[GoogleDriveService] \u2705 Corbeille vid\xE9e`);
+          logger.debug(`[GoogleDriveService] \u2705 Corbeille vid\xE9e`);
           return true;
         } catch (error) {
-          console.error("[GoogleDriveService] \u274C Erreur lors du vidage de la corbeille:", error);
+          logger.error("[GoogleDriveService] \u274C Erreur lors du vidage de la corbeille:", error);
           throw error;
         }
       }
@@ -5278,7 +5319,7 @@ var init_GoogleDriveService = __esm({
        */
       async getDownloadUrl(organizationId, fileId, userId) {
         try {
-          console.log(`[GoogleDriveService] \u2B07\uFE0F Obtenir URL de t\xE9l\xE9chargement: ${fileId}`);
+          logger.debug(`[GoogleDriveService] \u2B07\uFE0F Obtenir URL de t\xE9l\xE9chargement: ${fileId}`);
           const drive = await this.getDriveAPI(organizationId, userId);
           const response = await drive.files.get({
             fileId,
@@ -5305,7 +5346,7 @@ var init_GoogleDriveService = __esm({
             mimeType
           };
         } catch (error) {
-          console.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration de l'URL:", error);
+          logger.error("[GoogleDriveService] \u274C Erreur lors de la r\xE9cup\xE9ration de l'URL:", error);
           throw error;
         }
       }
@@ -5314,7 +5355,7 @@ var init_GoogleDriveService = __esm({
        */
       async createGoogleDoc(organizationId, name, type, parentId = "root", userId) {
         try {
-          console.log(`[GoogleDriveService] \u{1F4C4} Cr\xE9er ${type}: "${name}"`);
+          logger.debug(`[GoogleDriveService] \u{1F4C4} Cr\xE9er ${type}: "${name}"`);
           const drive = await this.getDriveAPI(organizationId, userId);
           const mimeTypes = {
             document: "application/vnd.google-apps.document",
@@ -5329,7 +5370,7 @@ var init_GoogleDriveService = __esm({
             },
             fields: "id, name, mimeType, modifiedTime, webViewLink"
           });
-          console.log(`[GoogleDriveService] \u2705 ${type} cr\xE9\xE9: ${response.data.id}`);
+          logger.debug(`[GoogleDriveService] \u2705 ${type} cr\xE9\xE9: ${response.data.id}`);
           return {
             id: response.data.id || "",
             name: response.data.name || name,
@@ -5338,7 +5379,7 @@ var init_GoogleDriveService = __esm({
             webViewLink: response.data.webViewLink || void 0
           };
         } catch (error) {
-          console.error("[GoogleDriveService] \u274C Erreur lors de la cr\xE9ation:", error);
+          logger.error("[GoogleDriveService] \u274C Erreur lors de la cr\xE9ation:", error);
           throw error;
         }
       }
@@ -5559,11 +5600,11 @@ function forceSharedRefSuffixes(tokens2, suffix) {
         } else {
         }
       } else if (token.includes("shared-ref")) {
-        console.warn(`\xC3\xB0\xC5\xB8\xE2\u20AC\x9D\xC2\xA5 [idx ${idx}] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F CONTAINS 'shared-ref' MAIS NE MATCHE PAS regex: "${token}"`);
+        logger.warn(`\xC3\xB0\xC5\xB8\xE2\u20AC\x9D\xC2\xA5 [idx ${idx}] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F CONTAINS 'shared-ref' MAIS NE MATCHE PAS regex: "${token}"`);
       }
     } else {
       if (String(token).includes("shared-ref")) {
-        console.warn(`\xC3\xB0\xC5\xB8\xE2\u20AC\x9D\xC2\xA5 [idx ${idx}] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Token NOT STRING mais contient 'shared-ref': Type=${typeof token}, Value=`, token);
+        logger.warn(`\xC3\xB0\xC5\xB8\xE2\u20AC\x9D\xC2\xA5 [idx ${idx}] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Token NOT STRING mais contient 'shared-ref': Type=${typeof token}, Value=`, token);
       }
     }
     return token;
@@ -5607,6 +5648,7 @@ function forceSharedRefSuffixesInJson(obj, suffix) {
 var init_universal_reference_rewriter = __esm({
   "src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/utils/universal-reference-rewriter.ts"() {
     "use strict";
+    init_logger();
   }
 });
 
@@ -5617,7 +5659,7 @@ __export(api_server_clean_exports, {
 });
 module.exports = __toCommonJS(api_server_clean_exports);
 var import_dotenv = __toESM(require("dotenv"), 1);
-var import_express120 = __toESM(require("express"), 1);
+var import_express121 = __toESM(require("express"), 1);
 var import_http = __toESM(require("http"), 1);
 var import_path7 = __toESM(require("path"), 1);
 var import_fs8 = __toESM(require("fs"), 1);
@@ -5644,10 +5686,11 @@ init_database();
 var import_bcryptjs = __toESM(require("bcryptjs"), 1);
 var import_jsonwebtoken = __toESM(require("jsonwebtoken"), 1);
 var import_fs = __toESM(require("fs"), 1);
+init_logger();
 var getJWTSecret = () => {
   let secret = process.env.JWT_SECRET;
   if (secret && secret.trim()) {
-    console.log("[AUTH] \u2705 JWT_SECRET trouv\xE9 dans process.env");
+    logger.debug("[AUTH] \u2705 JWT_SECRET trouv\xE9 dans process.env");
     return secret;
   }
   const cloudRunSecretPath = "/run/secrets/JWT_SECRET";
@@ -5655,14 +5698,14 @@ var getJWTSecret = () => {
     try {
       secret = import_fs.default.readFileSync(cloudRunSecretPath, "utf-8").trim();
       if (secret) {
-        console.log("[AUTH] \u2705 JWT_SECRET trouv\xE9 dans /run/secrets/JWT_SECRET");
+        logger.debug("[AUTH] \u2705 JWT_SECRET trouv\xE9 dans /run/secrets/JWT_SECRET");
         return secret;
       }
     } catch (err) {
-      console.error("[AUTH] \u274C Erreur \xE0 la lecture de /run/secrets/JWT_SECRET:", err);
+      logger.error("[AUTH] \u274C Erreur \xE0 la lecture de /run/secrets/JWT_SECRET:", err);
     }
   }
-  console.warn("[AUTH] \u26A0\uFE0F JWT_SECRET non disponible, utilisation de la cl\xE9 de d\xE9veloppement");
+  logger.warn("[AUTH] \u26A0\uFE0F JWT_SECRET non disponible, utilisation de la cl\xE9 de d\xE9veloppement");
   return "development-secret-key";
 };
 var login = async (req2, res) => {
@@ -5671,7 +5714,7 @@ var login = async (req2, res) => {
     const stripInvisible = (s) => s.trim().replace(/[\u200B-\u200D\uFEFF\u00A0\u2060]/g, "");
     const email = typeof rawEmail === "string" ? stripInvisible(rawEmail).toLowerCase() : rawEmail;
     const password = typeof rawPassword === "string" ? stripInvisible(rawPassword) : rawPassword;
-    console.log("[AUTH] \u{1F510} Tentative de connexion", {
+    logger.debug("[AUTH] \u{1F510} Tentative de connexion", {
       email,
       hasPassword: typeof password === "string" && password.length > 0,
       rawPasswordLength: typeof rawPassword === "string" ? rawPassword.length : 0,
@@ -5679,7 +5722,7 @@ var login = async (req2, res) => {
       contentType: req2.headers["content-type"]
     });
     if (!email || !password) {
-      console.log(`[AUTH] \u274C Email ou password manquant`);
+      logger.debug(`[AUTH] \u274C Email ou password manquant`);
       return res.status(400).json({ message: "Email et mot de passe requis" });
     }
     let user = await db.user.findFirst({
@@ -5718,22 +5761,22 @@ var login = async (req2, res) => {
             }
           }
         });
-        console.log(`[AUTH] \u{1F504} Connexion via @zhiive.com: ${email} \u2192 user ${user?.email}`);
+        logger.debug(`[AUTH] \u{1F504} Connexion via @zhiive.com: ${email} \u2192 user ${user?.email}`);
       }
     }
     if (!user || !user.passwordHash) {
-      console.log(`[AUTH] \u274C Utilisateur non trouv\xE9 ou pas de passwordHash pour: ${email}`);
+      logger.debug(`[AUTH] \u274C Utilisateur non trouv\xE9 ou pas de passwordHash pour: ${email}`);
       return res.status(401).json({ message: "Identifiants invalides" });
     }
-    console.log(`[AUTH] \u{1F464} Utilisateur trouv\xE9: ${user.firstName} ${user.lastName}`);
+    logger.debug(`[AUTH] \u{1F464} Utilisateur trouv\xE9: ${user.firstName} ${user.lastName}`);
     const isPasswordValid = await import_bcryptjs.default.compare(password, user.passwordHash);
-    console.log(`[AUTH] \u{1F511} Comparaison mot de passe: ${isPasswordValid ? "\u2705 VALIDE" : "\u274C INVALIDE"}`);
+    logger.debug(`[AUTH] \u{1F511} Comparaison mot de passe: ${isPasswordValid ? "\u2705 VALIDE" : "\u274C INVALIDE"}`);
     if (!isPasswordValid) {
-      console.log(`[AUTH] \u274C Mot de passe incorrect pour: ${email}`);
+      logger.debug(`[AUTH] \u274C Mot de passe incorrect pour: ${email}`);
       return res.status(401).json({ message: "Identifiants invalides" });
     }
     if (!user.emailVerified && user.role !== "super_admin") {
-      console.log(`[AUTH] \u26A0\uFE0F Email non v\xE9rifi\xE9 pour: ${email}`);
+      logger.debug(`[AUTH] \u26A0\uFE0F Email non v\xE9rifi\xE9 pour: ${email}`);
       return res.status(403).json({
         message: "Votre email n'est pas encore v\xE9rifi\xE9. Consultez votre bo\xEEte de r\xE9ception pour le lien d'activation.",
         emailNotVerified: true,
@@ -5775,7 +5818,7 @@ var login = async (req2, res) => {
     const isCodespaces2 = process.env.CODESPACES === "true";
     const cookieSecure = isProduction5 || isCodespaces2;
     const cookieSameSite = isProduction5 ? "none" : "lax";
-    console.log(`[AUTH] \u{1F36A} Cookie config: isProduction=${isProduction5}, isCodespaces=${isCodespaces2}, secure=${cookieSecure}, sameSite=${cookieSameSite}`);
+    logger.debug(`[AUTH] \u{1F36A} Cookie config: isProduction=${isProduction5}, isCodespaces=${isCodespaces2}, secure=${cookieSecure}, sameSite=${cookieSameSite}`);
     res.cookie("token", token, {
       httpOnly: true,
       secure: cookieSecure,
@@ -5784,10 +5827,10 @@ var login = async (req2, res) => {
       // 24 heures
       path: "/"
     });
-    console.log(`[AUTH] \u2705 Connexion r\xE9ussie pour ${email} (cookie secure=${cookieSecure}, sameSite=${cookieSameSite})`);
+    logger.debug(`[AUTH] \u2705 Connexion r\xE9ussie pour ${email} (cookie secure=${cookieSecure}, sameSite=${cookieSameSite})`);
     res.status(200).json(response);
   } catch (error) {
-    console.error("[AUTH] Erreur lors de la connexion:", error);
+    logger.error("[AUTH] Erreur lors de la connexion:", error);
     res.status(500).json({ message: "Erreur interne du serveur" });
   }
 };
@@ -5850,11 +5893,11 @@ var getMe = async (req2, res) => {
     const isJwtError = error instanceof import_jsonwebtoken.default.JsonWebTokenError || error instanceof import_jsonwebtoken.default.TokenExpiredError;
     if (isJwtError) {
       const jwtErr = error;
-      console.warn(`[AUTH] \u26A0\uFE0F Erreur JWT: ${jwtErr.name} - ${jwtErr.message}`);
+      logger.warn(`[AUTH] \u26A0\uFE0F Erreur JWT: ${jwtErr.name} - ${jwtErr.message}`);
       res.clearCookie("token");
       res.status(401).json({ message: "Token invalide ou expir\xE9" });
     } else {
-      console.error("[AUTH] \u274C Erreur inattendue dans getMe (DB/serveur?):", error);
+      logger.error("[AUTH] \u274C Erreur inattendue dans getMe (DB/serveur?):", error);
       res.status(500).json({ message: "Erreur serveur lors de la v\xE9rification" });
     }
   }
@@ -5862,10 +5905,10 @@ var getMe = async (req2, res) => {
 var logout = (_req, res) => {
   try {
     res.clearCookie("token");
-    console.log("[AUTH] D\xE9connexion r\xE9ussie");
+    logger.debug("[AUTH] D\xE9connexion r\xE9ussie");
     res.status(200).json({ message: "D\xE9connexion r\xE9ussie" });
   } catch (error) {
-    console.error("[AUTH] Erreur lors de la d\xE9connexion:", error);
+    logger.error("[AUTH] Erreur lors de la d\xE9connexion:", error);
     res.status(500).json({ message: "Erreur lors de la d\xE9connexion" });
   }
 };
@@ -6033,11 +6076,12 @@ var API_URL = process.env.API_URL || "https://api.crmpro.com";
 
 // src/config.ts
 var import_fs2 = __toESM(require("fs"), 1);
+init_logger();
 var isProduction = process.env.NODE_ENV === "production";
 var getJWTSecretFromConfig = () => {
   let secret = process.env.JWT_SECRET;
   if (secret && secret.trim()) {
-    console.log("[CONFIG] \u2705 JWT_SECRET trouv\xE9 dans process.env");
+    logger.debug("[CONFIG] \u2705 JWT_SECRET trouv\xE9 dans process.env");
     return secret;
   }
   const cloudRunSecretPath = "/run/secrets/JWT_SECRET";
@@ -6045,15 +6089,15 @@ var getJWTSecretFromConfig = () => {
     try {
       secret = import_fs2.default.readFileSync(cloudRunSecretPath, "utf-8").trim();
       if (secret) {
-        console.log("[CONFIG] \u2705 JWT_SECRET trouv\xE9 dans /run/secrets/JWT_SECRET");
+        logger.debug("[CONFIG] \u2705 JWT_SECRET trouv\xE9 dans /run/secrets/JWT_SECRET");
         return secret;
       }
     } catch (err) {
-      console.error("[CONFIG] \u274C Erreur \xE0 la lecture de /run/secrets/JWT_SECRET:", err);
+      logger.error("[CONFIG] \u274C Erreur \xE0 la lecture de /run/secrets/JWT_SECRET:", err);
     }
   }
   if (isProduction) {
-    console.error("[CONFIG] \u274C FATAL: JWT_SECRET non disponible en production \u2014 arr\xEAt imm\xE9diat");
+    logger.error("[CONFIG] \u274C FATAL: JWT_SECRET non disponible en production \u2014 arr\xEAt imm\xE9diat");
     process.exit(1);
   }
   const fallbackSecret = "dev_secret_key";
@@ -6062,12 +6106,13 @@ var getJWTSecretFromConfig = () => {
 var JWT_SECRET2 = getJWTSecretFromConfig();
 var API_URL2 = process.env.API_URL || (isProduction ? "https://api.crmpro.com" : "");
 if (isProduction) {
-  console.log("Application en mode PRODUCTION");
+  logger.debug("Application en mode PRODUCTION");
 } else {
-  console.log("Application en mode D\xC9VELOPPEMENT");
+  logger.debug("Application en mode D\xC9VELOPPEMENT");
 }
 
 // src/middlewares/auth.ts
+init_logger();
 var prisma2 = db;
 var authMiddleware = async (req2, res, next) => {
   const authHeader = req2.headers.authorization;
@@ -6091,7 +6136,7 @@ var authMiddleware = async (req2, res, next) => {
       where: { id: decoded.userId }
     });
     if (!user) {
-      console.error("[AUTH] Utilisateur non trouv\xE9 pour l'ID:", decoded.userId);
+      logger.error("[AUTH] Utilisateur non trouv\xE9 pour l'ID:", decoded.userId);
       return res.status(401).json({ error: "Authentification invalide" });
     }
     let organizationId = decoded.organizationId || null;
@@ -6105,7 +6150,7 @@ var authMiddleware = async (req2, res, next) => {
     if (organizationId) {
       const organization = await prisma2.organization.findUnique({ where: { id: organizationId } });
       if (!organization) {
-        console.error("[AUTH] Organisation non trouv\xE9e pour l'ID:", organizationId);
+        logger.error("[AUTH] Organisation non trouv\xE9e pour l'ID:", organizationId);
         return res.status(404).json({ error: "Organisation non trouv\xE9e" });
       }
     }
@@ -6123,7 +6168,7 @@ var authMiddleware = async (req2, res, next) => {
     };
     return next();
   } catch (error) {
-    console.error("[AUTH] Erreur de v\xE9rification du token:", error);
+    logger.error("[AUTH] Erreur de v\xE9rification du token:", error);
     return res.status(401).json({ error: "Token d'authentification invalide" });
   }
 };
@@ -6145,6 +6190,7 @@ var requireRole = (roles) => {
 
 // src/middlewares/impersonation.ts
 init_database();
+init_logger();
 var prisma3 = db;
 async function impersonationMiddleware(req2, res, next) {
   const authReq = req2;
@@ -6154,7 +6200,7 @@ async function impersonationMiddleware(req2, res, next) {
   if (!originalUser || originalUser.role !== "super_admin" || !impersonateUserId && !impersonateOrgId) {
     return next();
   }
-  console.log(
+  logger.debug(
     `[Impersonation] Middleware triggered for super_admin ${originalUser.userId}. Headers: user=${impersonateUserId}, org=${impersonateOrgId}`
   );
   try {
@@ -6167,20 +6213,20 @@ async function impersonationMiddleware(req2, res, next) {
       }
       authReq.impersonatedUser = userToImpersonate;
       authReq.impersonatedOrganizationId = impersonateOrgId;
-      console.log(
+      logger.debug(
         `[Impersonation] Stored impersonatedUser: ${authReq.impersonatedUser.id}`
       );
     } else if (impersonateOrgId) {
       authReq.impersonatedOrganizationId = impersonateOrgId;
     }
     if (authReq.impersonatedOrganizationId) {
-      console.log(
+      logger.debug(
         `[Impersonation] Stored impersonatedOrganizationId: ${authReq.impersonatedOrganizationId}`
       );
     }
     next();
   } catch (error) {
-    console.error("[Impersonation] Erreur:", error);
+    logger.error("[Impersonation] Erreur:", error);
     res.status(500).json({ error: "Une erreur est survenue durant l'usurpation." });
   }
 }
@@ -6191,6 +6237,7 @@ var import_crypto3 = require("crypto");
 // src/services/EmailService.ts
 var import_nodemailer = __toESM(require("nodemailer"), 1);
 var import_crypto = require("crypto");
+init_logger();
 var EmailService = class {
   /**
    * Convertit du HTML en texte brut (fallback anti-spam)
@@ -6273,7 +6320,7 @@ ${content}
     const smtpUser = process.env.SMTP_USER;
     const smtpPass = process.env.SMTP_PASS;
     if (!smtpHost || !smtpUser || !smtpPass) {
-      console.warn("[EmailService] \u26A0\uFE0F SMTP non configur\xE9 (SMTP_HOST, SMTP_USER, SMTP_PASS manquants)");
+      logger.warn("[EmailService] \u26A0\uFE0F SMTP non configur\xE9 (SMTP_HOST, SMTP_USER, SMTP_PASS manquants)");
       return false;
     }
     const fromAddress = process.env.SMTP_FROM || smtpUser;
@@ -6306,7 +6353,7 @@ ${content}
       });
       return true;
     } catch (error) {
-      console.error("[EmailService] \u274C Erreur SMTP:", error);
+      logger.error("[EmailService] \u274C Erreur SMTP:", error);
       return false;
     }
   }
@@ -6323,7 +6370,7 @@ ${content}
     }
     const sentViaSMTP = await this.sendViaSMTP(to, subject, body2);
     if (sentViaSMTP) return;
-    console.warn("[EmailService] \u26A0\uFE0F Aucun transport email disponible \u2014 affichage console uniquement");
+    logger.warn("[EmailService] \u26A0\uFE0F Aucun transport email disponible \u2014 affichage console uniquement");
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
     const acceptUrl = `${frontendUrl}/accept-invitation?token=${payload.token}`;
   }
@@ -6339,7 +6386,7 @@ ${content}
     }
     const sent = await this.sendViaSMTP(to, subject, html, text, attachments, { replyTo, fromName });
     if (sent) return;
-    console.error(`[EmailService] \u274C Aucun transport disponible pour envoyer \xE0 ${to}`);
+    logger.error(`[EmailService] \u274C Aucun transport disponible pour envoyer \xE0 ${to}`);
     throw new Error("Aucun transport email disponible (ni Gmail API, ni SMTP)");
   }
 };
@@ -6347,31 +6394,7 @@ var emailService = new EmailService();
 
 // src/routes/misc.ts
 init_PostalEmailService();
-
-// src/lib/logger.ts
-var IS_PROD = process.env.NODE_ENV === "production";
-var LOG_LEVEL = process.env.LOG_LEVEL || (IS_PROD ? "warn" : "debug");
-var LEVELS = { debug: 0, info: 1, warn: 2, error: 3 };
-var currentLevel = LEVELS[LOG_LEVEL] ?? LEVELS.debug;
-function shouldLog(level) {
-  return LEVELS[level] >= currentLevel;
-}
-var logger = {
-  debug: (...args) => {
-    if (shouldLog("debug")) console.log("[DEBUG]", ...args);
-  },
-  info: (...args) => {
-    if (shouldLog("info")) console.log("[INFO]", ...args);
-  },
-  warn: (...args) => {
-    if (shouldLog("warn")) console.warn("[WARN]", ...args);
-  },
-  error: (...args) => {
-    if (shouldLog("error")) console.error("[ERROR]", ...args);
-  }
-};
-
-// src/routes/misc.ts
+init_logger();
 var router = (0, import_express2.Router)();
 var ZHIIVE_ORG_ID = "zhiive-global-org";
 var ZHIIVE_USER_ROLE_ID = "zhiive-global-user-role";
@@ -7051,6 +7074,7 @@ init_database();
 var import_path = __toESM(require("path"), 1);
 var import_fs3 = __toESM(require("fs"), 1);
 init_storage();
+init_logger();
 var prisma4 = db;
 var router2 = (0, import_express3.Router)();
 var buildAvatarUrl = (_req, avatarPath) => {
@@ -7527,6 +7551,7 @@ init_database();
 var prisma_default = db;
 
 // src/middleware/auth.ts
+init_logger();
 var JWT_SECRET3 = JWT_SECRET2;
 var authenticateToken = (req2, res, next) => {
   if (req2.headers["x-test-bypass-auth"] === "1") {
@@ -7555,7 +7580,7 @@ var authenticateToken = (req2, res, next) => {
     req2.user = { ...decoded, id: decoded.userId };
     next();
   } catch (error) {
-    console.error("[AUTH] \u274C Token invalide:", error.message);
+    logger.error("[AUTH] \u274C Token invalide:", error.message);
     return res.status(401).json({ error: "Token invalide ou expir\xE9" });
   }
 };
@@ -7573,7 +7598,7 @@ var fetchFullUser = async (req2, res, next) => {
     req2.user = { ...userFromDb, ...req2.user };
     next();
   } catch (error) {
-    console.error("[MIDDLEWARE] fetchFullUser: Erreur", error);
+    logger.error("[MIDDLEWARE] fetchFullUser: Erreur", error);
     res.status(500).json({ message: "Erreur interne du serveur." });
   }
 };
@@ -7586,6 +7611,7 @@ var isAdmin = (req2, res, next) => {
 };
 
 // src/routes/modules.ts
+init_logger();
 var prisma5 = db;
 var router3 = (0, import_express4.Router)();
 router3.use(authenticateToken);
@@ -7927,6 +7953,7 @@ var modules_default = router3;
 var import_express5 = require("express");
 
 // src/middlewares/requireRole.ts
+init_logger();
 function requireRole2(roles) {
   return (req2, res, next) => {
     const authReq = req2;
@@ -7944,7 +7971,7 @@ function requireRole2(roles) {
       return;
     }
     if (!roles.includes(user.role)) {
-      console.warn(`[requireRole] Acc\xE8s refus\xE9 - R\xF4le ${user.role} non autoris\xE9 pour ${roles.join(", ")}`);
+      logger.warn(`[requireRole] Acc\xE8s refus\xE9 - R\xF4le ${user.role} non autoris\xE9 pour ${roles.join(", ")}`);
       res.status(403).json({ error: "Acc\xE8s refus\xE9" });
       return;
     }
@@ -7953,6 +7980,7 @@ function requireRole2(roles) {
 }
 
 // src/routes/admin-modules.ts
+init_logger();
 var router4 = (0, import_express5.Router)();
 router4.use(authMiddleware, impersonationMiddleware);
 router4.get("/", async (req2, res) => {
@@ -8302,6 +8330,7 @@ var admin_modules_default = router4;
 // src/routes/admin-trees.ts
 var import_express6 = require("express");
 init_database();
+init_logger();
 var router5 = (0, import_express6.Router)();
 router5.use(authMiddleware, impersonationMiddleware);
 var checkSuperAdmin = (req2) => {
@@ -8704,6 +8733,7 @@ var admin_trees_default = router5;
 // src/routes/icons.ts
 var import_express7 = require("express");
 init_database();
+init_logger();
 var prisma6 = db;
 var router6 = (0, import_express7.Router)();
 router6.use(authMiddleware, impersonationMiddleware);
@@ -8865,6 +8895,7 @@ var icons_default = router6;
 // src/routes/company.ts
 var import_express8 = require("express");
 init_database();
+init_logger();
 var router7 = (0, import_express8.Router)();
 router7.use(authMiddleware);
 router7.get("/", async (req2, res) => {
@@ -8953,6 +8984,7 @@ var import_bcryptjs4 = __toESM(require("bcryptjs"), 1);
 // src/services/GoogleWorkspaceService.ts
 var import_googleapis = require("googleapis");
 var import_google_auth_library = require("google-auth-library");
+init_logger();
 var GoogleWorkspaceService = class {
   config;
   adminClient;
@@ -8975,7 +9007,7 @@ var GoogleWorkspaceService = class {
       });
       this.adminClient = import_googleapis.google.admin({ version: "directory_v1", auth: jwtClient });
     } catch (error) {
-      console.error("[GoogleWorkspace] Erreur initialisation client:", error);
+      logger.error("[GoogleWorkspace] Erreur initialisation client:", error);
       throw new Error("Impossible d'initialiser le client Google Workspace");
     }
   }
@@ -8993,7 +9025,7 @@ var GoogleWorkspaceService = class {
         message: `Connexion r\xE9ussie au domaine ${this.config.domain}`
       };
     } catch (error) {
-      console.error("\u274C [GoogleWorkspace] Erreur test connexion:", error);
+      logger.error("\u274C [GoogleWorkspace] Erreur test connexion:", error);
       const errorMessage = error instanceof Error ? error.message : "Erreur inconnue";
       return {
         success: false,
@@ -9025,7 +9057,7 @@ var GoogleWorkspaceService = class {
         user: response.data
       };
     } catch (error) {
-      console.error("\u274C [GoogleWorkspace] Erreur cr\xE9ation utilisateur:", error);
+      logger.error("\u274C [GoogleWorkspace] Erreur cr\xE9ation utilisateur:", error);
       const errorMessage = error instanceof Error ? error.message : "Erreur inconnue";
       return {
         success: false,
@@ -9046,7 +9078,7 @@ var GoogleWorkspaceService = class {
       });
       return { success: true };
     } catch (error) {
-      console.error("\u274C [GoogleWorkspace] Erreur mise \xE0 jour mot de passe:", error);
+      logger.error("\u274C [GoogleWorkspace] Erreur mise \xE0 jour mot de passe:", error);
       const errorMessage = error instanceof Error ? error.message : "Erreur inconnue";
       return {
         success: false,
@@ -9076,7 +9108,7 @@ var GoogleWorkspaceService = class {
       });
       return response.data.users ?? [];
     } catch (error) {
-      console.error("[GoogleWorkspace] Erreur liste utilisateurs:", error);
+      logger.error("[GoogleWorkspace] Erreur liste utilisateurs:", error);
       return [];
     }
   }
@@ -9088,7 +9120,7 @@ var GoogleWorkspaceService = class {
       await this.adminClient.users.delete({ userKey: email });
       return { success: true };
     } catch (error) {
-      console.error("\u274C [GoogleWorkspace] Erreur suppression utilisateur:", error);
+      logger.error("\u274C [GoogleWorkspace] Erreur suppression utilisateur:", error);
       const errorMessage = error instanceof Error ? error.message : "Erreur inconnue";
       return {
         success: false,
@@ -9100,6 +9132,7 @@ var GoogleWorkspaceService = class {
 
 // src/services/GoogleWorkspaceIntegrationService.ts
 init_crypto();
+init_logger();
 var GoogleWorkspaceIntegrationService = class _GoogleWorkspaceIntegrationService {
   static instance = null;
   googleWorkspaceService = null;
@@ -9137,7 +9170,7 @@ var GoogleWorkspaceIntegrationService = class _GoogleWorkspaceIntegrationService
       this.isInitialized = true;
       return true;
     } catch (error) {
-      console.error("\u274C [GoogleWorkspaceIntegration] Erreur initialisation:", error);
+      logger.error("\u274C [GoogleWorkspaceIntegration] Erreur initialisation:", error);
       this.isInitialized = false;
       return false;
     }
@@ -9177,14 +9210,14 @@ var GoogleWorkspaceIntegrationService = class _GoogleWorkspaceIntegrationService
           workspaceUser: result.user
         };
       } else {
-        console.error(`\u274C [GoogleWorkspaceIntegration] \xC9chec cr\xE9ation compte pour ${crmUser.email}:`, result.error);
+        logger.error(`\u274C [GoogleWorkspaceIntegration] \xC9chec cr\xE9ation compte pour ${crmUser.email}:`, result.error);
         return {
           success: false,
           error: result.error || "Erreur inconnue lors de la cr\xE9ation du compte"
         };
       }
     } catch (error) {
-      console.error("\u274C [GoogleWorkspaceIntegration] Erreur cr\xE9ation utilisateur:", error);
+      logger.error("\u274C [GoogleWorkspaceIntegration] Erreur cr\xE9ation utilisateur:", error);
       return {
         success: false,
         error: error instanceof Error ? error.message : "Erreur inconnue"
@@ -9201,7 +9234,7 @@ var GoogleWorkspaceIntegrationService = class _GoogleWorkspaceIntegrationService
       });
       return !!config;
     } catch (error) {
-      console.error("\u274C [GoogleWorkspaceIntegration] Erreur v\xE9rification statut:", error);
+      logger.error("\u274C [GoogleWorkspaceIntegration] Erreur v\xE9rification statut:", error);
       return false;
     }
   }
@@ -9221,7 +9254,7 @@ var GoogleWorkspaceIntegrationService = class _GoogleWorkspaceIntegrationService
       }
       return await this.googleWorkspaceService.updateUserPassword(email, newPassword);
     } catch (error) {
-      console.error("\u274C [GoogleWorkspaceIntegration] Erreur mise \xE0 jour mot de passe:", error);
+      logger.error("\u274C [GoogleWorkspaceIntegration] Erreur mise \xE0 jour mot de passe:", error);
       return {
         success: false,
         error: error instanceof Error ? error.message : "Erreur inconnue"
@@ -9250,7 +9283,7 @@ var GoogleWorkspaceIntegrationService = class _GoogleWorkspaceIntegrationService
   async saveWorkspaceUserInfo(crmUserId, workspaceInfo) {
     try {
     } catch (error) {
-      console.error("\u274C [GoogleWorkspaceIntegration] Erreur sauvegarde infos Workspace:", error);
+      logger.error("\u274C [GoogleWorkspaceIntegration] Erreur sauvegarde infos Workspace:", error);
     }
   }
   /**
@@ -9259,7 +9292,7 @@ var GoogleWorkspaceIntegrationService = class _GoogleWorkspaceIntegrationService
   async sendWelcomeEmail(user, _tempPassword) {
     try {
     } catch (error) {
-      console.error("\u274C [GoogleWorkspaceIntegration] Erreur envoi email de bienvenue:", error);
+      logger.error("\u274C [GoogleWorkspaceIntegration] Erreur envoi email de bienvenue:", error);
     }
   }
 };
@@ -9273,6 +9306,7 @@ var import_uuid = require("uuid");
 var import_express9 = require("express");
 var import_web_push = __toESM(require("web-push"), 1);
 init_database();
+init_logger();
 var router8 = (0, import_express9.Router)();
 var VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "";
 var VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
@@ -9372,6 +9406,7 @@ async function sendPushToUser(userId, payload) {
 var push_default = router8;
 
 // src/services/NotificationHelper.ts
+init_logger();
 async function createNotification(payload) {
   try {
     await db.notification.create({
@@ -9403,7 +9438,7 @@ async function createNotification(payload) {
       });
     }
   } catch (err) {
-    console.error(`[NotificationHelper] Erreur cr\xE9ation notification (${payload.type}):`, err);
+    logger.error(`[NotificationHelper] Erreur cr\xE9ation notification (${payload.type}):`, err);
   }
 }
 async function notifyMultipleUsers(userIds, payload) {
@@ -9795,6 +9830,7 @@ var notify = {
 
 // src/routes/invitations.ts
 init_PostalEmailService();
+init_logger();
 var router9 = (0, import_express10.Router)();
 var publicPaths = ["/verify", "/accept"];
 router9.use((req2, res, next) => {
@@ -10500,6 +10536,7 @@ var import_client4 = require("@prisma/client");
 var import_zod2 = require("zod");
 var import_express_rate_limit = __toESM(require("express-rate-limit"), 1);
 var import_crypto5 = require("crypto");
+init_logger();
 var router10 = (0, import_express11.Router)();
 var prisma7 = db;
 var sanitizeString = (input) => {
@@ -11834,6 +11871,7 @@ var organizations_default = router10;
 // src/routes/autoGoogleAuthRoutes.ts
 var import_express12 = require("express");
 init_database();
+init_logger();
 var router11 = (0, import_express12.Router)();
 router11.get("/status", authMiddleware, async (req2, res) => {
   const { userId, organizationId } = req2.query;
@@ -11961,9 +11999,10 @@ var import_googleapis4 = require("googleapis");
 var import_googleapis2 = require("googleapis");
 init_database();
 init_crypto();
+init_logger();
 async function refreshGoogleTokenIfNeeded(organizationId, userId) {
   try {
-    console.log("[REFRESH-TOKEN] \u{1F50D} V\xE9rification token pour organisation:", organizationId, "userId:", userId);
+    logger.debug("[REFRESH-TOKEN] \u{1F50D} V\xE9rification token pour organisation:", organizationId, "userId:", userId);
     let googleToken;
     if (userId) {
       googleToken = await db.googleToken.findUnique({
@@ -11972,31 +12011,31 @@ async function refreshGoogleTokenIfNeeded(organizationId, userId) {
         }
       });
     } else {
-      console.log("[REFRESH-TOKEN] \u26A0\uFE0F userId non fourni, fallback sur findFirst");
+      logger.debug("[REFRESH-TOKEN] \u26A0\uFE0F userId non fourni, fallback sur findFirst");
       googleToken = await db.googleToken.findFirst({
         where: { organizationId }
       });
     }
     if (!googleToken) {
-      console.log("[REFRESH-TOKEN] \u274C Aucun token trouv\xE9 pour l'organisation:", organizationId);
+      logger.debug("[REFRESH-TOKEN] \u274C Aucun token trouv\xE9 pour l'organisation:", organizationId);
       return { success: false, error: "no_token_found" };
     }
-    console.log("[REFRESH-TOKEN] \u{1F4CB} Token trouv\xE9, expiration:", googleToken.expiresAt);
+    logger.debug("[REFRESH-TOKEN] \u{1F4CB} Token trouv\xE9, expiration:", googleToken.expiresAt);
     const now = /* @__PURE__ */ new Date();
     const thirtyMinutesFromNow = new Date(now.getTime() + 30 * 60 * 1e3);
     const isExpiring = googleToken.expiresAt && googleToken.expiresAt <= thirtyMinutesFromNow;
     const isExpired = googleToken.expiresAt && googleToken.expiresAt <= now;
-    console.log("[REFRESH-TOKEN] \u23F0 Maintenant:", now.toISOString());
-    console.log("[REFRESH-TOKEN] \u23F0 Token expire le:", googleToken.expiresAt?.toISOString());
-    console.log("[REFRESH-TOKEN] \u26A0\uFE0F Token expirant bient\xF4t (30min)?", isExpiring);
-    console.log("[REFRESH-TOKEN] \u274C Token d\xE9j\xE0 expir\xE9?", isExpired);
-    console.log("[REFRESH-TOKEN] \u23F0 \xC9tat du token (d\xE9lai 30min):");
-    console.log("  - Expire le:", googleToken.expiresAt);
-    console.log("  - Maintenant:", now);
-    console.log("  - Expir\xE9:", isExpired);
-    console.log("  - Expire bient\xF4t (30min):", isExpiring);
+    logger.debug("[REFRESH-TOKEN] \u23F0 Maintenant:", now.toISOString());
+    logger.debug("[REFRESH-TOKEN] \u23F0 Token expire le:", googleToken.expiresAt?.toISOString());
+    logger.debug("[REFRESH-TOKEN] \u26A0\uFE0F Token expirant bient\xF4t (30min)?", isExpiring);
+    logger.debug("[REFRESH-TOKEN] \u274C Token d\xE9j\xE0 expir\xE9?", isExpired);
+    logger.debug("[REFRESH-TOKEN] \u23F0 \xC9tat du token (d\xE9lai 30min):");
+    logger.debug("  - Expire le:", googleToken.expiresAt);
+    logger.debug("  - Maintenant:", now);
+    logger.debug("  - Expir\xE9:", isExpired);
+    logger.debug("  - Expire bient\xF4t (30min):", isExpiring);
     if (!isExpiring && !isExpired) {
-      console.log("[REFRESH-TOKEN] \u2705 Token encore valide (plus de 30min), pas de refresh n\xE9cessaire");
+      logger.debug("[REFRESH-TOKEN] \u2705 Token encore valide (plus de 30min), pas de refresh n\xE9cessaire");
       return {
         success: true,
         accessToken: googleToken.accessToken,
@@ -12005,43 +12044,43 @@ async function refreshGoogleTokenIfNeeded(organizationId, userId) {
       };
     }
     if (!googleToken.refreshToken) {
-      console.log("[REFRESH-TOKEN] \u274C Token expir\xE9 mais pas de refresh token disponible");
+      logger.debug("[REFRESH-TOKEN] \u274C Token expir\xE9 mais pas de refresh token disponible");
       return { success: false, error: "no_refresh_token" };
     }
-    console.log("[REFRESH-TOKEN] \u{1F504} Token expir\xE9/expirant (moins de 30min), tentative de refresh...");
+    logger.debug("[REFRESH-TOKEN] \u{1F504} Token expir\xE9/expirant (moins de 30min), tentative de refresh...");
     const googleConfig = await db.googleWorkspaceConfig.findUnique({
       where: { organizationId }
     });
     if (!googleConfig || !googleConfig.clientId || !googleConfig.clientSecret) {
-      console.log("[REFRESH-TOKEN] \u274C Configuration OAuth manquante pour l'organisation:", organizationId);
-      console.log("[REFRESH-TOKEN] \u{1F4CB} Config trouv\xE9e:", !!googleConfig);
+      logger.debug("[REFRESH-TOKEN] \u274C Configuration OAuth manquante pour l'organisation:", organizationId);
+      logger.debug("[REFRESH-TOKEN] \u{1F4CB} Config trouv\xE9e:", !!googleConfig);
       if (googleConfig) {
-        console.log("[REFRESH-TOKEN] \u{1F4CB} ClientId pr\xE9sent:", !!googleConfig.clientId);
-        console.log("[REFRESH-TOKEN] \u{1F4CB} ClientSecret pr\xE9sent:", !!googleConfig.clientSecret);
+        logger.debug("[REFRESH-TOKEN] \u{1F4CB} ClientId pr\xE9sent:", !!googleConfig.clientId);
+        logger.debug("[REFRESH-TOKEN] \u{1F4CB} ClientSecret pr\xE9sent:", !!googleConfig.clientSecret);
       }
       return { success: false, error: "missing_oauth_config" };
     }
-    console.log("[REFRESH-TOKEN] \u{1F527} Configuration OAuth client...");
+    logger.debug("[REFRESH-TOKEN] \u{1F527} Configuration OAuth client...");
     const clientId = googleConfig.clientId ? decrypt(googleConfig.clientId) : null;
     const clientSecret = googleConfig.clientSecret ? decrypt(googleConfig.clientSecret) : null;
     if (!clientId || !clientSecret) {
-      console.log("[REFRESH-TOKEN] \u274C Configuration OAuth manquante/invalide (apr\xE8s d\xE9chiffrement)");
+      logger.debug("[REFRESH-TOKEN] \u274C Configuration OAuth manquante/invalide (apr\xE8s d\xE9chiffrement)");
       return { success: false, error: "missing_oauth_config" };
     }
     const oauth2Client = new import_googleapis2.google.auth.OAuth2(clientId, clientSecret);
-    console.log("[REFRESH-TOKEN] \u{1F511} Configuration des credentials...");
+    logger.debug("[REFRESH-TOKEN] \u{1F511} Configuration des credentials...");
     oauth2Client.setCredentials({
       refresh_token: googleToken.refreshToken || void 0
     });
     try {
-      console.log("[REFRESH-TOKEN] \u{1F680} Tentative de refresh du token...");
+      logger.debug("[REFRESH-TOKEN] \u{1F680} Tentative de refresh du token...");
       const { credentials } = await oauth2Client.refreshAccessToken();
-      console.log("[REFRESH-TOKEN] \u2705 Refresh r\xE9ussi!");
-      console.log("[REFRESH-TOKEN] \u{1F4CB} Nouveau token expire le:", new Date(credentials.expiry_date || 0));
-      console.log("[REFRESH-TOKEN] \u{1F4CB} Token re\xE7u:", !!credentials.access_token);
-      console.log("[REFRESH-TOKEN] \u{1F4CB} Nouveau refresh token re\xE7u:", !!credentials.refresh_token);
+      logger.debug("[REFRESH-TOKEN] \u2705 Refresh r\xE9ussi!");
+      logger.debug("[REFRESH-TOKEN] \u{1F4CB} Nouveau token expire le:", new Date(credentials.expiry_date || 0));
+      logger.debug("[REFRESH-TOKEN] \u{1F4CB} Token re\xE7u:", !!credentials.access_token);
+      logger.debug("[REFRESH-TOKEN] \u{1F4CB} Nouveau refresh token re\xE7u:", !!credentials.refresh_token);
       const newExpiresAt = credentials.expiry_date ? new Date(credentials.expiry_date) : null;
-      console.log("[REFRESH-TOKEN] \u{1F4BE} Sauvegarde du nouveau token...");
+      logger.debug("[REFRESH-TOKEN] \u{1F4BE} Sauvegarde du nouveau token...");
       if (userId) {
         await db.googleToken.update({
           where: {
@@ -12074,7 +12113,7 @@ async function refreshGoogleTokenIfNeeded(organizationId, userId) {
           }
         });
       }
-      console.log("[REFRESH-TOKEN] \u{1F4BE} Token mis \xE0 jour en base de donn\xE9es");
+      logger.debug("[REFRESH-TOKEN] \u{1F4BE} Token mis \xE0 jour en base de donn\xE9es");
       return {
         success: true,
         accessToken: credentials.access_token,
@@ -12082,24 +12121,24 @@ async function refreshGoogleTokenIfNeeded(organizationId, userId) {
         expiresAt: newExpiresAt
       };
     } catch (refreshError) {
-      console.error("[REFRESH-TOKEN] \u274C Erreur lors du refresh:", refreshError);
+      logger.error("[REFRESH-TOKEN] \u274C Erreur lors du refresh:", refreshError);
       const errorMessage = refreshError instanceof Error ? refreshError.message : String(refreshError);
-      console.log("[REFRESH-TOKEN] \u{1F50D} Message d'erreur:", errorMessage);
+      logger.debug("[REFRESH-TOKEN] \u{1F50D} Message d'erreur:", errorMessage);
       if (errorMessage.includes("invalid_grant")) {
-        console.log("[REFRESH-TOKEN] \u{1F6A8} Refresh token invalide ou r\xE9voqu\xE9");
+        logger.debug("[REFRESH-TOKEN] \u{1F6A8} Refresh token invalide ou r\xE9voqu\xE9");
         return { success: false, error: "invalid_refresh_token" };
       } else if (errorMessage.includes("invalid_client")) {
-        console.log("[REFRESH-TOKEN] \u{1F6A8} Configuration OAuth invalide");
+        logger.debug("[REFRESH-TOKEN] \u{1F6A8} Configuration OAuth invalide");
         return { success: false, error: "invalid_oauth_config" };
       } else {
-        console.log("[REFRESH-TOKEN] \u{1F6A8} Erreur g\xE9n\xE9rique:", errorMessage);
+        logger.debug("[REFRESH-TOKEN] \u{1F6A8} Erreur g\xE9n\xE9rique:", errorMessage);
         return { success: false, error: "refresh_failed" };
       }
     }
   } catch (error) {
-    console.error("[REFRESH-TOKEN] \u274C Erreur g\xE9n\xE9rale dans refreshGoogleTokenIfNeeded:", error);
+    logger.error("[REFRESH-TOKEN] \u274C Erreur g\xE9n\xE9rale dans refreshGoogleTokenIfNeeded:", error);
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.log("[REFRESH-TOKEN] \u{1F50D} D\xE9tails de l'erreur g\xE9n\xE9rale:", errorMessage);
+    logger.debug("[REFRESH-TOKEN] \u{1F50D} D\xE9tails de l'erreur g\xE9n\xE9rale:", errorMessage);
     return { success: false, error: "general_error" };
   }
 }
@@ -12111,6 +12150,7 @@ init_GoogleOAuthCore();
 var import_winston = __toESM(require("winston"), 1);
 var import_winston_daily_rotate_file = __toESM(require("winston-daily-rotate-file"), 1);
 var import_path2 = __toESM(require("path"), 1);
+init_logger();
 var isProduction3 = process.env.NODE_ENV === "production";
 var transports = [
   // Console pour tous les environnements
@@ -12205,7 +12245,7 @@ function logSecurityEvent(eventType, details, level = "info") {
   };
   securityLogger[level](`SECURITY_EVENT: ${eventType}`, securityEvent);
   if (level === "error" || eventType.includes("ATTACK") || eventType.includes("BREACH")) {
-    console.error(`\u{1F6A8} ALERTE S\xC9CURIT\xC9: ${eventType}`, securityEvent);
+    logger.error(`\u{1F6A8} ALERTE S\xC9CURIT\xC9: ${eventType}`, securityEvent);
   }
 }
 var securityMetrics = {
@@ -12216,6 +12256,7 @@ var securityMetrics = {
 };
 
 // src/routes/google-auth.ts
+init_logger();
 var router12 = (0, import_express13.Router)();
 var GOOGLE_SCOPES = GOOGLE_SCOPES_LIST.join(" ");
 function getFrontendUrl() {
@@ -12949,6 +12990,7 @@ init_database();
 var import_zod3 = require("zod");
 init_crypto();
 var import_nanoid = require("nanoid");
+init_logger();
 var router13 = (0, import_express14.Router)();
 var prisma8 = db;
 router13.use(authMiddleware);
@@ -13498,6 +13540,7 @@ var adaptBlockStructure = (block) => {
 };
 
 // src/routes/blocks.ts
+init_logger();
 var router14 = (0, import_express15.Router)();
 router14.use(authMiddleware, impersonationMiddleware);
 async function ensureSectionTypeColumnExists() {
@@ -13859,6 +13902,7 @@ var import_express16 = require("express");
 
 // src/services/UniversalNotificationService.ts
 var import_events = require("events");
+init_logger();
 var NOTIFICATION_CONFIG = {
   NEW_EMAIL: { icon: "\u{1F4E7}", color: "#1890ff", sound: "email.wav" },
   NEW_LEAD: { icon: "\u{1F465}", color: "#52c41a", sound: "success.wav" },
@@ -13891,26 +13935,26 @@ var UniversalNotificationService = class _UniversalNotificationService extends i
    */
   start() {
     if (this.isRunning) {
-      console.log("\u26A0\uFE0F [UniversalNotification] Service d\xE9j\xE0 en cours...");
+      logger.debug("\u26A0\uFE0F [UniversalNotification] Service d\xE9j\xE0 en cours...");
       return;
     }
-    console.log("\u{1F31F} [UniversalNotification] D\xE9marrage du service UNIVERSEL de notifications...");
+    logger.debug("\u{1F31F} [UniversalNotification] D\xE9marrage du service UNIVERSEL de notifications...");
     this.isRunning = true;
     this.startPeriodicChecks();
     this.emit("service-started");
-    console.log("\u2705 [UniversalNotification] Service universel d\xE9marr\xE9 avec succ\xE8s");
+    logger.debug("\u2705 [UniversalNotification] Service universel d\xE9marr\xE9 avec succ\xE8s");
   }
   /**
    * 🛑 ARRÊTER LE SERVICE
    */
   stop() {
-    console.log("\u{1F6D1} [UniversalNotification] Arr\xEAt du service...");
+    logger.debug("\u{1F6D1} [UniversalNotification] Arr\xEAt du service...");
     if (this.checkInterval) {
       clearInterval(this.checkInterval);
     }
     this.isRunning = false;
     this.emit("service-stopped");
-    console.log("\u2705 [UniversalNotification] Service arr\xEAt\xE9");
+    logger.debug("\u2705 [UniversalNotification] Service arr\xEAt\xE9");
   }
   /**
    * � OBTENIR L'ÉTAT COURANT DU SERVICE
@@ -13928,7 +13972,7 @@ var UniversalNotificationService = class _UniversalNotificationService extends i
   async createNotification(data) {
     try {
       const config = NOTIFICATION_CONFIG[data.type];
-      console.log(`\u{1F514} [UniversalNotification] Cr\xE9ation notification: ${data.type} - ${data.title}`);
+      logger.debug(`\u{1F514} [UniversalNotification] Cr\xE9ation notification: ${data.type} - ${data.title}`);
       const notification = await db.notification.create({
         data: {
           organizationId: data.organizationId,
@@ -13960,9 +14004,9 @@ var UniversalNotificationService = class _UniversalNotificationService extends i
         priority: data.priority,
         config
       });
-      console.log(`\u2705 [UniversalNotification] Notification cr\xE9\xE9e: ${notification.id}`);
+      logger.debug(`\u2705 [UniversalNotification] Notification cr\xE9\xE9e: ${notification.id}`);
     } catch (error) {
-      console.error("\u274C [UniversalNotification] Erreur cr\xE9ation notification:", error);
+      logger.error("\u274C [UniversalNotification] Erreur cr\xE9ation notification:", error);
       throw error;
     }
   }
@@ -14078,7 +14122,7 @@ var UniversalNotificationService = class _UniversalNotificationService extends i
    * 🔄 VÉRIFICATIONS PÉRIODIQUES (toutes les 2 minutes)
    */
   startPeriodicChecks() {
-    console.log("\u{1F504} [UniversalNotification] D\xE9marrage v\xE9rifications p\xE9riodiques...");
+    logger.debug("\u{1F504} [UniversalNotification] D\xE9marrage v\xE9rifications p\xE9riodiques...");
     this.checkInterval = setInterval(async () => {
       try {
         await this.checkForUpcomingMeetings();
@@ -14086,7 +14130,7 @@ var UniversalNotificationService = class _UniversalNotificationService extends i
         await this.checkForExpiringContracts();
         await this.cleanExpiredNotifications();
       } catch (error) {
-        console.error("\u274C [UniversalNotification] Erreur v\xE9rification p\xE9riodique:", error);
+        logger.error("\u274C [UniversalNotification] Erreur v\xE9rification p\xE9riodique:", error);
       }
     }, 2 * 60 * 1e3);
   }
@@ -14096,7 +14140,7 @@ var UniversalNotificationService = class _UniversalNotificationService extends i
   async checkForUpcomingMeetings() {
     const now = /* @__PURE__ */ new Date();
     const fifteenMinutesFromNow = new Date(now.getTime() + 15 * 60 * 1e3);
-    console.log(
+    logger.debug(
       `\u{1F4C5} [UniversalNotification] V\xE9rification des rendez-vous entre ${now.toISOString()} et ${fifteenMinutesFromNow.toISOString()}...`
     );
   }
@@ -14104,13 +14148,13 @@ var UniversalNotificationService = class _UniversalNotificationService extends i
    * ⏰ VÉRIFIER LES TÂCHES EN RETARD
    */
   async checkForOverdueTasks() {
-    console.log("\u23F0 [UniversalNotification] V\xE9rification des t\xE2ches en retard...");
+    logger.debug("\u23F0 [UniversalNotification] V\xE9rification des t\xE2ches en retard...");
   }
   /**
    * 📄 VÉRIFIER LES CONTRATS EXPIRANTS
    */
   async checkForExpiringContracts() {
-    console.log("\u{1F4C4} [UniversalNotification] V\xE9rification des contrats expirants...");
+    logger.debug("\u{1F4C4} [UniversalNotification] V\xE9rification des contrats expirants...");
   }
   /**
    * 🧹 NETTOYER LES NOTIFICATIONS EXPIRÉES
@@ -14125,10 +14169,10 @@ var UniversalNotificationService = class _UniversalNotificationService extends i
         }
       });
       if (result.count > 0) {
-        console.log(`\u{1F9F9} [UniversalNotification] ${result.count} notifications expir\xE9es supprim\xE9es`);
+        logger.debug(`\u{1F9F9} [UniversalNotification] ${result.count} notifications expir\xE9es supprim\xE9es`);
       }
     } catch (error) {
-      console.error("\u274C [UniversalNotification] Erreur nettoyage notifications expir\xE9es:", error);
+      logger.error("\u274C [UniversalNotification] Erreur nettoyage notifications expir\xE9es:", error);
     }
   }
   /**
@@ -14159,7 +14203,7 @@ var UniversalNotificationService = class _UniversalNotificationService extends i
         }, {})
       };
     } catch (error) {
-      console.error("\u274C [UniversalNotification] Erreur stats:", error);
+      logger.error("\u274C [UniversalNotification] Erreur stats:", error);
       return { total: 0, byType: {}, byStatus: {} };
     }
   }
@@ -14168,6 +14212,7 @@ var UniversalNotificationService_default = UniversalNotificationService;
 
 // src/services/GoogleGeminiService.ts
 var import_generative_ai = require("@google/generative-ai");
+init_logger();
 var GoogleGeminiService = class {
   isDemoMode;
   apiKey;
@@ -14279,10 +14324,10 @@ Je peux proposer: planifier un RDV, analyser un lead, g\xE9n\xE9rer un email ou 
           model: result.modelUsed
         };
       }
-      console.warn("\u26A0\uFE0F Erreur API Gemini, fallback vers d\xE9mo");
+      logger.warn("\u26A0\uFE0F Erreur API Gemini, fallback vers d\xE9mo");
       return { ...this.generateDemoEmail(leadData, emailType), model: "demo" };
     } catch (error) {
-      console.error("\u274C Erreur g\xE9n\xE9ration email:", error);
+      logger.error("\u274C Erreur g\xE9n\xE9ration email:", error);
       return { success: false, error: error.message };
     }
   }
@@ -14297,7 +14342,7 @@ Je peux proposer: planifier un RDV, analyser un lead, g\xE9n\xE9rer un email ou 
       }
       return { success: false, error: "Vertex AI non configur\xE9" };
     } catch (error) {
-      console.error("\u274C Erreur analyse lead:", error);
+      logger.error("\u274C Erreur analyse lead:", error);
       return { success: false, error: error.message };
     }
   }
@@ -14312,7 +14357,7 @@ Je peux proposer: planifier un RDV, analyser un lead, g\xE9n\xE9rer un email ou 
       }
       return { success: false, error: "Vertex AI non configur\xE9" };
     } catch (error) {
-      console.error("\u274C Erreur g\xE9n\xE9ration proposition:", error);
+      logger.error("\u274C Erreur g\xE9n\xE9ration proposition:", error);
       return { success: false, error: error.message };
     }
   }
@@ -14327,7 +14372,7 @@ Je peux proposer: planifier un RDV, analyser un lead, g\xE9n\xE9rer un email ou 
       }
       return { success: false, error: "Vertex AI non configur\xE9" };
     } catch (error) {
-      console.error("\u274C Erreur analyse sentiment:", error);
+      logger.error("\u274C Erreur analyse sentiment:", error);
       return { success: false, error: error.message };
     }
   }
@@ -14342,7 +14387,7 @@ Je peux proposer: planifier un RDV, analyser un lead, g\xE9n\xE9rer un email ou 
       }
       return { success: false, error: "Vertex AI non configur\xE9" };
     } catch (error) {
-      console.error("\u274C Erreur suggestion email:", error);
+      logger.error("\u274C Erreur suggestion email:", error);
       return { success: false, error: error.message };
     }
   }
@@ -14599,7 +14644,7 @@ Bien \xE0 vous`;
         return this.generateDemoImageMeasures(measureKeys);
       }
       if (this.degradedUntil && Date.now() < this.degradedUntil) {
-        console.warn("\u26A0\uFE0F [Gemini Vision] Circuit breaker actif, retour mode d\xE9mo");
+        logger.warn("\u26A0\uFE0F [Gemini Vision] Circuit breaker actif, retour mode d\xE9mo");
         return {
           ...this.generateDemoImageMeasures(measureKeys),
           error: this.lastError || "circuit-breaker-active"
@@ -14618,14 +14663,14 @@ Bien \xE0 vous`;
         };
       }
       this.recordFailure(result.error || "unknown-vision-error");
-      console.warn("\u26A0\uFE0F [Gemini Vision] Erreur API, fallback vers d\xE9mo");
+      logger.warn("\u26A0\uFE0F [Gemini Vision] Erreur API, fallback vers d\xE9mo");
       return {
         ...this.generateDemoImageMeasures(measureKeys),
         error: result.error
       };
     } catch (error) {
       const msg = error.message;
-      console.error("\u274C [Gemini Vision] Erreur:", msg);
+      logger.error("\u274C [Gemini Vision] Erreur:", msg);
       this.recordFailure(msg);
       return {
         success: false,
@@ -14639,7 +14684,7 @@ Bien \xE0 vous`;
   async callVisionAPI(imageBase64, mimeType, prompt) {
     try {
       if (!this.genAI) {
-        console.error("\u274C [Gemini Vision] genAI non initialis\xE9 \u2014 cl\xE9 API manquante ?");
+        logger.error("\u274C [Gemini Vision] genAI non initialis\xE9 \u2014 cl\xE9 API manquante ?");
         return { success: false, error: "API Gemini non initialis\xE9e (cl\xE9 API manquante)", modelUsed: this.primaryModelName };
       }
       const visionModelName = this.primaryModelName;
@@ -14668,21 +14713,21 @@ Bien \xE0 vous`;
       const response = await result.response;
       const finishReason = response.candidates?.[0]?.finishReason;
       if (finishReason === "SAFETY") {
-        console.warn("\u26A0\uFE0F [Gemini Vision] Bloqu\xE9 par safety filter:", JSON.stringify(response.candidates[0].safetyRatings));
+        logger.warn("\u26A0\uFE0F [Gemini Vision] Bloqu\xE9 par safety filter:", JSON.stringify(response.candidates[0].safetyRatings));
         return { success: false, error: "Image bloqu\xE9e par les filtres de s\xE9curit\xE9", modelUsed: visionModelName };
       }
       if (finishReason === "MAX_TOKENS") {
-        console.warn("\u26A0\uFE0F [Gemini Vision] R\xE9ponse tronqu\xE9e (MAX_TOKENS) \u2014 augmenter maxOutputTokens");
+        logger.warn("\u26A0\uFE0F [Gemini Vision] R\xE9ponse tronqu\xE9e (MAX_TOKENS) \u2014 augmenter maxOutputTokens");
       }
       const text = response.text();
       if (!text || text.trim().length === 0) {
-        console.warn("\u26A0\uFE0F [Gemini Vision] R\xE9ponse vide");
+        logger.warn("\u26A0\uFE0F [Gemini Vision] R\xE9ponse vide");
         return { success: false, error: "R\xE9ponse vide de Gemini", modelUsed: visionModelName };
       }
       return { success: true, content: text, modelUsed: visionModelName };
     } catch (error) {
       const errMsg = error?.message || String(error);
-      console.error("\u274C [Gemini Vision API] Erreur:", errMsg);
+      logger.error("\u274C [Gemini Vision API] Erreur:", errMsg);
       if (this.fallbackModelNames.length > 0 && !errMsg.includes("API key")) {
         const fallback = this.fallbackModelNames[0];
         try {
@@ -14704,7 +14749,7 @@ Bien \xE0 vous`;
             return { success: true, content: t2, modelUsed: fallback };
           }
         } catch (e2) {
-          console.error(`\u274C [Gemini Vision] Fallback ${fallback} \xE9chou\xE9:`, e2?.message);
+          logger.error(`\u274C [Gemini Vision] Fallback ${fallback} \xE9chou\xE9:`, e2?.message);
         }
       }
       return { success: false, error: errMsg, modelUsed: this.primaryModelName };
@@ -14752,7 +14797,7 @@ Analyse maintenant cette image et ESTIME toutes les dimensions:`;
     try {
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
-        console.warn("\u26A0\uFE0F [Gemini Vision] Pas de JSON trouv\xE9 dans la r\xE9ponse");
+        logger.warn("\u26A0\uFE0F [Gemini Vision] Pas de JSON trouv\xE9 dans la r\xE9ponse");
         return this.createEmptyMeasurements(measureKeys);
       }
       const parsed = JSON.parse(jsonMatch[0]);
@@ -14766,7 +14811,7 @@ Analyse maintenant cette image et ESTIME toutes les dimensions:`;
       }
       return measurements;
     } catch (error) {
-      console.warn("\u26A0\uFE0F [Gemini Vision] Erreur parsing JSON:", error);
+      logger.warn("\u26A0\uFE0F [Gemini Vision] Erreur parsing JSON:", error);
       return this.createEmptyMeasurements(measureKeys);
     }
   }
@@ -14821,12 +14866,12 @@ Analyse maintenant cette image et ESTIME toutes les dimensions:`;
       const result = await this.callGeminiAPIWithRetries(prompt, candidate);
       if (result.success) {
         if (candidate !== this.primaryModelName) {
-          console.warn(`\u21AA\uFE0F  [Gemini API] Bascul\xE9 sur le mod\xE8le de secours ${candidate}`);
+          logger.warn(`\u21AA\uFE0F  [Gemini API] Bascul\xE9 sur le mod\xE8le de secours ${candidate}`);
         }
         return result;
       }
       lastError = result.error;
-      console.warn(`\u26A0\uFE0F [Gemini API] \xC9chec avec ${candidate}: ${lastError || "erreur inconnue"}`);
+      logger.warn(`\u26A0\uFE0F [Gemini API] \xC9chec avec ${candidate}: ${lastError || "erreur inconnue"}`);
     }
     return {
       success: false,
@@ -14845,7 +14890,7 @@ Analyse maintenant cette image et ESTIME toutes les dimensions:`;
       const text = response.text();
       return { success: true, content: text, modelUsed: modelName };
     } catch (error) {
-      console.error("\u274C [Gemini API] Erreur:", error);
+      logger.error("\u274C [Gemini API] Erreur:", error);
       return { success: false, error: error.message, modelUsed: modelName };
     }
   }
@@ -14957,7 +15002,7 @@ L'email doit \xEAtre en fran\xE7ais et adapt\xE9 au march\xE9 belge.`;
         tone: this.extractFromContent(content, "tone", "professionnel")
       };
     } catch (error) {
-      console.warn("\u26A0\uFE0F Erreur parsing r\xE9ponse Gemini:", error);
+      logger.warn("\u26A0\uFE0F Erreur parsing r\xE9ponse Gemini:", error);
       return {
         subject: "Email g\xE9n\xE9r\xE9 par IA",
         body: content,
@@ -14980,6 +15025,7 @@ function getGeminiService() {
 }
 
 // src/routes/notifications.ts
+init_logger();
 var router15 = (0, import_express16.Router)();
 router15.use(authMiddleware);
 router15.get("/", async (req2, res) => {
@@ -15368,6 +15414,7 @@ var notifications_default = router15;
 
 // src/routes/notificationSystemRoutes.ts
 var import_express17 = require("express");
+init_logger();
 var router16 = (0, import_express17.Router)();
 router16.use(authMiddleware);
 router16.get("/status", async (req2, res) => {
@@ -15498,6 +15545,7 @@ var notificationSystemRoutes_default = router16;
 
 // src/routes/settingsRoutes.ts
 var import_express18 = require("express");
+init_logger();
 var router17 = (0, import_express18.Router)();
 router17.use(authMiddleware);
 router17.get("/lead-statuses", async (req2, res) => {
@@ -16695,6 +16743,7 @@ async function generateFormResponsePdf(data) {
 
 // src/routes/leadsRoutes.ts
 init_storage();
+init_logger();
 var router18 = (0, import_express19.Router)();
 router18.use(authMiddleware);
 router18.get("/", async (req2, res) => {
@@ -17393,6 +17442,7 @@ init_database();
 
 // src/middleware/chantierPermission.ts
 init_database();
+init_logger();
 var CHANTIERS_MODULE_ID = "module-chantiers-87ba0db4-2eb9-4096-8bbb-2259da444c2e";
 async function resolveChantierScope(user, organizationId, action) {
   if (user.isSuperAdmin || user.role === "super_admin" || user.role === "admin") {
@@ -17470,7 +17520,7 @@ function requireChantierAction(...actions) {
         }
       });
       if (!perm) {
-        console.log(`[ChantierPerm] \u{1F512} Permission refus\xE9e: user=${user.id}, actions=${actions.join(",")}, role=${userOrg.roleId}`);
+        logger.debug(`[ChantierPerm] \u{1F512} Permission refus\xE9e: user=${user.id}, actions=${actions.join(",")}, role=${userOrg.roleId}`);
         return res.status(403).json({ success: false, message: `Permission refus\xE9e: action ${actions.join("/")} requise` });
       }
       const resolved = await resolveChantierScope(user, organizationId, actions[0]);
@@ -17478,7 +17528,7 @@ function requireChantierAction(...actions) {
       req2.chantierTechIds = resolved.technicianIds;
       next();
     } catch (error) {
-      console.error("[ChantierPerm] Erreur v\xE9rification permission:", error);
+      logger.error("[ChantierPerm] Erreur v\xE9rification permission:", error);
       return res.status(500).json({ success: false, message: "Erreur v\xE9rification permission" });
     }
   };
@@ -17773,6 +17823,7 @@ async function getOrgSocialSettings(orgId) {
 }
 
 // src/services/business-auto-post.ts
+init_logger();
 var EVENT_SETTING_MAP = {
   devis_signed: "autoPostOnDevisSigned",
   invoice_paid: "autoPostOnInvoicePaid",
@@ -17822,7 +17873,7 @@ ${extraContent || `Bonjour${clientName ? " " + clientName : ""}, votre ${entityL
       });
       postIds.push(clientPost.id);
     } catch (err) {
-      console.error(`[AUTO-POST] Error creating CLIENT post for ${eventType}:`, err);
+      logger.error(`[AUTO-POST] Error creating CLIENT post for ${eventType}:`, err);
     }
   }
   try {
@@ -17844,7 +17895,7 @@ ${extraContent}` : ""}`,
     });
     postIds.push(internalPost.id);
   } catch (err) {
-    console.error(`[AUTO-POST] Error creating IN post for ${eventType}:`, err);
+    logger.error(`[AUTO-POST] Error creating IN post for ${eventType}:`, err);
   }
   try {
     const publicPost = await db.wallPost.create({
@@ -17865,7 +17916,7 @@ ${extraContent || `Encore un beau projet r\xE9alis\xE9 par notre Colony !`}`,
     });
     postIds.push(publicPost.id);
   } catch (err) {
-    console.error(`[AUTO-POST] Error creating ALL post for ${eventType}:`, err);
+    logger.error(`[AUTO-POST] Error creating ALL post for ${eventType}:`, err);
   }
   try {
     const orgMembers = await db.user.findMany({
@@ -17888,13 +17939,14 @@ ${extraContent || `Encore un beau projet r\xE9alis\xE9 par notre Colony !`}`,
       });
     }
   } catch (err) {
-    console.error(`[AUTO-POST] Error sending push for ${eventType}:`, err);
+    logger.error(`[AUTO-POST] Error sending push for ${eventType}:`, err);
   }
-  console.log(`[AUTO-POST] Created ${postIds.length} posts for ${eventType} (${entityLabel})`);
+  logger.debug(`[AUTO-POST] Created ${postIds.length} posts for ${eventType} (${entityLabel})`);
   return { created: postIds.length, postIds };
 }
 
 // src/routes/chantier-workflow.ts
+init_logger();
 async function createChantierNotifWithPush(args) {
   const notif = await db.notification.create(args);
   const d = args.data;
@@ -20477,6 +20529,7 @@ var chantier_workflow_default = router19;
 
 // src/routes/chantiersRoutes.ts
 init_storage();
+init_logger();
 var router20 = (0, import_express21.Router)();
 var createChantierSchema = import_zod5.z.object({
   leadId: import_zod5.z.string().optional(),
@@ -21802,6 +21855,7 @@ var chantiersRoutes_default = router20;
 var import_express22 = require("express");
 init_database();
 var import_zod6 = require("zod");
+init_logger();
 var router21 = (0, import_express22.Router)();
 var chantierStatusSchema = import_zod6.z.object({
   name: import_zod6.z.string().min(1, "Le nom est requis"),
@@ -22376,6 +22430,7 @@ function calculateVerticalCenterOffset(actualHeight, textHeight) {
 }
 
 // src/services/documentPdfRenderer.ts
+init_logger();
 var DEFAULT_THEME = {
   primaryColor: "#1890ff",
   secondaryColor: "#52c41a",
@@ -22490,13 +22545,13 @@ var DocumentPdfRenderer = class {
       }
       this.currentY += 20;
     }
-    console.log("\u{1F4C4} [PDF RENDERER] V\xE9rification tblData:", {
+    logger.debug("\u{1F4C4} [PDF RENDERER] V\xE9rification tblData:", {
       hasTblData: !!this.ctx.tblData,
       tblDataKeys: Object.keys(this.ctx.tblData || {}),
       keysCount: Object.keys(this.ctx.tblData || {}).length
     });
     if (this.ctx.tblData && Object.keys(this.ctx.tblData).length > 0) {
-      console.log("\u{1F4C4} [PDF RENDERER] \u2705 Rendu des donn\xE9es TBL...");
+      logger.debug("\u{1F4C4} [PDF RENDERER] \u2705 Rendu des donn\xE9es TBL...");
       this.doc.fillColor(this.theme.primaryColor || "#1890ff").fontSize(this.scaleFontSize(16)).font("Helvetica-Bold").text("\u{1F4CA} Donn\xE9es du formulaire", this.margin, this.currentY);
       this.currentY += 25;
       this.doc.fillColor(this.theme.textColor || "#333333").fontSize(this.scaleFontSize(10)).font("Helvetica");
@@ -22630,23 +22685,23 @@ var DocumentPdfRenderer = class {
             const buf = Buffer.from(await resp.arrayBuffer());
             fs6.writeFileSync(cachePath, buf);
             this.emojiPngCache.set(emoji, cachePath);
-            console.log(`\u{1F4C4} [PDF] Emoji ${emoji} \u2192 ${hex}.png (${buf.length}B)`);
+            logger.debug(`\u{1F4C4} [PDF] Emoji ${emoji} \u2192 ${hex}.png (${buf.length}B)`);
             return;
           }
         } catch {
         }
       }
-      console.warn(`\u{1F4C4} [PDF] Emoji non trouv\xE9 sur Twemoji: ${emoji} (${hex})`);
+      logger.warn(`\u{1F4C4} [PDF] Emoji non trouv\xE9 sur Twemoji: ${emoji} (${hex})`);
     });
     await Promise.all(downloadPromises);
     if (this.emojiPngCache.size > 0) {
-      console.log(`\u{1F4C4} [PDF] ${this.emojiPngCache.size} emojis KPI pr\xE9-charg\xE9s`);
+      logger.debug(`\u{1F4C4} [PDF] ${this.emojiPngCache.size} emojis KPI pr\xE9-charg\xE9s`);
     }
   }
   async preloadImages() {
     const urls = this.collectImageUrls();
     if (urls.length === 0) return;
-    console.log(`\u{1F4C4} [PDF] Pr\xE9-chargement de ${urls.length} images externes...`);
+    logger.debug(`\u{1F4C4} [PDF] Pr\xE9-chargement de ${urls.length} images externes...`);
     const fetchPromises = urls.map(async (url) => {
       try {
         const response = await fetch(url, {
@@ -22654,19 +22709,19 @@ var DocumentPdfRenderer = class {
           // Timeout 10s
         });
         if (!response.ok) {
-          console.warn(`\u{1F4C4} [PDF] Image non accessible: ${url} (${response.status})`);
+          logger.warn(`\u{1F4C4} [PDF] Image non accessible: ${url} (${response.status})`);
           return;
         }
         const arrayBuffer = await response.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
         this.imageCache.set(url, buffer);
-        console.log(`\u{1F4C4} [PDF] \u2705 Image charg\xE9e: ${url.substring(0, 60)}...`);
+        logger.debug(`\u{1F4C4} [PDF] \u2705 Image charg\xE9e: ${url.substring(0, 60)}...`);
       } catch (error) {
-        console.warn(`\u{1F4C4} [PDF] \xC9chec chargement image: ${url}`, error);
+        logger.warn(`\u{1F4C4} [PDF] \xC9chec chargement image: ${url}`, error);
       }
     });
     await Promise.all(fetchPromises);
-    console.log(`\u{1F4C4} [PDF] ${this.imageCache.size}/${urls.length} images pr\xE9-charg\xE9es`);
+    logger.debug(`\u{1F4C4} [PDF] ${this.imageCache.size}/${urls.length} images pr\xE9-charg\xE9es`);
   }
   /**
    * Génère le PDF complet
@@ -22682,7 +22737,7 @@ var DocumentPdfRenderer = class {
       stream.on("error", reject);
       this.doc.pipe(stream);
       try {
-        console.log("\u{1F4C4} [PDF RENDERER] D\xE9but du rendu", {
+        logger.debug("\u{1F4C4} [PDF RENDERER] D\xE9but du rendu", {
           templateId: this.ctx.template.id,
           templateName: this.ctx.template.name,
           sectionsCount: this.ctx.template.sections?.length || 0,
@@ -22690,17 +22745,17 @@ var DocumentPdfRenderer = class {
           hasTblData: !!this.ctx.tblData && Object.keys(this.ctx.tblData).length > 0
         });
         const sortedSections = [...this.ctx.template.sections || []].sort((a, b) => a.order - b.order);
-        console.log("\u{1F4C4} [PDF RENDERER] Sections \xE0 rendre:", sortedSections.map((s) => s.type));
+        logger.debug("\u{1F4C4} [PDF RENDERER] Sections \xE0 rendre:", sortedSections.map((s) => s.type));
         if (sortedSections.length === 0) {
-          console.log("\u{1F4C4} [PDF RENDERER] \u26A0\uFE0F Aucune section configur\xE9e, rendu par d\xE9faut");
+          logger.debug("\u{1F4C4} [PDF RENDERER] \u26A0\uFE0F Aucune section configur\xE9e, rendu par d\xE9faut");
           this.renderDefaultContent();
         } else {
           for (const section of sortedSections) {
-            console.log(`\u{1F4C4} [PDF RENDERER] Rendu section: ${section.type} (${section.id})`);
+            logger.debug(`\u{1F4C4} [PDF RENDERER] Rendu section: ${section.type} (${section.id})`);
             this.renderSection(section);
           }
         }
-        console.log("\u{1F4C4} [PDF RENDERER] \u2705 Rendu termin\xE9");
+        logger.debug("\u{1F4C4} [PDF RENDERER] \u2705 Rendu termin\xE9");
         if (!this.hasModularPage) {
           this.renderFooter();
         }
@@ -22719,7 +22774,7 @@ var DocumentPdfRenderer = class {
     if (config.conditionalDisplay && !this.evaluateCondition(config.conditionalDisplay)) {
       return;
     }
-    console.log(`\u{1F4C4} [PDF] Rendering section: ${section.type}`);
+    logger.debug(`\u{1F4C4} [PDF] Rendering section: ${section.type}`);
     switch (section.type) {
       case "MODULAR_PAGE":
         this.renderModularPage(config);
@@ -22765,7 +22820,7 @@ var DocumentPdfRenderer = class {
         this.renderCustomContent(config);
         break;
       default:
-        console.warn(`\u{1F4C4} [PDF] Unknown section type: ${section.type}`);
+        logger.warn(`\u{1F4C4} [PDF] Unknown section type: ${section.type}`);
     }
   }
   convertPageBuilderRect(position) {
@@ -22840,18 +22895,18 @@ var DocumentPdfRenderer = class {
    */
   renderModularPage(config) {
     this.hasModularPage = true;
-    console.log("\u{1F4C4} [PDF] ========================================");
-    console.log("\u{1F4C4} [PDF] Rendu page modulaire:", config.name);
-    console.log("\u{1F4C4} [PDF] Pages actuelles dans le doc:", this.doc.bufferedPageRange?.()?.count || "N/A");
-    console.log("\u{1F4C4} [PDF] isFirstModularPage:", this.isFirstModularPage);
+    logger.debug("\u{1F4C4} [PDF] ========================================");
+    logger.debug("\u{1F4C4} [PDF] Rendu page modulaire:", config.name);
+    logger.debug("\u{1F4C4} [PDF] Pages actuelles dans le doc:", this.doc.bufferedPageRange?.()?.count || "N/A");
+    logger.debug("\u{1F4C4} [PDF] isFirstModularPage:", this.isFirstModularPage);
     if (!this.isFirstModularPage) {
-      console.log("\u{1F4C4} [PDF] \u{1F4C3} Cr\xE9ation d'une nouvelle page PDF");
+      logger.debug("\u{1F4C4} [PDF] \u{1F4C3} Cr\xE9ation d'une nouvelle page PDF");
       this.doc.addPage();
       this.currentY = 0;
     }
     this.isFirstModularPage = false;
     const modules = config.modules || [];
-    console.log("\u{1F4C4} [PDF] Nombre de modules:", modules.length);
+    logger.debug("\u{1F4C4} [PDF] Nombre de modules:", modules.length);
     const sortedModules = [...modules].sort((a, b) => {
       const aType = a.moduleId || a.moduleType || a.type;
       const bType = b.moduleId || b.moduleType || b.type;
@@ -22864,8 +22919,8 @@ var DocumentPdfRenderer = class {
       if (Math.abs(aY - bY) > 5) return aY - bY;
       return aX - bX;
     });
-    console.log(`\u{1F4C4} [PDF] Rendu de ${sortedModules.length} modules sur la page`);
-    console.log(`\u{1F4C4} [PDF] Ordre des modules:`, sortedModules.map((m) => m.moduleId || m.moduleType || m.type));
+    logger.debug(`\u{1F4C4} [PDF] Rendu de ${sortedModules.length} modules sur la page`);
+    logger.debug(`\u{1F4C4} [PDF] Ordre des modules:`, sortedModules.map((m) => m.moduleId || m.moduleType || m.type));
     const backgroundModuleIds = /* @__PURE__ */ new Set(["BACKGROUND"]);
     const flowModuleIds = /* @__PURE__ */ new Set(["PRICING_TABLE"]);
     const getModuleType = (m) => m.moduleId || m.moduleType || m.type;
@@ -22901,7 +22956,7 @@ var DocumentPdfRenderer = class {
       const configRaw = flowModule.config || {};
       const conditionResult = this.evaluateModuleConditions(configRaw);
       if (!conditionResult.shouldRender) {
-        console.log(`\u{1F4C4} [PDF] Module ${flowType}: SKIPPED (condition false)`);
+        logger.debug(`\u{1F4C4} [PDF] Module ${flowType}: SKIPPED (condition false)`);
         remainingModules = belowOrEqual;
         continue;
       }
@@ -22912,7 +22967,7 @@ var DocumentPdfRenderer = class {
       }
       const effectiveConfig = { ...configRaw, _themeId: flowModule.themeId };
       if (conditionResult.content !== void 0) {
-        console.log(`\u{1F4C4} [PDF] Module ${flowType}: Using conditional content: "${conditionResult.content}"`);
+        logger.debug(`\u{1F4C4} [PDF] Module ${flowType}: Using conditional content: "${conditionResult.content}"`);
       }
       this.renderModulePricingTablePaginated(effectiveConfig, rect.x, rect.y, rect.width, rect.height, {
         reservedBottomY: bottomStartY,
@@ -23078,17 +23133,17 @@ var DocumentPdfRenderer = class {
     const rect = this.convertPageBuilderRect(position);
     const conditionResult = this.evaluateModuleConditions(config);
     if (!conditionResult.shouldRender) {
-      console.log(`\u{1F4C4} [PDF] Module ${moduleType}: SKIPPED (condition false)`);
+      logger.debug(`\u{1F4C4} [PDF] Module ${moduleType}: SKIPPED (condition false)`);
       return;
     }
     const effectiveConfig = { ...config, _themeId: module2.themeId };
     if (conditionResult.content !== void 0) {
-      console.log(`\u{1F4C4} [PDF] Module ${moduleType}: Using conditional content: "${conditionResult.content}"`);
+      logger.debug(`\u{1F4C4} [PDF] Module ${moduleType}: Using conditional content: "${conditionResult.content}"`);
       if (moduleType === "TITLE" || moduleType === "SUBTITLE" || moduleType === "TEXT_BLOCK") {
         effectiveConfig.text = conditionResult.content;
       }
     }
-    console.log(`\u{1F4C4} [PDF] \u2605\u2605\u2605 FRESH CODE \u2605\u2605\u2605 Module ${moduleType}: PageBuilder(${position.x ?? 0},${position.y ?? 0}) -> PDF(${rect.x.toFixed(1)},${rect.y.toFixed(1)}) size ${rect.width.toFixed(1)}x${rect.height.toFixed(1)}`);
+    logger.debug(`\u{1F4C4} [PDF] \u2605\u2605\u2605 FRESH CODE \u2605\u2605\u2605 Module ${moduleType}: PageBuilder(${position.x ?? 0},${position.y ?? 0}) -> PDF(${rect.x.toFixed(1)},${rect.y.toFixed(1)}) size ${rect.width.toFixed(1)}x${rect.height.toFixed(1)}`);
     this.doc.save();
     try {
       switch (moduleType) {
@@ -23149,7 +23204,7 @@ var DocumentPdfRenderer = class {
           this.renderModuleKpiBanner(effectiveConfig, rect.x, rect.y, rect.width, rect.height);
           break;
         default:
-          console.warn(`\u{1F4C4} [PDF] Module type inconnu: ${moduleType}`);
+          logger.warn(`\u{1F4C4} [PDF] Module type inconnu: ${moduleType}`);
       }
     } finally {
       this.doc.restore();
@@ -23182,7 +23237,7 @@ var DocumentPdfRenderer = class {
     const alignment = config.alignment || "center";
     const color = config.color || config.textColor || config.style?.color || "#FFFFFF";
     const actualHeight = height || 50;
-    console.log(`\u{1F4C4} [PDF] TITLE: config.color=${config.color}, config.textColor=${config.textColor}, final color=${color}`);
+    logger.debug(`\u{1F4C4} [PDF] TITLE: config.color=${config.color}, config.textColor=${config.textColor}, final color=${color}`);
     let fontSize = level === "h1" ? 20 : level === "h2" ? 16 : 14;
     this.doc.font("Helvetica-Bold");
     let scaledFontSize = this.scaleFontSize(fontSize);
@@ -23193,7 +23248,7 @@ var DocumentPdfRenderer = class {
       fontSize -= 2;
       scaledFontSize = this.scaleFontSize(fontSize);
     }
-    console.log(`\u{1F4C4} [PDF] TITLE: text="${text}", fontSize=${fontSize}, height=${Math.round(actualHeight)}, color=${color}`);
+    logger.debug(`\u{1F4C4} [PDF] TITLE: text="${text}", fontSize=${fontSize}, height=${Math.round(actualHeight)}, color=${color}`);
     const savedY = this.doc.y;
     this.doc.save();
     this.doc.fillColor(color);
@@ -23230,7 +23285,7 @@ var DocumentPdfRenderer = class {
       fontSize -= 1;
       scaledFontSize = this.scaleFontSize(fontSize);
     }
-    console.log(`\u{1F4C4} [PDF] SUBTITLE: text="${text}", fontSize=${fontSize}`);
+    logger.debug(`\u{1F4C4} [PDF] SUBTITLE: text="${text}", fontSize=${fontSize}`);
     const savedY = this.doc.y;
     this.doc.fontSize(scaledFontSize);
     const subtitleTextHeight = this.doc.heightOfString(text, { width });
@@ -23247,7 +23302,7 @@ var DocumentPdfRenderer = class {
   renderModuleTextBlock(config, x, y, width, height) {
     const availableHeight = this.getAvailableHeightOnPage(y);
     if (availableHeight < 10) {
-      console.warn(`\u{1F4C4} [PDF] TEXT_BLOCK: Pas de place (${availableHeight.toFixed(0)}px). Bloc masqu\xE9.`);
+      logger.warn(`\u{1F4C4} [PDF] TEXT_BLOCK: Pas de place (${availableHeight.toFixed(0)}px). Bloc masqu\xE9.`);
       return;
     }
     const rawText = this.substituteVariables(config.content || config.text || "");
@@ -23277,7 +23332,7 @@ var DocumentPdfRenderer = class {
     if (config.backgroundColor) {
       this.doc.rect(x, y, width, actualHeight).fill(config.backgroundColor);
     }
-    console.log(`\u{1F4C4} [PDF] TEXT_BLOCK: text="${text.substring(0, 30)}...", color=${color}, fontSize=${fontSize}, hauteur disponible=${availableHeight.toFixed(0)}px`);
+    logger.debug(`\u{1F4C4} [PDF] TEXT_BLOCK: text="${text.substring(0, 30)}...", color=${color}, fontSize=${fontSize}, hauteur disponible=${availableHeight.toFixed(0)}px`);
     const savedY = this.doc.y;
     const finalTextHeight = this.doc.heightOfString(text, { width: innerWidth });
     const textYOffset = calculateVerticalCenterOffset(innerHeight, finalTextHeight);
@@ -23294,10 +23349,10 @@ var DocumentPdfRenderer = class {
   }
   renderModuleImage(config, x, y, width, height) {
     const imageUrl = config.image || config.url || config.src;
-    console.log(`\u{1F4C4} [PDF] IMAGE: x=${Math.round(x)}, y=${Math.round(y)}, w=${Math.round(width)}, h=${Math.round(height)}`);
-    console.log(`\u{1F4C4} [PDF] IMAGE: source=${imageUrl ? imageUrl.substring(0, 50) + "..." : "NONE"}`);
+    logger.debug(`\u{1F4C4} [PDF] IMAGE: x=${Math.round(x)}, y=${Math.round(y)}, w=${Math.round(width)}, h=${Math.round(height)}`);
+    logger.debug(`\u{1F4C4} [PDF] IMAGE: source=${imageUrl ? imageUrl.substring(0, 50) + "..." : "NONE"}`);
     if (!imageUrl) {
-      console.log(`\u{1F4C4} [PDF] IMAGE: pas d'URL, affichage placeholder`);
+      logger.debug(`\u{1F4C4} [PDF] IMAGE: pas d'URL, affichage placeholder`);
       this.doc.rect(x, y, width, height).fill("#f0f0f0").stroke("#cccccc");
       this.doc.fontSize(12).fillColor("#999999").text("Image", x, y + height / 2 - 6, { width, align: "center", lineBreak: false });
       return;
@@ -23309,15 +23364,15 @@ var DocumentPdfRenderer = class {
     };
     try {
       if (imageUrl.startsWith("data:")) {
-        console.log(`\u{1F4C4} [PDF] IMAGE: traitement data URL avec fit pour pr\xE9server proportions`);
+        logger.debug(`\u{1F4C4} [PDF] IMAGE: traitement data URL avec fit pour pr\xE9server proportions`);
         const base64Data = imageUrl.split(",")[1];
         if (base64Data) {
           const buffer = Buffer.from(base64Data, "base64");
-          console.log(`\u{1F4C4} [PDF] IMAGE: buffer cr\xE9\xE9, taille=${buffer.length}`);
+          logger.debug(`\u{1F4C4} [PDF] IMAGE: buffer cr\xE9\xE9, taille=${buffer.length}`);
           this.doc.image(buffer, x, y, imageOptions);
-          console.log(`\u{1F4C4} [PDF] IMAGE: \u2705 rendu r\xE9ussi \xE0 x=${Math.round(x)}, y=${Math.round(y)}`);
+          logger.debug(`\u{1F4C4} [PDF] IMAGE: \u2705 rendu r\xE9ussi \xE0 x=${Math.round(x)}, y=${Math.round(y)}`);
         } else {
-          console.warn(`\u{1F4C4} [PDF] IMAGE: \u26A0\uFE0F pas de donn\xE9es base64 trouv\xE9es`);
+          logger.warn(`\u{1F4C4} [PDF] IMAGE: \u26A0\uFE0F pas de donn\xE9es base64 trouv\xE9es`);
           this.renderImagePlaceholder(x, y, width, height, "Base64 vide");
         }
       } else if (imageUrl.startsWith("/uploads/") || imageUrl.startsWith("uploads/")) {
@@ -23327,24 +23382,24 @@ var DocumentPdfRenderer = class {
         if (cachedBuffer) {
           this.doc.image(cachedBuffer, x, y, imageOptions);
         } else {
-          console.warn(`\u{1F4C4} [PDF] Image /uploads/ non en cache GCS: ${gcsUrl}`);
+          logger.warn(`\u{1F4C4} [PDF] Image /uploads/ non en cache GCS: ${gcsUrl}`);
           this.renderImagePlaceholder(x, y, width, height, "Image non charg\xE9e");
         }
       } else if (imageUrl.startsWith("http")) {
         const cachedBuffer = this.imageCache.get(imageUrl);
         if (cachedBuffer) {
-          console.log(`\u{1F4C4} [PDF] \u2705 Utilisation image du cache: ${imageUrl.substring(0, 50)}...`);
+          logger.debug(`\u{1F4C4} [PDF] \u2705 Utilisation image du cache: ${imageUrl.substring(0, 50)}...`);
           this.doc.image(cachedBuffer, x, y, imageOptions);
         } else {
-          console.warn(`\u{1F4C4} [PDF] Image externe non en cache: ${imageUrl.substring(0, 50)}...`);
+          logger.warn(`\u{1F4C4} [PDF] Image externe non en cache: ${imageUrl.substring(0, 50)}...`);
           this.renderImagePlaceholder(x, y, width, height, "Image non charg\xE9e");
         }
       } else {
-        console.log(`\u{1F4C4} [PDF] URL non support\xE9e: ${imageUrl.substring(0, 50)}...`);
+        logger.debug(`\u{1F4C4} [PDF] URL non support\xE9e: ${imageUrl.substring(0, 50)}...`);
         this.renderImagePlaceholder(x, y, width, height, "URL non support\xE9e");
       }
     } catch (error) {
-      console.error("\u{1F4C4} [PDF] Erreur chargement image:", error);
+      logger.error("\u{1F4C4} [PDF] Erreur chargement image:", error);
       this.renderImagePlaceholder(x, y, width, height, "Erreur");
     }
   }
@@ -23357,10 +23412,10 @@ var DocumentPdfRenderer = class {
     const hasColor = !!config.color;
     const hasGradient = !!(config.gradientStart && config.gradientEnd);
     const declaredType = config.type;
-    console.log(`\u{1F4C4} [PDF] BACKGROUND: declaredType=${declaredType}, hasImage=${hasImage}, hasColor=${hasColor}, hasGradient=${hasGradient}`);
-    console.log(`\u{1F4C4} [PDF] BACKGROUND: position x=${x}, y=${y}, w=${width}, h=${height}`);
+    logger.debug(`\u{1F4C4} [PDF] BACKGROUND: declaredType=${declaredType}, hasImage=${hasImage}, hasColor=${hasColor}, hasGradient=${hasGradient}`);
+    logger.debug(`\u{1F4C4} [PDF] BACKGROUND: position x=${x}, y=${y}, w=${width}, h=${height}`);
     if (hasImage) {
-      console.log(`\u{1F4C4} [PDF] BACKGROUND: rendu image de fond`);
+      logger.debug(`\u{1F4C4} [PDF] BACKGROUND: rendu image de fond`);
       try {
         const imageUrl = config.image;
         const backgroundColor = config.backgroundColor || config.color || this.theme.backgroundColor;
@@ -23371,12 +23426,12 @@ var DocumentPdfRenderer = class {
           const base64Data = imageUrl.split(",")[1];
           if (base64Data) {
             const buffer = Buffer.from(base64Data, "base64");
-            console.log(`\u{1F4C4} [PDF] BACKGROUND: buffer cr\xE9\xE9, taille=${buffer.length} octets`);
+            logger.debug(`\u{1F4C4} [PDF] BACKGROUND: buffer cr\xE9\xE9, taille=${buffer.length} octets`);
             this.drawBackgroundImage(buffer, x, y, width, height);
-            console.log(`\u{1F4C4} [PDF] BACKGROUND: \u2705 image rendue avec succ\xE8s (ratio maintenu)`);
+            logger.debug(`\u{1F4C4} [PDF] BACKGROUND: \u2705 image rendue avec succ\xE8s (ratio maintenu)`);
             return;
           }
-          console.warn(`\u{1F4C4} [PDF] BACKGROUND: \u26A0\uFE0F pas de donn\xE9es base64`);
+          logger.warn(`\u{1F4C4} [PDF] BACKGROUND: \u26A0\uFE0F pas de donn\xE9es base64`);
         } else if (imageUrl.startsWith("/uploads/") || imageUrl.startsWith("uploads/")) {
           const prefix = imageUrl.startsWith("/") ? imageUrl.slice(1) : imageUrl;
           const gcsUrl = `https://storage.googleapis.com/crm-2thier-uploads/${prefix.replace(/^\/?uploads\//, "")}`;
@@ -23385,7 +23440,7 @@ var DocumentPdfRenderer = class {
             this.drawBackgroundImage(cachedBuffer, x, y, width, height);
             return;
           }
-          console.warn(`\u{1F4C4} [PDF] Image /uploads/ non en cache GCS: ${gcsUrl}`);
+          logger.warn(`\u{1F4C4} [PDF] Image /uploads/ non en cache GCS: ${gcsUrl}`);
           this.renderImagePlaceholder(x, y, width, height, "Image non charg\xE9e");
           return;
         } else if (imageUrl.startsWith("http")) {
@@ -23394,20 +23449,20 @@ var DocumentPdfRenderer = class {
             this.drawBackgroundImage(cachedBuffer, x, y, width, height);
             return;
           }
-          console.warn(`\u{1F4C4} [PDF] Image externe non en cache: ${imageUrl.substring(0, 50)}...`);
+          logger.warn(`\u{1F4C4} [PDF] Image externe non en cache: ${imageUrl.substring(0, 50)}...`);
           this.renderImagePlaceholder(x, y, width, height, "Image non charg\xE9e");
           return;
         } else {
-          console.log(`\u{1F4C4} [PDF] URL non support\xE9e: ${imageUrl.substring(0, 50)}...`);
+          logger.debug(`\u{1F4C4} [PDF] URL non support\xE9e: ${imageUrl.substring(0, 50)}...`);
           this.renderImagePlaceholder(x, y, width, height, "URL non support\xE9e");
           return;
         }
       } catch (error) {
-        console.error(`\u{1F4C4} [PDF] BACKGROUND: \u274C erreur image:`, error);
+        logger.error(`\u{1F4C4} [PDF] BACKGROUND: \u274C erreur image:`, error);
       }
     }
     if (hasGradient) {
-      console.log(`\u{1F4C4} [PDF] BACKGROUND: rendu gradient`);
+      logger.debug(`\u{1F4C4} [PDF] BACKGROUND: rendu gradient`);
       const steps = 20;
       const stepHeight = Math.max(1, height / steps);
       for (let i = 0; i < steps; i++) {
@@ -23418,11 +23473,11 @@ var DocumentPdfRenderer = class {
       return;
     }
     if (hasColor) {
-      console.log(`\u{1F4C4} [PDF] BACKGROUND: rendu couleur solide ${config.color}`);
+      logger.debug(`\u{1F4C4} [PDF] BACKGROUND: rendu couleur solide ${config.color}`);
       this.doc.rect(x, y, width, height).fill(config.color);
       return;
     }
-    console.log(`\u{1F4C4} [PDF] BACKGROUND: aucun rendu (pas d'image, pas de couleur, pas de gradient)`);
+    logger.debug(`\u{1F4C4} [PDF] BACKGROUND: aucun rendu (pas d'image, pas de couleur, pas de gradient)`);
   }
   interpolateColor(color1, color2, ratio) {
     const hex = (c) => parseInt(c.replace("#", ""), 16);
@@ -23442,9 +23497,9 @@ var DocumentPdfRenderer = class {
     const currency = config.currency || "\u20AC";
     let items = [];
     if (config.pricingLines && config.pricingLines.length > 0) {
-      console.log("\u{1F4C4} [PDF] PRICING_TABLE: Utilisation de pricingLines", config.pricingLines.length);
+      logger.debug("\u{1F4C4} [PDF] PRICING_TABLE: Utilisation de pricingLines", config.pricingLines.length);
       items = this.processPricingLines(config.pricingLines, config);
-      console.log("\u{1F4C4} [PDF] PRICING_TABLE: Items r\xE9solus:", items);
+      logger.debug("\u{1F4C4} [PDF] PRICING_TABLE: Items r\xE9solus:", items);
     } else if (config.items && config.items.length > 0) {
       items = config.items.map((item) => ({
         description: this.substituteVariables(item.name || item.label || ""),
@@ -23462,13 +23517,13 @@ var DocumentPdfRenderer = class {
     }
     const availableHeight = this.getAvailableHeightOnPage(y);
     if (availableHeight < 50) {
-      console.warn(`\u{1F4C4} [PDF] PRICING_TABLE: Pas assez de place (${availableHeight.toFixed(0)}px restants). Tableau masqu\xE9.`);
+      logger.warn(`\u{1F4C4} [PDF] PRICING_TABLE: Pas assez de place (${availableHeight.toFixed(0)}px restants). Tableau masqu\xE9.`);
       return;
     }
     this.doc.fontSize(this.scaleFontSize(16)).font("Helvetica-Bold").fillColor(this.theme.primaryColor || "#1890ff").text(title, x, y, { width });
     let currentY = y + 25;
     if (!this.canFitOnPage(currentY, 30)) {
-      console.warn(`\u{1F4C4} [PDF] PRICING_TABLE: Pas de place pour la table. Tableau masqu\xE9.`);
+      logger.warn(`\u{1F4C4} [PDF] PRICING_TABLE: Pas de place pour la table. Tableau masqu\xE9.`);
       return;
     }
     const colWidths = [width * 0.45, width * 0.12, width * 0.18, width * 0.25];
@@ -23490,7 +23545,7 @@ var DocumentPdfRenderer = class {
       for (const item of items) {
         const rowHeight = 18;
         if (!this.canFitOnPage(currentY, rowHeight + 5)) {
-          console.warn(`\u{1F4C4} [PDF] PRICING_TABLE: Plus de place pour ${items.length - rowsRendered} lignes. Arr\xEAt du rendu.`);
+          logger.warn(`\u{1F4C4} [PDF] PRICING_TABLE: Plus de place pour ${items.length - rowsRendered} lignes. Arr\xEAt du rendu.`);
           break;
         }
         const lineTotal = typeof item.total === "number" ? item.total : typeof item.quantity === "number" && typeof item.unitPrice === "number" ? item.quantity * item.unitPrice : null;
@@ -23548,11 +23603,11 @@ var DocumentPdfRenderer = class {
       const raw = this.resolveVariable(source);
       const cleaned = raw.replace(/[\s\u00A0]/g, "").replace(",", ".");
       const num = parseFloat(cleaned);
-      console.log(`\u{1F4C4} [PDF] resolveAndFormat("${source}") \u2192 raw="${raw}", cleaned="${cleaned}", num=${num}, isFinite=${Number.isFinite(num)}`);
+      logger.debug(`\u{1F4C4} [PDF] resolveAndFormat("${source}") \u2192 raw="${raw}", cleaned="${cleaned}", num=${num}, isFinite=${Number.isFinite(num)}`);
       if (Number.isFinite(num)) return `${num.toFixed(2)} ${currency}`;
       return raw || "-";
     };
-    console.log(`\u{1F4C4} [PDF] renderPricingTotalsTBL sources:`, {
+    logger.debug(`\u{1F4C4} [PDF] renderPricingTotalsTBL sources:`, {
       remiseSource: config.remiseSource || "(non configur\xE9)",
       totalHTVASource: config.totalHTVASource || "(non configur\xE9)",
       totalTVASource: config.totalTVASource || "(non configur\xE9)",
@@ -23571,7 +23626,7 @@ var DocumentPdfRenderer = class {
         try {
           this.doc.image(tagPng, remTextX - tagS - 3, currentY - 1, { width: tagS, height: tagS });
         } catch (e) {
-          console.warn("PDF tag icon error:", e);
+          logger.warn("PDF tag icon error:", e);
         }
       }
       this.doc.fontSize(remFs).font("Helvetica-Bold").fillColor("#D9791F");
@@ -23728,7 +23783,7 @@ var DocumentPdfRenderer = class {
           logoOffset = maxLogoWidth + 10;
         }
       } catch (e) {
-        console.warn("\u{1F4C4} [PDF] Impossible de charger le logo:", e);
+        logger.warn("\u{1F4C4} [PDF] Impossible de charger le logo:", e);
       }
     }
     const leftX = x + logoOffset;
@@ -23778,7 +23833,7 @@ var DocumentPdfRenderer = class {
     if (clientTVA) {
       this.doc.font("Helvetica").fontSize(tvaFs).fillColor("#888888").text(`TVA: ${clientTVA}`, rightX, currentY, { width: halfWidth, align: "right", lineBreak: false });
     }
-    console.log(`\u{1F4C4} [PDF] DOCUMENT_HEADER rendu: company=${companyName}, client=${clientName}`);
+    logger.debug(`\u{1F4C4} [PDF] DOCUMENT_HEADER rendu: company=${companyName}, client=${clientName}`);
   }
   // ============================================================
   // DOCUMENT_INFO - Référence, date, validité
@@ -23787,7 +23842,7 @@ var DocumentPdfRenderer = class {
     const themeId = config._themeId;
     const layoutRaw = (config.layout || "").toString().trim();
     const layout = "inline";
-    console.log("\u{1F4C4} [PDF] DOCUMENT_INFO render", {
+    logger.debug("\u{1F4C4} [PDF] DOCUMENT_INFO render", {
       themeId,
       layoutRaw,
       forcedLayout: layout,
@@ -23851,7 +23906,7 @@ var DocumentPdfRenderer = class {
         this.doc.font("Helvetica").fontSize(this.scaleFontSize(11)).fillColor("#333333").text(`${objectPrefix} ${object}`, x, currentY, { width });
       }
     }
-    console.log(`\u{1F4C4} [PDF] DOCUMENT_INFO rendu: ref=${reference}, date=${date}`);
+    logger.debug(`\u{1F4C4} [PDF] DOCUMENT_INFO rendu: ref=${reference}, date=${date}`);
   }
   // ============================================================
   // DOCUMENT_FOOTER - Pied de page avec infos entreprise
@@ -23913,13 +23968,13 @@ var DocumentPdfRenderer = class {
           this.doc.font(textFont).fontSize(baseFontSize).fillColor("#888888").text(pageNumberText, x + leftWidth, lineY, { width: rightWidth, align: "right", lineBreak: false });
         }
       }
-      console.log(`\u{1F4C4} [PDF] DOCUMENT_FOOTER rendu (spread): ${companyName}`);
+      logger.debug(`\u{1F4C4} [PDF] DOCUMENT_FOOTER rendu (spread): ${companyName}`);
       return;
     }
     if (layout === "minimal") {
       const minimalText = `${companyName}${pageNumberText ? ` \u2014 ${pageNumberText}` : ""}`;
       drawSingleLine(minimalText, y, { font: textFont, size: baseFontSize, color: "#888888", align: "center" });
-      console.log(`\u{1F4C4} [PDF] DOCUMENT_FOOTER rendu (minimal): ${companyName}`);
+      logger.debug(`\u{1F4C4} [PDF] DOCUMENT_FOOTER rendu (minimal): ${companyName}`);
       return;
     }
     const bannerColor = this.theme.primaryColor || "#0d7377";
@@ -23990,7 +24045,7 @@ var DocumentPdfRenderer = class {
       const pageNumY = y + bannerH - baseFontSize - 6;
       this.doc.font(textFont).fontSize(baseFontSize).fillColor(textColor).text(pageNumberText, x, pageNumY, { width: width - bannerPaddingH, align: "right", lineBreak: false });
     }
-    console.log(`\u{1F4C4} [PDF] DOCUMENT_FOOTER rendu (green banner+icons): ${companyName}`);
+    logger.debug(`\u{1F4C4} [PDF] DOCUMENT_FOOTER rendu (green banner+icons): ${companyName}`);
   }
   // ============================================================
   // SIGNATURE_BLOCK - Zone de signatures
@@ -23998,9 +24053,9 @@ var DocumentPdfRenderer = class {
   renderModuleSignatureBlock(config, x, y, width, height) {
     const availableHeight = this.getAvailableHeightOnPage(y);
     const minHeight = 60;
-    console.log(`\u{1F4C4} [PDF] SIGNATURE_BLOCK: y=${y.toFixed(0)}, height=${height}, availableHeight=${availableHeight.toFixed(0)}, minHeight=${minHeight}`);
+    logger.debug(`\u{1F4C4} [PDF] SIGNATURE_BLOCK: y=${y.toFixed(0)}, height=${height}, availableHeight=${availableHeight.toFixed(0)}, minHeight=${minHeight}`);
     if (availableHeight < minHeight) {
-      console.warn(`\u{1F4C4} [PDF] SIGNATURE_BLOCK: Pas assez de place (${availableHeight.toFixed(0)}px restants). Bloc masqu\xE9.`);
+      logger.warn(`\u{1F4C4} [PDF] SIGNATURE_BLOCK: Pas assez de place (${availableHeight.toFixed(0)}px restants). Bloc masqu\xE9.`);
       return;
     }
     const isStacked = config.layout === "stacked";
@@ -24016,7 +24071,7 @@ var DocumentPdfRenderer = class {
     const renderBox = (label, boxX, boxY, signerRole) => {
       const eSigs = this.ctx.electronicSignatures || [];
       const eSig = signerRole === "CLIENT" ? eSigs.find((s) => s.signerRole === "CLIENT") : eSigs.find((s) => s.signerRole !== "CLIENT");
-      console.log(`\u{1F4C4} [PDF] SIGNATURE_BLOCK renderBox: role=${signerRole}, eSigs=${eSigs.length}, found=${!!eSig}${eSig ? `, signerName=${eSig.signerName}, hasData=${!!eSig.signatureData}, dataLen=${eSig.signatureData?.length || 0}` : ""}`);
+      logger.debug(`\u{1F4C4} [PDF] SIGNATURE_BLOCK renderBox: role=${signerRole}, eSigs=${eSigs.length}, found=${!!eSig}${eSig ? `, signerName=${eSig.signerName}, hasData=${!!eSig.signatureData}, dataLen=${eSig.signatureData?.length || 0}` : ""}`);
       this.doc.roundedRect(boxX, boxY, boxWidth, boxHeight, 6).stroke(eSig ? "#52c41a" : "#e8e8e8");
       const padding = 16;
       const innerW = boxWidth - padding * 2;
@@ -24036,7 +24091,7 @@ var DocumentPdfRenderer = class {
             this.doc.image(imgBuffer, boxX + padding, currentY + 2, { width: innerW - 10, height: imgH, fit: [innerW - 10, imgH] });
           }
         } catch (imgErr) {
-          console.warn("[PDF] Erreur image signature module:", imgErr);
+          logger.warn("[PDF] Erreur image signature module:", imgErr);
         }
       } else {
         const showMention = config.showMention !== false;
@@ -24065,7 +24120,7 @@ var DocumentPdfRenderer = class {
       renderBox(companyLabel, x + boxWidth + 24, y, "COMPANY");
     }
     this.doc.restore();
-    console.log(`\u{1F4C4} [PDF] SIGNATURE_BLOCK rendu: ${clientLabel} / ${companyLabel} (disponible: ${availableHeight.toFixed(0)}px)`);
+    logger.debug(`\u{1F4C4} [PDF] SIGNATURE_BLOCK rendu: ${clientLabel} / ${companyLabel} (disponible: ${availableHeight.toFixed(0)}px)`);
   }
   // ============================================================
   // TOTALS_SUMMARY - Récapitulatif des totaux (HT/TVA/TTC)
@@ -24108,7 +24163,7 @@ var DocumentPdfRenderer = class {
           try {
             this.doc.image(tagPng, textEndX - labelTextW - iconSz - 4, currentY + 5, { width: iconSz, height: iconSz });
           } catch (e) {
-            console.warn("PDF tag icon error:", e);
+            logger.warn("PDF tag icon error:", e);
           }
         }
       }
@@ -24148,7 +24203,7 @@ var DocumentPdfRenderer = class {
   renderModulePaymentInfo(config, x, y, width, _height) {
     const availableHeight = this.getAvailableHeightOnPage(y);
     if (availableHeight < 30) {
-      console.warn(`\u{1F4C4} [PDF] PAYMENT_INFO: Pas de place (${availableHeight.toFixed(0)}px). Bloc masqu\xE9.`);
+      logger.warn(`\u{1F4C4} [PDF] PAYMENT_INFO: Pas de place (${availableHeight.toFixed(0)}px). Bloc masqu\xE9.`);
       return;
     }
     const title = config.title || "Modalit\xE9s de paiement";
@@ -24159,7 +24214,7 @@ var DocumentPdfRenderer = class {
     let currentY = y;
     if (config.showTitle !== false) {
       if (!this.canFitOnPage(currentY, 20)) {
-        console.warn(`\u{1F4C4} [PDF] PAYMENT_INFO: Pas de place pour le titre. Bloc masqu\xE9.`);
+        logger.warn(`\u{1F4C4} [PDF] PAYMENT_INFO: Pas de place pour le titre. Bloc masqu\xE9.`);
         return;
       }
       this.doc.font("Helvetica-Bold").fontSize(this.scaleFontSize(12)).fillColor("#333333").text(`${title}`, x, currentY, { width });
@@ -24169,7 +24224,7 @@ var DocumentPdfRenderer = class {
     const fieldHeight = 16;
     if (config.showIBAN !== false && iban) {
       if (!this.canFitOnPage(currentY, fieldHeight)) {
-        console.warn(`\u{1F4C4} [PDF] PAYMENT_INFO: Plus de place pour IBAN et suivants.`);
+        logger.warn(`\u{1F4C4} [PDF] PAYMENT_INFO: Plus de place pour IBAN et suivants.`);
         return;
       }
       this.doc.font("Helvetica").fontSize(this.scaleFontSize(11)).fillColor("#666666").text("IBAN:", x, currentY, { width: labelWidth, continued: true }).font("Courier").fillColor("#333333").text(iban);
@@ -24204,7 +24259,7 @@ var DocumentPdfRenderer = class {
       this.doc.roundedRect(x, currentY, width, 28, 4).fill("#f9f9f9");
       this.doc.font("Helvetica").fontSize(this.scaleFontSize(10)).fillColor("#666666").text(`${config.paymentTerms}`, x + 10, currentY + 8, { width: width - 20 });
     }
-    console.log(`\u{1F4C4} [PDF] PAYMENT_INFO rendu (disponible: ${availableHeight.toFixed(0)}px)`);
+    logger.debug(`\u{1F4C4} [PDF] PAYMENT_INFO rendu (disponible: ${availableHeight.toFixed(0)}px)`);
   }
   // ============================================================
   // CONTACT_INFO - Informations de contact
@@ -24212,13 +24267,13 @@ var DocumentPdfRenderer = class {
   renderModuleContactInfo(config, x, y, width, _height) {
     const availableHeight = this.getAvailableHeightOnPage(y);
     if (availableHeight < 30) {
-      console.warn(`\u{1F4C4} [PDF] CONTACT_INFO: Pas de place (${availableHeight.toFixed(0)}px). Bloc masqu\xE9.`);
+      logger.warn(`\u{1F4C4} [PDF] CONTACT_INFO: Pas de place (${availableHeight.toFixed(0)}px). Bloc masqu\xE9.`);
       return;
     }
     let currentY = y;
     if (config.title) {
       if (!this.canFitOnPage(currentY, 20)) {
-        console.warn(`\u{1F4C4} [PDF] CONTACT_INFO: Pas de place pour le titre. Bloc masqu\xE9.`);
+        logger.warn(`\u{1F4C4} [PDF] CONTACT_INFO: Pas de place pour le titre. Bloc masqu\xE9.`);
         return;
       }
       this.doc.font("Helvetica-Bold").fontSize(this.scaleFontSize(12)).fillColor("#333333").text(config.title, x, currentY, { width });
@@ -24227,7 +24282,7 @@ var DocumentPdfRenderer = class {
     const fieldHeight = 14;
     if (config.showPhone && config.phone) {
       if (!this.canFitOnPage(currentY, fieldHeight)) {
-        console.warn(`\u{1F4C4} [PDF] CONTACT_INFO: Plus de place pour Phone et suivants.`);
+        logger.warn(`\u{1F4C4} [PDF] CONTACT_INFO: Plus de place pour Phone et suivants.`);
         return;
       }
       this.doc.font("Helvetica").fontSize(this.scaleFontSize(11)).fillColor("#333333").text(`Tel: ${config.phone}`, x, currentY, { width });
@@ -24253,7 +24308,7 @@ var DocumentPdfRenderer = class {
       }
       this.doc.font("Helvetica").fontSize(this.scaleFontSize(11)).fillColor("#333333").text(`Web: ${config.website}`, x, currentY, { width });
     }
-    console.log(`\u{1F4C4} [PDF] CONTACT_INFO rendu (disponible: ${availableHeight.toFixed(0)}px)`);
+    logger.debug(`\u{1F4C4} [PDF] CONTACT_INFO rendu (disponible: ${availableHeight.toFixed(0)}px)`);
   }
   // ============================================================
   /**
@@ -24423,7 +24478,7 @@ var DocumentPdfRenderer = class {
     const tblData = this.ctx.tblData || {};
     for (const line of pricingLines) {
       if (line.condition && !this.evaluateCondition(line.condition)) {
-        console.log(`\u{1F4C4} [PDF] Ligne "${line.label}" ignor\xE9e (condition non remplie)`);
+        logger.debug(`\u{1F4C4} [PDF] Ligne "${line.label}" ignor\xE9e (condition non remplie)`);
         continue;
       }
       const isRepeaterLine = line.type === "repeater" || !!line.repeaterId || this.hasRepeatSources(line);
@@ -24432,7 +24487,7 @@ var DocumentPdfRenderer = class {
         if (repeaterId) {
           const repeaterInstances = this.getRepeaterInstances(repeaterId, tblData, line);
           if (repeaterInstances.length === 0) {
-            console.log(`\u{1F4C4} [PDF] Ligne repeater "${line.label}" masqu\xE9e (0 instances pour repeater ${repeaterId})`);
+            logger.debug(`\u{1F4C4} [PDF] Ligne repeater "${line.label}" masqu\xE9e (0 instances pour repeater ${repeaterId})`);
             continue;
           }
           for (const instance of repeaterInstances) {
@@ -24440,7 +24495,7 @@ var DocumentPdfRenderer = class {
             results.push(resolvedLine);
           }
         } else {
-          console.log(`\u{1F4C4} [PDF] Ligne repeater "${line.label}" masqu\xE9e (repeaterId non trouv\xE9)`);
+          logger.debug(`\u{1F4C4} [PDF] Ligne repeater "${line.label}" masqu\xE9e (repeaterId non trouv\xE9)`);
           continue;
         }
       } else {
@@ -24536,7 +24591,7 @@ var DocumentPdfRenderer = class {
       const effectiveRef = suffix ? this.resolveRepeatRef(ref, suffix) : ref;
       return this.resolveVariable(effectiveRef);
     };
-    console.log("\u{1F4C4} [PDF] resolveLineValues:", {
+    logger.debug("\u{1F4C4} [PDF] resolveLineValues:", {
       label: line.label,
       labelSource: line.labelSource,
       quantity: line.quantity,
@@ -24564,13 +24619,13 @@ var DocumentPdfRenderer = class {
         return `${prefix}${value}${suffix2}`.trim();
       }).filter((p) => p.length > 0);
       resolvedLine.description = parts.join(" - ");
-      console.log(`\u{1F4C4} [PDF] Label multi-segments r\xE9solu: "${resolvedLine.description}" (${line.labelParts.length} segments)`);
+      logger.debug(`\u{1F4C4} [PDF] Label multi-segments r\xE9solu: "${resolvedLine.description}" (${line.labelParts.length} segments)`);
       if (!resolvedLine.description) {
         resolvedLine.description = line.label || "Non d\xE9fini";
       }
     } else if (line.labelSource) {
       const resolved = resolve2(line.labelSource);
-      console.log(`\u{1F4C4} [PDF] Label r\xE9solu: "${resolved}" (source: ${line.labelSource}, suffix: ${suffix})`);
+      logger.debug(`\u{1F4C4} [PDF] Label r\xE9solu: "${resolved}" (source: ${line.labelSource}, suffix: ${suffix})`);
       resolvedLine.description = resolved || line.label || "Non d\xE9fini";
     } else {
       resolvedLine.description = this.substituteVariables(line.label || "");
@@ -24580,7 +24635,7 @@ var DocumentPdfRenderer = class {
     }
     if (line.quantitySource) {
       const qty = resolve2(line.quantitySource);
-      console.log(`\u{1F4C4} [PDF] Quantit\xE9 r\xE9solue: "${qty}" (source: ${line.quantitySource}, suffix: ${suffix})`);
+      logger.debug(`\u{1F4C4} [PDF] Quantit\xE9 r\xE9solue: "${qty}" (source: ${line.quantitySource}, suffix: ${suffix})`);
       const n = parseFloat(qty);
       resolvedLine.quantity = Number.isFinite(n) ? n : null;
     } else if (typeof line.quantity === "string" && line.quantity.startsWith("@")) {
@@ -24597,7 +24652,7 @@ var DocumentPdfRenderer = class {
     }
     if (line.unitPriceSource) {
       const price = resolve2(line.unitPriceSource);
-      console.log(`\u{1F4C4} [PDF] Prix r\xE9solu: "${price}" (source: ${line.unitPriceSource}, suffix: ${suffix})`);
+      logger.debug(`\u{1F4C4} [PDF] Prix r\xE9solu: "${price}" (source: ${line.unitPriceSource}, suffix: ${suffix})`);
       const n = parseFloat(price);
       resolvedLine.unitPrice = Number.isFinite(n) ? n : null;
     } else if (typeof line.unitPrice === "string" && (line.unitPrice.startsWith("@") || line.unitPrice.startsWith("node-formula:") || line.unitPrice.startsWith("condition:"))) {
@@ -24612,7 +24667,7 @@ var DocumentPdfRenderer = class {
         resolvedLine.unitPrice = Number.isFinite(n) ? n : null;
       }
     }
-    console.log(`\u{1F4C4} [PDF] \u27A1\uFE0F Ligne r\xE9solue:`, resolvedLine);
+    logger.debug(`\u{1F4C4} [PDF] \u27A1\uFE0F Ligne r\xE9solue:`, resolvedLine);
     const hasExplicitTotal = line.totalSource || line.total !== void 0;
     const hasQtyAndUnit = typeof resolvedLine.quantity === "number" && typeof resolvedLine.unitPrice === "number";
     if (hasExplicitTotal && hasQtyAndUnit) {
@@ -24653,7 +24708,7 @@ var DocumentPdfRenderer = class {
         if (match) templateChildIds.add(match[1]);
       }
     }
-    console.log(`\u{1F4C4} [PDF] Repeater ${repeaterId}: templateChildIds trouv\xE9s:`, [...templateChildIds]);
+    logger.debug(`\u{1F4C4} [PDF] Repeater ${repeaterId}: templateChildIds trouv\xE9s:`, [...templateChildIds]);
     const suffixes = /* @__PURE__ */ new Set();
     for (const key2 of Object.keys(tblData)) {
       for (const tplId of templateChildIds) {
@@ -24673,7 +24728,7 @@ var DocumentPdfRenderer = class {
       data: {}
       // Les données seront résolues via resolveVariable avec le suffix
     }));
-    console.log(`\u{1F4C4} [PDF] Repeater ${repeaterId}: ${instances.length} instance(s) trouv\xE9e(s) (suffixes: ${sortedSuffixes.join(", ")})`);
+    logger.debug(`\u{1F4C4} [PDF] Repeater ${repeaterId}: ${instances.length} instance(s) trouv\xE9e(s) (suffixes: ${sortedSuffixes.join(", ")})`);
     return instances;
   }
   /**
@@ -24940,7 +24995,7 @@ var DocumentPdfRenderer = class {
           this.doc.image(imgBuffer, leftX, signatureY + 45, { width: colWidth - 10, height: 55, fit: [colWidth - 10, 55] });
         }
       } catch (imgErr) {
-        console.warn("[PDF] Erreur image signature client:", imgErr);
+        logger.warn("[PDF] Erreur image signature client:", imgErr);
         this.doc.rect(leftX, signatureY + 45, colWidth, 55).stroke("#52c41a");
       }
       this.doc.fontSize(8).font("Helvetica-Bold").fillColor("#52c41a").text("Sign\xE9 \xE9lectroniquement", leftX, signatureY + 105);
@@ -24960,7 +25015,7 @@ var DocumentPdfRenderer = class {
           this.doc.image(imgBuffer, rightX, signatureY + 45, { width: colWidth - 10, height: 55, fit: [colWidth - 10, 55] });
         }
       } catch (imgErr) {
-        console.warn("[PDF] Erreur image signature entreprise:", imgErr);
+        logger.warn("[PDF] Erreur image signature entreprise:", imgErr);
         this.doc.rect(rightX, signatureY + 45, colWidth, 55).stroke("#52c41a");
       }
       this.doc.fontSize(8).font("Helvetica-Bold").fillColor("#52c41a").text("Sign\xE9 \xE9lectroniquement", rightX, signatureY + 105);
@@ -25165,11 +25220,11 @@ var DocumentPdfRenderer = class {
     const formulaResultsMap = this.ctx.formulaResultsMap || {};
     if (formulaResultsMap[ref] !== void 0) {
       const rawVal = formulaResultsMap[ref];
-      console.log(`\u{1F4C4} [PDF] \u2705 R\xE9solu via formulaResultsMap: "${ref}" \u2192 ${rawVal}`);
+      logger.debug(`\u{1F4C4} [PDF] \u2705 R\xE9solu via formulaResultsMap: "${ref}" \u2192 ${rawVal}`);
       if (this.ctx.selectOptionsMap && typeof rawVal === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(rawVal)) {
         const label = this.ctx.selectOptionsMap[rawVal];
         if (label) {
-          console.log(`\u{1F4C4} [PDF] \u{1F504} SELECT r\xE9solu via formulaResultsMap: "${rawVal}" \u2192 "${label}"`);
+          logger.debug(`\u{1F4C4} [PDF] \u{1F504} SELECT r\xE9solu via formulaResultsMap: "${rawVal}" \u2192 "${label}"`);
           return label;
         }
       }
@@ -25178,7 +25233,7 @@ var DocumentPdfRenderer = class {
     if (ref.startsWith("lead.")) {
       const key2 = ref.replace("lead.", "");
       const value = lead[key2];
-      console.log(`\u{1F4C4} [PDF] resolveVariable("${ref}") -> lead.${key2} = "${value}"`);
+      logger.debug(`\u{1F4C4} [PDF] resolveVariable("${ref}") -> lead.${key2} = "${value}"`);
       return String(value || "");
     }
     if (ref.startsWith("org.")) {
@@ -25189,48 +25244,48 @@ var DocumentPdfRenderer = class {
       if (key2 === "bic") return String(orgAny.bic ?? "");
       if (key2 === "bankName") return String(orgAny.bankName ?? "");
       const value = orgAny[key2];
-      console.log(`\u{1F4C4} [PDF] resolveVariable("${ref}") -> org.${key2} = "${value}"`);
+      logger.debug(`\u{1F4C4} [PDF] resolveVariable("${ref}") -> org.${key2} = "${value}"`);
       return String(value || "");
     }
     if (ref.startsWith("quote.")) {
       const key2 = ref.replace("quote.", "");
       const value = quote[key2];
-      console.log(`\u{1F4C4} [PDF] resolveVariable("${ref}") -> quote.${key2} = "${value}"`, { quoteKeys: Object.keys(quote) });
+      logger.debug(`\u{1F4C4} [PDF] resolveVariable("${ref}") -> quote.${key2} = "${value}"`, { quoteKeys: Object.keys(quote) });
       if (typeof value === "number") return value.toFixed(2);
       return String(value || "");
     }
     if (ref.startsWith("@value.") || ref.startsWith("@select.")) {
       const nodeRef = ref.replace(/^@(value|select)\./, "");
-      console.log(`\u{1F4C4} [PDF] Cherche TBL ref: "${nodeRef}"`);
+      logger.debug(`\u{1F4C4} [PDF] Cherche TBL ref: "${nodeRef}"`);
       const resolveSelectLabel = (rawValue) => {
         const formatted = this.formatValue(rawValue);
         if (this.ctx.selectOptionsMap && typeof rawValue === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(rawValue)) {
           const label = this.ctx.selectOptionsMap[rawValue];
           if (label) {
-            console.log(`\u{1F4C4} [PDF] \u{1F504} SELECT r\xE9solu: "${rawValue}" \u2192 "${label}"`);
+            logger.debug(`\u{1F4C4} [PDF] \u{1F504} SELECT r\xE9solu: "${rawValue}" \u2192 "${label}"`);
             return label;
           }
         }
         return formatted;
       };
       if (tblData[nodeRef] !== void 0) {
-        console.log(`\u{1F4C4} [PDF] \u2705 Trouv\xE9 exact: ${tblData[nodeRef]}`);
+        logger.debug(`\u{1F4C4} [PDF] \u2705 Trouv\xE9 exact: ${tblData[nodeRef]}`);
         return resolveSelectLabel(tblData[nodeRef]);
       }
       if (tblData.values && tblData.values[nodeRef] !== void 0) {
-        console.log(`\u{1F4C4} [PDF] \u2705 Trouv\xE9 dans values: ${tblData.values[nodeRef]}`);
+        logger.debug(`\u{1F4C4} [PDF] \u2705 Trouv\xE9 dans values: ${tblData.values[nodeRef]}`);
         return resolveSelectLabel(tblData.values[nodeRef]);
       }
       for (const [key2, value] of Object.entries(tblData)) {
         if (key2.includes(nodeRef) || key2.endsWith(nodeRef)) {
-          console.log(`\u{1F4C4} [PDF] \u2705 Trouv\xE9 partiel "${key2}": ${value}`);
+          logger.debug(`\u{1F4C4} [PDF] \u2705 Trouv\xE9 partiel "${key2}": ${value}`);
           return resolveSelectLabel(value);
         }
       }
       if (tblData.values) {
         for (const [key2, value] of Object.entries(tblData.values)) {
           if (key2.includes(nodeRef) || key2.endsWith(nodeRef)) {
-            console.log(`\u{1F4C4} [PDF] \u2705 Trouv\xE9 partiel dans values "${key2}": ${value}`);
+            logger.debug(`\u{1F4C4} [PDF] \u2705 Trouv\xE9 partiel dans values "${key2}": ${value}`);
             return resolveSelectLabel(value);
           }
         }
@@ -25241,14 +25296,14 @@ var DocumentPdfRenderer = class {
       const formulaId = ref.replace(/^(node-formula:|formula:)/, "");
       const altRef = ref.startsWith("node-formula:") ? `formula:${formulaId}` : `node-formula:${formulaId}`;
       if (formulaResultsMap2[ref] !== void 0) {
-        console.log(`\u{1F4C4} [PDF] \u2705 Formula r\xE9solu via formulaResultsMap: ${ref} \u2192 ${formulaResultsMap2[ref]}`);
+        logger.debug(`\u{1F4C4} [PDF] \u2705 Formula r\xE9solu via formulaResultsMap: ${ref} \u2192 ${formulaResultsMap2[ref]}`);
         return this.formatValue(formulaResultsMap2[ref]);
       }
       if (formulaResultsMap2[altRef] !== void 0) {
-        console.log(`\u{1F4C4} [PDF] \u2705 Formula r\xE9solu via formulaResultsMap (alt): ${altRef} \u2192 ${formulaResultsMap2[altRef]}`);
+        logger.debug(`\u{1F4C4} [PDF] \u2705 Formula r\xE9solu via formulaResultsMap (alt): ${altRef} \u2192 ${formulaResultsMap2[altRef]}`);
         return this.formatValue(formulaResultsMap2[altRef]);
       }
-      console.log(`\u{1F4C4} [PDF] Cherche formula: "${formulaId}" (pas trouv\xE9 dans formulaResultsMap, keys: ${Object.keys(formulaResultsMap2).join(", ")})`);
+      logger.debug(`\u{1F4C4} [PDF] Cherche formula: "${formulaId}" (pas trouv\xE9 dans formulaResultsMap, keys: ${Object.keys(formulaResultsMap2).join(", ")})`);
       if (tblData.formulas && tblData.formulas[formulaId] !== void 0) {
         return this.formatValue(tblData.formulas[formulaId]);
       }
@@ -25264,11 +25319,11 @@ var DocumentPdfRenderer = class {
     if (ref.startsWith("calculatedValue:") || ref.startsWith("@calculated.")) {
       const formulaResultsMap2 = this.ctx.formulaResultsMap || {};
       if (formulaResultsMap2[ref] !== void 0) {
-        console.log(`\u{1F4C4} [PDF] \u2705 Calculated r\xE9solu via formulaResultsMap: ${ref} \u2192 ${formulaResultsMap2[ref]}`);
+        logger.debug(`\u{1F4C4} [PDF] \u2705 Calculated r\xE9solu via formulaResultsMap: ${ref} \u2192 ${formulaResultsMap2[ref]}`);
         return this.formatValue(formulaResultsMap2[ref]);
       }
       const calcRef = ref.replace(/^(calculatedValue:|@calculated\.)/, "");
-      console.log(`\u{1F4C4} [PDF] Cherche calculatedValue: "${calcRef}"`);
+      logger.debug(`\u{1F4C4} [PDF] Cherche calculatedValue: "${calcRef}"`);
       if (tblData.calculatedValues && tblData.calculatedValues[calcRef] !== void 0) {
         return this.formatValue(tblData.calculatedValues[calcRef]);
       }
@@ -25283,7 +25338,7 @@ var DocumentPdfRenderer = class {
     }
     if (ref.startsWith("condition:")) {
       const condRef = ref.replace("condition:", "");
-      console.log(`\u{1F4C4} [PDF] Cherche condition: "${condRef}"`);
+      logger.debug(`\u{1F4C4} [PDF] Cherche condition: "${condRef}"`);
       if (tblData.conditions && tblData.conditions[condRef] !== void 0) {
         return this.formatValue(tblData.conditions[condRef]);
       }
@@ -25296,11 +25351,11 @@ var DocumentPdfRenderer = class {
     }
     for (const [key2, value] of Object.entries(tblData)) {
       if (key2.includes(ref) || ref.includes(key2)) {
-        console.log(`\u{1F4C4} [PDF] \u2705 Trouv\xE9 par recherche globale "${key2}": ${value}`);
+        logger.debug(`\u{1F4C4} [PDF] \u2705 Trouv\xE9 par recherche globale "${key2}": ${value}`);
         return this.formatValue(value);
       }
     }
-    console.log(`\u{1F4C4} [PDF] \u274C Variable non trouv\xE9e: "${ref}"`);
+    logger.debug(`\u{1F4C4} [PDF] \u274C Variable non trouv\xE9e: "${ref}"`);
     return "";
   }
   /**
@@ -25342,7 +25397,7 @@ var DocumentPdfRenderer = class {
       fieldValue = this.ctx.tblData?.[key2];
     }
     const compareValue = rule.compareValue;
-    console.log(`\u{1F4CB} [PDF Condition] Rule: ${fieldRef} ${rule.operator} ${compareValue} | fieldValue=${fieldValue}`);
+    logger.debug(`\u{1F4CB} [PDF Condition] Rule: ${fieldRef} ${rule.operator} ${compareValue} | fieldValue=${fieldValue}`);
     switch (rule.operator) {
       case "IS_EMPTY":
         return fieldValue === null || fieldValue === void 0 || fieldValue === "";
@@ -25377,7 +25432,7 @@ var DocumentPdfRenderer = class {
     if (!conditionalConfig || !conditionalConfig.enabled || conditionalConfig.rules.length === 0) {
       return { shouldRender: true };
     }
-    console.log(`\u{1F4CB} [PDF] \xC9valuation conditions:`, JSON.stringify(conditionalConfig.rules));
+    logger.debug(`\u{1F4CB} [PDF] \xC9valuation conditions:`, JSON.stringify(conditionalConfig.rules));
     let result = this.evaluateSingleConditionRule(conditionalConfig.rules[0]);
     for (let i = 1; i < conditionalConfig.rules.length; i++) {
       const rule = conditionalConfig.rules[i];
@@ -25389,7 +25444,7 @@ var DocumentPdfRenderer = class {
       }
     }
     const action = conditionalConfig.rules[0]?.action || "SHOW";
-    console.log(`\u{1F4CB} [PDF] Condition result: ${result}, action: ${action}`);
+    logger.debug(`\u{1F4CB} [PDF] Condition result: ${result}, action: ${action}`);
     if (action === "SHOW") {
       if (result && conditionalConfig.showContent) {
         return {
@@ -25459,7 +25514,7 @@ var DocumentPdfRenderer = class {
   renderFooter() {
     const footerY = this.pageHeight - 40;
     const footerText = `Document g\xE9n\xE9r\xE9 le ${(/* @__PURE__ */ new Date()).toLocaleDateString("fr-FR")} | ${this.ctx.organization?.name || "2Thier CRM"}`;
-    console.log(`\u{1F4C4} [PDF] FOOTER: y=${footerY}`);
+    logger.debug(`\u{1F4C4} [PDF] FOOTER: y=${footerY}`);
     this.doc.fontSize(8).font("Helvetica").fillColor("#999999").text(footerText, this.margin, footerY, {
       width: this.contentWidth,
       align: "center",
@@ -25472,7 +25527,7 @@ var DocumentPdfRenderer = class {
   // KPI_BANNER - Bandeau KPI / ROI graphique
   // ============================================================
   renderModuleKpiBanner(config, x, y, width, height) {
-    console.log(`\u{1F3A8} [KPI-ICON-DEBUG] BANNER CALLED! icon keys: ${Object.keys(config).filter((k) => k.includes("icon")).map((k) => `${k}="${config[k]}"`).join(", ")}`);
+    logger.debug(`\u{1F3A8} [KPI-ICON-DEBUG] BANNER CALLED! icon keys: ${Object.keys(config).filter((k) => k.includes("icon")).map((k) => `${k}="${config[k]}"`).join(", ")}`);
     this.doc.save();
     this.doc.rect(x, y, width, height).clip();
     const gradientFrom = config.gradientFrom || "#0F5C60";
@@ -25874,7 +25929,7 @@ var DocumentPdfRenderer = class {
           doc.image(pngPath, cx - sz / 2, cy - sz / 2, { width: sz, height: sz });
           return true;
         } catch (e) {
-          console.warn(`\u{1F4C4} [PDF] Erreur doc.image emoji: ${e}`);
+          logger.warn(`\u{1F4C4} [PDF] Erreur doc.image emoji: ${e}`);
         }
       }
       let cat = "dot";
@@ -25944,7 +25999,7 @@ var DocumentPdfRenderer = class {
         });
       }
     }
-    console.log(`\u{1F4CA} [KPI-BANNER] ${allKpis.length} KPIs from flat fields: ${allKpis.map((k) => `${k.label}(icon=${k.icon})`).join(", ")}`);
+    logger.debug(`\u{1F4CA} [KPI-BANNER] ${allKpis.length} KPIs from flat fields: ${allKpis.map((k) => `${k.label}(icon=${k.icon})`).join(", ")}`);
     if (allKpis.length === 0 && Array.isArray(config.kpis)) {
       for (const kpi of config.kpis) {
         if (!kpi || kpi.enabled === false) continue;
@@ -26143,7 +26198,7 @@ var DocumentPdfRenderer = class {
     const widthDiff = Math.abs(actualWidth - this.pageWidth);
     const heightDiff = Math.abs(actualHeight - this.pageHeight);
     if (widthDiff > A4_DIMENSION_TOLERANCE || heightDiff > A4_DIMENSION_TOLERANCE) {
-      console.warn(`\u{1F4C4} [PDF] Taille A4 attendue: ${this.pageWidth.toFixed(2)}x${this.pageHeight.toFixed(2)}, taille r\xE9elle: ${actualWidth.toFixed(2)}x${actualHeight.toFixed(2)}`);
+      logger.warn(`\u{1F4C4} [PDF] Taille A4 attendue: ${this.pageWidth.toFixed(2)}x${this.pageHeight.toFixed(2)}, taille r\xE9elle: ${actualWidth.toFixed(2)}x${actualHeight.toFixed(2)}`);
     }
     this.pageWidth = actualWidth;
     this.pageHeight = actualHeight;
@@ -26157,6 +26212,7 @@ async function renderDocumentPdf(context) {
 
 // src/routes/documents.ts
 init_PostalEmailService();
+init_logger();
 var router22 = (0, import_express23.Router)();
 router22.use(authenticateToken);
 var prisma9 = db;
@@ -28044,6 +28100,7 @@ router22.get("/generated/:id/preview", async (req2, res) => {
 var documents_default = router22;
 
 // src/routes/e-signature.ts
+init_logger();
 var router23 = (0, import_express24.Router)();
 function generateOtp() {
   return crypto.randomInt(OTP_MIN, OTP_MAX).toString();
@@ -29201,6 +29258,7 @@ var import_express25 = require("express");
 init_database();
 var import_zod8 = require("zod");
 init_storage();
+init_logger();
 var router24 = (0, import_express25.Router)();
 function getOrgId(req2) {
   return req2.headers["x-organization-id"] || null;
@@ -30087,6 +30145,7 @@ var import_express26 = require("express");
 init_database();
 var import_zod9 = require("zod");
 var import_express_rate_limit2 = __toESM(require("express-rate-limit"), 1);
+init_logger();
 var router25 = (0, import_express26.Router)();
 var prisma10 = db;
 var sanitizeString2 = (input) => {
@@ -30525,6 +30584,7 @@ init_database();
 var import_zod10 = require("zod");
 var import_express_rate_limit3 = __toESM(require("express-rate-limit"), 1);
 var import_crypto16 = require("crypto");
+init_logger();
 var router26 = (0, import_express27.Router)();
 var prisma11 = db;
 var sanitizeString3 = (input) => {
@@ -31271,6 +31331,7 @@ var usersRoutes_default = router26;
 // src/routes/adminPasswordRoutes.ts
 var import_express28 = require("express");
 init_database();
+init_logger();
 var router27 = (0, import_express28.Router)();
 router27.use(authenticateToken);
 router27.get("/users-emails", async (req2, res) => {
@@ -31388,6 +31449,7 @@ var adminPasswordRoutes_default = router27;
 var import_express29 = __toESM(require("express"), 1);
 var import_express_rate_limit4 = __toESM(require("express-rate-limit"), 1);
 var import_zod11 = require("zod");
+init_logger();
 var router28 = import_express29.default.Router();
 var servicesRateLimit = (0, import_express_rate_limit4.default)({
   windowMs: 15 * 60 * 1e3,
@@ -31494,6 +31556,7 @@ var services_default = router28;
 // src/routes/permissions.ts
 var import_express30 = require("express");
 init_database();
+init_logger();
 var prisma12 = db;
 var router29 = (0, import_express30.Router)();
 router29.use(authMiddleware, impersonationMiddleware);
@@ -31697,6 +31760,7 @@ var permissions_default = router29;
 var import_express31 = __toESM(require("express"), 1);
 init_database();
 init_crypto();
+init_logger();
 var prisma13 = db;
 var router30 = import_express31.default.Router();
 router30.use(authMiddleware, impersonationMiddleware);
@@ -31813,6 +31877,7 @@ var admin_default = router30;
 
 // src/routes/impersonate.ts
 var import_express32 = require("express");
+init_logger();
 var router31 = (0, import_express32.Router)();
 router31.post("/", authMiddleware, async (req2, res) => {
   try {
@@ -31866,6 +31931,7 @@ var impersonate_default = router31;
 // src/routes/clients.ts
 var import_express33 = require("express");
 init_database();
+init_logger();
 var router32 = (0, import_express33.Router)();
 var prisma14 = db;
 router32.use(authenticateToken);
@@ -32023,6 +32089,7 @@ var clients_default = router32;
 // src/routes/projects.ts
 var import_express34 = require("express");
 init_database();
+init_logger();
 var router33 = (0, import_express34.Router)();
 var prisma15 = db;
 router33.use(authenticateToken);
@@ -32225,6 +32292,7 @@ var projects_default = router33;
 // src/routes/gemini.ts
 var import_express35 = __toESM(require("express"), 1);
 init_database();
+init_logger();
 var router34 = import_express35.default.Router();
 var geminiService = getGeminiService();
 router34.use(authenticateToken);
@@ -32508,6 +32576,7 @@ function joinUrl(base, path10) {
 }
 
 // src/services/TelnyxCascadeService.ts
+init_logger();
 var prisma16 = db;
 var TELNYX_API_URL = "https://api.telnyx.com/v2";
 async function getTelnyxHeaders(organizationId) {
@@ -32520,12 +32589,12 @@ async function getTelnyxHeaders(organizationId) {
       try {
         apiKey = decrypt(config.encryptedApiKey).trim();
       } catch {
-        console.error("\u274C [TelnyxCascade] API Key illisible (ENCRYPTION_KEY modifi\xE9e ?)");
+        logger.error("\u274C [TelnyxCascade] API Key illisible (ENCRYPTION_KEY modifi\xE9e ?)");
         return null;
       }
     }
     if (!apiKey || apiKey.trim().length === 0) {
-      console.error("\u274C [TelnyxCascade] API Key vide apr\xE8s d\xE9chiffrement");
+      logger.error("\u274C [TelnyxCascade] API Key vide apr\xE8s d\xE9chiffrement");
       return null;
     }
     return {
@@ -32533,7 +32602,7 @@ async function getTelnyxHeaders(organizationId) {
       "Content-Type": "application/json"
     };
   } catch (error) {
-    console.error("\u274C [TelnyxCascade] Erreur getTelnyxHeaders:", error);
+    logger.error("\u274C [TelnyxCascade] Erreur getTelnyxHeaders:", error);
     return null;
   }
 }
@@ -32560,7 +32629,7 @@ async function planCascade(organizationId) {
     }
     return legs;
   } catch (error) {
-    console.error("\u274C [TelnyxCascade] Erreur planCascade:", error);
+    logger.error("\u274C [TelnyxCascade] Erreur planCascade:", error);
     return [];
   }
 }
@@ -32604,7 +32673,7 @@ async function initiateCallWithCascade(options, req2) {
     });
     const cascadeLegs = await planCascade(organizationId);
     if (cascadeLegs.length === 0) {
-      console.warn("\u26A0\uFE0F [TelnyxCascade] Aucun endpoint SIP configur\xE9, appel direct");
+      logger.warn("\u26A0\uFE0F [TelnyxCascade] Aucun endpoint SIP configur\xE9, appel direct");
       return {
         success: true,
         callId: call.id,
@@ -32624,7 +32693,7 @@ async function initiateCallWithCascade(options, req2) {
       }))
     };
   } catch (error) {
-    console.error("\u274C [TelnyxCascade] Erreur initiation cascade:", error.response?.data || error.message);
+    logger.error("\u274C [TelnyxCascade] Erreur initiation cascade:", error.response?.data || error.message);
     throw error;
   }
 }
@@ -32648,7 +32717,7 @@ async function executeCascade(cascadeLegs, callId) {
       });
     }
   } catch (error) {
-    console.error("\u274C [TelnyxCascade] Erreur executeCascade:", error);
+    logger.error("\u274C [TelnyxCascade] Erreur executeCascade:", error);
     throw error;
   }
 }
@@ -32661,7 +32730,7 @@ async function updateCallLegStatus(callId, destination, status, answeredAt, ende
       }
     });
     if (!leg) {
-      console.warn(`\u26A0\uFE0F [TelnyxCascade] Leg non trouv\xE9: ${callId} -> ${destination}`);
+      logger.warn(`\u26A0\uFE0F [TelnyxCascade] Leg non trouv\xE9: ${callId} -> ${destination}`);
       return;
     }
     await prisma16.telnyxCallLeg.update({
@@ -32685,7 +32754,7 @@ async function updateCallLegStatus(callId, destination, status, answeredAt, ende
       });
     }
   } catch (error) {
-    console.error("\u274C [TelnyxCascade] Erreur updateCallLegStatus:", error);
+    logger.error("\u274C [TelnyxCascade] Erreur updateCallLegStatus:", error);
   }
 }
 var TelnyxCascadeService = {
@@ -32696,6 +32765,7 @@ var TelnyxCascadeService = {
 // src/api/telnyx.ts
 init_crypto();
 var import_crypto20 = __toESM(require("crypto"), 1);
+init_logger();
 var router35 = (0, import_express36.Router)();
 var prisma17 = db;
 router35.use(async (_req, _res, next) => {
@@ -32809,7 +32879,7 @@ async function ensureTelnyxCascadeSchema() {
           END IF;
         END $$;`);
       } catch (e) {
-        console.warn("\u26A0\uFE0F [Telnyx API] Impossible de garantir le sch\xE9ma Telnyx cascade (continuation best-effort):", e.message);
+        logger.warn("\u26A0\uFE0F [Telnyx API] Impossible de garantir le sch\xE9ma Telnyx cascade (continuation best-effort):", e.message);
       }
     })();
   }
@@ -33057,7 +33127,7 @@ async function transferCallToLeg(params) {
     const status = error?.response?.status;
     const details = error?.response?.data;
     const errors = Array.isArray(details?.errors) ? details.errors : void 0;
-    console.warn("\u26A0\uFE0F [Telnyx Transfer] \xE9chec", {
+    logger.warn("\u26A0\uFE0F [Telnyx Transfer] \xE9chec", {
       status,
       callControlId,
       legType: leg.type,
@@ -33277,7 +33347,7 @@ function shouldDebugTelnyxWebhooks() {
 }
 function telnyxWebhookDebugLog(...args) {
   if (!shouldDebugTelnyxWebhooks()) return;
-  console.log("\u{1F9F7} [Telnyx Webhook Debug]", ...args);
+  logger.debug("\u{1F9F7} [Telnyx Webhook Debug]", ...args);
 }
 async function patchTelnyxCallControlApplicationWebhook(params) {
   const { id, desiredWebhookUrl, headers, applicationName } = params;
@@ -33388,10 +33458,10 @@ var purchaseNumberSchema = import_zod12.z.object({
 });
 router35.get("/connections", async (req2, res) => {
   try {
-    console.log("\u{1F50D} [Telnyx API] R\xE9cup\xE9ration des connexions...");
+    logger.debug("\u{1F50D} [Telnyx API] R\xE9cup\xE9ration des connexions...");
     const organizationId = getOrganizationIdFromRequest(req2);
     if (!organizationId) return res.status(401).json({ error: "Non autoris\xE9" });
-    console.log("[Telnyx API] organizationId:", organizationId);
+    logger.debug("[Telnyx API] organizationId:", organizationId);
     const auth = await getTelnyxAuth(organizationId);
     if (!auth.ok) {
       const cached = await prisma17.telnyxConnection.findMany({
@@ -33446,13 +33516,13 @@ router35.get("/connections", async (req2, res) => {
           }
         });
       } catch (dbError) {
-        console.warn("\u26A0\uFE0F [Telnyx API] Connexion non sauvegard\xE9e en DB:", conn.id, dbError);
+        logger.warn("\u26A0\uFE0F [Telnyx API] Connexion non sauvegard\xE9e en DB:", conn.id, dbError);
       }
     }
-    console.log(`\u2705 [Telnyx API] ${connections.length} connexions synchronis\xE9es`);
+    logger.debug(`\u2705 [Telnyx API] ${connections.length} connexions synchronis\xE9es`);
     res.json(connections);
   } catch (error) {
-    console.error("\u274C [Telnyx API] Erreur connexions:", error);
+    logger.error("\u274C [Telnyx API] Erreur connexions:", error);
     const organizationId = getOrganizationIdFromRequest(req2);
     if (!organizationId) return res.status(401).json({ error: "Non autoris\xE9" });
     const cached = await prisma17.telnyxConnection.findMany({
@@ -33486,7 +33556,7 @@ router35.get("/connections", async (req2, res) => {
 });
 router35.get("/phone-numbers", async (req2, res) => {
   try {
-    console.log("\u{1F50D} [Telnyx API] R\xE9cup\xE9ration des num\xE9ros...");
+    logger.debug("\u{1F50D} [Telnyx API] R\xE9cup\xE9ration des num\xE9ros...");
     const organizationId = getOrganizationIdFromRequest(req2);
     if (!organizationId) return res.status(401).json({ error: "Non autoris\xE9" });
     const auth = await getTelnyxAuth(organizationId);
@@ -33556,13 +33626,13 @@ router35.get("/phone-numbers", async (req2, res) => {
           }
         });
       } catch (dbError) {
-        console.warn("\u26A0\uFE0F [Telnyx API] Num\xE9ro non sauvegard\xE9 en DB:", number.id, dbError);
+        logger.warn("\u26A0\uFE0F [Telnyx API] Num\xE9ro non sauvegard\xE9 en DB:", number.id, dbError);
       }
     }
-    console.log(`\u2705 [Telnyx API] ${phoneNumbers.length} num\xE9ros synchronis\xE9s`);
+    logger.debug(`\u2705 [Telnyx API] ${phoneNumbers.length} num\xE9ros synchronis\xE9s`);
     res.json(phoneNumbers);
   } catch (error) {
-    console.error("\u274C [Telnyx API] Erreur num\xE9ros:", error);
+    logger.error("\u274C [Telnyx API] Erreur num\xE9ros:", error);
     const organizationId = getOrganizationIdFromRequest(req2);
     if (!organizationId) return res.status(401).json({ error: "Non autoris\xE9" });
     const cached = await prisma17.telnyxPhoneNumber.findMany({
@@ -33607,7 +33677,7 @@ router35.post("/phone-numbers/purchase", async (req2, res) => {
       });
     }
     const data = parsed.data;
-    console.log("\u{1F6D2} [Telnyx API] Achat de num\xE9ro:", data);
+    logger.debug("\u{1F6D2} [Telnyx API] Achat de num\xE9ro:", data);
     const organizationId = getOrganizationIdFromRequest(req2);
     if (!organizationId) return res.status(401).json({ error: "Non autoris\xE9" });
     const auth = await getTelnyxAuth(organizationId);
@@ -33630,14 +33700,14 @@ router35.post("/phone-numbers/purchase", async (req2, res) => {
     const purchaseResponse = await import_axios2.default.post(`${TELNYX_API_URL2}/phone_number_orders`, {
       phone_numbers: [{ phone_number: availableNumber.phone_number }]
     }, { headers: auth.headers });
-    console.log("\u2705 [Telnyx API] Num\xE9ro achet\xE9:", availableNumber.phone_number);
+    logger.debug("\u2705 [Telnyx API] Num\xE9ro achet\xE9:", availableNumber.phone_number);
     res.json({
       success: true,
       phone_number: availableNumber.phone_number,
       order_id: purchaseResponse.data.data.id
     });
   } catch (error) {
-    console.error("\u274C [Telnyx API] Erreur achat num\xE9ro:", error);
+    logger.error("\u274C [Telnyx API] Erreur achat num\xE9ro:", error);
     return respondTelnyxAxiosError(res, error, "Erreur lors de l'achat du num\xE9ro");
   }
 });
@@ -33646,7 +33716,7 @@ router35.get("/calls", async (req2, res) => {
     const limit = parseInt(req2.query.limit) || 50;
     const organizationId = getOrganizationIdFromRequest(req2);
     if (!organizationId) return res.status(401).json({ error: "Non autoris\xE9" });
-    console.log(`\u{1F50D} [Telnyx API] R\xE9cup\xE9ration des appels (${limit})...`);
+    logger.debug(`\u{1F50D} [Telnyx API] R\xE9cup\xE9ration des appels (${limit})...`);
     const calls = await prisma17.telnyxCall.findMany({
       where: { organizationId },
       orderBy: { startedAt: "desc" },
@@ -33666,10 +33736,10 @@ router35.get("/calls", async (req2, res) => {
       recording_url: call.recordingUrl,
       lead_id: call.leadId
     }));
-    console.log(`\u2705 [Telnyx API] ${formattedCalls.length} appels r\xE9cup\xE9r\xE9s`);
+    logger.debug(`\u2705 [Telnyx API] ${formattedCalls.length} appels r\xE9cup\xE9r\xE9s`);
     res.json(formattedCalls);
   } catch (error) {
-    console.error("\u274C [Telnyx API] Erreur r\xE9cup\xE9ration appels:", error);
+    logger.error("\u274C [Telnyx API] Erreur r\xE9cup\xE9ration appels:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des appels" });
   }
 });
@@ -33678,14 +33748,14 @@ router35.post("/calls", async (req2, res) => {
     const data = makeCallSchema.parse(req2.body);
     const organizationId = getOrganizationIdFromRequest(req2);
     if (!organizationId) return res.status(401).json({ error: "Non autoris\xE9" });
-    console.log("\u{1F4DE} [Telnyx API] Initiation appel AVEC CASCADE:", data);
+    logger.debug("\u{1F4DE} [Telnyx API] Initiation appel AVEC CASCADE:", data);
     const result = await TelnyxCascadeService.initiateCallWithCascade({
       organizationId,
       fromNumber: data.from,
       toNumber: data.to,
       leadId: data.lead_id
     }, req2);
-    console.log("\u2705 [Telnyx API] Appel initi\xE9 avec cascade:", result.callControlId);
+    logger.debug("\u2705 [Telnyx API] Appel initi\xE9 avec cascade:", result.callControlId);
     res.json({
       success: true,
       id: result.callId,
@@ -33696,7 +33766,7 @@ router35.post("/calls", async (req2, res) => {
       cascade: result.cascade
     });
   } catch (error) {
-    console.error("\u274C [Telnyx API] Erreur initiation appel:", error);
+    logger.error("\u274C [Telnyx API] Erreur initiation appel:", error);
     return respondTelnyxAxiosError(res, error, "Erreur lors de l'initiation de l'appel");
   }
 });
@@ -33762,7 +33832,7 @@ router35.post("/calls/hangup-active", async (req2, res) => {
       errors
     });
   } catch (error) {
-    console.error("\u274C [Telnyx API] Erreur hangup-active:", error);
+    logger.error("\u274C [Telnyx API] Erreur hangup-active:", error);
     return respondTelnyxAxiosError(res, error, "Erreur lors du raccrochage des appels actifs");
   }
 });
@@ -33771,7 +33841,7 @@ router35.post("/calls/:callId/hangup", async (req2, res) => {
     const { callId } = req2.params;
     const organizationId = getOrganizationIdFromRequest(req2);
     if (!organizationId) return res.status(401).json({ error: "Non autoris\xE9" });
-    console.log("\u260E\uFE0F [Telnyx API] Raccrocher appel:", callId);
+    logger.debug("\u260E\uFE0F [Telnyx API] Raccrocher appel:", callId);
     const call = await prisma17.telnyxCall.findFirst({
       where: {
         callId,
@@ -33796,10 +33866,10 @@ router35.post("/calls/:callId/hangup", async (req2, res) => {
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    console.log("\u2705 [Telnyx API] Appel raccroch\xE9:", callId);
+    logger.debug("\u2705 [Telnyx API] Appel raccroch\xE9:", callId);
     res.json({ success: true });
   } catch (error) {
-    console.error("\u274C [Telnyx API] Erreur raccrocher:", error);
+    logger.error("\u274C [Telnyx API] Erreur raccrocher:", error);
     return respondTelnyxAxiosError(res, error, "Erreur lors du raccrochage");
   }
 });
@@ -33808,7 +33878,7 @@ router35.post("/calls/:callId/mute", async (req2, res) => {
     const { callId } = req2.params;
     const organizationId = getOrganizationIdFromRequest(req2);
     if (!organizationId) return res.status(401).json({ error: "Non autoris\xE9" });
-    console.log("\u{1F507} [Telnyx API] Couper micro:", callId);
+    logger.debug("\u{1F507} [Telnyx API] Couper micro:", callId);
     const auth = await getTelnyxAuth(organizationId);
     if (!auth.ok) {
       return res.status(auth.status).json({ error: auth.message, code: auth.code });
@@ -33816,10 +33886,10 @@ router35.post("/calls/:callId/mute", async (req2, res) => {
     await import_axios2.default.post(`${TELNYX_API_URL2}/calls/${callId}/actions/mute`, {}, {
       headers: auth.headers
     });
-    console.log("\u2705 [Telnyx API] Micro coup\xE9:", callId);
+    logger.debug("\u2705 [Telnyx API] Micro coup\xE9:", callId);
     res.json({ success: true });
   } catch (error) {
-    console.error("\u274C [Telnyx API] Erreur mute:", error);
+    logger.error("\u274C [Telnyx API] Erreur mute:", error);
     return respondTelnyxAxiosError(res, error, "Erreur lors de la coupure du micro");
   }
 });
@@ -33828,7 +33898,7 @@ router35.post("/calls/:callId/unmute", async (req2, res) => {
     const { callId } = req2.params;
     const organizationId = getOrganizationIdFromRequest(req2);
     if (!organizationId) return res.status(401).json({ error: "Non autoris\xE9" });
-    console.log("\u{1F50A} [Telnyx API] Activer micro:", callId);
+    logger.debug("\u{1F50A} [Telnyx API] Activer micro:", callId);
     const auth = await getTelnyxAuth(organizationId);
     if (!auth.ok) {
       return res.status(auth.status).json({ error: auth.message, code: auth.code });
@@ -33836,10 +33906,10 @@ router35.post("/calls/:callId/unmute", async (req2, res) => {
     await import_axios2.default.post(`${TELNYX_API_URL2}/calls/${callId}/actions/unmute`, {}, {
       headers: auth.headers
     });
-    console.log("\u2705 [Telnyx API] Micro activ\xE9:", callId);
+    logger.debug("\u2705 [Telnyx API] Micro activ\xE9:", callId);
     res.json({ success: true });
   } catch (error) {
-    console.error("\u274C [Telnyx API] Erreur unmute:", error);
+    logger.error("\u274C [Telnyx API] Erreur unmute:", error);
     return respondTelnyxAxiosError(res, error, "Erreur lors de l'activation du micro");
   }
 });
@@ -33848,7 +33918,7 @@ router35.get("/messages", async (req2, res) => {
     const limit = parseInt(req2.query.limit) || 50;
     const organizationId = getOrganizationIdFromRequest(req2);
     if (!organizationId) return res.status(401).json({ error: "Non autoris\xE9" });
-    console.log(`\u{1F50D} [Telnyx API] R\xE9cup\xE9ration des messages (${limit})...`);
+    logger.debug(`\u{1F50D} [Telnyx API] R\xE9cup\xE9ration des messages (${limit})...`);
     const messages = await prisma17.telnyxMessage.findMany({
       where: { organizationId },
       orderBy: { sentAt: "desc" },
@@ -33869,10 +33939,10 @@ router35.get("/messages", async (req2, res) => {
       media_urls: msg.mediaUrls || [],
       lead_id: msg.leadId
     }));
-    console.log(`\u2705 [Telnyx API] ${formattedMessages.length} messages r\xE9cup\xE9r\xE9s`);
+    logger.debug(`\u2705 [Telnyx API] ${formattedMessages.length} messages r\xE9cup\xE9r\xE9s`);
     res.json(formattedMessages);
   } catch (error) {
-    console.error("\u274C [Telnyx API] Erreur r\xE9cup\xE9ration messages:", error);
+    logger.error("\u274C [Telnyx API] Erreur r\xE9cup\xE9ration messages:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des messages" });
   }
 });
@@ -33881,7 +33951,7 @@ router35.post("/messages", async (req2, res) => {
     const data = sendMessageSchema.parse(req2.body);
     const organizationId = getOrganizationIdFromRequest(req2);
     if (!organizationId) return res.status(401).json({ error: "Non autoris\xE9" });
-    console.log("\u{1F4AC} [Telnyx API] Envoi message:", data);
+    logger.debug("\u{1F4AC} [Telnyx API] Envoi message:", data);
     const auth = await getTelnyxAuth(organizationId);
     if (!auth.ok) {
       return res.status(auth.status).json({ error: auth.message, code: auth.code });
@@ -33913,21 +33983,21 @@ router35.post("/messages", async (req2, res) => {
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    console.log("\u2705 [Telnyx API] Message envoy\xE9:", message.messageId);
+    logger.debug("\u2705 [Telnyx API] Message envoy\xE9:", message.messageId);
     res.json({
       id: message.id,
       message_id: message.messageId,
       status: message.status
     });
   } catch (error) {
-    console.error("\u274C [Telnyx API] Erreur envoi message:", error);
+    logger.error("\u274C [Telnyx API] Erreur envoi message:", error);
     return respondTelnyxAxiosError(res, error, "Erreur lors de l'envoi du message");
   }
 });
 router35.post("/webhooks/calls", async (req2, res) => {
   try {
     const webhook = req2.body;
-    console.log("\u{1FA9D} [Telnyx Webhook] Appel:", webhook.data?.event_type);
+    logger.debug("\u{1FA9D} [Telnyx Webhook] Appel:", webhook.data?.event_type);
     const callData = webhook.data?.payload;
     if (!callData) {
       return res.json({ received: true });
@@ -33950,7 +34020,7 @@ router35.post("/webhooks/calls", async (req2, res) => {
         where: { id: call.id },
         data: updateData
       });
-      console.log(`\u2705 [Telnyx Webhook] Appel mis \xE0 jour: ${call.callId} -> ${callData.state}`);
+      logger.debug(`\u2705 [Telnyx Webhook] Appel mis \xE0 jour: ${call.callId} -> ${callData.state}`);
       if (["hangup", "completed"].includes(callData.state) && updateData.duration === 0 && call.organizationId) {
         notify.missedCall(
           call.organizationId,
@@ -33961,14 +34031,14 @@ router35.post("/webhooks/calls", async (req2, res) => {
     }
     res.json({ received: true });
   } catch (error) {
-    console.error("\u274C [Telnyx Webhook] Erreur appel:", error);
+    logger.error("\u274C [Telnyx Webhook] Erreur appel:", error);
     res.status(500).json({ error: "Erreur webhook appel" });
   }
 });
 router35.post("/webhooks/messages", async (req2, res) => {
   try {
     const webhook = req2.body;
-    console.log("\u{1FA9D} [Telnyx Webhook] Message:", webhook.data?.event_type);
+    logger.debug("\u{1FA9D} [Telnyx Webhook] Message:", webhook.data?.event_type);
     const messageData = webhook.data?.payload;
     if (!messageData) {
       return res.json({ received: true });
@@ -33977,7 +34047,7 @@ router35.post("/webhooks/messages", async (req2, res) => {
     if (eventType === "message.received") {
       const organizationId = await getOrganizationIdFromMessagePayload(messageData);
       if (!organizationId) {
-        console.warn("\u26A0\uFE0F [Telnyx Webhook] SMS entrant: org introuvable, skip:", messageData?.id);
+        logger.warn("\u26A0\uFE0F [Telnyx Webhook] SMS entrant: org introuvable, skip:", messageData?.id);
         return res.json({ received: true });
       }
       await prisma17.telnyxMessage.create({
@@ -33997,7 +34067,7 @@ router35.post("/webhooks/messages", async (req2, res) => {
           updatedAt: /* @__PURE__ */ new Date()
         }
       });
-      console.log("\u2705 [Telnyx Webhook] Message entrant sauvegard\xE9:", messageData.id);
+      logger.debug("\u2705 [Telnyx Webhook] Message entrant sauvegard\xE9:", messageData.id);
       notify.incomingSms(
         organizationId,
         { fromNumber: messageData.from.phone_number, text: messageData.text || "" }
@@ -34015,18 +34085,18 @@ router35.post("/webhooks/messages", async (req2, res) => {
             updatedAt: /* @__PURE__ */ new Date()
           }
         });
-        console.log("\u2705 [Telnyx Webhook] Message livr\xE9:", messageData.id);
+        logger.debug("\u2705 [Telnyx Webhook] Message livr\xE9:", messageData.id);
       }
     }
     res.json({ received: true });
   } catch (error) {
-    console.error("\u274C [Telnyx Webhook] Erreur message:", error);
+    logger.error("\u274C [Telnyx Webhook] Erreur message:", error);
     res.status(500).json({ error: "Erreur webhook message" });
   }
 });
 router35.post("/sync", async (req2, res) => {
   try {
-    console.log("\u{1F504} [Telnyx API] Synchronisation compl\xE8te...");
+    logger.debug("\u{1F504} [Telnyx API] Synchronisation compl\xE8te...");
     const organizationId = getOrganizationIdFromRequest(req2);
     if (!organizationId) return res.status(401).json({ error: "Non autoris\xE9" });
     const auth = await getTelnyxAuth(organizationId);
@@ -34063,7 +34133,7 @@ router35.post("/sync", async (req2, res) => {
           }
         });
       } catch (dbError) {
-        console.warn("\u26A0\uFE0F [Telnyx API] Connexion non sauvegard\xE9e en DB:", conn.id, dbError);
+        logger.warn("\u26A0\uFE0F [Telnyx API] Connexion non sauvegard\xE9e en DB:", conn.id, dbError);
       }
     }
     for (const number of numbersRes.data.data) {
@@ -34097,17 +34167,17 @@ router35.post("/sync", async (req2, res) => {
           }
         });
       } catch (dbError) {
-        console.warn("\u26A0\uFE0F [Telnyx API] Num\xE9ro non sauvegard\xE9 en DB:", number.id, dbError);
+        logger.warn("\u26A0\uFE0F [Telnyx API] Num\xE9ro non sauvegard\xE9 en DB:", number.id, dbError);
       }
     }
-    console.log("\u2705 [Telnyx API] Synchronisation termin\xE9e");
+    logger.debug("\u2705 [Telnyx API] Synchronisation termin\xE9e");
     res.json({
       success: true,
       connections: connectionsRes.data.data.length,
       numbers: numbersRes.data.data.length
     });
   } catch (error) {
-    console.error("\u274C [Telnyx API] Erreur synchronisation:", error);
+    logger.error("\u274C [Telnyx API] Erreur synchronisation:", error);
     return respondTelnyxAxiosError(res, error, "Erreur lors de la synchronisation");
   }
 });
@@ -34213,7 +34283,7 @@ router35.post("/config", async (req2, res) => {
     });
   } catch (error) {
     const errorId = import_crypto20.default.randomUUID();
-    console.error(`\u274C [Telnyx API] Erreur sauvegarde configuration (errorId=${errorId}):`, error);
+    logger.error(`\u274C [Telnyx API] Erreur sauvegarde configuration (errorId=${errorId}):`, error);
     const anyErr = error;
     const prismaCode = anyErr?.code;
     const dbCode = anyErr?.meta?.code;
@@ -34485,7 +34555,7 @@ router35.post("/provision", async (req2, res) => {
       warnings
     });
   } catch (error) {
-    console.error("\u274C [Telnyx API] Erreur provisioning:", error);
+    logger.error("\u274C [Telnyx API] Erreur provisioning:", error);
     return respondTelnyxAxiosError(res, error, "Erreur provisioning Telnyx");
   }
 });
@@ -34513,7 +34583,7 @@ router35.get("/users", async (req2, res) => {
     }));
     return res.json(users);
   } catch (error) {
-    console.error("\u274C [Telnyx API] Erreur r\xE9cup\xE9ration users org:", error);
+    logger.error("\u274C [Telnyx API] Erreur r\xE9cup\xE9ration users org:", error);
     return res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des utilisateurs" });
   }
 });
@@ -34522,7 +34592,7 @@ router35.post("/user-config", async (req2, res) => {
     const { userId, assignedNumber, canMakeCalls, canSendSms, monthlyLimit } = req2.body;
     const organizationId = getOrganizationIdFromRequest(req2);
     if (!organizationId) return res.status(401).json({ error: "Non autoris\xE9" });
-    console.log("\u2699\uFE0F [Telnyx API] Configuration utilisateur:", { userId, assignedNumber });
+    logger.debug("\u2699\uFE0F [Telnyx API] Configuration utilisateur:", { userId, assignedNumber });
     const userConfig = await prisma17.telnyxUserConfig.upsert({
       where: { userId },
       update: {
@@ -34578,10 +34648,10 @@ router35.post("/user-config", async (req2, res) => {
         }
       });
     }
-    console.log("\u2705 [Telnyx API] Configuration utilisateur sauvegard\xE9e");
+    logger.debug("\u2705 [Telnyx API] Configuration utilisateur sauvegard\xE9e");
     res.json({ success: true, config: userConfig });
   } catch (error) {
-    console.error("\u274C [Telnyx API] Erreur config utilisateur:", error);
+    logger.error("\u274C [Telnyx API] Erreur config utilisateur:", error);
     res.status(500).json({ error: "Erreur lors de la sauvegarde de la configuration" });
   }
 });
@@ -34590,7 +34660,7 @@ router35.get("/user-config/:userId", async (req2, res) => {
     const { userId } = req2.params;
     const organizationId = getOrganizationIdFromRequest(req2);
     if (!organizationId) return res.status(401).json({ error: "Non autoris\xE9" });
-    console.log("\u{1F50D} [Telnyx API] R\xE9cup\xE9ration config utilisateur:", userId);
+    logger.debug("\u{1F50D} [Telnyx API] R\xE9cup\xE9ration config utilisateur:", userId);
     const userConfig = await prisma17.telnyxUserConfig.findFirst({
       where: {
         userId,
@@ -34606,7 +34676,7 @@ router35.get("/user-config/:userId", async (req2, res) => {
       monthlyLimit: null
     });
   } catch (error) {
-    console.error("\u274C [Telnyx API] Erreur r\xE9cup\xE9ration config:", error);
+    logger.error("\u274C [Telnyx API] Erreur r\xE9cup\xE9ration config:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration de la configuration" });
   }
 });
@@ -34614,7 +34684,7 @@ router35.get("/stats", async (req2, res) => {
   try {
     const organizationId = getOrganizationIdFromRequest(req2);
     if (!organizationId) return res.status(401).json({ error: "Non autoris\xE9" });
-    console.log("\u{1F4CA} [Telnyx API] R\xE9cup\xE9ration statistiques...");
+    logger.debug("\u{1F4CA} [Telnyx API] R\xE9cup\xE9ration statistiques...");
     const [totalCalls, totalSms, activeNumbers] = await Promise.all([
       prisma17.telnyxCall.count({
         where: {
@@ -34652,7 +34722,7 @@ router35.get("/stats", async (req2, res) => {
     const callsCost = calls.reduce((sum, call) => sum + (call.cost || 0), 0);
     const numbersCost = numbers.reduce((sum, number) => sum + (number.monthlyCost || 0), 0);
     const monthlyCost = callsCost + numbersCost;
-    console.log("\u2705 [Telnyx API] Statistiques r\xE9cup\xE9r\xE9es");
+    logger.debug("\u2705 [Telnyx API] Statistiques r\xE9cup\xE9r\xE9es");
     res.json({
       totalCalls,
       totalSms,
@@ -34660,7 +34730,7 @@ router35.get("/stats", async (req2, res) => {
       monthlyCost
     });
   } catch (error) {
-    console.error("\u274C [Telnyx API] Erreur stats:", error);
+    logger.error("\u274C [Telnyx API] Erreur stats:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des statistiques" });
   }
 });
@@ -34670,7 +34740,7 @@ router35.post("/webhooks", async (req2, res) => {
   const eventType = webhook?.data?.event_type;
   const payload = webhook?.data?.payload;
   if (debug) {
-    console.log("\u{1F9F7} [Telnyx Webhook Debug] inbound", {
+    logger.debug("\u{1F9F7} [Telnyx Webhook Debug] inbound", {
       path: req2.path,
       originalUrl: req2.originalUrl,
       method: req2.method,
@@ -34681,18 +34751,18 @@ router35.post("/webhooks", async (req2, res) => {
     });
   }
   try {
-    console.log("\u{1FA9D} [Telnyx Webhook]", eventType, payload?.call_control_id || payload?.id);
+    logger.debug("\u{1FA9D} [Telnyx Webhook]", eventType, payload?.call_control_id || payload?.id);
     if (eventType?.startsWith("call.")) {
       await handleCallWebhook(eventType, payload, req2);
     } else if (eventType?.startsWith("message.")) {
       await handleMessageWebhook(eventType, payload);
     } else {
-      console.log("\u{1FA9D} [Telnyx Webhook] \xC9v\xE9nement non g\xE9r\xE9:", eventType);
+      logger.debug("\u{1FA9D} [Telnyx Webhook] \xC9v\xE9nement non g\xE9r\xE9:", eventType);
     }
   } catch (error) {
-    console.error("\u274C [Telnyx Webhook] Erreur:", error);
+    logger.error("\u274C [Telnyx Webhook] Erreur:", error);
     if (debug) {
-      console.error("\u{1F9F7} [Telnyx Webhook Debug] failed", {
+      logger.error("\u{1F9F7} [Telnyx Webhook Debug] failed", {
         eventType,
         callControlId: payload?.call_control_id || payload?.id || null
       });
@@ -34728,12 +34798,12 @@ async function handleCallWebhook(eventType, callData, req2) {
     const directionRaw = typeof callData.direction === "string" ? callData.direction : "incoming";
     const isInbound = directionRaw === "incoming" || directionRaw === "inbound";
     if (!isInbound) {
-      console.warn(`\u26A0\uFE0F [Telnyx Webhook] Call non trouv\xE9 (non-inbound): ${callControlId}`);
+      logger.warn(`\u26A0\uFE0F [Telnyx Webhook] Call non trouv\xE9 (non-inbound): ${callControlId}`);
       return;
     }
     const organizationId = await getOrganizationIdFromCallPayload(callData);
     if (!organizationId) {
-      console.warn(`\u26A0\uFE0F [Telnyx Webhook] Impossible de d\xE9terminer l'organisation pour inbound: ${callControlId}`);
+      logger.warn(`\u26A0\uFE0F [Telnyx Webhook] Impossible de d\xE9terminer l'organisation pour inbound: ${callControlId}`);
       return;
     }
     call = await prisma17.telnyxCall.create({
@@ -34775,11 +34845,11 @@ async function handleCallWebhook(eventType, callData, req2) {
             { action: "answer", title: "R\xE9pondre" },
             { action: "decline", title: "Refuser" }
           ]
-        }).catch((err) => console.warn("[PUSH] Error sending incoming Telnyx call notification:", err));
+        }).catch((err) => logger.warn("[PUSH] Error sending incoming Telnyx call notification:", err));
       }
     }
   }
-  console.log(`\u{1FA9D} [Telnyx Webhook] ${eventType} pour call ${call.id} -> state: ${state}`);
+  logger.debug(`\u{1FA9D} [Telnyx Webhook] ${eventType} pour call ${call.id} -> state: ${state}`);
   const mainCallControlId = call.callId;
   const updateData = {
     updatedAt: /* @__PURE__ */ new Date()
@@ -34793,7 +34863,7 @@ async function handleCallWebhook(eventType, callData, req2) {
             await TelnyxCascadeService.updateCallLegStatus(call.callId, destination, "dialing", /* @__PURE__ */ new Date());
           }
         } catch (e) {
-          console.warn("\u26A0\uFE0F [Telnyx Webhook] call.initiated (leg): tracking leg failed:", e);
+          logger.warn("\u26A0\uFE0F [Telnyx Webhook] call.initiated (leg): tracking leg failed:", e);
         }
         break;
       }
@@ -34878,13 +34948,13 @@ async function handleCallWebhook(eventType, callData, req2) {
                   }
                 }
               } catch (e2) {
-                console.warn("\u26A0\uFE0F [Telnyx Webhook] Impossible de basculer vers le leg suivant apr\xE8s \xE9chec transfer:", e2);
+                logger.warn("\u26A0\uFE0F [Telnyx Webhook] Impossible de basculer vers le leg suivant apr\xE8s \xE9chec transfer:", e2);
               }
             }
           }
         }
       } catch (e) {
-        console.warn("\u26A0\uFE0F [Telnyx Webhook] Impossible de d\xE9marrer la cascade inbound:", e);
+        logger.warn("\u26A0\uFE0F [Telnyx Webhook] Impossible de d\xE9marrer la cascade inbound:", e);
       }
       break;
     case "call.ringing":
@@ -34895,7 +34965,7 @@ async function handleCallWebhook(eventType, callData, req2) {
             await TelnyxCascadeService.updateCallLegStatus(call.callId, destination, "dialing", /* @__PURE__ */ new Date());
           }
         } catch (e) {
-          console.warn("\u26A0\uFE0F [Telnyx Webhook] call.ringing (leg): tracking leg failed:", e);
+          logger.warn("\u26A0\uFE0F [Telnyx Webhook] call.ringing (leg): tracking leg failed:", e);
         }
         break;
       }
@@ -34939,7 +35009,7 @@ async function handleCallWebhook(eventType, callData, req2) {
           }
         }
       } catch (e) {
-        console.warn("\u26A0\uFE0F [Telnyx Webhook] call.ringing: tracking leg failed:", e);
+        logger.warn("\u26A0\uFE0F [Telnyx Webhook] call.ringing: tracking leg failed:", e);
       }
       break;
     case "call.answered":
@@ -35020,14 +35090,14 @@ async function handleCallWebhook(eventType, callData, req2) {
           }
         }
       } catch (e) {
-        console.warn("\u26A0\uFE0F [Telnyx Webhook] Next-leg cascade failed:", e);
+        logger.warn("\u26A0\uFE0F [Telnyx Webhook] Next-leg cascade failed:", e);
       }
       break;
     case "call.machine.detection.ended":
       if (callData.result === "human") {
-        console.log("\u2705 [Telnyx Webhook] Humain d\xE9tect\xE9");
+        logger.debug("\u2705 [Telnyx Webhook] Humain d\xE9tect\xE9");
       } else {
-        console.log("\u{1F916} [Telnyx Webhook] R\xE9pondeur/machine d\xE9tect\xE9");
+        logger.debug("\u{1F916} [Telnyx Webhook] R\xE9pondeur/machine d\xE9tect\xE9");
       }
       break;
   }
@@ -35035,7 +35105,7 @@ async function handleCallWebhook(eventType, callData, req2) {
     where: { id: call.id },
     data: updateData
   });
-  console.log(`\u2705 [Telnyx Webhook] Call mis \xE0 jour: ${call.callId} -> ${updateData.status || state}`);
+  logger.debug(`\u2705 [Telnyx Webhook] Call mis \xE0 jour: ${call.callId} -> ${updateData.status || state}`);
 }
 async function handleMessageWebhook(eventType, messageData) {
   if (!messageData) {
@@ -35043,7 +35113,7 @@ async function handleMessageWebhook(eventType, messageData) {
   }
   const organizationId = await getOrganizationIdFromMessagePayload(messageData);
   if (!organizationId) {
-    console.warn("\u26A0\uFE0F [Telnyx Webhook] Message: org introuvable, skip:", messageData?.id, eventType);
+    logger.warn("\u26A0\uFE0F [Telnyx Webhook] Message: org introuvable, skip:", messageData?.id, eventType);
     return;
   }
   if (eventType === "message.received") {
@@ -35064,7 +35134,7 @@ async function handleMessageWebhook(eventType, messageData) {
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    console.log("\u2705 [Telnyx Webhook] Message entrant sauvegard\xE9:", messageData.id);
+    logger.debug("\u2705 [Telnyx Webhook] Message entrant sauvegard\xE9:", messageData.id);
   } else if (eventType === "message.sent") {
     const message = await prisma17.telnyxMessage.findFirst({
       where: { messageId: messageData.id }
@@ -35078,7 +35148,7 @@ async function handleMessageWebhook(eventType, messageData) {
           updatedAt: /* @__PURE__ */ new Date()
         }
       });
-      console.log("\u2705 [Telnyx Webhook] Message sortant mis \xE0 jour:", messageData.id);
+      logger.debug("\u2705 [Telnyx Webhook] Message sortant mis \xE0 jour:", messageData.id);
     }
   }
 }
@@ -35129,7 +35199,7 @@ router35.get("/sip-endpoints", async (req2, res) => {
     }));
     res.json(formattedEndpoints);
   } catch (error) {
-    console.error("\u274C [Telnyx API] Erreur r\xE9cup\xE9ration SIP endpoints:", error);
+    logger.error("\u274C [Telnyx API] Erreur r\xE9cup\xE9ration SIP endpoints:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des endpoints SIP" });
   }
 });
@@ -35186,7 +35256,7 @@ router35.get("/recent-calls", async (req2, res) => {
     });
     res.json({ calls });
   } catch (error) {
-    console.error("\u274C [Telnyx API] recent-calls error:", error);
+    logger.error("\u274C [Telnyx API] recent-calls error:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des derniers appels" });
   }
 });
@@ -35221,7 +35291,7 @@ router35.post("/sip-endpoints", async (req2, res) => {
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    console.log("\u2705 [Telnyx API] SIP endpoint cr\xE9\xE9:", endpoint.id);
+    logger.debug("\u2705 [Telnyx API] SIP endpoint cr\xE9\xE9:", endpoint.id);
     res.json({
       success: true,
       endpoint: {
@@ -35239,7 +35309,7 @@ router35.post("/sip-endpoints", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\u274C [Telnyx API] Erreur cr\xE9ation SIP endpoint:", error);
+    logger.error("\u274C [Telnyx API] Erreur cr\xE9ation SIP endpoint:", error);
     res.status(500).json({ error: "Erreur lors de la cr\xE9ation de l'endpoint SIP" });
   }
 });
@@ -35272,7 +35342,7 @@ router35.put("/sip-endpoints/:id", async (req2, res) => {
       where: { id },
       data: updateData
     });
-    console.log("\u2705 [Telnyx API] SIP endpoint modifi\xE9:", id);
+    logger.debug("\u2705 [Telnyx API] SIP endpoint modifi\xE9:", id);
     res.json({
       success: true,
       endpoint: {
@@ -35290,7 +35360,7 @@ router35.put("/sip-endpoints/:id", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\u274C [Telnyx API] Erreur modification SIP endpoint:", error);
+    logger.error("\u274C [Telnyx API] Erreur modification SIP endpoint:", error);
     res.status(500).json({ error: "Erreur lors de la modification de l'endpoint SIP" });
   }
 });
@@ -35308,10 +35378,10 @@ router35.delete("/sip-endpoints/:id", async (req2, res) => {
     await prisma17.telnyxSipEndpoint.delete({
       where: { id }
     });
-    console.log("\u2705 [Telnyx API] SIP endpoint supprim\xE9:", id);
+    logger.debug("\u2705 [Telnyx API] SIP endpoint supprim\xE9:", id);
     res.json({ success: true });
   } catch (error) {
-    console.error("\u274C [Telnyx API] Erreur suppression SIP endpoint:", error);
+    logger.error("\u274C [Telnyx API] Erreur suppression SIP endpoint:", error);
     res.status(500).json({ error: "Erreur lors de la suppression de l'endpoint SIP" });
   }
 });
@@ -35362,7 +35432,7 @@ router35.post("/sip-endpoints/:id/test", async (req2, res) => {
     const webhookUrl = selectTelnyxWebhookUrl(req2, cfg?.webhookUrl || "__AUTO__").webhookUrl;
     const autoHangupSecsRaw = req2.body?.autoHangupSecs;
     const autoHangupSecs = typeof autoHangupSecsRaw === "number" && Number.isFinite(autoHangupSecsRaw) ? Math.max(5, Math.min(120, Math.floor(autoHangupSecsRaw))) : 25;
-    console.log("\u{1F9EA} [Telnyx API] Test SIP endpoint (appel):", { toSipUri, fromNumber, connectionId });
+    logger.debug("\u{1F9EA} [Telnyx API] Test SIP endpoint (appel):", { toSipUri, fromNumber, connectionId });
     try {
       const response = await import_axios2.default.post(`${TELNYX_API_URL2}/calls`, {
         to: toSipUri,
@@ -35421,7 +35491,7 @@ router35.post("/sip-endpoints/:id/test", async (req2, res) => {
       return respondTelnyxAxiosError(res, error, "Erreur lors du test (appel SIP)");
     }
   } catch (error) {
-    console.error("\u274C [Telnyx API] Erreur test SIP endpoint:", error);
+    logger.error("\u274C [Telnyx API] Erreur test SIP endpoint:", error);
     res.status(500).json({ error: "Erreur lors du test de l'endpoint SIP" });
   } finally {
     if (lockOrgId) releaseSipTestLock(lockOrgId, lockToken);
@@ -35451,6 +35521,7 @@ var telnyx_default2 = router36;
 // src/routes/quotes.ts
 var import_express38 = require("express");
 init_database();
+init_logger();
 var router37 = (0, import_express38.Router)();
 var prisma18 = db;
 router37.use(authMiddleware);
@@ -35763,6 +35834,7 @@ var quotes_default = router37;
 var import_express39 = require("express");
 init_database();
 var import_express_rate_limit5 = __toESM(require("express-rate-limit"), 1);
+init_logger();
 var router38 = (0, import_express39.Router)();
 var prisma19 = db;
 var analyticsRateLimit = (0, import_express_rate_limit5.default)({
@@ -35984,6 +36056,7 @@ var import_express40 = __toESM(require("express"), 1);
 var import_fs5 = __toESM(require("fs"), 1);
 var import_path4 = __toESM(require("path"), 1);
 var import_crypto21 = require("crypto");
+init_logger();
 var geminiSingleton = getGeminiService();
 var router39 = import_express40.default.Router();
 router39.use(authMiddleware);
@@ -38328,6 +38401,7 @@ init_database();
 var import_express42 = require("express");
 init_database();
 var import_uuid4 = require("uuid");
+init_logger();
 var prisma20 = db;
 var router41 = (0, import_express42.Router)({ mergeParams: true });
 router41.use((req2, _res, next) => {
@@ -38617,6 +38691,7 @@ var formulas_default = router41;
 // src/routes/dependencies.ts
 var import_express43 = require("express");
 var import_uuid5 = require("uuid");
+init_logger();
 var router42 = (0, import_express43.Router)({ mergeParams: true });
 router42.use(authMiddleware, impersonationMiddleware);
 router42.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
@@ -38797,10 +38872,11 @@ var dependencies_default = router42;
 var import_express44 = __toESM(require("express"), 1);
 
 // src/services/validationService.ts
+init_logger();
 var getValidationsByFieldId = async (fieldId) => {
   try {
     if (!db.fieldValidation) {
-      console.error("[ValidationService] Le mod\xE8le fieldValidation n'existe pas dans le client Prisma");
+      logger.error("[ValidationService] Le mod\xE8le fieldValidation n'existe pas dans le client Prisma");
       return [];
     }
     const validations = await db.fieldValidation.findMany({
@@ -38811,7 +38887,7 @@ var getValidationsByFieldId = async (fieldId) => {
     });
     return validations;
   } catch (error) {
-    console.error(`[ValidationService] Erreur d\xE9taill\xE9e lors de la r\xE9cup\xE9ration des validations pour le champ ${fieldId}:`, error);
+    logger.error(`[ValidationService] Erreur d\xE9taill\xE9e lors de la r\xE9cup\xE9ration des validations pour le champ ${fieldId}:`, error);
     return [];
   }
 };
@@ -38823,7 +38899,7 @@ var createValidation = async (fieldId, validationData) => {
       }
     });
     if (!field) {
-      console.error(`[ValidationService] Le champ ${fieldId} n'existe pas`);
+      logger.error(`[ValidationService] Le champ ${fieldId} n'existe pas`);
       throw new Error(`Le champ avec l'ID ${fieldId} n'existe pas.`);
     }
     const validation = await db.fieldValidation.create({
@@ -38838,14 +38914,14 @@ var createValidation = async (fieldId, validationData) => {
     });
     return validation;
   } catch (error) {
-    console.error(`[ValidationService] Erreur lors de la cr\xE9ation de la validation pour le champ ${fieldId}:`, error);
+    logger.error(`[ValidationService] Erreur lors de la cr\xE9ation de la validation pour le champ ${fieldId}:`, error);
     throw new Error("Impossible de cr\xE9er la validation dans la base de donn\xE9es.");
   }
 };
 var updateValidation = async (validationId, updateData) => {
   try {
     if (!db.fieldValidation) {
-      console.error("[ValidationService] Le mod\xE8le fieldValidation n'existe pas dans le client Prisma");
+      logger.error("[ValidationService] Le mod\xE8le fieldValidation n'existe pas dans le client Prisma");
       return {
         id: validationId,
         ...updateData,
@@ -38858,7 +38934,7 @@ var updateValidation = async (validationId, updateData) => {
       }
     });
     if (!existingValidation) {
-      console.error(`[ValidationService] Validation ${validationId} non trouv\xE9e pour la mise \xE0 jour`);
+      logger.error(`[ValidationService] Validation ${validationId} non trouv\xE9e pour la mise \xE0 jour`);
       if (process.env.NODE_ENV === "development") {
         return {
           id: validationId,
@@ -38886,7 +38962,7 @@ var updateValidation = async (validationId, updateData) => {
     });
     return updatedValidation;
   } catch (error) {
-    console.error(`[ValidationService] Erreur lors de la mise \xE0 jour de la validation ${validationId}:`, error);
+    logger.error(`[ValidationService] Erreur lors de la mise \xE0 jour de la validation ${validationId}:`, error);
     if (process.env.NODE_ENV === "development") {
       return {
         id: validationId,
@@ -38901,7 +38977,7 @@ var updateValidation = async (validationId, updateData) => {
 var deleteValidationById = async (validationId) => {
   try {
     if (!db.fieldValidation) {
-      console.error("[ValidationService] Le mod\xE8le fieldValidation n'existe pas dans le client Prisma");
+      logger.error("[ValidationService] Le mod\xE8le fieldValidation n'existe pas dans le client Prisma");
       return {
         id: validationId,
         message: "Simulation de suppression r\xE9ussie (mod\xE8le non disponible)"
@@ -38922,7 +38998,7 @@ var deleteValidationById = async (validationId) => {
     });
     return deletedValidation;
   } catch (error) {
-    console.error(`[ValidationService] Erreur lors de la suppression de la validation ${validationId}:`, error);
+    logger.error(`[ValidationService] Erreur lors de la suppression de la validation ${validationId}:`, error);
     if (process.env.NODE_ENV === "development") {
       return {
         id: validationId,
@@ -38934,6 +39010,7 @@ var deleteValidationById = async (validationId) => {
 };
 
 // src/routes/validations.ts
+init_logger();
 var router43 = import_express44.default.Router({ mergeParams: true });
 router43.use(authenticateToken);
 router43.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
@@ -39070,6 +39147,7 @@ router43.patch("/:id", async (req2, res) => {
 var validations_default = router43;
 
 // src/routes/fields.ts
+init_logger();
 var router44 = (0, import_express45.Router)();
 var prisma21 = db;
 router44.use(authMiddleware);
@@ -39454,6 +39532,7 @@ var import_express46 = __toESM(require("express"), 1);
 init_database();
 
 // src/global-mock-formulas.ts
+init_logger();
 if (!global._globalFormulasStore) {
   global._globalFormulasStore = /* @__PURE__ */ new Map();
   global._backupFormulasStore = /* @__PURE__ */ new Map();
@@ -39482,7 +39561,7 @@ var logOperation = (operation, fieldId, formulaId = null, status = "success", de
 var getFormulasForField = (fieldId) => {
   try {
     if (!fieldId) {
-      console.error("[MOCK] Erreur: fieldId est undefined ou null");
+      logger.error("[MOCK] Erreur: fieldId est undefined ou null");
       logOperation("getFormulasForField", "unknown", null, "error", "fieldId manquant");
       return [];
     }
@@ -39492,7 +39571,7 @@ var getFormulasForField = (fieldId) => {
     }
     const storedData = global._globalFormulasStore.get(fieldId);
     if (!storedData) {
-      console.warn("[MOCK] Donn\xC3\u0192\xC2\xA9es manquantes apr\xC3\u0192\xC2\xA8s v\xC3\u0192\xC2\xA9rification, cr\xC3\u0192\xC2\xA9ation d'un tableau vide");
+      logger.warn("[MOCK] Donn\xC3\u0192\xC2\xA9es manquantes apr\xC3\u0192\xC2\xA8s v\xC3\u0192\xC2\xA9rification, cr\xC3\u0192\xC2\xA9ation d'un tableau vide");
       global._globalFormulasStore.set(fieldId, []);
       return [];
     }
@@ -39501,7 +39580,7 @@ var getFormulasForField = (fieldId) => {
     logOperation("getFormulasForField", fieldId, null, "success", { count: storedData.length });
     return JSON.parse(JSON.stringify(storedData));
   } catch (error) {
-    console.error("[MOCK] Erreur lors de la r\xC3\u0192\xC2\xA9cup\xC3\u0192\xC2\xA9ration des formules pour le champ " + fieldId + ":", error);
+    logger.error("[MOCK] Erreur lors de la r\xC3\u0192\xC2\xA9cup\xC3\u0192\xC2\xA9ration des formules pour le champ " + fieldId + ":", error);
     logOperation("getFormulasForField", fieldId, null, "error", error.message || String(error));
     return [];
   }
@@ -39509,7 +39588,7 @@ var getFormulasForField = (fieldId) => {
 var updateFormula = (fieldId, formulaId, data) => {
   try {
     if (!fieldId || !formulaId) {
-      console.error("[MOCK] Erreur: fieldId ou formulaId manquant");
+      logger.error("[MOCK] Erreur: fieldId ou formulaId manquant");
       logOperation("updateFormula", fieldId || "unknown", formulaId || null, "error", "Param\xC3\u0192\xC2\xA8tres manquants");
       return null;
     }
@@ -39537,13 +39616,13 @@ var updateFormula = (fieldId, formulaId, data) => {
       const backupCopy = JSON.parse(JSON.stringify(sortedFormulas));
       global._backupFormulasStore.set(fieldId, backupCopy);
     } catch (backupError) {
-      console.error("[MOCK] \xC3\xA2\xC2\x9D\xC5\u2019 \xC3\u0192\xE2\u20AC\xB0chec de la sauvegarde de secours:", backupError);
+      logger.error("[MOCK] \xC3\xA2\xC2\x9D\xC5\u2019 \xC3\u0192\xE2\u20AC\xB0chec de la sauvegarde de secours:", backupError);
     }
     const storedFormulas = global._globalFormulasStore.get(fieldId);
     if (storedFormulas && storedFormulas.length > 0) {
       storedFormulas.forEach((f, idx) => {
         if (!f.id || !f.sequence) {
-          console.warn(
+          logger.warn(
             `[MOCK] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Formule #${idx} potentiellement corrompue:`,
             JSON.stringify({ id: f.id, hasSequence: !!f.sequence, sequenceType: typeof f.sequence })
           );
@@ -39552,13 +39631,14 @@ var updateFormula = (fieldId, formulaId, data) => {
     }
     return formula;
   } catch (error) {
-    console.error("[MOCK] Erreur lors de la mise \xC3\u0192\xC2\xA0 jour de la formule " + formulaId + ":", error);
+    logger.error("[MOCK] Erreur lors de la mise \xC3\u0192\xC2\xA0 jour de la formule " + formulaId + ":", error);
     logOperation("updateFormula", fieldId, formulaId, "error", error.message || String(error));
     return null;
   }
 };
 
 // src/utils/formulaEvaluator.ts
+init_logger();
 var evaluateFormula = (formula, fieldValues, context) => {
   if (!formula || !formula.sequence || !Array.isArray(formula.sequence) || formula.sequence.length === 0) {
     return {
@@ -39615,10 +39695,10 @@ var evaluateFormula = (formula, fieldValues, context) => {
             if (typeof fieldValues[fid] !== "undefined") rawVal = fieldValues[fid];
             else if (context?.rawValues && Object.prototype.hasOwnProperty.call(context.rawValues, fid)) rawVal = context.rawValues[fid];
           }
-          console.log(`[FormulaEvaluator] \u{1F3F7}\uFE0F Champ "${fid}": rawVal=${rawVal}, typeof=${typeof rawVal}`);
+          logger.debug(`[FormulaEvaluator] \u{1F3F7}\uFE0F Champ "${fid}": rawVal=${rawVal}, typeof=${typeof rawVal}`);
           if (rawVal && typeof rawVal === "object") {
             const sel = rawVal.selection;
-            console.log(`[FormulaEvaluator] \u{1F50D} Advanced select - selection:${sel}, objet:`, rawVal);
+            logger.debug(`[FormulaEvaluator] \u{1F50D} Advanced select - selection:${sel}, objet:`, rawVal);
             rawVal = typeof sel !== "undefined" ? sel : rawVal;
           }
           itemRaw = rawVal;
@@ -39635,7 +39715,7 @@ var evaluateFormula = (formula, fieldValues, context) => {
           } else {
             itemValue = 0;
           }
-          console.log(`[FormulaEvaluator] \u{1F4CA} Champ "${fid}" \xE9valu\xE9: ${itemValue} (raw: ${rawVal})`);
+          logger.debug(`[FormulaEvaluator] \u{1F4CA} Champ "${fid}" \xE9valu\xE9: ${itemValue} (raw: ${rawVal})`);
           debugSteps.push({ step: index + 1, operation: `Champ ${fid}`, value: itemValue });
           break;
         }
@@ -39709,12 +39789,12 @@ var evaluateFormula = (formula, fieldValues, context) => {
                   pass = Boolean(nestedBool.result);
                   condDebugValue = nestedBool.result;
                 } else {
-                  console.warn(`[FormulaEvaluator] Erreur \xE9valuation condition IF: ${nestedBool.error}`);
+                  logger.warn(`[FormulaEvaluator] Erreur \xE9valuation condition IF: ${nestedBool.error}`);
                   pass = false;
                   condDebugValue = false;
                 }
               } else {
-                console.warn("[FormulaEvaluator] Fonction IF sans condition suffisante");
+                logger.warn("[FormulaEvaluator] Fonction IF sans condition suffisante");
                 pass = false;
                 condDebugValue = false;
               }
@@ -39774,11 +39854,11 @@ var evaluateFormula = (formula, fieldValues, context) => {
             condDebugValue = pass;
           }
           debugSteps.push({ step: index + 1, operation: `Condition TEST`, value: condDebugValue });
-          console.log(`[FormulaEvaluator] \u{1F50D} Condition IF \xE9valu\xE9e: ${pass} (${condDebugValue})`);
+          logger.debug(`[FormulaEvaluator] \u{1F50D} Condition IF \xE9valu\xE9e: ${pass} (${condDebugValue})`);
           const seqToEval = pass ? item.then || [] : item.else || [];
-          console.log(`[FormulaEvaluator] \u{1F4DD} Branche s\xE9lectionn\xE9e: ${pass ? "THEN" : "ELSE"} (${seqToEval.length} \xE9l\xE9ments)`);
+          logger.debug(`[FormulaEvaluator] \u{1F4DD} Branche s\xE9lectionn\xE9e: ${pass ? "THEN" : "ELSE"} (${seqToEval.length} \xE9l\xE9ments)`);
           if (seqToEval.length > 0) {
-            console.log(`[FormulaEvaluator] \u{1F522} S\xE9quence \xE0 \xE9valuer:`, seqToEval.map((s) => `${s.type}:${s.label || s.value}`));
+            logger.debug(`[FormulaEvaluator] \u{1F522} S\xE9quence \xE0 \xE9valuer:`, seqToEval.map((s) => `${s.type}:${s.label || s.value}`));
           }
           if (seqToEval.length === 0) {
             if (!pass && item.elseBehavior === "ignore") {
@@ -39789,13 +39869,13 @@ var evaluateFormula = (formula, fieldValues, context) => {
             debugSteps.push({ step: index + 1, operation: `Condition ${pass ? "THEN (vide)" : "ELSE (vide)"}`, value: 0 });
           } else {
             const temp = { id: `${formula.id}__cond_${index}`, name: "cond", sequence: seqToEval, targetProperty: "" };
-            console.log(`[FormulaEvaluator] \u2699\uFE0F \xC9valuation de la branche ${pass ? "THEN" : "ELSE"} avec fieldValues:`, Object.keys(fieldValues));
+            logger.debug(`[FormulaEvaluator] \u2699\uFE0F \xC9valuation de la branche ${pass ? "THEN" : "ELSE"} avec fieldValues:`, Object.keys(fieldValues));
             const nested = evaluateFormula(temp, fieldValues, { ...context, depth: (context?.depth || 0) + 1 });
-            console.log(`[FormulaEvaluator] \u{1F4CA} R\xE9sultat branche ${pass ? "THEN" : "ELSE"}:`, nested);
+            logger.debug(`[FormulaEvaluator] \u{1F4CA} R\xE9sultat branche ${pass ? "THEN" : "ELSE"}:`, nested);
             if (!nested.success) throw new Error(`Erreur sous-s\xE9quence condition: ${nested.error}`);
             const valNum = typeof nested.result === "number" ? nested.result : typeof nested.result === "boolean" ? nested.result ? 1 : 0 : 0;
             itemValue = valNum;
-            console.log(`[FormulaEvaluator] \u2705 Valeur finale de la condition: ${itemValue}`);
+            logger.debug(`[FormulaEvaluator] \u2705 Valeur finale de la condition: ${itemValue}`);
             debugSteps.push({ step: index + 1, operation: `Condition ${pass ? "THEN" : "ELSE"} (r\xE9sultat branche)`, value: valNum });
           }
           itemRaw = itemValue;
@@ -39859,7 +39939,7 @@ var evaluateFormula = (formula, fieldValues, context) => {
       if (currentOperator === null) {
         throw new Error(`Op\xE9rateur manquant avant la valeur \xE0 l'\xE9tape ${index + 1}`);
       }
-      console.log(`[FormulaEvaluator] \u{1F522} Op\xE9ration: ${result} ${currentOperator} ${itemValue}`);
+      logger.debug(`[FormulaEvaluator] \u{1F522} Op\xE9ration: ${result} ${currentOperator} ${itemValue}`);
       switch (currentOperator) {
         case "+":
           result = (Number(result) || 0) + Number(itemValue);
@@ -39873,7 +39953,7 @@ var evaluateFormula = (formula, fieldValues, context) => {
         case "/":
           if (itemValue === 0) {
             debugSteps.push({ step: index + 1, operation: "Division par 0 (arr\xEAt)", value: null });
-            console.log(`[FormulaEvaluator] \u274C Division par z\xE9ro d\xE9tect\xE9e !`);
+            logger.debug(`[FormulaEvaluator] \u274C Division par z\xE9ro d\xE9tect\xE9e !`);
             throw new Error("Division par z\xE9ro");
           }
           result = (Number(result) || 0) / Number(itemValue);
@@ -39905,7 +39985,7 @@ var evaluateFormula = (formula, fieldValues, context) => {
         default:
           throw new Error(`Op\xE9rateur non support\xE9: ${currentOperator}`);
       }
-      console.log(`[FormulaEvaluator] \u27A1\uFE0F R\xE9sultat apr\xE8s op\xE9ration: ${result}`);
+      logger.debug(`[FormulaEvaluator] \u27A1\uFE0F R\xE9sultat apr\xE8s op\xE9ration: ${result}`);
       debugSteps.push({
         step: index + 1,
         operation: `${currentOperator} ${itemValue}`,
@@ -39931,6 +40011,7 @@ var evaluateFormula = (formula, fieldValues, context) => {
 };
 
 // src/routes/api/formulas.ts
+init_logger();
 var router45 = import_express46.default.Router({ mergeParams: true });
 var prisma22 = db;
 router45.get("/all", async (_req, res) => {
@@ -40147,6 +40228,7 @@ var formulas_default2 = router45;
 // src/routes/api/dependencies.ts
 var import_express47 = __toESM(require("express"), 1);
 init_database();
+init_logger();
 var router46 = import_express47.default.Router({ mergeParams: true });
 var prisma23 = db;
 router46.put("/:dependencyId", async (req2, res) => {
@@ -40209,6 +40291,7 @@ var dependencies_default2 = router46;
 
 // src/routes/sections.ts
 var import_express48 = require("express");
+init_logger();
 var router47 = (0, import_express48.Router)();
 router47.use(authMiddleware, impersonationMiddleware);
 router47.get("/", async (req2, res) => {
@@ -40375,6 +40458,7 @@ var sections_default = router47;
 
 // src/routes/module-navigation.ts
 var import_express49 = require("express");
+init_logger();
 var router48 = (0, import_express49.Router)();
 router48.use(authMiddleware, impersonationMiddleware);
 router48.get("/", async (req2, res) => {
@@ -40469,6 +40553,7 @@ var module_navigation_default = router48;
 // src/routes/form-sections.ts
 var import_express50 = require("express");
 init_database();
+init_logger();
 var router49 = (0, import_express50.Router)();
 router49.use(authenticateToken);
 var prisma24 = db;
@@ -40565,6 +40650,7 @@ var form_sections_default = router49;
 // src/routes/fieldTypes.ts
 var import_express51 = require("express");
 init_database();
+init_logger();
 var router50 = (0, import_express51.Router)();
 var prisma25 = db;
 router50.use(authMiddleware);
@@ -40584,6 +40670,7 @@ var fieldTypes_default = router50;
 // src/routes/optionNodes.ts
 var import_express52 = require("express");
 init_database();
+init_logger();
 var router51 = (0, import_express52.Router)();
 var prisma26 = db;
 router51.use(authMiddleware);
@@ -40821,6 +40908,7 @@ var optionNodes_default = router51;
 var import_express53 = __toESM(require("express"), 1);
 
 // src/services/AdvancedSelectService.ts
+init_logger();
 var AdvancedSelectService = class {
   /**
    * 📝 Récupérer un champ advanced_select avec ses options enrichies
@@ -40989,7 +41077,7 @@ var AdvancedSelectService = class {
           error: `Champ ${fieldId} non trouv\xE9`
         };
       }
-      console.log(`[ADVANCED_SELECT] Mise \xE0 jour calcul\xE9e:`, {
+      logger.debug(`[ADVANCED_SELECT] Mise \xE0 jour calcul\xE9e:`, {
         fieldId,
         value,
         organizationId,
@@ -41077,6 +41165,7 @@ var AdvancedSelectService = class {
 var AdvancedSelectService_default = AdvancedSelectService;
 
 // src/api/advanced-select.ts
+init_logger();
 var router52 = import_express53.default.Router();
 var advancedSelectService = new AdvancedSelectService_default();
 router52.get("/:fieldId", async (req2, res) => {
@@ -41099,7 +41188,7 @@ router52.get("/:fieldId", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("Erreur GET advanced-select:", error);
+    logger.error("Erreur GET advanced-select:", error);
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : "Erreur inconnue"
@@ -41145,7 +41234,7 @@ router52.post("/:fieldId/calculate", async (req2, res) => {
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
     });
   } catch (error) {
-    console.error("Erreur POST calculate:", error);
+    logger.error("Erreur POST calculate:", error);
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : "Erreur inconnue"
@@ -41173,7 +41262,7 @@ router52.put("/:fieldId/update", async (req2, res) => {
       data: updateResult
     });
   } catch (error) {
-    console.error("Erreur PUT update:", error);
+    logger.error("Erreur PUT update:", error);
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : "Erreur inconnue"
@@ -41199,7 +41288,7 @@ router52.post("/validate", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("Erreur POST validate:", error);
+    logger.error("Erreur POST validate:", error);
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : "Erreur inconnue"
@@ -41290,7 +41379,7 @@ router52.post("/templates", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("Erreur POST templates:", error);
+    logger.error("Erreur POST templates:", error);
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : "Erreur inconnue"
@@ -41334,7 +41423,7 @@ router52.get("/:fieldId/analytics", async (req2, res) => {
       generated_at: (/* @__PURE__ */ new Date()).toISOString()
     });
   } catch (error) {
-    console.error("Erreur GET analytics:", error);
+    logger.error("Erreur GET analytics:", error);
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : "Erreur inconnue"
@@ -41358,6 +41447,7 @@ var import_express54 = __toESM(require("express"), 1);
 
 // src/services/DynamicFormulaEngine.ts
 init_database();
+init_logger();
 var DynamicFormulaEngine = class {
   prisma;
   configCache = /* @__PURE__ */ new Map();
@@ -41422,7 +41512,7 @@ var DynamicFormulaEngine = class {
       }
       return configurations;
     } catch (error) {
-      console.error("\u274C [DynamicFormulaEngine] Erreur chargement configurations:", error);
+      logger.error("\u274C [DynamicFormulaEngine] Erreur chargement configurations:", error);
       throw new Error(`Erreur lors du chargement des configurations: ${error.message}`);
     }
   }
@@ -41568,7 +41658,7 @@ var DynamicFormulaEngine = class {
       }
       return results;
     } catch (error) {
-      console.error("\u274C [DynamicFormulaEngine] Erreur dans les calculs:", error);
+      logger.error("\u274C [DynamicFormulaEngine] Erreur dans les calculs:", error);
       throw error;
     }
   }
@@ -41647,7 +41737,7 @@ var DynamicFormulaEngine = class {
         this.configCache.delete(fieldId);
       }
     } catch (error) {
-      console.error("\u274C Erreur mise \xE0 jour configuration:", error);
+      logger.error("\u274C Erreur mise \xE0 jour configuration:", error);
       throw error;
     }
   }
@@ -41659,14 +41749,14 @@ var DynamicFormulaEngine = class {
     const debug = options?.debug || false;
     const changedFieldId = options?.changedFieldId;
     const preloadedRules = options?.preloadedRules;
-    if (debug) console.log("\u{1F680} [DynamicFormulaEngine] Application des formules - d\xE9clench\xE9e par:", changedFieldId, "r\xE8gles pr\xE9charg\xE9es:", !!preloadedRules);
+    if (debug) logger.debug("\u{1F680} [DynamicFormulaEngine] Application des formules - d\xE9clench\xE9e par:", changedFieldId, "r\xE8gles pr\xE9charg\xE9es:", !!preloadedRules);
     try {
       const calculatedValues = {};
       const appliedFormulas = [];
       const errors = [];
       let formulas = [];
       if (preloadedRules) {
-        if (debug) console.log("\u{1F4CB} Utilisation des r\xE8gles pr\xE9charg\xE9es");
+        if (debug) logger.debug("\u{1F4CB} Utilisation des r\xE8gles pr\xE9charg\xE9es");
         Object.entries(preloadedRules).forEach(([fieldId, rules]) => {
           if (rules.formulas && Array.isArray(rules.formulas)) {
             rules.formulas.forEach((formula) => {
@@ -41677,9 +41767,9 @@ var DynamicFormulaEngine = class {
             });
           }
         });
-        if (debug) console.log(`\u{1F4CA} ${formulas.length} formules trouv\xE9es dans les r\xE8gles pr\xE9charg\xE9es`);
+        if (debug) logger.debug(`\u{1F4CA} ${formulas.length} formules trouv\xE9es dans les r\xE8gles pr\xE9charg\xE9es`);
       } else {
-        if (debug) console.log("\u{1F504} Chargement des formules depuis la base de donn\xE9es");
+        if (debug) logger.debug("\u{1F504} Chargement des formules depuis la base de donn\xE9es");
         formulas = await this.prisma.fieldFormula.findMany({
           orderBy: { order: "asc" }
         });
@@ -41692,13 +41782,13 @@ var DynamicFormulaEngine = class {
             try {
               sequence = JSON.parse(formula.sequence);
             } catch {
-              if (debug) console.warn("\u26A0\uFE0F Formule avec s\xE9quence JSON invalide:", formula.id);
+              if (debug) logger.warn("\u26A0\uFE0F Formule avec s\xE9quence JSON invalide:", formula.id);
               continue;
             }
           } else if (Array.isArray(formula.sequence)) {
             sequence = formula.sequence;
           } else {
-            if (debug) console.warn("\u26A0\uFE0F Formule avec format de s\xE9quence non support\xE9:", formula.id);
+            if (debug) logger.warn("\u26A0\uFE0F Formule avec format de s\xE9quence non support\xE9:", formula.id);
             continue;
           }
           if (!Array.isArray(sequence) || sequence.length === 0) continue;
@@ -41714,7 +41804,7 @@ var DynamicFormulaEngine = class {
         } catch (formulaError) {
           const errorMsg = formulaError instanceof Error ? formulaError.message : String(formulaError);
           errors.push(`Erreur formule ${formula.name || formula.id}: ${errorMsg}`);
-          if (debug) console.error("\u274C Erreur formule:", formula.id, errorMsg);
+          if (debug) logger.error("\u274C Erreur formule:", formula.id, errorMsg);
         }
       }
       return {
@@ -41725,7 +41815,7 @@ var DynamicFormulaEngine = class {
       };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      if (debug) console.error("\u274C [DynamicFormulaEngine] Erreur g\xE9n\xE9rale:", errorMsg);
+      if (debug) logger.error("\u274C [DynamicFormulaEngine] Erreur g\xE9n\xE9rale:", errorMsg);
       return {
         success: false,
         calculatedValues: {},
@@ -41816,7 +41906,7 @@ var DynamicFormulaEngine = class {
           return { success: false, error: "Division par z\xE9ro" };
         }
         const result = num1 / num2;
-        if (debug) console.log(`\u{1F9EE} R\xE9sultat division: ${result}`);
+        if (debug) logger.debug(`\u{1F9EE} R\xE9sultat division: ${result}`);
         return { success: true, value: result };
       }
     } else {
@@ -41836,13 +41926,13 @@ var DynamicFormulaEngine = class {
     }
     if (type === "value" && typeof value === "string" && value.startsWith("nextField:")) {
       const nextFieldId = value.substring("nextField:".length);
-      if (debug) console.log(`\u{1F50D} Recherche NextField: ${nextFieldId}`);
+      if (debug) logger.debug(`\u{1F50D} Recherche NextField: ${nextFieldId}`);
       for (const [_fieldId, fieldValue] of Object.entries(fieldValues)) {
         if (fieldValue && typeof fieldValue === "object" && !Array.isArray(fieldValue)) {
           const obj = fieldValue;
           if (obj.nodeId === nextFieldId && obj.extra !== void 0) {
             const result = parseFloat(String(obj.extra)) || 0;
-            if (debug) console.log(`\u{1F4CB} NextField trouv\xE9 directement: ${result} (nodeId: ${nextFieldId})`);
+            if (debug) logger.debug(`\u{1F4CB} NextField trouv\xE9 directement: ${result} (nodeId: ${nextFieldId})`);
             return { success: true, value: result };
           }
         }
@@ -41863,7 +41953,7 @@ var DynamicFormulaEngine = class {
                     const nextFieldObj = nextField;
                     if (nextFieldObj.id === nextFieldId) {
                       const result = parseFloat(String(obj.extra)) || 0;
-                      if (debug) console.log(`\u{1F4CB} NextField trouv\xE9: ${result}`);
+                      if (debug) logger.debug(`\u{1F4CB} NextField trouv\xE9: ${result}`);
                       return { success: true, value: result };
                     }
                   }
@@ -41878,11 +41968,11 @@ var DynamicFormulaEngine = class {
     } else if (type === "field") {
       const fieldValue = fieldValues[value];
       const numValue = parseFloat(String(fieldValue)) || 0;
-      if (debug) console.log(`\u{1F4CB} Field ${value}: ${numValue}`);
+      if (debug) logger.debug(`\u{1F4CB} Field ${value}: ${numValue}`);
       return { success: true, value: numValue };
     } else if (type === "value") {
       const numValue = parseFloat(String(value)) || 0;
-      if (debug) console.log(`\u{1F4CB} Value: ${numValue}`);
+      if (debug) logger.debug(`\u{1F4CB} Value: ${numValue}`);
       return { success: true, value: numValue };
     }
     return { success: false, error: `Type d'action non support\xE9: ${type}` };
@@ -41899,6 +41989,7 @@ var DynamicFormulaEngine = class {
 var DynamicFormulaEngine_default = DynamicFormulaEngine;
 
 // src/api/dynamic-formulas.ts
+init_logger();
 var router53 = import_express54.default.Router();
 router53.get("/configurations", async (req2, res) => {
   try {
@@ -41924,7 +42015,7 @@ router53.get("/configurations", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [DynamicFormulaAPI] Erreur r\xC3\u0192\xC2\xA9cup\xC3\u0192\xC2\xA9ration configurations:", error);
+    logger.error("\xC3\xA2\xC2\x9D\xC5\u2019 [DynamicFormulaAPI] Erreur r\xC3\u0192\xC2\xA9cup\xC3\u0192\xC2\xA9ration configurations:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de la r\xC3\u0192\xC2\xA9cup\xC3\u0192\xC2\xA9ration des configurations",
@@ -41969,7 +42060,7 @@ router53.post("/calculate", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [DynamicFormulaAPI] Erreur calculs:", error);
+    logger.error("\xC3\xA2\xC2\x9D\xC5\u2019 [DynamicFormulaAPI] Erreur calculs:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors des calculs dynamiques",
@@ -42028,7 +42119,7 @@ router53.post("/calculate-prix-kwh", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [Prix Kw/h API] Erreur:", error);
+    logger.error("\xC3\xA2\xC2\x9D\xC5\u2019 [Prix Kw/h API] Erreur:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors du calcul Prix Kw/h",
@@ -42056,7 +42147,7 @@ router53.put("/configurations/:fieldId", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [DynamicFormulaAPI] Erreur mise \xC3\u0192\xC2\xA0 jour:", error);
+    logger.error("\xC3\xA2\xC2\x9D\xC5\u2019 [DynamicFormulaAPI] Erreur mise \xC3\u0192\xC2\xA0 jour:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de la mise \xC3\u0192\xC2\xA0 jour de la configuration",
@@ -42093,7 +42184,7 @@ router53.get("/field/:fieldId/logic", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [DynamicFormulaAPI] Erreur analyse logique:", error);
+    logger.error("\xC3\xA2\xC2\x9D\xC5\u2019 [DynamicFormulaAPI] Erreur analyse logique:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de l'analyse de la logique",
@@ -42125,7 +42216,7 @@ router53.get("/analytics", async (req2, res) => {
       data: analytics
     });
   } catch (error) {
-    console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [DynamicFormulaAPI] Erreur analytics:", error);
+    logger.error("\xC3\xA2\xC2\x9D\xC5\u2019 [DynamicFormulaAPI] Erreur analytics:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de la r\xC3\u0192\xC2\xA9cup\xC3\u0192\xC2\xA9ration des statistiques",
@@ -42138,6 +42229,7 @@ var dynamic_formulas_default = router53;
 // src/routes/dashboard.ts
 var import_express55 = __toESM(require("express"), 1);
 init_database();
+init_logger();
 var router54 = import_express55.default.Router();
 var prisma27 = db;
 router54.get("/stats", authMiddleware, async (req2, res) => {
@@ -42885,6 +42977,7 @@ var import_client7 = require("@prisma/client");
 init_database();
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/universal-linking-system.ts
+init_logger();
 function normalizeCapacityRef(raw) {
   const trim = raw.trim();
   const lower = trim.toLowerCase();
@@ -43227,7 +43320,7 @@ async function linkConditionToAllNodes(client, conditionId, conditionSet) {
       successCount++;
     } catch (e) {
       errorCount++;
-      console.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 ${nodeId} \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 \xC3\u0192\xE2\u20AC\xB0CHEC:`, e.message);
+      logger.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 ${nodeId} \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 \xC3\u0192\xE2\u20AC\xB0CHEC:`, e.message);
     }
   }
 }
@@ -43241,7 +43334,7 @@ async function linkFormulaToAllNodes(client, formulaId, tokens2) {
       successCount++;
     } catch (e) {
       errorCount++;
-      console.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 ${nodeId} \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 \xC3\u0192\xE2\u20AC\xB0CHEC:`, e.message);
+      logger.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 ${nodeId} \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 \xC3\u0192\xE2\u20AC\xB0CHEC:`, e.message);
     }
   }
 }
@@ -43263,7 +43356,7 @@ async function linkTableToAllNodes(client, tableId, tableData) {
       successCount++;
     } catch (e) {
       errorCount++;
-      console.error(`   \u2717 ${nodeId} ECHEC:`, e.message);
+      logger.error(`   \u2717 ${nodeId} ECHEC:`, e.message);
     }
   }
 }
@@ -43278,11 +43371,11 @@ async function linkVariableToAllCapacityNodes(client, variableId, sourceRef) {
         successCount++;
       } catch (e) {
         errorCount++;
-        console.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 ${nodeId} \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 \xC3\u0192\xE2\u20AC\xB0CHEC:`, e.message);
+        logger.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 ${nodeId} \xC3\xA2\xE2\u20AC\xA0\xE2\u20AC\u2122 \xC3\u0192\xE2\u20AC\xB0CHEC:`, e.message);
       }
     }
   } catch (e) {
-    console.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 Erreur lors de la liaison variable:`, e.message);
+    logger.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 Erreur lors de la liaison variable:`, e.message);
   }
 }
 
@@ -43330,6 +43423,7 @@ function applySuffixToSourceRef(sourceRef, suffix) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/shared/hierarchyRules.ts
+init_logger();
 function calculateGenealogy(nodeId, nodesMap) {
   const genealogy = [];
   let currentNode = nodesMap.get(nodeId);
@@ -43355,7 +43449,7 @@ function calculateNodeLevel(nodeId, nodesMap) {
     const genealogy = calculateGenealogy(nodeId, nodesMap);
     return genealogy.length;
   } catch (error) {
-    console.error("\xD4\xD8\xEE Erreur lors du calcul du niveau:", error);
+    logger.error("\xD4\xD8\xEE Erreur lors du calcul du niveau:", error);
     return -1;
   }
 }
@@ -43693,6 +43787,7 @@ function captureRepeatTemplate(repeaterNodeId) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-blueprint-writer.ts
+init_logger();
 function logVariableEvent(payload) {
   try {
     const input = {
@@ -43706,7 +43801,7 @@ function logVariableEvent(payload) {
     };
     registerVariable(input);
   } catch (err) {
-    console.warn("[repeat-blueprint-writer] Unable to log variable event:", err);
+    logger.warn("[repeat-blueprint-writer] Unable to log variable event:", err);
   }
 }
 function logCapacityEvent(payload) {
@@ -43720,7 +43815,7 @@ function logCapacityEvent(payload) {
     };
     registerCapacityLink(input);
   } catch (err) {
-    console.warn("[repeat-blueprint-writer] Unable to log capacity event:", err);
+    logger.warn("[repeat-blueprint-writer] Unable to log capacity event:", err);
   }
 }
 
@@ -43728,14 +43823,15 @@ function logCapacityEvent(payload) {
 var import_client5 = require("@prisma/client");
 init_database();
 var import_crypto23 = require("crypto");
+init_logger();
 var prisma28 = db;
 function getOrgId2(req2) {
   const user = req2.user || {};
   const headerOrg = req2.headers?.["x-organization-id"] || req2.headers?.["x-organization"] || req2.headers?.["organization-id"];
   return user.organizationId || headerOrg || null;
 }
-function registerSumDisplayFieldRoutes(router117) {
-  router117.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+function registerSumDisplayFieldRoutes(router118) {
+  router118.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
     try {
       const { treeId, nodeId } = req2.params;
       const organizationId = getOrgId2(req2);
@@ -43975,7 +44071,7 @@ function registerSumDisplayFieldRoutes(router117) {
         } catch (err) {
           if (err instanceof import_client5.Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
             await prisma28.treeBranchLeafNode.update({ where: { id: sumFieldNodeId }, data: sumNodeData });
-            console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F [SUM DISPLAY] N\xC3\u2026\xE2\u20AC\u0153ud Total d\xC3\u0192\xC2\xA9j\xC3\u0192\xC2\xA0 existant, mise \xC3\u0192\xC2\xA0 jour forc\xC3\u0192\xC2\xA9e: ${sumFieldNodeId}`);
+            logger.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F [SUM DISPLAY] N\xC3\u2026\xE2\u20AC\u0153ud Total d\xC3\u0192\xC2\xA9j\xC3\u0192\xC2\xA0 existant, mise \xC3\u0192\xC2\xA0 jour forc\xC3\u0192\xC2\xA9e: ${sumFieldNodeId}`);
           } else {
             throw err;
           }
@@ -44021,7 +44117,7 @@ function registerSumDisplayFieldRoutes(router117) {
         } catch (err) {
           if (err instanceof import_client5.Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
             await prisma28.treeBranchLeafNodeVariable.update({ where: { nodeId: sumFieldNodeId }, data: sumVariableData });
-            console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F [SUM DISPLAY] Variable Total d\xC3\u0192\xC2\xA9j\xC3\u0192\xC2\xA0 existante, mise \xC3\u0192\xC2\xA0 jour forc\xC3\u0192\xC2\xA9e: ${sumFieldNodeId}`);
+            logger.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F [SUM DISPLAY] Variable Total d\xC3\u0192\xC2\xA9j\xC3\u0192\xC2\xA0 existante, mise \xC3\u0192\xC2\xA0 jour forc\xC3\u0192\xC2\xA9e: ${sumFieldNodeId}`);
           } else {
             throw err;
           }
@@ -44074,7 +44170,7 @@ function registerSumDisplayFieldRoutes(router117) {
                 ...sumFormulaData
               }
             });
-            console.warn(`\u26A0\uFE0F [SUM DISPLAY] Formule orpheline nettoy\xE9e et recr\xE9\xE9e: ${sumFormulaId}`);
+            logger.warn(`\u26A0\uFE0F [SUM DISPLAY] Formule orpheline nettoy\xE9e et recr\xE9\xE9e: ${sumFormulaId}`);
           } else {
             throw err;
           }
@@ -44102,12 +44198,12 @@ function registerSumDisplayFieldRoutes(router117) {
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
       const errStack = error instanceof Error ? error.stack : "";
-      console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [SUM DISPLAY] Erreur:", errMsg);
-      console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [SUM DISPLAY] Stack:", errStack);
+      logger.error("\xC3\xA2\xC2\x9D\xC5\u2019 [SUM DISPLAY] Erreur:", errMsg);
+      logger.error("\xC3\xA2\xC2\x9D\xC5\u2019 [SUM DISPLAY] Stack:", errStack);
       res.status(500).json({ error: "Erreur lors de la cr\xC3\u0192\xC2\xA9ation du champ Total", details: errMsg });
     }
   });
-  router117.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+  router118.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
     try {
       const { treeId, nodeId } = req2.params;
       const organizationId = getOrgId2(req2);
@@ -44169,7 +44265,7 @@ function registerSumDisplayFieldRoutes(router117) {
       });
       return res.json({ success: true });
     } catch (error) {
-      console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [SUM DISPLAY] Erreur suppression:", error);
+      logger.error("\xC3\xA2\xC2\x9D\xC5\u2019 [SUM DISPLAY] Erreur suppression:", error);
       res.status(500).json({ error: "Erreur lors de la suppression du champ Total" });
     }
   });
@@ -44291,7 +44387,7 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient) 
         }
       }
     } catch (sdErr) {
-      console.warn(`\u26A0\uFE0F [SUM UPDATE] Erreur lecture SubmissionData, fallback calculatedValue:`, sdErr.message);
+      logger.warn(`\u26A0\uFE0F [SUM UPDATE] Erreur lecture SubmissionData, fallback calculatedValue:`, sdErr.message);
       for (const node of allCopyNodes) {
         newCalculatedValue += parseFloat(String(node.calculatedValue)) || 0;
       }
@@ -44322,7 +44418,7 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient) 
       if (activeSubmissions.length > 0) {
       }
     } catch (sdUpdateErr) {
-      console.warn(`\u26A0\uFE0F [SUM UPDATE] Erreur mise \xE0 jour SubmissionData sum-total:`, sdUpdateErr.message);
+      logger.warn(`\u26A0\uFE0F [SUM UPDATE] Erreur mise \xE0 jour SubmissionData sum-total:`, sdUpdateErr.message);
     }
     const sumNode = await db2.treeBranchLeafNode.findUnique({
       where: { id: sumFieldNodeId },
@@ -44352,12 +44448,13 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient) 
       });
     }
   } catch (error) {
-    console.error("\xC3\xA2\xC2\x9D\xC5\u2019 [SUM UPDATE] Erreur mise \xC3\u0192\xC2\xA0 jour champ Total:", error);
+    logger.error("\xC3\xA2\xC2\x9D\xC5\u2019 [SUM UPDATE] Erreur mise \xC3\u0192\xC2\xA0 jour champ Total:", error);
   }
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-capacity-formula.ts
 init_universal_reference_rewriter();
+init_logger();
 async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma50, options = {}) {
   const {
     nodeIdMap = /* @__PURE__ */ new Map(),
@@ -44381,7 +44478,7 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma5
       where: { id: cleanFormulaId }
     });
     if (!originalFormula) {
-      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Formule introuvable avec id: ${cleanFormulaId}`);
+      logger.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Formule introuvable avec id: ${cleanFormulaId}`);
       return {
         newFormulaId: "",
         nodeId: "",
@@ -44418,7 +44515,7 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma5
         (t) => typeof t === "string" && t.includes("shared-ref") && !/-\d+$/.test(t)
       );
       if (unsuffixed.length > 0) {
-        console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 ALERTE: ${unsuffixed.length} shared-refs TOUJOURS non-suffix\xC3\u0192\xC2\xA9s:`, unsuffixed);
+        logger.error(`\xC3\xA2\xC2\x9D\xC5\u2019 ALERTE: ${unsuffixed.length} shared-refs TOUJOURS non-suffix\xC3\u0192\xC2\xA9s:`, unsuffixed);
       } else {
       }
     }
@@ -44461,14 +44558,14 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma5
       try {
         await linkFormulaToAllNodes(prisma50, newFormulaId, rewrittenTokens);
       } catch (e) {
-        console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur LIAISON AUTOMATIQUE:`, e.message);
+        logger.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur LIAISON AUTOMATIQUE:`, e.message);
       }
     }
     if (!options.skipLinking && ownerNodeExistsForUpdate) {
       try {
         await addToNodeLinkedField2(prisma50, finalOwnerNodeId, "linkedFormulaIds", [newFormulaId]);
       } catch (e) {
-        console.warn(`Erreur MAJ linkedFormulaIds du proprietaire:`, e.message);
+        logger.warn(`Erreur MAJ linkedFormulaIds du proprietaire:`, e.message);
       }
     }
     if (!options.skipCapacitySync && ownerNodeExistsForUpdate) {
@@ -44482,7 +44579,7 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma5
           }
         });
       } catch (e) {
-        console.warn(`Erreur lors de la mise a jour des parametres capacite:`, e.message);
+        logger.warn(`Erreur lors de la mise a jour des parametres capacite:`, e.message);
       }
     }
     formulaCopyCache.set(originalFormulaId, newFormulaId);
@@ -44493,7 +44590,7 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma5
       success: true
     };
   } catch (error) {
-    console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur lors de la copie de la formule:`, error);
+    logger.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur lors de la copie de la formule:`, error);
     return {
       newFormulaId: "",
       nodeId: "",
@@ -44519,6 +44616,7 @@ async function addToNodeLinkedField2(prisma50, nodeId, field, idsToAdd) {
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-capacity-condition.ts
 init_universal_reference_rewriter();
+init_logger();
 function regenerateInternalIds(conditionSet, suffix) {
   if (!conditionSet || typeof conditionSet !== "object") {
     return conditionSet;
@@ -44551,7 +44649,7 @@ function regenerateInternalIds(conditionSet, suffix) {
     result = processObject(result);
     return result;
   } catch (error) {
-    console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur lors de la r\xC3\u0192\xC2\xA9g\xC3\u0192\xC2\xA9n\xC3\u0192\xC2\xA9ration des IDs internes:`, error);
+    logger.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur lors de la r\xC3\u0192\xC2\xA9g\xC3\u0192\xC2\xA9n\xC3\u0192\xC2\xA9ration des IDs internes:`, error);
     return conditionSet;
   }
 }
@@ -44592,7 +44690,7 @@ function replaceInJson(json, replacements) {
     }
     return JSON.parse(str);
   } catch (error) {
-    console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur lors du remplacement dans JSON:`, error);
+    logger.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur lors du remplacement dans JSON:`, error);
     return json;
   }
 }
@@ -44633,7 +44731,7 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
       where: { id: cleanConditionId }
     });
     if (!originalCondition) {
-      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Condition introuvable avec id: ${cleanConditionId}`);
+      logger.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Condition introuvable avec id: ${cleanConditionId}`);
       return {
         newConditionId: "",
         nodeId: "",
@@ -44691,17 +44789,17 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
                     (t) => typeof t === "string" && t.includes("shared-ref") && !/-\d+$/.test(t)
                   );
                   if (unsuffixed.length > 0) {
-                    console.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 PROBL\xC3\u0192\xCB\u2020ME: ${unsuffixed.length} shared-refs TOUJOURS non-suffix\xC3\u0192\xC2\xA9s en BD:`, unsuffixed);
+                    logger.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 PROBL\xC3\u0192\xCB\u2020ME: ${unsuffixed.length} shared-refs TOUJOURS non-suffix\xC3\u0192\xC2\xA9s en BD:`, unsuffixed);
                   } else {
                   }
                 }
               }
               formulaIdMap.set(linkedFormId, linkedFormResult.newFormulaId);
             } else {
-              console.warn(`   \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F \xC3\u0192\xE2\u20AC\xB0chec copie formule li\xC3\u0192\xC2\xA9e: ${linkedFormId}`);
+              logger.warn(`   \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F \xC3\u0192\xE2\u20AC\xB0chec copie formule li\xC3\u0192\xC2\xA9e: ${linkedFormId}`);
             }
           } catch (e) {
-            console.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 Exception copie formule li\xC3\u0192\xC2\xA9e:`, e.message);
+            logger.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 Exception copie formule li\xC3\u0192\xC2\xA9e:`, e.message);
           }
         }
       }
@@ -44765,10 +44863,10 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
                 ])
               );
             } else {
-              console.warn(`   \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F \xC3\u0192\xE2\u20AC\xB0chec copie condition li\xC3\u0192\xC2\xA9e: ${linkedCondId}`);
+              logger.warn(`   \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F \xC3\u0192\xE2\u20AC\xB0chec copie condition li\xC3\u0192\xC2\xA9e: ${linkedCondId}`);
             }
           } catch (e) {
-            console.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 Exception copie condition li\xC3\u0192\xC2\xA9e:`, e.message);
+            logger.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 Exception copie condition li\xC3\u0192\xC2\xA9e:`, e.message);
           }
         }
       }
@@ -44806,10 +44904,10 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
                 ])
               );
             } else {
-              console.warn(`   \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F \xC3\u0192\xE2\u20AC\xB0chec copie table li\xC3\u0192\xC2\xA9e: ${linkedTableId}`);
+              logger.warn(`   \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F \xC3\u0192\xE2\u20AC\xB0chec copie table li\xC3\u0192\xC2\xA9e: ${linkedTableId}`);
             }
           } catch (e) {
-            console.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 Exception copie table li\xC3\u0192\xC2\xA9e:`, e.message);
+            logger.error(`   \xC3\xA2\xC2\x9D\xC5\u2019 Exception copie table li\xC3\u0192\xC2\xA9e:`, e.message);
           }
         }
       }
@@ -44855,12 +44953,12 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
     try {
       await linkConditionToAllNodes(prisma50, newConditionId, rewrittenConditionSet);
     } catch (e) {
-      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur LIAISON AUTOMATIQUE:`, e.message);
+      logger.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur LIAISON AUTOMATIQUE:`, e.message);
     }
     try {
       await addToNodeLinkedField3(prisma50, finalOwnerNodeId, "linkedConditionIds", [newConditionId]);
     } catch (e) {
-      console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur MAJ linkedConditionIds du propri\xC3\u0192\xC2\xA9taire:`, e.message);
+      logger.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur MAJ linkedConditionIds du propri\xC3\u0192\xC2\xA9taire:`, e.message);
     }
     try {
       await prisma50.treeBranchLeafNode.update({
@@ -44871,7 +44969,7 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
         }
       });
     } catch (e) {
-      console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur lors de la mise \xC3\u0192\xC2\xA0 jour des param\xC3\u0192\xC2\xA8tres capacit\xC3\u0192\xC2\xA9:`, e.message);
+      logger.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur lors de la mise \xC3\u0192\xC2\xA0 jour des param\xC3\u0192\xC2\xA8tres capacit\xC3\u0192\xC2\xA9:`, e.message);
     }
     conditionCopyCache.set(originalConditionId, newConditionId);
     return {
@@ -44881,7 +44979,7 @@ async function copyConditionCapacity(originalConditionId, newNodeId, suffix, pri
       success: true
     };
   } catch (error) {
-    console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur lors de la copie de la condition:`, error);
+    logger.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur lors de la copie de la condition:`, error);
     return {
       newConditionId: "",
       nodeId: "",
@@ -44898,7 +44996,7 @@ async function addToNodeLinkedField3(prisma50, nodeId, field, idsToAdd) {
     select: { [field]: true }
   });
   if (!node) {
-    console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F N\xC3\u2026\xE2\u20AC\u0153ud ${nodeId} introuvable pour MAJ ${field}`);
+    logger.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F N\xC3\u2026\xE2\u20AC\u0153ud ${nodeId} introuvable pour MAJ ${field}`);
     return;
   }
   const current = node[field] || [];
@@ -44911,6 +45009,7 @@ async function addToNodeLinkedField3(prisma50, nodeId, field, idsToAdd) {
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-capacity-table.ts
 init_universal_reference_rewriter();
+init_logger();
 function stripNumericSuffix(value) {
   if (!value) return value;
   const numericWithAnySuffix = /^\d+(?:-\d+)+$/;
@@ -44960,7 +45059,7 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma50, 
       }
     });
     if (!originalTable) {
-      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Table introuvable avec id: ${cleanTableId}`);
+      logger.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Table introuvable avec id: ${cleanTableId}`);
       return {
         newTableId: "",
         nodeId: "",
@@ -45092,7 +45191,7 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma50, 
           });
           columnsCount++;
         } catch (e) {
-          console.warn(`  \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F [${col.columnIndex}] Erreur: ${e.message.split("\n")[0].substring(0, 80)}`);
+          logger.warn(`  \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F [${col.columnIndex}] Erreur: ${e.message.split("\n")[0].substring(0, 80)}`);
         }
       }
       const originalRowsRaw = await prisma50.$queryRaw`
@@ -45118,7 +45217,7 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma50, 
           if (rowsCount % 5 === 0) {
           }
         } catch (e) {
-          console.warn(`  \u26A0\uFE0F [${row.rowIndex}] Erreur: ${e.message.split("\n")[0].substring(0, 80)}`);
+          logger.warn(`  \u26A0\uFE0F [${row.rowIndex}] Erreur: ${e.message.split("\n")[0].substring(0, 80)}`);
         }
       }
     }
@@ -45137,7 +45236,7 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma50, 
         }
       }
     } catch (e) {
-      console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Normalisation des noms de colonnes \xC3\u0192\xC2\xA9chou\xC3\u0192\xC2\xA9e:`, e.message);
+      logger.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Normalisation des noms de colonnes \xC3\u0192\xC2\xA9chou\xC3\u0192\xC2\xA9e:`, e.message);
     }
     await prisma50.treeBranchLeafNodeTable.update({
       where: { id: newTableId },
@@ -45153,12 +45252,12 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma50, 
     try {
       await linkTableToAllNodes(prisma50, newTableId, rewrittenTableData);
     } catch (e) {
-      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur LIAISON AUTOMATIQUE:`, e.message);
+      logger.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur LIAISON AUTOMATIQUE:`, e.message);
     }
     try {
       await addToNodeLinkedField4(prisma50, finalOwnerNodeId, "linkedTableIds", [newTableId]);
     } catch (e) {
-      console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur MAJ linkedTableIds du propri\xC3\u0192\xC2\xA9taire:`, e.message);
+      logger.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur MAJ linkedTableIds du propri\xC3\u0192\xC2\xA9taire:`, e.message);
     }
     try {
       const originalNode = await prisma50.treeBranchLeafNode.findUnique({
@@ -45198,7 +45297,7 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma50, 
         }
       });
     } catch (e) {
-      console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur lors de la mise \xC3\u0192\xC2\xA0 jour des param\xC3\u0192\xC2\xA8tres capacit\xC3\u0192\xC2\xA9:`, e.message);
+      logger.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur lors de la mise \xC3\u0192\xC2\xA0 jour des param\xC3\u0192\xC2\xA8tres capacit\xC3\u0192\xC2\xA9:`, e.message);
     }
     tableCopyCache.set(originalTableId, newTableId);
     return {
@@ -45211,7 +45310,7 @@ async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma50, 
       success: true
     };
   } catch (error) {
-    console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur lors de la copie de la table:`, error);
+    logger.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur lors de la copie de la table:`, error);
     return {
       newTableId: "",
       nodeId: "",
@@ -45230,7 +45329,7 @@ async function addToNodeLinkedField4(prisma50, nodeId, field, idsToAdd) {
     select: { [field]: true }
   });
   if (!node) {
-    console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F N\xC3\u2026\xE2\u20AC\u0153ud ${nodeId} introuvable pour MAJ ${field}`);
+    logger.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F N\xC3\u2026\xE2\u20AC\u0153ud ${nodeId} introuvable pour MAJ ${field}`);
     return;
   }
   const current = node[field] || [];
@@ -45242,6 +45341,7 @@ async function addToNodeLinkedField4(prisma50, nodeId, field, idsToAdd) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/variable-copy-engine.ts
+init_logger();
 async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, prisma50, options = {}) {
   const {
     formulaIdMap = /* @__PURE__ */ new Map(),
@@ -45306,7 +45406,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             }
           }
         } catch (cleanErr) {
-          console.warn(`\u26A0\uFE0F Impossible de nettoyer linkedVariableIds orphelins:`, cleanErr.message);
+          logger.warn(`\u26A0\uFE0F Impossible de nettoyer linkedVariableIds orphelins:`, cleanErr.message);
         }
       }
       return {
@@ -45438,7 +45538,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 newSourceRef = applySuffixOnceToSourceRef(originalVar.sourceRef);
               }
             } catch (e) {
-              console.error(`\u274C Exception copie table:`, e.message);
+              logger.error(`\u274C Exception copie table:`, e.message);
               newSourceRef = applySuffixOnceToSourceRef(originalVar.sourceRef);
             }
           }
@@ -45457,7 +45557,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
     finalNodeId = newNodeId;
     if (autoCreateDisplayNode) {
       if (!originalVar.nodeId) {
-        console.warn(`\u26A0\uFE0F [AUTO-CREATE-DISPLAY] Variable ${originalVar.id} n'a PAS de nodeId! Impossible de cr\xE9er display node. Fallback newNodeId.`);
+        logger.warn(`\u26A0\uFE0F [AUTO-CREATE-DISPLAY] Variable ${originalVar.id} n'a PAS de nodeId! Impossible de cr\xE9er display node. Fallback newNodeId.`);
         finalNodeId = newNodeId;
       } else {
         try {
@@ -46004,7 +46104,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                       orderBy: { order: "asc" }
                     });
                   } catch (findErr) {
-                    console.warn(`[VAR-COPY] Erreur recherche enfants de ${origParentId}:`, findErr.message);
+                    logger.warn(`[VAR-COPY] Erreur recherche enfants de ${origParentId}:`, findErr.message);
                     continue;
                   }
                   for (const child of childDisplayNodes) {
@@ -46129,7 +46229,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                             formulaIdMap.set(f.id, newSumFormulaId);
                             childFormulaIdMap.set(f.id, newSumFormulaId);
                             childCopiedFormulaIds.push(newSumFormulaId);
-                            console.log(`[VAR-COPY] \u2705 Sum-total formule copi\xE9e SANS r\xE9\xE9criture: ${f.id} \u2192 ${newSumFormulaId}`);
+                            logger.debug(`[VAR-COPY] \u2705 Sum-total formule copi\xE9e SANS r\xE9\xE9criture: ${f.id} \u2192 ${newSumFormulaId}`);
                           } else {
                             const formulaResult = await copyFormulaCapacity(
                               f.id,
@@ -46145,7 +46245,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                             }
                           }
                         } catch (fErr) {
-                          console.warn(`[VAR-COPY] Erreur copie formule enfant ${f.id}:`, fErr.message);
+                          logger.warn(`[VAR-COPY] Erreur copie formule enfant ${f.id}:`, fErr.message);
                         }
                       }
                       if (childCopiedFormulaIds.length > 0) {
@@ -46217,15 +46317,15 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                           });
                         }
                       }
-                      console.log(`[VAR-COPY] \u2705 Enfant display node ${child.label} \u2192 ${childCopyId} dupliqu\xE9`);
+                      logger.debug(`[VAR-COPY] \u2705 Enfant display node ${child.label} \u2192 ${childCopyId} dupliqu\xE9`);
                       try {
                         await updateSumDisplayFieldAfterCopyChange(child.id, prisma50);
                       } catch (sumErr) {
-                        console.warn(`[VAR-COPY] Erreur mise \xE0 jour sum-total enfant ${child.id}:`, sumErr.message);
+                        logger.warn(`[VAR-COPY] Erreur mise \xE0 jour sum-total enfant ${child.id}:`, sumErr.message);
                       }
                       bfsQueue.push({ origParentId: child.id, copyParentId: childCopyId });
                     } catch (perChildErr) {
-                      console.error(`[VAR-COPY] \u26A0\uFE0F Erreur duplication enfant ${child.id} (${child.label}) \u2192 continue avec les suivants:`, perChildErr.message);
+                      logger.error(`[VAR-COPY] \u26A0\uFE0F Erreur duplication enfant ${child.id} (${child.label}) \u2192 continue avec les suivants:`, perChildErr.message);
                       const childCopyIdFallback = appendSuffixOnce(stripTrailingNumeric(child.id));
                       bfsQueue.push({ origParentId: child.id, copyParentId: childCopyIdFallback });
                     }
@@ -46233,12 +46333,12 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                 }
               }
             } catch (copyCapErr) {
-              console.warn(`[VAR-COPY] Erreur copie formules/conditions pour var ${originalVarId} \u2192 node ${finalNodeId}:`, copyCapErr.message);
+              logger.warn(`[VAR-COPY] Erreur copie formules/conditions pour var ${originalVarId} \u2192 node ${finalNodeId}:`, copyCapErr.message);
             }
           } else {
           }
         } catch (e) {
-          console.warn(`[VAR-COPY] Erreur cr\xE9ation display node pour var ${originalVarId}:`, e.message);
+          logger.warn(`[VAR-COPY] Erreur cr\xE9ation display node pour var ${originalVarId}:`, e.message);
         }
       }
     }
@@ -46249,7 +46349,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
         newVarId = `${originalVarId}-${suffix}-${tail}`;
       }
     } catch (e) {
-      console.warn(`[VAR-COPY] Erreur v\xE9rification collision ID pour var ${originalVarId}:`, e.message);
+      logger.warn(`[VAR-COPY] Erreur v\xE9rification collision ID pour var ${originalVarId}:`, e.message);
     }
     try {
       const keyCollision = existingVariableKeys ? existingVariableKeys.has(newExposedKey) : await prisma50.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: newExposedKey } }).then((r) => !!r).catch(() => false);
@@ -46258,7 +46358,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
         newExposedKey = `${originalVar.exposedKey}-${suffix}-${tail}`;
       }
     } catch (e) {
-      console.warn(`[VAR-COPY] Erreur v\xE9rification collision exposedKey pour var ${originalVarId}:`, e.message);
+      logger.warn(`[VAR-COPY] Erreur v\xE9rification collision exposedKey pour var ${originalVarId}:`, e.message);
     }
     if (existingVariableIds) existingVariableIds.add(newVarId);
     if (existingVariableKeys) existingVariableKeys.add(newExposedKey);
@@ -46293,7 +46393,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
               await addToNodeLinkedField5(prisma50, finalNodeId, "linkedVariableIds", [existingForNode.id]);
             }
           } catch (e) {
-            console.warn(`[VAR-COPY] Erreur MAJ display node (r\xE9utilisation) pour var ${originalVarId}:`, e.message);
+            logger.warn(`[VAR-COPY] Erreur MAJ display node (r\xE9utilisation) pour var ${originalVarId}:`, e.message);
           }
           const cacheKey2 = `${originalVarId}|${finalNodeId}`;
           variableCopyCache.set(cacheKey2, existingForNode.id);
@@ -46301,14 +46401,14 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
           try {
             await prisma50.treeBranchLeafNodeVariable.delete({ where: { id: existingForNode.id } });
           } catch (delError) {
-            console.warn(`[VAR-COPY] Erreur suppression variable existante ${existingForNode.id}:`, delError.message);
+            logger.warn(`[VAR-COPY] Erreur suppression variable existante ${existingForNode.id}:`, delError.message);
           }
           _reusingExistingVariable = false;
           _existingVariableForReuse = null;
         }
       }
     } catch (e) {
-      console.warn(`[VAR-COPY] Erreur v\xE9rification variable existante pour node ${finalNodeId}:`, e.message);
+      logger.warn(`[VAR-COPY] Erreur v\xE9rification variable existante pour node ${finalNodeId}:`, e.message);
     }
     let newVariable;
     if (_reusingExistingVariable && _existingVariableForReuse) {
@@ -46320,7 +46420,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
       }
       const nodeExists = existingNodeIds ? existingNodeIds.has(finalNodeId) : await prisma50.treeBranchLeafNode.findUnique({ where: { id: finalNodeId }, select: { id: true } }).then((r) => !!r);
       if (!nodeExists) {
-        console.warn(`\u26A0\uFE0F Cannot create variable: node ${finalNodeId} does not exist in database. Skipping variable creation.`);
+        logger.warn(`\u26A0\uFE0F Cannot create variable: node ${finalNodeId} does not exist in database. Skipping variable creation.`);
         return {
           success: false,
           error: `Node ${finalNodeId} does not exist`,
@@ -46490,7 +46590,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
       try {
         await linkVariableToAllCapacityNodes(prisma50, newVariable.id, newVariable.sourceRef);
       } catch (e) {
-        console.warn(`[VAR-COPY] Erreur liaison variable ${newVariable.id} \u2192 capacit\xE9s:`, e.message);
+        logger.warn(`[VAR-COPY] Erreur liaison variable ${newVariable.id} \u2192 capacit\xE9s:`, e.message);
       }
     }
     try {
@@ -46510,7 +46610,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
         }
       });
     } catch (e) {
-      console.warn(`[VAR-COPY] Erreur MAJ display node ${finalNodeId}:`, e.message);
+      logger.warn(`[VAR-COPY] Erreur MAJ display node ${finalNodeId}:`, e.message);
     }
     if (linkToDisplaySection) {
       try {
@@ -46533,7 +46633,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
           }
         }
       } catch (e) {
-        console.warn(`[VAR-COPY] Erreur linkage section display pour var ${newVariable.id}:`, e.message);
+        logger.warn(`[VAR-COPY] Erreur linkage section display pour var ${newVariable.id}:`, e.message);
       }
     } else if (autoCreateDisplayNode) {
       try {
@@ -46542,7 +46642,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
           await addToNodeLinkedField5(prisma50, finalNodeId, "linkedVariableIds", [newVariable.id]);
         }
       } catch (e) {
-        console.warn(`[VAR-COPY] Erreur linkage linkedVariableIds pour node ${finalNodeId}:`, e.message);
+        logger.warn(`[VAR-COPY] Erreur linkage linkedVariableIds pour node ${finalNodeId}:`, e.message);
       }
       try {
         if (capacityType && newSourceRef) {
@@ -46582,7 +46682,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
                   }
                 }
               } catch (e) {
-                console.warn(`[VAR-COPY] Erreur sync linkedVariableIds sur node ${newNodeId}:`, e.message);
+                logger.warn(`[VAR-COPY] Erreur sync linkedVariableIds sur node ${newNodeId}:`, e.message);
               }
             } else if (parsedCap.type === "table") {
               const tbl = await prisma50.treeBranchLeafNodeTable.findUnique({
@@ -46606,7 +46706,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
           }
         }
       } catch (e) {
-        console.warn(`[VAR-COPY] Erreur sync capacit\xE9s (condition/table) pour node ${finalNodeId}:`, e.message);
+        logger.warn(`[VAR-COPY] Erreur sync capacit\xE9s (condition/table) pour node ${finalNodeId}:`, e.message);
       }
     }
     try {
@@ -46617,7 +46717,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
         await replaceLinkedVariableId(prisma50, finalNodeId, originalVarId, newVariable.id, suffix);
       }
     } catch (e) {
-      console.warn(`[VAR-COPY] Erreur replace linkedVariableIds pour var ${originalVarId} \u2192 ${newVariable.id}:`, e.message);
+      logger.warn(`[VAR-COPY] Erreur replace linkedVariableIds pour var ${originalVarId} \u2192 ${newVariable.id}:`, e.message);
     }
     const cacheKeyFinal = `${originalVarId}|${finalNodeId}`;
     variableCopyCache.set(cacheKeyFinal, newVariable.id);
@@ -46651,7 +46751,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
             }
           }
         } catch (e) {
-          console.warn(`[VAR-COPY] Erreur MAJ bidirectionnelle linked pour capacit\xE9 ${capacityType}:`, e.message);
+          logger.warn(`[VAR-COPY] Erreur MAJ bidirectionnelle linked pour capacit\xE9 ${capacityType}:`, e.message);
         }
       }
     }
@@ -46661,7 +46761,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
         });
       }
     } catch (sumErr) {
-      console.warn(`[VAR-COPY] Erreur mise \xE0 jour champ Total pour node ${originalVar?.nodeId}:`, sumErr.message);
+      logger.warn(`[VAR-COPY] Erreur mise \xE0 jour champ Total pour node ${originalVar?.nodeId}:`, sumErr.message);
     }
     return {
       variableId: newVariable.id,
@@ -46678,15 +46778,15 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
       childDisplayNodeIds: childDisplayNodeIds.length > 0 ? childDisplayNodeIds : void 0
     };
   } catch (error) {
-    console.error(`
+    logger.error(`
 ${"\u2550".repeat(80)}`);
-    console.error(`\u274C\u274C\u274C ERREUR FATALE lors de la copie de la variable!`);
-    console.error(`Variable ID: ${originalVarId}`);
-    console.error(`Suffix: ${suffix}`);
-    console.error(`Display Node ID: ${finalNodeId || "undefined"}`);
-    console.error(`Message d'erreur:`, error instanceof Error ? error.message : String(error));
-    console.error(`Stack trace:`, error instanceof Error ? error.stack : "N/A");
-    console.error(`${"\u2550".repeat(80)}
+    logger.error(`\u274C\u274C\u274C ERREUR FATALE lors de la copie de la variable!`);
+    logger.error(`Variable ID: ${originalVarId}`);
+    logger.error(`Suffix: ${suffix}`);
+    logger.error(`Display Node ID: ${finalNodeId || "undefined"}`);
+    logger.error(`Message d'erreur:`, error instanceof Error ? error.message : String(error));
+    logger.error(`Stack trace:`, error instanceof Error ? error.stack : "N/A");
+    logger.error(`${"\u2550".repeat(80)}
 `);
     throw error;
   }
@@ -46798,7 +46898,7 @@ async function addToNodeLinkedField5(prisma50, nodeId, field, idsToAdd) {
       nodeId
     );
   } catch (e) {
-    console.warn(`[VAR-COPY] Erreur addToNodeLinkedField ${field} sur node ${nodeId}:`, e.message);
+    logger.warn(`[VAR-COPY] Erreur addToNodeLinkedField ${field} sur node ${nodeId}:`, e.message);
   }
 }
 async function replaceLinkedVariableId(prisma50, nodeId, originalVarId, newVarId, suffix) {
@@ -46825,6 +46925,7 @@ async function replaceLinkedVariableId(prisma50, nodeId, originalVarId, newVarId
 init_universal_reference_rewriter();
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-selector-tables.ts
+init_logger();
 async function copySelectorTablesAfterNodeCopy(prisma50, copiedRootNodeId, originalRootNodeId, options, suffix) {
   try {
     const originalNodeIds = Array.from(options.nodeIdMap.keys());
@@ -46896,15 +46997,16 @@ async function copySelectorTablesAfterNodeCopy(prisma50, copiedRootNodeId, origi
         } else {
         }
       } catch (e) {
-        console.warn(`      \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur lors de la copie:`, e.message);
+        logger.warn(`      \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur lors de la copie:`, e.message);
       }
     }
   } catch (e) {
-    console.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur dans copySelectorTablesAfterNodeCopy:`, e.message);
+    logger.warn(`\xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur dans copySelectorTablesAfterNodeCopy:`, e.message);
   }
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/shared-helpers.ts
+init_logger();
 function getAuthCtx(req2) {
   const user = req2 && req2.user || {};
   const headerOrg = req2?.headers?.["x-organization-id"] || req2?.headers?.["x-organization"] || req2?.headers?.["organization-id"];
@@ -47041,7 +47143,7 @@ function buildResponseFromColumns(node) {
           const parsed = JSON.parse(node.repeater_templateNodeIds);
           return Array.isArray(parsed) ? parsed : [];
         } catch (e) {
-          console.error("\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA2\xC3\u0192\xE2\u20AC\u0161\xC3\u201A\xC2\x9D\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xE2\u201E\xA2 [buildResponseFromColumns] Erreur parse repeater_templateNodeIds:", e);
+          logger.error("\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA2\xC3\u0192\xE2\u20AC\u0161\xC3\u201A\xC2\x9D\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xE2\u201E\xA2 [buildResponseFromColumns] Erreur parse repeater_templateNodeIds:", e);
           return [];
         }
       }
@@ -47057,7 +47159,7 @@ function buildResponseFromColumns(node) {
           const parsedLabels = JSON.parse(node.repeater_templateNodeLabels);
           return parsedLabels && typeof parsedLabels === "object" ? parsedLabels : null;
         } catch (e) {
-          console.error("\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA2\xC3\u0192\xE2\u20AC\u0161\xC3\u201A\xC2\x9D\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xE2\u201E\xA2 [buildResponseFromColumns] Erreur parse repeater_templateNodeLabels:", e);
+          logger.error("\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA2\xC3\u0192\xE2\u20AC\u0161\xC3\u201A\xC2\x9D\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xE2\u201E\xA2 [buildResponseFromColumns] Erreur parse repeater_templateNodeLabels:", e);
         }
       }
       const legacyLabels = legacyRepeater?.templateNodeLabels;
@@ -47323,7 +47425,7 @@ function buildResponseFromColumns(node) {
     }
     result.capabilities = mergedCaps;
   } catch (e) {
-    console.error("\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA2\xC3\u0192\xE2\u20AC\u0161\xC3\u201A\xC2\x9D\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xE2\u201E\xA2 [buildResponseFromColumns] Erreur adaptation legacy capabilities:", e);
+    logger.error("\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA2\xC3\u0192\xE2\u20AC\u0161\xC3\u201A\xC2\x9D\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xE2\u201E\xA2 [buildResponseFromColumns] Erreur adaptation legacy capabilities:", e);
   }
   if (node.sharedReferenceIds && node.sharedReferenceIds.length > 0) {
   }
@@ -47372,6 +47474,7 @@ function deriveRepeatContextFromMetadata(carrier, fallback = {}) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/deep-copy-service.ts
+init_logger();
 async function deepCopyNodeInternal(prisma50, req2, nodeId, opts) {
   const {
     targetParentId,
@@ -47862,7 +47965,7 @@ async function deepCopyNodeInternal(prisma50, req2, nodeId, opts) {
         });
         return JSON.parse(replaced);
       } catch {
-        console.warn("[fieldConfig] Erreur traitement fieldConfig, copie tel quel");
+        logger.warn("[fieldConfig] Erreur traitement fieldConfig, copie tel quel");
         return oldNode.fieldConfig;
       }
     })(),
@@ -47978,7 +48081,7 @@ async function deepCopyNodeInternal(prisma50, req2, nodeId, opts) {
         if (!mapping.targetRef) continue;
         const originalTargetField = await prisma50.treeBranchLeafNode.findUnique({ where: { id: mapping.targetRef } });
         if (!originalTargetField) {
-          console.warn(`[DEEP-COPY] Champ cible ${mapping.targetRef} introuvable`);
+          logger.warn(`[DEEP-COPY] Champ cible ${mapping.targetRef} introuvable`);
           continue;
         }
         const duplicatedTargetId = `${mapping.targetRef}${suffixToken}`;
@@ -48039,7 +48142,7 @@ async function deepCopyNodeInternal(prisma50, req2, nodeId, opts) {
         });
       }
     } catch (aiMeasureError) {
-      console.error(`[DEEP-COPY] Erreur duplication champs AI Measure:`, aiMeasureError);
+      logger.error(`[DEEP-COPY] Erreur duplication champs AI Measure:`, aiMeasureError);
     }
   }
   const allOldNodeIds = createdNodes.map((n) => n.oldId);
@@ -48175,10 +48278,10 @@ async function deepCopyNodeInternal(prisma50, req2, nodeId, opts) {
           } catch (e) {
           }
         } else {
-          console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur copie formule centralis\xC3\u0192\xC2\xA9e: ${f.id}`);
+          logger.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur copie formule centralis\xC3\u0192\xC2\xA9e: ${f.id}`);
         }
       } catch (error) {
-        console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Exception copie formule ${f.id}:`, error);
+        logger.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Exception copie formule ${f.id}:`, error);
       }
     }
     const conditions = conditionsByNodeId.get(oldId) || [];
@@ -48251,7 +48354,7 @@ async function deepCopyNodeInternal(prisma50, req2, nodeId, opts) {
           pendingLinkedConditionUpdates.get(normalizedRefId).add(newConditionId);
         }
       } catch (e) {
-        console.warn("[TreeBranchLeaf API] Warning updating linkedConditionIds during deep copy:", e.message);
+        logger.warn("[TreeBranchLeaf API] Warning updating linkedConditionIds during deep copy:", e.message);
       }
     }
     const shouldHaveFormula = oldNode.hasFormula === true || formulas.length > 0;
@@ -48357,14 +48460,14 @@ async function deepCopyNodeInternal(prisma50, req2, nodeId, opts) {
               nodeExists = { id: tableOwnerNodeId };
               existingNodeIds.add(tableOwnerNodeId);
             } else {
-              console.error(`[DEEP-COPY] \u274C Failed to create stub node ${tableOwnerNodeId}: ${err.message}`);
+              logger.error(`[DEEP-COPY] \u274C Failed to create stub node ${tableOwnerNodeId}: ${err.message}`);
               throw err;
             }
           }
         }
       }
       if (!nodeExists) {
-        console.warn(
+        logger.warn(
           `[DEEP-COPY] \u26A0\uFE0F Cannot create table "${t.name}": owner node "${tableOwnerNodeId}" doesn't exist. Original nodeId: "${t.nodeId}", oldId: "${oldId}", newId: "${newId}"`
         );
         continue;
@@ -48400,7 +48503,7 @@ async function deepCopyNodeInternal(prisma50, req2, nodeId, opts) {
               }
               return metaObj;
             } catch (err) {
-              console.warn("[table.meta] Erreur traitement meta, copie tel quel:", err);
+              logger.warn("[table.meta] Erreur traitement meta, copie tel quel:", err);
               return t.meta;
             }
           })(),
@@ -48512,7 +48615,7 @@ async function deepCopyNodeInternal(prisma50, req2, nodeId, opts) {
               }
             }
           } catch (initDisplayErr) {
-            console.warn("[DEEP-COPY SelectConfig] Erreur initialisation displayColumn:", initDisplayErr.message);
+            logger.warn("[DEEP-COPY SelectConfig] Erreur initialisation displayColumn:", initDisplayErr.message);
           }
         } catch (selectConfigErr) {
         }
@@ -48644,13 +48747,13 @@ async function deepCopyNodeInternal(prisma50, req2, nodeId, opts) {
         }
       }
     }
-    console.log(`[DEEP-COPY] PERF R8: Executed ${varCopyTasks.length} variable copies in parallel chunks of 5`);
+    logger.debug(`[DEEP-COPY] PERF R8: Executed ${varCopyTasks.length} variable copies in parallel chunks of 5`);
   }
   if (pendingFinalUpdateOps.length > 0) {
     try {
       await prisma50.$transaction(pendingFinalUpdateOps);
     } catch (e) {
-      console.warn("[DEEP-COPY] PERF R7: Batch merged update error:", e.message);
+      logger.warn("[DEEP-COPY] PERF R7: Batch merged update error:", e.message);
     }
   }
   if (pendingLinkedConditionUpdates.size > 0) {
@@ -48661,11 +48764,11 @@ async function deepCopyNodeInternal(prisma50, req2, nodeId, opts) {
         condSkipped++;
       }
     }
-    if (condSkipped > 0) console.log(`[DEEP-COPY] PERF R8: Skipped ${condSkipped} non-existent nodes for linkedConditionIds`);
+    if (condSkipped > 0) logger.debug(`[DEEP-COPY] PERF R8: Skipped ${condSkipped} non-existent nodes for linkedConditionIds`);
     const batchPromises = [];
     for (const [refNodeId, conditionIds] of pendingLinkedConditionUpdates) {
       batchPromises.push(
-        addToNodeLinkedField6(prisma50, refNodeId, "linkedConditionIds", Array.from(conditionIds)).catch((e) => console.warn("[DEEP-COPY] Warning batch linkedConditionIds:", e.message))
+        addToNodeLinkedField6(prisma50, refNodeId, "linkedConditionIds", Array.from(conditionIds)).catch((e) => logger.warn("[DEEP-COPY] Warning batch linkedConditionIds:", e.message))
       );
     }
     await Promise.all(batchPromises);
@@ -48678,15 +48781,15 @@ async function deepCopyNodeInternal(prisma50, req2, nodeId, opts) {
         formSkipped++;
       }
     }
-    if (formSkipped > 0) console.log(`[DEEP-COPY] PERF R8: Skipped ${formSkipped} non-existent nodes for linkedFormulaIds`);
+    if (formSkipped > 0) logger.debug(`[DEEP-COPY] PERF R8: Skipped ${formSkipped} non-existent nodes for linkedFormulaIds`);
     const batchFormulaPromises = [];
     for (const [refNodeId, formulaIds] of pendingLinkedFormulaUpdates) {
       batchFormulaPromises.push(
-        addToNodeLinkedField6(prisma50, refNodeId, "linkedFormulaIds", Array.from(formulaIds)).catch((e) => console.warn("[DEEP-COPY] Warning batch linkedFormulaIds:", e.message))
+        addToNodeLinkedField6(prisma50, refNodeId, "linkedFormulaIds", Array.from(formulaIds)).catch((e) => logger.warn("[DEEP-COPY] Warning batch linkedFormulaIds:", e.message))
       );
     }
     await Promise.all(batchFormulaPromises);
-    console.log(`[DEEP-COPY] PERF R8: Batch-flushed linkedFormulaIds for ${pendingLinkedFormulaUpdates.size} nodes (instead of per-formula linking)`);
+    logger.debug(`[DEEP-COPY] PERF R8: Batch-flushed linkedFormulaIds for ${pendingLinkedFormulaUpdates.size} nodes (instead of per-formula linking)`);
   }
   const rootNewId = idMap.get(source.id);
   if (displayNodeIds.length > 0) {
@@ -48748,14 +48851,14 @@ async function deepCopyNodeInternal(prisma50, req2, nodeId, opts) {
           }
         }));
       } catch (varError) {
-        console.error("[DEEP-COPY] Erreur creation variable pour " + nodeId2 + ":", varError);
+        logger.error("[DEEP-COPY] Erreur creation variable pour " + nodeId2 + ":", varError);
       }
     }
     if (postProcessOps.length > 0) {
       try {
         await prisma50.$transaction(postProcessOps);
       } catch (ppErr) {
-        console.warn("[DEEP-COPY] PERF R8: Post-process batch error, falling back to sequential:", ppErr.message);
+        logger.warn("[DEEP-COPY] PERF R8: Post-process batch error, falling back to sequential:", ppErr.message);
       }
     }
   }
@@ -48799,7 +48902,7 @@ async function deepCopyNodeInternal(prisma50, req2, nodeId, opts) {
       }
     }
   } catch (syncPassThroughError) {
-    console.warn("[DEEP-COPY] Post-copy data sync skipped:", syncPassThroughError.message);
+    logger.warn("[DEEP-COPY] Post-copy data sync skipped:", syncPassThroughError.message);
   }
   return {
     root: {
@@ -48824,6 +48927,7 @@ var import_express56 = require("express");
 init_database();
 var import_crypto24 = require("crypto");
 init_operation_interpreter();
+init_logger();
 function isSumTotalNodeId(nodeId) {
   return /-sum-total(-\d+)?$/.test(nodeId);
 }
@@ -48961,7 +49065,7 @@ async function cloneCompletedSubmissionToDraft(params) {
       uniqueOriginalRows.push(r);
     }
     if (duplicateCount > 0) {
-      console.warn("\u26A0\uFE0F [TBL][REVISION] Doublons TreeBranchLeafSubmissionData d\xE9tect\xE9s, d\xE9dupliqu\xE9s", {
+      logger.warn("\u26A0\uFE0F [TBL][REVISION] Doublons TreeBranchLeafSubmissionData d\xE9tect\xE9s, d\xE9dupliqu\xE9s", {
         submissionId: original.id,
         duplicateCount,
         totalRows: originalRows.length,
@@ -49356,7 +49460,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
       where: { submissionId },
       select: { nodeId: true, value: true, operationSource: true }
     }).catch((e) => {
-      console.warn("\u26A0\uFE0F [EVALUATE] Hydratation DB \xE9chou\xE9e:", e?.message);
+      logger.warn("\u26A0\uFE0F [EVALUATE] Hydratation DB \xE9chou\xE9e:", e?.message);
       return [];
     })
   ]);
@@ -49413,7 +49517,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
       }
     }
   } catch (e) {
-    console.warn("\u26A0\uFE0F [EVALUATE] Chargement lead \xE9chou\xE9 (best-effort):", e?.message || e);
+    logger.warn("\u26A0\uFE0F [EVALUATE] Chargement lead \xE9chou\xE9 (best-effort):", e?.message || e);
   }
   const displayNodeIds = /* @__PURE__ */ new Set();
   for (const n of displayNodesParallel) {
@@ -49432,7 +49536,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
       }
     }
   } catch (e) {
-    console.warn("\u26A0\uFE0F [EVALUATE] Hydratation DB du valueMap \xE9chou\xE9e (best-effort):", e?.message || e);
+    logger.warn("\u26A0\uFE0F [EVALUATE] Hydratation DB du valueMap \xE9chou\xE9e (best-effort):", e?.message || e);
   }
   const restoredDbDisplayValues = /* @__PURE__ */ new Map();
   if (formData && typeof formData === "object") {
@@ -49517,7 +49621,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
     if (linkResolvedCount > 0) {
     }
   } catch (e) {
-    console.warn("\u26A0\uFE0F [FIX R21b] R\xE9solution LINK fields \xE9chou\xE9e (best-effort):", e?.message || e);
+    logger.warn("\u26A0\uFE0F [FIX R21b] R\xE9solution LINK fields \xE9chou\xE9e (best-effort):", e?.message || e);
   }
   const [variablesRaw, formulasRaw] = await Promise.all([
     prisma29.treeBranchLeafNodeVariable.findMany({
@@ -49782,7 +49886,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
           }
         }
         if (addedCount > 0) {
-          console.log(`\u{1F527} [FIX TRIGGER-COVERAGE] ${addedCount} display nodes ajout\xE9s au trigger index (absents de capacitiesRaw)`);
+          logger.debug(`\u{1F527} [FIX TRIGGER-COVERAGE] ${addedCount} display nodes ajout\xE9s au trigger index (absents de capacitiesRaw)`);
         }
       }
       const [selectFieldNodes, optionNodes, displayNodes, displayFieldTables, allLinkedNodes, allTreeNodeIds] = await Promise.all([
@@ -50164,7 +50268,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
       }
     }
     if (affectedDisplayFieldIds.size === 0) {
-      console.warn(`\u26A0\uFE0F [FIX D] changedFieldId="${changedFieldId?.substring(0, 12)}" n'est dans aucun trigger \u2192 fallback \xE9valuation COMPL\xC8TE (comme mode='open')`);
+      logger.warn(`\u26A0\uFE0F [FIX D] changedFieldId="${changedFieldId?.substring(0, 12)}" n'est dans aucun trigger \u2192 fallback \xE9valuation COMPL\xC8TE (comme mode='open')`);
       affectedDisplayFieldIds = null;
     }
   }
@@ -50316,7 +50420,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
             operationResult: `Somme = ${sum}`
           };
         } catch (sumError) {
-          console.error(`\u274C [SUM-TOTAL EVALUATOR] Erreur pour ${capacity.nodeId}:`, sumError);
+          logger.error(`\u274C [SUM-TOTAL EVALUATOR] Erreur pour ${capacity.nodeId}:`, sumError);
           capacityResult = { value: 0, operationSource: "formula" };
         }
       } else {
@@ -50493,7 +50597,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
         }
       }
     } catch (error) {
-      console.error(`[TBL CAPACITY ERROR] ${sourceRef}:`, error);
+      logger.error(`[TBL CAPACITY ERROR] ${sourceRef}:`, error);
     }
   }
   if (pendingNonDisplayUpserts.length > 0) {
@@ -50530,7 +50634,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
       });
       await prisma29.$transaction(operations);
     } catch (batchError) {
-      console.error("[PERF] Batch upsert \xE9chou\xE9, fallback s\xE9quentiel:", batchError);
+      logger.error("[PERF] Batch upsert \xE9chou\xE9, fallback s\xE9quentiel:", batchError);
       for (const op of pendingNonDisplayUpserts) {
         try {
           if (op.isUpdate) {
@@ -50544,7 +50648,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
             });
           }
         } catch (seqError) {
-          console.error(`[TBL CAPACITY UPSERT] ${op.nodeId}:`, seqError);
+          logger.error(`[TBL CAPACITY UPSERT] ${op.nodeId}:`, seqError);
         }
       }
     }
@@ -50643,7 +50747,7 @@ async function evaluateCapacitiesForSubmission(submissionId, organizationId, use
       const stored = await upsertComputedValuesForSubmission(submissionId, computedValuesToStore);
       results.displayFieldsUpdated = stored;
     } catch (computedStoreError) {
-      console.error("[COMPUTED VALUES] Erreur stockage:", computedStoreError);
+      logger.error("[COMPUTED VALUES] Erreur stockage:", computedStoreError);
     }
   }
   if (mode === "change" && affectedDisplayFieldIds !== null) {
@@ -50759,7 +50863,7 @@ router55.post("/submissions/:submissionId/evaluate-all", async (req2, res) => {
         });
         evaluatedCount++;
       } catch (error) {
-        console.error(`\u274C [TBL EVALUATE ALL] Erreur pour ${data.sourceRef}:`, error);
+        logger.error(`\u274C [TBL EVALUATE ALL] Erreur pour ${data.sourceRef}:`, error);
         results.push({
           id: data.id,
           sourceRef: data.sourceRef,
@@ -50780,7 +50884,7 @@ router55.post("/submissions/:submissionId/evaluate-all", async (req2, res) => {
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
     });
   } catch (error) {
-    console.error("\u274C [TBL EVALUATE ALL] Erreur globale:", error);
+    logger.error("\u274C [TBL EVALUATE ALL] Erreur globale:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur lors de l'\xE9valuation compl\xE8te",
@@ -50836,7 +50940,7 @@ router55.get("/submissions/:submissionId/verification", async (req2, res) => {
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
     });
   } catch (error) {
-    console.error("\u274C [TBL VERIFICATION] Erreur:", error);
+    logger.error("\u274C [TBL VERIFICATION] Erreur:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur lors de la v\xE9rification"
@@ -51112,7 +51216,7 @@ router55.post("/submissions/create-and-evaluate", async (req2, res) => {
       freshlyComputedNodeIds: evalStats?.computedNodeIds ?? []
     });
   } catch (error) {
-    console.error("\u274C [TBL CREATE-AND-EVALUATE] Erreur:", error);
+    logger.error("\u274C [TBL CREATE-AND-EVALUATE] Erreur:", error);
     return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : "Erreur interne"
@@ -51175,7 +51279,7 @@ router55.put("/submissions/:submissionId/update-and-evaluate", async (req2, res)
       submission: { ...finalSubmission, submissionData: finalData }
     });
   } catch (error) {
-    console.error("\u274C [TBL UPDATE-AND-EVALUATE] Erreur:", error);
+    logger.error("\u274C [TBL UPDATE-AND-EVALUATE] Erreur:", error);
     return res.status(500).json({ success: false, error: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
@@ -51524,7 +51628,7 @@ router55.post("/submissions/preview-evaluate", async (req2, res) => {
         await upsertComputedValuesForSubmission(submissionId, computedRows);
       }
     } catch (storeError) {
-      console.error("[PREVIEW] Erreur stockage:", storeError);
+      logger.error("[PREVIEW] Erreur stockage:", storeError);
     }
     return res.json({
       success: true,
@@ -51535,7 +51639,7 @@ router55.post("/submissions/preview-evaluate", async (req2, res) => {
       results
     });
   } catch (error) {
-    console.error("\u274C [TBL PREVIEW-EVALUATE] Erreur:", error);
+    logger.error("\u274C [TBL PREVIEW-EVALUATE] Erreur:", error);
     return res.status(500).json({ success: false, error: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
@@ -51745,7 +51849,7 @@ router55.get("/tables/:tableId", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\u274C [GET TABLE] Erreur:", error);
+    logger.error("\u274C [GET TABLE] Erreur:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur lors de la r\xE9cup\xE9ration de la table",
@@ -51760,6 +51864,7 @@ var import_express57 = require("express");
 var import_client6 = require("@prisma/client");
 init_database();
 var import_crypto25 = require("crypto");
+init_logger();
 var router56 = (0, import_express57.Router)();
 var prisma30 = db;
 function toJsonSafe2(value) {
@@ -51834,7 +51939,7 @@ async function syncTableReferences(oldTableId, newTableId, ownerNodeId, tableNam
             data: { meta: updatedMeta, updatedAt: /* @__PURE__ */ new Date() }
           });
         } catch (parseErr) {
-          console.error(`[syncTableRefs] \u274C Erreur parse meta pour table ${t.id}:`, parseErr);
+          logger.error(`[syncTableRefs] \u274C Erreur parse meta pour table ${t.id}:`, parseErr);
         }
       }
     }
@@ -51845,7 +51950,7 @@ async function syncTableReferences(oldTableId, newTableId, ownerNodeId, tableNam
       }
     }
   } catch (error) {
-    console.error(`[syncTableRefs] \u274C Erreur lors de la sync des r\xE9f\xE9rences:`, error);
+    logger.error(`[syncTableRefs] \u274C Erreur lors de la sync des r\xE9f\xE9rences:`, error);
   }
 }
 router56.post("/nodes/:nodeId/tables", async (req2, res) => {
@@ -51961,7 +52066,7 @@ router56.post("/nodes/:nodeId/tables", async (req2, res) => {
         updatedAt: viewTable.updatedAt,
         order: viewTable.createdAt ? new Date(viewTable.createdAt).getTime() : 0
       };
-      console.log(`[POST table] \u2705 Vue "${finalName}" cr\xE9\xE9e (source: ${sourceTableId})`);
+      logger.debug(`[POST table] \u2705 Vue "${finalName}" cr\xE9\xE9e (source: ${sourceTableId})`);
       return res.status(201).json(response);
     }
     const defaultMeta = {
@@ -52171,11 +52276,11 @@ router56.post("/nodes/:nodeId/tables", async (req2, res) => {
             });
           }
         } catch (lookupError) {
-          console.error(`[NEW POST /tables] Erreur lors de la creation des SelectConfigs lookup:`, lookupError);
+          logger.error(`[NEW POST /tables] Erreur lors de la creation des SelectConfigs lookup:`, lookupError);
         }
       }
     } catch (updateError) {
-      console.error(`[NEW POST /tables] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur lors de la mise \xC3\u0192\xC2\xA0 jour des SelectConfigs:`, updateError);
+      logger.error(`[NEW POST /tables] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur lors de la mise \xC3\u0192\xC2\xA0 jour des SelectConfigs:`, updateError);
     }
     const createdTable = await prisma30.treeBranchLeafNodeTable.findUnique({
       where: { id: result.id },
@@ -52223,7 +52328,7 @@ router56.post("/nodes/:nodeId/tables", async (req2, res) => {
       updatedAt: createdTable.updatedAt
     });
   } catch (error) {
-    console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [NEW POST /tables] Erreur lors de la cr\xC3\u0192\xC2\xA9ation de la table:`, error);
+    logger.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [NEW POST /tables] Erreur lors de la cr\xC3\u0192\xC2\xA9ation de la table:`, error);
     if (error instanceof import_client6.Prisma.PrismaClientValidationError) {
       return res.status(400).json({
         error: "Requ\xC3\xAAte invalide pour la cr\xC3\u0192\xC2\xA9ation de la table.",
@@ -52305,7 +52410,7 @@ router56.get("/tables/:id", async (req2, res) => {
       updatedAt: table.updatedAt
     });
   } catch (error) {
-    console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [NEW GET /tables/:id] Erreur lors de la r\xC3\u0192\xC2\xA9cup\xC3\u0192\xC2\xA9ration de la table:`, error);
+    logger.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [NEW GET /tables/:id] Erreur lors de la r\xC3\u0192\xC2\xA9cup\xC3\u0192\xC2\xA9ration de la table:`, error);
     res.status(500).json({ error: "Impossible de r\xC3\u0192\xC2\xA9cup\xC3\u0192\xC2\xA9rer la table" });
   }
 });
@@ -52381,7 +52486,7 @@ router56.put("/tables/:id", async (req2, res) => {
     const finalTableData = await prisma30.treeBranchLeafNodeTable.findUnique({ where: { id } });
     res.json(finalTableData);
   } catch (error) {
-    console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [NEW PUT /tables/:id] Erreur lors de la mise \xC3\u0192\xC2\xA0 jour:`, error);
+    logger.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [NEW PUT /tables/:id] Erreur lors de la mise \xC3\u0192\xC2\xA0 jour:`, error);
     if (error instanceof Error && (error.message === "Table non trouv\xC3\u0192\xC2\xA9e" || error.message === "Acc\xC3\u0192\xC2\xA8s non autoris\xC3\u0192\xC2\xA9")) {
       const status = error.message === "Table non trouv\xC3\u0192\xC2\xA9e" ? 404 : 403;
       return res.status(status).json({ error: error.message });
@@ -52423,7 +52528,7 @@ router56.delete("/tables/:id", async (req2, res) => {
         } else {
         }
       } catch (syncErr) {
-        console.error(`[NEW DELETE /tables/:id] \u26A0\uFE0F Erreur sync r\xE9f\xE9rences:`, syncErr);
+        logger.error(`[NEW DELETE /tables/:id] \u26A0\uFE0F Erreur sync r\xE9f\xE9rences:`, syncErr);
       }
     }
     try {
@@ -52480,7 +52585,7 @@ router56.delete("/tables/:id", async (req2, res) => {
         }
       }
     } catch (selectConfigError) {
-      console.error(`[NEW DELETE /tables/:id] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur d\xC3\u0192\xC2\xA9sactivation lookups:`, selectConfigError);
+      logger.error(`[NEW DELETE /tables/:id] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F Erreur d\xC3\u0192\xC2\xA9sactivation lookups:`, selectConfigError);
     }
     if (table.nodeId) {
       const node = await prisma30.treeBranchLeafNode.findUnique({
@@ -52529,7 +52634,7 @@ router56.delete("/tables/:id", async (req2, res) => {
     }
     res.json({ success: true, message: "Table supprim\xC3\u0192\xC2\xA9e avec succ\xC3\u0192\xC2\xA8s" });
   } catch (error) {
-    console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [NEW DELETE /tables/:id] Erreur lors de la suppression:`, error);
+    logger.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [NEW DELETE /tables/:id] Erreur lors de la suppression:`, error);
     res.status(500).json({ error: "Impossible de supprimer la table" });
   }
 });
@@ -52672,7 +52777,7 @@ router56.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
     }
     res.json(updatedTable);
   } catch (error) {
-    console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [NEW PUT /nodes/:nodeId/tables/:tableId] Erreur:`, error);
+    logger.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [NEW PUT /nodes/:nodeId/tables/:tableId] Erreur:`, error);
     if (error instanceof Error && (error.message === "Table non trouv\xC3\u0192\xC2\xA9e" || error.message === "Acc\xC3\u0192\xC2\xA8s non autoris\xC3\u0192\xC2\xA9")) {
       const status = error.message === "Table non trouv\xC3\u0192\xC2\xA9e" ? 404 : 403;
       return res.status(status).json({ error: error.message });
@@ -52851,13 +52956,14 @@ router56.get("/nodes/:nodeId/tables", async (req2, res) => {
     });
     res.json(formattedTables);
   } catch (error) {
-    console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [NEW GET /nodes/:nodeId/tables] Erreur:`, error);
+    logger.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [NEW GET /nodes/:nodeId/tables] Erreur:`, error);
     res.status(500).json({ error: "Impossible de r\xC3\u0192\xC2\xA9cup\xC3\u0192\xC2\xA9rer les tables" });
   }
 });
 var table_routes_new_default = router56;
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/treebranchleaf-routes.ts
+init_logger();
 var router57 = (0, import_express58.Router)();
 router57.use("/", table_routes_new_default);
 registerSumDisplayFieldRoutes(router57);
@@ -53079,7 +53185,7 @@ async function setNodeLinkedField(client, nodeId, field, values) {
       data: { [field]: { set: uniq(values) } }
     });
   } catch (e) {
-    console.warn("[TreeBranchLeaf API] setNodeLinkedField skipped:", { nodeId, field, error: e.message });
+    logger.warn("[TreeBranchLeaf API] setNodeLinkedField skipped:", { nodeId, field, error: e.message });
   }
 }
 async function addToNodeLinkedField7(client, nodeId, field, idsToAdd) {
@@ -53199,7 +53305,7 @@ function calculateResult(expression) {
     }
     return null;
   } catch (error) {
-    console.error("Erreur lors du calcul:", error);
+    logger.error("Erreur lors du calcul:", error);
     return null;
   }
 }
@@ -53233,7 +53339,7 @@ router57.get("/trees", async (req2, res) => {
     }
     res.json(trees);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error fetching trees:", error);
+    logger.error("[TreeBranchLeaf API] Error fetching trees:", error);
     res.status(500).json({ error: "Impossible de r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rer les arbres" });
   }
 });
@@ -53256,7 +53362,7 @@ router57.get("/trees/:id", async (req2, res) => {
     }
     res.json(tree);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error fetching tree:", error);
+    logger.error("[TreeBranchLeaf API] Error fetching tree:", error);
     res.status(500).json({ error: "Impossible de r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rer l'arbre" });
   }
 });
@@ -53302,7 +53408,7 @@ router57.post("/trees", async (req2, res) => {
     });
     res.status(201).json(tree);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error creating tree:", error);
+    logger.error("[TreeBranchLeaf API] Error creating tree:", error);
     res.status(500).json({ error: "Impossible de cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9er l'arbre" });
   }
 });
@@ -53694,7 +53800,7 @@ router57.post("/trees/:id/duplicate", async (req2, res) => {
       tablesCount: sourceTables.length
     });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error duplicating tree:", error);
+    logger.error("[TreeBranchLeaf API] Error duplicating tree:", error);
     res.status(500).json({ error: "Erreur lors de la duplication de l'arbre" });
   }
 });
@@ -53724,7 +53830,7 @@ router57.put("/trees/:id", async (req2, res) => {
     });
     res.json(updatedTree);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error updating tree:", error);
+    logger.error("[TreeBranchLeaf API] Error updating tree:", error);
     res.status(500).json({ error: "Impossible de mettre \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour l'arbre" });
   }
 });
@@ -53746,7 +53852,7 @@ router57.delete("/trees/:id", async (req2, res) => {
     }
     res.json({ success: true, message: "Arbre supprim\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 avec succ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s" });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error deleting tree:", error);
+    logger.error("[TreeBranchLeaf API] Error deleting tree:", error);
     res.status(500).json({ error: "Impossible de supprimer l'arbre" });
   }
 });
@@ -53798,7 +53904,7 @@ router57.get("/trees/:treeId/nodes", async (req2, res) => {
     }
     res.json(reconstructedNodes);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error fetching nodes:", error);
+    logger.error("[TreeBranchLeaf API] Error fetching nodes:", error);
     res.status(500).json({ error: "Impossible de r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rer les n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cuds" });
   }
 });
@@ -53860,7 +53966,7 @@ router57.get("/trees/:treeId/repeater-nodes", async (req2, res) => {
     });
     res.json(result);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error fetching repeater nodes:", error);
+    logger.error("[TreeBranchLeaf API] Error fetching repeater nodes:", error);
     res.status(500).json({ error: "Impossible de r\xE9cup\xE9rer les n\u0153uds repeater" });
   }
 });
@@ -53914,7 +54020,7 @@ router57.get("/trees/:treeId/repeater-fields", async (req2, res) => {
     }
     res.json(repeaterFields);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error fetching repeater fields:", error);
+    logger.error("[TreeBranchLeaf API] Error fetching repeater fields:", error);
     res.status(500).json({ error: "Impossible de r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rer les champs r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9p\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9titeurs" });
   }
 });
@@ -53949,7 +54055,7 @@ router57.get("/trees/:treeId/shared-references", async (req2, res) => {
     });
     res.json(sharedReferences);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error fetching shared references:", error);
+    logger.error("[TreeBranchLeaf API] Error fetching shared references:", error);
     res.status(500).json({ error: "Impossible de r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rer les r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rences partag\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9es" });
   }
 });
@@ -54083,7 +54189,7 @@ router57.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
         try {
           const r = await applySharedReferencesFromOriginalInternal(req2, newRootId);
         } catch (e) {
-          console.warn("\xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F [DUPLICATE-TEMPLATES] \xC3\u0192\xC6\u2019\xC3\xA2\xE2\u201A\xAC\xC2\xB0chec application des r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rences partag\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9es pour", newRootId, e);
+          logger.warn("\xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F [DUPLICATE-TEMPLATES] \xC3\u0192\xC6\u2019\xC3\xA2\xE2\u201A\xAC\xC2\xB0chec application des r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rences partag\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9es pour", newRootId, e);
         }
         try {
           const selectorCopyOptions = {
@@ -54100,7 +54206,7 @@ router57.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
             copyNumber
           );
         } catch (selectorErr) {
-          console.warn("??  [DUPLICATE-TEMPLATES] Erreur lors de la copie des tables des s\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDlecteurs pour", newRootId, selectorErr);
+          logger.warn("??  [DUPLICATE-TEMPLATES] Erreur lors de la copie des tables des s\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDlecteurs pour", newRootId, selectorErr);
         }
       }
     }
@@ -54109,7 +54215,7 @@ router57.post("/nodes/:nodeId/duplicate-templates", async (req2, res) => {
       count: duplicatedSummaries.length
     });
   } catch (error) {
-    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [DUPLICATE-TEMPLATES] Erreur:", error);
+    logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [DUPLICATE-TEMPLATES] Erreur:", error);
     const msg = error instanceof Error ? error.message : String(error);
     res.status(500).json({ error: "Erreur lors de la duplication des templates", details: msg });
   }
@@ -54144,16 +54250,16 @@ router57.post("/nodes/:nodeId/deep-copy", async (req2, res) => {
           );
           if (evalResult.success) {
           } else {
-            console.warn(`\u26A0\uFE0F [DEEP-COPY] \xC9valuation \xE9chou\xE9e pour ${copiedNodeId}:`, evalResult.error);
+            logger.warn(`\u26A0\uFE0F [DEEP-COPY] \xC9valuation \xE9chou\xE9e pour ${copiedNodeId}:`, evalResult.error);
           }
         }
       } catch (evalError) {
-        console.error(`\u274C [DEEP-COPY] Erreur \xE9valuation n\u0153ud ${copiedNodeId}:`, evalError);
+        logger.error(`\u274C [DEEP-COPY] Erreur \xE9valuation n\u0153ud ${copiedNodeId}:`, evalError);
       }
     }
     res.json(result);
   } catch (error) {
-    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [/nodes/:nodeId/deep-copy] Erreur:", error);
+    logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [/nodes/:nodeId/deep-copy] Erreur:", error);
     res.status(500).json({ error: "Erreur lors de la copie profonde" });
   }
 });
@@ -54283,7 +54389,7 @@ router57.post("/trees/:treeId/nodes", async (req2, res) => {
     });
     res.status(201).json(node);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error creating node:", error);
+    logger.error("[TreeBranchLeaf API] Error creating node:", error);
     res.status(500).json({ error: "Impossible de cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9er le n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud" });
   }
 });
@@ -54459,7 +54565,7 @@ function buildResponseFromColumns2(node) {
           const parsed = JSON.parse(node.repeater_templateNodeIds);
           return Array.isArray(parsed) ? parsed : [];
         } catch (e) {
-          console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [buildResponseFromColumns] Erreur parse repeater_templateNodeIds:", e);
+          logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [buildResponseFromColumns] Erreur parse repeater_templateNodeIds:", e);
           return [];
         }
       }
@@ -54475,7 +54581,7 @@ function buildResponseFromColumns2(node) {
           const parsedLabels = JSON.parse(node.repeater_templateNodeLabels);
           return parsedLabels && typeof parsedLabels === "object" ? parsedLabels : null;
         } catch (e) {
-          console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [buildResponseFromColumns] Erreur parse repeater_templateNodeLabels:", e);
+          logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [buildResponseFromColumns] Erreur parse repeater_templateNodeLabels:", e);
         }
       }
       const legacyLabels = legacyRepeater?.templateNodeLabels;
@@ -54585,7 +54691,7 @@ function buildResponseFromColumns2(node) {
         metadataWithRepeater.subTabs = parsedSubTabs;
       }
     } catch (e) {
-      console.error("[buildResponseFromColumns] Erreur parse subtabs:", e);
+      logger.error("[buildResponseFromColumns] Erreur parse subtabs:", e);
     }
   }
   if (node.subtab) {
@@ -54598,7 +54704,7 @@ function buildResponseFromColumns2(node) {
         metadataWithRepeater.subTab = subTabValue;
       }
     } catch (e) {
-      console.error("[buildResponseFromColumns] Erreur parse subtab:", e);
+      logger.error("[buildResponseFromColumns] Erreur parse subtab:", e);
     }
   }
   const result = {
@@ -54752,7 +54858,7 @@ function buildResponseFromColumns2(node) {
     }
     result.capabilities = mergedCaps;
   } catch (e) {
-    console.error("? [buildResponseFromColumns] Erreur adaptation legacy capabilities:", e);
+    logger.error("? [buildResponseFromColumns] Erreur adaptation legacy capabilities:", e);
   }
   if (node.sharedReferenceIds && node.sharedReferenceIds.length > 0) {
   }
@@ -54883,7 +54989,7 @@ var updateOrMoveNode = async (req2, res) => {
       const nodeAnyTree = await prisma31.treeBranchLeafNode.findFirst({
         where: { id: nodeId }
       });
-      console.error("? [updateOrMoveNode] N\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDud non trouv\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBD - DEBUG:", {
+      logger.error("? [updateOrMoveNode] N\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDud non trouv\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBD - DEBUG:", {
         nodeId,
         treeId,
         organizationId,
@@ -55043,7 +55149,7 @@ var updateOrMoveNode = async (req2, res) => {
         ...incomingMetadataBeforeRepeater || {},
         repeater: updatedRepeaterMetadata
       };
-      console.warn("\u{1F527} [updateOrMoveNode] Synchronisation metadata.repeater:", updatedRepeaterMetadata);
+      logger.warn("\u{1F527} [updateOrMoveNode] Synchronisation metadata.repeater:", updatedRepeaterMetadata);
     }
     if (updateObj.metadata && typeof updateObj.metadata === "object") {
       const currentMetadata = existingNode.metadata || {};
@@ -55053,11 +55159,11 @@ var updateOrMoveNode = async (req2, res) => {
         const hasDataFlag = updateObj.hasData ?? nodeFlags.hasData;
         const hasConditionFlag = updateObj.hasCondition ?? nodeFlags.hasCondition;
         if (newMetadata.capabilities.datas && !hasDataFlag) {
-          console.warn(`\u{1F6E1}\uFE0F [updateOrMoveNode] BLOQU\xC9: tentative d'\xE9criture capabilities.datas sur n\u0153ud ${nodeId} sans hasData=true`);
+          logger.warn(`\u{1F6E1}\uFE0F [updateOrMoveNode] BLOQU\xC9: tentative d'\xE9criture capabilities.datas sur n\u0153ud ${nodeId} sans hasData=true`);
           delete newMetadata.capabilities.datas;
         }
         if (newMetadata.capabilities.conditions && !hasConditionFlag) {
-          console.warn(`\u{1F6E1}\uFE0F [updateOrMoveNode] BLOQU\xC9: tentative d'\xE9criture capabilities.conditions sur n\u0153ud ${nodeId} sans hasCondition=true`);
+          logger.warn(`\u{1F6E1}\uFE0F [updateOrMoveNode] BLOQU\xC9: tentative d'\xE9criture capabilities.conditions sur n\u0153ud ${nodeId} sans hasCondition=true`);
           delete newMetadata.capabilities.conditions;
         }
       }
@@ -55088,7 +55194,7 @@ var updateOrMoveNode = async (req2, res) => {
       if (currentMeta.repeater) {
         const { repeater, ...metadataWithoutRepeater } = currentMeta;
         updateObj.metadata = metadataWithoutRepeater;
-        console.warn("[updateOrMoveNode] \u{1F5D1}\uFE0F Suppression explicite de metadata.repeater car repeater_templateNodeIds = NULL");
+        logger.warn("[updateOrMoveNode] \u{1F5D1}\uFE0F Suppression explicite de metadata.repeater car repeater_templateNodeIds = NULL");
       }
     }
     await prisma31.treeBranchLeafNode.update({
@@ -55099,7 +55205,7 @@ var updateOrMoveNode = async (req2, res) => {
     const responseData = updatedNode ? buildResponseFromColumns2(updatedNode) : updatedNode;
     return res.json(responseData);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 ERREUR D\xC3\u0192\xC6\u2019\xC3\xA2\xE2\u201A\xAC\xC2\xB0TAILL\xC3\u0192\xC6\u2019\xC3\xA2\xE2\u201A\xAC\xC2\xB0E lors de updateOrMoveNode:", {
+    logger.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 ERREUR D\xC3\u0192\xC6\u2019\xC3\xA2\xE2\u201A\xAC\xC2\xB0TAILL\xC3\u0192\xC6\u2019\xC3\xA2\xE2\u201A\xAC\xC2\xB0E lors de updateOrMoveNode:", {
       error,
       message: error.message,
       stack: error.stack,
@@ -55126,7 +55232,7 @@ router57.put("/nodes/:nodeId", async (req2, res) => {
     req2.params.treeId = node.treeId;
     return updateOrMoveNode(req2, res);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Erreur PUT /nodes/:nodeId:", error);
+    logger.error("[TreeBranchLeaf API] Erreur PUT /nodes/:nodeId:", error);
     res.status(500).json({ error: "Erreur lors de la mise a jour du noeud", details: error.message });
   }
 });
@@ -55403,7 +55509,7 @@ router57.get("/trees/:treeId/nodes/:nodeId/check-dependencies", async (req2, res
       externalDependencies: dependencies
     });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Erreur check-dependencies:", error);
+    logger.error("[TreeBranchLeaf API] Erreur check-dependencies:", error);
     res.status(500).json({ error: "Erreur v\xE9rification d\xE9pendances", details: error.message });
   }
 });
@@ -55721,13 +55827,13 @@ router57.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
               deletedExtra++;
               deletedExtraIds.push(id);
             } catch (e) {
-              console.warn("[DELETE EXTRA] Failed to delete node", id, e.message);
+              logger.warn("[DELETE EXTRA] Failed to delete node", id, e.message);
             }
           }
         });
       }
     } catch (e) {
-      console.warn("[DELETE] Extra cleanup failed", e.message);
+      logger.warn("[DELETE] Extra cleanup failed", e.message);
     }
     const allDeletedSet = /* @__PURE__ */ new Set([...deletedSubtreeIds, ...deletedOrphansIds, ...deletedExtraIds]);
     const allDeletedIds = Array.from(allDeletedSet);
@@ -55738,7 +55844,7 @@ router57.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
       if (deletedSubmissionData.count > 0) {
       }
     } catch (sdCleanupError) {
-      console.warn("[DELETE] Erreur nettoyage SubmissionData orphelines:", sdCleanupError.message);
+      logger.warn("[DELETE] Erreur nettoyage SubmissionData orphelines:", sdCleanupError.message);
     }
     try {
       const variablesToCheck = await prisma31.treeBranchLeafNodeVariable.findMany({
@@ -55774,7 +55880,7 @@ router57.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
       if (orphanedVariables.count > 0) {
       }
     } catch (orphanCleanError) {
-      console.warn("[DELETE] Erreur nettoyage variables orphelines:", orphanCleanError.message);
+      logger.warn("[DELETE] Erreur nettoyage variables orphelines:", orphanCleanError.message);
     }
     try {
       const suffixPattern = /-\d+$/;
@@ -55813,7 +55919,7 @@ router57.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
         });
       }
     } catch (formulaConditionCleanError) {
-      console.warn("[DELETE] Erreur nettoyage formules/conditions copi\xE9es:", formulaConditionCleanError.message);
+      logger.warn("[DELETE] Erreur nettoyage formules/conditions copi\xE9es:", formulaConditionCleanError.message);
     }
     try {
       const remainingNodes = await prisma31.treeBranchLeafNode.findMany({
@@ -55826,12 +55932,12 @@ router57.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
           try {
             await updateSumDisplayFieldAfterCopyChange(String(meta.sourceNodeId), prisma31);
           } catch (err) {
-            console.warn(`[DELETE] \u26A0\uFE0F Erreur mise \xE0 jour champ Total ${node.id}:`, err);
+            logger.warn(`[DELETE] \u26A0\uFE0F Erreur mise \xE0 jour champ Total ${node.id}:`, err);
           }
         }
       }
     } catch (sumUpdateError) {
-      console.warn("[DELETE] Erreur lors de la mise \xE0 jour des champs Total:", sumUpdateError.message);
+      logger.warn("[DELETE] Erreur lors de la mise \xE0 jour des champs Total:", sumUpdateError.message);
     }
     try {
       let orphanPassCount = 0;
@@ -55856,10 +55962,10 @@ router57.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
         }
       }
       if (totalOrphansDeleted > 0) {
-        console.log(`[DELETE] \u{1F9F9} ${totalOrphansDeleted} n\u0153ud(s) orphelin(s) supprim\xE9(s) en ${orphanPassCount} passe(s)`);
+        logger.debug(`[DELETE] \u{1F9F9} ${totalOrphansDeleted} n\u0153ud(s) orphelin(s) supprim\xE9(s) en ${orphanPassCount} passe(s)`);
       }
     } catch (orphanNodeCleanError) {
-      console.warn("[DELETE] Erreur nettoyage n\u0153uds orphelins:", orphanNodeCleanError.message);
+      logger.warn("[DELETE] Erreur nettoyage n\u0153uds orphelins:", orphanNodeCleanError.message);
     }
     try {
       const treeSubmissions = await prisma31.treeBranchLeafSubmission.findMany({
@@ -55875,11 +55981,11 @@ router57.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
            RETURNING 1 as count`
         );
         if (orphanedSD.length > 0) {
-          console.log(`[DELETE] \u{1F9F9} ${orphanedSD.length} SubmissionData orpheline(s) supprim\xE9e(s)`);
+          logger.debug(`[DELETE] \u{1F9F9} ${orphanedSD.length} SubmissionData orpheline(s) supprim\xE9e(s)`);
         }
       }
     } catch (sdOrphanCleanError) {
-      console.warn("[DELETE] Erreur nettoyage SubmissionData orphelines:", sdOrphanCleanError.message);
+      logger.warn("[DELETE] Erreur nettoyage SubmissionData orphelines:", sdOrphanCleanError.message);
     }
     res.json({
       success: true,
@@ -55937,7 +56043,7 @@ router57.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
               await tx.treeBranchLeafNode.delete({ where: { id } });
               dd.push(id);
             } catch (err) {
-              console.warn("[AGGRESSIVE CLEANUP] Failed to delete node", id, err.message);
+              logger.warn("[AGGRESSIVE CLEANUP] Failed to delete node", id, err.message);
             }
           }
         });
@@ -55945,10 +56051,10 @@ router57.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
         }
       }
     } catch (e) {
-      console.warn("[AGGRESSIVE CLEANUP] Failed aggressive metadata scan:", e.message);
+      logger.warn("[AGGRESSIVE CLEANUP] Failed aggressive metadata scan:", e.message);
     }
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error deleting node subtree:", error);
+    logger.error("[TreeBranchLeaf API] Error deleting node subtree:", error);
     res.status(500).json({ error: "Impossible de supprimer le n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud et ses descendants" });
   }
 });
@@ -56003,7 +56109,7 @@ router57.get("/nodes/:nodeId", async (req2, res) => {
           rawMeta.subTabs = parsedSubTabs;
         }
       } catch (e) {
-        console.error("[GET /nodes/:nodeId] Erreur parse subtabs:", e);
+        logger.error("[GET /nodes/:nodeId] Erreur parse subtabs:", e);
       }
     }
     return res.json({
@@ -56034,7 +56140,7 @@ router57.get("/nodes/:nodeId", async (req2, res) => {
       select_options: node.select_options || []
     });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error fetching node info:", error);
+    logger.error("[TreeBranchLeaf API] Error fetching node info:", error);
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration du n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud" });
   }
 });
@@ -56105,7 +56211,7 @@ router57.get("/nodes/:nodeId/full", async (req2, res) => {
       nodes
     });
   } catch (error) {
-    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [/nodes/:nodeId/full] Erreur:", error);
+    logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [/nodes/:nodeId/full] Erreur:", error);
     res.status(500).json({ error: "Erreur lors de l\xC3\u0192\xC2\xA2\xC3\xA2\xE2\u20AC\u0161\xC2\xAC\xC3\xA2\xE2\u20AC\u017E\xC2\xA2analyse compl\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8te de la branche" });
   }
 });
@@ -56152,7 +56258,7 @@ router57.get("/nodes/:nodeId/shared-references", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [/nodes/:nodeId/shared-references] Erreur:", error);
+    logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [/nodes/:nodeId/shared-references] Erreur:", error);
     res.status(500).json({ error: "Erreur lors de l\xC3\u0192\xC2\xA2\xC3\xA2\xE2\u20AC\u0161\xC2\xAC\xC3\xA2\xE2\u20AC\u017E\xC2\xA2analyse des r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rences partag\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9es" });
   }
 });
@@ -56310,10 +56416,10 @@ async function applySharedReferencesFromOriginalInternal(req2, nodeId) {
             );
             if (copyResult.success) {
             } else {
-              console.warn(`  ?? [SHARED-REF] \xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDchec copie variable ${originalVarId}: ${copyResult.error}`);
+              logger.warn(`  ?? [SHARED-REF] \xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDchec copie variable ${originalVarId}: ${copyResult.error}`);
             }
           } catch (e) {
-            console.warn(`  ?? [SHARED-REF] Erreur copie variable ${originalVarId}:`, e.message);
+            logger.warn(`  ?? [SHARED-REF] Erreur copie variable ${originalVarId}:`, e.message);
           }
         }
       }
@@ -56355,7 +56461,7 @@ router57.post("/nodes/:nodeId/apply-shared-references-from-original", async (req
     const result = await applySharedReferencesFromOriginalInternal(req2, nodeId);
     return res.json(result);
   } catch (error) {
-    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [/nodes/:nodeId/apply-shared-references-from-original] Erreur:", error);
+    logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [/nodes/:nodeId/apply-shared-references-from-original] Erreur:", error);
     res.status(500).json({ error: "Erreur lors de l'application des r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rences partag\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9es" });
   }
 });
@@ -56443,7 +56549,7 @@ router57.post("/nodes/:nodeId/unlink-shared-references", async (req2, res) => {
     }
     return res.json({ success: true, unlinked: collected.size, orphanCandidates, deletedOrphans: deletedCount });
   } catch (error) {
-    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [/nodes/:nodeId/unlink-shared-references] Erreur:", error);
+    logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [/nodes/:nodeId/unlink-shared-references] Erreur:", error);
     res.status(500).json({ error: "Erreur lors du d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9lier/suppression des r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rences partag\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9es" });
   }
 });
@@ -56479,7 +56585,7 @@ router57.get("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
     }
     return res.json({ usedVariableId, ownerNodeId, proxiedFromNodeId });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error fetching node data:", error);
+    logger.error("[TreeBranchLeaf API] Error fetching node data:", error);
     res.status(500).json({ error: "Erreur lors de la recuperation de la donnee du noeud" });
   }
 });
@@ -56639,13 +56745,13 @@ router57.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
           await addToNodeLinkedField7(tx, nodeId, "linkedVariableIds", [variable.id]);
         }
       } catch (e) {
-        console.warn("[TreeBranchLeaf API] Warning updating owner linkedVariableIds:", e.message);
+        logger.warn("[TreeBranchLeaf API] Warning updating owner linkedVariableIds:", e.message);
       }
       if (variable.sourceRef) {
         try {
           await linkVariableToAllCapacityNodes(tx, variable.id, variable.sourceRef);
         } catch (e) {
-          console.warn(`?? [TreeBranchLeaf API] \xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDchec liaison automatique linkedVariableIds pour ${variable.id}:`, e.message);
+          logger.warn(`?? [TreeBranchLeaf API] \xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDchec liaison automatique linkedVariableIds pour ${variable.id}:`, e.message);
         }
       }
       try {
@@ -56770,10 +56876,10 @@ router57.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
             }
           }
         } catch (e) {
-          console.warn("[TreeBranchLeaf API] Warning updating lookup linkedVariableIds:", e.message);
+          logger.warn("[TreeBranchLeaf API] Warning updating lookup linkedVariableIds:", e.message);
         }
       } catch (e) {
-        console.warn("[TreeBranchLeaf API] Warning updating inverse linkedVariableIds:", e.message);
+        logger.warn("[TreeBranchLeaf API] Warning updating inverse linkedVariableIds:", e.message);
       }
       return variable;
     });
@@ -56794,7 +56900,7 @@ router57.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
     if (err && err.code === "P2002") {
       return res.status(409).json({ error: "La variable expos\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e (exposedKey) existe d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9j\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0" });
     }
-    console.error("[TreeBranchLeaf API] Error updating node data:", error);
+    logger.error("[TreeBranchLeaf API] Error updating node data:", error);
     res.status(500).json({ error: "Erreur lors de la mise \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour de la donn\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e du n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud" });
   }
 });
@@ -56846,11 +56952,11 @@ router57.delete("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
         });
       }
     } catch (e) {
-      console.warn("[DELETE Variable] Avertissement lors du nettoyage des linkedVariableIds:", e.message);
+      logger.warn("[DELETE Variable] Avertissement lors du nettoyage des linkedVariableIds:", e.message);
     }
     return res.json({ success: true, message: "Variable supprim\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e avec succ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s" });
   } catch (error) {
-    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [DELETE Variable] Erreur lors de la suppression:", error);
+    logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [DELETE Variable] Erreur lors de la suppression:", error);
     res.status(500).json({ error: "Erreur lors de la suppression de la variable" });
   }
 });
@@ -56886,7 +56992,7 @@ router57.put("/nodes/:nodeId/conditions", async (req2, res) => {
     });
     return res.json(updated.conditionConfig || {});
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error updating node conditions:", error);
+    logger.error("[TreeBranchLeaf API] Error updating node conditions:", error);
     res.status(500).json({ error: "Erreur lors de la mise \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour des conditions du n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud" });
   }
 });
@@ -56911,7 +57017,7 @@ router57.get("/nodes/:nodeId/formula", async (req2, res) => {
     }
     return res.json(node.formulaConfig || {});
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error fetching node formula:", error);
+    logger.error("[TreeBranchLeaf API] Error fetching node formula:", error);
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration de la formule du n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud" });
   }
 });
@@ -56948,7 +57054,7 @@ router57.put("/nodes/:nodeId/formula", async (req2, res) => {
     invalidateTriggerIndexCache();
     return res.json(updated.formulaConfig || {});
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error updating node formula:", error);
+    logger.error("[TreeBranchLeaf API] Error updating node formula:", error);
     res.status(500).json({ error: "Erreur lors de la mise \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour de la formule du n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud" });
   }
 });
@@ -56964,7 +57070,7 @@ router57.get("/nodes/:nodeId/formulas", async (req2, res) => {
     });
     return res.json({ formulas });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error fetching node formulas:", error);
+    logger.error("[TreeBranchLeaf API] Error fetching node formulas:", error);
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des formules du n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud" });
   }
 });
@@ -56994,7 +57100,7 @@ router57.post("/nodes/:nodeId/formulas", async (req2, res) => {
         uniqueName = `${name} (${counter})`;
         counter++;
       } catch (error) {
-        console.error("Erreur lors de la v\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rification du nom de formule:", error);
+        logger.error("Erreur lors de la v\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rification du nom de formule:", error);
         break;
       }
     }
@@ -57028,12 +57134,12 @@ router57.post("/nodes/:nodeId/formulas", async (req2, res) => {
         await addToNodeLinkedField7(prisma31, normalizeRefId2(refId), "linkedFormulaIds", [formula.id]);
       }
     } catch (e) {
-      console.warn("[TreeBranchLeaf API] Warning updating linkedFormulaIds after create:", e.message);
+      logger.warn("[TreeBranchLeaf API] Warning updating linkedFormulaIds after create:", e.message);
     }
     invalidateTriggerIndexCache();
     return res.status(201).json(formula);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error creating node formula:", error);
+    logger.error("[TreeBranchLeaf API] Error creating node formula:", error);
     res.status(500).json({ error: "Erreur lors de la cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ation de la formule" });
   }
 });
@@ -57078,12 +57184,12 @@ router57.put("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
       }
       await addToNodeLinkedField7(prisma31, nodeId, "linkedFormulaIds", [formulaId]);
     } catch (e) {
-      console.warn("[TreeBranchLeaf API] Warning updating inverse linkedFormulaIds after update:", e.message);
+      logger.warn("[TreeBranchLeaf API] Warning updating inverse linkedFormulaIds after update:", e.message);
     }
     invalidateTriggerIndexCache();
     return res.json(updated);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error updating node formula:", error);
+    logger.error("[TreeBranchLeaf API] Error updating node formula:", error);
     res.status(500).json({ error: "Erreur lors de la mise \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour de la formule" });
   }
 });
@@ -57115,7 +57221,7 @@ router57.delete("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
         });
       }
     } catch (e) {
-      console.warn("[TreeBranchLeaf API] Warning deleting associated variable:", e.message);
+      logger.warn("[TreeBranchLeaf API] Warning deleting associated variable:", e.message);
     }
     try {
       await removeFromNodeLinkedField(prisma31, nodeId, "linkedFormulaIds", [formulaId]);
@@ -57124,7 +57230,7 @@ router57.delete("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
         await removeFromNodeLinkedField(prisma31, normalizeRefId2(refId), "linkedFormulaIds", [formulaId]);
       }
     } catch (e) {
-      console.warn("[TreeBranchLeaf API] Warning cleaning linkedFormulaIds after delete:", e.message);
+      logger.warn("[TreeBranchLeaf API] Warning cleaning linkedFormulaIds after delete:", e.message);
     }
     const remainingFormulas = await prisma31.treeBranchLeafNodeFormula.count({ where: { nodeId } });
     await prisma31.treeBranchLeafNode.update({
@@ -57134,7 +57240,7 @@ router57.delete("/nodes/:nodeId/formulas/:formulaId", async (req2, res) => {
     invalidateTriggerIndexCache();
     return res.json({ success: true, message: "Formule supprim\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e avec succ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s" });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error deleting node formula:", error);
+    logger.error("[TreeBranchLeaf API] Error deleting node formula:", error);
     res.status(500).json({ error: "Erreur lors de la suppression de la formule" });
   }
 });
@@ -57169,7 +57275,7 @@ router57.get("/reusables/formulas", async (req2, res) => {
     });
     return res.json({ items });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error listing all formulas:", error);
+    logger.error("[TreeBranchLeaf API] Error listing all formulas:", error);
     res.status(500).json({ error: "Erreur lors de la recuperation des formules" });
   }
 });
@@ -57197,7 +57303,7 @@ router57.get("/reusables/formulas/:id", async (req2, res) => {
       treeId: node?.treeId || null
     });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error getting formula:", error);
+    logger.error("[TreeBranchLeaf API] Error getting formula:", error);
     res.status(500).json({ error: "Erreur lors de la recuperation de la formule" });
   }
 });
@@ -57233,7 +57339,7 @@ router57.get("/reusables/conditions", async (req2, res) => {
     });
     return res.json({ items });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error listing reusable conditions:", error);
+    logger.error("[TreeBranchLeaf API] Error listing reusable conditions:", error);
     res.status(500).json({ error: "Erreur lors de la recuperation des conditions reutilisables" });
   }
 });
@@ -57261,7 +57367,7 @@ router57.get("/reusables/conditions/:id", async (req2, res) => {
       treeId: node?.treeId || null
     });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error getting condition:", error);
+    logger.error("[TreeBranchLeaf API] Error getting condition:", error);
     res.status(500).json({ error: "Erreur lors de la recuperation de la condition" });
   }
 });
@@ -57301,7 +57407,7 @@ router57.get("/reusables/tables", async (req2, res) => {
     });
     return res.json({ items });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error listing reusable tables:", error);
+    logger.error("[TreeBranchLeaf API] Error listing reusable tables:", error);
     res.status(500).json({ error: "Erreur lors de la recuperation des tables reutilisables" });
   }
 });
@@ -57321,7 +57427,7 @@ router57.get("/nodes/:nodeId/conditions", async (req2, res) => {
     });
     return res.json({ conditions });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error fetching node conditions:", error);
+    logger.error("[TreeBranchLeaf API] Error fetching node conditions:", error);
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des conditions du n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud" });
   }
 });
@@ -57378,14 +57484,14 @@ router57.post("/evaluate/condition/:conditionId", async (req2, res) => {
       };
       return res.json(result);
     } catch (error) {
-      console.error("[TBL-PRISMA] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation TBL-prisma:", error);
+      logger.error("[TBL-PRISMA] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation TBL-prisma:", error);
       return res.status(500).json({
         error: "Erreur lors de l'\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation TBL-prisma",
         details: error instanceof Error ? error.message : "Erreur inconnue"
       });
     }
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error evaluating condition:", error);
+    logger.error("[TreeBranchLeaf API] Error evaluating condition:", error);
     res.status(500).json({ error: "Erreur lors de l'\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation de la condition" });
   }
 });
@@ -57445,11 +57551,11 @@ router57.post("/nodes/:nodeId/conditions", async (req2, res) => {
         await addToNodeLinkedField7(prisma31, normalizeRefId2(refId), "linkedConditionIds", [condition.id]);
       }
     } catch (e) {
-      console.warn("[TreeBranchLeaf API] Warning updating linkedConditionIds after create:", e.message);
+      logger.warn("[TreeBranchLeaf API] Warning updating linkedConditionIds after create:", e.message);
     }
     return res.status(201).json(condition);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error creating node condition:", error);
+    logger.error("[TreeBranchLeaf API] Error creating node condition:", error);
     res.status(500).json({ error: "Erreur lors de la cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ation de la condition" });
   }
 });
@@ -57490,11 +57596,11 @@ router57.put("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
       }
       await addToNodeLinkedField7(prisma31, nodeId, "linkedConditionIds", [conditionId]);
     } catch (e) {
-      console.warn("[TreeBranchLeaf API] Warning updating inverse linkedConditionIds after update:", e.message);
+      logger.warn("[TreeBranchLeaf API] Warning updating inverse linkedConditionIds after update:", e.message);
     }
     return res.json(updated);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error updating node condition:", error);
+    logger.error("[TreeBranchLeaf API] Error updating node condition:", error);
     res.status(500).json({ error: "Erreur lors de la mise \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour de la condition" });
   }
 });
@@ -57526,7 +57632,7 @@ router57.delete("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
         });
       }
     } catch (e) {
-      console.warn("[TreeBranchLeaf API] Warning deleting associated variable:", e.message);
+      logger.warn("[TreeBranchLeaf API] Warning deleting associated variable:", e.message);
     }
     try {
       await removeFromNodeLinkedField(prisma31, nodeId, "linkedConditionIds", [conditionId]);
@@ -57535,7 +57641,7 @@ router57.delete("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
         await removeFromNodeLinkedField(prisma31, normalizeRefId2(refId), "linkedConditionIds", [conditionId]);
       }
     } catch (e) {
-      console.warn("[TreeBranchLeaf API] Warning cleaning linkedConditionIds after delete:", e.message);
+      logger.warn("[TreeBranchLeaf API] Warning cleaning linkedConditionIds after delete:", e.message);
     }
     const remainingConditions = await prisma31.treeBranchLeafNodeCondition.count({ where: { nodeId } });
     await prisma31.treeBranchLeafNode.update({
@@ -57544,7 +57650,7 @@ router57.delete("/nodes/:nodeId/conditions/:conditionId", async (req2, res) => {
     });
     return res.json({ success: true, message: "Condition supprim\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e avec succ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s" });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error deleting node condition:", error);
+    logger.error("[TreeBranchLeaf API] Error deleting node condition:", error);
     res.status(500).json({ error: "Erreur lors de la suppression de la condition" });
   }
 });
@@ -57597,7 +57703,7 @@ router57.get("/tables/:id", async (req2, res) => {
       totalPages: Math.ceil(table.rowCount / limit)
     });
   } catch (error) {
-    console.error(`\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [GET /tables/:id] Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration de la table ${id}:`, error);
+    logger.error(`\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [GET /tables/:id] Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration de la table ${id}:`, error);
     res.status(500).json({ error: "Impossible de r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rer la table" });
   }
 });
@@ -57662,9 +57768,9 @@ var normalizeTableInstance = (table) => {
     };
     return result;
   } catch (error) {
-    console.error("[normalizeTableInstance] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 ERREUR FATALE:", error);
-    console.error("[normalizeTableInstance] table.id:", table?.id);
-    console.error("[normalizeTableInstance] table structure:", JSON.stringify(table, null, 2));
+    logger.error("[normalizeTableInstance] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 ERREUR FATALE:", error);
+    logger.error("[normalizeTableInstance] table.id:", table?.id);
+    logger.error("[normalizeTableInstance] table structure:", JSON.stringify(table, null, 2));
     throw error;
   }
 };
@@ -57737,7 +57843,7 @@ async function applyTableFilters(matrix, columns, filters, formValues) {
       }
       const columnIndex = columns.indexOf(filter.column);
       if (columnIndex === -1) {
-        console.warn(`[applyTableFilters] \xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F Colonne "${filter.column}" introuvable dans:`, columns);
+        logger.warn(`[applyTableFilters] \xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F Colonne "${filter.column}" introuvable dans:`, columns);
         passesAllFilters = false;
         break;
       }
@@ -57877,7 +57983,7 @@ async function resolveFilterValueRef(valueRef, formValues) {
         return latestSubmissionData.value;
       }
     } catch (err) {
-      console.warn(`\u26A0\uFE0F [resolveFilterValueRef] @calculated.${nodeId} \u2192 SubmissionData fallback error:`, err);
+      logger.warn(`\u26A0\uFE0F [resolveFilterValueRef] @calculated.${nodeId} \u2192 SubmissionData fallback error:`, err);
     }
     return null;
   }
@@ -57932,7 +58038,7 @@ async function resolveFilterValueRef(valueRef, formValues) {
         }
       });
       if (!refTable) {
-        console.warn(`\u26A0\uFE0F [resolveFilterValueRef] @table.${tableId} \u2192 table introuvable`);
+        logger.warn(`\u26A0\uFE0F [resolveFilterValueRef] @table.${tableId} \u2192 table introuvable`);
         return null;
       }
       const meta = refTable.meta;
@@ -57971,9 +58077,9 @@ async function resolveFilterValueRef(valueRef, formValues) {
                   return result;
                 }
               }
-              console.warn(`\u26A0\uFE0F [resolveFilterValueRef] @table.${tableId} (${refTable.name}) \u2192 Aucune ligne ne matche "${comparisonColumn}"="${sourceValue}"`);
+              logger.warn(`\u26A0\uFE0F [resolveFilterValueRef] @table.${tableId} (${refTable.name}) \u2192 Aucune ligne ne matche "${comparisonColumn}"="${sourceValue}"`);
             } else {
-              console.warn(`\u26A0\uFE0F [resolveFilterValueRef] @table.${tableId} \u2192 Colonnes introuvables: comp="${comparisonColumn}"(${compColIdx}), display="${displayColumn}"(${displayColIdx}) dans [${columns.join(", ")}]`);
+              logger.warn(`\u26A0\uFE0F [resolveFilterValueRef] @table.${tableId} \u2192 Colonnes introuvables: comp="${comparisonColumn}"(${compColIdx}), display="${displayColumn}"(${displayColIdx}) dans [${columns.join(", ")}]`);
             }
           } else {
             const sourceNode = await prisma31.treeBranchLeafNode.findUnique({
@@ -58020,7 +58126,7 @@ async function resolveFilterValueRef(valueRef, formValues) {
                       return result;
                     }
                   }
-                  console.warn(`\u26A0\uFE0F [resolveFilterValueRef] @table.${tableId} (${refTable.name}) \u2192 LINK resolved mais aucune ligne ne matche "${comparisonColumn}"="${sourceValue}"`);
+                  logger.warn(`\u26A0\uFE0F [resolveFilterValueRef] @table.${tableId} (${refTable.name}) \u2192 LINK resolved mais aucune ligne ne matche "${comparisonColumn}"="${sourceValue}"`);
                 }
               } else {
               }
@@ -58049,10 +58155,10 @@ async function resolveFilterValueRef(valueRef, formValues) {
           return ownerNode.calculatedValue;
         }
       }
-      console.warn(`\u26A0\uFE0F [resolveFilterValueRef] @table.${tableId} (${refTable?.name}) \u2192 AUCUNE VALEUR R\xC9SOLUE`);
+      logger.warn(`\u26A0\uFE0F [resolveFilterValueRef] @table.${tableId} (${refTable?.name}) \u2192 AUCUNE VALEUR R\xC9SOLUE`);
       return null;
     } catch (error) {
-      console.error(`\u274C [resolveFilterValueRef] @table.${tableId} \u2192 Erreur:`, error);
+      logger.error(`\u274C [resolveFilterValueRef] @table.${tableId} \u2192 Erreur:`, error);
       return null;
     }
   }
@@ -58114,7 +58220,7 @@ function compareFilterValues(cellValue, operator, compareValue) {
     case "endsWith":
       return String(normalizedCell).toLowerCase().endsWith(String(normalizedCompare).toLowerCase());
     default:
-      console.warn(`[compareFilterValues] \xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F Op\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rateur inconnu: ${operator}`);
+      logger.warn(`[compareFilterValues] \xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F Op\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rateur inconnu: ${operator}`);
       return false;
   }
 }
@@ -58147,7 +58253,7 @@ router57.get("/nodes/:nodeId/tables", async (req2, res) => {
     const normalized = tables.map(normalizeTableInstance);
     return res.json(normalized);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error fetching node tables:", error);
+    logger.error("[TreeBranchLeaf API] Error fetching node tables:", error);
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des tableaux" });
   }
 });
@@ -58225,7 +58331,7 @@ router57.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
         }
       }
     } catch (selectConfigError) {
-      console.error(`[DELETE Table] ?? Erreur d\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDsactivation lookups:`, selectConfigError);
+      logger.error(`[DELETE Table] ?? Erreur d\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDsactivation lookups:`, selectConfigError);
     }
     if (table.nodeId) {
       const node = await prisma31.treeBranchLeafNode.findUnique({
@@ -58272,7 +58378,7 @@ router57.delete("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
     }
     return res.json({ success: true, message: "Tableau supprim\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBD avec succ\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDs" });
   } catch (error) {
-    console.error("[DELETE Table] ? Erreur lors de la suppression:", error);
+    logger.error("[DELETE Table] ? Erreur lors de la suppression:", error);
     res.status(500).json({ error: "Erreur lors de la suppression du tableau" });
   }
 });
@@ -58304,7 +58410,7 @@ router57.get("/nodes/:nodeId/tables/options", async (req2, res) => {
     const items = table.columns.map((label, index) => ({ value: label, label, index }));
     return res.json({ items, table: { id: table.id, type: table.type, name: table.name }, tables });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error fetching table options:", error);
+    logger.error("[TreeBranchLeaf API] Error fetching table options:", error);
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des options du tableau" });
   }
 });
@@ -58402,7 +58508,7 @@ router57.get("/nodes/:nodeId/tables/lookup", async (req2, res) => {
       exposeColumns
     });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error performing table lookup:", error);
+    logger.error("[TreeBranchLeaf API] Error performing table lookup:", error);
     res.status(500).json({ error: "Erreur lors du lookup dans le tableau" });
   }
 });
@@ -58517,7 +58623,7 @@ router57.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
       table: { id: table.id, name: table.name, type: table.type }
     });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error generating selects from table:", error);
+    logger.error("[TreeBranchLeaf API] Error generating selects from table:", error);
     res.status(500).json({ error: "Erreur lors de la g\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9n\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des champs d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9pendants" });
   }
 });
@@ -58541,7 +58647,7 @@ router57.get("/effective-values", async (req2, res) => {
     }
     return res.json({ success: true, data: result });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error getting effective values:", error);
+    logger.error("[TreeBranchLeaf API] Error getting effective values:", error);
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des valeurs effectives" });
   }
 });
@@ -58564,7 +58670,7 @@ router57.get("/debug/formula-vars", async (req2, res) => {
     });
     return res.json(vars);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error fetching formula variables:", error);
+    logger.error("[TreeBranchLeaf API] Error fetching formula variables:", error);
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des variables de formule" });
   }
 });
@@ -58605,7 +58711,7 @@ router57.get("/debug/formula-eval", async (req2, res) => {
     });
     return res.json({ value, errors });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error evaluating formula in debug:", error);
+    logger.error("[TreeBranchLeaf API] Error evaluating formula in debug:", error);
     res.status(500).json({ error: "Erreur lors de l'\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation de la formule en mode d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9bogage" });
   }
 });
@@ -58613,7 +58719,7 @@ router57.get("/formulas-version", async (req2, res) => {
   try {
     res.setHeader("X-TBL-Legacy-Deprecated", "true");
     if (process.env.NODE_ENV !== "production") {
-      console.warn("[TBL LEGACY] /api/treebranchleaf/formulas-version appel\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 (d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9pr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ci\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9). Utiliser /api/tbl/evaluate avec futur cache d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9pendances.");
+      logger.warn("[TBL LEGACY] /api/treebranchleaf/formulas-version appel\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 (d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9pr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ci\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9). Utiliser /api/tbl/evaluate avec futur cache d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9pendances.");
     }
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     const version = {
@@ -58624,7 +58730,7 @@ router57.get("/formulas-version", async (req2, res) => {
     };
     return res.json(version);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error getting formulas version:", error);
+    logger.error("[TreeBranchLeaf API] Error getting formulas version:", error);
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration de la version des formules" });
   }
 });
@@ -58642,7 +58748,7 @@ router57.post("/formulas/validate", (req2, res) => {
       complexity: tokens2.length
     });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error validating formula:", error);
+    logger.error("[TreeBranchLeaf API] Error validating formula:", error);
     return res.status(400).json({
       error: "Parse error",
       details: error instanceof Error ? error.message : String(error)
@@ -58691,7 +58797,7 @@ router57.post("/evaluate/formula", async (req2, res) => {
     if (error instanceof Error) {
       return res.status(400).json({ error: "Parse error", details: error.message });
     }
-    console.error("[TreeBranchLeaf API] Error evaluating inline formula:", error);
+    logger.error("[TreeBranchLeaf API] Error evaluating inline formula:", error);
     return res.status(500).json({ error: "Erreur \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation inline" });
   }
 });
@@ -58699,7 +58805,7 @@ router57.post("/evaluate/formula/:formulaId", async (req2, res) => {
   try {
     res.setHeader("X-TBL-Legacy-Deprecated", "true");
     if (process.env.NODE_ENV !== "production") {
-      console.warn("[TBL LEGACY] /api/treebranchleaf/evaluate/formula/:id appel\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 (d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9pr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ci\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9). Utiliser POST /api/tbl/evaluate elementId=<exposedKey>.");
+      logger.warn("[TBL LEGACY] /api/treebranchleaf/evaluate/formula/:id appel\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 (d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9pr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ci\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9). Utiliser POST /api/tbl/evaluate elementId=<exposedKey>.");
     }
     const { formulaId } = req2.params;
     const { fieldValues = {}, testMode = true } = req2.body;
@@ -58776,15 +58882,15 @@ router57.post("/evaluate/formula/:formulaId", async (req2, res) => {
                     const parsed = parseFloat(String(fromFV).replace(/\s+/g, "").replace(/,/g, "."));
                     resolvedValue = isNaN(parsed) ? 0 : parsed;
                   } else {
-                    console.warn(`\u26A0\uFE0F [FORMULA] @table.${tableId} (${table.name}) \u2192 n\u0153ud "${ownerNode?.label}" calculatedValue=null, fieldValues=absent`);
+                    logger.warn(`\u26A0\uFE0F [FORMULA] @table.${tableId} (${table.name}) \u2192 n\u0153ud "${ownerNode?.label}" calculatedValue=null, fieldValues=absent`);
                   }
                 }
               } else {
-                console.warn(`\u26A0\uFE0F [FORMULA] @table.${tableId} \u2192 table introuvable en DB`);
+                logger.warn(`\u26A0\uFE0F [FORMULA] @table.${tableId} \u2192 table introuvable en DB`);
               }
               resolvedTokens.push({ type: "value", value: resolvedValue });
             } catch (tableError) {
-              console.error(`\u274C [FORMULA] Erreur r\xE9solution @table.${tableId}:`, tableError);
+              logger.error(`\u274C [FORMULA] Erreur r\xE9solution @table.${tableId}:`, tableError);
               resolvedTokens.push({ type: "value", value: 0 });
             }
             continue;
@@ -58806,12 +58912,12 @@ router57.post("/evaluate/formula/:formulaId", async (req2, res) => {
                   const parsed = parseFloat(String(fromFV).replace(/\s+/g, "").replace(/,/g, "."));
                   resolvedValue = isNaN(parsed) ? 0 : parsed;
                 } else {
-                  console.warn(`\u26A0\uFE0F [FORMULA] @calculated.${nodeId} \u2192 "${refNode?.label}" calculatedValue=null, fieldValues=absent`);
+                  logger.warn(`\u26A0\uFE0F [FORMULA] @calculated.${nodeId} \u2192 "${refNode?.label}" calculatedValue=null, fieldValues=absent`);
                 }
               }
               resolvedTokens.push({ type: "value", value: resolvedValue });
             } catch (calcError) {
-              console.error(`\u274C [FORMULA] Erreur r\xE9solution @calculated.${nodeId}:`, calcError);
+              logger.error(`\u274C [FORMULA] Erreur r\xE9solution @calculated.${nodeId}:`, calcError);
               resolvedTokens.push({ type: "value", value: 0 });
             }
             continue;
@@ -58858,7 +58964,7 @@ router57.post("/evaluate/formula/:formulaId", async (req2, res) => {
           }
         }
       } catch (orchestratorError) {
-        console.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur orchestrateur:", orchestratorError);
+        logger.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur orchestrateur:", orchestratorError);
         return res.status(500).json({
           error: "Erreur orchestrateur formule",
           details: orchestratorError.message || "unknown",
@@ -59075,7 +59181,7 @@ router57.post("/evaluate/formula/:formulaId", async (req2, res) => {
       };
       return res.json(responseData);
     } catch (evaluationError) {
-      console.error(`[TreeBranchLeaf API] Erreur lors de l'\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation:`, evaluationError);
+      logger.error(`[TreeBranchLeaf API] Erreur lors de l'\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation:`, evaluationError);
       return res.status(500).json({
         error: "Erreur lors de l'\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation de la formule",
         details: evaluationError.message,
@@ -59092,7 +59198,7 @@ router57.post("/evaluate/formula/:formulaId", async (req2, res) => {
       });
     }
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error evaluating formula:", error);
+    logger.error("[TreeBranchLeaf API] Error evaluating formula:", error);
     res.status(500).json({ error: "Erreur lors de l'\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation de la formule" });
   }
 });
@@ -59328,7 +59434,7 @@ router57.post("/evaluate/batch", async (req2, res) => {
           }
         });
       } catch (evaluationError) {
-        console.error(`[TreeBranchLeaf API] Erreur \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation batch formule ${formulaId}:`, evaluationError);
+        logger.error(`[TreeBranchLeaf API] Erreur \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation batch formule ${formulaId}:`, evaluationError);
         results.push({
           formulaId,
           error: `Erreur d'\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation: ${evaluationError.message}`,
@@ -59343,7 +59449,7 @@ router57.post("/evaluate/batch", async (req2, res) => {
       results
     });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error in batch evaluation:", error);
+    logger.error("[TreeBranchLeaf API] Error in batch evaluation:", error);
     res.status(500).json({ error: "Erreur lors de l'\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation batch" });
   }
 });
@@ -59371,7 +59477,7 @@ async function ensureNodeOrgAccess(prisma50, nodeId, auth) {
     }
     return { ok: true };
   } catch (error) {
-    console.error("Error checking node org access:", error);
+    logger.error("Error checking node org access:", error);
     return { ok: false, status: 500, error: "Erreur de v\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rification d'acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s" };
   }
 }
@@ -59402,7 +59508,7 @@ router57.get("/conditions/:conditionId", async (req2, res) => {
     }
     return res.json(condition);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error getting condition by ID:", error);
+    logger.error("[TreeBranchLeaf API] Error getting condition by ID:", error);
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration de la condition" });
   }
 });
@@ -59433,7 +59539,7 @@ router57.get("/formulas/:formulaId", async (req2, res) => {
     }
     return res.json(formula);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error getting formula by ID:", error);
+    logger.error("[TreeBranchLeaf API] Error getting formula by ID:", error);
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration de la formule" });
   }
 });
@@ -59474,7 +59580,7 @@ router57.get("/submissions", async (req2, res) => {
     }));
     res.json(enrichedSubmissions);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error fetching submissions:", error);
+    logger.error("[TreeBranchLeaf API] Error fetching submissions:", error);
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des soumissions" });
   }
 });
@@ -59575,7 +59681,7 @@ router57.get("/submissions/by-leads", async (req2, res) => {
     }));
     res.json(formattedData);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error getting submissions by leads:", error);
+    logger.error("[TreeBranchLeaf API] Error getting submissions by leads:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des devis par leads" });
   }
 });
@@ -59588,7 +59694,7 @@ router57.get("/submissions/:id/fields", async (req2, res) => {
       submission = await prisma31.treeBranchLeafSubmission.findUnique({ where: { id } });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      console.warn("[TBL-FIELDS] \u26A0\uFE0F findUnique submission \xE9chou\xE9:", msg);
+      logger.warn("[TBL-FIELDS] \u26A0\uFE0F findUnique submission \xE9chou\xE9:", msg);
       submission = null;
     }
     if (!submission) {
@@ -59602,7 +59708,7 @@ router57.get("/submissions/:id/fields", async (req2, res) => {
           select: { id: true, organizationId: true }
         });
       } catch (e) {
-        console.warn("[TBL-FIELDS] \u26A0\uFE0F findUnique tree \xE9chou\xE9:", e instanceof Error ? e.message : String(e));
+        logger.warn("[TBL-FIELDS] \u26A0\uFE0F findUnique tree \xE9chou\xE9:", e instanceof Error ? e.message : String(e));
         tree = null;
       }
     }
@@ -59625,7 +59731,7 @@ router57.get("/submissions/:id/fields", async (req2, res) => {
           }
         });
       } catch (e) {
-        console.warn("[TBL-FIELDS] \u26A0\uFE0F findUnique lead \xE9chou\xE9:", e instanceof Error ? e.message : String(e));
+        logger.warn("[TBL-FIELDS] \u26A0\uFE0F findUnique lead \xE9chou\xE9:", e instanceof Error ? e.message : String(e));
         lead = null;
       }
     }
@@ -59636,7 +59742,7 @@ router57.get("/submissions/:id/fields", async (req2, res) => {
         orderBy: { createdAt: "asc" }
       });
     } catch (e) {
-      console.warn("[TBL-FIELDS] \u26A0\uFE0F findMany submissionData \xE9chou\xE9:", e instanceof Error ? e.message : String(e));
+      logger.warn("[TBL-FIELDS] \u26A0\uFE0F findMany submissionData \xE9chou\xE9:", e instanceof Error ? e.message : String(e));
       dataRows = [];
     }
     const nodeIds = [...new Set(
@@ -59650,7 +59756,7 @@ router57.get("/submissions/:id/fields", async (req2, res) => {
           select: { id: true, type: true, label: true, fieldType: true, fieldSubType: true }
         });
       } catch (e) {
-        console.warn("[TreeBranchLeaf API] \u26A0\uFE0F findMany nodes \xE9chou\xE9, retour des champs vides.", e instanceof Error ? e.message : String(e));
+        logger.warn("[TreeBranchLeaf API] \u26A0\uFE0F findMany nodes \xE9chou\xE9, retour des champs vides.", e instanceof Error ? e.message : String(e));
         nodes = [];
       }
     }
@@ -59701,8 +59807,8 @@ router57.get("/submissions/:id/fields", async (req2, res) => {
     return res.json(response);
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    console.error("[TreeBranchLeaf API] \u{1F4A5} Erreur GET /submissions/:id/fields:", errorMsg);
-    console.error("[TreeBranchLeaf API] Stack:", error instanceof Error ? error.stack : "");
+    logger.error("[TreeBranchLeaf API] \u{1F4A5} Erreur GET /submissions/:id/fields:", errorMsg);
+    logger.error("[TreeBranchLeaf API] Stack:", error instanceof Error ? error.stack : "");
     return res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des champs", details: errorMsg });
   }
 });
@@ -59751,7 +59857,7 @@ router57.get("/submissions/:id", async (req2, res) => {
       Lead: leadBasic
     });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error fetching submission:", error);
+    logger.error("[TreeBranchLeaf API] Error fetching submission:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration de la soumission" });
   }
 });
@@ -59808,7 +59914,7 @@ router57.get("/submissions/:id/summary", async (req2, res) => {
       completion
     });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur GET /submissions/:id/summary:", error);
+    logger.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur GET /submissions/:id/summary:", error);
     return res.status(500).json({ error: "Erreur lors du calcul du r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9sum\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 de la soumission" });
   }
 });
@@ -60049,7 +60155,7 @@ router57.get("/submissions/:id/operations", async (req2, res) => {
     }));
     return res.json({ submissionId: id, items });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur GET /submissions/:id/operations:", error);
+    logger.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur GET /submissions/:id/operations:", error);
     return res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des op\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rations" });
   }
 });
@@ -60141,7 +60247,7 @@ router57.post("/submissions/:id/repair-ops", async (req2, res) => {
     }
     return res.json({ success: true, updated: rows.length });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur POST /submissions/:id/repair-ops:", error);
+    logger.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur POST /submissions/:id/repair-ops:", error);
     return res.status(500).json({ error: "Erreur lors du backfill des op\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rations" });
   }
 });
@@ -60163,7 +60269,7 @@ router57.post("/submissions", async (req2, res) => {
       return res.status(400).json({ error: "treeId est requis" });
     }
     if (!userId) {
-      console.warn("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F Aucun userId dans la requ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAAte (mode anonyme/mock) \xC3\u0192\xC2\xA2\xC3\xA2\xE2\u20AC\u0161\xC2\xAC\xC3\xA2\xE2\u201A\xAC\xC5\u201C poursuite sans liaison utilisateur");
+      logger.warn("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F Aucun userId dans la requ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAAte (mode anonyme/mock) \xC3\u0192\xC2\xA2\xC3\xA2\xE2\u20AC\u0161\xC2\xAC\xC3\xA2\xE2\u201A\xAC\xC5\u201C poursuite sans liaison utilisateur");
     }
     if (!name || typeof name !== "string") {
       return res.status(400).json({ error: "name est requis et doit \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAAtre une cha\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAEne" });
@@ -60222,10 +60328,10 @@ router57.post("/submissions", async (req2, res) => {
           if (existingUser) {
             safeUserId = userId;
           } else {
-            console.warn("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F userId fourni mais introuvable en base \xC3\u0192\xC2\xA2\xC3\xA2\xE2\u20AC\u0161\xC2\xAC\xC3\xA2\xE2\u201A\xAC\xC5\u201C cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ation avec userId NULL");
+            logger.warn("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F userId fourni mais introuvable en base \xC3\u0192\xC2\xA2\xC3\xA2\xE2\u20AC\u0161\xC2\xAC\xC3\xA2\xE2\u201A\xAC\xC5\u201C cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ation avec userId NULL");
           }
         } catch (checkErr) {
-          console.warn("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F \xC3\u0192\xC6\u2019\xC3\xA2\xE2\u201A\xAC\xC2\xB0chec de v\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rification userId \xC3\u0192\xC2\xA2\xC3\xA2\xE2\u20AC\u0161\xC2\xAC\xC3\xA2\xE2\u201A\xAC\xC5\u201C cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ation avec userId NULL:", checkErr?.message);
+          logger.warn("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F \xC3\u0192\xC6\u2019\xC3\xA2\xE2\u201A\xAC\xC2\xB0chec de v\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rification userId \xC3\u0192\xC2\xA2\xC3\xA2\xE2\u20AC\u0161\xC2\xAC\xC3\xA2\xE2\u201A\xAC\xC5\u201C cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ation avec userId NULL:", checkErr?.message);
         }
       }
       const now = /* @__PURE__ */ new Date();
@@ -60352,7 +60458,7 @@ router57.post("/submissions", async (req2, res) => {
           });
         }
       } catch (enrichErr) {
-        console.warn("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F Backfill post-cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ation des op\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rations non critique a \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9chou\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9:", enrichErr?.message);
+        logger.warn("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F Backfill post-cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ation des op\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rations non critique a \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9chou\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9:", enrichErr?.message);
       }
       const full = await prisma31.treeBranchLeafSubmission.findUnique({
         where: { id: created.id },
@@ -60384,16 +60490,16 @@ router57.post("/submissions", async (req2, res) => {
       res.status(201).json(responsePayload);
     } catch (error) {
       const err = error;
-      console.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 ERREUR D\xC3\u0192\xC6\u2019\xC3\xA2\xE2\u201A\xAC\xC2\xB0TAILL\xC3\u0192\xC6\u2019\xC3\xA2\xE2\u201A\xAC\xC2\xB0E lors de la cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ation:", {
+      logger.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 ERREUR D\xC3\u0192\xC6\u2019\xC3\xA2\xE2\u201A\xAC\xC2\xB0TAILL\xC3\u0192\xC6\u2019\xC3\xA2\xE2\u201A\xAC\xC2\xB0E lors de la cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ation:", {
         message: err?.message,
         code: err?.code,
         meta: err?.meta
       });
-      if (err?.stack) console.error(err.stack);
+      if (err?.stack) logger.error(err.stack);
       if (err && err.code) {
-        console.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xB0\xC3\u2026\xC2\xB8\xC3\xA2\xE2\u201A\xAC\xC2\x9D\xC3\u201A\xC2\x8D Code erreur Prisma:", err.code);
+        logger.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xB0\xC3\u2026\xC2\xB8\xC3\xA2\xE2\u201A\xAC\xC2\x9D\xC3\u201A\xC2\x8D Code erreur Prisma:", err.code);
         if (err.meta) {
-          console.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xB0\xC3\u2026\xC2\xB8\xC3\xA2\xE2\u201A\xAC\xC2\x9D\xC3\u201A\xC2\x8D M\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9tadonn\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9es:", err.meta);
+          logger.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xB0\xC3\u2026\xC2\xB8\xC3\xA2\xE2\u201A\xAC\xC2\x9D\xC3\u201A\xC2\x8D M\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9tadonn\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9es:", err.meta);
         }
       }
       return res.status(500).json({
@@ -60403,7 +60509,7 @@ router57.post("/submissions", async (req2, res) => {
     }
   } catch (outerErr) {
     const e = outerErr;
-    console.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur inattendue en entr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e de route /submissions:", e?.message);
+    logger.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur inattendue en entr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e de route /submissions:", e?.message);
     return res.status(500).json({ error: "Erreur interne inattendue" });
   }
 });
@@ -60454,7 +60560,7 @@ router57.delete("/submissions/:id", async (req2, res) => {
     });
     res.json({ success: true, message: "Soumission supprimee avec succes" });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error deleting submission:", error);
+    logger.error("[TreeBranchLeaf API] Error deleting submission:", error);
     res.status(500).json({ error: "Erreur lors de la suppression de la soumission" });
   }
 });
@@ -60511,7 +60617,7 @@ router57.get("/nodes/:fieldId/select-config", async (req2, res) => {
     }
     return res.json(selectConfig);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error fetching select config:", error);
+    logger.error("[TreeBranchLeaf API] Error fetching select config:", error);
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration de la configuration SELECT" });
   }
 });
@@ -60572,7 +60678,7 @@ router57.post("/nodes/:fieldId/select-config", async (req2, res) => {
     });
     return res.json(selectConfig);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error creating select config:", error);
+    logger.error("[TreeBranchLeaf API] Error creating select config:", error);
     res.status(500).json({ error: "Erreur lors de la cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ation de la configuration SELECT" });
   }
 });
@@ -60595,7 +60701,7 @@ router57.post("/nodes/:nodeId/normalize-step4", async (req2, res) => {
       tableId = sc2?.tableReference || null;
     }
     if (!tableId) {
-      console.warn("[STEP4-AUTO] \u274C No tableId found for node", { nodeId });
+      logger.warn("[STEP4-AUTO] \u274C No tableId found for node", { nodeId });
       return res.status(404).json({ error: "Aucune table active pour ce champ" });
     }
     const table = await prisma31.treeBranchLeafNodeTable.findUnique({
@@ -60608,7 +60714,7 @@ router57.post("/nodes/:nodeId/normalize-step4", async (req2, res) => {
     const firstColName = table.tableColumns[0]?.name || null;
     const chosenDisplayColumn = bodyDisplayColumn || firstColName || null;
     if (!chosenDisplayColumn) {
-      console.warn("[STEP4-AUTO] \u274C No displayColumn candidate", { tableId });
+      logger.warn("[STEP4-AUTO] \u274C No displayColumn candidate", { tableId });
       return res.status(400).json({ error: "Impossible de d\xE9terminer displayColumn" });
     }
     try {
@@ -60625,7 +60731,7 @@ router57.post("/nodes/:nodeId/normalize-step4", async (req2, res) => {
         data: { meta: nextMeta, updatedAt: /* @__PURE__ */ new Date() }
       });
     } catch (e) {
-      console.warn("[STEP4-AUTO] \u26A0\uFE0F META update failed (non-bloquant):", e.message);
+      logger.warn("[STEP4-AUTO] \u26A0\uFE0F META update failed (non-bloquant):", e.message);
     }
     const sc = await prisma31.treeBranchLeafSelectConfig.upsert({
       where: { nodeId },
@@ -60662,7 +60768,7 @@ router57.post("/nodes/:nodeId/normalize-step4", async (req2, res) => {
       displayColumn: chosenDisplayColumn
     });
   } catch (error) {
-    console.error("[STEP4-AUTO] Error normalize-step4:", error);
+    logger.error("[STEP4-AUTO] Error normalize-step4:", error);
     res.status(500).json({ error: "Erreur lors de la normalisation \xC9tape 4" });
   }
 });
@@ -60677,14 +60783,14 @@ router57.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
       try {
         formValues = JSON.parse(formValuesParam);
       } catch (e) {
-        console.warn("[TreeBranchLeaf API] Erreur parsing formValues:", e);
+        logger.warn("[TreeBranchLeaf API] Erreur parsing formValues:", e);
       }
     }
     if (Object.keys(formValues).length === 0 && formValuesFromBody) {
       try {
         formValues = typeof formValuesFromBody === "string" ? JSON.parse(formValuesFromBody) : formValuesFromBody;
       } catch (e) {
-        console.warn("[table/lookup] Error parsing formValues from body:", e);
+        logger.warn("[table/lookup] Error parsing formValues from body:", e);
       }
     }
     const access = await ensureNodeOrgAccess(prisma31, nodeId, { organizationId, isSuperAdmin: isSuperAdmin2 });
@@ -60797,7 +60903,7 @@ router57.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
           data.push([]);
         }
       } catch (error) {
-        console.error("[TreeBranchLeaf API] Erreur parsing cells:", error);
+        logger.error("[TreeBranchLeaf API] Erreur parsing cells:", error);
         rows.push("");
         data.push([]);
       }
@@ -60842,7 +60948,7 @@ router57.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
         try {
           const parsed = JSON.parse(effectiveKeyRow);
           if (Array.isArray(parsed)) {
-            console.warn(`[TreeBranchLeaf API] \u26A0\uFE0F keyRow est un JSON array au lieu d'un nom de ligne \u2014 ignor\xE9:`, effectiveKeyRow);
+            logger.warn(`[TreeBranchLeaf API] \u26A0\uFE0F keyRow est un JSON array au lieu d'un nom de ligne \u2014 ignor\xE9:`, effectiveKeyRow);
             effectiveKeyRow = null;
             await prisma31.treeBranchLeafSelectConfig.update({
               where: { nodeId },
@@ -60856,7 +60962,7 @@ router57.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
       if (effectiveKeyRow) {
         const rowIndex = rows.indexOf(effectiveKeyRow);
         if (rowIndex === -1) {
-          console.warn(`\u26A0\uFE0F [TreeBranchLeaf API] Ligne "${effectiveKeyRow}" introuvable`);
+          logger.warn(`\u26A0\uFE0F [TreeBranchLeaf API] Ligne "${effectiveKeyRow}" introuvable`);
           return res.json({ options: [] });
         }
         let options;
@@ -60914,7 +61020,7 @@ router57.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
       if (selectConfig?.keyColumn) {
         const colIndex = columns.indexOf(selectConfig.keyColumn);
         if (colIndex === -1) {
-          console.warn(`\u26A0\uFE0F [TreeBranchLeaf API] Colonne "${selectConfig.keyColumn}" introuvable`);
+          logger.warn(`\u26A0\uFE0F [TreeBranchLeaf API] Colonne "${selectConfig.keyColumn}" introuvable`);
           return res.json({ options: [] });
         }
         let options;
@@ -60999,7 +61105,7 @@ router57.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
             }
           });
         } catch (e) {
-          console.warn(`[TreeBranchLeaf API] \u26A0\uFE0F Auto-upsert select-config a \xE9chou\xE9 (non bloquant):`, e);
+          logger.warn(`[TreeBranchLeaf API] \u26A0\uFE0F Auto-upsert select-config a \xE9chou\xE9 (non bloquant):`, e);
         }
         return res.json({
           options: autoOptions,
@@ -61020,7 +61126,7 @@ router57.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
     }
     return res.json(table);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error fetching table for lookup:", error);
+    logger.error("[TreeBranchLeaf API] Error fetching table for lookup:", error);
     res.status(500).json({ error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration du tableau" });
   }
 });
@@ -61041,7 +61147,7 @@ router57.patch("/nodes/:nodeId", async (req2, res) => {
     });
     return res.json(updatedNode);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error updating node:", error);
+    logger.error("[TreeBranchLeaf API] Error updating node:", error);
     res.status(500).json({ error: "Erreur lors de la mise \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour du n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud" });
   }
 });
@@ -61130,7 +61236,7 @@ router57.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
           }
         });
       } catch (selectConfigError) {
-        console.error(`\xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F [TablePanel API] Erreur upsert config SELECT (non-bloquant):`, selectConfigError);
+        logger.error(`\xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F [TablePanel API] Erreur upsert config SELECT (non-bloquant):`, selectConfigError);
       }
     } else if (!enabled) {
       try {
@@ -61138,7 +61244,7 @@ router57.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
           where: { nodeId }
         });
       } catch (deleteError) {
-        console.error(`\xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F [TablePanel API] Erreur suppression config SELECT (non-bloquant):`, deleteError);
+        logger.error(`\xC3\u0192\xC2\xA2\xC3\u2026\xC2\xA1\xC3\u201A\xC2\xA0\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xB8\xC3\u201A\xC2\x8F [TablePanel API] Erreur suppression config SELECT (non-bloquant):`, deleteError);
       }
     }
     const verifyNode = await prisma31.treeBranchLeafNode.findUnique({
@@ -61153,7 +61259,7 @@ router57.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("[TablePanel API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur PUT /nodes/:nodeId/capabilities/table:", error);
+    logger.error("[TablePanel API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur PUT /nodes/:nodeId/capabilities/table:", error);
     return res.status(500).json({ error: "Erreur lors de la mise \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour de la capacit\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 Table" });
   }
 });
@@ -61219,11 +61325,11 @@ router57.patch("/submissions/:id", async (req2, res) => {
   } catch (error) {
     if (error && error.code) {
       const e = error;
-      console.error("[TreeBranchLeaf API] \u274C Prisma error PATCH /submissions/:id:", e);
+      logger.error("[TreeBranchLeaf API] \u274C Prisma error PATCH /submissions/:id:", e);
       return res.status(400).json({ error: `Erreur de requ\xEAte (${e.code})`, message: e.message });
     }
     const err = error;
-    console.error("[TreeBranchLeaf API] \u274C Erreur PATCH /submissions/:id:", { message: err?.message, stack: err?.stack });
+    logger.error("[TreeBranchLeaf API] \u274C Erreur PATCH /submissions/:id:", { message: err?.message, stack: err?.stack });
     return res.status(400).json({ error: "PATCH_UPDATE_ERROR", message: err?.message || "Erreur lors de la mise \xE0 jour de la soumission" });
   }
 });
@@ -61282,7 +61388,7 @@ router57.post("/submissions/:id/reset-data", async (req2, res) => {
     });
     return res.json({ success: true });
   } catch (error) {
-    console.error("[TreeBranchLeaf API] \u274C Erreur POST /submissions/:id/reset-data:", error);
+    logger.error("[TreeBranchLeaf API] \u274C Erreur POST /submissions/:id/reset-data:", error);
     return res.status(500).json({ error: "Erreur lors de la r\xE9initialisation de la soumission" });
   }
 });
@@ -61749,7 +61855,7 @@ router57.put("/submissions/:id", async (req2, res) => {
     });
     return res.json(full);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur PUT /submissions/:id:", error);
+    logger.error("[TreeBranchLeaf API] \xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur PUT /submissions/:id:", error);
     return res.status(500).json({ error: "Erreur lors de la mise \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 jour de la soumission" });
   }
 });
@@ -61759,14 +61865,14 @@ router57.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
     const { submissionId } = req2.body;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx3(req2);
     if (!variableNodeId) {
-      console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [V2 API] variableNodeId manquant");
+      logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [V2 API] variableNodeId manquant");
       return res.status(400).json({
         success: false,
         error: "variableNodeId requis"
       });
     }
     if (!submissionId) {
-      console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [V2 API] submissionId manquant");
+      logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [V2 API] submissionId manquant");
       return res.status(400).json({
         success: false,
         error: "submissionId requis dans le body"
@@ -61797,14 +61903,14 @@ router57.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
       }
     });
     if (!node) {
-      console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [V2 API] N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud introuvable:", variableNodeId);
+      logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [V2 API] N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud introuvable:", variableNodeId);
       return res.status(404).json({
         success: false,
         error: "N\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud introuvable"
       });
     }
     if (!isSuperAdmin2 && node.TreeBranchLeafTree?.organizationId !== organizationId) {
-      console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [V2 API] Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 - mauvaise organisation");
+      logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [V2 API] Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 - mauvaise organisation");
       return res.status(403).json({
         success: false,
         error: "Acc\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s refus\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 ce n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud"
@@ -61812,7 +61918,7 @@ router57.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
     }
     const variable = node.TreeBranchLeafNodeVariable?.[0];
     if (!variable) {
-      console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [V2 API] Pas de variable associ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 ce n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud");
+      logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [V2 API] Pas de variable associ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA0 ce n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud");
       return res.status(400).json({
         success: false,
         error: "Ce n\xC3\u0192\xE2\u20AC\xA6\xC3\xA2\xE2\u201A\xAC\xC5\u201Cud ne contient pas de variable"
@@ -61828,7 +61934,7 @@ router57.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
       }
     });
     if (!submission) {
-      console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [V2 API] Soumission introuvable:", submissionId);
+      logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [V2 API] Soumission introuvable:", submissionId);
       return res.status(404).json({
         success: false,
         error: "Soumission introuvable"
@@ -61898,11 +62004,11 @@ router57.post("/v2/variables/:variableNodeId/evaluate", async (req2, res) => {
     };
     return res.json(response);
   } catch (error) {
-    console.error("\n" + "\xC3\u0192\xC2\xA2\xC3\xA2\xE2\u201A\xAC\xC2\xA2\xC3\u201A\xC2\x90".repeat(80));
-    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [V2 API] ERREUR CRITIQUE");
-    console.error("\xC3\u0192\xC2\xA2\xC3\xA2\xE2\u201A\xAC\xC2\xA2\xC3\u201A\xC2\x90".repeat(80));
-    console.error(error);
-    console.error("\xC3\u0192\xC2\xA2\xC3\xA2\xE2\u201A\xAC\xC2\xA2\xC3\u201A\xC2\x90".repeat(80) + "\n");
+    logger.error("\n" + "\xC3\u0192\xC2\xA2\xC3\xA2\xE2\u201A\xAC\xC2\xA2\xC3\u201A\xC2\x90".repeat(80));
+    logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [V2 API] ERREUR CRITIQUE");
+    logger.error("\xC3\u0192\xC2\xA2\xC3\xA2\xE2\u201A\xAC\xC2\xA2\xC3\u201A\xC2\x90".repeat(80));
+    logger.error(error);
+    logger.error("\xC3\u0192\xC2\xA2\xC3\xA2\xE2\u201A\xAC\xC2\xA2\xC3\u201A\xC2\x90".repeat(80) + "\n");
     return res.status(500).json({
       success: false,
       error: "Erreur lors de l'\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation de la variable",
@@ -61997,7 +62103,7 @@ router57.get("/v2/submissions/:submissionId/variables", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [V2 API] Erreur r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration variables:", error);
+    logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [V2 API] Erreur r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration variables:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des variables",
@@ -62058,7 +62164,7 @@ router57.post("/submissions/stage", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [STAGE] Erreur:", error);
+    logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [STAGE] Erreur:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur lors de la gestion du brouillon",
@@ -62114,7 +62220,7 @@ router57.post("/submissions/stage/preview", async (req2, res) => {
             operationDetail: evalResult.operationDetail
           };
         } catch (error) {
-          console.error(`\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation ${node.id}:`, error);
+          logger.error(`\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation ${node.id}:`, error);
           return {
             nodeId: node.id,
             nodeLabel: node.label,
@@ -62139,7 +62245,7 @@ router57.post("/submissions/stage/preview", async (req2, res) => {
       }))
     });
   } catch (error) {
-    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [STAGE PREVIEW] Erreur:", error);
+    logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [STAGE PREVIEW] Erreur:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur lors de la pr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9visualisation",
@@ -62206,7 +62312,7 @@ router57.post("/submissions/stage/commit", async (req2, res) => {
               operationDetail: evalResult.operationDetail
             };
           } catch (error) {
-            console.error(`\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation ${node.id}:`, error);
+            logger.error(`\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation ${node.id}:`, error);
             return null;
           }
         })
@@ -62347,7 +62453,7 @@ router57.post("/submissions/stage/commit", async (req2, res) => {
                 operationDetail: evalResult.operationDetail
               };
             } catch (error) {
-              console.error(`\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation ${node.id}:`, error);
+              logger.error(`\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 Erreur \xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9valuation ${node.id}:`, error);
               return null;
             }
           })
@@ -62418,7 +62524,7 @@ router57.post("/submissions/stage/commit", async (req2, res) => {
       message: "Devis enregistr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9 avec succ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s"
     });
   } catch (error) {
-    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [STAGE COMMIT] Erreur:", error);
+    logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [STAGE COMMIT] Erreur:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur lors de la sauvegarde",
@@ -62443,7 +62549,7 @@ router57.post("/submissions/stage/discard", async (req2, res) => {
       message: "Brouillon supprim\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9"
     });
   } catch (error) {
-    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [STAGE DISCARD] Erreur:", error);
+    logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [STAGE DISCARD] Erreur:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur lors de la suppression du brouillon",
@@ -62490,7 +62596,7 @@ router57.get("/submissions/my-drafts", async (req2, res) => {
       }))
     });
   } catch (error) {
-    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [MY DRAFTS] Erreur:", error);
+    logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [MY DRAFTS] Erreur:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration des brouillons",
@@ -62530,7 +62636,7 @@ router57.get("/submissions/:id/versions", async (req2, res) => {
       }))
     });
   } catch (error) {
-    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [VERSIONS] Erreur:", error);
+    logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [VERSIONS] Erreur:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur lors de la r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9cup\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ration de l'historique",
@@ -62584,7 +62690,7 @@ router57.post("/submissions/:id/restore/:version", async (req2, res) => {
       message: `Version ${version} charg\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e en brouillon. Enregistrez pour confirmer la restauration.`
     });
   } catch (error) {
-    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [RESTORE] Erreur:", error);
+    logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [RESTORE] Erreur:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur lors de la restauration",
@@ -62635,7 +62741,7 @@ router57.get("/shared-references", async (req2, res) => {
     }));
     res.json(formatted);
   } catch (error) {
-    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [SHARED REF] Erreur liste:", error);
+    logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [SHARED REF] Erreur liste:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -62672,7 +62778,7 @@ router57.get("/shared-references/:refId", async (req2, res) => {
       usages: []
     });
   } catch (error) {
-    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [SHARED REF] Erreur d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9tails:", error);
+    logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [SHARED REF] Erreur d\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9tails:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -62711,7 +62817,7 @@ router57.put("/shared-references/:refId", async (req2, res) => {
     });
     res.json({ success: true, reference: updated });
   } catch (error) {
-    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [SHARED REF] Erreur modification:", error);
+    logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [SHARED REF] Erreur modification:", error);
     res.status(500).json({ error: "Erreur lors de la modification" });
   }
 });
@@ -62753,7 +62859,7 @@ router57.delete("/shared-references/:refId", async (req2, res) => {
     });
     res.json({ success: true, message: "R\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rence supprim\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e avec succ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s" });
   } catch (error) {
-    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [SHARED REF] Erreur suppression:", error);
+    logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [SHARED REF] Erreur suppression:", error);
     res.status(500).json({ error: "Erreur lors de la suppression" });
   }
 });
@@ -62806,7 +62912,7 @@ router57.post("/trees/:treeId/create-shared-reference", async (req2, res) => {
       message: "R\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rence partag\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e avec succ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s"
     });
   } catch (error) {
-    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [SHARED REF] Erreur cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ation:", error);
+    logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [SHARED REF] Erreur cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9ation:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -62837,7 +62943,7 @@ router57.post("/nodes/:nodeId/link-shared-references", async (req2, res) => {
       message: `${referenceIds.length} r\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rence(s) li\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e(s) avec succ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s`
     });
   } catch (error) {
-    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [SHARED REF] Erreur liaison:", error);
+    logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [SHARED REF] Erreur liaison:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -62874,7 +62980,7 @@ router57.post("/nodes/:nodeId/convert-to-reference", async (req2, res) => {
       message: "R\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9f\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9rence cr\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA9e avec succ\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA8s"
     });
   } catch (error) {
-    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [SHARED REF] Erreur conversion:", error);
+    logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [SHARED REF] Erreur conversion:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -62882,7 +62988,7 @@ router57.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { variableId, newSuffix, duplicateNode, targetNodeId: bodyTargetNodeId } = req2.body;
-    console.warn("?? [COPY-LINKED-VAR] DEPRECATED route: please use the registry/repeat API endpoints (POST /api/repeat) instead. This legacy route will be removed in a future release.");
+    logger.warn("?? [COPY-LINKED-VAR] DEPRECATED route: please use the registry/repeat API endpoints (POST /api/repeat) instead. This legacy route will be removed in a future release.");
     res.set("X-Deprecated-API", "/api/repeat");
     if (!variableId || newSuffix === void 0) {
       return res.status(400).json({
@@ -63030,7 +63136,7 @@ router57.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
     try {
       await addToNodeLinkedField7(prisma31, targetNodeId, "linkedVariableIds", [result.variableId]);
     } catch (e) {
-      console.warn("?? [COPY-LINKED-VAR] \xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDchec MAJ linkedVariableIds:", e.message);
+      logger.warn("?? [COPY-LINKED-VAR] \xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDchec MAJ linkedVariableIds:", e.message);
     }
     try {
       const copiedNode = await prisma31.treeBranchLeafNode.findUnique({
@@ -63060,15 +63166,15 @@ router57.post("/nodes/:nodeId/copy-linked-variable", async (req2, res) => {
             }
           });
         } else {
-          console.warn(`\u26A0\uFE0F [COPY-LINKED-VAR] Pas de submission active trouv\xE9e pour \xE9valuation de ${targetNodeId}`);
+          logger.warn(`\u26A0\uFE0F [COPY-LINKED-VAR] Pas de submission active trouv\xE9e pour \xE9valuation de ${targetNodeId}`);
         }
       }
     } catch (evalError) {
-      console.error("\u26A0\uFE0F [COPY-LINKED-VAR] Erreur lors de l'\xE9valuation initiale:", evalError);
+      logger.error("\u26A0\uFE0F [COPY-LINKED-VAR] Erreur lors de l'\xE9valuation initiale:", evalError);
     }
     res.status(201).json({ ...result, targetNodeId });
   } catch (error) {
-    console.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [COPY-LINKED-VAR] Erreur:", error);
+    logger.error("\xC3\u0192\xC2\xA2\xC3\u201A\xC2\x9D\xC3\u2026\xE2\u20AC\u2122 [COPY-LINKED-VAR] Erreur:", error);
     const msg = error instanceof Error ? error.message : String(error);
     res.status(500).json({ error: msg });
   }
@@ -63081,7 +63187,7 @@ router57.post("/variables/:variableId/create-display", async (req2, res) => {
     res.status(201).json(result);
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    console.error("? [/variables/:variableId/create-display] Erreur:", msg);
+    logger.error("? [/variables/:variableId/create-display] Erreur:", msg);
     res.status(400).json({ error: msg });
   }
 });
@@ -63165,7 +63271,7 @@ router57.get("/trees/:treeId/calculated-values", async (req2, res) => {
             evaluated: true
           };
         } catch (evalError) {
-          console.warn(`\u26A0\uFE0F [calculated-values] Erreur \xE9valuation ${node.id} (${node.label}):`, evalError);
+          logger.warn(`\u26A0\uFE0F [calculated-values] Erreur \xE9valuation ${node.id} (${node.label}):`, evalError);
           return {
             id: node.id,
             label: node.label || "Champ sans nom",
@@ -63182,7 +63288,7 @@ router57.get("/trees/:treeId/calculated-values", async (req2, res) => {
     );
     res.json(calculatedValues);
   } catch (error) {
-    console.error("[TreeBranchLeaf API] Error fetching calculated values:", error);
+    logger.error("[TreeBranchLeaf API] Error fetching calculated values:", error);
     res.status(500).json({ error: "Impossible de r\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDcup\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDrer les valeurs calcul\xC3\u0192\xC2\xAF\xC3\u201A\xC2\xBF\xC3\u201A\xC2\xBDes" });
   }
 });
@@ -63191,6 +63297,7 @@ var treebranchleaf_routes_default = router57;
 // src/components/TreeBranchLeaf/treebranchleaf-new/TBL/routes/tbl-routes.ts
 var import_express59 = __toESM(require("express"), 1);
 init_database();
+init_logger();
 var router58 = import_express59.default.Router();
 var prisma32 = db;
 function getAuthCtx4(req2) {
@@ -63234,7 +63341,7 @@ router58.get("/variables", authMiddleware, requireRole(["user", "admin", "super_
     return res.json({ variables, count: variables.length, source: "database" });
   } catch (e) {
     const err = e;
-    console.error("\u274C [TBL API] Erreur GET /variables:", err.message, err.stack);
+    logger.error("\u274C [TBL API] Erreur GET /variables:", err.message, err.stack);
     return res.status(500).json({ error: "Erreur serveur variables", details: err.message });
   }
 });
@@ -63300,7 +63407,7 @@ router58.get(["/calculation-modes", "/modes"], authMiddleware, requireRole(["use
     return res.json({ modes, count: modes.length, source: "derived_capacity", generatedAt: (/* @__PURE__ */ new Date()).toISOString() });
   } catch (e) {
     const err = e;
-    console.error("\u274C [TBL API] Erreur GET /calculation-modes (capacity detection):", err.message, err.stack);
+    logger.error("\u274C [TBL API] Erreur GET /calculation-modes (capacity detection):", err.message, err.stack);
     return res.status(500).json({ error: "Erreur serveur calculation-modes", details: err.message });
   }
 });
@@ -63353,7 +63460,7 @@ router58.get("/fields", authMiddleware, requireRole(["user", "admin", "super_adm
     }));
     return res.json({ fields, count: fields.length, source: "database" });
   } catch (e) {
-    console.error("\u274C [TBL API] Erreur GET /fields:", e);
+    logger.error("\u274C [TBL API] Erreur GET /fields:", e);
     return res.status(500).json({ error: "Erreur serveur fields" });
   }
 });
@@ -63380,7 +63487,7 @@ router58.post("/devis", authMiddleware, requireRole(["user", "admin", "super_adm
     };
     return res.json({ success: true, ...payload, message: "Devis TBL sauvegard\xE9 (simulation)" });
   } catch (error) {
-    console.error("\u274C [TBL API] Erreur sauvegarde devis:", error);
+    logger.error("\u274C [TBL API] Erreur sauvegarde devis:", error);
     return res.status(500).json({ success: false, error: "Erreur serveur lors de la sauvegarde du devis" });
   }
 });
@@ -63428,7 +63535,7 @@ router58.get("/devis/client/:clientId", authMiddleware, requireRole(["user", "ad
   try {
     res.json([]);
   } catch (error) {
-    console.error("\u274C [TBL API] Erreur r\xE9cup\xE9ration devis client:", error);
+    logger.error("\u274C [TBL API] Erreur r\xE9cup\xE9ration devis client:", error);
     res.status(500).json({
       error: "Erreur serveur lors de la r\xE9cup\xE9ration des devis"
     });
@@ -63452,7 +63559,7 @@ router58.get("/devis/:devisId", authMiddleware, requireRole(["user", "admin", "s
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     });
   } catch (error) {
-    console.error("\u274C [TBL API] Erreur chargement devis:", error);
+    logger.error("\u274C [TBL API] Erreur chargement devis:", error);
     res.status(500).json({
       error: "Erreur serveur lors du chargement du devis"
     });
@@ -63468,7 +63575,7 @@ router58.get("/clients/:clientId/access-check", authMiddleware, requireRole(["us
       userRole: role
     });
   } catch (error) {
-    console.error("\u274C [TBL API] Erreur v\xE9rification acc\xE8s client:", error);
+    logger.error("\u274C [TBL API] Erreur v\xE9rification acc\xE8s client:", error);
     res.status(500).json({
       error: "Erreur serveur lors de la v\xE9rification d'acc\xE8s"
     });
@@ -63481,6 +63588,7 @@ var import_express60 = __toESM(require("express"), 1);
 
 // src/components/TreeBranchLeaf/tbl-bridge/intelligence/TBLIntelligence.ts
 init_database();
+init_logger();
 var TBLIntelligence = class {
   prisma;
   elementRegistry = /* @__PURE__ */ new Map();
@@ -63498,10 +63606,10 @@ var TBLIntelligence = class {
   async readAndDecodeElementData(elementId, elementType) {
     const cacheKey = `${elementType}_${elementId}`;
     if (this.dataCache.has(cacheKey)) {
-      console.log(`\u{1F4D6} [TBL Intelligence] Donn\xE9es en cache pour ${cacheKey}`);
+      logger.debug(`\u{1F4D6} [TBL Intelligence] Donn\xE9es en cache pour ${cacheKey}`);
       return this.dataCache.get(cacheKey);
     }
-    console.log(`\u{1F4D6} [TBL Intelligence] Lecture donn\xE9es encod\xE9es pour ${elementType} ${elementId}`);
+    logger.debug(`\u{1F4D6} [TBL Intelligence] Lecture donn\xE9es encod\xE9es pour ${elementType} ${elementId}`);
     let decodedData = {};
     try {
       switch (elementType) {
@@ -63518,13 +63626,13 @@ var TBLIntelligence = class {
           decodedData = await this.readFieldData(elementId);
           break;
         default:
-          console.warn(`Type d'\xE9l\xE9ment non support\xE9 pour lecture donn\xE9es: ${elementType}`);
+          logger.warn(`Type d'\xE9l\xE9ment non support\xE9 pour lecture donn\xE9es: ${elementType}`);
       }
       this.dataCache.set(cacheKey, decodedData);
-      console.log(`\u{1F4D6} [TBL Intelligence] Donn\xE9es d\xE9cod\xE9es pour ${cacheKey}:`, decodedData);
+      logger.debug(`\u{1F4D6} [TBL Intelligence] Donn\xE9es d\xE9cod\xE9es pour ${cacheKey}:`, decodedData);
       return decodedData;
     } catch (error) {
-      console.error(`\u{1F4D6} [TBL Intelligence] Erreur lecture donn\xE9es ${cacheKey}:`, error);
+      logger.error(`\u{1F4D6} [TBL Intelligence] Erreur lecture donn\xE9es ${cacheKey}:`, error);
       return {};
     }
   }
@@ -63540,7 +63648,7 @@ var TBLIntelligence = class {
     try {
       tokens2 = formula.tokens ? JSON.parse(formula.tokens) : [];
     } catch (e) {
-      console.warn("Erreur d\xE9codage tokens formule:", e);
+      logger.warn("Erreur d\xE9codage tokens formule:", e);
     }
     const variables = {};
     const sequence = [];
@@ -63597,7 +63705,7 @@ var TBLIntelligence = class {
     try {
       conditionSet = condition.conditionSet ? JSON.parse(condition.conditionSet) : {};
     } catch (e) {
-      console.warn("Erreur d\xE9codage conditionSet:", e);
+      logger.warn("Erreur d\xE9codage conditionSet:", e);
     }
     const rules = Array.isArray(conditionSet.rules) ? conditionSet.rules : [];
     return {
@@ -63621,7 +63729,7 @@ var TBLIntelligence = class {
       tableData = table.data ? typeof table.data === "string" ? JSON.parse(table.data) : table.data : [];
       columns = table.columns ? typeof table.columns === "string" ? JSON.parse(table.columns) : table.columns : [];
     } catch (e) {
-      console.warn("Erreur d\xE9codage donn\xE9es tableau:", e);
+      logger.warn("Erreur d\xE9codage donn\xE9es tableau:", e);
     }
     return {
       table_type: table.type,
@@ -63670,7 +63778,7 @@ var TBLIntelligence = class {
    * Exécute les calculs mathématiques avec support des variables TBL
    */
   async calculateFormula(formulaId, contextData = {}) {
-    console.log(`\u{1F9EE} [TBL Intelligence] Calcul formule ${formulaId}`);
+    logger.debug(`\u{1F9EE} [TBL Intelligence] Calcul formule ${formulaId}`);
     const steps = [];
     try {
       const formulaData = await this.readAndDecodeElementData(formulaId, "formula");
@@ -63884,7 +63992,7 @@ var TBLIntelligence = class {
    * Évalue les conditions logiques avec support des options et comparaisons
    */
   async evaluateCondition(conditionId, contextData = {}) {
-    console.log(`\u2696\uFE0F [TBL Intelligence] \xC9valuation condition ${conditionId}`);
+    logger.debug(`\u2696\uFE0F [TBL Intelligence] \xC9valuation condition ${conditionId}`);
     const details = [];
     try {
       const conditionData = await this.readAndDecodeElementData(conditionId, "condition");
@@ -64013,7 +64121,7 @@ var TBLIntelligence = class {
         }
         return !String(compare).split(",").map((s) => s.trim()).includes(String(source));
       default:
-        console.warn(`Op\xE9rateur de comparaison non support\xE9: ${operator}`);
+        logger.warn(`Op\xE9rateur de comparaison non support\xE9: ${operator}`);
         return false;
     }
   }
@@ -64073,7 +64181,7 @@ var TBLIntelligence = class {
    * Analyse les structures de tableaux avec données dynamiques et formules
    */
   async processTable(tableId, contextData = {}) {
-    console.log(`\u{1F4CA} [TBL Intelligence] Traitement tableau ${tableId}`);
+    logger.debug(`\u{1F4CA} [TBL Intelligence] Traitement tableau ${tableId}`);
     const processing = [];
     try {
       const tableData = await this.readAndDecodeElementData(tableId, "table");
@@ -64210,7 +64318,7 @@ var TBLIntelligence = class {
     try {
       return this.safeEvaluateExpression(processedFormula);
     } catch (error) {
-      console.warn("Formule non \xE9valuable comme JS, tentative d'\xE9valuation simple:", processedFormula);
+      logger.warn("Formule non \xE9valuable comme JS, tentative d'\xE9valuation simple:", processedFormula);
       return processedFormula;
     }
   }
@@ -64305,8 +64413,8 @@ var TBLIntelligence = class {
    * Analyse un élément par son CODE TBL ou son UUID
    */
   async analyzeElement(elementIdentifier) {
-    console.log(`\u{1F9E0} [TBL Intelligence] Analyse compl\xE8te de ${elementIdentifier}`);
-    console.log(`\u{1F50D} Recherche TBL Bridge sur code: ${elementIdentifier}`);
+    logger.debug(`\u{1F9E0} [TBL Intelligence] Analyse compl\xE8te de ${elementIdentifier}`);
+    logger.debug(`\u{1F50D} Recherche TBL Bridge sur code: ${elementIdentifier}`);
     const element = await this.prisma.treeBranchLeafNode.findFirst({
       where: { tbl_code: elementIdentifier },
       // UNIQUEMENT code TBL !
@@ -64338,12 +64446,12 @@ var TBLIntelligence = class {
     if (!element) {
       throw new Error(`\u274C \xC9l\xE9ment TBL Bridge avec code "${elementIdentifier}" non trouv\xE9 dans la base de donn\xE9es`);
     }
-    console.log(`\u2705 \xC9l\xE9ment TBL Bridge trouv\xE9: ${element.label} (${element.type})`);
-    console.log(`   \u{1F3AF} TBL Code: ${element.tbl_code}`);
-    console.log(`   \u{1F3D7}\uFE0F Type TBL: ${element.tbl_type} | \u{1F527} Capacit\xE9 TBL: ${element.tbl_capacity}`);
+    logger.debug(`\u2705 \xC9l\xE9ment TBL Bridge trouv\xE9: ${element.label} (${element.type})`);
+    logger.debug(`   \u{1F3AF} TBL Code: ${element.tbl_code}`);
+    logger.debug(`   \u{1F3D7}\uFE0F Type TBL: ${element.tbl_type} | \u{1F527} Capacit\xE9 TBL: ${element.tbl_capacity}`);
     const typeDescription = this.getTBLTypeDescription(element.tbl_type);
     const capacityDescription = this.getTBLCapacityDescription(element.tbl_capacity);
-    console.log(`   \u{1F4CB} TBL Intelligence: ${typeDescription} avec ${capacityDescription}`);
+    logger.debug(`   \u{1F4CB} TBL Intelligence: ${typeDescription} avec ${capacityDescription}`);
     const tblElement = {
       id: element.id,
       label: element.label,
@@ -64353,15 +64461,15 @@ var TBLIntelligence = class {
       type: element.type,
       parent_id: element.parent_id || void 0
     };
-    console.log(`\u{1F9E0} [TBL Intelligence V2.0] Analyse des capacit\xE9s via colonnes Prisma...`);
+    logger.debug(`\u{1F9E0} [TBL Intelligence V2.0] Analyse des capacit\xE9s via colonnes Prisma...`);
     const formulas = element.tbl_capacity === 2 ? await this.analyzeFormulas(element.TreeBranchLeafNodeFormula || []) : [];
     const conditions = element.tbl_capacity === 3 ? await this.analyzeConditions(element.TreeBranchLeafNodeCondition || []) : [];
     const tables = element.tbl_capacity === 4 ? await this.analyzeTables(element.TreeBranchLeafNodeTable || []) : [];
-    console.log(`\u{1F4CA} [TBL V2.0] R\xE9sultats: ${formulas.length} formules, ${conditions.length} conditions, ${tables.length} tableaux`);
+    logger.debug(`\u{1F4CA} [TBL V2.0] R\xE9sultats: ${formulas.length} formules, ${conditions.length} conditions, ${tables.length} tableaux`);
     const dependencies = await this.buildDependencyGraph(tblElement, formulas, conditions, tables);
-    console.log(`\u2705 [TBL Intelligence] Analyse termin\xE9e pour ${element.label} (${element.tbl_code})`);
-    console.log(`   \u{1F4CA} ${formulas.length} formules, ${conditions.length} conditions, ${tables.length} tableaux`);
-    console.log(`   \u{1F517} ${dependencies.length} d\xE9pendances d\xE9tect\xE9es`);
+    logger.debug(`\u2705 [TBL Intelligence] Analyse termin\xE9e pour ${element.label} (${element.tbl_code})`);
+    logger.debug(`   \u{1F4CA} ${formulas.length} formules, ${conditions.length} conditions, ${tables.length} tableaux`);
+    logger.debug(`   \u{1F517} ${dependencies.length} d\xE9pendances d\xE9tect\xE9es`);
     return {
       element: tblElement,
       formulas,
@@ -64377,7 +64485,7 @@ var TBLIntelligence = class {
   async analyzeFormulas(formulas) {
     const tblFormulas = [];
     for (const formula of formulas) {
-      console.log(`\u{1F9EE} [TBL Intelligence] Analyse formule ${formula.id}`);
+      logger.debug(`\u{1F9EE} [TBL Intelligence] Analyse formule ${formula.id}`);
       const referencedFields = [];
       const dependencies = [];
       const tokens2 = Array.isArray(formula.tokens) ? formula.tokens : [];
@@ -64396,7 +64504,7 @@ var TBLIntelligence = class {
               dependency_type: "formula",
               relationship: "depends_on"
             });
-            console.log(`   \u{1F517} R\xE9f\xE9rence d\xE9tect\xE9e: ${referencedElement.label} (${referencedElement.tbl_code})`);
+            logger.debug(`   \u{1F517} R\xE9f\xE9rence d\xE9tect\xE9e: ${referencedElement.label} (${referencedElement.tbl_code})`);
           }
         }
       }
@@ -64416,7 +64524,7 @@ var TBLIntelligence = class {
   async analyzeConditions(conditions) {
     const tblConditions = [];
     for (const condition of conditions) {
-      console.log(`\u2696\uFE0F [TBL Intelligence] Analyse condition ${condition.id}`);
+      logger.debug(`\u2696\uFE0F [TBL Intelligence] Analyse condition ${condition.id}`);
       const triggerElements = [];
       const targetElements = [];
       const optionMappings = [];
@@ -64448,7 +64556,7 @@ var TBLIntelligence = class {
                     field_code: child.tbl_code,
                     show_when_selected: rule.condition_value === "true" || rule.condition_value === sourceElement.label
                   });
-                  console.log(`   \u{1F3AF} Option + Champ d\xE9tect\xE9: ${sourceElement.label} (${sourceElement.tbl_code}) \u2192 ${child.label} (${child.tbl_code})`);
+                  logger.debug(`   \u{1F3AF} Option + Champ d\xE9tect\xE9: ${sourceElement.label} (${sourceElement.tbl_code}) \u2192 ${child.label} (${child.tbl_code})`);
                 }
               }
             }
@@ -64481,7 +64589,7 @@ var TBLIntelligence = class {
   async analyzeTables(tables) {
     const tblTables = [];
     for (const table of tables) {
-      console.log(`\u{1F4CA} [TBL Intelligence] Analyse tableau ${table.id}`);
+      logger.debug(`\u{1F4CA} [TBL Intelligence] Analyse tableau ${table.id}`);
       const dataSources = [];
       const computedColumns = [];
       const relationships = [];
@@ -64497,7 +64605,7 @@ var TBLIntelligence = class {
             } else {
               dataSources.push(sourceElement.tbl_code);
             }
-            console.log(`   \u{1F4CB} Source donn\xE9es: ${sourceElement.label} (${sourceElement.tbl_code})`);
+            logger.debug(`   \u{1F4CB} Source donn\xE9es: ${sourceElement.label} (${sourceElement.tbl_code})`);
           }
         }
       }
@@ -64561,7 +64669,7 @@ var TBLIntelligence = class {
    * Résout une valeur en tenant compte de toutes les dépendances TBL
    */
   async resolveValue(elementCode, context = {}) {
-    console.log(`\u{1F3AF} [TBL Intelligence] R\xE9solution intelligente de ${elementCode}`);
+    logger.debug(`\u{1F3AF} [TBL Intelligence] R\xE9solution intelligente de ${elementCode}`);
     const element = await this.prisma.treeBranchLeafNode.findFirst({
       where: { tbl_code: elementCode }
     });
@@ -64581,7 +64689,7 @@ var TBLIntelligence = class {
     }
   }
   async resolveFormula(analysis, context) {
-    console.log(`\u{1F9EE} R\xE9solution formule avec ${analysis.formulas.length} formules`);
+    logger.debug(`\u{1F9EE} R\xE9solution formule avec ${analysis.formulas.length} formules`);
     return {
       value: 0,
       // Calculé selon la formule
@@ -64591,7 +64699,7 @@ var TBLIntelligence = class {
     };
   }
   async resolveCondition(analysis, context) {
-    console.log(`\u2696\uFE0F R\xE9solution condition avec ${analysis.conditions.length} conditions`);
+    logger.debug(`\u2696\uFE0F R\xE9solution condition avec ${analysis.conditions.length} conditions`);
     return {
       value: true,
       // Évalué selon les conditions
@@ -64601,7 +64709,7 @@ var TBLIntelligence = class {
     };
   }
   async resolveTable(analysis, context) {
-    console.log(`\u{1F4CA} R\xE9solution tableau avec ${analysis.tables.length} tableaux`);
+    logger.debug(`\u{1F4CA} R\xE9solution tableau avec ${analysis.tables.length} tableaux`);
     return {
       value: [],
       // Données du tableau
@@ -64612,7 +64720,7 @@ var TBLIntelligence = class {
   }
   async resolveSimpleValue(analysis, context) {
     const value = context[analysis.element.tbl_code] || null;
-    console.log(`\u{1F4DD} R\xE9solution valeur simple: ${analysis.element.label} = ${value}`);
+    logger.debug(`\u{1F4DD} R\xE9solution valeur simple: ${analysis.element.label} = ${value}`);
     return {
       value,
       dependencies_resolved: [],
@@ -64652,6 +64760,7 @@ var TBLIntelligence = class {
 var TBLIntelligence_default = TBLIntelligence;
 
 // src/components/TreeBranchLeaf/tbl-bridge/intelligence/TBLEvaluationEngine.ts
+init_logger();
 var TBLEvaluationEngine = class {
   intelligence;
   evaluationCache = /* @__PURE__ */ new Map();
@@ -64666,8 +64775,8 @@ var TBLEvaluationEngine = class {
    */
   async evaluate(request) {
     const startTime = Date.now();
-    console.log(`\u{1F680} [TBL Evaluation] D\xE9but \xE9valuation ${request.element_code}`);
-    console.log(`   Mode: ${request.evaluation_mode}, Deep: ${request.deep_resolution}`);
+    logger.debug(`\u{1F680} [TBL Evaluation] D\xE9but \xE9valuation ${request.element_code}`);
+    logger.debug(`   Mode: ${request.evaluation_mode}, Deep: ${request.deep_resolution}`);
     const result = {
       success: false,
       element_code: request.element_code,
@@ -64689,7 +64798,7 @@ var TBLEvaluationEngine = class {
       const cacheKey = this.getCacheKey(request);
       const cached = this.getCachedResult(cacheKey);
       if (cached) {
-        console.log(`\u{1F4BE} [TBL Evaluation] Cache HIT pour ${request.element_code}`);
+        logger.debug(`\u{1F4BE} [TBL Evaluation] Cache HIT pour ${request.element_code}`);
         result.performance.cache_hits = 1;
         result.final_value = cached;
         result.success = true;
@@ -64718,9 +64827,9 @@ var TBLEvaluationEngine = class {
       }
       this.setCachedResult(cacheKey, result.final_value);
       result.success = true;
-      console.log(`\u2705 [TBL Evaluation] \xC9valuation r\xE9ussie: ${request.element_code} = ${result.final_value}`);
+      logger.debug(`\u2705 [TBL Evaluation] \xC9valuation r\xE9ussie: ${request.element_code} = ${result.final_value}`);
     } catch (error) {
-      console.error(`\u274C [TBL Evaluation] Erreur:`, error);
+      logger.error(`\u274C [TBL Evaluation] Erreur:`, error);
       result.errors.push(error instanceof Error ? error.message : "Erreur inconnue");
     }
     result.performance.total_time_ms = Date.now() - startTime;
@@ -64730,7 +64839,7 @@ var TBLEvaluationEngine = class {
    * 🧮 ÉVALUATION DES FORMULES
    */
   async evaluateFormulas(analysis, request, result) {
-    console.log(`\u{1F9EE} [TBL Evaluation] \xC9valuation de ${analysis.formulas.length} formules`);
+    logger.debug(`\u{1F9EE} [TBL Evaluation] \xC9valuation de ${analysis.formulas.length} formules`);
     for (const formula of analysis.formulas) {
       try {
         const fieldValues = {};
@@ -64750,9 +64859,9 @@ var TBLEvaluationEngine = class {
           result: formulaResult
         });
         result.final_value = formulaResult;
-        console.log(`   \u2705 Formule ${formula.id}: ${formulaResult}`);
+        logger.debug(`   \u2705 Formule ${formula.id}: ${formulaResult}`);
       } catch (error) {
-        console.error(`   \u274C Erreur formule ${formula.id}:`, error);
+        logger.error(`   \u274C Erreur formule ${formula.id}:`, error);
         result.errors.push(`Formule ${formula.id}: ${error instanceof Error ? error.message : "Erreur"}`);
       }
     }
@@ -64761,7 +64870,7 @@ var TBLEvaluationEngine = class {
    * ⚖️ ÉVALUATION DES CONDITIONS
    */
   async evaluateConditions(analysis, request, result) {
-    console.log(`\u2696\uFE0F [TBL Evaluation] \xC9valuation de ${analysis.conditions.length} conditions`);
+    logger.debug(`\u2696\uFE0F [TBL Evaluation] \xC9valuation de ${analysis.conditions.length} conditions`);
     for (const condition of analysis.conditions) {
       try {
         let conditionResult = true;
@@ -64783,7 +64892,7 @@ var TBLEvaluationEngine = class {
             field_code: mapping.field_code,
             show_field: shouldShowField
           });
-          console.log(`   \u{1F3AF} Option ${mapping.option_code} \u2192 Champ ${mapping.field_code}: ${shouldShowField ? "AFFICH\xC9" : "MASQU\xC9"}`);
+          logger.debug(`   \u{1F3AF} Option ${mapping.option_code} \u2192 Champ ${mapping.field_code}: ${shouldShowField ? "AFFICH\xC9" : "MASQU\xC9"}`);
         }
         result.conditions_evaluated.push({
           condition_id: condition.id,
@@ -64791,9 +64900,9 @@ var TBLEvaluationEngine = class {
           result: conditionResult
         });
         result.final_value = conditionResult;
-        console.log(`   \u2705 Condition ${condition.id}: ${conditionResult}`);
+        logger.debug(`   \u2705 Condition ${condition.id}: ${conditionResult}`);
       } catch (error) {
-        console.error(`   \u274C Erreur condition ${condition.id}:`, error);
+        logger.error(`   \u274C Erreur condition ${condition.id}:`, error);
         result.errors.push(`Condition ${condition.id}: ${error instanceof Error ? error.message : "Erreur"}`);
       }
     }
@@ -64802,7 +64911,7 @@ var TBLEvaluationEngine = class {
    * 📊 ÉVALUATION DES TABLEAUX
    */
   async evaluateTables(analysis, request, result) {
-    console.log(`\u{1F4CA} [TBL Evaluation] \xC9valuation de ${analysis.tables.length} tableaux`);
+    logger.debug(`\u{1F4CA} [TBL Evaluation] \xC9valuation de ${analysis.tables.length} tableaux`);
     for (const table of analysis.tables) {
       try {
         const tableData = [];
@@ -64814,12 +64923,12 @@ var TBLEvaluationEngine = class {
           }
         }
         for (const computedCode of table.computed_columns) {
-          console.log(`   \u{1F9EE} Colonne calcul\xE9e: ${computedCode}`);
+          logger.debug(`   \u{1F9EE} Colonne calcul\xE9e: ${computedCode}`);
         }
         result.final_value = tableData;
-        console.log(`   \u2705 Tableau ${table.id}: ${tableData.length} lignes`);
+        logger.debug(`   \u2705 Tableau ${table.id}: ${tableData.length} lignes`);
       } catch (error) {
-        console.error(`   \u274C Erreur tableau ${table.id}:`, error);
+        logger.error(`   \u274C Erreur tableau ${table.id}:`, error);
         result.errors.push(`Tableau ${table.id}: ${error instanceof Error ? error.message : "Erreur"}`);
       }
     }
@@ -64830,7 +64939,7 @@ var TBLEvaluationEngine = class {
    */
   async evaluateAuto(analysis, request, result) {
     const capacity = analysis.element.tbl_capacity;
-    console.log(`\u{1F916} [TBL Evaluation] Mode auto - capacit\xE9 d\xE9tect\xE9e: ${capacity}`);
+    logger.debug(`\u{1F916} [TBL Evaluation] Mode auto - capacit\xE9 d\xE9tect\xE9e: ${capacity}`);
     switch (capacity) {
       case 2:
         await this.evaluateFormulas(analysis, request, result);
@@ -64850,7 +64959,7 @@ var TBLEvaluationEngine = class {
    * 🔄 RÉSOLUTION RÉCURSIVE DES DÉPENDANCES
    */
   async resolveDeepDependencies(analysis, request, result) {
-    console.log(`\u{1F504} [TBL Evaluation] R\xE9solution profonde des d\xE9pendances`);
+    logger.debug(`\u{1F504} [TBL Evaluation] R\xE9solution profonde des d\xE9pendances`);
     for (const dependency of analysis.dependencies) {
       if (!result.evaluation_path.includes(dependency.source_code)) {
         const subRequest = {
@@ -64913,6 +65022,7 @@ var TBLEvaluationEngine_default = TBLEvaluationEngine;
 // src/components/TreeBranchLeaf/tbl-bridge/routes/tbl-intelligence-routes.ts
 init_operation_interpreter();
 init_database();
+init_logger();
 var router59 = import_express60.default.Router();
 var evaluationEngine = new TBLEvaluationEngine_default();
 function logRouteHit(route) {
@@ -65012,7 +65122,7 @@ router59.post("/evaluate", async (req2, res) => {
             trace
           });
         } catch (evalError) {
-          console.error(`\u274C [TBL EVALUATE] Erreur \xE9valuation directe formule:`, evalError);
+          logger.error(`\u274C [TBL EVALUATE] Erreur \xE9valuation directe formule:`, evalError);
           trace.push({ step: "formula_direct_eval", info: `Erreur: ${evalError instanceof Error ? evalError.message : "unknown"}`, success: false });
         }
       } else {
@@ -65084,7 +65194,7 @@ router59.post("/evaluate", async (req2, res) => {
     }
     return res.json({ success: true, type: "neutral", capacity, value: null, trace });
   } catch (e) {
-    console.error("\u{1F4A5} [TBL INTELLIGENCE] Erreur /evaluate:", e);
+    logger.error("\u{1F4A5} [TBL INTELLIGENCE] Erreur /evaluate:", e);
     return res.status(500).json({ success: false, error: "Erreur interne /evaluate", details: e instanceof Error ? e.message : "unknown" });
   }
 });
@@ -65152,7 +65262,7 @@ async function resolveSingleEvaluation(prisma50, elementId, contextData) {
           trace
         };
       } catch (evalError) {
-        console.error(`\u274C [TBL EVALUATE BATCH] Erreur \xE9valuation directe formule:`, evalError);
+        logger.error(`\u274C [TBL EVALUATE BATCH] Erreur \xE9valuation directe formule:`, evalError);
         trace.push({ step: "formula_direct_eval", info: `Erreur: ${evalError instanceof Error ? evalError.message : "unknown"}`, success: false });
       }
     } else {
@@ -65247,7 +65357,7 @@ async function resolveSingleEvaluation(prisma50, elementId, contextData) {
         trace
       };
     } catch (error) {
-      console.error(`\u274C [TBL EVALUATE] Erreur interpretFormula:`, error);
+      logger.error(`\u274C [TBL EVALUATE] Erreur interpretFormula:`, error);
       trace.push({ step: "formula_interpret", info: `Erreur: ${error instanceof Error ? error.message : "unknown"}`, success: false });
       const result = await evaluationEngine2.evaluate({
         element_code: variable.exposedKey,
@@ -65312,7 +65422,7 @@ async function resolveSingleEvaluation(prisma50, elementId, contextData) {
         trace
       };
     } catch (error) {
-      console.error(`\u274C [TBL EVALUATE] Erreur interpretCondition:`, error);
+      logger.error(`\u274C [TBL EVALUATE] Erreur interpretCondition:`, error);
       trace.push({ step: "condition_interpret", info: `Erreur: ${error instanceof Error ? error.message : "unknown"}`, success: false });
       return { payload: { success: false, type: "condition", capacity, error: "\xC9chec \xE9valuation condition", details: error instanceof Error ? error.message : "unknown" }, trace };
     }
@@ -65364,7 +65474,7 @@ router59.post("/condition", async (req2, res) => {
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
     });
   } catch (error) {
-    console.error("\u274C [TBL CONDITION] Erreur:", error);
+    logger.error("\u274C [TBL CONDITION] Erreur:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur interne",
@@ -65409,7 +65519,7 @@ router59.post("/evaluate/condition/:tblCode", async (req2, res) => {
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
     });
   } catch (error) {
-    console.error("\u274C [TBL EVALUATE CONDITION] Erreur:", error);
+    logger.error("\u274C [TBL EVALUATE CONDITION] Erreur:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur interne",
@@ -65480,7 +65590,7 @@ router59.post("/update-database-results", async (req2, res) => {
           sourceRef: data.sourceRef,
           error: error instanceof Error ? error.message : "unknown"
         });
-        console.error(`\u274C [TBL UPDATE] Erreur data ${data.id}:`, error);
+        logger.error(`\u274C [TBL UPDATE] Erreur data ${data.id}:`, error);
       }
     }
     return res.json({
@@ -65491,7 +65601,7 @@ router59.post("/update-database-results", async (req2, res) => {
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
     });
   } catch (error) {
-    console.error("\u274C [TBL UPDATE] Erreur globale:", error);
+    logger.error("\u274C [TBL UPDATE] Erreur globale:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur interne",
@@ -65525,7 +65635,7 @@ router59.post("/check-submission-data", async (req2, res) => {
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
     });
   } catch (error) {
-    console.error("\u274C [TBL CHECK] Erreur:", error);
+    logger.error("\u274C [TBL CHECK] Erreur:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur interne",
@@ -65543,7 +65653,7 @@ router59.post("/update-database-with-intelligent-translations", async (req2, res
       const translatorModule = await import("../../../../../../tbl-intelligent-translator.cjs");
       TBLIntelligentTranslator = translatorModule.default;
     } catch (error) {
-      console.error("\u274C [TBL INTELLIGENT] Impossible de charger TBLIntelligentTranslator:", error);
+      logger.error("\u274C [TBL INTELLIGENT] Impossible de charger TBLIntelligentTranslator:", error);
       return res.status(500).json({
         success: false,
         error: "TBLIntelligentTranslator non disponible"
@@ -65588,7 +65698,7 @@ router59.post("/update-database-with-intelligent-translations", async (req2, res
           nodeLabel: data.TreeBranchLeafNode?.label,
           error: error instanceof Error ? error.message : "unknown"
         });
-        console.error(`\u274C [TBL INTELLIGENT] Erreur data ${data.id}:`, error);
+        logger.error(`\u274C [TBL INTELLIGENT] Erreur data ${data.id}:`, error);
       }
     }
     return res.json({
@@ -65600,7 +65710,7 @@ router59.post("/update-database-with-intelligent-translations", async (req2, res
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
     });
   } catch (error) {
-    console.error("\u274C [TBL INTELLIGENT UPDATE] Erreur globale:", error);
+    logger.error("\u274C [TBL INTELLIGENT UPDATE] Erreur globale:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur interne",
@@ -65651,7 +65761,7 @@ router59.get("/check-intelligent-translations", async (req2, res) => {
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
     });
   } catch (error) {
-    console.error("\u274C [TBL CHECK INTELLIGENT] Erreur:", error);
+    logger.error("\u274C [TBL CHECK INTELLIGENT] Erreur:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur interne",
@@ -65672,7 +65782,7 @@ router59.get("/nodes/:nodeId", async (req2, res) => {
     }
     return res.json(node);
   } catch (error) {
-    console.error("\u274C [TBL NODES] Erreur:", error);
+    logger.error("\u274C [TBL NODES] Erreur:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur interne",
@@ -65695,7 +65805,7 @@ router59.get("/reusables/conditions", async (req2, res) => {
       count: conditions.length
     });
   } catch (error) {
-    console.error("\u274C [TBL CONDITIONS] Erreur:", error);
+    logger.error("\u274C [TBL CONDITIONS] Erreur:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur interne",
@@ -65718,7 +65828,7 @@ router59.get("/reusables/formulas", async (req2, res) => {
       count: formulas.length
     });
   } catch (error) {
-    console.error("\u274C [TBL FORMULAS] Erreur:", error);
+    logger.error("\u274C [TBL FORMULAS] Erreur:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur interne",
@@ -65731,6 +65841,7 @@ var tbl_intelligence_routes_default = router59;
 // src/routes/tbl-capabilities.ts
 var import_express61 = __toESM(require("express"), 1);
 init_database();
+init_logger();
 var prisma33 = db;
 var router60 = import_express61.default.Router();
 function extractFormulaDependencies(tokens2) {
@@ -65882,6 +65993,7 @@ var tbl_capabilities_default = router60;
 // src/routes/gestionnaire.ts
 var import_express62 = require("express");
 init_database();
+init_logger();
 var router61 = (0, import_express62.Router)();
 router61.get("/trees/:treeId/exposed", async (req2, res) => {
   try {
@@ -66307,6 +66419,7 @@ function shouldAutoCreateSelectConfig(input) {
 }
 
 // src/routes/tbl-select-config-route.ts
+init_logger();
 var router62 = (0, import_express63.Router)();
 router62.use(authenticateToken);
 router62.get("/nodes/:nodeId/select-config", async (req2, res) => {
@@ -66373,6 +66486,7 @@ var tblSelectConfigRouter = router62;
 var import_express64 = require("express");
 init_database();
 var import_express_rate_limit6 = __toESM(require("express-rate-limit"), 1);
+init_logger();
 var router63 = (0, import_express64.Router)();
 var prisma34 = db;
 var leadGenRateLimit = (0, import_express_rate_limit6.default)({
@@ -66599,6 +66713,7 @@ var leadGeneration_default = router63;
 // src/routes/marketplace-fixed.ts
 var import_express65 = require("express");
 var import_express_rate_limit7 = __toESM(require("express-rate-limit"), 1);
+init_logger();
 var router64 = (0, import_express65.Router)();
 var marketplaceRateLimit = (0, import_express_rate_limit7.default)({
   windowMs: 60 * 1e3,
@@ -66855,6 +66970,7 @@ var marketplace_fixed_default = router64;
 var import_express66 = require("express");
 init_database();
 var import_express_rate_limit8 = __toESM(require("express-rate-limit"), 1);
+init_logger();
 var router65 = (0, import_express66.Router)();
 var prisma35 = db;
 var partnerRateLimit = (0, import_express_rate_limit8.default)({
@@ -67167,6 +67283,7 @@ var partner_default = router65;
 var import_express67 = require("express");
 var import_express_rate_limit9 = __toESM(require("express-rate-limit"), 1);
 var import_zod13 = require("zod");
+init_logger();
 var router66 = (0, import_express67.Router)();
 var submissionRateLimit = (0, import_express_rate_limit9.default)({
   windowMs: 5 * 60 * 1e3,
@@ -67911,6 +68028,7 @@ var publicForms_default = router66;
 // src/routes/landingPages.ts
 var import_express68 = require("express");
 var import_express_rate_limit10 = __toESM(require("express-rate-limit"), 1);
+init_logger();
 var router67 = (0, import_express68.Router)();
 var publicLandingRateLimit = (0, import_express_rate_limit10.default)({
   windowMs: 60 * 1e3,
@@ -68439,6 +68557,7 @@ init_database();
 init_PostalEmailService();
 var import_nodemailer4 = __toESM(require("nodemailer"), 1);
 var import_crypto27 = __toESM(require("crypto"), 1);
+init_logger();
 var postalApiVerified = false;
 var postalApiChecked = false;
 async function isPostalApiConfigured() {
@@ -68906,6 +69025,7 @@ init_database();
 var import_nodemailer5 = __toESM(require("nodemailer"), 1);
 var import_crypto28 = __toESM(require("crypto"), 1);
 var import_child_process2 = require("child_process");
+init_logger();
 var router69 = (0, import_express70.Router)();
 function requireSuperAdmin(req2, res, next) {
   if (!req2.user?.isSuperAdmin) {
@@ -69432,6 +69552,7 @@ var zhiivemail_admin_default = router69;
 var import_express71 = require("express");
 var import_crypto29 = __toESM(require("crypto"), 1);
 init_database();
+init_logger();
 var router70 = (0, import_express71.Router)();
 function generateZhiiveEmail2(firstName, lastName, fallbackEmail) {
   if (firstName && lastName) {
@@ -69513,6 +69634,7 @@ var mail_provider_default = router70;
 var import_express72 = require("express");
 init_database();
 var import_express_rate_limit11 = __toESM(require("express-rate-limit"), 1);
+init_logger();
 var router71 = (0, import_express72.Router)();
 var prisma36 = db;
 var campaignAnalyticsRateLimit = (0, import_express_rate_limit11.default)({
@@ -70018,6 +70140,7 @@ var campaignAnalytics_default = router71;
 var import_express73 = require("express");
 var import_express_rate_limit12 = __toESM(require("express-rate-limit"), 1);
 init_database();
+init_logger();
 var router72 = (0, import_express73.Router)();
 var prisma37 = db;
 var dispatchRateLimit = (0, import_express_rate_limit12.default)({
@@ -70117,6 +70240,7 @@ var import_express74 = require("express");
 var import_crypto30 = require("crypto");
 var import_express_rate_limit13 = __toESM(require("express-rate-limit"), 1);
 init_database();
+init_logger();
 var router73 = (0, import_express74.Router)();
 var prisma38 = db;
 var rl = (0, import_express_rate_limit13.default)({ windowMs: 60 * 1e3, max: 60 });
@@ -70239,7 +70363,7 @@ var import_crypto31 = require("crypto");
 init_googleConfig();
 
 // src/services/adPlatformService.ts
-var import_meta2 = {};
+var import_meta3 = {};
 var AD_PLATFORMS = {
   google_ads: {
     id: "google_ads",
@@ -70251,7 +70375,7 @@ var AD_PLATFORMS = {
       const env = globalThis?.process?.env || {};
       const explicit = env.GOOGLE_ADS_REDIRECT || env.GOOGLE_REDIRECT_URI;
       if (explicit) return explicit;
-      const viteEnv = import_meta2?.env || {};
+      const viteEnv = import_meta3?.env || {};
       const frontendBase = viteEnv.VITE_API_BASE_URL || viteEnv.API_URL || "";
       if (frontendBase) return `${frontendBase.replace(/\/$/, "")}/api/google-auth/callback`;
       if (typeof window !== "undefined") return `${window.location.origin}/api/google-auth/callback`;
@@ -70545,6 +70669,7 @@ var AdPlatformService = class {
 };
 
 // src/services/ecommerceService.ts
+init_logger();
 var ECOMMERCE_PLATFORMS = {
   shopify: {
     id: "shopify",
@@ -70923,66 +71048,66 @@ var EcommerceService = class {
   }
   // Récupération des produits (à implémenter)
   static async fetchShopifyProducts(integration) {
-    console.warn("\u{1F6CD}\uFE0F [Ecommerce] fetchShopifyProducts non impl\xE9ment\xE9", {
+    logger.warn("\u{1F6CD}\uFE0F [Ecommerce] fetchShopifyProducts non impl\xE9ment\xE9", {
       integrationId: integration?.id ?? integration?.url ?? "unknown"
     });
     return [];
   }
   static async fetchWooCommerceProducts(integration) {
-    console.warn("\u{1F6CD}\uFE0F [Ecommerce] fetchWooCommerceProducts non impl\xE9ment\xE9", {
+    logger.warn("\u{1F6CD}\uFE0F [Ecommerce] fetchWooCommerceProducts non impl\xE9ment\xE9", {
       integrationId: integration?.id ?? integration?.url ?? "unknown"
     });
     return [];
   }
   static async fetchPrestaShopProducts(integration) {
-    console.warn("\u{1F6CD}\uFE0F [Ecommerce] fetchPrestaShopProducts non impl\xE9ment\xE9", {
+    logger.warn("\u{1F6CD}\uFE0F [Ecommerce] fetchPrestaShopProducts non impl\xE9ment\xE9", {
       integrationId: integration?.id ?? integration?.url ?? "unknown"
     });
     return [];
   }
   static async fetchMagentoProducts(integration) {
-    console.warn("\u{1F6CD}\uFE0F [Ecommerce] fetchMagentoProducts non impl\xE9ment\xE9", {
+    logger.warn("\u{1F6CD}\uFE0F [Ecommerce] fetchMagentoProducts non impl\xE9ment\xE9", {
       integrationId: integration?.id ?? integration?.url ?? "unknown"
     });
     return [];
   }
   static async fetchCustomProducts(integration) {
-    console.warn("\u{1F6CD}\uFE0F [Ecommerce] fetchCustomProducts non impl\xE9ment\xE9", {
+    logger.warn("\u{1F6CD}\uFE0F [Ecommerce] fetchCustomProducts non impl\xE9ment\xE9", {
       integrationId: integration?.id ?? integration?.url ?? "unknown"
     });
     return [];
   }
   // Récupération des commandes (à implémenter)
   static async fetchShopifyOrders(integration, fromDate) {
-    console.warn("\u{1F6D2} [Ecommerce] fetchShopifyOrders non impl\xE9ment\xE9", {
+    logger.warn("\u{1F6D2} [Ecommerce] fetchShopifyOrders non impl\xE9ment\xE9", {
       integrationId: integration?.id ?? integration?.url ?? "unknown",
       fromDate: fromDate?.toISOString() ?? null
     });
     return [];
   }
   static async fetchWooCommerceOrders(integration, fromDate) {
-    console.warn("\u{1F6D2} [Ecommerce] fetchWooCommerceOrders non impl\xE9ment\xE9", {
+    logger.warn("\u{1F6D2} [Ecommerce] fetchWooCommerceOrders non impl\xE9ment\xE9", {
       integrationId: integration?.id ?? integration?.url ?? "unknown",
       fromDate: fromDate?.toISOString() ?? null
     });
     return [];
   }
   static async fetchPrestaShopOrders(integration, fromDate) {
-    console.warn("\u{1F6D2} [Ecommerce] fetchPrestaShopOrders non impl\xE9ment\xE9", {
+    logger.warn("\u{1F6D2} [Ecommerce] fetchPrestaShopOrders non impl\xE9ment\xE9", {
       integrationId: integration?.id ?? integration?.url ?? "unknown",
       fromDate: fromDate?.toISOString() ?? null
     });
     return [];
   }
   static async fetchMagentoOrders(integration, fromDate) {
-    console.warn("\u{1F6D2} [Ecommerce] fetchMagentoOrders non impl\xE9ment\xE9", {
+    logger.warn("\u{1F6D2} [Ecommerce] fetchMagentoOrders non impl\xE9ment\xE9", {
       integrationId: integration?.id ?? integration?.url ?? "unknown",
       fromDate: fromDate?.toISOString() ?? null
     });
     return [];
   }
   static async fetchCustomOrders(integration, fromDate) {
-    console.warn("\u{1F6D2} [Ecommerce] fetchCustomOrders non impl\xE9ment\xE9", {
+    logger.warn("\u{1F6D2} [Ecommerce] fetchCustomOrders non impl\xE9ment\xE9", {
       integrationId: integration?.id ?? integration?.url ?? "unknown",
       fromDate: fromDate?.toISOString() ?? null
     });
@@ -70991,6 +71116,7 @@ var EcommerceService = class {
 };
 
 // src/routes/integrations.ts
+init_logger();
 var prisma39 = db;
 var router74 = (0, import_express75.Router)();
 function cacheGet(_key) {
@@ -72608,6 +72734,7 @@ var import_express76 = require("express");
 var import_express_rate_limit14 = require("express-rate-limit");
 var import_express_validator = require("express-validator");
 init_database();
+init_logger();
 var router75 = (0, import_express76.Router)();
 var prisma40 = db;
 var geminiService2 = getGeminiService();
@@ -72925,6 +73052,7 @@ init_database();
 var import_path6 = __toESM(require("path"), 1);
 var import_fs7 = __toESM(require("fs"), 1);
 init_storage();
+init_logger();
 var router76 = (0, import_express77.Router)();
 router76.use(authenticateToken);
 function getUser(req2) {
@@ -73585,6 +73713,7 @@ var product_documents_default = router76;
 // src/routes/sync-temp.ts
 var import_express78 = require("express");
 init_database();
+init_logger();
 var router77 = (0, import_express78.Router)();
 router77.use(authenticateToken);
 var prisma41 = db;
@@ -73659,6 +73788,7 @@ var sync_temp_default = router77;
 var import_express79 = require("express");
 init_database();
 var import_client8 = require("@prisma/client");
+init_logger();
 var router78 = (0, import_express79.Router)();
 router78.post("/", authMiddleware, async (req2, res) => {
   try {
@@ -73919,6 +74049,7 @@ init_storage();
 
 // src/services/ai-moderation.ts
 var import_generative_ai2 = require("@google/generative-ai");
+init_logger();
 var genAI = new import_generative_ai2.GoogleGenerativeAI(process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || "");
 var DEFAULT_BANNED = [
   "hate_speech",
@@ -73964,7 +74095,7 @@ Si le contenu est acceptable, retourne : {"flagged": false, "categories": [], "c
       aiRaw: text
     };
   } catch (error) {
-    console.error("[AI-Moderation] Error:", error);
+    logger.error("[AI-Moderation] Error:", error);
     return {
       flagged: false,
       categories: [],
@@ -73986,6 +74117,7 @@ var DEFAULT_REACTION = REACTION_TYPES[0];
 var REACTION_TYPE_VALUES = REACTION_TYPES.map((r) => r.type);
 
 // src/routes/wall.ts
+init_logger();
 var router79 = (0, import_express80.Router)();
 var createPostSchema = import_zod14.z.object({
   content: import_zod14.z.string().min(1).max(5e4).optional(),
@@ -74639,6 +74771,7 @@ var import_express81 = require("express");
 init_database();
 var import_zod15 = require("zod");
 var import_crypto32 = require("crypto");
+init_logger();
 var router80 = (0, import_express81.Router)();
 function getUserContext(req2) {
   const user = req2.user;
@@ -74956,6 +75089,7 @@ var import_express82 = require("express");
 init_database();
 var import_zod16 = require("zod");
 var import_crypto33 = require("crypto");
+init_logger();
 var router81 = (0, import_express82.Router)();
 var updatePrefsSchema = import_zod16.z.object({
   // Push
@@ -75046,6 +75180,7 @@ var notification_preferences_default = router81;
 // src/routes/rgpd.ts
 var import_express83 = require("express");
 init_database();
+init_logger();
 var router82 = (0, import_express83.Router)();
 router82.use(authenticateToken);
 function getUser2(req2) {
@@ -75350,6 +75485,7 @@ var rgpd_default = router82;
 // src/routes/friends.ts
 var import_express84 = require("express");
 init_database();
+init_logger();
 var router83 = (0, import_express84.Router)();
 router83.use(authenticateToken);
 router83.get("/", async (req2, res) => {
@@ -75991,6 +76127,7 @@ init_crypto();
 var import_socket = require("socket.io");
 var import_jsonwebtoken6 = __toESM(require("jsonwebtoken"), 1);
 init_database();
+init_logger();
 var io = null;
 var userSockets = /* @__PURE__ */ new Map();
 var socketToUser = /* @__PURE__ */ new Map();
@@ -76029,7 +76166,7 @@ function initializeSocketIO(httpServer) {
   });
   io.on("connection", (socket) => {
     const userId = socket.userId;
-    console.log(`\u{1F50C} [SOCKET] User ${userId} connected (${socket.id})`);
+    logger.debug(`\u{1F50C} [SOCKET] User ${userId} connected (${socket.id})`);
     if (!userSockets.has(userId)) {
       userSockets.set(userId, /* @__PURE__ */ new Set());
     }
@@ -76075,7 +76212,7 @@ function initializeSocketIO(httpServer) {
           timestamp: now.toISOString()
         });
       } catch (err) {
-        console.error("[SOCKET] Error updating delivered status:", err);
+        logger.error("[SOCKET] Error updating delivered status:", err);
       }
     });
     socket.on("messages-read", async (data) => {
@@ -76103,7 +76240,7 @@ function initializeSocketIO(httpServer) {
           });
         }
       } catch (err) {
-        console.error("[SOCKET] Error updating read status:", err);
+        logger.error("[SOCKET] Error updating read status:", err);
       }
     });
     socket.on("update-status", async (data) => {
@@ -76130,11 +76267,11 @@ function initializeSocketIO(httpServer) {
           customStatusEmoji: data.emoji || null
         });
       } catch (err) {
-        console.error("[SOCKET] Error updating status:", err);
+        logger.error("[SOCKET] Error updating status:", err);
       }
     });
     socket.on("disconnect", (reason) => {
-      console.log(`\u{1F50C} [SOCKET] User ${userId} disconnected (${reason})`);
+      logger.debug(`\u{1F50C} [SOCKET] User ${userId} disconnected (${reason})`);
       const sockets = userSockets.get(userId);
       if (sockets) {
         sockets.delete(socket.id);
@@ -76146,12 +76283,23 @@ function initializeSocketIO(httpServer) {
       socketToUser.delete(socket.id);
     });
   });
-  console.log("\u{1F50C} [SOCKET.IO] Initialized successfully");
+  logger.debug("\u{1F50C} [SOCKET.IO] Initialized successfully");
+  return io;
+}
+function getIO() {
   return io;
 }
 function emitToConversation(conversationId, event, data) {
   if (io) {
     io.to(`conv:${conversationId}`).emit(event, data);
+  }
+}
+function emitToUser(userId, event, data) {
+  const sockets = userSockets.get(userId);
+  if (io && sockets) {
+    for (const socketId of sockets) {
+      io.to(socketId).emit(event, data);
+    }
   }
 }
 function getOnlineUsers() {
@@ -76167,7 +76315,7 @@ async function joinUserConversations(socket, userId) {
       socket.join(`conv:${p.conversationId}`);
     }
   } catch (err) {
-    console.error("[SOCKET] Error joining conversation rooms:", err);
+    logger.error("[SOCKET] Error joining conversation rooms:", err);
   }
 }
 async function updateUserPresence(userId, online) {
@@ -76196,6 +76344,7 @@ async function broadcastToUserContacts(userId, event, data) {
 
 // src/routes/messenger.ts
 init_storage();
+init_logger();
 var router84 = (0, import_express85.Router)();
 router84.use(authenticateToken);
 router84.get("/conversations", async (req2, res) => {
@@ -77406,6 +77555,7 @@ var messenger_default = router84;
 // src/routes/calls.ts
 var import_express86 = require("express");
 init_database();
+init_logger();
 var router85 = (0, import_express86.Router)();
 router85.post("/:id/leave-beacon", async (req2, res) => {
   const { userId } = req2.body || {};
@@ -77904,6 +78054,7 @@ var calls_default = router85;
 var import_express87 = require("express");
 init_database();
 var import_zod17 = require("zod");
+init_logger();
 var router86 = (0, import_express87.Router)();
 router86.post("/follow/:userId", authenticateToken, async (req2, res) => {
   try {
@@ -79226,6 +79377,7 @@ var zhiive_default = router86;
 var import_express88 = require("express");
 init_database();
 var import_zod18 = require("zod");
+init_logger();
 var router87 = (0, import_express88.Router)();
 var createMomentSchema = import_zod18.z.object({
   title: import_zod18.z.string().min(1).max(200),
@@ -79463,6 +79615,7 @@ var hive_live_default = router87;
 // src/routes/globalSearch.ts
 var import_express89 = require("express");
 init_database();
+init_logger();
 var router88 = (0, import_express89.Router)();
 router88.use(authenticateToken);
 router88.use(fetchFullUser);
@@ -80205,17 +80358,18 @@ var routes_default = apiRouter;
 // src/components/TreeBranchLeaf/treebranchleaf-new/TBL/routes/ia-config-routes.ts
 var import_express91 = __toESM(require("express"), 1);
 init_database();
+init_logger();
 var router89 = import_express91.default.Router();
 router89.get("/nodes/:nodeId/ia-config", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
-    console.log(`\u{1F4CA} [IA-CONFIG] R\xE9cup\xE9ration config pour node ${nodeId}`);
+    logger.debug(`\u{1F4CA} [IA-CONFIG] R\xE9cup\xE9ration config pour node ${nodeId}`);
     const node = await db.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
       select: { iaMesureConfig: true }
     });
     if (!node) {
-      console.warn(`\u26A0\uFE0F [IA-CONFIG] Node ${nodeId} non trouv\xE9`);
+      logger.warn(`\u26A0\uFE0F [IA-CONFIG] Node ${nodeId} non trouv\xE9`);
       return res.status(404).json({ error: "Node not found" });
     }
     const defaultConfig = {
@@ -80229,10 +80383,10 @@ router89.get("/nodes/:nodeId/ia-config", async (req2, res) => {
       }
     };
     const config = node.iaMesureConfig || defaultConfig;
-    console.log(`\u2705 [IA-CONFIG] Config r\xE9cup\xE9r\xE9e:`, JSON.stringify(config).substring(0, 100));
+    logger.debug(`\u2705 [IA-CONFIG] Config r\xE9cup\xE9r\xE9e:`, JSON.stringify(config).substring(0, 100));
     res.json(config);
   } catch (error) {
-    console.error("\u274C [IA-CONFIG] Erreur r\xE9cup\xE9ration config:", error);
+    logger.error("\u274C [IA-CONFIG] Erreur r\xE9cup\xE9ration config:", error);
     res.status(500).json({ error: "Failed to fetch IA config" });
   }
 });
@@ -80240,9 +80394,9 @@ router89.put("/nodes/:nodeId/ia-config", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const config = req2.body;
-    console.log(`\u{1F4BE} [IA-CONFIG] Mise \xE0 jour config pour node ${nodeId}`);
+    logger.debug(`\u{1F4BE} [IA-CONFIG] Mise \xE0 jour config pour node ${nodeId}`);
     if (!config || typeof config !== "object") {
-      console.warn(`\u26A0\uFE0F [IA-CONFIG] Format de config invalide`);
+      logger.warn(`\u26A0\uFE0F [IA-CONFIG] Format de config invalide`);
       return res.status(400).json({ error: "Invalid config format" });
     }
     if (config.enabled !== void 0 && typeof config.enabled !== "boolean") {
@@ -80258,17 +80412,17 @@ router89.put("/nodes/:nodeId/ia-config", async (req2, res) => {
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    console.log(`\u2705 [IA-CONFIG] Config sauvegard\xE9e avec succ\xE8s`);
+    logger.debug(`\u2705 [IA-CONFIG] Config sauvegard\xE9e avec succ\xE8s`);
     res.json({ success: true, config });
   } catch (error) {
-    console.error("\u274C [IA-CONFIG] Erreur sauvegarde config:", error);
+    logger.error("\u274C [IA-CONFIG] Erreur sauvegarde config:", error);
     res.status(500).json({ error: "Failed to update IA config" });
   }
 });
 router89.delete("/nodes/:nodeId/ia-config", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
-    console.log(`\u{1F5D1}\uFE0F [IA-CONFIG] Suppression config pour node ${nodeId}`);
+    logger.debug(`\u{1F5D1}\uFE0F [IA-CONFIG] Suppression config pour node ${nodeId}`);
     await db.treeBranchLeafNode.update({
       where: { id: nodeId },
       data: {
@@ -80276,10 +80430,10 @@ router89.delete("/nodes/:nodeId/ia-config", async (req2, res) => {
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    console.log(`\u2705 [IA-CONFIG] Config supprim\xE9e`);
+    logger.debug(`\u2705 [IA-CONFIG] Config supprim\xE9e`);
     res.json({ success: true });
   } catch (error) {
-    console.error("\u274C [IA-CONFIG] Erreur suppression config:", error);
+    logger.error("\u274C [IA-CONFIG] Erreur suppression config:", error);
     res.status(500).json({ error: "Failed to delete IA config" });
   }
 });
@@ -80289,6 +80443,7 @@ var ia_config_routes_default = router89;
 var import_express92 = require("express");
 var import_crypto35 = require("crypto");
 init_database();
+init_logger();
 var router90 = (0, import_express92.Router)();
 var prisma42 = db;
 var parseStoredStringValue = (raw) => {
@@ -80525,7 +80680,7 @@ router90.get("/:nodeId/calculated-value", async (req2, res) => {
           debugParts
         });
       } catch (sumTotalError) {
-        console.error(`\u274C [SUM-TOTAL DIRECT] Erreur pour ${nodeId}:`, sumTotalError);
+        logger.error(`\u274C [SUM-TOTAL DIRECT] Erreur pour ${nodeId}:`, sumTotalError);
       }
     }
     const isDisplayField = node.fieldType === "DISPLAY" || node.type === "DISPLAY" || node.type === "leaf_field";
@@ -80657,7 +80812,7 @@ router90.get("/:nodeId/calculated-value", async (req2, res) => {
               freshCalculation: true
             });
           } catch (recomputeErr) {
-            console.error("\u274C [CalculatedValueController] Recompute error:", recomputeErr);
+            logger.error("\u274C [CalculatedValueController] Recompute error:", recomputeErr);
           }
         }
       }
@@ -80754,7 +80909,7 @@ router90.get("/:nodeId/calculated-value", async (req2, res) => {
           });
         }
       } catch (recomputeErr) {
-        console.error("\u274C [CalculatedValueController] Recompute (requiresFreshCalculation) error:", recomputeErr);
+        logger.error("\u274C [CalculatedValueController] Recompute (requiresFreshCalculation) error:", recomputeErr);
       }
     }
     if (hasValidExistingValue && !isDisplayField) {
@@ -80835,7 +80990,7 @@ router90.get("/:nodeId/calculated-value", async (req2, res) => {
           });
         }
       } catch (operationErr) {
-        console.error("\u274C [CalculatedValueController] Erreur operation-interpreter:", operationErr);
+        logger.error("\u274C [CalculatedValueController] Erreur operation-interpreter:", operationErr);
       }
     }
     if (isDisplayField) {
@@ -80863,7 +81018,7 @@ router90.get("/:nodeId/calculated-value", async (req2, res) => {
       fieldType: node.fieldType
     });
   } catch (error) {
-    console.error("[CalculatedValueController] GET erreur:", error);
+    logger.error("[CalculatedValueController] GET erreur:", error);
     return res.status(500).json({ error: String(error) });
   }
 });
@@ -80914,7 +81069,7 @@ router90.post("/batch-calculated-values", async (req2, res) => {
     }
     return res.json({ success: true, results });
   } catch (error) {
-    console.error("[CalculatedValueController] BATCH GET erreur:", error);
+    logger.error("[CalculatedValueController] BATCH GET erreur:", error);
     return res.status(500).json({ error: String(error) });
   }
 });
@@ -80951,7 +81106,7 @@ router90.post("/:nodeId/store-calculated-value", async (req2, res) => {
       calculatedBy: updated.calculatedBy
     });
   } catch (error) {
-    console.error("[CalculatedValueController] POST erreur:", error);
+    logger.error("[CalculatedValueController] POST erreur:", error);
     return res.status(500).json({ error: String(error) });
   }
 });
@@ -80992,7 +81147,7 @@ router90.post("/store-batch-calculated-values", async (req2, res) => {
       submissionId
     });
   } catch (error) {
-    console.error("[CalculatedValueController] BATCH POST erreur:", error);
+    logger.error("[CalculatedValueController] BATCH POST erreur:", error);
     return res.status(500).json({ error: String(error) });
   }
 });
@@ -81001,6 +81156,7 @@ var calculatedValueController_default = router90;
 // src/routes/tbl-batch-routes.ts
 var import_express93 = require("express");
 init_database();
+init_logger();
 var router91 = (0, import_express93.Router)();
 router91.use(authenticateToken);
 function getAuthCtx6(req2) {
@@ -81432,6 +81588,7 @@ var tbl_batch_routes_default = router91;
 var import_express94 = require("express");
 init_database();
 var import_googleapis8 = require("googleapis");
+init_logger();
 var router92 = (0, import_express94.Router)();
 router92.use(authenticateToken);
 function getAuthCtx7(req2) {
@@ -81781,6 +81938,7 @@ var batch_routes_default = router92;
 // src/api/websites.ts
 var import_express95 = require("express");
 init_database();
+init_logger();
 var router93 = (0, import_express95.Router)();
 router93.get("/websites", authenticateToken, async (req2, res) => {
   try {
@@ -81806,7 +81964,7 @@ router93.get("/websites", authenticateToken, async (req2, res) => {
     });
     res.json(websites);
   } catch (error) {
-    console.error("Error fetching websites:", error);
+    logger.error("Error fetching websites:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -81829,7 +81987,7 @@ router93.get("/websites/id/:id", authenticateToken, async (req2, res) => {
     }
     res.json(website);
   } catch (error) {
-    console.error("Error fetching website by ID:", error);
+    logger.error("Error fetching website by ID:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -81839,34 +81997,34 @@ router93.put("/websites/:id", authenticateToken, async (req2, res) => {
     const organizationId = req2.headers["x-organization-id"];
     const isSuperAdmin2 = req2.headers["x-is-super-admin"] === "true";
     const data = req2.body;
-    console.log("\u{1F50D} [WEBSITES PUT] ===== D\xC9BUT =====");
-    console.log("\u{1F50D} [WEBSITES PUT] websiteId:", websiteId);
-    console.log("\u{1F50D} [WEBSITES PUT] organizationId from header:", organizationId);
-    console.log("\u{1F50D} [WEBSITES PUT] isSuperAdmin:", isSuperAdmin2);
-    console.log("\u{1F50D} [WEBSITES PUT] All headers:", JSON.stringify(req2.headers, null, 2));
-    console.log("\u{1F50D} [WEBSITES PUT] Body:", JSON.stringify(data, null, 2));
+    logger.debug("\u{1F50D} [WEBSITES PUT] ===== D\xC9BUT =====");
+    logger.debug("\u{1F50D} [WEBSITES PUT] websiteId:", websiteId);
+    logger.debug("\u{1F50D} [WEBSITES PUT] organizationId from header:", organizationId);
+    logger.debug("\u{1F50D} [WEBSITES PUT] isSuperAdmin:", isSuperAdmin2);
+    logger.debug("\u{1F50D} [WEBSITES PUT] All headers:", JSON.stringify(req2.headers, null, 2));
+    logger.debug("\u{1F50D} [WEBSITES PUT] Body:", JSON.stringify(data, null, 2));
     if (!organizationId && !isSuperAdmin2) {
-      console.log("\u{1F50D} [WEBSITES PUT] \u274C Pas d'organizationId dans les headers");
+      logger.debug("\u{1F50D} [WEBSITES PUT] \u274C Pas d'organizationId dans les headers");
       return res.status(400).json({ error: "Organization ID is required" });
     }
     const whereClause = { id: websiteId };
     if (!isSuperAdmin2) {
       whereClause.organizationId = organizationId;
     }
-    console.log("\u{1F50D} [WEBSITES PUT] Recherche du site avec:", whereClause);
+    logger.debug("\u{1F50D} [WEBSITES PUT] Recherche du site avec:", whereClause);
     const existingWebsite = await db.websites.findFirst({
       where: whereClause
     });
-    console.log("\u{1F50D} [WEBSITES PUT] R\xE9sultat recherche:", existingWebsite ? "TROUV\xC9" : "NON TROUV\xC9");
+    logger.debug("\u{1F50D} [WEBSITES PUT] R\xE9sultat recherche:", existingWebsite ? "TROUV\xC9" : "NON TROUV\xC9");
     if (existingWebsite) {
-      console.log("\u{1F50D} [WEBSITES PUT] Site trouv\xE9:", {
+      logger.debug("\u{1F50D} [WEBSITES PUT] Site trouv\xE9:", {
         id: existingWebsite.id,
         organizationId: existingWebsite.organizationId,
         siteName: existingWebsite.siteName
       });
     }
     if (!existingWebsite) {
-      console.log("\u{1F50D} [WEBSITES PUT] \u274C Website not found - 404");
+      logger.debug("\u{1F50D} [WEBSITES PUT] \u274C Website not found - 404");
       return res.status(404).json({ error: "Website not found" });
     }
     const updateData = {
@@ -81883,7 +82041,7 @@ router93.put("/websites/:id", authenticateToken, async (req2, res) => {
     if (data.cloudRunDomain !== void 0) updateData.cloudRunDomain = data.cloudRunDomain;
     if (data.cloudRunServiceName !== void 0) updateData.cloudRunServiceName = data.cloudRunServiceName;
     if (data.cloudRunRegion !== void 0) updateData.cloudRunRegion = data.cloudRunRegion;
-    console.log("\u{1F4DD} [WEBSITES] Donn\xE9es de mise \xE0 jour:", updateData);
+    logger.debug("\u{1F4DD} [WEBSITES] Donn\xE9es de mise \xE0 jour:", updateData);
     const updatedWebsite = await db.websites.update({
       where: { id: websiteId },
       data: updateData,
@@ -81891,10 +82049,10 @@ router93.put("/websites/:id", authenticateToken, async (req2, res) => {
         website_configs: true
       }
     });
-    console.log("\u2705 [WEBSITES] Site mis \xE0 jour:", updatedWebsite.id);
+    logger.debug("\u2705 [WEBSITES] Site mis \xE0 jour:", updatedWebsite.id);
     res.json(updatedWebsite);
   } catch (error) {
-    console.error("Error updating website:", error);
+    logger.error("Error updating website:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -81918,7 +82076,7 @@ router93.delete("/websites/:id", authenticateToken, async (req2, res) => {
     });
     res.json({ success: true });
   } catch (error) {
-    console.error("Error deleting website:", error);
+    logger.error("Error deleting website:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -81949,7 +82107,7 @@ router93.post("/websites", authenticateToken, async (req2, res) => {
     });
     res.status(201).json(newWebsite);
   } catch (error) {
-    console.error("Error creating website:", error);
+    logger.error("Error creating website:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -82009,7 +82167,7 @@ router93.get("/websites/:idOrSlug", async (req2, res) => {
     }
     res.json(website);
   } catch (error) {
-    console.error("Error fetching website:", error);
+    logger.error("Error fetching website:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -82032,7 +82190,7 @@ router93.get("/websites/:slug/services", async (req2, res) => {
     });
     res.json(services);
   } catch (error) {
-    console.error("Error fetching services:", error);
+    logger.error("Error fetching services:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -82060,7 +82218,7 @@ router93.get("/websites/:slug/projects", async (req2, res) => {
     });
     res.json(projects);
   } catch (error) {
-    console.error("Error fetching projects:", error);
+    logger.error("Error fetching projects:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -82088,7 +82246,7 @@ router93.get("/websites/:slug/testimonials", async (req2, res) => {
     });
     res.json(testimonials);
   } catch (error) {
-    console.error("Error fetching testimonials:", error);
+    logger.error("Error fetching testimonials:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -82127,7 +82285,7 @@ router93.get("/websites/:slug/blog", async (req2, res) => {
     });
     res.json(blogPosts);
   } catch (error) {
-    console.error("Error fetching blog posts:", error);
+    logger.error("Error fetching blog posts:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -82164,7 +82322,7 @@ router93.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
     }
     res.json(blogPost);
   } catch (error) {
-    console.error("Error fetching blog post:", error);
+    logger.error("Error fetching blog post:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -82173,6 +82331,7 @@ var websites_default = router93;
 // src/api/website-services.ts
 var import_express96 = require("express");
 init_database();
+init_logger();
 var router94 = (0, import_express96.Router)();
 var prisma43 = db;
 router94.get("/website-services/:websiteId", async (req2, res) => {
@@ -82188,7 +82347,7 @@ router94.get("/website-services/:websiteId", async (req2, res) => {
     });
     res.json(services);
   } catch (error) {
-    console.error("Error fetching services:", error);
+    logger.error("Error fetching services:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -82218,7 +82377,7 @@ router94.post("/website-services", async (req2, res) => {
     });
     res.json(service);
   } catch (error) {
-    console.error("Error creating service:", error);
+    logger.error("Error creating service:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -82241,7 +82400,7 @@ router94.put("/website-services/:id", async (req2, res) => {
     });
     res.json(service);
   } catch (error) {
-    console.error("Error updating service:", error);
+    logger.error("Error updating service:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -82253,7 +82412,7 @@ router94.delete("/website-services/:id", async (req2, res) => {
     });
     res.json({ success: true });
   } catch (error) {
-    console.error("Error deleting service:", error);
+    logger.error("Error deleting service:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -82273,7 +82432,7 @@ router94.post("/website-services/reorder", async (req2, res) => {
     );
     res.json({ success: true });
   } catch (error) {
-    console.error("Error reordering services:", error);
+    logger.error("Error reordering services:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -82282,6 +82441,7 @@ var website_services_default = router94;
 // src/api/website-projects.ts
 var import_express97 = require("express");
 init_database();
+init_logger();
 var router95 = (0, import_express97.Router)();
 var prisma44 = db;
 router95.get("/website-projects/:websiteId", async (req2, res) => {
@@ -82297,7 +82457,7 @@ router95.get("/website-projects/:websiteId", async (req2, res) => {
     });
     res.json(projects);
   } catch (error) {
-    console.error("Error fetching projects:", error);
+    logger.error("Error fetching projects:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -82326,7 +82486,7 @@ router95.post("/website-projects", async (req2, res) => {
     });
     res.json(project);
   } catch (error) {
-    console.error("Error creating project:", error);
+    logger.error("Error creating project:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -82348,7 +82508,7 @@ router95.put("/website-projects/:id", async (req2, res) => {
     });
     res.json(project);
   } catch (error) {
-    console.error("Error updating project:", error);
+    logger.error("Error updating project:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -82360,7 +82520,7 @@ router95.delete("/website-projects/:id", async (req2, res) => {
     });
     res.json({ success: true });
   } catch (error) {
-    console.error("Error deleting project:", error);
+    logger.error("Error deleting project:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -82380,7 +82540,7 @@ router95.post("/website-projects/reorder", async (req2, res) => {
     );
     res.json({ success: true });
   } catch (error) {
-    console.error("Error reordering projects:", error);
+    logger.error("Error reordering projects:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -82389,6 +82549,7 @@ var website_projects_default = router95;
 // src/api/website-testimonials.ts
 var import_express98 = require("express");
 init_database();
+init_logger();
 var router96 = (0, import_express98.Router)();
 var prisma45 = db;
 router96.get("/website-testimonials/:websiteId", async (req2, res) => {
@@ -82404,7 +82565,7 @@ router96.get("/website-testimonials/:websiteId", async (req2, res) => {
     });
     res.json(testimonials);
   } catch (error) {
-    console.error("Error fetching testimonials:", error);
+    logger.error("Error fetching testimonials:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -82434,7 +82595,7 @@ router96.post("/website-testimonials", async (req2, res) => {
     });
     res.json(testimonial);
   } catch (error) {
-    console.error("Error creating testimonial:", error);
+    logger.error("Error creating testimonial:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -82457,7 +82618,7 @@ router96.put("/website-testimonials/:id", async (req2, res) => {
     });
     res.json(testimonial);
   } catch (error) {
-    console.error("Error updating testimonial:", error);
+    logger.error("Error updating testimonial:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -82469,7 +82630,7 @@ router96.delete("/website-testimonials/:id", async (req2, res) => {
     });
     res.json({ success: true });
   } catch (error) {
-    console.error("Error deleting testimonial:", error);
+    logger.error("Error deleting testimonial:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -82489,7 +82650,7 @@ router96.post("/website-testimonials/reorder", async (req2, res) => {
     );
     res.json({ success: true });
   } catch (error) {
-    console.error("Error reordering testimonials:", error);
+    logger.error("Error reordering testimonials:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -82498,6 +82659,7 @@ var website_testimonials_default = router96;
 // src/api/website-sections.ts
 var import_express99 = __toESM(require("express"), 1);
 init_database();
+init_logger();
 var router97 = import_express99.default.Router();
 router97.get("/website-sections/:websiteId", async (req2, res) => {
   try {
@@ -82512,7 +82674,7 @@ router97.get("/website-sections/:websiteId", async (req2, res) => {
     });
     res.json(sections);
   } catch (error) {
-    console.error("\u274C Erreur r\xE9cup\xE9ration sections:", error);
+    logger.error("\u274C Erreur r\xE9cup\xE9ration sections:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -82540,7 +82702,7 @@ router97.post("/website-sections", async (req2, res) => {
     });
     res.json(section);
   } catch (error) {
-    console.error("\u274C Erreur cr\xE9ation section:", error);
+    logger.error("\u274C Erreur cr\xE9ation section:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -82584,7 +82746,7 @@ router97.put("/website-sections/:id", async (req2, res) => {
     });
     res.json(section);
   } catch (error) {
-    console.error("\u274C Erreur modification section:", error);
+    logger.error("\u274C Erreur modification section:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -82628,7 +82790,7 @@ router97.patch("/website-sections/:id", async (req2, res) => {
     });
     res.json(section);
   } catch (error) {
-    console.error("\u274C Erreur modification section:", error);
+    logger.error("\u274C Erreur modification section:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -82646,7 +82808,7 @@ router97.delete("/website-sections/:id", async (req2, res) => {
     });
     res.json({ success: true });
   } catch (error) {
-    console.error("\u274C Erreur suppression section:", error);
+    logger.error("\u274C Erreur suppression section:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -82663,7 +82825,7 @@ router97.post("/website-sections/reorder", async (req2, res) => {
     );
     res.json({ success: true });
   } catch (error) {
-    console.error("\u274C Erreur r\xE9organisation sections:", error);
+    logger.error("\u274C Erreur r\xE9organisation sections:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -82694,7 +82856,7 @@ router97.post("/website-sections/duplicate/:id", async (req2, res) => {
     });
     res.json(duplicate);
   } catch (error) {
-    console.error("\u274C Erreur duplication section:", error);
+    logger.error("\u274C Erreur duplication section:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -82702,6 +82864,7 @@ var website_sections_default = router97;
 
 // src/api/website-themes.ts
 var import_express100 = require("express");
+init_logger();
 var router98 = (0, import_express100.Router)();
 router98.get("/:websiteId", async (req2, res) => {
   try {
@@ -82714,7 +82877,7 @@ router98.get("/:websiteId", async (req2, res) => {
     }
     res.json(theme);
   } catch (error) {
-    console.error("\u274C [API] Erreur GET theme:", error);
+    logger.error("\u274C [API] Erreur GET theme:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -82726,7 +82889,7 @@ router98.post("/", async (req2, res) => {
     });
     res.status(201).json(theme);
   } catch (error) {
-    console.error("\u274C [API] Erreur POST theme:", error);
+    logger.error("\u274C [API] Erreur POST theme:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -82740,7 +82903,7 @@ router98.put("/:id", async (req2, res) => {
     });
     res.json(theme);
   } catch (error) {
-    console.error("\u274C [API] Erreur PUT theme:", error);
+    logger.error("\u274C [API] Erreur PUT theme:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -82752,7 +82915,7 @@ router98.delete("/:id", async (req2, res) => {
     });
     res.json({ message: "Th\xE8me supprim\xE9 avec succ\xE8s" });
   } catch (error) {
-    console.error("\u274C [API] Erreur DELETE theme:", error);
+    logger.error("\u274C [API] Erreur DELETE theme:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -82761,6 +82924,7 @@ var website_themes_default = router98;
 // src/api/contact-form.ts
 var import_express101 = require("express");
 init_database();
+init_logger();
 var router99 = (0, import_express101.Router)();
 var prisma46 = db;
 var isValidEmail = (email) => {
@@ -82837,7 +83001,7 @@ router99.post("/contact-form", async (req2, res) => {
       submissionId: submission.id
     });
   } catch (error) {
-    console.error("\u274C Erreur lors de la soumission du formulaire:", error);
+    logger.error("\u274C Erreur lors de la soumission du formulaire:", error);
     res.status(500).json({
       success: false,
       message: "Une erreur est survenue. Veuillez r\xE9essayer ou nous contacter directement par t\xE9l\xE9phone."
@@ -82855,7 +83019,7 @@ router99.get("/contact-submissions/:websiteId", async (req2, res) => {
     });
     res.json(submissions);
   } catch (error) {
-    console.error("Erreur r\xE9cup\xE9ration soumissions:", error);
+    logger.error("Erreur r\xE9cup\xE9ration soumissions:", error);
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
@@ -82868,7 +83032,7 @@ router99.patch("/contact-submission/:id/read", async (req2, res) => {
     });
     res.json({ success: true, submission });
   } catch (error) {
-    console.error("Erreur marquage lu:", error);
+    logger.error("Erreur marquage lu:", error);
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
@@ -82890,7 +83054,7 @@ router99.patch("/contact-submission/:id/status", async (req2, res) => {
     });
     res.json({ success: true, submission });
   } catch (error) {
-    console.error("Erreur changement statut:", error);
+    logger.error("Erreur changement statut:", error);
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
@@ -82902,7 +83066,7 @@ router99.delete("/contact-submission/:id", async (req2, res) => {
     });
     res.json({ success: true, message: "Soumission supprim\xE9e" });
   } catch (error) {
-    console.error("Erreur suppression:", error);
+    logger.error("Erreur suppression:", error);
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
@@ -82913,6 +83077,7 @@ var import_express102 = require("express");
 var import_multer = __toESM(require("multer"), 1);
 init_database();
 init_storage();
+init_logger();
 var router100 = (0, import_express102.Router)();
 var prisma47 = db;
 var multerStorage = import_multer.default.memoryStorage();
@@ -82959,7 +83124,7 @@ router100.post("/upload", upload.single("file"), async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\u274C [IMAGE-UPLOAD] Erreur:", error);
+    logger.error("\u274C [IMAGE-UPLOAD] Erreur:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de l'upload",
@@ -83010,7 +83175,7 @@ router100.post("/upload-image", upload.single("image"), async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\u274C Erreur upload image:", error);
+    logger.error("\u274C Erreur upload image:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de l'upload"
@@ -83034,7 +83199,7 @@ router100.get("/images/:websiteId", async (req2, res) => {
       images
     });
   } catch (error) {
-    console.error("Erreur r\xE9cup\xE9ration images:", error);
+    logger.error("Erreur r\xE9cup\xE9ration images:", error);
     res.status(500).json({
       success: false,
       message: "Erreur serveur"
@@ -83056,7 +83221,7 @@ router100.delete("/image/:id", async (req2, res) => {
     try {
       await deleteFile(mediaFile.fileUrl || mediaFile.filePath);
     } catch (err) {
-      console.warn("Fichier d\xE9j\xE0 supprim\xE9 ou inexistant");
+      logger.warn("Fichier d\xE9j\xE0 supprim\xE9 ou inexistant");
     }
     await prisma47.webSiteMediaFile.delete({
       where: { id }
@@ -83066,7 +83231,7 @@ router100.delete("/image/:id", async (req2, res) => {
       message: "Image supprim\xE9e"
     });
   } catch (error) {
-    console.error("Erreur suppression image:", error);
+    logger.error("Erreur suppression image:", error);
     res.status(500).json({
       success: false,
       message: "Erreur serveur"
@@ -83079,6 +83244,7 @@ var image_upload_default = router100;
 var import_express103 = require("express");
 
 // src/services/aiContentService.ts
+init_logger();
 var AIContentService = class {
   geminiService;
   constructor() {
@@ -83280,7 +83446,7 @@ R\xE8gles :
         });
         services.push(service);
       } catch (error) {
-        console.error(`Erreur g\xE9n\xE9ration service ${serviceType}:`, error);
+        logger.error(`Erreur g\xE9n\xE9ration service ${serviceType}:`, error);
       }
     }
     return services;
@@ -83289,6 +83455,7 @@ R\xE8gles :
 var aiContentService = new AIContentService();
 
 // src/api/ai-content.ts
+init_logger();
 var router101 = (0, import_express103.Router)();
 router101.post("/generate-service", async (req2, res) => {
   try {
@@ -83309,7 +83476,7 @@ router101.post("/generate-service", async (req2, res) => {
       content
     });
   } catch (error) {
-    console.error("Erreur g\xE9n\xE9ration service:", error);
+    logger.error("Erreur g\xE9n\xE9ration service:", error);
     res.status(500).json({
       error: "Erreur lors de la g\xE9n\xE9ration du service",
       details: error.message
@@ -83335,7 +83502,7 @@ router101.post("/generate-project", async (req2, res) => {
       content
     });
   } catch (error) {
-    console.error("Erreur g\xE9n\xE9ration projet:", error);
+    logger.error("Erreur g\xE9n\xE9ration projet:", error);
     res.status(500).json({
       error: "Erreur lors de la g\xE9n\xE9ration du projet",
       details: error.message
@@ -83361,7 +83528,7 @@ router101.post("/generate-testimonial", async (req2, res) => {
       content
     });
   } catch (error) {
-    console.error("Erreur g\xE9n\xE9ration t\xE9moignage:", error);
+    logger.error("Erreur g\xE9n\xE9ration t\xE9moignage:", error);
     res.status(500).json({
       error: "Erreur lors de la g\xE9n\xE9ration du t\xE9moignage",
       details: error.message
@@ -83388,7 +83555,7 @@ router101.post("/generate-page", async (req2, res) => {
       content
     });
   } catch (error) {
-    console.error("Erreur g\xE9n\xE9ration page:", error);
+    logger.error("Erreur g\xE9n\xE9ration page:", error);
     res.status(500).json({
       error: "Erreur lors de la g\xE9n\xE9ration de la page",
       details: error.message
@@ -83416,7 +83583,7 @@ router101.post("/optimize-seo", async (req2, res) => {
       suggestions
     });
   } catch (error) {
-    console.error("Erreur optimisation SEO:", error);
+    logger.error("Erreur optimisation SEO:", error);
     res.status(500).json({
       error: "Erreur lors de l'optimisation SEO",
       details: error.message
@@ -83442,7 +83609,7 @@ router101.post("/generate-multiple-services", async (req2, res) => {
       count: services.length
     });
   } catch (error) {
-    console.error("Erreur g\xE9n\xE9ration multiple services:", error);
+    logger.error("Erreur g\xE9n\xE9ration multiple services:", error);
     res.status(500).json({
       error: "Erreur lors de la g\xE9n\xE9ration des services",
       details: error.message
@@ -83454,6 +83621,7 @@ var ai_content_default = router101;
 // src/api/ai.ts
 var import_express104 = __toESM(require("express"), 1);
 var import_generative_ai3 = require("@google/generative-ai");
+init_logger();
 var router102 = import_express104.default.Router();
 var genAI2 = new import_generative_ai3.GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 var MODEL_NAME = "gemini-pro";
@@ -83494,7 +83662,7 @@ router102.post("/generate", async (req2, res) => {
         throw new Error("Pas de JSON trouv\xE9");
       }
     } catch (parseError) {
-      console.warn("[AI] R\xE9ponse non-JSON, conversion en array");
+      logger.warn("[AI] R\xE9ponse non-JSON, conversion en array");
       suggestions = parseNonJSONResponse(text, context);
     }
     const formattedSuggestions = formatSuggestions(suggestions, context);
@@ -83505,7 +83673,7 @@ router102.post("/generate", async (req2, res) => {
       // Pour debug
     });
   } catch (error) {
-    console.error("[AI] Erreur:", error);
+    logger.error("[AI] Erreur:", error);
     res.status(500).json({
       success: false,
       error: error.message || "Erreur lors de la g\xE9n\xE9ration IA",
@@ -83651,13 +83819,13 @@ router102.post("/analyze-section", async (req2, res) => {
         throw new Error("Pas de JSON trouv\xE9");
       }
     } catch (parseError) {
-      console.warn("[AI Analyze] Parsing \xE9chou\xE9, g\xE9n\xE9ration d'analyse par d\xE9faut");
+      logger.warn("[AI Analyze] Parsing \xE9chou\xE9, g\xE9n\xE9ration d'analyse par d\xE9faut");
       analysis = generateFallbackAnalysis(sectionType, content);
     }
     const validatedAnalysis = validateAnalysis(analysis);
     res.json(validatedAnalysis);
   } catch (error) {
-    console.error("[AI Analyze] Erreur:", error);
+    logger.error("[AI Analyze] Erreur:", error);
     res.json(generateFallbackAnalysis(req2.body.sectionType, req2.body.content));
   }
 });
@@ -83784,7 +83952,7 @@ Format de r\xE9ponse : JSON avec { metaTitle, metaDescription, keywords: [], slu
       seo: seoData
     });
   } catch (error) {
-    console.error("[AI SEO] Erreur:", error);
+    logger.error("[AI SEO] Erreur:", error);
     res.status(500).json({
       success: false,
       error: error.message || "Erreur lors de l'optimisation SEO"
@@ -83821,7 +83989,7 @@ Retourne le contenu am\xE9lior\xE9 au format JSON identique \xE0 l'original.`;
       original: content
     });
   } catch (error) {
-    console.error("[AI Improve] Erreur:", error);
+    logger.error("[AI Improve] Erreur:", error);
     res.status(500).json({
       success: false,
       error: error.message || "Erreur lors de l'am\xE9lioration du contenu"
@@ -83876,7 +84044,7 @@ Format de r\xE9ponse : JSON array avec :
       // Max 3 suggestions
     });
   } catch (error) {
-    console.error("[AI Layout] Erreur:", error);
+    logger.error("[AI Layout] Erreur:", error);
     res.json({
       success: true,
       layouts: generateFallbackLayouts(req2.body.itemCount || 6)
@@ -83935,7 +84103,7 @@ Format : JSON array avec :
       palettes: palettes.slice(0, 3)
     });
   } catch (error) {
-    console.error("[AI Palette] Erreur:", error);
+    logger.error("[AI Palette] Erreur:", error);
     res.json({
       success: true,
       palettes: generateFallbackPalettes(req2.body.baseColor || "#1890ff")
@@ -84072,7 +84240,7 @@ router102.post("/measure-image", async (req2, res) => {
     );
     const duration = Date.now() - startTime;
     if (!result.success) {
-      console.error(`\u274C [AI Measure] \xC9chec apr\xE8s ${duration}ms:`, result.error);
+      logger.error(`\u274C [AI Measure] \xC9chec apr\xE8s ${duration}ms:`, result.error);
       return res.status(500).json({
         success: false,
         error: result.error || "Erreur lors de l'analyse de l'image",
@@ -84093,7 +84261,7 @@ router102.post("/measure-image", async (req2, res) => {
     });
   } catch (error) {
     const duration = Date.now() - startTime;
-    console.error("\u274C [AI Measure] Erreur:", error);
+    logger.error("\u274C [AI Measure] Erreur:", error);
     return res.status(500).json({
       success: false,
       error: error.message || "Erreur interne",
@@ -84151,7 +84319,7 @@ router102.post("/measure-image/apply", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\u274C [AI Measure Apply] Erreur:", error);
+    logger.error("\u274C [AI Measure Apply] Erreur:", error);
     return res.status(500).json({
       success: false,
       error: error.message || "Erreur interne"
@@ -84182,6 +84350,7 @@ var ai_default2 = router102;
 
 // src/routes/ai-field-generator.ts
 var import_express105 = __toESM(require("express"), 1);
+init_logger();
 var router103 = import_express105.default.Router();
 var geminiService3 = getGeminiService();
 router103.use(authMiddleware);
@@ -84677,6 +84846,7 @@ var ai_field_generator_default = router103;
 var import_express106 = require("express");
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-blueprint-builder.ts
+init_logger();
 var parseJsonArray = (value) => {
   if (!value) return [];
   try {
@@ -84688,7 +84858,7 @@ var parseJsonArray = (value) => {
 };
 async function buildBlueprintForRepeater(prisma50, repeaterNodeId) {
   if (!repeaterNodeId) {
-    console.warn(`[repeat-blueprint-builder] Missing repeaterNodeId`);
+    logger.warn(`[repeat-blueprint-builder] Missing repeaterNodeId`);
     return null;
   }
   const cached = captureRepeatTemplate(repeaterNodeId);
@@ -84714,7 +84884,7 @@ async function buildBlueprintForRepeater(prisma50, repeaterNodeId) {
         totalField: cached.totalField
       };
     }
-    console.warn("[repeat-blueprint-builder] Cached blueprint invalid, falling back to Prisma lookup", {
+    logger.warn("[repeat-blueprint-builder] Cached blueprint invalid, falling back to Prisma lookup", {
       repeaterNodeId,
       candidateTemplateIds
     });
@@ -84729,7 +84899,7 @@ async function buildBlueprintForRepeater(prisma50, repeaterNodeId) {
     }
   });
   if (!repeaterNode) {
-    console.warn(`[repeat-blueprint-builder] \xC3\xA2\xC2\x9D\xC5\u2019 Repeater node not found: ${repeaterNodeId}`);
+    logger.warn(`[repeat-blueprint-builder] \xC3\xA2\xC2\x9D\xC5\u2019 Repeater node not found: ${repeaterNodeId}`);
     return null;
   }
   const extractedIds = extractTemplateIds(repeaterNode);
@@ -84740,7 +84910,7 @@ async function buildBlueprintForRepeater(prisma50, repeaterNodeId) {
     candidateTemplateNodeIds
   );
   if (!templateNodeIds.length) {
-    console.warn(`[repeat-blueprint-builder] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F No valid templates found!`);
+    logger.warn(`[repeat-blueprint-builder] \xC3\xA2\xC5\xA1\xC2\xA0\xC3\xAF\xC2\xB8\xC2\x8F No valid templates found!`);
     return {
       repeaterNodeId,
       templateNodeIds: [],
@@ -84885,7 +85055,7 @@ function extractTemplateIds(node) {
   if (fromColumn.length) {
     return fromColumn;
   }
-  console.warn(`\xC3\xA2\xC2\x9D\xC5\u2019 [extractTemplateIds] Aucun template trouv\xC3\u0192\xC2\xA9 !`);
+  logger.warn(`\xC3\xA2\xC2\x9D\xC5\u2019 [extractTemplateIds] Aucun template trouv\xC3\u0192\xC2\xA9 !`);
   return [];
 }
 function extractTotalFieldConfig(metadata) {
@@ -84917,7 +85087,7 @@ async function filterExistingTemplateNodeIds(prisma50, repeaterNodeId, candidate
   const validIds = normalized.filter((id) => existingSet.has(id));
   const missingIds = normalized.filter((id) => !existingSet.has(id));
   if (missingIds.length) {
-    console.warn("[repeat-blueprint-builder] Missing template nodes detected", {
+    logger.warn("[repeat-blueprint-builder] Missing template nodes detected", {
       repeaterNodeId,
       missingCount: missingIds.length,
       missingIds
@@ -85046,6 +85216,7 @@ async function computeTemplateCopySuffixMax(prisma50, treeId, templateNodeIds) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-service.ts
+init_logger();
 var RepeatOperationError = class extends Error {
   status;
   details;
@@ -85154,7 +85325,7 @@ async function executeRepeatDuplication(prisma50, repeaterNodeId, options = {}) 
       operations
     };
   } catch (error) {
-    console.error(`[repeat-service] \xC3\xA2\xC2\x9D\xC5\u2019 ERROR in executeRepeatDuplication:`, error instanceof Error ? error.stack : String(error));
+    logger.error(`[repeat-service] \xC3\xA2\xC2\x9D\xC5\u2019 ERROR in executeRepeatDuplication:`, error instanceof Error ? error.stack : String(error));
     throw error;
   }
 }
@@ -85163,6 +85334,7 @@ async function executeRepeatDuplication(prisma50, repeaterNodeId, options = {}) 
 var import_client9 = require("@prisma/client");
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-variable-with-capacities.ts
+init_logger();
 function parseSourceRef2(sourceRef) {
   if (!sourceRef || typeof sourceRef !== "string") return null;
   const cleaned = sourceRef.trim();
@@ -85261,7 +85433,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
       where: { id: originalVarId }
     });
     if (!originalVar) {
-      console.error(`\xE2\x9D\u0152 Variable introuvable: ${originalVarId}`);
+      logger.error(`\xE2\x9D\u0152 Variable introuvable: ${originalVarId}`);
       return {
         variableId: "",
         exposedKey: "",
@@ -85309,7 +85481,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
                 newSourceRef = applySuffixToSourceRef2(originalVar.sourceRef, Number(suffix));
               }
             } catch (e) {
-              console.error(`\xE2\x9D\u0152 [COPY-VAR] Exception copie formule:`, e.message, e.stack);
+              logger.error(`\xE2\x9D\u0152 [COPY-VAR] Exception copie formule:`, e.message, e.stack);
               newSourceRef = applySuffixToSourceRef2(originalVar.sourceRef, Number(suffix));
             }
           }
@@ -85333,7 +85505,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
                 newSourceRef = applySuffixToSourceRef2(originalVar.sourceRef, suffix);
               }
             } catch (e) {
-              console.error(`\xE2\x9D\u0152 Exception copie condition:`, e.message);
+              logger.error(`\xE2\x9D\u0152 Exception copie condition:`, e.message);
               newSourceRef = applySuffixToSourceRef2(originalVar.sourceRef, suffix);
             }
           }
@@ -85357,7 +85529,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
                 newSourceRef = applySuffixToSourceRef2(originalVar.sourceRef, suffix);
               }
             } catch (e) {
-              console.error(`\xE2\x9D\u0152 Exception copie table:`, e.message);
+              logger.error(`\xE2\x9D\u0152 Exception copie table:`, e.message);
               newSourceRef = applySuffixToSourceRef2(originalVar.sourceRef, suffix);
             }
           }
@@ -85518,10 +85690,10 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
                 if (tableResult.success) {
                   tableIdMap2.set(originalTableId, tableResult.newTableId);
                 } else {
-                  console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F [COPY-TABLES] \xC3\u2030chec copie table ${originalTableId}: ${tableResult.error}`);
+                  logger.warn(`\xE2\u0161\xA0\xEF\xB8\x8F [COPY-TABLES] \xC3\u2030chec copie table ${originalTableId}: ${tableResult.error}`);
                 }
               } catch (e) {
-                console.error(`\xE2\x9D\u0152 [COPY-TABLES] Exception copie table ${originalTableId}:`, e.message);
+                logger.error(`\xE2\x9D\u0152 [COPY-TABLES] Exception copie table ${originalTableId}:`, e.message);
               }
             }
             await prisma50.treeBranchLeafNode.update({
@@ -85530,10 +85702,10 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
             });
           }
         } else {
-          console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Impossible de r\xC3\xA9cup\xC3\xA9rer le n\xC5\u201Cud propri\xC3\xA9taire original ${originalVar.nodeId}. Fallback newNodeId.`);
+          logger.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Impossible de r\xC3\xA9cup\xC3\xA9rer le n\xC5\u201Cud propri\xC3\xA9taire original ${originalVar.nodeId}. Fallback newNodeId.`);
         }
       } catch (e) {
-        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur lors de la cr\xC3\xA9ation du n\xC5\u201Cud d'affichage d\xC3\xA9di\xC3\xA9:`, e.message);
+        logger.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur lors de la cr\xC3\xA9ation du n\xC5\u201Cud d'affichage d\xC3\xA9di\xC3\xA9:`, e.message);
       }
     } else {
     }
@@ -85545,7 +85717,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
         newVarId = adjusted;
       }
     } catch (e) {
-      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F V\xC3\xA9rification collision id variable \xC3\xA9chou\xC3\xA9e:`, e.message);
+      logger.warn(`\xE2\u0161\xA0\xEF\xB8\x8F V\xC3\xA9rification collision id variable \xC3\xA9chou\xC3\xA9e:`, e.message);
     }
     try {
       const existingByKey = await prisma50.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey: newExposedKey } });
@@ -85555,7 +85727,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
         newExposedKey = adjustedKey;
       }
     } catch (e) {
-      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F V\xC3\xA9rification collision exposedKey \xC3\xA9chou\xC3\xA9e:`, e.message);
+      logger.warn(`\xE2\u0161\xA0\xEF\xB8\x8F V\xC3\xA9rification collision exposedKey \xC3\xA9chou\xC3\xA9e:`, e.message);
     }
     let _reusingExistingVariable = false;
     let _existingVariableForReuse = null;
@@ -85581,12 +85753,12 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
           });
           await addToNodeLinkedField8(prisma50, finalNodeId, "linkedVariableIds", [existingForNode.id]);
         } catch (e) {
-          console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur MAJ display node (r\xC3\xA9utilisation):`, e.message);
+          logger.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur MAJ display node (r\xC3\xA9utilisation):`, e.message);
         }
         variableCopyCache.set(originalVarId, existingForNode.id);
       }
     } catch (e) {
-      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F V\xC3\xA9rification variable existante par nodeId \xC3\xA9chou\xC3\xA9e:`, e.message);
+      logger.warn(`\xE2\u0161\xA0\xEF\xB8\x8F V\xC3\xA9rification variable existante par nodeId \xC3\xA9chou\xC3\xA9e:`, e.message);
     }
     let newVariable;
     if (cachedVariable) {
@@ -85621,7 +85793,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
     });
     if (verification) {
     } else {
-      console.error(`\xE2\x9D\u0152\xE2\x9D\u0152\xE2\x9D\u0152 PROBL\xC3\u02C6ME GRAVE: Variable ${newVariable.id} N'EXISTE PAS apr\xC3\xA8s cr\xC3\xA9ation !`);
+      logger.error(`\xE2\x9D\u0152\xE2\x9D\u0152\xE2\x9D\u0152 PROBL\xC3\u02C6ME GRAVE: Variable ${newVariable.id} N'EXISTE PAS apr\xC3\xA8s cr\xC3\xA9ation !`);
     }
     try {
       await prisma50.treeBranchLeafNode.update({
@@ -85640,7 +85812,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
         }
       });
     } catch (e) {
-      console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur lors de la mise \xC3\xA0 jour des param\xC3\xA8tres capacit\xC3\xA9 (display node):`, e.message);
+      logger.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur lors de la mise \xC3\xA0 jour des param\xC3\xA8tres capacit\xC3\xA9 (display node):`, e.message);
     }
     if (linkToDisplaySection) {
       try {
@@ -85664,13 +85836,13 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
           }
         }
       } catch (e) {
-        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur lors du linkage vers la section d'affichage:`, e.message);
+        logger.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur lors du linkage vers la section d'affichage:`, e.message);
       }
     } else if (autoCreateDisplayNode) {
       try {
         await addToNodeLinkedField8(prisma50, finalNodeId, "linkedVariableIds", [newVariable.id]);
       } catch (e) {
-        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur linkage variable\xE2\u2020\u2019display node:`, e.message);
+        logger.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur linkage variable\xE2\u2020\u2019display node:`, e.message);
       }
       try {
         if (capacityType && newSourceRef) {
@@ -85713,7 +85885,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
           }
         }
       } catch (e) {
-        console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Synchronisation capacit\xC3\xA9s condition/table sur le n\xC5\u201Cud d'affichage:`, e.message);
+        logger.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Synchronisation capacit\xC3\xA9s condition/table sur le n\xC5\u201Cud d'affichage:`, e.message);
       }
     }
     variableCopyCache.set(cacheKey, newVariable.id);
@@ -85747,7 +85919,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
             }
           }
         } catch (e) {
-          console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur MAJ bidirectionnelle:`, e.message);
+          logger.warn(`\xE2\u0161\xA0\xEF\xB8\x8F Erreur MAJ bidirectionnelle:`, e.message);
         }
       }
     }
@@ -85761,7 +85933,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
       // ðŸ”‘ IMPORTANT: Retourner l'ID du display node crÃ©Ã©!
     };
   } catch (error) {
-    console.error(`\xE2\x9D\u0152 Erreur lors de la copie de la variable:`, error);
+    logger.error(`\xE2\x9D\u0152 Erreur lors de la copie de la variable:`, error);
     return {
       variableId: "",
       exposedKey: "",
@@ -85781,7 +85953,7 @@ async function addToNodeLinkedField8(prisma50, nodeId, field, idsToAdd) {
     select: { [field]: true }
   });
   if (!node) {
-    console.warn(`\xE2\u0161\xA0\xEF\xB8\x8F N\xC5\u201Cud ${nodeId} introuvable pour MAJ ${field}`);
+    logger.warn(`\xE2\u0161\xA0\xEF\xB8\x8F N\xC5\u201Cud ${nodeId} introuvable pour MAJ ${field}`);
     return;
   }
   const current = node[field] || [];
@@ -85793,6 +85965,7 @@ async function addToNodeLinkedField8(prisma50, nodeId, field, idsToAdd) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/shared/shared-reference-helpers.ts
+init_logger();
 async function applySharedReferencesFromOriginalInternal2(params) {
   const { prisma: prisma50, nodeId, authCtx } = params;
   const { organizationId, isSuperAdmin: isSuperAdmin2 } = authCtx;
@@ -85971,10 +86144,10 @@ async function applySharedReferencesFromOriginalInternal2(params) {
               }
             );
             if (!copyResult.success) {
-              console.warn(`\u26A0\uFE0F [SHARED-REF] \xC9chec copie variable ${originalVarId}: ${copyResult.error}`);
+              logger.warn(`\u26A0\uFE0F [SHARED-REF] \xC9chec copie variable ${originalVarId}: ${copyResult.error}`);
             }
           } catch (e) {
-            console.warn(`\u26A0\uFE0F [SHARED-REF] Erreur copie variable ${originalVarId}:`, e.message);
+            logger.warn(`\u26A0\uFE0F [SHARED-REF] Erreur copie variable ${originalVarId}:`, e.message);
           }
         }
       }
@@ -85992,7 +86165,7 @@ async function applySharedReferencesFromOriginalInternal2(params) {
       select: { id: true }
     });
     if (!copyExists) {
-      console.warn(`\u26A0\uFE0F N\u0153ud ${copyId} introuvable pour MAJ linkedConditionIds`);
+      logger.warn(`\u26A0\uFE0F N\u0153ud ${copyId} introuvable pour MAJ linkedConditionIds`);
       continue;
     }
     const origMultiple = Array.isArray(orig.sharedReferenceIds) ? orig.sharedReferenceIds.filter(Boolean) : [];
@@ -86020,6 +86193,7 @@ async function applySharedReferencesFromOriginalInternal2(params) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/batch-post-duplication.ts
+init_logger();
 async function batchPostDuplicationProcessing(prisma50, copiedNodeIds) {
   const result = {
     processedCount: 0,
@@ -86087,7 +86261,7 @@ async function batchPostDuplicationProcessing(prisma50, copiedNodeIds) {
         try {
           await op;
         } catch (e) {
-          console.error(`[BATCH-POST-DUP] Individual update failed:`, e.message);
+          logger.error(`[BATCH-POST-DUP] Individual update failed:`, e.message);
         }
       }
     }
@@ -86097,6 +86271,7 @@ async function batchPostDuplicationProcessing(prisma50, copiedNodeIds) {
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/table-lookup-duplication-service.ts
 var import_crypto36 = require("crypto");
+init_logger();
 var TableLookupDuplicationService = class {
   /**
    * Duplique complÃƒÂ¨tement les tables TBL et leurs configurations SELECT associÃƒÂ©es
@@ -86172,8 +86347,8 @@ var TableLookupDuplicationService = class {
         await this.duplicateTableAndSelectConfig(prisma50, selectConfig, copiedNodeId, suffixToken);
       }
     } catch (error) {
-      console.error(`[TBL-DUP] ERROR: ${error instanceof Error ? error.message : String(error)}`);
-      if (error instanceof Error) console.error(`[TBL-DUP] Stack: ${error.stack}`);
+      logger.error(`[TBL-DUP] ERROR: ${error instanceof Error ? error.message : String(error)}`);
+      if (error instanceof Error) logger.error(`[TBL-DUP] Stack: ${error.stack}`);
       throw error;
     }
   }
@@ -86228,13 +86403,13 @@ var TableLookupDuplicationService = class {
             });
             nodeOwnerExists = createdNode;
           } catch (err) {
-            console.error(`[TBL-DUP] \u274C Failed to create stub node: ${err.message}`);
+            logger.error(`[TBL-DUP] \u274C Failed to create stub node: ${err.message}`);
             throw err;
           }
         }
       }
       if (!nodeOwnerExists) {
-        console.warn(
+        logger.warn(
           `[TBL-DUP] Cannot duplicate table: owner node "${copiedTableOwnerNodeId}" doesn't exist`
         );
         return;
@@ -86260,11 +86435,11 @@ var TableLookupDuplicationService = class {
             select: { id: true }
           });
           if (linkTargetNode) {
-            console.log(`[TBL-DUP] \u{1F517} sourceField resolved: ${originalId} \u2192 LINK target ${linkTargetSuffixed}`);
+            logger.debug(`[TBL-DUP] \u{1F517} sourceField resolved: ${originalId} \u2192 LINK target ${linkTargetSuffixed}`);
             return linkTargetSuffixed;
           }
         }
-        console.warn(`[TBL-DUP] \u26A0\uFE0F Node ${suffixedId} not found, LINK resolution failed. Using suffixed ID anyway.`);
+        logger.warn(`[TBL-DUP] \u26A0\uFE0F Node ${suffixedId} not found, LINK resolution failed. Using suffixed ID anyway.`);
         return suffixedId;
       };
       const rewrittenMeta = await (async () => {
@@ -86449,12 +86624,12 @@ var TableLookupDuplicationService = class {
             });
           }
         } catch (nodeUpdateErr) {
-          console.warn(`   \u26A0\uFE0F Warning updating node ${copiedNodeId} capabilities:`, nodeUpdateErr.message);
+          logger.warn(`   \u26A0\uFE0F Warning updating node ${copiedNodeId} capabilities:`, nodeUpdateErr.message);
         }
       } else {
       }
     } catch (error) {
-      console.error(`\u274C Erreur duplication table/config ${originalTableId}:`, error);
+      logger.error(`\u274C Erreur duplication table/config ${originalTableId}:`, error);
       throw error;
     }
   }
@@ -86483,7 +86658,7 @@ var TableLookupDuplicationService = class {
         }
       }
     } catch (error) {
-      console.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [TableLookupDuplication] Erreur r\xC3\u0192\xC2\xA9paration:`, error);
+      logger.error(`\xC3\xA2\xC2\x9D\xC5\u2019 [TableLookupDuplication] Erreur r\xC3\u0192\xC2\xA9paration:`, error);
       throw error;
     }
   }
@@ -86495,6 +86670,7 @@ function normalizeNodeBase(value) {
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/recalculate-with-interpreter.ts
 init_operation_interpreter();
+init_logger();
 async function recalculateAllCopiedNodesWithOperationInterpreter(prisma50, repeaterNodeId, suffixMarker = "-1", precomputedNodeIds) {
   const report = {
     totalNodes: 0,
@@ -86574,7 +86750,7 @@ async function recalculateAllCopiedNodesWithOperationInterpreter(prisma50, repea
         });
       }
     }
-    console.log(`[PERF] Recalc: ${nodesWithCapacity.length}/${allNodes.length} nodes have capacities`);
+    logger.debug(`[PERF] Recalc: ${nodesWithCapacity.length}/${allNodes.length} nodes have capacities`);
     const CHUNK_SIZE = 10;
     for (let chunkStart = 0; chunkStart < nodesWithCapacity.length; chunkStart += CHUNK_SIZE) {
       const chunk = nodesWithCapacity.slice(chunkStart, chunkStart + CHUNK_SIZE);
@@ -86612,7 +86788,7 @@ async function recalculateAllCopiedNodesWithOperationInterpreter(prisma50, repea
           }
         } catch (interpretError) {
           result.error = `Erreur interpretReference: ${interpretError instanceof Error ? interpretError.message : String(interpretError)}`;
-          console.warn(`[recalculate-with-interpreter] ${result.error}`);
+          logger.warn(`[recalculate-with-interpreter] ${result.error}`);
         }
         return result;
       }));
@@ -86627,7 +86803,7 @@ async function recalculateAllCopiedNodesWithOperationInterpreter(prisma50, repea
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     report.errors.push({ nodeId: repeaterNodeId, error: `Erreur globale: ${errorMsg}` });
-    console.error(`[recalculate-with-interpreter] Erreur globale: ${errorMsg}`);
+    logger.error(`[recalculate-with-interpreter] Erreur globale: ${errorMsg}`);
   }
   return report;
 }
@@ -86691,6 +86867,7 @@ async function syncRepeaterTemplateIds(prisma50, repeaterNodeId, templateNodeIds
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-executor.ts
+init_logger();
 async function runRepeatExecution(prisma50, req2, execution) {
   const { repeaterNodeId, scopeId, plan, blueprint } = execution;
   const authCtx = getAuthCtx(req2);
@@ -86763,7 +86940,7 @@ async function runRepeatExecution(prisma50, req2, execution) {
   const _preloadedTreeNodes = await prisma50.treeBranchLeafNode.findMany({ where: { treeId: repeaterNode.treeId } });
   const _preloadedTreeNodesById = new Map(_preloadedTreeNodes.map((n) => [n.id, n]));
   const _t1 = Date.now();
-  console.log(`[PERF] Setup: ${_t1 - _t0}ms`);
+  logger.debug(`[PERF] Setup: ${_t1 - _t0}ms`);
   const templateErrors = [];
   await Promise.all(nodesToDuplicate.map(async (template) => {
     try {
@@ -86792,7 +86969,7 @@ async function runRepeatExecution(prisma50, req2, execution) {
           return { result, appliedSuffix: forcedSuffix };
         } catch (error) {
           if (forcedSuffix !== void 0 && isUniqueConstraintError(error)) {
-            console.warn("[repeat-executor] Forced suffix already exists, retrying with auto suffix", {
+            logger.warn("[repeat-executor] Forced suffix already exists, retrying with auto suffix", {
               templateId: template.id,
               forcedSuffix
             });
@@ -86914,7 +87091,7 @@ async function runRepeatExecution(prisma50, req2, execution) {
                 );
               }
             } catch (childErr) {
-              console.error(`[REPEAT-EXECUTOR] Erreur traitement triggers pour enfant ${childId}:`, childErr);
+              logger.error(`[REPEAT-EXECUTOR] Erreur traitement triggers pour enfant ${childId}:`, childErr);
             }
           }
           if (childUpdateOps.length > 0) {
@@ -86972,7 +87149,7 @@ async function runRepeatExecution(prisma50, req2, execution) {
           authCtx
         });
       } catch (sharedErr) {
-        console.warn("[repeat-executor] Failed to apply shared references", sharedErr);
+        logger.warn("[repeat-executor] Failed to apply shared references", sharedErr);
       }
       try {
         const selectorOptions = {
@@ -86988,10 +87165,10 @@ async function runRepeatExecution(prisma50, req2, execution) {
           effectiveSuffix
         );
       } catch (selectorErr) {
-        console.warn("[repeat-executor] Failed to copy selector tables", selectorErr);
+        logger.warn("[repeat-executor] Failed to copy selector tables", selectorErr);
       }
     } catch (nodeExecErr) {
-      console.error(`[repeat-executor] Error during execution for template ${template?.id || "unknown"}:`, nodeExecErr instanceof Error ? nodeExecErr.stack || nodeExecErr.message : String(nodeExecErr));
+      logger.error(`[repeat-executor] Error during execution for template ${template?.id || "unknown"}:`, nodeExecErr instanceof Error ? nodeExecErr.stack || nodeExecErr.message : String(nodeExecErr));
       templateErrors.push(nodeExecErr instanceof Error ? nodeExecErr : new Error(String(nodeExecErr)));
     }
   }));
@@ -86999,7 +87176,7 @@ async function runRepeatExecution(prisma50, req2, execution) {
     throw templateErrors[0];
   }
   const _t2 = Date.now();
-  console.log(`[PERF] Template duplication loop: ${_t2 - _t1}ms`);
+  logger.debug(`[PERF] Template duplication loop: ${_t2 - _t1}ms`);
   const allTemplateVarIds = [...new Set(plan.variables.map((v) => v.templateVariableId))];
   const templateVarsMap = /* @__PURE__ */ new Map();
   const fullVarsMap = /* @__PURE__ */ new Map();
@@ -87072,7 +87249,7 @@ async function runRepeatExecution(prisma50, req2, execution) {
     if (realTargetNodeId) {
       targetNodeId = realTargetNodeId;
     } else {
-      console.warn(`[REPEAT-EXECUTOR] No mapping for targetNodeId "${targetNodeId}", using directly`);
+      logger.warn(`[REPEAT-EXECUTOR] No mapping for targetNodeId "${targetNodeId}", using directly`);
     }
     varTasks.push({ templateVariableId, targetNodeId, plannedSuffix });
   }
@@ -87157,7 +87334,7 @@ async function runRepeatExecution(prisma50, req2, execution) {
         );
         return { task, result: variableResult };
       } catch (varErr) {
-        console.error(`[repeat-executor] Erreur copie variable ${task.templateVariableId}:`, varErr instanceof Error ? varErr.stack || varErr.message : String(varErr));
+        logger.error(`[repeat-executor] Erreur copie variable ${task.templateVariableId}:`, varErr instanceof Error ? varErr.stack || varErr.message : String(varErr));
         failedVarTasks.push(task);
         return { task, result: null };
       }
@@ -87167,7 +87344,7 @@ async function runRepeatExecution(prisma50, req2, execution) {
     }
   }
   if (failedVarTasks.length > 0) {
-    console.warn(`[repeat-executor] ${failedVarTasks.length} variable(s) \xE9chou\xE9e(s), retry s\xE9quentiel...`);
+    logger.warn(`[repeat-executor] ${failedVarTasks.length} variable(s) \xE9chou\xE9e(s), retry s\xE9quentiel...`);
     for (const task of failedVarTasks) {
       try {
         const retryResult = await copyVariableWithCapacities(
@@ -87179,25 +87356,25 @@ async function runRepeatExecution(prisma50, req2, execution) {
         );
         aggregateResult(retryResult);
         if (retryResult.success) {
-          console.log(`[repeat-executor] \u2705 Retry r\xE9ussi pour variable ${task.templateVariableId}`);
+          logger.debug(`[repeat-executor] \u2705 Retry r\xE9ussi pour variable ${task.templateVariableId}`);
         } else {
           const msg = `Variable ${task.templateVariableId} \u2192 \xE9chec retry: ${retryResult.error || "unknown"}`;
-          console.warn(`[repeat-executor] \u26A0\uFE0F ${msg}`);
+          logger.warn(`[repeat-executor] \u26A0\uFE0F ${msg}`);
           varCopyWarnings.push(msg);
         }
       } catch (retryErr) {
         const msg = `Variable ${task.templateVariableId} \u2192 \xE9chec retry: ${retryErr instanceof Error ? retryErr.message : String(retryErr)}`;
-        console.error(`[repeat-executor] \u274C ${msg}`);
+        logger.error(`[repeat-executor] \u274C ${msg}`);
         varCopyWarnings.push(msg);
       }
     }
   }
   const _t3 = Date.now();
-  console.log(`[PERF] Variable copy loop: ${_t3 - _t2}ms`);
+  logger.debug(`[PERF] Variable copy loop: ${_t3 - _t2}ms`);
   try {
     await syncRepeaterTemplateIds(prisma50, repeaterNodeId, templateNodeIds);
   } catch (syncErr) {
-    console.warn("[repeat-executor] Unable to sync repeater template IDs", syncErr);
+    logger.warn("[repeat-executor] Unable to sync repeater template IDs", syncErr);
   }
   if (duplicatedNodeIds.size > 0) {
     try {
@@ -87242,7 +87419,7 @@ async function runRepeatExecution(prisma50, req2, execution) {
         }
       }
       const _t5 = Date.now();
-      console.log(`[PERF] TBL-DUP: ${_t5 - _t4}ms`);
+      logger.debug(`[PERF] TBL-DUP: ${_t5 - _t4}ms`);
       await reassignCopiedNodesToDuplicatedParents(prisma50, duplicatedNodeIds, originalNodeIdByCopyId);
       const _t5b = Date.now();
       try {
@@ -87253,22 +87430,22 @@ async function runRepeatExecution(prisma50, req2, execution) {
           repeaterNode.treeId
         );
         if (syncResult.created > 0) {
-          console.log(`[repeat-executor] \u{1F512} Safety net: ${syncResult.created} enfant(s) manquant(s) cr\xE9\xE9(s)`);
+          logger.debug(`[repeat-executor] \u{1F512} Safety net: ${syncResult.created} enfant(s) manquant(s) cr\xE9\xE9(s)`);
           for (const id of syncResult.createdIds) {
             duplicatedNodeIds.add(id);
           }
         }
       } catch (syncErr) {
-        console.warn("[repeat-executor] Safety net sync failed (non-blocking):", syncErr.message);
+        logger.warn("[repeat-executor] Safety net sync failed (non-blocking):", syncErr.message);
       }
-      console.log(`[PERF] DisplayNodeChildSync: ${Date.now() - _t5b}ms`);
+      logger.debug(`[PERF] DisplayNodeChildSync: ${Date.now() - _t5b}ms`);
       const _t6 = Date.now();
       const batchResult = await batchPostDuplicationProcessing(
         prisma50,
         Array.from(duplicatedNodeIds)
       );
       const _t7 = Date.now();
-      console.log(`[PERF] batchPostDup: ${_t7 - _t6}ms`);
+      logger.debug(`[PERF] batchPostDup: ${_t7 - _t6}ms`);
       const interpreterRecalcReport = await recalculateAllCopiedNodesWithOperationInterpreter(
         prisma50,
         repeaterNodeId,
@@ -87276,15 +87453,15 @@ async function runRepeatExecution(prisma50, req2, execution) {
         Array.from(duplicatedNodeIds)
       );
       const _t8 = Date.now();
-      console.log(`[PERF] Recalculate interpreter: ${_t8 - _t7}ms`);
-      console.log(`[PERF] === TOTAL: ${_t8 - _t0}ms === | Templates: ${_t2 - _t1}ms | Variables: ${_t3 - _t2}ms | TBL-DUP: ${_t5 - _t4}ms | BatchPost: ${_t7 - _t6}ms | Recalc: ${_t8 - _t7}ms`);
+      logger.debug(`[PERF] Recalculate interpreter: ${_t8 - _t7}ms`);
+      logger.debug(`[PERF] === TOTAL: ${_t8 - _t0}ms === | Templates: ${_t2 - _t1}ms | Variables: ${_t3 - _t2}ms | TBL-DUP: ${_t5 - _t4}ms | BatchPost: ${_t7 - _t6}ms | Recalc: ${_t8 - _t7}ms`);
       interpreterRecalcReport.recalculated.forEach((r) => {
         if (r.hasCapacity && r.newValue) {
         }
       });
     } catch (isolationError) {
       const errMsg = `Erreur post-duplication: ${isolationError instanceof Error ? isolationError.message : String(isolationError)}`;
-      console.warn("[REPEAT-EXECUTOR]", errMsg, isolationError instanceof Error ? isolationError.stack : "");
+      logger.warn("[REPEAT-EXECUTOR]", errMsg, isolationError instanceof Error ? isolationError.stack : "");
       varCopyWarnings.push(errMsg);
     }
   }
@@ -87299,7 +87476,7 @@ async function runRepeatExecution(prisma50, req2, execution) {
     nodesPayload = nodes.map(buildResponseFromColumns);
   }
   if (varCopyWarnings.length > 0) {
-    console.warn(`[repeat-executor] \u26A0\uFE0F ${varCopyWarnings.length} avertissement(s) durant la copie:`, varCopyWarnings);
+    logger.warn(`[repeat-executor] \u26A0\uFE0F ${varCopyWarnings.length} avertissement(s) durant la copie:`, varCopyWarnings);
   }
   return {
     duplicated: duplicatedSummaries,
@@ -87633,7 +87810,7 @@ async function syncMissingDisplayNodeChildren(prisma50, duplicatedNodeIds, origi
             }
           });
           createdIds.push(expectedChildId);
-          console.log(`[repeat-executor] \u{1F512} Enfant manquant cr\xE9\xE9: ${origChild.label} \u2192 ${expectedChildId} (parent: ${copyParentId})`);
+          logger.debug(`[repeat-executor] \u{1F512} Enfant manquant cr\xE9\xE9: ${origChild.label} \u2192 ${expectedChildId} (parent: ${copyParentId})`);
           bfsQueue.push({ origParentId: origChild.id, copyParentId: expectedChildId });
           const origChildVar = await prisma50.treeBranchLeafNodeVariable.findUnique({
             where: { nodeId: origChild.id }
@@ -87721,7 +87898,7 @@ async function syncMissingDisplayNodeChildren(prisma50, duplicatedNodeIds, origi
               copiedFormulaIds.push(newFormulaId);
               localFormulaIdMap.set(f.id, newFormulaId);
             } catch (fErr) {
-              console.warn(`[repeat-executor] Safety net: erreur copie formule ${f.id}:`, fErr.message);
+              logger.warn(`[repeat-executor] Safety net: erreur copie formule ${f.id}:`, fErr.message);
             }
           }
           if (copiedFormulaIds.length > 0) {
@@ -87745,7 +87922,7 @@ async function syncMissingDisplayNodeChildren(prisma50, duplicatedNodeIds, origi
           if (isUniqueConstraintError(createErr)) {
             bfsQueue.push({ origParentId: origChild.id, copyParentId: expectedChildId });
           } else {
-            console.warn(`[repeat-executor] Safety net: erreur cr\xE9ation enfant ${expectedChildId}:`, createErr.message);
+            logger.warn(`[repeat-executor] Safety net: erreur cr\xE9ation enfant ${expectedChildId}:`, createErr.message);
           }
         }
       }
@@ -87755,11 +87932,12 @@ async function syncMissingDisplayNodeChildren(prisma50, duplicatedNodeIds, origi
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts
+init_logger();
 function createRepeatRouter(prisma50) {
-  const router117 = (0, import_express106.Router)();
+  const router118 = (0, import_express106.Router)();
   const inFlightExecuteByRepeater = /* @__PURE__ */ new Set();
-  router117.use(authenticateToken);
-  router117.post("/:repeaterNodeId/instances", async (req2, res) => {
+  router118.use(authenticateToken);
+  router118.post("/:repeaterNodeId/instances", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
     try {
@@ -87784,14 +87962,14 @@ function createRepeatRouter(prisma50) {
           details: error.details ?? null
         });
       }
-      console.error("[repeat-route] Unable to plan duplication", error);
+      logger.error("[repeat-route] Unable to plan duplication", error);
       return res.status(500).json({
         error: "Failed to plan repeat duplication.",
         details: error instanceof Error ? error.message : String(error)
       });
     }
   });
-  router117.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
+  router118.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
     if (inFlightExecuteByRepeater.has(repeaterNodeId)) {
@@ -87835,7 +88013,7 @@ function createRepeatRouter(prisma50) {
         });
       }
       const stack = error instanceof Error ? error.stack || error.message : String(error);
-      console.error("[repeat-route] Unable to execute duplication", stack);
+      logger.error("[repeat-route] Unable to execute duplication", stack);
       return res.status(500).json({
         error: "Failed to execute repeat duplication.",
         details: error instanceof Error ? error.message : String(error)
@@ -87844,7 +88022,7 @@ function createRepeatRouter(prisma50) {
       inFlightExecuteByRepeater.delete(repeaterNodeId);
     }
   });
-  router117.post("/:repeaterId/preload-copies", async (req2, res) => {
+  router118.post("/:repeaterId/preload-copies", async (req2, res) => {
     try {
       const { repeaterId } = req2.params;
       const { targetCount } = req2.body || {};
@@ -87915,7 +88093,7 @@ function createRepeatRouter(prisma50) {
               await deleteNodeWithCascade(prisma50, repeaterNode.treeId, node.id);
               deletedNodes.push(node.id);
             } catch (deleteError) {
-              console.warn(`\u26A0\uFE0F [PRELOAD] Node ${node.id} peut-\xEAtre d\xE9j\xE0 supprim\xE9:`, deleteError.message);
+              logger.warn(`\u26A0\uFE0F [PRELOAD] Node ${node.id} peut-\xEAtre d\xE9j\xE0 supprim\xE9:`, deleteError.message);
             }
           }
         }
@@ -87928,7 +88106,7 @@ function createRepeatRouter(prisma50) {
           if (deletedSD.count > 0) {
           }
         } catch (sdErr) {
-          console.warn(`\u26A0\uFE0F [PRELOAD] Erreur nettoyage SubmissionData:`, sdErr.message);
+          logger.warn(`\u26A0\uFE0F [PRELOAD] Erreur nettoyage SubmissionData:`, sdErr.message);
         }
         try {
           const remainingNodes = await prisma50.treeBranchLeafNode.findMany({
@@ -87939,12 +88117,12 @@ function createRepeatRouter(prisma50) {
             const meta = node.metadata;
             if (meta?.isSumDisplayField === true && meta?.sourceNodeId) {
               updateSumDisplayFieldAfterCopyChange(String(meta.sourceNodeId), prisma50).catch((err) => {
-                console.warn(`[PRELOAD] Erreur mise \xE0 jour champ Total ${node.id}:`, err);
+                logger.warn(`[PRELOAD] Erreur mise \xE0 jour champ Total ${node.id}:`, err);
               });
             }
           }
         } catch (sumErr) {
-          console.warn(`\u26A0\uFE0F [PRELOAD] Erreur mise \xE0 jour sum-total:`, sumErr.message);
+          logger.warn(`\u26A0\uFE0F [PRELOAD] Erreur mise \xE0 jour sum-total:`, sumErr.message);
         }
       }
       if (copiesToCreate > 0) {
@@ -87960,7 +88138,7 @@ function createRepeatRouter(prisma50) {
               createdNodes.push(executionSummary.duplicated.newId);
             }
           } catch (execError) {
-            console.error(`\u274C [PRELOAD] Erreur cr\xE9ation copie ${i + 1}:`, execError);
+            logger.error(`\u274C [PRELOAD] Erreur cr\xE9ation copie ${i + 1}:`, execError);
           }
         }
       }
@@ -87976,11 +88154,11 @@ function createRepeatRouter(prisma50) {
         deletedNodeIds: deletedNodes
       });
     } catch (error) {
-      console.error("\u274C [PRELOAD] Erreur:", error);
+      logger.error("\u274C [PRELOAD] Erreur:", error);
       res.status(500).json({ error: "Erreur lors du pr\xE9-chargement des copies" });
     }
   });
-  return router117;
+  return router118;
 }
 async function deleteNodeWithCascade(prisma50, treeId, nodeId) {
   const allNodes = await prisma50.treeBranchLeafNode.findMany({
@@ -88013,7 +88191,7 @@ async function deleteNodeWithCascade(prisma50, treeId, nodeId) {
       try {
         await tx.treeBranchLeafNode.delete({ where: { id } });
       } catch (err) {
-        console.warn(`[PRELOAD DELETE] Node ${id} peut-\xEAtre d\xE9j\xE0 supprim\xE9`);
+        logger.warn(`[PRELOAD DELETE] Node ${id} peut-\xEAtre d\xE9j\xE0 supprim\xE9`);
       }
     }
   });
@@ -88021,6 +88199,7 @@ async function deleteNodeWithCascade(prisma50, treeId, nodeId) {
 
 // src/api/cloud-run-domains.ts
 var import_express107 = require("express");
+init_logger();
 var router104 = (0, import_express107.Router)();
 router104.get("/cloud-run-domains", authenticateToken, async (req2, res) => {
   try {
@@ -88056,7 +88235,7 @@ router104.get("/cloud-run-domains", authenticateToken, async (req2, res) => {
       count: mappedDomains.length
     });
   } catch (error) {
-    console.error("\u274C [CloudRunDomains] Erreur:", error);
+    logger.error("\u274C [CloudRunDomains] Erreur:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9cup\xE9ration des domaines Cloud Run",
       details: error.message
@@ -88083,7 +88262,7 @@ router104.post("/cloud-run-domains/verify", authenticateToken, async (req2, res)
       verifiedAt: (/* @__PURE__ */ new Date()).toISOString()
     });
   } catch (error) {
-    console.error("\u274C [CloudRunDomains] Erreur v\xE9rification:", error);
+    logger.error("\u274C [CloudRunDomains] Erreur v\xE9rification:", error);
     res.status(500).json({
       error: "Erreur lors de la v\xE9rification du domaine",
       details: error.message
@@ -88112,7 +88291,7 @@ async function checkDomainReachability(domain) {
       req2.end();
     });
   } catch (error) {
-    console.error("\u274C Erreur lors de la v\xE9rification du domaine:", error);
+    logger.error("\u274C Erreur lors de la v\xE9rification du domaine:", error);
     return false;
   }
 }
@@ -88123,6 +88302,7 @@ var import_express108 = require("express");
 var sharpModule = __toESM(require("sharp"), 1);
 
 // src/lib/apriltag-detector-server.ts
+init_logger();
 var apriltagModulePromise = null;
 async function loadApriltagModule() {
   if (!apriltagModulePromise) {
@@ -88132,7 +88312,7 @@ async function loadApriltagModule() {
 }
 async function detectAprilTagsMetreA4(data, width, height, options = {}) {
   try {
-    console.log(`\u{1F3AF} [APRILTAG] D\xE9tection AprilTags M\xE9tr\xE9 A4 V10...`);
+    logger.debug(`\u{1F3AF} [APRILTAG] D\xE9tection AprilTags M\xE9tr\xE9 A4 V10...`);
     const { default: AprilTag, FAMILIES } = await loadApriltagModule();
     const grayscale = new Uint8Array(width * height);
     for (let i = 0; i < width * height; i++) {
@@ -88151,7 +88331,7 @@ async function detectAprilTagsMetreA4(data, width, height, options = {}) {
       decodeSharpening: options.decodeSharpening ?? 0.25
     });
     const detections = detector.detect(width, height, grayscale);
-    console.log(`   \u{1F50D} ${detections.length} AprilTag(s) d\xE9tect\xE9(s)`);
+    logger.debug(`   \u{1F50D} ${detections.length} AprilTag(s) d\xE9tect\xE9(s)`);
     if (detections.length === 0) {
       return [];
     }
@@ -88173,9 +88353,9 @@ async function detectAprilTagsMetreA4(data, width, height, options = {}) {
         distinctPixels.add(key2);
       }
       if (distinctPixels.size < 4) {
-        console.warn(`   \u274C [APRILTAG ID=${detection.id}] D\xE9tection D\xC9G\xC9N\xC9R\xC9E: ${distinctPixels.size} coins distincts au lieu de 4`);
-        corners.forEach((c, i) => console.warn(`      Corner ${i}: (${c.x.toFixed(1)}, ${c.y.toFixed(1)})`));
-        console.warn(`   \u23ED\uFE0F  REJET DE CETTE D\xC9TECTION`);
+        logger.warn(`   \u274C [APRILTAG ID=${detection.id}] D\xE9tection D\xC9G\xC9N\xC9R\xC9E: ${distinctPixels.size} coins distincts au lieu de 4`);
+        corners.forEach((c, i) => logger.warn(`      Corner ${i}: (${c.x.toFixed(1)}, ${c.y.toFixed(1)})`));
+        logger.warn(`   \u23ED\uFE0F  REJET DE CETTE D\xC9TECTION`);
         continue;
       }
       const dist = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
@@ -88184,23 +88364,24 @@ async function detectAprilTagsMetreA4(data, width, height, options = {}) {
       const perimeter = dist(corners[0], corners[1]) + dist(corners[1], corners[2]) + dist(corners[2], corners[3]) + dist(corners[3], corners[0]);
       const diagRatio = Math.min(diag1, diag2) / Math.max(diag1, diag2);
       if (diagRatio < 0.8 || diagRatio > 1.2 || perimeter < 100) {
-        console.warn(`   \u26A0\uFE0F  [APRILTAG ID=${detection.id}] G\xE9om\xE9trie suspecte: diagRatio=${diagRatio.toFixed(2)}, perimeter=${perimeter.toFixed(0)}px`);
+        logger.warn(`   \u26A0\uFE0F  [APRILTAG ID=${detection.id}] G\xE9om\xE9trie suspecte: diagRatio=${diagRatio.toFixed(2)}, perimeter=${perimeter.toFixed(0)}px`);
       }
       const center = {
         x: (corners[0].x + corners[1].x + corners[2].x + corners[3].x) / 4,
         y: (corners[0].y + corners[1].y + corners[2].y + corners[3].y) / 4
       };
       results.push({ id: detection.id, corners, center });
-      console.log(`   \u2705 AprilTag ID=${detection.id} d\xE9tect\xE9 (diag: ${diag1.toFixed(0)}px/${diag2.toFixed(0)}px)`);
+      logger.debug(`   \u2705 AprilTag ID=${detection.id} d\xE9tect\xE9 (diag: ${diag1.toFixed(0)}px/${diag2.toFixed(0)}px)`);
     }
     return results;
   } catch (error) {
-    console.error(`\u274C [APRILTAG] Erreur d\xE9tection:`, error);
+    logger.error(`\u274C [APRILTAG] Erreur d\xE9tection:`, error);
     return [];
   }
 }
 
 // src/utils/homographyUtils.ts
+init_logger();
 function computeHomography(srcPoints, dstPoints) {
   if (srcPoints.length !== 4 || dstPoints.length !== 4) {
     throw new Error("Homography requires exactly 4 points");
@@ -88211,7 +88392,7 @@ function computeHomography(srcPoints, dstPoints) {
   const dstScale = computeAverageDistanceFromCentroid(dstPoints, dstCentroid);
   const normalizedSrc = normalizePoints(srcPoints, srcCentroid, srcScale);
   const normalizedDst = normalizePoints(dstPoints, dstCentroid, dstScale);
-  console.log("\u{1F527} [Homography] Normalisation:", {
+  logger.debug("\u{1F527} [Homography] Normalisation:", {
     srcCentroid: `(${srcCentroid[0].toFixed(1)}, ${srcCentroid[1].toFixed(1)})`,
     srcScale: srcScale.toFixed(2),
     dstCentroid: `(${dstCentroid[0].toFixed(1)}, ${dstCentroid[1].toFixed(1)})`,
@@ -88229,7 +88410,7 @@ function computeHomography(srcPoints, dstPoints) {
   const Hinv = invertMatrix3x3(H);
   const quality = evaluateHomographyQuality(srcPoints, dstPoints, H);
   const uncertainty = estimateUncertainty(quality, srcPoints);
-  console.log(`\u{1F4D0} [Homography] Matrice calcul\xE9e, qualit\xE9: ${quality.toFixed(1)}%, incertitude: \xB1${uncertainty.toFixed(1)}%`);
+  logger.debug(`\u{1F4D0} [Homography] Matrice calcul\xE9e, qualit\xE9: ${quality.toFixed(1)}%, incertitude: \xB1${uncertainty.toFixed(1)}%`);
   return {
     matrix: H,
     inverseMatrix: Hinv,
@@ -88286,7 +88467,7 @@ function solveHomographySystem(A) {
     );
     const xNorm = Math.sqrt(x.reduce((s, v) => s + v * v, 0));
     if (xNorm < EPSILON || !isFinite(xNorm)) {
-      console.warn("\u26A0\uFE0F [Homography] It\xE9ration divergente, arr\xEAt");
+      logger.warn("\u26A0\uFE0F [Homography] It\xE9ration divergente, arr\xEAt");
       break;
     }
     h = x.map((v) => v / xNorm);
@@ -88295,7 +88476,7 @@ function solveHomographySystem(A) {
   const normalized = h.map((v) => v / scale);
   const hasNaN = normalized.some((v) => !isFinite(v));
   if (hasNaN) {
-    console.warn("\u26A0\uFE0F [Homography] Solution invalide (NaN), retour identit\xE9");
+    logger.warn("\u26A0\uFE0F [Homography] Solution invalide (NaN), retour identit\xE9");
     return [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
   }
   return [
@@ -88308,7 +88489,7 @@ function invertMatrix3x3(M) {
   const [[a, b, c], [d, e, f], [g, h, i]] = M;
   const det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
   if (Math.abs(det) < 1e-10) {
-    console.warn("\u26A0\uFE0F [Homography] Matrice singuli\xE8re, retour identit\xE9");
+    logger.warn("\u26A0\uFE0F [Homography] Matrice singuli\xE8re, retour identit\xE9");
     return [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
   }
   const invDet = 1 / det;
@@ -88452,6 +88633,7 @@ function multiplyMatrices3x3(A, B) {
 }
 
 // src/lib/metre-a4-v10-detector.ts
+init_logger();
 var METRE_A4_V10_SPECS = {
   version: "A4-CALIB-V10",
   sheet: {
@@ -88603,7 +88785,7 @@ function ransacHomography(points, iterations = 200, thresholdMm = 3) {
 }
 function buildFallbackFromLargeTag(largeTag, largeSizePx) {
   try {
-    console.log("\u26A0\uFE0F [V10] Fallback: grand tag seul (pr\xE9diction des petits tags)");
+    logger.debug("\u26A0\uFE0F [V10] Fallback: grand tag seul (pr\xE9diction des petits tags)");
     const halfLarge = METRE_A4_V10_SPECS.largeTag.size_mm / 2;
     const largeCenterMm = METRE_A4_V10_SPECS.largeTag.center_mm;
     const largeRealCorners = [
@@ -88687,14 +88869,14 @@ function buildFallbackFromLargeTag(largeTag, largeSizePx) {
       }
     };
   } catch (error) {
-    console.error("\u274C [V10] Fallback grand tag \xE9chou\xE9:", error);
+    logger.error("\u274C [V10] Fallback grand tag \xE9chou\xE9:", error);
     return null;
   }
 }
 async function detectMetreA4V10(data, width, height) {
   const detectedTags = await detectAprilTagsMetreA4(data, width, height);
   if (!detectedTags.length) {
-    console.log("   \u274C [V10] Aucun AprilTag d\xE9tect\xE9");
+    logger.debug("   \u274C [V10] Aucun AprilTag d\xE9tect\xE9");
     return null;
   }
   const tagsWithSize = detectedTags.map((tag) => ({ tag, size: avgSidePx(tag) }));
@@ -88706,7 +88888,7 @@ async function detectMetreA4V10(data, width, height) {
   const smallTarget = largeSize * 0.5;
   const smallCandidates = sortedBySize.slice(1).filter(({ size }) => size >= largeSize * 0.35 && size <= largeSize * 0.7).sort((a, b) => Math.abs(a.size - smallTarget) - Math.abs(b.size - smallTarget)).slice(0, 6);
   if (smallCandidates.length < 6) {
-    console.log(`   \u26A0\uFE0F [V10] Seulement ${smallCandidates.length}/6 petits tags d\xE9tect\xE9s`);
+    logger.debug(`   \u26A0\uFE0F [V10] Seulement ${smallCandidates.length}/6 petits tags d\xE9tect\xE9s`);
     const fallback = buildFallbackFromLargeTag(largeTag, largeSize);
     return fallback;
   }
@@ -88717,7 +88899,7 @@ async function detectMetreA4V10(data, width, height) {
   const [topLeft, topCenter, topRight] = topRow;
   const [bottomLeft, bottomCenter, bottomRight] = bottomRow;
   if (!topLeft || !topCenter || !topRight || !bottomLeft || !bottomCenter || !bottomRight) {
-    console.log("   \u274C [V10] Impossible de classer les 6 tags en lignes");
+    logger.debug("   \u274C [V10] Impossible de classer les 6 tags en lignes");
     return null;
   }
   const topLine = fitLine([topLeft.center, topCenter.center, topRight.center]);
@@ -88798,6 +88980,7 @@ async function detectMetreA4V10(data, width, height) {
 }
 
 // src/services/measurement-calculator.ts
+init_logger();
 function computeObjectDimensions(calibration, objectCorners) {
   const warnings = [];
   const markerWidthCm = 13;
@@ -88833,7 +89016,7 @@ function computeObjectDimensions(calibration, objectCorners) {
   try {
     homography = computeHomography(srcPoints, dstPoints);
   } catch (error) {
-    console.error("\u274C Erreur calcul homographie:", error);
+    logger.error("\u274C Erreur calcul homographie:", error);
     return {
       success: false,
       largeur_cm: 0,
@@ -88944,6 +89127,7 @@ function computeObjectDimensions(calibration, objectCorners) {
 }
 
 // src/api/measurement-reference.ts
+init_logger();
 var sharp = sharpModule.default || sharpModule;
 var router105 = (0, import_express108.Router)();
 router105.post("/ultra-fusion-detect", authenticateToken, async (req2, res) => {
@@ -89056,7 +89240,7 @@ router105.post("/ultra-fusion-detect", authenticateToken, async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\u274C [V10] Erreur ultra-fusion-detect:", error);
+    logger.error("\u274C [V10] Erreur ultra-fusion-detect:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur serveur lors de l\u2019analyse M\xE9tr\xE9 A4 V10"
@@ -89145,7 +89329,7 @@ router105.post("/compute-dimensions-simple", authenticateToken, async (req2, res
       }
     });
   } catch (error) {
-    console.error("\u274C [V10] Erreur compute-dimensions-simple:", error);
+    logger.error("\u274C [V10] Erreur compute-dimensions-simple:", error);
     return res.status(500).json({
       success: false,
       error: "Erreur serveur lors du calcul des dimensions",
@@ -89158,6 +89342,7 @@ var measurement_reference_default = router105;
 // src/api/calendar.ts
 var import_express109 = require("express");
 init_database();
+init_logger();
 var router106 = (0, import_express109.Router)();
 var prisma48 = db;
 router106.get("/events", authMiddleware, async (req2, res) => {
@@ -89248,7 +89433,7 @@ router106.get("/events", authMiddleware, async (req2, res) => {
     });
     res.json(events);
   } catch (error) {
-    console.error("[Calendar API] Erreur lors de la r\xE9cup\xE9ration des \xE9v\xE9nements:", error);
+    logger.error("[Calendar API] Erreur lors de la r\xE9cup\xE9ration des \xE9v\xE9nements:", error);
     res.status(500).json({ error: "Erreur serveur lors de la r\xE9cup\xE9ration des \xE9v\xE9nements" });
   }
 });
@@ -89347,10 +89532,10 @@ router106.post("/events", authMiddleware, async (req2, res) => {
       eventType: "calendar_event",
       entityId: event.id,
       entityLabel: title || "\xC9v\xE9nement"
-    }).catch((err) => console.error("[Calendar API] Auto-post error:", err));
+    }).catch((err) => logger.error("[Calendar API] Auto-post error:", err));
     res.status(201).json(fullEvent);
   } catch (error) {
-    console.error("[Calendar API] Erreur lors de la cr\xE9ation de l'\xE9v\xE9nement:", error);
+    logger.error("[Calendar API] Erreur lors de la cr\xE9ation de l'\xE9v\xE9nement:", error);
     res.status(500).json({ error: "Erreur serveur lors de la cr\xE9ation de l'\xE9v\xE9nement" });
   }
 });
@@ -89445,7 +89630,7 @@ router106.put("/events/:id", authMiddleware, async (req2, res) => {
     }
     res.json(updatedEvent);
   } catch (error) {
-    console.error("[Calendar API] Erreur lors de la modification de l'\xE9v\xE9nement:", error);
+    logger.error("[Calendar API] Erreur lors de la modification de l'\xE9v\xE9nement:", error);
     res.status(500).json({ error: "Erreur serveur lors de la modification de l'\xE9v\xE9nement" });
   }
 });
@@ -89473,7 +89658,7 @@ router106.delete("/events/:id", authMiddleware, async (req2, res) => {
     });
     res.json({ success: true });
   } catch (error) {
-    console.error("[Calendar API] Erreur lors de la suppression de l'\xE9v\xE9nement:", error);
+    logger.error("[Calendar API] Erreur lors de la suppression de l'\xE9v\xE9nement:", error);
     res.status(500).json({ error: "Erreur serveur lors de la suppression de l'\xE9v\xE9nement" });
   }
 });
@@ -89492,7 +89677,7 @@ router106.get("/types", authMiddleware, async (_req, res) => {
     ];
     res.json(types);
   } catch (error) {
-    console.error("[Calendar API] Erreur lors de la r\xE9cup\xE9ration des types:", error);
+    logger.error("[Calendar API] Erreur lors de la r\xE9cup\xE9ration des types:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -89578,7 +89763,7 @@ router106.get("/chantier-events", authMiddleware, async (req2, res) => {
     }));
     res.json(calendarFormatEvents);
   } catch (error) {
-    console.error("[Calendar API] Erreur lors de la r\xE9cup\xE9ration des \xE9v\xE9nements chantier:", error);
+    logger.error("[Calendar API] Erreur lors de la r\xE9cup\xE9ration des \xE9v\xE9nements chantier:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -89635,7 +89820,7 @@ router106.get("/telnyx-calls", authMiddleware, async (req2, res) => {
     });
     res.json(calendarFormatCalls);
   } catch (error) {
-    console.error("[Calendar API] Erreur lors de la r\xE9cup\xE9ration des appels Telnyx:", error);
+    logger.error("[Calendar API] Erreur lors de la r\xE9cup\xE9ration des appels Telnyx:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -89644,6 +89829,7 @@ var calendar_default = router106;
 // src/routes/userFavoritesRoutes.ts
 var import_express110 = require("express");
 init_database();
+init_logger();
 var router107 = (0, import_express110.Router)();
 router107.get("/", authMiddleware, async (req2, res) => {
   try {
@@ -89749,6 +89935,7 @@ var userFavoritesRoutes_default = router107;
 // src/routes/userBookmarksRoutes.ts
 var import_express111 = require("express");
 init_database();
+init_logger();
 var router108 = (0, import_express111.Router)();
 router108.get("/", authMiddleware, async (req2, res) => {
   try {
@@ -89866,6 +90053,7 @@ var userBookmarksRoutes_default = router108;
 var import_express112 = require("express");
 init_database();
 var import_rss_parser = __toESM(require("rss-parser"), 1);
+init_logger();
 var router109 = (0, import_express112.Router)();
 var RSS_PARSER_TIMEOUT_MS = 15e3;
 var FETCH_TIMEOUT_MS = 12e3;
@@ -90616,6 +90804,7 @@ var honeycombRoutes_default = router109;
 // src/routes/userPreferencesRoutes.ts
 var import_express113 = require("express");
 init_database();
+init_logger();
 var router110 = (0, import_express113.Router)();
 router110.get("/", authMiddleware, async (req2, res) => {
   try {
@@ -90715,6 +90904,7 @@ var userPreferencesRoutes_default = router110;
 // src/routes/wax.ts
 var import_express114 = require("express");
 init_database();
+init_logger();
 var router111 = (0, import_express114.Router)();
 router111.use(authenticateToken);
 function extractUser(req2) {
@@ -91209,6 +91399,7 @@ var wax_default = router111;
 // src/routes/website-forms.ts
 var import_express115 = require("express");
 init_database();
+init_logger();
 var router112 = (0, import_express115.Router)();
 var getOrgId4 = (req2) => {
   const orgId = req2.organizationId || req2.headers["x-organization-id"];
@@ -92083,6 +92274,7 @@ var import_axios4 = __toESM(require("axios"), 1);
 init_crypto();
 var import_qrcode = __toESM(require("qrcode"), 1);
 init_storage();
+init_logger();
 async function sendSmsInternal(organizationId, to, text) {
   try {
     const config = await db.telnyxConfig.findUnique({ where: { organizationId } }).catch(() => null);
@@ -92864,6 +93056,7 @@ init_database();
 var import_zod20 = require("zod");
 
 // src/services/peppolBridge.ts
+init_logger();
 var PeppolBridge = class _PeppolBridge {
   config;
   uid = null;
@@ -92989,7 +93182,7 @@ var PeppolBridge = class _PeppolBridge {
         });
         return;
       } catch (e1) {
-        console.warn(`[PeppolBridge] try_loading('be') \xE9chou\xE9:`, e1.message);
+        logger.warn(`[PeppolBridge] try_loading('be') \xE9chou\xE9:`, e1.message);
       }
       try {
         const templates = await this.call("account.chart.template", "search_read", [
@@ -93007,11 +93200,11 @@ var PeppolBridge = class _PeppolBridge {
           return;
         }
       } catch (e2) {
-        console.warn(`[PeppolBridge] res.config.settings chart \xE9chou\xE9:`, e2.message);
+        logger.warn(`[PeppolBridge] res.config.settings chart \xE9chou\xE9:`, e2.message);
       }
       await this.copyEssentialAccounts(odooCompanyId);
     } catch (e) {
-      console.error(`[PeppolBridge] Erreur installation plan comptable pour company ${odooCompanyId}:`, e);
+      logger.error(`[PeppolBridge] Erreur installation plan comptable pour company ${odooCompanyId}:`, e);
     }
     await this.ensureBelgianTaxes(odooCompanyId);
   }
@@ -93024,7 +93217,7 @@ var PeppolBridge = class _PeppolBridge {
       [["account_type", "in", ["income", "income_other"]]]
     ], { fields: ["id", "code", "name", "account_type", "company_id", "reconcile"], limit: 5 });
     if (sourceAccounts.length === 0) {
-      console.warn("[PeppolBridge] Aucun compte source trouv\xE9 pour copie");
+      logger.warn("[PeppolBridge] Aucun compte source trouv\xE9 pour copie");
       return;
     }
     const sourceCompanyId = sourceAccounts[0].company_id[0];
@@ -93043,7 +93236,7 @@ var PeppolBridge = class _PeppolBridge {
         }]);
         created++;
       } catch (e) {
-        console.warn(`[PeppolBridge] Skip compte ${acc.code}: ${e.message?.substring(0, 80)}`);
+        logger.warn(`[PeppolBridge] Skip compte ${acc.code}: ${e.message?.substring(0, 80)}`);
       }
     }
   }
@@ -93090,7 +93283,7 @@ var PeppolBridge = class _PeppolBridge {
         ], { context: companyContext });
       } finally {
         await this.call("res.users", "write", [[adminUid], { company_id: 1 }]).catch(
-          (e) => console.error("[PeppolBridge] Erreur restauration admin company:", e)
+          (e) => logger.error("[PeppolBridge] Erreur restauration admin company:", e)
         );
       }
     }
@@ -93122,7 +93315,7 @@ var PeppolBridge = class _PeppolBridge {
       return { success: true };
     } finally {
       await this.call("res.users", "write", [[adminUid], { company_id: 1 }]).catch(
-        (e) => console.error("[PeppolBridge] Erreur restauration admin company:", e)
+        (e) => logger.error("[PeppolBridge] Erreur restauration admin company:", e)
       );
     }
   }
@@ -93156,7 +93349,7 @@ var PeppolBridge = class _PeppolBridge {
       return { status: state };
     } finally {
       await this.call("res.users", "write", [[adminUid], { company_id: 1 }]).catch(
-        (e) => console.error("[PeppolBridge] Erreur restauration admin company:", e)
+        (e) => logger.error("[PeppolBridge] Erreur restauration admin company:", e)
       );
     }
   }
@@ -93168,7 +93361,7 @@ var PeppolBridge = class _PeppolBridge {
     try {
       await this.call("ir.cron", "method_direct_trigger", [[20]]);
     } catch (e) {
-      console.warn("[PeppolBridge] Cron Peppol trigger \xE9chou\xE9 (non bloquant):", e.message?.substring(0, 100));
+      logger.warn("[PeppolBridge] Cron Peppol trigger \xE9chou\xE9 (non bloquant):", e.message?.substring(0, 100));
     }
     const company = await this.call("res.company", "read", [
       [odooCompanyId]
@@ -93200,7 +93393,7 @@ var PeppolBridge = class _PeppolBridge {
       if (anyAccounts.length > 0) return anyAccounts[0].id;
       return void 0;
     } catch (e) {
-      console.warn("[PeppolBridge] Erreur recherche compte:", e);
+      logger.warn("[PeppolBridge] Erreur recherche compte:", e);
       return void 0;
     }
   }
@@ -93245,7 +93438,7 @@ var PeppolBridge = class _PeppolBridge {
           }]);
           groupMap.set(tg.name, newId);
         } catch (e) {
-          console.warn(`[PeppolBridge]   \u26A0\uFE0F Tax group '${tg.name}' cr\xE9ation \xE9chou\xE9e:`, e.message?.substring(0, 100));
+          logger.warn(`[PeppolBridge]   \u26A0\uFE0F Tax group '${tg.name}' cr\xE9ation \xE9chou\xE9e:`, e.message?.substring(0, 100));
         }
       }
     }
@@ -93255,7 +93448,7 @@ var PeppolBridge = class _PeppolBridge {
       if (existingAmounts.has(key2)) continue;
       const taxGroupId = groupMap.get(tax.groupName);
       if (!taxGroupId) {
-        console.warn(`[PeppolBridge]   \u26A0\uFE0F Pas de tax group '${tax.groupName}' pour la taxe '${tax.name}', skip`);
+        logger.warn(`[PeppolBridge]   \u26A0\uFE0F Pas de tax group '${tax.groupName}' pour la taxe '${tax.name}', skip`);
         continue;
       }
       try {
@@ -93268,7 +93461,7 @@ var PeppolBridge = class _PeppolBridge {
           tax_group_id: taxGroupId
         }]);
       } catch (e) {
-        console.warn(`[PeppolBridge]   \u26A0\uFE0F Taxe '${tax.name}' cr\xE9ation \xE9chou\xE9e:`, e.message?.substring(0, 100));
+        logger.warn(`[PeppolBridge]   \u26A0\uFE0F Taxe '${tax.name}' cr\xE9ation \xE9chou\xE9e:`, e.message?.substring(0, 100));
       }
     }
   }
@@ -93298,7 +93491,7 @@ var PeppolBridge = class _PeppolBridge {
       });
       return true;
     } catch (e) {
-      console.error(`[PeppolBridge] \u274C Wizard Peppol \xE9chou\xE9 pour facture ${odooInvoiceId}:`, e.message);
+      logger.error(`[PeppolBridge] \u274C Wizard Peppol \xE9chou\xE9 pour facture ${odooInvoiceId}:`, e.message);
       return false;
     }
   }
@@ -93354,7 +93547,7 @@ var PeppolBridge = class _PeppolBridge {
         taxCache.set(percent, ids);
         return ids;
       } catch (e) {
-        console.warn(`[PeppolBridge] Impossible de trouver la taxe TVA ${percent}%:`, e);
+        logger.warn(`[PeppolBridge] Impossible de trouver la taxe TVA ${percent}%:`, e);
         return [];
       }
     };
@@ -93362,7 +93555,7 @@ var PeppolBridge = class _PeppolBridge {
     for (const line of invoice.lines) {
       const lineTaxIds = await findTaxForPercent(line.taxPercent);
       if (lineTaxIds.length === 0) {
-        console.warn(`[PeppolBridge] \u26A0\uFE0F Aucune taxe trouv\xE9e pour ${line.taxPercent}% \u2014 UBL requiert au minimum une taxe par ligne !`);
+        logger.warn(`[PeppolBridge] \u26A0\uFE0F Aucune taxe trouv\xE9e pour ${line.taxPercent}% \u2014 UBL requiert au minimum une taxe par ligne !`);
       }
       invoiceLines.push([0, 0, {
         name: line.description,
@@ -93385,7 +93578,7 @@ var PeppolBridge = class _PeppolBridge {
     await this.call("account.move", "action_post", [[odooInvoiceId]]);
     const wizardSuccess = await this.sendViaWizard(odooInvoiceId, odooCompanyId);
     if (!wizardSuccess) {
-      console.error(`[PeppolBridge] \u274C L'envoi Peppol via wizard a \xE9chou\xE9 pour facture ${odooInvoiceId}. Le cron auto-retry prendra le relais.`);
+      logger.error(`[PeppolBridge] \u274C L'envoi Peppol via wizard a \xE9chou\xE9 pour facture ${odooInvoiceId}. Le cron auto-retry prendra le relais.`);
     }
     const createdInvoice = await this.call("account.move", "read", [
       [odooInvoiceId]
@@ -93423,9 +93616,9 @@ var PeppolBridge = class _PeppolBridge {
     } catch (error) {
       const msg = error.message;
       if (msg.includes("Private methods")) {
-        console.warn(`[PeppolBridge] \u26A0\uFE0F _peppol_get_new_documents est priv\xE9 (Odoo 17) \u2014 les crons internes Odoo g\xE8rent le download. On continue avec la lecture des factures existantes.`);
+        logger.warn(`[PeppolBridge] \u26A0\uFE0F _peppol_get_new_documents est priv\xE9 (Odoo 17) \u2014 les crons internes Odoo g\xE8rent le download. On continue avec la lecture des factures existantes.`);
       } else {
-        console.error(`[PeppolBridge] \u274C Erreur fetch incoming documents company ${odooCompanyId}:`, msg);
+        logger.error(`[PeppolBridge] \u274C Erreur fetch incoming documents company ${odooCompanyId}:`, msg);
       }
       return false;
     }
@@ -93471,7 +93664,7 @@ var PeppolBridge = class _PeppolBridge {
           if (p.vat) partnerVatMap[p.id] = p.vat;
         }
       } catch (err) {
-        console.warn(`[PeppolBridge] \u26A0\uFE0F Could not fetch partner VATs:`, err.message);
+        logger.warn(`[PeppolBridge] \u26A0\uFE0F Could not fetch partner VATs:`, err.message);
       }
     }
     return bills.map((bill) => {
@@ -93559,7 +93752,7 @@ var PeppolBridge = class _PeppolBridge {
       [odooCompanyId]
     ], { fields: ["account_peppol_proxy_state"] });
     const newState = updated[0]?.account_peppol_proxy_state;
-    console.log(`[PeppolBridge] Deregistered company ${odooCompanyId}: ${previousState} \u2192 ${newState}`);
+    logger.debug(`[PeppolBridge] Deregistered company ${odooCompanyId}: ${previousState} \u2192 ${newState}`);
     return { success: !newState || newState === "not_registered", previousState };
   }
   /**
@@ -93739,6 +93932,7 @@ var import_express117 = require("express");
 init_database();
 var import_zod19 = require("zod");
 var import_pdfkit4 = __toESM(require("pdfkit"), 1);
+init_logger();
 var router114 = (0, import_express117.Router)();
 function getOrganizationId(req2) {
   return req2.headers["x-organization-id"] || null;
@@ -94705,6 +94899,7 @@ var invoices_default = router114;
 
 // src/routes/peppol.ts
 init_PostalEmailService();
+init_logger();
 var router115 = (0, import_express118.Router)();
 function getOrganizationId2(req2) {
   const fromHeader = req2.headers["x-organization-id"];
@@ -95968,6 +96163,7 @@ var peppol_default = router115;
 var import_express119 = require("express");
 init_database();
 var import_zod21 = require("zod");
+init_logger();
 var router116 = (0, import_express119.Router)();
 var getOrganizationId3 = (req2) => req2.organizationId || req2.headers["x-organization-id"] || null;
 var getUserId3 = (req2) => req2.userId || null;
@@ -96393,9 +96589,959 @@ router116.post("/:id/mark-paid", authenticateToken, async (req2, res) => {
 });
 var expenses_default = router116;
 
+// src/routes/arena.ts
+var import_express120 = require("express");
+init_database();
+
+// src/services/arena/tournamentEngine.ts
+init_database();
+function shuffleArray(array) {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+function generateRandomDraw(teams) {
+  const shuffled = shuffleArray(teams);
+  const matches = [];
+  let matchNumber = 1;
+  for (let i = 0; i < shuffled.length; i += 2) {
+    matches.push({
+      matchNumber,
+      team1Id: shuffled[i].id,
+      team2Id: i + 1 < shuffled.length ? shuffled[i + 1].id : null
+      // bye
+    });
+    matchNumber++;
+  }
+  return matches;
+}
+function generateRoundRobin(teams) {
+  const matches = [];
+  let matchNumber = 1;
+  for (let i = 0; i < teams.length; i++) {
+    for (let j = i + 1; j < teams.length; j++) {
+      matches.push({
+        matchNumber,
+        team1Id: teams[i].id,
+        team2Id: teams[j].id
+      });
+      matchNumber++;
+    }
+  }
+  return matches;
+}
+function generateSingleElimination(teams) {
+  const sorted = teams.some((t) => t.seed != null) ? [...teams].sort((a, b) => (a.seed ?? 999) - (b.seed ?? 999)) : shuffleArray(teams);
+  const bracketSize = Math.pow(2, Math.ceil(Math.log2(sorted.length)));
+  const byes = bracketSize - sorted.length;
+  const matches = [];
+  let matchNumber = 1;
+  const firstRoundTeams = [...sorted];
+  for (let i = 0; i < bracketSize / 2; i++) {
+    const team1 = firstRoundTeams[i] || null;
+    const team2Idx = bracketSize - 1 - i;
+    const team2 = team2Idx < firstRoundTeams.length ? firstRoundTeams[team2Idx] : null;
+    if (team1 && team2) {
+      matches.push({
+        matchNumber,
+        team1Id: team1.id,
+        team2Id: team2.id
+      });
+    } else if (team1) {
+      matches.push({
+        matchNumber,
+        team1Id: team1.id,
+        team2Id: null
+        // bye
+      });
+    }
+    matchNumber++;
+  }
+  return matches;
+}
+async function generateSwissRound(tournamentId, roundNumber) {
+  const standings = await db.arenaStanding.findMany({
+    where: { tournamentId },
+    orderBy: { totalPoints: "desc" },
+    include: { TeamEntry: true }
+  });
+  const playedMatches = await db.arenaMatch.findMany({
+    where: { tournamentId, status: "COMPLETED" },
+    select: { team1Id: true, team2Id: true }
+  });
+  const playedPairs = new Set(
+    playedMatches.map((m) => [m.team1Id, m.team2Id].sort().join("-"))
+  );
+  const teams = standings.map((s) => ({
+    id: s.teamEntryId,
+    name: s.TeamEntry.name,
+    points: s.totalPoints
+  }));
+  const matches = [];
+  const paired = /* @__PURE__ */ new Set();
+  let matchNumber = 1;
+  for (const team of teams) {
+    if (paired.has(team.id)) continue;
+    const opponent = teams.find((t) => {
+      if (t.id === team.id) return false;
+      if (paired.has(t.id)) return false;
+      const pairKey = [team.id, t.id].sort().join("-");
+      return !playedPairs.has(pairKey);
+    });
+    if (opponent) {
+      matches.push({
+        matchNumber,
+        team1Id: team.id,
+        team2Id: opponent.id
+      });
+      paired.add(team.id);
+      paired.add(opponent.id);
+      matchNumber++;
+    }
+  }
+  return matches;
+}
+async function generateRound(tournamentId) {
+  const tournament = await db.arenaTournament.findUnique({
+    where: { id: tournamentId },
+    include: {
+      TeamEntries: { where: { status: "CONFIRMED" } },
+      Rounds: { orderBy: { roundNumber: "desc" }, take: 1 }
+    }
+  });
+  if (!tournament) throw new Error("Tournament not found");
+  const teams = tournament.TeamEntries.map((t) => ({
+    id: t.id,
+    name: t.name,
+    seed: t.seed
+  }));
+  if (teams.length < 2) throw new Error("Not enough teams to generate matches");
+  const nextRound = (tournament.Rounds[0]?.roundNumber ?? 0) + 1;
+  let roundName;
+  if (tournament.format === "SINGLE_ELIMINATION" || tournament.format === "DOUBLE_ELIMINATION") {
+    const totalRounds = Math.ceil(Math.log2(teams.length));
+    const remaining = totalRounds - nextRound + 1;
+    if (remaining === 1) roundName = "Finale";
+    else if (remaining === 2) roundName = "Demi-finale";
+    else if (remaining === 3) roundName = "Quart de finale";
+    else roundName = `Tour ${nextRound}`;
+  } else {
+    roundName = `Tour ${nextRound}`;
+  }
+  let generatedMatches;
+  switch (tournament.format) {
+    case "RANDOM_DRAW":
+      generatedMatches = generateRandomDraw(teams);
+      break;
+    case "ROUND_ROBIN":
+      if (nextRound === 1) {
+        generatedMatches = generateRoundRobin(teams);
+      } else {
+        throw new Error("Round-robin generates all matches in round 1");
+      }
+      break;
+    case "SINGLE_ELIMINATION":
+      generatedMatches = generateSingleElimination(teams);
+      break;
+    case "SWISS":
+      generatedMatches = await generateSwissRound(tournamentId, nextRound);
+      break;
+    default:
+      generatedMatches = generateRandomDraw(teams);
+  }
+  const courts = tournament.withCourts ? await db.arenaCourt.findMany({
+    where: { tournamentId, isAvailable: true },
+    orderBy: { name: "asc" }
+  }) : [];
+  const result = await db.$transaction(async (tx) => {
+    const round = await tx.arenaRound.create({
+      data: {
+        tournamentId,
+        roundNumber: nextRound,
+        name: roundName,
+        status: "SCHEDULED"
+      }
+    });
+    const matchData = generatedMatches.map((m, idx) => ({
+      tournamentId,
+      roundId: round.id,
+      matchNumber: m.matchNumber,
+      team1Id: m.team1Id,
+      team2Id: m.team2Id,
+      courtId: courts[idx % courts.length]?.id ?? null,
+      // Assignation cyclique des terrains
+      status: "SCHEDULED"
+    }));
+    await tx.arenaMatch.createMany({ data: matchData });
+    await tx.arenaTournament.update({
+      where: { id: tournamentId },
+      data: { currentRound: nextRound, status: "IN_PROGRESS" }
+    });
+    return { roundId: round.id, matchCount: matchData.length };
+  });
+  const io2 = getIO();
+  if (io2) {
+    io2.to(`arena:${tournamentId}`).emit("arena:round-generated", {
+      tournamentId,
+      roundId: result.roundId,
+      roundNumber: nextRound,
+      roundName,
+      matchCount: result.matchCount
+    });
+  }
+  return result;
+}
+async function recalculateStandings(tournamentId) {
+  const tournament = await db.arenaTournament.findUnique({
+    where: { id: tournamentId }
+  });
+  if (!tournament) throw new Error("Tournament not found");
+  const teamEntries = await db.arenaTeamEntry.findMany({
+    where: { tournamentId, status: "CONFIRMED" }
+  });
+  const completedMatches = await db.arenaMatch.findMany({
+    where: { tournamentId, status: "COMPLETED" }
+  });
+  const settings = tournament.settings ?? {};
+  const pointsPerWin = settings.pointsPerWin ?? 3;
+  const pointsPerDraw = settings.pointsPerDraw ?? 1;
+  const pointsPerLoss = settings.pointsPerLoss ?? 0;
+  const statsMap = /* @__PURE__ */ new Map();
+  for (const team of teamEntries) {
+    statsMap.set(team.id, { played: 0, won: 0, drawn: 0, lost: 0, pointsFor: 0, pointsAgainst: 0 });
+  }
+  for (const match of completedMatches) {
+    if (!match.team1Id || !match.team2Id || match.score1 == null || match.score2 == null) continue;
+    const s1 = statsMap.get(match.team1Id);
+    const s2 = statsMap.get(match.team2Id);
+    if (!s1 || !s2) continue;
+    s1.played++;
+    s2.played++;
+    s1.pointsFor += match.score1;
+    s1.pointsAgainst += match.score2;
+    s2.pointsFor += match.score2;
+    s2.pointsAgainst += match.score1;
+    if (match.score1 > match.score2) {
+      s1.won++;
+      s2.lost++;
+    } else if (match.score2 > match.score1) {
+      s2.won++;
+      s1.lost++;
+    } else {
+      s1.drawn++;
+      s2.drawn++;
+    }
+  }
+  await db.$transaction(
+    teamEntries.map((team) => {
+      const stats = statsMap.get(team.id);
+      const totalPoints = stats.won * pointsPerWin + stats.drawn * pointsPerDraw + stats.lost * pointsPerLoss;
+      return db.arenaStanding.upsert({
+        where: { teamEntryId: team.id },
+        update: {
+          played: stats.played,
+          won: stats.won,
+          drawn: stats.drawn,
+          lost: stats.lost,
+          pointsFor: stats.pointsFor,
+          pointsAgainst: stats.pointsAgainst,
+          totalPoints
+        },
+        create: {
+          tournamentId,
+          teamEntryId: team.id,
+          played: stats.played,
+          won: stats.won,
+          drawn: stats.drawn,
+          lost: stats.lost,
+          pointsFor: stats.pointsFor,
+          pointsAgainst: stats.pointsAgainst,
+          totalPoints
+        }
+      });
+    })
+  );
+  const standings = await db.arenaStanding.findMany({
+    where: { tournamentId },
+    orderBy: [{ totalPoints: "desc" }, { pointsFor: "desc" }]
+  });
+  await db.$transaction(
+    standings.map(
+      (s, idx) => db.arenaStanding.update({
+        where: { id: s.id },
+        data: { rank: idx + 1 }
+      })
+    )
+  );
+  const io2 = getIO();
+  if (io2) {
+    io2.to(`arena:${tournamentId}`).emit("arena:standings-updated", {
+      tournamentId
+    });
+  }
+}
+async function createTeamsFromRandomDraw(tournamentId) {
+  const tournament = await db.arenaTournament.findUnique({
+    where: { id: tournamentId },
+    include: { PlayerEntries: { where: { status: "CONFIRMED" }, include: { User: true } } }
+  });
+  if (!tournament) throw new Error("Tournament not found");
+  const players = shuffleArray(tournament.PlayerEntries);
+  const teamSize = tournament.playersPerTeam;
+  const teamNames = [];
+  const teams = [];
+  let teamNum = 1;
+  for (let i = 0; i < players.length; i += teamSize) {
+    const chunk = players.slice(i, i + teamSize);
+    if (chunk.length === 0) break;
+    const name = `\xC9quipe ${teamNum}`;
+    teamNames.push(name);
+    teams.push({
+      name,
+      members: chunk.map((p, idx) => ({
+        userId: p.userId,
+        isCaptain: idx === 0
+        // Premier joueur est capitaine
+      }))
+    });
+    teamNum++;
+  }
+  await db.$transaction(async (tx) => {
+    for (const team of teams) {
+      const entry = await tx.arenaTeamEntry.create({
+        data: {
+          tournamentId,
+          name: team.name,
+          status: "CONFIRMED"
+        }
+      });
+      await tx.arenaTeamMember.createMany({
+        data: team.members.map((m) => ({
+          teamEntryId: entry.id,
+          userId: m.userId,
+          isCaptain: m.isCaptain
+        }))
+      });
+    }
+  });
+  return { teamCount: teams.length };
+}
+
+// src/routes/arena.ts
+init_logger();
+var router117 = (0, import_express120.Router)();
+var getOrganizationId4 = (req2) => req2.user?.organizationId || req2.headers["x-organization-id"] || null;
+var getUserId4 = (req2) => req2.user?.id || req2.user?.userId || "";
+router117.get("/tournaments", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = getOrganizationId4(req2);
+    const status = req2.query.status;
+    const sport = req2.query.sport;
+    const where = {};
+    if (organizationId) {
+      where.OR = [
+        { organizationId },
+        { isPublic: true }
+      ];
+    } else {
+      where.isPublic = true;
+    }
+    if (status) where.status = status;
+    if (sport) where.sport = sport;
+    const tournaments = await db.arenaTournament.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      include: {
+        Creator: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+        Organization: { select: { id: true, name: true, logoUrl: true } },
+        _count: {
+          select: {
+            TeamEntries: true,
+            PlayerEntries: true,
+            Matches: true
+          }
+        }
+      }
+    });
+    res.json({ success: true, data: tournaments });
+  } catch (error) {
+    logger.error("[ARENA] GET /tournaments error:", error.message);
+    res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
+});
+router117.get("/tournaments/:id", authenticateToken, async (req2, res) => {
+  try {
+    const tournament = await db.arenaTournament.findUnique({
+      where: { id: req2.params.id },
+      include: {
+        Creator: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+        Organization: { select: { id: true, name: true, logoUrl: true } },
+        Rounds: {
+          orderBy: { roundNumber: "asc" },
+          include: {
+            Matches: {
+              orderBy: { matchNumber: "asc" },
+              include: {
+                Team1: { include: { Members: { include: { User: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } } } } } },
+                Team2: { include: { Members: { include: { User: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } } } } } },
+                Winner: { select: { id: true, name: true } },
+                Court: { select: { id: true, name: true } }
+              }
+            }
+          }
+        },
+        TeamEntries: {
+          orderBy: { createdAt: "asc" },
+          include: {
+            Members: {
+              include: {
+                User: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } }
+              }
+            }
+          }
+        },
+        PlayerEntries: {
+          include: {
+            User: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } }
+          }
+        },
+        Courts: { orderBy: { name: "asc" } },
+        Standings: {
+          orderBy: { rank: "asc" },
+          include: {
+            TeamEntry: { select: { id: true, name: true } }
+          }
+        }
+      }
+    });
+    if (!tournament) {
+      return res.status(404).json({ success: false, message: "Tournoi introuvable" });
+    }
+    res.json({ success: true, data: tournament });
+  } catch (error) {
+    logger.error("[ARENA] GET /tournaments/:id error:", error.message);
+    res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
+});
+router117.post("/tournaments", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = getOrganizationId4(req2);
+    const userId = getUserId4(req2);
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "Organisation requise" });
+    }
+    const {
+      name,
+      description,
+      sport,
+      format,
+      teamType,
+      playersPerTeam,
+      maxTeams,
+      maxPlayers,
+      pointsToWin,
+      nbRounds,
+      allowMixedTeams,
+      withCourts,
+      courtsCount,
+      location,
+      startsAt,
+      endsAt,
+      rules,
+      isPublic,
+      settings
+    } = req2.body;
+    if (!name?.trim()) {
+      return res.status(400).json({ success: false, message: "Le nom du tournoi est requis" });
+    }
+    const tournament = await db.arenaTournament.create({
+      data: {
+        organizationId,
+        creatorId: userId,
+        name: name.trim(),
+        description: description?.trim() || null,
+        sport: sport || "petanque",
+        format: format || "RANDOM_DRAW",
+        teamType: teamType || "DOUBLETTE",
+        playersPerTeam: playersPerTeam ?? 2,
+        maxTeams: maxTeams ?? null,
+        maxPlayers: maxPlayers ?? null,
+        pointsToWin: pointsToWin ?? 13,
+        nbRounds: nbRounds ?? 5,
+        allowMixedTeams: allowMixedTeams ?? true,
+        withCourts: withCourts ?? true,
+        courtsCount: courtsCount ?? null,
+        location: location?.trim() || null,
+        startsAt: startsAt ? new Date(startsAt) : null,
+        endsAt: endsAt ? new Date(endsAt) : null,
+        rules: rules?.trim() || null,
+        isPublic: isPublic ?? true,
+        settings: settings ?? null,
+        status: "DRAFT"
+      },
+      include: {
+        Creator: { select: { id: true, firstName: true, lastName: true } },
+        Organization: { select: { id: true, name: true } }
+      }
+    });
+    res.status(201).json({ success: true, data: tournament });
+  } catch (error) {
+    logger.error("[ARENA] POST /tournaments error:", error.message);
+    res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
+});
+router117.put("/tournaments/:id", authenticateToken, async (req2, res) => {
+  try {
+    const userId = getUserId4(req2);
+    const tournament = await db.arenaTournament.findUnique({ where: { id: req2.params.id } });
+    if (!tournament) {
+      return res.status(404).json({ success: false, message: "Tournoi introuvable" });
+    }
+    if (tournament.creatorId !== userId && req2.user?.role !== "super_admin") {
+      return res.status(403).json({ success: false, message: "Non autoris\xE9" });
+    }
+    const allowedFields = [
+      "name",
+      "description",
+      "sport",
+      "format",
+      "teamType",
+      "playersPerTeam",
+      "maxTeams",
+      "maxPlayers",
+      "pointsToWin",
+      "nbRounds",
+      "allowMixedTeams",
+      "withCourts",
+      "courtsCount",
+      "location",
+      "startsAt",
+      "endsAt",
+      "rules",
+      "isPublic",
+      "settings",
+      "status"
+    ];
+    const data = {};
+    for (const field of allowedFields) {
+      if (req2.body[field] !== void 0) {
+        if (field === "startsAt" || field === "endsAt") {
+          data[field] = req2.body[field] ? new Date(req2.body[field]) : null;
+        } else {
+          data[field] = req2.body[field];
+        }
+      }
+    }
+    const updated = await db.arenaTournament.update({
+      where: { id: req2.params.id },
+      data
+    });
+    const io2 = getIO();
+    if (io2) {
+      io2.to(`arena:${tournament.id}`).emit("arena:tournament-updated", { tournamentId: tournament.id });
+    }
+    res.json({ success: true, data: updated });
+  } catch (error) {
+    logger.error("[ARENA] PUT /tournaments/:id error:", error.message);
+    res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
+});
+router117.delete("/tournaments/:id", authenticateToken, async (req2, res) => {
+  try {
+    const userId = getUserId4(req2);
+    const tournament = await db.arenaTournament.findUnique({ where: { id: req2.params.id } });
+    if (!tournament) {
+      return res.status(404).json({ success: false, message: "Tournoi introuvable" });
+    }
+    if (tournament.creatorId !== userId && req2.user?.role !== "super_admin") {
+      return res.status(403).json({ success: false, message: "Non autoris\xE9" });
+    }
+    if (tournament.status !== "DRAFT") {
+      return res.status(400).json({ success: false, message: "Seuls les tournois en brouillon peuvent \xEAtre supprim\xE9s" });
+    }
+    await db.arenaTournament.delete({ where: { id: req2.params.id } });
+    res.json({ success: true, message: "Tournoi supprim\xE9" });
+  } catch (error) {
+    logger.error("[ARENA] DELETE /tournaments/:id error:", error.message);
+    res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
+});
+router117.post("/tournaments/:id/start", authenticateToken, async (req2, res) => {
+  try {
+    const userId = getUserId4(req2);
+    const tournament = await db.arenaTournament.findUnique({ where: { id: req2.params.id } });
+    if (!tournament) return res.status(404).json({ success: false, message: "Tournoi introuvable" });
+    if (tournament.creatorId !== userId && req2.user?.role !== "super_admin") {
+      return res.status(403).json({ success: false, message: "Non autoris\xE9" });
+    }
+    let newStatus;
+    if (tournament.status === "DRAFT") {
+      newStatus = "REGISTRATION_OPEN";
+    } else if (tournament.status === "REGISTRATION_OPEN" || tournament.status === "REGISTRATION_CLOSED") {
+      newStatus = "IN_PROGRESS";
+    } else {
+      return res.status(400).json({ success: false, message: `Impossible de d\xE9marrer depuis le statut ${tournament.status}` });
+    }
+    const updated = await db.arenaTournament.update({
+      where: { id: req2.params.id },
+      data: { status: newStatus }
+    });
+    const io2 = getIO();
+    if (io2) {
+      io2.to(`arena:${tournament.id}`).emit("arena:tournament-status", {
+        tournamentId: tournament.id,
+        status: newStatus
+      });
+    }
+    res.json({ success: true, data: updated });
+  } catch (error) {
+    logger.error("[ARENA] POST /tournaments/:id/start error:", error.message);
+    res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
+});
+router117.post("/tournaments/:id/generate-round", authenticateToken, async (req2, res) => {
+  try {
+    const userId = getUserId4(req2);
+    const tournament = await db.arenaTournament.findUnique({ where: { id: req2.params.id } });
+    if (!tournament) return res.status(404).json({ success: false, message: "Tournoi introuvable" });
+    if (tournament.creatorId !== userId && req2.user?.role !== "super_admin") {
+      return res.status(403).json({ success: false, message: "Non autoris\xE9" });
+    }
+    const result = await generateRound(req2.params.id);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    logger.error("[ARENA] POST /generate-round error:", error.message);
+    res.status(400).json({ success: false, message: error.message });
+  }
+});
+router117.post("/tournaments/:id/generate-teams", authenticateToken, async (req2, res) => {
+  try {
+    const userId = getUserId4(req2);
+    const tournament = await db.arenaTournament.findUnique({ where: { id: req2.params.id } });
+    if (!tournament) return res.status(404).json({ success: false, message: "Tournoi introuvable" });
+    if (tournament.creatorId !== userId && req2.user?.role !== "super_admin") {
+      return res.status(403).json({ success: false, message: "Non autoris\xE9" });
+    }
+    const result = await createTeamsFromRandomDraw(req2.params.id);
+    const io2 = getIO();
+    if (io2) {
+      io2.to(`arena:${tournament.id}`).emit("arena:teams-generated", {
+        tournamentId: tournament.id,
+        teamCount: result.teamCount
+      });
+    }
+    res.json({ success: true, data: result });
+  } catch (error) {
+    logger.error("[ARENA] POST /generate-teams error:", error.message);
+    res.status(400).json({ success: false, message: error.message });
+  }
+});
+router117.get("/tournaments/:id/standings", authenticateToken, async (req2, res) => {
+  try {
+    const standings = await db.arenaStanding.findMany({
+      where: { tournamentId: req2.params.id },
+      orderBy: [{ rank: "asc" }],
+      include: {
+        TeamEntry: {
+          select: {
+            id: true,
+            name: true,
+            Members: {
+              include: {
+                User: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } }
+              }
+            }
+          }
+        }
+      }
+    });
+    res.json({ success: true, data: standings });
+  } catch (error) {
+    logger.error("[ARENA] GET /standings error:", error.message);
+    res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
+});
+router117.get("/tournaments/:id/matches", authenticateToken, async (req2, res) => {
+  try {
+    const roundId = req2.query.roundId;
+    const where = { tournamentId: req2.params.id };
+    if (roundId) where.roundId = roundId;
+    const matches = await db.arenaMatch.findMany({
+      where,
+      orderBy: [{ Round: { roundNumber: "asc" } }, { matchNumber: "asc" }],
+      include: {
+        Round: { select: { id: true, roundNumber: true, name: true } },
+        Team1: { select: { id: true, name: true } },
+        Team2: { select: { id: true, name: true } },
+        Winner: { select: { id: true, name: true } },
+        Court: { select: { id: true, name: true } }
+      }
+    });
+    res.json({ success: true, data: matches });
+  } catch (error) {
+    logger.error("[ARENA] GET /matches error:", error.message);
+    res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
+});
+router117.put("/matches/:id/score", authenticateToken, async (req2, res) => {
+  try {
+    const userId = getUserId4(req2);
+    const { score1, score2 } = req2.body;
+    if (score1 == null || score2 == null) {
+      return res.status(400).json({ success: false, message: "score1 et score2 requis" });
+    }
+    if (typeof score1 !== "number" || typeof score2 !== "number" || score1 < 0 || score2 < 0) {
+      return res.status(400).json({ success: false, message: "Scores invalides" });
+    }
+    const match = await db.arenaMatch.findUnique({
+      where: { id: req2.params.id },
+      include: { Tournament: true }
+    });
+    if (!match) return res.status(404).json({ success: false, message: "Match introuvable" });
+    const winnerId = score1 > score2 ? match.team1Id : score2 > score1 ? match.team2Id : null;
+    const updated = await db.arenaMatch.update({
+      where: { id: req2.params.id },
+      data: {
+        score1,
+        score2,
+        winnerId,
+        status: "COMPLETED",
+        completedAt: /* @__PURE__ */ new Date()
+      }
+    });
+    await db.arenaMatchScore.create({
+      data: {
+        matchId: match.id,
+        submitterId: userId,
+        score1,
+        score2,
+        isValidated: match.Tournament.creatorId === userId
+        // Auto-validé si c'est l'organisateur
+      }
+    });
+    await recalculateStandings(match.tournamentId);
+    const io2 = getIO();
+    if (io2) {
+      io2.to(`arena:${match.tournamentId}`).emit("arena:score-updated", {
+        tournamentId: match.tournamentId,
+        matchId: match.id,
+        score1,
+        score2,
+        winnerId
+      });
+    }
+    res.json({ success: true, data: updated });
+  } catch (error) {
+    logger.error("[ARENA] PUT /matches/:id/score error:", error.message);
+    res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
+});
+router117.put("/matches/:id/validate", authenticateToken, async (req2, res) => {
+  try {
+    const userId = getUserId4(req2);
+    const match = await db.arenaMatch.findUnique({
+      where: { id: req2.params.id },
+      include: { Tournament: true }
+    });
+    if (!match) return res.status(404).json({ success: false, message: "Match introuvable" });
+    if (match.Tournament.creatorId !== userId && req2.user?.role !== "super_admin") {
+      return res.status(403).json({ success: false, message: "Seul l'organisateur peut valider" });
+    }
+    await db.arenaMatchScore.updateMany({
+      where: { matchId: match.id },
+      data: { isValidated: true }
+    });
+    res.json({ success: true, message: "Score valid\xE9" });
+  } catch (error) {
+    logger.error("[ARENA] PUT /matches/:id/validate error:", error.message);
+    res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
+});
+router117.post("/tournaments/:id/teams", authenticateToken, async (req2, res) => {
+  try {
+    const userId = getUserId4(req2);
+    const { name, memberIds } = req2.body;
+    if (!name?.trim()) {
+      return res.status(400).json({ success: false, message: "Nom d'\xE9quipe requis" });
+    }
+    const tournament = await db.arenaTournament.findUnique({ where: { id: req2.params.id } });
+    if (!tournament) return res.status(404).json({ success: false, message: "Tournoi introuvable" });
+    if (tournament.status !== "REGISTRATION_OPEN" && tournament.status !== "DRAFT") {
+      return res.status(400).json({ success: false, message: "Les inscriptions sont ferm\xE9es" });
+    }
+    if (tournament.maxTeams) {
+      const count = await db.arenaTeamEntry.count({
+        where: { tournamentId: tournament.id, status: { in: ["PENDING", "CONFIRMED"] } }
+      });
+      if (count >= tournament.maxTeams) {
+        return res.status(400).json({ success: false, message: "Nombre maximum d'\xE9quipes atteint" });
+      }
+    }
+    const isOrganizer = tournament.creatorId === userId || req2.user?.role === "super_admin";
+    const entry = await db.$transaction(async (tx) => {
+      const teamEntry = await tx.arenaTeamEntry.create({
+        data: {
+          tournamentId: tournament.id,
+          name: name.trim(),
+          status: isOrganizer ? "CONFIRMED" : "PENDING"
+        }
+      });
+      const allMembers = [userId, ...(memberIds || []).filter((id) => id !== userId)];
+      await tx.arenaTeamMember.createMany({
+        data: allMembers.map((memberId, idx) => ({
+          teamEntryId: teamEntry.id,
+          userId: memberId,
+          isCaptain: idx === 0
+        }))
+      });
+      return teamEntry;
+    });
+    if (!isOrganizer) {
+      emitToUser(tournament.creatorId, "arena:registration-received", {
+        tournamentId: tournament.id,
+        teamName: name
+      });
+    }
+    res.status(201).json({ success: true, data: entry });
+  } catch (error) {
+    logger.error("[ARENA] POST /teams error:", error.message);
+    res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
+});
+router117.post("/tournaments/:id/players", authenticateToken, async (req2, res) => {
+  try {
+    const userId = getUserId4(req2);
+    const tournament = await db.arenaTournament.findUnique({ where: { id: req2.params.id } });
+    if (!tournament) return res.status(404).json({ success: false, message: "Tournoi introuvable" });
+    if (tournament.status !== "REGISTRATION_OPEN" && tournament.status !== "DRAFT") {
+      return res.status(400).json({ success: false, message: "Les inscriptions sont ferm\xE9es" });
+    }
+    if (tournament.maxPlayers) {
+      const count = await db.arenaPlayerEntry.count({
+        where: { tournamentId: tournament.id, status: { in: ["PENDING", "CONFIRMED"] } }
+      });
+      if (count >= tournament.maxPlayers) {
+        return res.status(400).json({ success: false, message: "Nombre maximum de joueurs atteint" });
+      }
+    }
+    const existing = await db.arenaPlayerEntry.findUnique({
+      where: { tournamentId_userId: { tournamentId: tournament.id, userId } }
+    });
+    if (existing) {
+      return res.status(409).json({ success: false, message: "D\xE9j\xE0 inscrit" });
+    }
+    const isOrganizer = tournament.creatorId === userId || req2.user?.role === "super_admin";
+    const entry = await db.arenaPlayerEntry.create({
+      data: {
+        tournamentId: tournament.id,
+        userId,
+        status: isOrganizer ? "CONFIRMED" : "PENDING"
+      }
+    });
+    res.status(201).json({ success: true, data: entry });
+  } catch (error) {
+    logger.error("[ARENA] POST /players error:", error.message);
+    res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
+});
+router117.put("/entries/:id/status", authenticateToken, async (req2, res) => {
+  try {
+    const { status, type } = req2.body;
+    if (!["CONFIRMED", "REJECTED"].includes(status)) {
+      return res.status(400).json({ success: false, message: "Statut invalide" });
+    }
+    if (type === "team") {
+      const entry = await db.arenaTeamEntry.update({
+        where: { id: req2.params.id },
+        data: { status }
+      });
+      res.json({ success: true, data: entry });
+    } else {
+      const entry = await db.arenaPlayerEntry.update({
+        where: { id: req2.params.id },
+        data: { status }
+      });
+      res.json({ success: true, data: entry });
+    }
+  } catch (error) {
+    logger.error("[ARENA] PUT /entries/:id/status error:", error.message);
+    res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
+});
+router117.post("/tournaments/:id/courts", authenticateToken, async (req2, res) => {
+  try {
+    const { courts } = req2.body;
+    if (!Array.isArray(courts) || courts.length === 0) {
+      return res.status(400).json({ success: false, message: "Liste de terrains requise" });
+    }
+    const created = await db.arenaCourt.createMany({
+      data: courts.map((c) => ({
+        tournamentId: req2.params.id,
+        name: c.name,
+        location: c.location || null
+      })),
+      skipDuplicates: true
+    });
+    res.status(201).json({ success: true, data: { count: created.count } });
+  } catch (error) {
+    logger.error("[ARENA] POST /courts error:", error.message);
+    res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
+});
+router117.get("/tournaments/:id/courts", authenticateToken, async (req2, res) => {
+  try {
+    const courts = await db.arenaCourt.findMany({
+      where: { tournamentId: req2.params.id },
+      orderBy: { name: "asc" },
+      include: {
+        Matches: {
+          where: { status: { in: ["SCHEDULED", "IN_PROGRESS"] } },
+          select: { id: true, matchNumber: true, status: true },
+          take: 1
+        }
+      }
+    });
+    res.json({ success: true, data: courts });
+  } catch (error) {
+    logger.error("[ARENA] GET /courts error:", error.message);
+    res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
+});
+router117.put("/matches/:id/reassign", authenticateToken, async (req2, res) => {
+  try {
+    const { courtId, team1Id, team2Id } = req2.body;
+    const data = {};
+    if (courtId !== void 0) data.courtId = courtId;
+    if (team1Id !== void 0) data.team1Id = team1Id;
+    if (team2Id !== void 0) data.team2Id = team2Id;
+    const match = await db.arenaMatch.update({
+      where: { id: req2.params.id },
+      data
+    });
+    const io2 = getIO();
+    if (io2) {
+      io2.to(`arena:${match.tournamentId}`).emit("arena:match-reassigned", {
+        matchId: match.id,
+        courtId,
+        team1Id,
+        team2Id
+      });
+    }
+    res.json({ success: true, data: match });
+  } catch (error) {
+    logger.error("[ARENA] PUT /matches/:id/reassign error:", error.message);
+    res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
+});
+var arena_default = router117;
+
 // src/middleware/websiteRenderer.ts
 var fs10 = __toESM(require("fs"), 1);
 var path8 = __toESM(require("path"), 1);
+init_logger();
 function renderSection(section) {
   const content = section.content || {};
   const sectionType = section.type;
@@ -96547,7 +97693,7 @@ function renderFooter(content) {
 async function renderWebsite(req2, res) {
   try {
     const website = req2.websiteData;
-    console.log(`\u{1F3A8} [WEBSITE-RENDERER] Site d\xE9tect\xE9:`, {
+    logger.debug(`\u{1F3A8} [WEBSITE-RENDERER] Site d\xE9tect\xE9:`, {
       hasWebsite: !!website,
       name: website?.name,
       slug: website?.slug,
@@ -96589,10 +97735,10 @@ async function renderWebsite(req2, res) {
         </script>
       `;
       indexHtml = indexHtml.replace("</head>", `${siteDataScript}</head>`);
-      console.log(`\u{1F4F1} [WEBSITE-RENDERER] Serving React app with bundles for: ${website.name}`);
+      logger.debug(`\u{1F4F1} [WEBSITE-RENDERER] Serving React app with bundles for: ${website.name}`);
       return res.send(indexHtml);
     }
-    console.warn("\u26A0\uFE0F [WEBSITE-RENDERER] dist/index.html non trouv\xE9, fallback SSR basique");
+    logger.warn("\u26A0\uFE0F [WEBSITE-RENDERER] dist/index.html non trouv\xE9, fallback SSR basique");
     const sections = website.sections || [];
     const sectionsHtml = sections.sort((a, b) => a.order - b.order).map((section) => renderSection(section)).join("\n");
     const fallbackHtml = `
@@ -96616,12 +97762,13 @@ async function renderWebsite(req2, res) {
     `;
     res.send(fallbackHtml);
   } catch (error) {
-    console.error("\u274C [WEBSITE-RENDERER] Erreur:", error);
+    logger.error("\u274C [WEBSITE-RENDERER] Erreur:", error);
     res.status(500).send("Erreur lors du chargement du site");
   }
 }
 
 // src/middleware/websiteDetection.ts
+init_logger();
 var isProduction4 = process.env.NODE_ENV === "production";
 var CRM_DOMAINS = [
   "www.zhiive.com",
@@ -96646,19 +97793,19 @@ async function detectWebsite(req2, res, next) {
     let hostname = forwardedHost || hostHeader || req2.hostname || "";
     hostname = hostname.split(":")[0];
     if (!isProduction4) {
-      console.log(`\u{1F50D} [WEBSITE-DETECTION] Headers - X-Forwarded-Host: ${forwardedHost}, Host: ${hostHeader}, hostname: ${req2.hostname}`);
-      console.log(`\u{1F50D} [WEBSITE-DETECTION] Domaine d\xE9tect\xE9: ${hostname}`);
+      logger.debug(`\u{1F50D} [WEBSITE-DETECTION] Headers - X-Forwarded-Host: ${forwardedHost}, Host: ${hostHeader}, hostname: ${req2.hostname}`);
+      logger.debug(`\u{1F50D} [WEBSITE-DETECTION] Domaine d\xE9tect\xE9: ${hostname}`);
     }
     if (CRM_DOMAINS.some((crm) => hostname.includes(crm))) {
       if (!isProduction4) {
-        console.log(`\u{1F4F1} [WEBSITE-DETECTION] Domaine CRM d\xE9tect\xE9: ${hostname}`);
+        logger.debug(`\u{1F4F1} [WEBSITE-DETECTION] Domaine CRM d\xE9tect\xE9: ${hostname}`);
       }
       req2.isWebsiteRoute = false;
       return next();
     }
     const cleanDomain = hostname.replace(/^www\./, "");
     if (!isProduction4) {
-      console.log(`\u{1F310} [WEBSITE-DETECTION] Recherche site pour: ${cleanDomain}`);
+      logger.debug(`\u{1F310} [WEBSITE-DETECTION] Recherche site pour: ${cleanDomain}`);
     }
     const website = await db.websites.findFirst({
       where: {
@@ -96679,7 +97826,7 @@ async function detectWebsite(req2, res, next) {
     });
     if (website) {
       if (!isProduction4) {
-        console.log(`\u2705 [WEBSITE-DETECTION] Site trouv\xE9: ${website.siteName} (${website.slug})`);
+        logger.debug(`\u2705 [WEBSITE-DETECTION] Site trouv\xE9: ${website.siteName} (${website.slug})`);
       }
       const websiteData = {
         id: website.id,
@@ -96693,13 +97840,13 @@ async function detectWebsite(req2, res, next) {
       req2.isWebsiteRoute = true;
     } else {
       if (!isProduction4) {
-        console.log(`\u26A0\uFE0F [WEBSITE-DETECTION] Aucun site trouv\xE9 pour: ${cleanDomain}`);
+        logger.debug(`\u26A0\uFE0F [WEBSITE-DETECTION] Aucun site trouv\xE9 pour: ${cleanDomain}`);
       }
       req2.isWebsiteRoute = false;
     }
     next();
   } catch (error) {
-    console.error("\u274C [WEBSITE-DETECTION] Erreur:", error);
+    logger.error("\u274C [WEBSITE-DETECTION] Erreur:", error);
     req2.isWebsiteRoute = false;
     next();
   }
@@ -96709,7 +97856,7 @@ function websiteInterceptor(req2, res, next) {
     return next();
   }
   if (req2.isWebsiteRoute && req2.websiteData) {
-    console.log(`\u{1F3A8} [WEBSITE-INTERCEPTOR] Interception pour site: ${req2.websiteData.name}`);
+    logger.debug(`\u{1F3A8} [WEBSITE-INTERCEPTOR] Interception pour site: ${req2.websiteData.name}`);
     return renderWebsite(req2, res);
   }
   next();
@@ -96718,6 +97865,7 @@ function websiteInterceptor(req2, res, next) {
 // src/security/securityMiddleware.ts
 var import_express_rate_limit15 = __toESM(require("express-rate-limit"), 1);
 var import_crypto38 = __toESM(require("crypto"), 1);
+init_logger();
 var isCodespaces = process.env.CODESPACES === "true" || typeof process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN === "string";
 var isRateLimitEnabled = process.env.NODE_ENV === "production" && !isCodespaces;
 var noopMiddleware = (_req, _res, next) => next();
@@ -96910,7 +98058,7 @@ var inputSanitization = (req2, res, next) => {
     try {
       req2.body = sanitizeObject(req2.body);
     } catch (e) {
-      console.warn("Cannot sanitize req.body:", e);
+      logger.warn("Cannot sanitize req.body:", e);
     }
   }
   next();
@@ -96971,6 +98119,7 @@ var uploadRateLimit = isRateLimitEnabled ? (0, import_express_rate_limit15.defau
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/sync-variable-hook.ts
 init_database();
+init_logger();
 var prisma49 = db;
 async function validateSourceRefExists(sourceRef) {
   if (!sourceRef) return false;
@@ -97004,7 +98153,7 @@ async function validateSourceRefExists(sourceRef) {
     }
     return true;
   } catch (error) {
-    console.warn(`[SYNC HOOK] \u26A0\uFE0F Erreur validation sourceRef "${sourceRef}":`, error);
+    logger.warn(`[SYNC HOOK] \u26A0\uFE0F Erreur validation sourceRef "${sourceRef}":`, error);
     return false;
   }
 }
@@ -97042,7 +98191,7 @@ async function syncVariableSourceRefs() {
       }
       const newRefExists = await validateSourceRefExists(jsonSourceRef);
       if (!newRefExists) {
-        console.warn(`[SYNC HOOK] \u{1F6E1}\uFE0F BLOQUE: Variable ${node.TreeBranchLeafNodeVariable.id} - sourceRef "${jsonSourceRef}" pointe vers une entite inexistante. Conservation de "${dbSourceRef || "null"}"`);
+        logger.warn(`[SYNC HOOK] \u{1F6E1}\uFE0F BLOQUE: Variable ${node.TreeBranchLeafNodeVariable.id} - sourceRef "${jsonSourceRef}" pointe vers une entite inexistante. Conservation de "${dbSourceRef || "null"}"`);
         blockedCount++;
         continue;
       }
@@ -97061,14 +98210,14 @@ async function syncVariableSourceRefs() {
     if (syncCount === 0 && skipCount === 0 && blockedCount === 0) {
     }
   } catch (error) {
-    console.error("\u274C [SYNC HOOK] Erreur:", error);
+    logger.error("\u274C [SYNC HOOK] Erreur:", error);
   }
 }
 async function initializeTreeBranchLeafSync() {
   try {
     await syncVariableSourceRefs();
   } catch (error) {
-    console.error("\u274C [INIT SYNC] Erreur:", error);
+    logger.error("\u274C [INIT SYNC] Erreur:", error);
   }
 }
 
@@ -97079,6 +98228,7 @@ init_database();
 var import_node_cron = __toESM(require("node-cron"), 1);
 init_database();
 init_PostalEmailService();
+init_logger();
 var LOG_PREFIX = "\u{1F504} [PEPPOL-CRON]";
 var checkTransitionStatuses = import_node_cron.default.schedule("*/30 * * * *", async () => {
   try {
@@ -97092,7 +98242,7 @@ var checkTransitionStatuses = import_node_cron.default.schedule("*/30 * * * *", 
       }
     });
     if (configs.length === 0) return;
-    console.log(`${LOG_PREFIX} V\xE9rification de ${configs.length} organisation(s) en transition...`);
+    logger.debug(`${LOG_PREFIX} V\xE9rification de ${configs.length} organisation(s) en transition...`);
     for (const config of configs) {
       try {
         const vatNumber = `${config.peppolEas === "0208" ? "BE" : ""}${config.peppolEndpoint}`;
@@ -97104,7 +98254,7 @@ var checkTransitionStatuses = import_node_cron.default.schedule("*/30 * * * *", 
           if (peppolCheck.isRegisteredWithUs) {
             updateData.registrationStatus = "ACTIVE";
             updateData.enabled = true;
-            console.log(`${LOG_PREFIX} \u2705 ${orgName}: ${oldStatus} \u2192 ACTIVE (confirm\xE9 sur Peppol)`);
+            logger.debug(`${LOG_PREFIX} \u2705 ${orgName}: ${oldStatus} \u2192 ACTIVE (confirm\xE9 sur Peppol)`);
           } else if (peppolCheck.isRegisteredElsewhere) {
             if (oldStatus !== "MIGRATION_PENDING") {
               updateData.registrationStatus = "MIGRATION_PENDING";
@@ -97113,7 +98263,7 @@ var checkTransitionStatuses = import_node_cron.default.schedule("*/30 * * * *", 
               updateData.previousAccessPoint = peppolCheck.accessPoint;
               updateData.previousApDetectedAt = /* @__PURE__ */ new Date();
             }
-            console.log(`${LOG_PREFIX} \u23F3 ${orgName}: toujours chez ${peppolCheck.accessPoint || "ancien AP"}`);
+            logger.debug(`${LOG_PREFIX} \u23F3 ${orgName}: toujours chez ${peppolCheck.accessPoint || "ancien AP"}`);
           }
         } else {
           if (config.odooCompanyId) {
@@ -97123,19 +98273,19 @@ var checkTransitionStatuses = import_node_cron.default.schedule("*/30 * * * *", 
               if (odooStatus === "active") {
                 updateData.registrationStatus = "ACTIVE";
                 updateData.enabled = true;
-                console.log(`${LOG_PREFIX} \u2705 ${orgName}: ${oldStatus} \u2192 ACTIVE (confirm\xE9 par Odoo AP)`);
+                logger.debug(`${LOG_PREFIX} \u2705 ${orgName}: ${oldStatus} \u2192 ACTIVE (confirm\xE9 par Odoo AP)`);
               } else if (odooStatus === "pending") {
                 if (oldStatus !== "PENDING") {
                   updateData.registrationStatus = "PENDING";
-                  console.log(`${LOG_PREFIX} \u23F3 ${orgName}: ${oldStatus} \u2192 PENDING (Odoo confirme pending)`);
+                  logger.debug(`${LOG_PREFIX} \u23F3 ${orgName}: ${oldStatus} \u2192 PENDING (Odoo confirme pending)`);
                 }
               } else if (odooStatus === "not_verified" || odooStatus === "sent_verification") {
                 if (oldStatus !== "VERIFICATION_NEEDED") {
                   updateData.registrationStatus = "VERIFICATION_NEEDED";
-                  console.log(`${LOG_PREFIX} \u{1F4F1} ${orgName}: ${oldStatus} \u2192 VERIFICATION_NEEDED (SMS requis)`);
+                  logger.debug(`${LOG_PREFIX} \u{1F4F1} ${orgName}: ${oldStatus} \u2192 VERIFICATION_NEEDED (SMS requis)`);
                 }
               } else if (odooStatus === "not_registered" && oldStatus === "MIGRATION_PENDING") {
-                console.log(`${LOG_PREFIX} \u{1F513} ${orgName}: ancien AP a lib\xE9r\xE9 le num\xE9ro \u2014 pr\xEAt pour enregistrement`);
+                logger.debug(`${LOG_PREFIX} \u{1F513} ${orgName}: ancien AP a lib\xE9r\xE9 le num\xE9ro \u2014 pr\xEAt pour enregistrement`);
               }
             } catch {
             }
@@ -97154,11 +98304,11 @@ var checkTransitionStatuses = import_node_cron.default.schedule("*/30 * * * *", 
           });
         }
       } catch (err) {
-        console.error(`${LOG_PREFIX} \u274C Erreur pour org ${config.organizationId}:`, err.message);
+        logger.error(`${LOG_PREFIX} \u274C Erreur pour org ${config.organizationId}:`, err.message);
       }
     }
   } catch (error) {
-    console.error(`${LOG_PREFIX} \u274C Erreur globale:`, error);
+    logger.error(`${LOG_PREFIX} \u274C Erreur globale:`, error);
   }
 }, { scheduled: false });
 var checkActiveStatuses = import_node_cron.default.schedule("0 */6 * * *", async () => {
@@ -97174,7 +98324,7 @@ var checkActiveStatuses = import_node_cron.default.schedule("0 */6 * * *", async
       }
     });
     if (configs.length === 0) return;
-    console.log(`${LOG_PREFIX} V\xE9rification sant\xE9 de ${configs.length} organisation(s) active(s)...`);
+    logger.debug(`${LOG_PREFIX} V\xE9rification sant\xE9 de ${configs.length} organisation(s) active(s)...`);
     for (const config of configs) {
       try {
         const vatNumber = `${config.peppolEas === "0208" ? "BE" : ""}${config.peppolEndpoint}`;
@@ -97186,7 +98336,7 @@ var checkActiveStatuses = import_node_cron.default.schedule("0 */6 * * *", async
             data: { lastCheckedAt: /* @__PURE__ */ new Date() }
           });
         } else if (peppolCheck.isRegistered && peppolCheck.isRegisteredElsewhere) {
-          console.warn(`${LOG_PREFIX} \u26A0\uFE0F ALERTE: ${orgName} n'est plus chez nous ! Maintenant chez ${peppolCheck.accessPoint}`);
+          logger.warn(`${LOG_PREFIX} \u26A0\uFE0F ALERTE: ${orgName} n'est plus chez nous ! Maintenant chez ${peppolCheck.accessPoint}`);
           await db.peppolConfig.update({
             where: { organizationId: config.organizationId },
             data: {
@@ -97197,18 +98347,18 @@ var checkActiveStatuses = import_node_cron.default.schedule("0 */6 * * *", async
             }
           });
         } else {
-          console.warn(`${LOG_PREFIX} \u26A0\uFE0F ${orgName}: plus visible dans l'annuaire Peppol (erreur r\xE9seau ?)`);
+          logger.warn(`${LOG_PREFIX} \u26A0\uFE0F ${orgName}: plus visible dans l'annuaire Peppol (erreur r\xE9seau ?)`);
           await db.peppolConfig.update({
             where: { organizationId: config.organizationId },
             data: { lastCheckedAt: /* @__PURE__ */ new Date() }
           });
         }
       } catch (err) {
-        console.error(`${LOG_PREFIX} \u274C Erreur sant\xE9 org ${config.organizationId}:`, err.message);
+        logger.error(`${LOG_PREFIX} \u274C Erreur sant\xE9 org ${config.organizationId}:`, err.message);
       }
     }
   } catch (error) {
-    console.error(`${LOG_PREFIX} \u274C Erreur globale sant\xE9:`, error);
+    logger.error(`${LOG_PREFIX} \u274C Erreur globale sant\xE9:`, error);
   }
 }, { scheduled: false });
 var fetchIncomingInvoices = import_node_cron.default.schedule("0 */1 * * *", async () => {
@@ -97225,7 +98375,7 @@ var fetchIncomingInvoices = import_node_cron.default.schedule("0 */1 * * *", asy
       }
     });
     if (configs.length === 0) return;
-    console.log(`${LOG_PREFIX} \u{1F4E5} R\xE9cup\xE9ration des factures entrantes pour ${configs.length} organisation(s)...`);
+    logger.debug(`${LOG_PREFIX} \u{1F4E5} R\xE9cup\xE9ration des factures entrantes pour ${configs.length} organisation(s)...`);
     for (const config of configs) {
       try {
         const orgName = config.Organization?.name || config.organizationId;
@@ -97275,7 +98425,7 @@ var fetchIncomingInvoices = import_node_cron.default.schedule("0 */1 * * *", asy
           }
         }
         if (imported > 0) {
-          console.log(`${LOG_PREFIX} \u{1F4E5} ${orgName}: ${imported} nouvelle(s) facture(s) import\xE9e(s)`);
+          logger.debug(`${LOG_PREFIX} \u{1F4E5} ${orgName}: ${imported} nouvelle(s) facture(s) import\xE9e(s)`);
           try {
             const org = await db.organization.findUnique({
               where: { id: config.organizationId },
@@ -97301,7 +98451,7 @@ var fetchIncomingInvoices = import_node_cron.default.schedule("0 */1 * * *", asy
                 actionUrl: "/facture?tab=incoming",
                 tags: ["peppol", "incoming", "cron"],
                 metadata: { count: imported, invoices: newlyImported.map((i) => i.invoiceNumber) }
-              }).catch((err) => console.error(`${LOG_PREFIX} Erreur notification in-app:`, err.message));
+              }).catch((err) => logger.error(`${LOG_PREFIX} Erreur notification in-app:`, err.message));
               sendPushToUser(admin.userId, {
                 title,
                 body: shortBody,
@@ -97309,7 +98459,7 @@ var fetchIncomingInvoices = import_node_cron.default.schedule("0 */1 * * *", asy
                 tag: `peppol-incoming-${Date.now()}`,
                 url: "/facture?tab=incoming",
                 type: "peppol_incoming"
-              }).catch((err) => console.error(`${LOG_PREFIX} Erreur push:`, err.message));
+              }).catch((err) => logger.error(`${LOG_PREFIX} Erreur push:`, err.message));
               const zhiiveEmail = admin.User?.EmailAccount?.emailAddress;
               if (zhiiveEmail) {
                 const postal = getPostalService();
@@ -97320,7 +98470,7 @@ var fetchIncomingInvoices = import_node_cron.default.schedule("0 */1 * * *", asy
                   subject: `${title} \u2014 ${orgName}`,
                   body: htmlEmail,
                   isHtml: true
-                }).catch((err) => console.error(`${LOG_PREFIX} Erreur email zhiive ${zhiiveEmail}:`, err.message));
+                }).catch((err) => logger.error(`${LOG_PREFIX} Erreur email zhiive ${zhiiveEmail}:`, err.message));
               }
             }
             if (org?.email) {
@@ -97332,19 +98482,19 @@ var fetchIncomingInvoices = import_node_cron.default.schedule("0 */1 * * *", asy
                 subject: `${title} \u2014 ${orgName}`,
                 body: htmlEmail,
                 isHtml: true
-              }).catch((err) => console.error(`${LOG_PREFIX} Erreur email colony ${org.email}:`, err.message));
+              }).catch((err) => logger.error(`${LOG_PREFIX} Erreur email colony ${org.email}:`, err.message));
             }
-            console.log(`${LOG_PREFIX} \u{1F514} Notifications envoy\xE9es: ${imported} facture(s), ${orgAdmins.length} admin(s)`);
+            logger.debug(`${LOG_PREFIX} \u{1F514} Notifications envoy\xE9es: ${imported} facture(s), ${orgAdmins.length} admin(s)`);
           } catch (notifyErr) {
-            console.error(`${LOG_PREFIX} \u274C Erreur notifications:`, notifyErr.message);
+            logger.error(`${LOG_PREFIX} \u274C Erreur notifications:`, notifyErr.message);
           }
         }
       } catch (err) {
-        console.error(`${LOG_PREFIX} \u274C Erreur fetch incoming org ${config.organizationId}:`, err.message);
+        logger.error(`${LOG_PREFIX} \u274C Erreur fetch incoming org ${config.organizationId}:`, err.message);
       }
     }
   } catch (error) {
-    console.error(`${LOG_PREFIX} \u274C Erreur globale fetch incoming:`, error);
+    logger.error(`${LOG_PREFIX} \u274C Erreur globale fetch incoming:`, error);
   }
 }, { scheduled: false });
 var MAX_PEPPOL_RETRIES = 5;
@@ -97395,7 +98545,7 @@ var checkInvoiceDeliveryStatuses = import_node_cron.default.schedule("*/2 * * * 
     ]);
     const totalProcessing = standaloneInvoices.length + chantierInvoices.length;
     if (totalProcessing === 0) return;
-    console.log(`${LOG_PREFIX} \u{1F4EC} V\xE9rification statut de ${totalProcessing} facture(s) PROCESSING...`);
+    logger.debug(`${LOG_PREFIX} \u{1F4EC} V\xE9rification statut de ${totalProcessing} facture(s) PROCESSING...`);
     const orgIds = [.../* @__PURE__ */ new Set([
       ...standaloneInvoices.map((i) => i.organizationId),
       ...chantierInvoices.map((i) => i.organizationId)
@@ -97417,24 +98567,24 @@ var checkInvoiceDeliveryStatuses = import_node_cron.default.schedule("*/2 * * * 
         ], { fields: ["name", "ref", "peppol_move_state", "peppol_message_uuid"] });
         const odooByName = new Map(odooInvoices.map((inv) => [inv.name, inv]));
         const odooByRef = new Map(odooInvoices.filter((inv) => inv.ref).map((inv) => [inv.ref, inv]));
-        console.log(`${LOG_PREFIX} Odoo: ${odooInvoices.length} facture(s) trouv\xE9e(s) pour company ${peppolConfig.odooCompanyId}`);
-        odooInvoices.forEach((inv) => console.log(`${LOG_PREFIX}   - ${inv.name} (ref: ${inv.ref || "N/A"}) \u2192 ${inv.peppol_move_state}`));
+        logger.debug(`${LOG_PREFIX} Odoo: ${odooInvoices.length} facture(s) trouv\xE9e(s) pour company ${peppolConfig.odooCompanyId}`);
+        odooInvoices.forEach((inv) => logger.debug(`${LOG_PREFIX}   - ${inv.name} (ref: ${inv.ref || "N/A"}) \u2192 ${inv.peppol_move_state}`));
         const findOdooMatch = (invoiceNumber) => {
           if (!invoiceNumber) return void 0;
           return odooByName.get(invoiceNumber) || odooByRef.get(invoiceNumber);
         };
         const retriggerPeppolSend = async (odooInvoiceId, invoiceNumber) => {
           try {
-            console.log(`${LOG_PREFIX} \u{1F504} Re-trigger Peppol send via wizard pour Odoo invoice ${odooInvoiceId} (${invoiceNumber})...`);
+            logger.debug(`${LOG_PREFIX} \u{1F504} Re-trigger Peppol send via wizard pour Odoo invoice ${odooInvoiceId} (${invoiceNumber})...`);
             const success = await bridge.sendViaWizard(odooInvoiceId, peppolConfig.odooCompanyId);
             if (success) {
-              console.log(`${LOG_PREFIX} \u2705 Re-trigger r\xE9ussi pour ${invoiceNumber}`);
+              logger.debug(`${LOG_PREFIX} \u2705 Re-trigger r\xE9ussi pour ${invoiceNumber}`);
             } else {
-              console.warn(`${LOG_PREFIX} \u26A0\uFE0F Re-trigger wizard retourn\xE9 false pour ${invoiceNumber}`);
+              logger.warn(`${LOG_PREFIX} \u26A0\uFE0F Re-trigger wizard retourn\xE9 false pour ${invoiceNumber}`);
             }
             return success;
           } catch (err) {
-            console.error(`${LOG_PREFIX} \u274C Re-trigger \xE9chou\xE9 pour ${invoiceNumber}:`, err.message);
+            logger.error(`${LOG_PREFIX} \u274C Re-trigger \xE9chou\xE9 pour ${invoiceNumber}:`, err.message);
             return false;
           }
         };
@@ -97457,7 +98607,7 @@ var checkInvoiceDeliveryStatuses = import_node_cron.default.schedule("*/2 * * * 
               } else {
                 await db.chantierInvoice.update({ where: { id: inv.id }, data: updateData });
               }
-              console.log(`${LOG_PREFIX} \u2705 Facture ${inv.invoiceNumber} \u2192 SENT (Peppol delivered)`);
+              logger.debug(`${LOG_PREFIX} \u2705 Facture ${inv.invoiceNumber} \u2192 SENT (Peppol delivered)`);
               const targetUserId = inv.createdById || void 0;
               if (targetUserId) {
                 await notify.peppolInvoiceDelivered(orgId, {
@@ -97486,7 +98636,7 @@ var checkInvoiceDeliveryStatuses = import_node_cron.default.schedule("*/2 * * * 
                 } else {
                   await db.chantierInvoice.update({ where: { id: inv.id }, data: updateData });
                 }
-                console.warn(`${LOG_PREFIX} \u274C Facture ${inv.invoiceNumber} \u2192 ERROR (Odoo peppol_move_state=error)`);
+                logger.warn(`${LOG_PREFIX} \u274C Facture ${inv.invoiceNumber} \u2192 ERROR (Odoo peppol_move_state=error)`);
                 const targetUserId = inv.createdById || void 0;
                 if (targetUserId) {
                   await sendPushToUser(targetUserId, {
@@ -97511,12 +98661,12 @@ var checkInvoiceDeliveryStatuses = import_node_cron.default.schedule("*/2 * * * 
                 } else {
                   await db.chantierInvoice.update({ where: { id: inv.id }, data: updateData });
                 }
-                console.log(`${LOG_PREFIX} \u{1F504} Facture ${inv.invoiceNumber}: ERROR \u2192 PROCESSING (Odoo dit processing, recovery auto)`);
+                logger.debug(`${LOG_PREFIX} \u{1F504} Facture ${inv.invoiceNumber}: ERROR \u2192 PROCESSING (Odoo dit processing, recovery auto)`);
               }
             } else if (odooState === "ready" || odooState === "to_send") {
               if (inv.peppolRetryCount < MAX_PEPPOL_RETRIES) {
                 const newRetryCount = inv.peppolRetryCount + 1;
-                console.warn(`${LOG_PREFIX} \u26A0\uFE0F Facture ${inv.invoiceNumber}: Odoo state="${odooState}" \u2014 retry ${newRetryCount}/${MAX_PEPPOL_RETRIES}`);
+                logger.warn(`${LOG_PREFIX} \u26A0\uFE0F Facture ${inv.invoiceNumber}: Odoo state="${odooState}" \u2014 retry ${newRetryCount}/${MAX_PEPPOL_RETRIES}`);
                 const retriggerSuccess = await retriggerPeppolSend(odooMatch.id, inv.invoiceNumber);
                 const updateData = {
                   peppolRetryCount: newRetryCount,
@@ -97530,7 +98680,7 @@ var checkInvoiceDeliveryStatuses = import_node_cron.default.schedule("*/2 * * * 
                   await db.chantierInvoice.update({ where: { id: inv.id }, data: updateData });
                 }
               } else {
-                console.error(`${LOG_PREFIX} \u{1F6A8} Facture ${inv.invoiceNumber}: MAX RETRIES (${MAX_PEPPOL_RETRIES}) atteint \u2192 ERROR`);
+                logger.error(`${LOG_PREFIX} \u{1F6A8} Facture ${inv.invoiceNumber}: MAX RETRIES (${MAX_PEPPOL_RETRIES}) atteint \u2192 ERROR`);
                 const updateData = {
                   peppolStatus: "ERROR",
                   peppolError: `\xC9chec apr\xE8s ${MAX_PEPPOL_RETRIES} tentatives. L'envoi Peppol via Odoo n'a pas abouti (state: ${odooState}). Contactez le support.`,
@@ -97555,7 +98705,7 @@ var checkInvoiceDeliveryStatuses = import_node_cron.default.schedule("*/2 * * * 
               }
             }
           } else if (isStuck) {
-            console.warn(`${LOG_PREFIX} \u{1F6A8} Facture ${inv.invoiceNumber} PROCESSING depuis ${Math.round((now - sentAt) / 6e4)} min \u2014 non trouv\xE9e dans Odoo !`);
+            logger.warn(`${LOG_PREFIX} \u{1F6A8} Facture ${inv.invoiceNumber} PROCESSING depuis ${Math.round((now - sentAt) / 6e4)} min \u2014 non trouv\xE9e dans Odoo !`);
             if (inv.peppolRetryCount >= MAX_PEPPOL_RETRIES) {
               const updateData = {
                 peppolStatus: "ERROR",
@@ -97605,11 +98755,11 @@ var checkInvoiceDeliveryStatuses = import_node_cron.default.schedule("*/2 * * * 
           );
         }
       } catch (err) {
-        console.error(`${LOG_PREFIX} \u274C Erreur v\xE9rification delivery org ${orgId}:`, err.message);
+        logger.error(`${LOG_PREFIX} \u274C Erreur v\xE9rification delivery org ${orgId}:`, err.message);
       }
     }
   } catch (error) {
-    console.error(`${LOG_PREFIX} \u274C Erreur globale check delivery:`, error);
+    logger.error(`${LOG_PREFIX} \u274C Erreur globale check delivery:`, error);
   }
 }, { scheduled: false });
 function startPeppolCronJobs() {
@@ -97617,36 +98767,37 @@ function startPeppolCronJobs() {
   checkActiveStatuses.start();
   fetchIncomingInvoices.start();
   checkInvoiceDeliveryStatuses.start();
-  console.log(`${LOG_PREFIX} \u2705 Jobs d\xE9marr\xE9s:`);
-  console.log(`${LOG_PREFIX}   - Transition (PENDING/MIGRATION): toutes les 30 min`);
-  console.log(`${LOG_PREFIX}   - Sant\xE9 (ACTIVE): toutes les 6h`);
-  console.log(`${LOG_PREFIX}   - Factures entrantes: toutes les 4h`);
-  console.log(`${LOG_PREFIX}   - Statut livraison factures: toutes les 2 min (retry auto + alerte stuck)`);
+  logger.debug(`${LOG_PREFIX} \u2705 Jobs d\xE9marr\xE9s:`);
+  logger.debug(`${LOG_PREFIX}   - Transition (PENDING/MIGRATION): toutes les 30 min`);
+  logger.debug(`${LOG_PREFIX}   - Sant\xE9 (ACTIVE): toutes les 6h`);
+  logger.debug(`${LOG_PREFIX}   - Factures entrantes: toutes les 4h`);
+  logger.debug(`${LOG_PREFIX}   - Statut livraison factures: toutes les 2 min (retry auto + alerte stuck)`);
 }
 
 // src/api-server-clean.ts
+init_logger();
 import_dotenv.default.config();
 if (process.env.NODE_ENV === "production") {
   const noop = () => {
   };
-  console.log = noop;
-  console.debug = noop;
-  console.info = noop;
+  logger.debug = noop;
+  logger.debug = noop;
+  logger.info = noop;
 }
-console.log("\u{1F3AC} [BOOTSTRAP] api-server-clean.cjs loaded at", (/* @__PURE__ */ new Date()).toISOString());
-console.log("\u{1F3AC} [BOOTSTRAP] PORT env:", process.env.PORT || "(not set, using 8080)");
-console.log("\u{1F3AC} [BOOTSTRAP] NODE_ENV:", process.env.NODE_ENV || "development");
-console.log("\u{1F680} [API-SERVER-CLEAN] D\xE9marrage du serveur CRM...");
+logger.debug("\u{1F3AC} [BOOTSTRAP] api-server-clean.cjs loaded at", (/* @__PURE__ */ new Date()).toISOString());
+logger.debug("\u{1F3AC} [BOOTSTRAP] PORT env:", process.env.PORT || "(not set, using 8080)");
+logger.debug("\u{1F3AC} [BOOTSTRAP] NODE_ENV:", process.env.NODE_ENV || "development");
+logger.debug("\u{1F680} [API-SERVER-CLEAN] D\xE9marrage du serveur CRM...");
 logSecurityEvent("SERVER_STARTUP", {
   timestamp: (/* @__PURE__ */ new Date()).toISOString(),
   nodeVersion: process.version,
   environment: process.env.NODE_ENV || "development",
   securityLevel: "ENTERPRISE"
 }, "info");
-var app = (0, import_express120.default)();
+var app = (0, import_express121.default)();
 app.set("trust proxy", 1);
 var port = Number(process.env.PORT || 8080);
-console.log("\u{1F3AF} [BOOTSTRAP] Server will listen on port:", port);
+logger.debug("\u{1F3AF} [BOOTSTRAP] Server will listen on port:", port);
 var BUILD_VERSION = process.env.BUILD_VERSION || "dev-local";
 var GIT_SHA = process.env.GIT_SHA || "unknown";
 app.use((req2, res, next) => {
@@ -97766,7 +98917,7 @@ app.use((0, import_cors.default)({
     if (isAllowed) {
       callback(null, true);
     } else {
-      console.warn(`\u{1F6AB} [CORS] Origin bloqu\xE9: ${origin}`);
+      logger.warn(`\u{1F6AB} [CORS] Origin bloqu\xE9: ${origin}`);
       callback(null, false);
     }
   },
@@ -97776,7 +98927,7 @@ app.use((0, import_cors.default)({
   exposedHeaders: ["X-Total-Count", "X-Rate-Limit-Remaining", "x-organization-id"]
 }));
 app.use(inputSanitization);
-app.use(import_express120.default.json({
+app.use(import_express121.default.json({
   limit: "50mb",
   verify: (req2, res, buf) => {
     try {
@@ -97790,7 +98941,7 @@ app.use(import_express120.default.json({
     }
   }
 }));
-app.use(import_express120.default.urlencoded({ extended: true, limit: "50mb" }));
+app.use(import_express121.default.urlencoded({ extended: true, limit: "50mb" }));
 app.use((0, import_cookie_parser.default)());
 app.use((0, import_express_fileupload.default)({
   limits: { fileSize: 100 * 1024 * 1024 },
@@ -97800,7 +98951,7 @@ app.use((0, import_express_fileupload.default)({
   abortOnLimit: true,
   responseOnLimit: "Fichier trop volumineux (max 100 Mo)"
 }));
-console.log("\u2705 [FileUpload] Middleware configur\xE9 (100MB max)");
+logger.debug("\u2705 [FileUpload] Middleware configur\xE9 (100MB max)");
 var sessionSecret = process.env.SESSION_SECRET || (process.env.NODE_ENV === "production" ? (() => {
   throw new Error("SESSION_SECRET requis en production");
 })() : "crm-dev-secret-2024");
@@ -97832,18 +98983,18 @@ app.use((0, import_express_session.default)({
     // Nettoyage des sessions expirées toutes les 15min
   })
 }));
-console.log("\u2705 [ENTERPRISE-SECURITY] Configuration s\xE9curit\xE9 niveau Enterprise activ\xE9e");
+logger.debug("\u2705 [ENTERPRISE-SECURITY] Configuration s\xE9curit\xE9 niveau Enterprise activ\xE9e");
 var GCS_BUCKET_NAME = process.env.GCS_BUCKET || "crm-2thier-uploads";
 app.use("/uploads", (req2, res) => {
   const gcsUrl = `https://storage.googleapis.com/${GCS_BUCKET_NAME}${req2.path}`;
   res.redirect(301, gcsUrl);
 });
-console.log("\u{1F4F8} [UPLOADS] Redirection /uploads/* \u2192 GCS bucket", GCS_BUCKET_NAME);
-console.log("\u{1F527} [API-SERVER-CLEAN] Configuration Passport...");
+logger.debug("\u{1F4F8} [UPLOADS] Redirection /uploads/* \u2192 GCS bucket", GCS_BUCKET_NAME);
+logger.debug("\u{1F527} [API-SERVER-CLEAN] Configuration Passport...");
 app.use(import_passport.default.initialize());
 app.use(import_passport.default.session());
-console.log("\u2705 [API-SERVER-CLEAN] Passport configur\xE9");
-console.log("\u{1F527} [API-SERVER-CLEAN] Configuration des routes...");
+logger.debug("\u2705 [API-SERVER-CLEAN] Passport configur\xE9");
+logger.debug("\u{1F527} [API-SERVER-CLEAN] Configuration des routes...");
 app.use("/api/auth", authRateLimit);
 app.use("/api", routes_default);
 app.use("/api", websites_default);
@@ -97877,10 +99028,11 @@ app.use("/api/calendar", calendar_default);
 app.use("/api/peppol", peppol_default);
 app.use("/api/invoices", invoices_default);
 app.use("/api/expenses", expenses_default);
+app.use("/api/arena", arena_default);
 var repeatRouter = createRepeatRouter(db);
 app.use("/api/treebranchleaf/repeat", repeatRouter);
 app.use("/api/repeat", repeatRouter);
-console.log("\u2705 [API-SERVER-CLEAN] Routes configur\xE9es");
+logger.debug("\u2705 [API-SERVER-CLEAN] Routes configur\xE9es");
 app.get("/health", (_req, res) => {
   res.json({
     status: "OK",
@@ -97902,14 +99054,14 @@ if (process.env.NODE_ENV === "production") {
   const distDir = import_path7.default.resolve(process.cwd(), "dist");
   const indexHtml = import_path7.default.join(distDir, "index.html");
   if (import_fs8.default.existsSync(indexHtml)) {
-    console.log("\u{1F5C2}\uFE0F [STATIC] Distribution front d\xE9tect\xE9e, activation du serveur statique");
+    logger.debug("\u{1F5C2}\uFE0F [STATIC] Distribution front d\xE9tect\xE9e, activation du serveur statique");
     const assetsDir = import_path7.default.join(distDir, "assets");
-    app.use("/assets", import_express120.default.static(assetsDir, {
+    app.use("/assets", import_express121.default.static(assetsDir, {
       setHeaders: (res) => {
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       }
     }));
-    app.use("/.well-known", import_express120.default.static(import_path7.default.join(distDir, ".well-known")));
+    app.use("/.well-known", import_express121.default.static(import_path7.default.join(distDir, ".well-known")));
     app.get(/^\/[^/]+\.(png|jpg|jpeg|gif|svg|ico|webp|js|css|woff|woff2|ttf|eot|json|webmanifest|html|txt|xml|mp3)$/i, (req2, res, next) => {
       const filePath = import_path7.default.join(distDir, req2.path);
       if (import_fs8.default.existsSync(filePath)) {
@@ -97939,7 +99091,7 @@ if (process.env.NODE_ENV === "production") {
           res.setHeader("Content-Type", mimeTypes[ext]);
         }
         res.setHeader("Cache-Control", "public, max-age=86400");
-        console.log(`\u{1F4C1} [STATIC] Serving: ${req2.path}`);
+        logger.debug(`\u{1F4C1} [STATIC] Serving: ${req2.path}`);
         return res.sendFile(filePath);
       }
       next();
@@ -97989,7 +99141,7 @@ if (process.env.NODE_ENV === "production") {
             { src: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }
           ]
         };
-        console.log(`\u{1F4F1} [MANIFEST] Dynamique pour ${site.domain} \u2192 ${site.name}`);
+        logger.debug(`\u{1F4F1} [MANIFEST] Dynamique pour ${site.domain} \u2192 ${site.name}`);
       }
       res.setHeader("Content-Type", "application/manifest+json");
       res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
@@ -98035,14 +99187,14 @@ if (process.env.NODE_ENV === "production") {
     });
     app.get(/^(?!\/api\/|\/assets\/).*/, (req2, res, _next) => {
       if (req2.isWebsiteRoute === true && req2.websiteData) {
-        console.log(`\u{1F3A8} [WEBSITE-RENDER] Rendu SSR pour: ${req2.websiteData.name} (${req2.hostname})`);
+        logger.debug(`\u{1F3A8} [WEBSITE-RENDER] Rendu SSR pour: ${req2.websiteData.name} (${req2.hostname})`);
         return renderWebsite(req2, res);
       }
-      console.log(`\u{1F4F1} [CRM-SPA] Serving React app for: ${req2.hostname}${req2.url}`);
+      logger.debug(`\u{1F4F1} [CRM-SPA] Serving React app for: ${req2.hostname}${req2.url}`);
       res.sendFile(indexHtml);
     });
   } else {
-    console.warn("\u26A0\uFE0F [STATIC] Aucun build front trouv\xE9 (dist/index.html manquant)");
+    logger.warn("\u26A0\uFE0F [STATIC] Aucun build front trouv\xE9 (dist/index.html manquant)");
   }
 }
 app.use(import_express_winston.default.errorLogger({
@@ -98095,9 +99247,9 @@ var errorHandler = (err, req2, res, next) => {
 app.use(errorHandler);
 async function startServer() {
   try {
-    console.log("\u{1F50C} [STARTUP] Connexion \xE0 la base de donn\xE9es...");
+    logger.debug("\u{1F50C} [STARTUP] Connexion \xE0 la base de donn\xE9es...");
     await connectDatabase();
-    console.log("\u2705 [STARTUP] Base de donn\xE9es connect\xE9e");
+    logger.debug("\u2705 [STARTUP] Base de donn\xE9es connect\xE9e");
     try {
       const { db: db2 } = await Promise.resolve().then(() => (init_database(), database_exports));
       const swipeModules = [
@@ -98120,15 +99272,15 @@ async function startServer() {
               updatedAt: /* @__PURE__ */ new Date()
             }
           });
-          console.log(`\u{1F41D} [BOOTSTRAP] Module '${m.key}' cr\xE9\xE9 (placement=${m.placement})`);
+          logger.debug(`\u{1F41D} [BOOTSTRAP] Module '${m.key}' cr\xE9\xE9 (placement=${m.placement})`);
         }
       }
     } catch (e) {
-      console.warn("\u26A0\uFE0F [BOOTSTRAP] Erreur auto-ensure modules:", e);
+      logger.warn("\u26A0\uFE0F [BOOTSTRAP] Erreur auto-ensure modules:", e);
     }
     const httpServer = import_http.default.createServer(app);
     const io2 = initializeSocketIO(httpServer);
-    console.log("\u{1F50C} [SOCKET.IO] WebSocket server attached to HTTP server");
+    logger.debug("\u{1F50C} [SOCKET.IO] WebSocket server attached to HTTP server");
     const server = httpServer.listen(port, "0.0.0.0", () => {
       logSecurityEvent("SERVER_READY", {
         port,
@@ -98143,25 +99295,25 @@ async function startServer() {
           "Timing Attack Protection"
         ]
       }, "info");
-      console.log(`\u{1F389} [API-SERVER-CLEAN] Serveur CRM d\xE9marr\xE9 avec succ\xE8s sur http://0.0.0.0:${port}`);
-      console.log(`\u{1F6E1}\uFE0F [ENTERPRISE-SECURITY] S\xE9curit\xE9 niveau 100% activ\xE9e`);
+      logger.debug(`\u{1F389} [API-SERVER-CLEAN] Serveur CRM d\xE9marr\xE9 avec succ\xE8s sur http://0.0.0.0:${port}`);
+      logger.debug(`\u{1F6E1}\uFE0F [ENTERPRISE-SECURITY] S\xE9curit\xE9 niveau 100% activ\xE9e`);
       if (process.env.NODE_ENV !== "production") {
-        console.log("\u{1F504} [TREEBRANCHLEAF] Synchronisation des sourceRef...");
+        logger.debug("\u{1F504} [TREEBRANCHLEAF] Synchronisation des sourceRef...");
         initializeTreeBranchLeafSync().catch((err) => {
-          console.error("\u26A0\uFE0F  [TREEBRANCHLEAF] Erreur lors de la synchronisation:", err);
+          logger.error("\u26A0\uFE0F  [TREEBRANCHLEAF] Erreur lors de la synchronisation:", err);
         });
       } else {
-        console.log("\u23ED\uFE0F [TREEBRANCHLEAF] Synchronisation d\xE9sactiv\xE9e en production (optimisation m\xE9moire)");
+        logger.debug("\u23ED\uFE0F [TREEBRANCHLEAF] Synchronisation d\xE9sactiv\xE9e en production (optimisation m\xE9moire)");
       }
-      console.log(`\u{1F4CB} [API-SERVER-CLEAN] Endpoints disponibles:`);
-      console.log(`   - Health: http://localhost:${port}/api/health`);
-      console.log(`   - Auth Me: http://localhost:${port}/api/auth/me`);
-      console.log(`   - Auth Login: http://localhost:${port}/api/auth/login`);
-      console.log(`   - Notifications: http://localhost:${port}/api/notifications`);
-      console.log(`   - Modules: http://localhost:${port}/api/modules/all`);
-      console.log(`   - Blocks: http://localhost:${port}/api/blocks`);
-      console.log(`   - Auto Google Auth (POST): http://localhost:${port}/api/auto-google-auth/connect`);
-      console.log(`   - Auto Google Status (GET): http://localhost:${port}/api/auto-google-auth/status`);
+      logger.debug(`\u{1F4CB} [API-SERVER-CLEAN] Endpoints disponibles:`);
+      logger.debug(`   - Health: http://localhost:${port}/api/health`);
+      logger.debug(`   - Auth Me: http://localhost:${port}/api/auth/me`);
+      logger.debug(`   - Auth Login: http://localhost:${port}/api/auth/login`);
+      logger.debug(`   - Notifications: http://localhost:${port}/api/notifications`);
+      logger.debug(`   - Modules: http://localhost:${port}/api/modules/all`);
+      logger.debug(`   - Blocks: http://localhost:${port}/api/blocks`);
+      logger.debug(`   - Auto Google Auth (POST): http://localhost:${port}/api/auto-google-auth/connect`);
+      logger.debug(`   - Auto Google Status (GET): http://localhost:${port}/api/auto-google-auth/status`);
       startPeppolCronJobs();
       setInterval(async () => {
         try {
@@ -98192,33 +99344,33 @@ async function startServer() {
             where: { expiresAt: { lt: now } }
           });
           if (expiredCount > 0 || deletedPins.count > 0) {
-            console.log(`\u{1F56F}\uFE0F [WAX-CLEANUP] ${expiredCount} messages expired, ${deletedPins.count} pins deleted`);
+            logger.debug(`\u{1F56F}\uFE0F [WAX-CLEANUP] ${expiredCount} messages expired, ${deletedPins.count} pins deleted`);
           }
         } catch (err) {
-          console.error("\u26A0\uFE0F [WAX-CLEANUP] Error:", err);
+          logger.error("\u26A0\uFE0F [WAX-CLEANUP] Error:", err);
         }
       }, 5 * 60 * 1e3);
     });
     return server;
   } catch (error) {
-    console.error("\u274C [STARTUP] Erreur fatale au d\xE9marrage:", error);
+    logger.error("\u274C [STARTUP] Erreur fatale au d\xE9marrage:", error);
     process.exit(1);
   }
 }
 async function gracefulShutdown(signal) {
-  console.log(`
+  logger.debug(`
 \u{1F6D1} [SHUTDOWN] Signal ${signal} re\xE7u. Fermeture propre en cours...`);
   try {
     if (globalServer) {
-      globalServer.close(() => console.log("\u2705 [SHUTDOWN] Serveur HTTP ferm\xE9 (plus de nouvelles connexions)"));
+      globalServer.close(() => logger.debug("\u2705 [SHUTDOWN] Serveur HTTP ferm\xE9 (plus de nouvelles connexions)"));
     }
     const { db: db2 } = await Promise.resolve().then(() => (init_database(), database_exports));
     await db2.$disconnect();
-    console.log("\u2705 [SHUTDOWN] Connexion base de donn\xE9es ferm\xE9e");
-    console.log("\u{1F44B} [SHUTDOWN] Arr\xEAt propre termin\xE9.");
+    logger.debug("\u2705 [SHUTDOWN] Connexion base de donn\xE9es ferm\xE9e");
+    logger.debug("\u{1F44B} [SHUTDOWN] Arr\xEAt propre termin\xE9.");
     process.exit(0);
   } catch (err) {
-    console.error("\u274C [SHUTDOWN] Erreur:", err);
+    logger.error("\u274C [SHUTDOWN] Erreur:", err);
     process.exit(1);
   }
 }
@@ -98226,13 +99378,13 @@ var globalServer = null;
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 process.on("uncaughtException", (err) => {
-  console.error("\u{1F4A5} [UNCAUGHT] Exception non g\xE9r\xE9e:", err);
+  logger.error("\u{1F4A5} [UNCAUGHT] Exception non g\xE9r\xE9e:", err);
   gracefulShutdown("uncaughtException");
 });
 startServer().then((server) => {
   globalServer = server;
 }).catch((err) => {
-  console.error("\u274C [FATAL] Impossible de d\xE9marrer le serveur:", err);
+  logger.error("\u274C [FATAL] Impossible de d\xE9marrer le serveur:", err);
   process.exit(1);
 });
 // Annotate the CommonJS export names for ESM import in node:

@@ -38,6 +38,7 @@ import {
 } from '@dnd-kit/sortable';
 import { useTranslation } from 'react-i18next';
 import { SF } from '../../components/zhiive/ZhiiveTheme';
+import { logger } from '../../lib/logger';
 
 const { Text, Title } = Typography;
 
@@ -200,7 +201,7 @@ const TreeStructure: React.FC<TreeStructureProps> = ({
     const hasChildren = node.children && node.children.length > 0;
     
     // Debug: Log pour chaque nÅ“ud rendu
-    console.log(`ðŸŽ¨ [RENDER-NODE] ${node.label}:`, {
+    logger.debug(`ðŸŽ¨ [RENDER-NODE] ${node.label}:`, {
       type: node.type,
       hasChildren,
       childrenCount: node.children?.length || 0,
@@ -322,9 +323,9 @@ const TreeStructure: React.FC<TreeStructureProps> = ({
       </Title>
       
       {(() => {
-        console.log('ðŸ” [RENDER-DEBUG] PropriÃ©tÃ©s de tree:', Object.keys(tree));
-        console.log('ðŸ” [RENDER-DEBUG] tree.Nodes:', tree.Nodes);
-        console.log('ðŸ” [RENDER-DEBUG] tree.Nodes?.length:', tree.Nodes?.length);
+        logger.debug('ðŸ” [RENDER-DEBUG] PropriÃ©tÃ©s de tree:', Object.keys(tree));
+        logger.debug('ðŸ” [RENDER-DEBUG] tree.Nodes:', tree.Nodes);
+        logger.debug('ðŸ” [RENDER-DEBUG] tree.Nodes?.length:', tree.Nodes?.length);
         return null;
       })()}
       
@@ -475,26 +476,26 @@ interface DraggedItem {
 
 // Fonction utilitaire pour transformer les donnÃ©es API en structure TreeBranchLeafTree
 const transformApiTreeToLocal = (apiTree: unknown, phantomNodes: Set<string> = new Set()): TreeBranchLeafTree => {
-  console.log('ðŸ”„ [TRANSFORM] DÃ©but transformation API vers local');
-  console.log('ðŸ” [TRANSFORM] DonnÃ©es API reÃ§ues:', apiTree);
-  console.log('ðŸ” [TRANSFORM] Nodes dans API:', apiTree.Nodes?.length);
-  console.log('ðŸ‘» [TRANSFORM] Phantom nodes Ã  filtrer:', [...phantomNodes]);
+  logger.debug('ðŸ”„ [TRANSFORM] DÃ©but transformation API vers local');
+  logger.debug('ðŸ” [TRANSFORM] DonnÃ©es API reÃ§ues:', apiTree);
+  logger.debug('ðŸ” [TRANSFORM] Nodes dans API:', apiTree.Nodes?.length);
+  logger.debug('ðŸ‘» [TRANSFORM] Phantom nodes Ã  filtrer:', [...phantomNodes]);
   
   // Filtrer les phantom nodes dÃ¨s la rÃ©ception des donnÃ©es API
   const filteredNodes = apiTree.Nodes?.filter((node: APINode) => {
     const isPhantom = phantomNodes.has(node.id);
     if (isPhantom) {
-      console.log('ðŸ§¹ [TRANSFORM] NÅ“ud fantÃ´me filtrÃ© dÃ¨s l\'API:', node.id);
+      logger.debug('ðŸ§¹ [TRANSFORM] NÅ“ud fantÃ´me filtrÃ© dÃ¨s l\'API:', node.id);
     }
     return !isPhantom;
   }) || [];
   
   // Log dÃ©taillÃ© des nÅ“uds aprÃ¨s filtrage phantom nodes
   if (filteredNodes.length > 0) {
-    console.log('ðŸ“‹ [TRANSFORM] DonnÃ©es brutes des nÅ“uds (aprÃ¨s filtrage phantom):');
+    logger.debug('ðŸ“‹ [TRANSFORM] DonnÃ©es brutes des nÅ“uds (aprÃ¨s filtrage phantom):');
     filteredNodes.forEach((node: unknown, index: number) => {
       const nodeObj = node as Record<string, unknown>;
-      console.log(`  API NÅ“ud ${index + 1}:`, {
+      logger.debug(`  API NÅ“ud ${index + 1}:`, {
         id: nodeObj.id,
         name: nodeObj.name,
         label: nodeObj.label,
@@ -533,10 +534,10 @@ const transformApiTreeToLocal = (apiTree: unknown, phantomNodes: Set<string> = n
   
   // Fonction pour construire la hiÃ©rarchie Ã  partir d'un tableau plat
   const buildHierarchy = (flatNodes: APINode[]): TreeBranchLeafNode[] => {
-    console.log('ðŸ—ï¸ [HIERARCHY] Construction hiÃ©rarchie depuis:', flatNodes.length, 'nÅ“uds');
-    console.log('ðŸ” [HIERARCHY] DÃ©tail des nÅ“uds reÃ§us:');
+    logger.debug('ðŸ—ï¸ [HIERARCHY] Construction hiÃ©rarchie depuis:', flatNodes.length, 'nÅ“uds');
+    logger.debug('ðŸ” [HIERARCHY] DÃ©tail des nÅ“uds reÃ§us:');
     flatNodes.forEach((node, index) => {
-      console.log(`  NÅ“ud ${index + 1}:`, {
+      logger.debug(`  NÅ“ud ${index + 1}:`, {
         id: node.id,
         name: node.name || node.label,
         parentId: node.parentId,
@@ -583,23 +584,23 @@ const transformApiTreeToLocal = (apiTree: unknown, phantomNodes: Set<string> = n
       if (!node) return;
 
       if (apiNode.parentId) {
-        console.log('ðŸ”— [HIERARCHY] NÅ“ud avec parent:', { child: apiNode.id, parent: apiNode.parentId });
+        logger.debug('ðŸ”— [HIERARCHY] NÅ“ud avec parent:', { child: apiNode.id, parent: apiNode.parentId });
         const parent = nodeMap.get(apiNode.parentId);
         if (parent) {
           parent.children.push(node);
-          console.log('âœ… [HIERARCHY] Enfant ajoutÃ© Ã  parent:', { parent: parent.id, childrenCount: parent.children.length });
+          logger.debug('âœ… [HIERARCHY] Enfant ajoutÃ© Ã  parent:', { parent: parent.id, childrenCount: parent.children.length });
         } else {
-          console.warn('âš ï¸ [HIERARCHY] Parent non trouvÃ© pour:', apiNode.id, 'parent:', apiNode.parentId);
+          logger.warn('âš ï¸ [HIERARCHY] Parent non trouvÃ© pour:', apiNode.id, 'parent:', apiNode.parentId);
           rootNodes.push(node);
         }
       } else {
-        console.log('ðŸŒ± [HIERARCHY] NÅ“ud racine:', apiNode.id);
+        logger.debug('ðŸŒ± [HIERARCHY] NÅ“ud racine:', apiNode.id);
         rootNodes.push(node);
       }
     });
 
-    console.log('âœ… [HIERARCHY] HiÃ©rarchie construite:', rootNodes.length, 'nÅ“uds racine');
-    console.log('ðŸŒ³ [HIERARCHY] Structure finale:', rootNodes.map(n => ({ 
+    logger.debug('âœ… [HIERARCHY] HiÃ©rarchie construite:', rootNodes.length, 'nÅ“uds racine');
+    logger.debug('ðŸŒ³ [HIERARCHY] Structure finale:', rootNodes.map(n => ({ 
       id: n.id, 
       name: n.name, 
       children: n.children.length,
@@ -624,13 +625,13 @@ const transformApiTreeToLocal = (apiTree: unknown, phantomNodes: Set<string> = n
     APIConnections: apiTree.APIConnections || []
   };
 
-  console.log('ðŸŽ¯ [TRANSFORM] Transformation terminÃ©e:', result);
+  logger.debug('ðŸŽ¯ [TRANSFORM] Transformation terminÃ©e:', result);
   return result;
 };
 
 // Layout principal TreeBranchLeaf V2 avec drag & drop
 const TreeBranchLeafLayoutV2: React.FC = () => {
-  console.log('ðŸŒŸ [TreeBranchLeaf] Composant TreeBranchLeafLayoutV2 chargÃ© !');
+  logger.debug('ðŸŒŸ [TreeBranchLeaf] Composant TreeBranchLeafLayoutV2 chargÃ© !');
   const { id: treeId } = useParams<{ id: string }>();
   const { api } = useAuthenticatedApi();
   const { message, modal } = App.useApp();
@@ -653,7 +654,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
       const stored = localStorage.getItem('treebranchleaf-phantom-nodes');
       return stored ? new Set(JSON.parse(stored)) : new Set();
     } catch (error) {
-      console.warn('ðŸš¨ [PHANTOM] Erreur lecture localStorage phantoms:', error);
+      logger.warn('ðŸš¨ [PHANTOM] Erreur lecture localStorage phantoms:', error);
       return new Set();
     }
   });
@@ -662,9 +663,9 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
   useEffect(() => {
     try {
       localStorage.setItem('treebranchleaf-phantom-nodes', JSON.stringify([...phantomNodes]));
-      console.log('ðŸ’¾ [PHANTOM] Sauvegarde localStorage:', [...phantomNodes]);
+      logger.debug('ðŸ’¾ [PHANTOM] Sauvegarde localStorage:', [...phantomNodes]);
     } catch (error) {
-      console.warn('ðŸš¨ [PHANTOM] Erreur sauvegarde localStorage:', error);
+      logger.warn('ðŸš¨ [PHANTOM] Erreur sauvegarde localStorage:', error);
     }
   }, [phantomNodes]);
 
@@ -710,11 +711,11 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
   const fetchTree = useCallback(async () => {
     try {
       setLoading(true);
-      console.log('ðŸ”„ [TreeBranchLeafV2] MODE PRODUCTION - Chargement arbre Prisma');
+      logger.debug('ðŸ”„ [TreeBranchLeafV2] MODE PRODUCTION - Chargement arbre Prisma');
       
       if (!treeId && !isDeleting) {
         // VÃ©rifier d'abord s'il existe des arbres
-        console.log('ðŸ” [TreeBranchLeafV2] VÃ©rification des arbres existants...');
+        logger.debug('ðŸ” [TreeBranchLeafV2] VÃ©rification des arbres existants...');
         const existingTrees = await api.get('/api/treebranchleaf-v2/trees');
         
         if (existingTrees.length > 0) {
@@ -726,22 +727,22 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
             const lastOpenedTree = existingTrees.find((tree) => tree.id === lastOpenedTreeId);
             if (lastOpenedTree) {
               treeToLoadBasic = lastOpenedTree;
-              console.log('ðŸ”„ [TreeBranchLeafV2] Restauration dernier arbre ouvert:', lastOpenedTree.name);
+              logger.debug('ðŸ”„ [TreeBranchLeafV2] Restauration dernier arbre ouvert:', lastOpenedTree.name);
             }
           } else {
             // Si pas de dernier arbre sauvÃ©, prendre le plus rÃ©cent (dernier crÃ©Ã©)
             treeToLoadBasic = existingTrees.sort((a, b) => 
               new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime()
             )[0];
-            console.log('ðŸ†• [TreeBranchLeafV2] SÃ©lection automatique du dernier arbre crÃ©Ã©/modifiÃ©:', treeToLoadBasic.name);
+            logger.debug('ðŸ†• [TreeBranchLeafV2] SÃ©lection automatique du dernier arbre crÃ©Ã©/modifiÃ©:', treeToLoadBasic.name);
           }
           
-          console.log('âœ… [TreeBranchLeafV2] Arbre sÃ©lectionnÃ© automatiquement:', treeToLoadBasic.name);
+          logger.debug('âœ… [TreeBranchLeafV2] Arbre sÃ©lectionnÃ© automatiquement:', treeToLoadBasic.name);
           
           // IMPORTANT: Charger l'arbre complet avec ses nÅ“uds via l'endpoint spÃ©cifique
-          console.log('ðŸ”„ [TreeBranchLeafV2] Chargement arbre complet avec nÅ“uds...');
+          logger.debug('ðŸ”„ [TreeBranchLeafV2] Chargement arbre complet avec nÅ“uds...');
           const fullTreeResponse = await api.get(`/api/treebranchleaf-v2/trees/${treeToLoadBasic.id}`);
-          console.log('ðŸ” [TreeBranchLeafV2] Arbre complet reÃ§u:', {
+          logger.debug('ðŸ” [TreeBranchLeafV2] Arbre complet reÃ§u:', {
             id: fullTreeResponse.id,
             name: fullTreeResponse.name,
             nodesCount: fullTreeResponse.Nodes?.length || 0
@@ -753,13 +754,13 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
           // Sauvegarder cet arbre comme dernier ouvert
           localStorage.setItem('treebranchleaf-last-opened', treeToLoadBasic.id);
           
-          console.log('ðŸŒ³ [TreeBranchLeafV2] Arbre chargÃ© avec', transformedTree.Nodes?.length || 0, 'nÅ“uds');
+          logger.debug('ðŸŒ³ [TreeBranchLeafV2] Arbre chargÃ© avec', transformedTree.Nodes?.length || 0, 'nÅ“uds');
           setLoading(false);
           return;
         }
         
         // CrÃ©er un nouvel arbre seulement s'il n'y en a aucun
-        console.log('ðŸ†• [TreeBranchLeafV2] Aucun arbre existant, crÃ©ation nouvel arbre Prisma');
+        logger.debug('ðŸ†• [TreeBranchLeafV2] Aucun arbre existant, crÃ©ation nouvel arbre Prisma');
         
         const newTreeResponse = await api.post('/api/treebranchleaf-v2/trees', {
           name: 'Nouvel Arbre TreeBranchLeaf',
@@ -770,39 +771,39 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
           metadata: { createdBy: 'system', version: '1.0.0' }
         });
         
-        console.log('âœ… [TreeBranchLeafV2] Nouvel arbre crÃ©Ã©:', newTreeResponse);
+        logger.debug('âœ… [TreeBranchLeafV2] Nouvel arbre crÃ©Ã©:', newTreeResponse);
         setTree(transformApiTreeToLocal(newTreeResponse, phantomNodes));
         setLoading(false);
         return;
       } else if (!treeId && isDeleting) {
-        console.log('â¸ï¸ [TreeBranchLeafV2] Suppression en cours, pas de crÃ©ation automatique');
+        logger.debug('â¸ï¸ [TreeBranchLeafV2] Suppression en cours, pas de crÃ©ation automatique');
         setTree(null);
         setLoading(false);
         return;
       }
 
       // Charger arbre existant depuis Prisma
-      console.log('ðŸ”„ [TreeBranchLeafV2] Chargement arbre existant:', treeId);
+      logger.debug('ðŸ”„ [TreeBranchLeafV2] Chargement arbre existant:', treeId);
       const response = await api.get(`/api/treebranchleaf-v2/trees/${treeId}`);
-      console.log('âœ… [TreeBranchLeafV2] Arbre chargÃ© depuis Prisma:', response);
+      logger.debug('âœ… [TreeBranchLeafV2] Arbre chargÃ© depuis Prisma:', response);
       
       setTree(transformApiTreeToLocal(response, phantomNodes));
     } catch (error) {
-      console.error('âŒ [TreeBranchLeafV2] Erreur Prisma:', error);
+      logger.error('âŒ [TreeBranchLeafV2] Erreur Prisma:', error);
       
       // En cas d'erreur, essayer de charger n'importe quel arbre existant
-      console.log('ðŸ”„ [TreeBranchLeafV2] Tentative de rÃ©cupÃ©ration via arbres existants');
+      logger.debug('ðŸ”„ [TreeBranchLeafV2] Tentative de rÃ©cupÃ©ration via arbres existants');
       try {
         const existingTrees = await api.get('/api/treebranchleaf-v2/trees');
         if (existingTrees.length > 0) {
-          console.log('âœ… [TreeBranchLeafV2] RÃ©cupÃ©ration rÃ©ussie avec:', existingTrees[0].name);
+          logger.debug('âœ… [TreeBranchLeafV2] RÃ©cupÃ©ration rÃ©ussie avec:', existingTrees[0].name);
           setTree(transformApiTreeToLocal(existingTrees[0], phantomNodes));
         } else {
-          console.log('ï¿½ [TreeBranchLeafV2] Aucun arbre disponible');
+          logger.debug('ï¿½ [TreeBranchLeafV2] Aucun arbre disponible');
           setTree(null);
         }
       } catch (recoveryError) {
-        console.error('ðŸ’¥ [TreeBranchLeafV2] Erreur critique:', recoveryError);
+        logger.error('ðŸ’¥ [TreeBranchLeafV2] Erreur critique:', recoveryError);
         setTree(null);
       }
     } finally {
@@ -812,8 +813,8 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
 
   // Fonction pour ajouter un nÅ“ud Ã  l'arbre (MODE PRODUCTION PRISMA)
   const handleAddNode = useCallback(async (paletteItem: { id: string; type: string; label: string; icon?: string; color?: string }, targetNodeId?: string) => {
-    console.log('ðŸš€ [DEBUG] handleAddNode appelÃ© avec:', { paletteItem, targetNodeId });
-    console.log('ðŸŒ³ [DEBUG] Ã‰tat actuel de tree:', tree);
+    logger.debug('ðŸš€ [DEBUG] handleAddNode appelÃ© avec:', { paletteItem, targetNodeId });
+    logger.debug('ðŸŒ³ [DEBUG] Ã‰tat actuel de tree:', tree);
     
     // Mapping des types palette vers types attendus
     const typeMapping: Record<string, string> = {
@@ -829,18 +830,18 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
     };
     
     const normalizedType = typeMapping[paletteItem.type] || paletteItem.type;
-    console.log('ðŸ”„ [DEBUG] Type normalisÃ©:', { original: paletteItem.type, normalized: normalizedType });
+    logger.debug('ðŸ”„ [DEBUG] Type normalisÃ©:', { original: paletteItem.type, normalized: normalizedType });
     
     if (!tree) {
-      console.log('âŒ [DEBUG] GUARD CLAUSE: tree est null/undefined, return early');
+      logger.debug('âŒ [DEBUG] GUARD CLAUSE: tree est null/undefined, return early');
       return;
     }
     
-    console.log('âœ… [DEBUG] Guard clause passÃ©e, execution continue...');
+    logger.debug('âœ… [DEBUG] Guard clause passÃ©e, execution continue...');
 
     // Fonction de validation des rÃ¨gles hiÃ©rarchiques
     const validateNodePlacement = (normalizedType: string, targetNodeId?: string | null): { valid: boolean; message: string } => {
-      console.log('ðŸ”„ [DEBUG] Validation avec type normalisÃ©:', normalizedType);
+      logger.debug('ðŸ”„ [DEBUG] Validation avec type normalisÃ©:', normalizedType);
       
       // Plus de type 'arbre' dans la palette - supprimÃ© !
       
@@ -897,20 +898,20 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
     };
 
     // Validation des rÃ¨gles hiÃ©rarchiques
-    console.log('ðŸ” [DEBUG] DÃ©but validation hiÃ©rarchique...');
+    logger.debug('ðŸ” [DEBUG] DÃ©but validation hiÃ©rarchique...');
     const validation = validateNodePlacement(normalizedType, targetNodeId);
-    console.log('ðŸ” [DEBUG] RÃ©sultat validation:', validation);
+    logger.debug('ðŸ” [DEBUG] RÃ©sultat validation:', validation);
     
     if (!validation.valid) {
-      console.log('âŒ [DEBUG] Validation Ã©chouÃ©e, affichage message d\'erreur');
+      logger.debug('âŒ [DEBUG] Validation Ã©chouÃ©e, affichage message d\'erreur');
       message.error(validation.message);
       return;
     }
     
-    console.log('âœ… [DEBUG] Validation rÃ©ussie, crÃ©ation du nÅ“ud...');
+    logger.debug('âœ… [DEBUG] Validation rÃ©ussie, crÃ©ation du nÅ“ud...');
 
     try {
-      console.log('ðŸ”„ [PRISMA] CrÃ©ation nouveau nÅ“ud:', { paletteItem, targetNodeId, treeId: tree.id });
+      logger.debug('ðŸ”„ [PRISMA] CrÃ©ation nouveau nÅ“ud:', { paletteItem, targetNodeId, treeId: tree.id });
 
       // DonnÃ©es du nouveau nÅ“ud pour Prisma
       const newNodeData = {
@@ -957,24 +958,24 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
       };
 
       // CrÃ©er le nÅ“ud dans Prisma
-      console.log('ðŸ“¤ [PRISMA] Envoi donnÃ©es:', newNodeData);
+      logger.debug('ðŸ“¤ [PRISMA] Envoi donnÃ©es:', newNodeData);
       const createdNode = await api.post(`/api/treebranchleaf-v2/trees/${tree.id}/nodes`, newNodeData);
-      console.log('âœ… [PRISMA] NÅ“ud crÃ©Ã©:', createdNode);
+      logger.debug('âœ… [PRISMA] NÅ“ud crÃ©Ã©:', createdNode);
 
       // Recharger l'arbre complet depuis Prisma pour avoir la structure mise Ã  jour
-      console.log('ðŸ”„ [PRISMA] Rechargement arbre...');
+      logger.debug('ðŸ”„ [PRISMA] Rechargement arbre...');
       const updatedTreeApi = await api.get(`/api/treebranchleaf-v2/trees/${tree.id}`);
-      console.log('âœ… [PRISMA] Arbre rechargÃ© (API):', updatedTreeApi);
-      console.log('ðŸ” [PRISMA] PropriÃ©tÃ©s disponibles dans l\'API:', Object.keys(updatedTreeApi));
-      console.log('ðŸ” [PRISMA] Children dans API:', updatedTreeApi.Children);
-      console.log('ðŸ” [PRISMA] Nodes dans API:', updatedTreeApi.Nodes);
-      console.log('ðŸ” [PRISMA] nodes dans API:', updatedTreeApi.nodes);
+      logger.debug('âœ… [PRISMA] Arbre rechargÃ© (API):', updatedTreeApi);
+      logger.debug('ðŸ” [PRISMA] PropriÃ©tÃ©s disponibles dans l\'API:', Object.keys(updatedTreeApi));
+      logger.debug('ðŸ” [PRISMA] Children dans API:', updatedTreeApi.Children);
+      logger.debug('ðŸ” [PRISMA] Nodes dans API:', updatedTreeApi.Nodes);
+      logger.debug('ðŸ” [PRISMA] nodes dans API:', updatedTreeApi.nodes);
       
       // Transformer les donnÃ©es API en format local
       const updatedTree = transformApiTreeToLocal(updatedTreeApi, phantomNodes);
-      console.log('ðŸ“Š [PRISMA] Nombre de nÅ“uds aprÃ¨s rechargement:', updatedTree?.Nodes?.length || 0);
-      console.log('ðŸŒ³ [PRISMA] Structure complÃ¨te des nÅ“uds:', JSON.stringify(updatedTree?.Nodes, null, 2));
-      console.log('ðŸ” [PRISMA] Premier nÅ“ud dÃ©taillÃ©:', updatedTree?.Nodes?.[0]);
+      logger.debug('ðŸ“Š [PRISMA] Nombre de nÅ“uds aprÃ¨s rechargement:', updatedTree?.Nodes?.length || 0);
+      logger.debug('ðŸŒ³ [PRISMA] Structure complÃ¨te des nÅ“uds:', JSON.stringify(updatedTree?.Nodes, null, 2));
+      logger.debug('ðŸ” [PRISMA] Premier nÅ“ud dÃ©taillÃ©:', updatedTree?.Nodes?.[0]);
       
       setTree(updatedTree);
       
@@ -985,7 +986,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
       message.success(`ðŸŽ‰ ${paletteItem.label} crÃ©Ã© avec succÃ¨s en mode production !`);
       
     } catch (error) {
-      console.error('âŒ [PRISMA] Erreur crÃ©ation nÅ“ud:', error);
+      logger.error('âŒ [PRISMA] Erreur crÃ©ation nÅ“ud:', error);
       message.error(`âŒ Erreur lors de la crÃ©ation du ${paletteItem.label}: ${error.message || 'Erreur inconnue'}`);
     }
   }, [tree, api, message, findNodeById, phantomNodes]);
@@ -993,7 +994,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
   // Fonctions d'actions pour les 3 points
   // Fonctions d'actions pour les 3 points (MODE PRODUCTION PRISMA)
   const handleEditNode = useCallback((nodeId: string) => {
-    console.log('âœï¸ [PRISMA] Ã‰dition nÅ“ud:', nodeId);
+    logger.debug('âœï¸ [PRISMA] Ã‰dition nÅ“ud:', nodeId);
     const findNodeById = (nodes: TreeBranchLeafNode[], targetId: string): TreeBranchLeafNode | null => {
       for (const node of nodes) {
         if (node.id === targetId) return node;
@@ -1010,7 +1011,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
       if (nodeToEdit) {
         setSelectedNode(nodeToEdit);
         message.success(`ðŸ“ NÅ“ud "${nodeToEdit.label}" sÃ©lectionnÃ© pour modification`);
-        console.log('âœ… [PRISMA] NÅ“ud sÃ©lectionnÃ© pour Ã©dition:', nodeToEdit);
+        logger.debug('âœ… [PRISMA] NÅ“ud sÃ©lectionnÃ© pour Ã©dition:', nodeToEdit);
       }
     }
   }, [tree, message]);
@@ -1018,7 +1019,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
   const handleCloneNode = useCallback(async (nodeId: string) => {
     if (!tree) return;
     
-    console.log('ðŸ“‹ [PRISMA] Clonage nÅ“ud:', nodeId);
+    logger.debug('ðŸ“‹ [PRISMA] Clonage nÅ“ud:', nodeId);
     
     const findNodeById = (nodes: TreeBranchLeafNode[], targetId: string): TreeBranchLeafNode | null => {
       for (const node of nodes) {
@@ -1045,7 +1046,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
     // VÃ©rifier si le nÅ“ud existe dans l'Ã©tat actuel
     const nodeExists = tree.Nodes && findNodeInHierarchy(tree.Nodes, nodeId);
     if (!nodeExists) {
-      console.warn('âš ï¸ [PRISMA] NÅ“ud inexistant pour clonage:', nodeId);
+      logger.warn('âš ï¸ [PRISMA] NÅ“ud inexistant pour clonage:', nodeId);
       message.warning('Ce nÅ“ud n\'existe plus et ne peut pas Ãªtre clonÃ©');
       return;
     }
@@ -1084,7 +1085,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
 
       // CrÃ©er le clone dans Prisma
       const clonedNode = await api.post(`/api/treebranchleaf-v2/trees/${tree.id}/nodes`, cloneData);
-      console.log('âœ… [PRISMA] NÅ“ud clonÃ©:', clonedNode);
+      logger.debug('âœ… [PRISMA] NÅ“ud clonÃ©:', clonedNode);
 
       // Recharger l'arbre
       const updatedTree = await api.get(`/api/treebranchleaf-v2/trees/${tree.id}`);
@@ -1096,7 +1097,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
       message.success(`ðŸ“‹ NÅ“ud "${nodeToClone.label}" clonÃ© avec succÃ¨s !`);
       
     } catch (error) {
-      console.error('âŒ [PRISMA] Erreur clonage:', error);
+      logger.error('âŒ [PRISMA] Erreur clonage:', error);
       message.error(`âŒ Erreur lors du clonage: ${error.message || 'Erreur inconnue'}`);
     }
   }, [tree, api, message]);
@@ -1104,11 +1105,11 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
   const handleDeleteNode = useCallback(async (nodeId: string) => {
     if (!tree) return;
 
-    console.log('ðŸ—‘ï¸ [PRISMA] Suppression nÅ“ud:', nodeId);
+    logger.debug('ðŸ—‘ï¸ [PRISMA] Suppression nÅ“ud:', nodeId);
     
     // VÃ©rifier si c'est un nÅ“ud de dÃ©mo (pour Ã©viter les erreurs 404)
     if (nodeId.startsWith('demo-')) {
-      console.warn('âš ï¸ [PRISMA] Tentative de suppression nÅ“ud dÃ©mo ignorÃ©e:', nodeId);
+      logger.warn('âš ï¸ [PRISMA] Tentative de suppression nÅ“ud dÃ©mo ignorÃ©e:', nodeId);
       message.warning('âš ï¸ Ce nÅ“ud de dÃ©monstration ne peut pas Ãªtre supprimÃ©');
       return;
     }
@@ -1127,21 +1128,21 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
     // VÃ©rifier si le nÅ“ud existe dans l'Ã©tat actuel
     const nodeExists = tree.Nodes && findNodeInHierarchy(tree.Nodes, nodeId);
     if (!nodeExists) {
-      console.warn('âš ï¸ [PRISMA] NÅ“ud dÃ©jÃ  supprimÃ© de l\'Ã©tat local:', nodeId);
+      logger.warn('âš ï¸ [PRISMA] NÅ“ud dÃ©jÃ  supprimÃ© de l\'Ã©tat local:', nodeId);
       message.warning('Ce nÅ“ud a dÃ©jÃ  Ã©tÃ© supprimÃ©');
       
       // Forcer le rechargement de l'arbre pour synchroniser l'Ã©tat
       try {
-        console.log('ðŸ”„ [PRISMA] Rechargement forcÃ© aprÃ¨s nÅ“ud manquant localement');
+        logger.debug('ðŸ”„ [PRISMA] Rechargement forcÃ© aprÃ¨s nÅ“ud manquant localement');
         const updatedTree = await api.get(`/api/treebranchleaf-v2/trees/${tree.id}`);
-        console.log('ðŸ” [PRISMA] Arbre rechargÃ© aprÃ¨s nÅ“ud manquant:', {
+        logger.debug('ðŸ” [PRISMA] Arbre rechargÃ© aprÃ¨s nÅ“ud manquant:', {
           nodesCount: updatedTree.Nodes?.length || 0,
           nodes: updatedTree.Nodes?.map(n => ({ id: n.id, label: n.label })) || []
         });
         setTree(updatedTree);
-        console.log('ðŸ”„ [PRISMA] Arbre rechargÃ© aprÃ¨s dÃ©tection de dÃ©synchronisation');
+        logger.debug('ðŸ”„ [PRISMA] Arbre rechargÃ© aprÃ¨s dÃ©tection de dÃ©synchronisation');
       } catch (refreshError) {
-        console.error('âŒ [PRISMA] Erreur rechargement arbre:', refreshError);
+        logger.error('âŒ [PRISMA] Erreur rechargement arbre:', refreshError);
       }
       return;
     }
@@ -1149,12 +1150,12 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
     try {
       // Supprimer le nÅ“ud dans Prisma (cascade sur les enfants)
       await api.delete(`/api/treebranchleaf-v2/trees/${tree.id}/nodes/${nodeId}`);
-      console.log('âœ… [PRISMA] NÅ“ud supprimÃ© de la base');
+      logger.debug('âœ… [PRISMA] NÅ“ud supprimÃ© de la base');
 
       // Recharger l'arbre
-      console.log('ðŸ”„ [PRISMA] Rechargement aprÃ¨s suppression normale');
+      logger.debug('ðŸ”„ [PRISMA] Rechargement aprÃ¨s suppression normale');
       const updatedTree = await api.get(`/api/treebranchleaf-v2/trees/${tree.id}`);
-      console.log('ðŸ” [PRISMA] Arbre rechargÃ© aprÃ¨s suppression:', {
+      logger.debug('ðŸ” [PRISMA] Arbre rechargÃ© aprÃ¨s suppression:', {
         nodesCount: updatedTree.Nodes?.length || 0,
         nodes: updatedTree.Nodes?.map(n => ({ id: n.id, label: n.label })) || []
       });
@@ -1168,18 +1169,18 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
       message.success('ðŸ—‘ï¸ NÅ“ud supprimÃ© avec succÃ¨s (avec tous ses enfants)');
       
     } catch (error) {
-      console.error('âŒ [PRISMA] Erreur suppression:', error);
+      logger.error('âŒ [PRISMA] Erreur suppression:', error);
       
       // Gestion spÃ©cifique des erreurs 404
       if (error.status === 404 || error.response?.status === 404) {
-        console.warn('âš ï¸ [PRISMA] NÅ“ud dÃ©jÃ  supprimÃ© cÃ´tÃ© serveur (404)');
+        logger.warn('âš ï¸ [PRISMA] NÅ“ud dÃ©jÃ  supprimÃ© cÃ´tÃ© serveur (404)');
         message.warning('Ce nÅ“ud avait dÃ©jÃ  Ã©tÃ© supprimÃ©. Synchronisation en cours...');
         
         // Recharger l'arbre pour synchroniser l'Ã©tat
         try {
-          console.log('ðŸ”„ [PRISMA] Rechargement aprÃ¨s 404 pour nÅ“ud:', nodeId);
+          logger.debug('ðŸ”„ [PRISMA] Rechargement aprÃ¨s 404 pour nÅ“ud:', nodeId);
           const updatedTree = await api.get(`/api/treebranchleaf-v2/trees/${tree.id}`);
-          console.log('ðŸ” [PRISMA] Arbre rechargÃ© aprÃ¨s 404:', {
+          logger.debug('ðŸ” [PRISMA] Arbre rechargÃ© aprÃ¨s 404:', {
             nodesCount: updatedTree.Nodes?.length || 0,
             nodes: updatedTree.Nodes?.map(n => ({ id: n.id, label: n.label })) || []
           });
@@ -1188,8 +1189,8 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
           setPhantomNodes(prev => {
             const newSet = new Set(prev);
             newSet.add(nodeId);
-            console.log('ðŸ‘» [PHANTOM] NÅ“ud ajoutÃ© aux phantoms:', nodeId);
-            console.log('ï¿½ [PHANTOM] Liste phantom nodes:', [...newSet]);
+            logger.debug('ðŸ‘» [PHANTOM] NÅ“ud ajoutÃ© aux phantoms:', nodeId);
+            logger.debug('ï¿½ [PHANTOM] Liste phantom nodes:', [...newSet]);
             return newSet;
           });
           
@@ -1202,7 +1203,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
             setSelectedNode(null);
           }
         } catch (refreshError) {
-          console.error('âŒ [PRISMA] Erreur rechargement aprÃ¨s 404:', refreshError);
+          logger.error('âŒ [PRISMA] Erreur rechargement aprÃ¨s 404:', refreshError);
           message.error('Erreur lors de la synchronisation de l\'arbre');
         }
       } else {
@@ -1214,7 +1215,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
   const handleMoveNode = useCallback(async (nodeId: string, direction: 'up' | 'down') => {
     if (!tree) return;
 
-    console.log('ðŸ”„ [PRISMA] DÃ©placement nÅ“ud:', { nodeId, direction });
+    logger.debug('ðŸ”„ [PRISMA] DÃ©placement nÅ“ud:', { nodeId, direction });
 
     // Fonction rÃ©cursive pour chercher un nÅ“ud dans la hiÃ©rarchie
     const findNodeInHierarchy = (nodes: TreeBranchLeafNode[], targetId: string): boolean => {
@@ -1230,7 +1231,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
     // VÃ©rifier si le nÅ“ud existe dans l'Ã©tat actuel
     const nodeExists = tree.Nodes && findNodeInHierarchy(tree.Nodes, nodeId);
     if (!nodeExists) {
-      console.warn('âš ï¸ [PRISMA] NÅ“ud inexistant pour dÃ©placement:', nodeId);
+      logger.warn('âš ï¸ [PRISMA] NÅ“ud inexistant pour dÃ©placement:', nodeId);
       message.warning('Ce nÅ“ud n\'existe plus et ne peut pas Ãªtre dÃ©placÃ©');
       return;
     }
@@ -1240,7 +1241,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
       await api.patch(`/api/treebranchleaf-v2/trees/${tree.id}/nodes/${nodeId}/move`, {
         direction: direction
       });
-      console.log('âœ… [PRISMA] NÅ“ud dÃ©placÃ©');
+      logger.debug('âœ… [PRISMA] NÅ“ud dÃ©placÃ©');
 
       // Recharger l'arbre
       const updatedTree = await api.get(`/api/treebranchleaf-v2/trees/${tree.id}`);
@@ -1249,7 +1250,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
       message.success(`ðŸ”„ NÅ“ud dÃ©placÃ© vers le ${direction === 'up' ? 'haut' : 'bas'}`);
       
     } catch (error) {
-      console.error('âŒ [PRISMA] Erreur dÃ©placement:', error);
+      logger.error('âŒ [PRISMA] Erreur dÃ©placement:', error);
       message.error(`âŒ Erreur lors du dÃ©placement: ${error.message || 'Erreur inconnue'}`);
     }
   }, [tree, api, message]);
@@ -1259,12 +1260,12 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
   // Charger tous les arbres disponibles
   const fetchAllTrees = useCallback(async () => {
     try {
-      console.log('ðŸ“‹ [TREES] Chargement de tous les arbres...');
+      logger.debug('ðŸ“‹ [TREES] Chargement de tous les arbres...');
       const trees = await api.get('/api/treebranchleaf-v2/trees');
       setAllTrees(trees);
-      console.log('âœ… [TREES] Arbres chargÃ©s:', trees);
+      logger.debug('âœ… [TREES] Arbres chargÃ©s:', trees);
     } catch (error) {
-      console.error('âŒ [TREES] Erreur chargement arbres:', error);
+      logger.error('âŒ [TREES] Erreur chargement arbres:', error);
       message.error('Erreur lors du chargement des arbres');
     }
   }, [api, message]);
@@ -1278,7 +1279,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
     }
 
     try {
-      console.log('ðŸŒ³ [TREES] CrÃ©ation nouvel arbre:', treeName);
+      logger.debug('ðŸŒ³ [TREES] CrÃ©ation nouvel arbre:', treeName);
       const newTree = await api.post('/api/treebranchleaf-v2/trees', {
         name: treeName.trim(),
         description: `Arbre crÃ©Ã© : ${treeName.trim()}`,
@@ -1288,10 +1289,10 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
       
       await fetchAllTrees(); // Recharger la liste
       message.success(`âœ… Arbre "${treeName}" crÃ©Ã© avec succÃ¨s`);
-      console.log('âœ… [TREES] Nouvel arbre crÃ©Ã©:', newTree);
+      logger.debug('âœ… [TREES] Nouvel arbre crÃ©Ã©:', newTree);
       return newTree;
     } catch (error) {
-      console.error('âŒ [TREES] Erreur crÃ©ation arbre:', error);
+      logger.error('âŒ [TREES] Erreur crÃ©ation arbre:', error);
       message.error('Erreur lors de la crÃ©ation de l\'arbre');
       return null;
     }
@@ -1300,7 +1301,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
   // Changer d'arbre
   const handleSelectTree = useCallback(async (treeId: string) => {
     try {
-      console.log('ðŸ”„ [TREES] Changement vers arbre:', treeId);
+      logger.debug('ðŸ”„ [TREES] Changement vers arbre:', treeId);
       const selectedTreeApi = await api.get(`/api/treebranchleaf-v2/trees/${treeId}`);
       const selectedTree = transformApiTreeToLocal(selectedTreeApi, phantomNodes);
       setTree(selectedTree);
@@ -1308,11 +1309,11 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
       
       // Sauvegarder comme dernier arbre ouvert
       localStorage.setItem('treebranchleaf-last-opened', treeId);
-      console.log('ðŸ’¾ [TREES] Arbre sauvegardÃ© comme dernier ouvert:', selectedTree.name);
+      logger.debug('ðŸ’¾ [TREES] Arbre sauvegardÃ© comme dernier ouvert:', selectedTree.name);
       
       message.success(`Arbre "${selectedTree.name}" chargÃ©`);
     } catch (error) {
-      console.error('âŒ [TREES] Erreur changement arbre:', error);
+      logger.error('âŒ [TREES] Erreur changement arbre:', error);
       message.error('Erreur lors du chargement de l\'arbre');
     }
   }, [api, message, phantomNodes]);
@@ -1332,7 +1333,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
       message.success('Nom de l\'arbre modifiÃ©');
       return true;
     } catch (error) {
-      console.error('âŒ [TREES] Erreur renommage:', error);
+      logger.error('âŒ [TREES] Erreur renommage:', error);
       message.error('Erreur lors du renommage');
       return false;
     }
@@ -1341,18 +1342,18 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
   // Supprimer un arbre
   const handleDeleteTree = useCallback(async (treeId: string) => {
     try {
-      console.log('ðŸ—‘ï¸ [TREES] Suppression arbre:', treeId);
+      logger.debug('ðŸ—‘ï¸ [TREES] Suppression arbre:', treeId);
       setIsDeleting(true); // Marquer qu'on est en train de supprimer
       
       await api.delete(`/api/treebranchleaf-v2/trees/${treeId}`);
-      console.log('âœ… [TREES] Arbre supprimÃ© cÃ´tÃ© serveur');
+      logger.debug('âœ… [TREES] Arbre supprimÃ© cÃ´tÃ© serveur');
       
       // Recharger la liste des arbres
       await fetchAllTrees();
-      console.log('âœ… [TREES] Liste des arbres rechargÃ©e');
+      logger.debug('âœ… [TREES] Liste des arbres rechargÃ©e');
       
       if (tree?.id === treeId) {
-        console.log('ðŸ”„ [TREES] L\'arbre supprimÃ© Ã©tait l\'arbre actuel');
+        logger.debug('ðŸ”„ [TREES] L\'arbre supprimÃ© Ã©tait l\'arbre actuel');
         
         // Attendre un peu pour que la liste soit Ã  jour
         setTimeout(async () => {
@@ -1360,10 +1361,10 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
           const updatedTrees = await api.get('/api/treebranchleaf-v2/trees');
           
           if (updatedTrees.length > 0) {
-            console.log('ðŸŒ³ [TREES] SÃ©lection du premier arbre restant:', updatedTrees[0].name);
+            logger.debug('ðŸŒ³ [TREES] SÃ©lection du premier arbre restant:', updatedTrees[0].name);
             await handleSelectTree(updatedTrees[0].id);
           } else {
-            console.log('ðŸ’” [TREES] Plus d\'arbres disponibles, remise Ã  zÃ©ro de l\'Ã©tat');
+            logger.debug('ðŸ’” [TREES] Plus d\'arbres disponibles, remise Ã  zÃ©ro de l\'Ã©tat');
             // Plus d'arbres, vider l'Ã©tat au lieu de crÃ©er automatiquement
             setTree(null);
             setSelectedNode(null);
@@ -1377,7 +1378,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
       
       message.success('Arbre supprimÃ©');
     } catch (error) {
-      console.error('âŒ [TREES] Erreur suppression:', error);
+      logger.error('âŒ [TREES] Erreur suppression:', error);
       setIsDeleting(false); // Fin de la suppression mÃªme en cas d'erreur
       message.error('Erreur lors de la suppression');
     }
@@ -1396,7 +1397,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
       message.success(`Arbre dupliquÃ© : "${newName}"`);
       return duplicatedTree;
     } catch (error) {
-      console.error('âŒ [TREES] Erreur duplication:', error);
+      logger.error('âŒ [TREES] Erreur duplication:', error);
       message.error('Erreur lors de la duplication');
       return null;
     }
@@ -1404,7 +1405,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
 
   // Effet pour charger l'arbre initial et la liste des arbres
   useEffect(() => {
-    console.log('ðŸ”„ [useEffect] Montage initial du composant');
+    logger.debug('ðŸ”„ [useEffect] Montage initial du composant');
     
     let isMounted = true;
     
@@ -1412,24 +1413,24 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
     const initializeComponent = async () => {
       try {
         setLoading(true);
-        console.log('ðŸ”„ [useEffect] DÃ©but du chargement initial');
+        logger.debug('ðŸ”„ [useEffect] DÃ©but du chargement initial');
         
         // D'abord charger la liste des arbres
         await fetchAllTrees();
         
         // Ensuite, si pas d'arbre actuel et pas en cours de suppression
         if (isMounted && !tree && !isDeleting) {
-          console.log('ðŸ”„ [useEffect] Aucun arbre actuel, chargement...');
+          logger.debug('ðŸ”„ [useEffect] Aucun arbre actuel, chargement...');
           await fetchTree();
         }
         
-        console.log('âœ… [useEffect] Chargement initial terminÃ©');
+        logger.debug('âœ… [useEffect] Chargement initial terminÃ©');
       } catch (error) {
-        console.error('âŒ [useEffect] Erreur lors de l\'initialisation:', error);
+        logger.error('âŒ [useEffect] Erreur lors de l\'initialisation:', error);
       } finally {
         // S'assurer que loading soit toujours stoppÃ©
         if (isMounted) {
-          console.log('âœ… [useEffect] ArrÃªt du loading aprÃ¨s initialisation');
+          logger.debug('âœ… [useEffect] ArrÃªt du loading aprÃ¨s initialisation');
           setLoading(false);
         }
       }
@@ -1444,17 +1445,17 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
 
   // Gestion du drag & drop
   const handleDragStart = (event: DragStartEvent) => {
-    console.log('ðŸŽ¯ [DragDrop] Drag start:', event);
+    logger.debug('ðŸŽ¯ [DragDrop] Drag start:', event);
     setDraggedItem(event.active.data.current);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     
-    console.log('ðŸŽ¯ [DragDrop] Drag end:', { active, over });
+    logger.debug('ðŸŽ¯ [DragDrop] Drag end:', { active, over });
     
     if (!over) {
-      console.log('âŒ [DragDrop] Pas de zone de drop valide');
+      logger.debug('âŒ [DragDrop] Pas de zone de drop valide');
       setDraggedItem(null);
       return;
     }
@@ -1471,29 +1472,29 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
         // Si on glisse une BRANCHE sur une autre BRANCHE au niveau racine (parentId === null),
         // alors on l'ajoute comme SIBLING (frÃ¨re) au niveau racine, pas comme CHILD
         if (paletteItem.type === 'branch' && targetNode && targetNode.type === 'branch' && !findParentOfNode(tree?.Nodes || [], targetNodeId)) {
-          console.log('âœ… [DragDrop] Branche ajoutÃ©e comme sibling au niveau racine');
+          logger.debug('âœ… [DragDrop] Branche ajoutÃ©e comme sibling au niveau racine');
           handleAddNode(paletteItem, null); // null = niveau racine
         } else {
-          console.log('âœ… [DragDrop] Ajout sur nÅ“ud existant:', { paletteItem, targetNodeId });
+          logger.debug('âœ… [DragDrop] Ajout sur nÅ“ud existant:', { paletteItem, targetNodeId });
           handleAddNode(paletteItem, targetNodeId);
         }
       }
       // Cas 2: Drop sur la zone vide (racine de l'arbre)  
       else if (over.data.current?.type === 'tree-root') {
-        console.log('âœ… [DragDrop] Ajout dans arbre vide:', { paletteItem });
+        logger.debug('âœ… [DragDrop] Ajout dans arbre vide:', { paletteItem });
         
         // Si c'est un Ã©lÃ©ment "root" (arbre) de la palette, demander le nom
-        console.log('ðŸŒ³ [DragDrop] VÃ©rification du type:', paletteItem.type);
-        console.log('ðŸŒ³ [DragDrop] Ã‰lÃ©ment glissÃ© complet:', paletteItem);
+        logger.debug('ðŸŒ³ [DragDrop] VÃ©rification du type:', paletteItem.type);
+        logger.debug('ðŸŒ³ [DragDrop] Ã‰lÃ©ment glissÃ© complet:', paletteItem);
         
         // Tous les Ã©lÃ©ments de la palette sont maintenant des nÅ“uds Ã  ajouter Ã  l'arbre
-        console.log('ðŸ”§ [DEBUG] Appel handleAddNode avec:', { paletteItem, targetNodeId: null });
+        logger.debug('ðŸ”§ [DEBUG] Appel handleAddNode avec:', { paletteItem, targetNodeId: null });
         handleAddNode(paletteItem, null);
-        console.log('ðŸ”§ [DEBUG] AprÃ¨s appel handleAddNode');
+        logger.debug('ðŸ”§ [DEBUG] AprÃ¨s appel handleAddNode');
       }
       else {
-        console.log('âŒ [DragDrop] Type de zone de drop non reconnu:', over.data.current?.type);
-        console.log('ðŸ”§ [DEBUG] over.data.current:', over.data.current);
+        logger.debug('âŒ [DragDrop] Type de zone de drop non reconnu:', over.data.current?.type);
+        logger.debug('ðŸ”§ [DEBUG] over.data.current:', over.data.current);
       }
     }
     
@@ -1501,7 +1502,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
     if (active.data.current?.type === 'palette-item' && over.data.current?.type === 'tree-global') {
       const paletteItem = active.data.current.item;
       
-      console.log('âœ… [DragDrop] Ajout Ã  la racine:', { paletteItem });
+      logger.debug('âœ… [DragDrop] Ajout Ã  la racine:', { paletteItem });
       
       // Ajouter Ã  la racine
       handleAddNode(paletteItem);
@@ -1586,7 +1587,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
   ], [tree, allTrees.length, handleDuplicateTree, handleSelectTree]);
 
   if (loading) {
-    console.log('ðŸ”„ [RENDER] Composant en cours de chargement, affichage du loader');
+    logger.debug('ðŸ”„ [RENDER] Composant en cours de chargement, affichage du loader');
     return (
       <div style={{ 
         height: '100vh', 
@@ -1609,8 +1610,8 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
     );
   }
 
-  console.log('âœ… [RENDER] Rendu principal du composant, arbre:', tree?.name || 'aucun');
-  console.log('ðŸŒ³ [RENDER] Structure de l\'arbre:', tree ? {
+  logger.debug('âœ… [RENDER] Rendu principal du composant, arbre:', tree?.name || 'aucun');
+  logger.debug('ðŸŒ³ [RENDER] Structure de l\'arbre:', tree ? {
     id: tree.id,
     name: tree.name,
     nodes: tree.Nodes?.length || 0,
@@ -1772,7 +1773,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
               selectedNode={selectedNode}
               onSelectNode={setSelectedNode}
               onDropItem={(item, targetNodeId) => {
-                console.log('ðŸŽ¯ Drop dans TreeExplorer:', item, 'sur:', targetNodeId);
+                logger.debug('ðŸŽ¯ Drop dans TreeExplorer:', item, 'sur:', targetNodeId);
                 handleAddNode(item, targetNodeId);
               }}
               onEditNode={handleEditNode}
@@ -1787,7 +1788,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
             <PropertiesPanel
               selectedNode={selectedNode}
               onUpdateNode={(nodeId, updates) => {
-                console.log('ðŸ”„ Mise Ã  jour nÅ“ud:', nodeId, updates);
+                logger.debug('ðŸ”„ Mise Ã  jour nÅ“ud:', nodeId, updates);
                 // TODO: Implementer la mise Ã  jour
               }}
             />

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { TreeSelect, Modal, Space, Tabs, Typography, Alert, Spin, Segmented, Tooltip, List, Input, Collapse, Badge, Tag, ConfigProvider } from 'antd';
 import { useAuthenticatedApi } from '../../../../../../hooks/useAuthenticatedApi';
 import { SF } from '../../../../../zhiive/ZhiiveTheme';
+import { logger } from '../../../../../../lib/logger';
 
 type NodeLite = { id: string; parentId?: string | null; label: string; type: string; subType?: string | null };
 
@@ -337,7 +338,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
         setSharedReferences(sharedRefsRes || []);
       } catch {
         // ignore, onglet non bloquant - l'API peut ne pas exister encore
-        console.warn('[NodeTreeSelector] Impossible de charger les références partagées');
+        logger.warn('[NodeTreeSelector] Impossible de charger les références partagées');
       } finally {
         if (mounted) setSharedReferencesLoading(false);
       }
@@ -359,7 +360,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
         setCalculatedValues(calculatedRes || []);
       } catch {
         // ignore, onglet non bloquant - l'API peut ne pas exister encore
-        console.warn('[NodeTreeSelector] Impossible de charger les valeurs calculées');
+        logger.warn('[NodeTreeSelector] Impossible de charger les valeurs calculées');
       } finally {
         if (mounted) setCalculatedValuesLoading(false);
       }

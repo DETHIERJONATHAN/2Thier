@@ -7,6 +7,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, X } from 'lucide-react';
 import FormulaExplorer from './FormulaExplorer';
 import './formula-editor.css';
+import { logger } from '../../lib/logger';
 
 // Déclaration pour étendre Window avec notre propriété de débogage
 declare global {
@@ -191,10 +192,10 @@ const SortableFormulaItem: React.FC<SortableFormulaItemProps> = ({ id, item, for
     };
 
     const openExplorerForZone = (zone: 'expr' | 'then' | 'else') => {
-        console.log('[SortableFormulaItem] Opening FormulaExplorer for zone:', zone);
+        logger.debug('[SortableFormulaItem] Opening FormulaExplorer for zone:', zone);
         setExplorerTargetZone(zone);
         setShowFormulaExplorer(true);
-        console.log('[SortableFormulaItem] showFormulaExplorer set to true');
+        logger.debug('[SortableFormulaItem] showFormulaExplorer set to true');
     };
 
     const switchJustBound = false; // simplifié
@@ -211,7 +212,7 @@ const SortableFormulaItem: React.FC<SortableFormulaItemProps> = ({ id, item, for
             <FormulaExplorer
                 visible={showFormulaExplorer}
                 onClose={() => {
-                    console.log('[SortableFormulaItem] Closing FormulaExplorer');
+                    logger.debug('[SortableFormulaItem] Closing FormulaExplorer');
                     setShowFormulaExplorer(false);
                 }}
                 onSelect={handleExplorerSelect}

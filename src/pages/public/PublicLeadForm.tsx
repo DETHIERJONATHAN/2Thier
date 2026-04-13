@@ -11,6 +11,7 @@ import {
   RocketOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Title, Paragraph, Text } = Typography;
 const { TextArea } = Input;
@@ -121,7 +122,7 @@ export default function PublicLeadForm() {
       }
       
     } catch (error) {
-      console.error('Erreur submission:', error);
+      logger.error('Erreur submission:', error);
       msgApi.error('Erreur lors de l\'envoi. Veuillez réessayer.');
     } finally {
       setIsSubmitting(false);

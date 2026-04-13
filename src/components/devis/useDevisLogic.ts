@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { message } from 'antd';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { logger } from '../../lib/logger';
 
 // === TYPES COMPLETS DU SYSTÈME ===
 interface FieldOption {
@@ -282,7 +283,7 @@ export const useDevisLogic = ({ devisId, leadId, mode = 'create' }: DevisLogicPr
         }
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des blocs:', error);
+      logger.error('Erreur lors du chargement des blocs:', error);
       message.error('Erreur lors du chargement des données');
     } finally {
       setLoading(false);
@@ -300,7 +301,7 @@ export const useDevisLogic = ({ devisId, leadId, mode = 'create' }: DevisLogicPr
         setLastSavedData(data.data);
       }
     } catch (error) {
-      console.error('Erreur lors du chargement du devis:', error);
+      logger.error('Erreur lors du chargement du devis:', error);
       message.error('Erreur lors du chargement du devis');
     }
   }, [devisId, api]);
@@ -326,7 +327,7 @@ export const useDevisLogic = ({ devisId, leadId, mode = 'create' }: DevisLogicPr
       
       setFormData(prev => ({ ...clientData, ...prev }));
     } catch (error) {
-      console.error('Erreur lors du chargement du lead:', error);
+      logger.error('Erreur lors du chargement du lead:', error);
     }
   }, [leadId, api]);
 
@@ -467,7 +468,7 @@ export const useDevisLogic = ({ devisId, leadId, mode = 'create' }: DevisLogicPr
       setLastSavedData(formData);
       message.success('Devis sauvegardé');
     } catch (error) {
-      console.error('Erreur lors de la sauvegarde:', error);
+      logger.error('Erreur lors de la sauvegarde:', error);
       message.error('Erreur lors de la sauvegarde');
     } finally {
       setSaving(false);

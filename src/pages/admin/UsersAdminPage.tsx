@@ -10,6 +10,7 @@ import UserGoogleWorkspaceModal from '../../components/admin/UserGoogleWorkspace
 import InvitationsList from '../../components/admin/InvitationsList';
 import { User, Role, UserService } from '../../types';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const UsersAdminPage: React.FC = () => {
   const { t } = useTranslation();
@@ -129,7 +130,7 @@ const UsersAdminPage: React.FC = () => {
       message.success(`Utilisateur ${user.email} supprimé avec succès`);
       fetchAllData(); // Recharger la liste des utilisateurs
     } catch (error: unknown) {
-      console.error('Erreur lors de la suppression:', error);
+      logger.error('Erreur lors de la suppression:', error);
       const errorMessage = error?.response?.data?.message || 'Erreur lors de la suppression de l\'utilisateur';
       message.error(errorMessage);
     }

@@ -6,6 +6,7 @@
  */
 
 import { type TreeBranchLeafNode, TBLElement } from '../index';
+import { logger } from '../../../../lib/logger';
 
 // 🔄 ÉMETTEUR D'ÉVÉNEMENTS TBL
 export const TBLEventEmitter = {
@@ -78,7 +79,7 @@ export class TreeBranchLeafDetector {
       } as TreeBranchLeafNode;
 
     } catch (error) {
-      console.warn('Erreur extraction données nœud:', error);
+      logger.warn('Erreur extraction données nœud:', error);
       return null;
     }
   }
@@ -210,7 +211,7 @@ export class ManualTBLSync {
         TBLEventEmitter.nodeCreated(node);
         success++;
       } catch (error) {
-        console.error('Erreur sync manuel:', error);
+        logger.error('Erreur sync manuel:', error);
         errors++;
       }
     }
@@ -222,14 +223,14 @@ export class ManualTBLSync {
     const element = document.querySelector(`[data-node-id="${nodeId}"], [id="${nodeId}"]`);
     
     if (!element) {
-      console.warn(`Élément non trouvé: ${nodeId}`);
+      logger.warn(`Élément non trouvé: ${nodeId}`);
       return false;
     }
 
     const nodeData = TreeBranchLeafDetector.extractNodeData(element);
     
     if (!nodeData) {
-      console.warn(`Impossible d'extraire les données: ${nodeId}`);
+      logger.warn(`Impossible d'extraire les données: ${nodeId}`);
       return false;
     }
 
@@ -237,7 +238,7 @@ export class ManualTBLSync {
       TBLEventEmitter.nodeCreated(nodeData);
       return true;
     } catch (error) {
-      console.error('Erreur sync spécifique:', error);
+      logger.error('Erreur sync spécifique:', error);
       return false;
     }
   }
@@ -303,7 +304,7 @@ export const QuickTBLSetup = {
    * Configuration ultra-rapide pour démarrer TBL Bridge
    */
   async quickStart(): Promise<void> {
-    console.log('🚀 Démarrage rapide TBL Bridge...');
+    logger.debug('🚀 Démarrage rapide TBL Bridge...');
     
     // Import dynamique pour éviter les dépendances circulaires
     const { startTBLIntegration } = await import('./index');
@@ -319,18 +320,18 @@ export const QuickTBLSetup = {
     // Ajouter la fonction de nettoyage au window pour accès global
     (window as any).tblCleanup = cleanup;
     
-    console.log('✅ TBL Bridge démarré. Tapez "window.tblCleanup()" pour arrêter.');
+    logger.debug('✅ TBL Bridge démarré. Tapez "window.tblCleanup()" pour arrêter.');
   },
 
   /**
    * Synchronisation manuelle d'urgence
    */
   async emergencySync(): Promise<void> {
-    console.log('🚨 Synchronisation d\'urgence...');
+    logger.debug('🚨 Synchronisation d\'urgence...');
     
     const result = await ManualTBLSync.syncFromDOM();
     
-    console.log(`✅ Sync terminée: ${result.success}/${result.total} succès, ${result.errors} erreurs`);
+    logger.debug(`✅ Sync terminée: ${result.success}/${result.total} succès, ${result.errors} erreurs`);
   }
 };
 

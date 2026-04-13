@@ -9,6 +9,7 @@ import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { useAIAssistant } from './CallModule/hooks/useAIAssistant';
 import { FiZap, FiMic, FiSend, FiVolume2, FiStopCircle } from 'react-icons/fi';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../lib/logger';
 
 // Assistant IA étendu: suggestions + chat texte + mode vocal (reconnaissance & synthèse navigateur)
 const AssistantAmeliorationIA: React.FC = () => {
@@ -84,7 +85,7 @@ const AssistantAmeliorationIA: React.FC = () => {
         }
       };
       r.onerror = (e: { error?: string }) => {
-        if (e?.error) console.warn('[IA Coach] Erreur reconnaissance vocale', e.error);
+        if (e?.error) logger.warn('[IA Coach] Erreur reconnaissance vocale', e.error);
         setRecording(false);
       };
       r.onend = () => setRecording(false);
@@ -99,7 +100,7 @@ const AssistantAmeliorationIA: React.FC = () => {
   try { r.stop(); } catch { /* ignore stop error */ }
       setRecording(false);
     } else {
-      try { r.start(); setRecording(true); } catch (e) { console.warn(e); }
+      try { r.start(); setRecording(true); } catch (e) { logger.warn(e); }
     }
   };
 

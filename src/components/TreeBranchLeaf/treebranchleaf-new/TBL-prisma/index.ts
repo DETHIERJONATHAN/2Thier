@@ -3,6 +3,7 @@ import { TBLContext, TBLCalculationResult } from './shared/types';
 import { ConditionCalculator } from './conditions/condition-calculator';
 import { FormulaCalculator } from './formulas/formula-calculator';
 import { ReferenceResolver } from './shared/reference-resolver';
+import { logger } from '../../../../lib/logger';
 
 /**
  * Point d'entrée principal pour tous les calculs TBL
@@ -34,7 +35,7 @@ export class TBLOrchestrator {
     sourceRef: string
   ): Promise<TBLCalculationResult> {
     try {
-      console.log(`[TBL-ORCHESTRATOR] 🎯 Construction pour type: ${operationType}, ref: ${sourceRef}`);
+      logger.debug(`[TBL-ORCHESTRATOR] 🎯 Construction pour type: ${operationType}, ref: ${sourceRef}`);
 
       switch (operationType) {
         case 'condition':
@@ -51,7 +52,7 @@ export class TBLOrchestrator {
       }
 
     } catch (error) {
-      console.error(`[TBL-ORCHESTRATOR] ❌ Erreur calcul ${operationType}:`, error);
+      logger.error(`[TBL-ORCHESTRATOR] ❌ Erreur calcul ${operationType}:`, error);
       return this.createErrorResult(`Erreur calcul ${operationType}: ${error}`);
     }
   }
@@ -65,7 +66,7 @@ export class TBLOrchestrator {
     // Extraire l'ID de la condition depuis sourceRef (format: condition:id)
     const conditionId = sourceRef.replace('condition:', '');
     
-    console.log(`[TBL-ORCHESTRATOR] 🎯 Construction condition: ${conditionId}`);
+    logger.debug(`[TBL-ORCHESTRATOR] 🎯 Construction condition: ${conditionId}`);
 
     // Calculer la condition avec le nouveau système
     const conditionResult = await this.conditionCalculator.calculateCondition(conditionId);
@@ -88,7 +89,7 @@ export class TBLOrchestrator {
     // Extraire l'ID de la formule depuis sourceRef (format: node-formula:id)
     const formulaId = sourceRef.replace('node-formula:', '');
     
-    console.log(`[TBL-ORCHESTRATOR] 📐 Construction formule: ${formulaId}`);
+    logger.debug(`[TBL-ORCHESTRATOR] 📐 Construction formule: ${formulaId}`);
 
     // Calculer la formule avec le nouveau système
     const formulaResult = await this.formulaCalculator.calculateFormula(formulaId);
@@ -111,7 +112,7 @@ export class TBLOrchestrator {
     // Pour l'instant, implémentation simple
     const tableId = sourceRef.replace('node-table:', '');
     
-    console.log(`[TBL-ORCHESTRATOR] 📊 Construction tableau: ${tableId}`);
+    logger.debug(`[TBL-ORCHESTRATOR] 📊 Construction tableau: ${tableId}`);
 
     return {
       detail: { tableId, message: 'Tableaux à implémenter' },

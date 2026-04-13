@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import * as XLSX from 'xlsx';
+import { logger } from '../lib/logger';
 
 interface Column {
   key: string;
@@ -125,7 +126,7 @@ export const TableauConfigEditor: React.FC<TableauConfigEditorProps> = ({
     if (!config.crossingData && config.data && Array.isArray(config.data) && config.data.length > 0) {
       hasMigratedRef.current = true; // Marquer comme migré AVANT d'appeler onChange
       
-      console.log('[TableauConfigEditor] Migration des anciennes données...');
+      logger.debug('[TableauConfigEditor] Migration des anciennes données...');
       const newCrossingData: Record<string, unknown> = {};
       
       config.data.forEach((rowData: Record<string, unknown>, rowIndex: number) => {
@@ -140,7 +141,7 @@ export const TableauConfigEditor: React.FC<TableauConfigEditorProps> = ({
         });
       });
       
-      console.log('[TableauConfigEditor] Données migrées:', Object.keys(newCrossingData).length);
+      logger.debug('[TableauConfigEditor] Données migrées:', Object.keys(newCrossingData).length);
       
       // Mettre à jour la configuration avec les données migrées via le ref stable
       onChangeRef.current({
@@ -406,7 +407,7 @@ ${newRows.length} lignes
 ${dataCount} cellules avec données importées.`);
         
       } catch (error) {
-        console.error('Erreur lors de l\'import Excel:', error);
+        logger.error('Erreur lors de l\'import Excel:', error);
         alert('Erreur lors de l\'import Excel. Vérifiez le format du fichier.');
       }
     };

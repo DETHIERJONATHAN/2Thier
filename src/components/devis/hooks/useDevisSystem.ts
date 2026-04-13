@@ -7,6 +7,7 @@ import { applyValidation } from '../../../utils/validationHelper';
 import { evaluateDependency } from '../../../utils/dependencyValidator';
 import type { FieldDependency as StoreFieldDependency } from '../../../store/slices/types';
 import { DynamicFormulaEngine } from '../../../services/DynamicFormulaEngine';
+import { logger } from '../../../lib/logger';
 
 // Types
 export type FieldOption = { id: string; label: string; value?: string };
@@ -104,13 +105,13 @@ export function useDevisSystem(config: DevisSystemConfig = {}) {
     try {
       const response = await api.get('/api/blocks');
       if (!response?.length) {
-        console.warn('[DEVIS] Aucun bloc trouvé');
+        logger.warn('[DEVIS] Aucun bloc trouvé');
         return;
       }
 
       const transformedBlocks = response.map((block: Record<string, unknown>) => {
         if (!block.Section || !Array.isArray(block.Section)) {
-          console.warn('[DEVIS] Bloc sans sections:', block.id);
+          logger.warn('[DEVIS] Bloc sans sections:', block.id);
           return { id: block.id, name: block.name || 'Bloc', sections: [] };
         }
 
@@ -153,7 +154,7 @@ export function useDevisSystem(config: DevisSystemConfig = {}) {
 
       setBlocks(transformedBlocks);
     } catch (error) {
-      console.error('[DEVIS] Erreur lors du chargement des blocs:', error);
+      logger.error('[DEVIS] Erreur lors du chargement des blocs:', error);
       message.error('Erreur lors du chargement des blocs');
     }
   }, [api]);
@@ -180,7 +181,7 @@ export function useDevisSystem(config: DevisSystemConfig = {}) {
         setFormData(initialFormData);
       }
     } catch (error) {
-      console.error('[DEVIS] Erreur lors du chargement du lead:', error);
+      logger.error('[DEVIS] Erreur lors du chargement du lead:', error);
       message.error('Erreur lors du chargement du lead');
     }
   }, [leadId, api]);
@@ -206,7 +207,7 @@ export function useDevisSystem(config: DevisSystemConfig = {}) {
             if (result.required !== undefined) required = result.required;
           }
         } catch (error) {
-          console.warn('[DEVIS] Erreur évaluation dépendance:', error);
+          logger.warn('[DEVIS] Erreur évaluation dépendance:', error);
         }
       }
 
@@ -245,7 +246,7 @@ export function useDevisSystem(config: DevisSystemConfig = {}) {
             }
           }
         } catch (error) {
-          console.warn('[DEVIS] Erreur traitement formule:', error);
+          logger.warn('[DEVIS] Erreur traitement formule:', error);
         }
       }, 0);
 
@@ -272,7 +273,7 @@ export function useDevisSystem(config: DevisSystemConfig = {}) {
         }
       });
     } catch (error) {
-      console.error('[DEVIS] Erreur sauvegarde:', error);
+      logger.error('[DEVIS] Erreur sauvegarde:', error);
       message.error('Erreur lors de la sauvegarde');
     } finally {
       setSaving(false);

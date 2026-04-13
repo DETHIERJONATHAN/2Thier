@@ -12,6 +12,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import { tblLog, isTBLDebugEnabled } from '../../../../../utils/tblDebug';
 import { useTBLBatchOptional } from '../contexts/TBLBatchContext';
+import { logger } from '../../../../../lib/logger';
 
 export interface NodeFormula {
   id: string;
@@ -144,7 +145,7 @@ export const useNodeFormulas = ({
           }
         }
       } catch (err) {
-        console.error('[useNodeFormulas] Erreur chargement:', err);
+        logger.error('[useNodeFormulas] Erreur chargement:', err);
         if (mountedRef.current) {
           setError('Erreur lors du chargement des formules');
         }

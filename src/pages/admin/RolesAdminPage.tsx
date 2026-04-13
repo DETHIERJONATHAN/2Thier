@@ -6,6 +6,7 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { NotificationManager } from '../../components/Notifications';
 import { useTranslation } from 'react-i18next';
 import { FB, SF } from '../../components/zhiive/ZhiiveTheme';
+import { logger } from '../../lib/logger';
 
 // ── Facebook Design Tokens ──
 // ── FBToggle (identique à UsersAdminPageNew) ──
@@ -234,7 +235,7 @@ function ModulesModal({ role, open, onClose }: { role: Role; open: boolean; onCl
       const response = await api.get(url);
       if (response.success) {
         const permsData = Array.isArray(response.data) ? response.data : [];
-        console.log('[ModulesModal] Permissions loaded:', permsData.length, '| access:', permsData.filter((p: Record<string, unknown>) => p.action === 'access' && p.allowed).length);
+        logger.debug('[ModulesModal] Permissions loaded:', permsData.length, '| access:', permsData.filter((p: Record<string, unknown>) => p.action === 'access' && p.allowed).length);
         setPermissions(permsData);
         // Auto-expand modules that have fine-grained permissions
         const modulesWithFinePerms = new Set<string>();
@@ -261,7 +262,7 @@ function ModulesModal({ role, open, onClose }: { role: Role; open: boolean; onCl
         const all: Module[] = Array.isArray(response.data) ? response.data : [];
         const activeModules = all.filter(m => m.active !== false);
         activeModules.sort((a, b) => a.label.localeCompare(b.label, 'fr'));
-        console.log('[ModulesModal] Modules loaded:', all.length, '| actifs:', activeModules.length, '| with actions:', activeModules.filter(m => m.parameters?.availableActions?.length).length);
+        logger.debug('[ModulesModal] Modules loaded:', all.length, '| actifs:', activeModules.length, '| with actions:', activeModules.filter(m => m.parameters?.availableActions?.length).length);
         setModules(activeModules);
       } else {
         throw new Error(response.message || 'Erreur lors du chargement des modules');
@@ -278,7 +279,7 @@ function ModulesModal({ role, open, onClose }: { role: Role; open: boolean; onCl
       setError('');
       fetchPermissions();
       fetchModules();
-      console.log('[ModulesModal] Opened for role:', role.label, '(', role.id, ')');
+      logger.debug('[ModulesModal] Opened for role:', role.label, '(', role.id, ')');
     }
   }, [open, fetchPermissions, fetchModules]);
 
@@ -357,7 +358,7 @@ function ModulesModal({ role, open, onClose }: { role: Role; open: boolean; onCl
         organizationId: role.organizationId,
         permissions: permissions.map(({ moduleId, action, resource, allowed }) => ({ moduleId, action, resource: resource || '*', allowed })),
       };
-      console.log('[ModulesModal] Saving', payload.permissions.length, 'permissions for role', role.label);
+      logger.debug('[ModulesModal] Saving', payload.permissions.length, 'permissions for role', role.label);
       const response = await api.post('/api/permissions/bulk', payload);
       if (response.success) {
         NotificationManager.success('Modules du rôle sauvegardés avec succès.');
@@ -624,9 +625,9 @@ export default function RolesAdminPage() {
         // On force le rechargement pour être sûr d'avoir l'objet Organization à jour
         fetchRoles();
       } else {
-        console.log("Création d'un nouveau rôle avec le payload :", payload);
+        logger.debug("Création d'un nouveau rôle avec le payload :", payload);
         response = await api.post('/api/roles', payload);
-        console.log("Réponse de l'API après création :", response);
+        logger.debug("Réponse de l'API après création :", response);
         if (!response.success) {
           throw new Error(response.message || 'La création du rôle a échoué.');
         }

@@ -32,6 +32,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -268,7 +269,7 @@ export default function MarketplacePage() {
       const transformedLeads = marketplaceLeads.map(transformMarketplaceLeadToLead);
       setLeads(transformedLeads);
     } catch (error) {
-      console.error('Erreur lors du chargement des leads:', error);
+      logger.error('Erreur lors du chargement des leads:', error);
       message.error('Impossible de charger les leads');
     }
   }, [api, filters]);
@@ -278,7 +279,7 @@ export default function MarketplacePage() {
       const data = await api.get<MarketplaceStats>('/api/marketplace/stats');
       setStats(data);
     } catch (error) {
-      console.error('Erreur lors du chargement des stats:', error);
+      logger.error('Erreur lors du chargement des stats:', error);
     }
   }, [api]);
 
@@ -287,7 +288,7 @@ export default function MarketplacePage() {
       const data = await api.get('/api/marketplace/saved-searches');
       setSavedSearches(data);
     } catch (error) {
-      console.error('Erreur lors du chargement des recherches sauvegardées:', error);
+      logger.error('Erreur lors du chargement des recherches sauvegardées:', error);
     }
   }, [api]);
 
@@ -323,7 +324,7 @@ export default function MarketplacePage() {
       setSelectedLead(null);
       loadLeads(); // Recharger la liste
     } catch (error: unknown) {
-      console.error('Erreur lors de l\'achat:', error);
+      logger.error('Erreur lors de l\'achat:', error);
       const errorMessage = error instanceof Error 
         ? error.message
         : 'Erreur lors de l\'achat du lead';
@@ -345,7 +346,7 @@ export default function MarketplacePage() {
       message.success('Recherche sauvegardée !');
       loadSavedSearches();
     } catch (error) {
-      console.error('Erreur lors de la sauvegarde:', error);
+      logger.error('Erreur lors de la sauvegarde:', error);
       message.error('Erreur lors de la sauvegarde de la recherche');
     }
   };

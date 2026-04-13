@@ -1,5 +1,6 @@
 import { Response, NextFunction } from 'express';
 import { db } from '../lib/database';
+import { logger } from '../lib/logger';
 
 const CHANTIERS_MODULE_ID = 'module-chantiers-87ba0db4-2eb9-4096-8bbb-2259da444c2e';
 
@@ -127,7 +128,7 @@ export function requireChantierAction(...actions: string[]) {
       });
 
       if (!perm) {
-        console.log(`[ChantierPerm] 🔒 Permission refusée: user=${user.id}, actions=${actions.join(',')}, role=${userOrg.roleId}`);
+        logger.debug(`[ChantierPerm] 🔒 Permission refusée: user=${user.id}, actions=${actions.join(',')}, role=${userOrg.roleId}`);
         return res.status(403).json({ success: false, message: `Permission refusée: action ${actions.join('/')} requise` });
       }
 
@@ -138,7 +139,7 @@ export function requireChantierAction(...actions: string[]) {
 
       next();
     } catch (error: unknown) {
-      console.error('[ChantierPerm] Erreur vérification permission:', error);
+      logger.error('[ChantierPerm] Erreur vérification permission:', error);
       return res.status(500).json({ success: false, message: 'Erreur vérification permission' });
     }
   };

@@ -11,6 +11,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../auth/useAuth';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
+import { logger } from '../lib/logger';
 
 // ═══════════════════════════════════════════════════════════════
 // TYPES
@@ -126,7 +127,7 @@ export function SocialIdentityProvider({ children }: { children: React.ReactNode
           setSocialContext(data);
         }
       } catch (error) {
-        console.error('[SocialIdentity] Error loading context:', error);
+        logger.error('[SocialIdentity] Error loading context:', error);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -145,7 +146,7 @@ export function SocialIdentityProvider({ children }: { children: React.ReactNode
       await api.api.post(`/social-settings/org-follow/${orgId}`);
       refresh();
     } catch (error) {
-      console.error('[SocialIdentity] Error following colony:', error);
+      logger.error('[SocialIdentity] Error following colony:', error);
       throw error;
     }
   }, [api.api, refresh]);
@@ -155,7 +156,7 @@ export function SocialIdentityProvider({ children }: { children: React.ReactNode
       await api.api.delete(`/social-settings/org-follow/${orgId}`);
       refresh();
     } catch (error) {
-      console.error('[SocialIdentity] Error unfollowing colony:', error);
+      logger.error('[SocialIdentity] Error unfollowing colony:', error);
       throw error;
     }
   }, [api.api, refresh]);

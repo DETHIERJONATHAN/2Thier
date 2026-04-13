@@ -56,6 +56,7 @@ import FieldRenderer from './fields/FieldRenderer';
 import AIContentGenerator from '../ai/AIContentGenerator';
 import { SectionRenderer } from '../renderer/SectionRenderer';
 import { SF } from '../../components/zhiive/ZhiiveTheme';
+import { logger } from '../../lib/logger';
 
 /**
  * 🔧 Props du UniversalSectionEditor
@@ -99,7 +100,7 @@ export const UniversalSectionEditor: React.FC<UniversalSectionEditorProps> = ({
   mode = 'drawer',
   aiContext
 }) => {
-  console.log('🔥 [UniversalSectionEditor] websiteId PROP direct reçu:', websiteId);
+  logger.debug('🔥 [UniversalSectionEditor] websiteId PROP direct reçu:', websiteId);
   
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
@@ -135,7 +136,7 @@ export const UniversalSectionEditor: React.FC<UniversalSectionEditorProps> = ({
       websiteId: websiteId // Priorité au websiteId direct
     };
     
-    console.log('✅ [UniversalSectionEditor] enrichedAiContext CRÉÉ:', {
+    logger.debug('✅ [UniversalSectionEditor] enrichedAiContext CRÉÉ:', {
       websiteIdProp: websiteId,
       aiContextWebsiteId: aiContext?.websiteId,
       finalWebsiteId: context.websiteId,
@@ -162,12 +163,12 @@ export const UniversalSectionEditor: React.FC<UniversalSectionEditorProps> = ({
    * 🔄 Initialiser le formulaire avec le contenu actuel
    */
   useEffect(() => {
-    console.log('🔄 [UniversalSectionEditor] Initialisation du formulaire');
-    console.log('  Section type:', sectionType);
-    console.log('  Content reçu:', content);
-    console.log('  Schema defaults:', schema.defaults);
+    logger.debug('🔄 [UniversalSectionEditor] Initialisation du formulaire');
+    logger.debug('  Section type:', sectionType);
+    logger.debug('  Content reçu:', content);
+    logger.debug('  Schema defaults:', schema.defaults);
     const initialValues = content || schema.defaults || {};
-    console.log('  Valeurs initiales à charger:', initialValues);
+    logger.debug('  Valeurs initiales à charger:', initialValues);
     form.setFieldsValue(initialValues);
     setFormValues(initialValues); // 🔥 SYNC état local
     // Note: getFieldsValue() peut être vide ici car les Form.Item ne sont pas encore montés
@@ -250,7 +251,7 @@ export const UniversalSectionEditor: React.FC<UniversalSectionEditorProps> = ({
 
       mergedContent = cleanupNoneActions(mergedContent);
       
-      console.log('💾 [UniversalSectionEditor] Sauvegarde:', {
+      logger.debug('💾 [UniversalSectionEditor] Sauvegarde:', {
         formValues: values,
         existingContent: content,
         mergedContent
@@ -260,7 +261,7 @@ export const UniversalSectionEditor: React.FC<UniversalSectionEditorProps> = ({
       message.success('Section mise à jour avec succès !');
       onClose?.();
     } catch (error) {
-      console.error('Validation error:', error);
+      logger.error('Validation error:', error);
       message.error('Veuillez corriger les erreurs avant de sauvegarder');
     } finally {
       setLoading(false);
@@ -289,7 +290,7 @@ export const UniversalSectionEditor: React.FC<UniversalSectionEditorProps> = ({
         setLoading(false);
       }, 2000);
     } catch (error) {
-      console.error('AI generation error:', error);
+      logger.error('AI generation error:', error);
       message.error('Erreur lors de la génération IA');
       setLoading(false);
     }
@@ -364,7 +365,7 @@ export const UniversalSectionEditor: React.FC<UniversalSectionEditorProps> = ({
                           ...formValues,
                           [field.id]: newValue
                         };
-                        console.log('📝 [UniversalSectionEditor] Mise à jour du champ:', {
+                        logger.debug('📝 [UniversalSectionEditor] Mise à jour du champ:', {
                           fieldId: field.id,
                           oldValue: formValues[field.id],
                           newValue: newValue,
@@ -406,7 +407,7 @@ export const UniversalSectionEditor: React.FC<UniversalSectionEditorProps> = ({
                     <Form.Item shouldUpdate noStyle>
                       {() => {
                         const currentValues = form.getFieldsValue();
-                        console.log('🎨 [Aperçu] Valeurs actuelles:', currentValues);
+                        logger.debug('🎨 [Aperçu] Valeurs actuelles:', currentValues);
                         
                         return (
                           <SectionRenderer
@@ -462,7 +463,7 @@ export const UniversalSectionEditor: React.FC<UniversalSectionEditorProps> = ({
                     >
                       <Input.TextArea
                         rows={4}
-                        placeholder="console.log('Hello');"
+                        placeholder="logger.debug('Hello');"
                       />
                     </Form.Item>
                   </Card>

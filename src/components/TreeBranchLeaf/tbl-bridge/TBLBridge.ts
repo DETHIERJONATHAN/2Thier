@@ -9,6 +9,7 @@
 
 import { CapacityDetector, TreeBranchLeafNode, TBLCapacity, CapacityAnalysis } from './capacities/CapacityDetector';
 import { TBLDecoder } from './TBLDecoder';
+import { logger } from '../../../lib/logger';
 
 export interface TBLElement {
   // 🔑 SYSTÈME HYBRIDE COMPLET
@@ -428,7 +429,7 @@ export class TBLBridge {
    */
   private log(message: string): void {
     if (this.config.debugMode) {
-      console.log(`[TBLBridge] ${message}`);
+      logger.debug(`[TBLBridge] ${message}`);
     }
   }
 
@@ -479,7 +480,7 @@ export const tblBridge = new TBLBridge({
  * };
  * 
  * const result = await tblBridge.process(node);
- * console.log(result);
+ * logger.debug(result);
  * // Output: {
  * //   success: true,
  * //   element: { tbl_code: "32-prix-total-ht", ... },

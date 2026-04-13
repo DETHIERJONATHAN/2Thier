@@ -1,6 +1,7 @@
 import React from 'react';
 import { Card, List, Button, Upload } from 'antd';
 import { DownloadOutlined, UploadOutlined, FileOutlined } from '@ant-design/icons';
+import { logger } from '../../../lib/logger';
 
 interface LeadDocumentsProps {
   leadId?: string;
@@ -27,7 +28,7 @@ export const LeadDocuments: React.FC<LeadDocumentsProps> = ({ leadId }) => {
   ];
 
   const handleUpload = (file: File) => {
-    console.log('Upload file:', file);
+    logger.debug('Upload file:', file);
     return false; // Empêche l'upload automatique
   };
 

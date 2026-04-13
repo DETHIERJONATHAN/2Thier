@@ -15,6 +15,7 @@ import type { Formula as StoreFormula, FormulaItem } from "../../store/slices/ty
 import SortableFormulaItem from './SortableFormulaItem';
 import { getAPIHeaders } from '../../utils/formulaValidator';
 import './formula-editor.css';
+import { logger } from '../../lib/logger';
 
 // �tendre l'interface pour inclure le fieldId
 interface Formula extends StoreFormula {
@@ -35,7 +36,7 @@ if (FORCE_PRODUCTION_BEHAVIOR) {
         if ((event.type === 'formula-updated' || event.type === 'formula-force-reload') && 
             !(event as CustomEvent)?.detail?.isDragEvent && // Ne pas bloquer les événements liés au drag-and-drop
             !(event as CustomEvent)?.detail?.isEssential) { // Ne pas bloquer les événements essentiels
-            console.log(`[FormulaSequenceEditor] Événement ${event.type} filtré pour éviter rechargement inutile`);
+            logger.debug(`[FormulaSequenceEditor] Événement ${event.type} filtré pour éviter rechargement inutile`);
             return true; // Simuler que l'événement a été traité
         }
         // Sinon, comportement normal
@@ -67,7 +68,7 @@ const FormulaSequenceEditor: React.FC<FormulaSequenceEditorProps> = ({ formula }
     
     // Log conditionnels uniquement si le mode production n'est pas forcé
     if (process.env.NODE_ENV === 'development' && !FORCE_PRODUCTION_BEHAVIOR) {
-        console.log(`[FormulaSequenceEditor] Initialisation de la formule ${formulaId} avec ${sequence.length} �l�ments:`, 
+        logger.debug(`[FormulaSequenceEditor] Initialisation de la formule ${formulaId} avec ${sequence.length} �l�ments:`, 
             sequence.map(item => `${item.type}:${item.value}`));
     }
 
@@ -144,15 +145,15 @@ const FormulaSequenceEditor: React.FC<FormulaSequenceEditorProps> = ({ formula }
                 })
             }).then(response => {
                 if (!response.ok) {
-                    console.error(`[FormulaSequenceEditor] L'API a répondu avec le statut ${response.status}`);
+                    logger.error(`[FormulaSequenceEditor] L'API a répondu avec le statut ${response.status}`);
                 }
             }).catch(error => {
-                console.error(`[FormulaSequenceEditor] Erreur API:`, error);
+                logger.error(`[FormulaSequenceEditor] Erreur API:`, error);
             });
             
             return true;
         } catch (error) {
-            console.error(`[FormulaSequenceEditor] Erreur lors de la mise à jour:`, error);
+            logger.error(`[FormulaSequenceEditor] Erreur lors de la mise à jour:`, error);
             setNotification({
                 message: `Erreur lors de la mise à jour: ${error instanceof Error ? error.message : 'Erreur inconnue'}`,
                 type: 'error'
@@ -165,7 +166,7 @@ const FormulaSequenceEditor: React.FC<FormulaSequenceEditorProps> = ({ formula }
     const handleDragEnd = useCallback((event: DragEndEvent) => {
         // Log conditionnel pour réduire le bruit en mode "production forcée"
         if (!FORCE_PRODUCTION_BEHAVIOR) {
-            console.log('[FormulaSequenceEditor] Drag terminé:', event);
+            logger.debug('[FormulaSequenceEditor] Drag terminé:', event);
         }
         
         // Si l'élément a été déposé sur notre zone de formule
@@ -176,7 +177,7 @@ const FormulaSequenceEditor: React.FC<FormulaSequenceEditorProps> = ({ formula }
             if (draggedItem) {
                 // Log conditionnel
                 if (!FORCE_PRODUCTION_BEHAVIOR) {
-                    console.log('[FormulaSequenceEditor] Item déposé:', draggedItem);
+                    logger.debug('[FormulaSequenceEditor] Item déposé:', draggedItem);
                 }
                 
                 // Créer un nouvel item avec un ID unique pour éviter les duplications
@@ -416,7 +417,7 @@ const FormulaSequenceEditor: React.FC<FormulaSequenceEditorProps> = ({ formula }
                     if (type) {
                         // Log conditionnel
                         if (!FORCE_PRODUCTION_BEHAVIOR) {
-                            console.log(`[FormulaSequenceEditor] Item déposé via drag natif de type ${type}`);
+                            logger.debug(`[FormulaSequenceEditor] Item déposé via drag natif de type ${type}`);
                         }
                         
                         // Créer un nouvel élément selon le type
@@ -486,7 +487,7 @@ const FormulaSequenceEditor: React.FC<FormulaSequenceEditorProps> = ({ formula }
                         } else if (type === 'formula_ref') {
                             const refId = e.dataTransfer.getData('formula-ref-id');
                             const refLabel = e.dataTransfer.getData('formula-ref-label');
-                            if (!refId) { console.error('[FormulaSequenceEditor] formula_ref sans id'); return; }
+                            if (!refId) { logger.error('[FormulaSequenceEditor] formula_ref sans id'); return; }
                             newItem = {
                                 type: 'formula_ref',
                                 refFormulaId: refId,
@@ -498,7 +499,7 @@ const FormulaSequenceEditor: React.FC<FormulaSequenceEditorProps> = ({ formula }
                             const fieldId = e.dataTransfer.getData('adv-field-id');
                             const part = e.dataTransfer.getData('adv-part');
                             const label = e.dataTransfer.getData('adv-label');
-                            if (!fieldId || !part) { console.error('[FormulaSequenceEditor] adv_part data manquant'); return; }
+                            if (!fieldId || !part) { logger.error('[FormulaSequenceEditor] adv_part data manquant'); return; }
                             newItem = {
                                 type: 'adv_part',
                                 fieldId,
@@ -508,7 +509,7 @@ const FormulaSequenceEditor: React.FC<FormulaSequenceEditorProps> = ({ formula }
                                 id: `adv_part-${fieldId}-${part}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
                             } as unknown as FormulaItem;
                         } else {
-                            console.error(`[FormulaSequenceEditor] Type d'élément non pris en charge: ${type}`);
+                            logger.error(`[FormulaSequenceEditor] Type d'élément non pris en charge: ${type}`);
                             return;
                         }
                         

@@ -4,6 +4,7 @@ import { NotificationManager } from '../../components/Notifications';
 import DebugAuth from './DebugAuth';
 import { useAuth } from '../../auth/useAuth';
 import useAutoAuth from '../../hooks/useAutoAuth';
+import { logger } from '../../lib/logger';
 
 // Types for data structures
 type User = { 
@@ -47,9 +48,9 @@ const UserRightsSummaryPage = () => {
     const fetchInitialData = async () => {
       setIsFetchingData(true);
       setError(null);
-      console.log("[UserRightsSummaryPage] Fetching initial data (users and orgs)...");
-      console.log("[UserRightsSummaryPage] Current user:", user);
-      console.log("[UserRightsSummaryPage] Is Super Admin:", isSuperAdmin);
+      logger.debug("[UserRightsSummaryPage] Fetching initial data (users and orgs)...");
+      logger.debug("[UserRightsSummaryPage] Current user:", user);
+      logger.debug("[UserRightsSummaryPage] Is Super Admin:", isSuperAdmin);
       
       try {
         // Utilisation du paramètre all=true pour s'assurer d'obtenir tous les utilisateurs
@@ -58,7 +59,7 @@ const UserRightsSummaryPage = () => {
           api.get('/api/organizations')
         ]);
 
-        console.log("[UserRightsSummaryPage] Users response:", usersResponse);
+        logger.debug("[UserRightsSummaryPage] Users response:", usersResponse);
         if (usersResponse.success) {
           // Traiter correctement le format de réponse pour les utilisateurs
           let userData = [];
@@ -69,13 +70,13 @@ const UserRightsSummaryPage = () => {
           } else if (usersResponse.data && typeof usersResponse.data === 'object') {
             userData = [usersResponse.data]; // Si c'est un seul objet
           }
-          console.log("[UserRightsSummaryPage] Processed user data:", userData);
+          logger.debug("[UserRightsSummaryPage] Processed user data:", userData);
           setUsers(userData);
         } else {
           throw new Error(usersResponse.message || 'Erreur lors du chargement des utilisateurs.');
         }
 
-        console.log("[UserRightsSummaryPage] Orgs response:", orgsResponse);
+        logger.debug("[UserRightsSummaryPage] Orgs response:", orgsResponse);
         if (orgsResponse.success && Array.isArray(orgsResponse.data)) {
           setOrganizations(orgsResponse.data);
         } else {
@@ -83,7 +84,7 @@ const UserRightsSummaryPage = () => {
         }
       } catch (err: unknown) {
         const errorMessage = err.message || 'Une erreur est survenue lors du chargement des données.';
-        console.error("[UserRightsSummaryPage] Error fetching initial data:", err);
+        logger.error("[UserRightsSummaryPage] Error fetching initial data:", err);
         setError(errorMessage);
         NotificationManager.error(errorMessage);
       } finally {
@@ -102,20 +103,20 @@ const UserRightsSummaryPage = () => {
         setError(null);
         setRightsSummary(null);
         setOrganizationModules([]);
-        console.log(`[UserRightsSummaryPage] Fetching rights and modules for user: ${selectedUserId}, org: ${selectedOrgId}`);
+        logger.debug(`[UserRightsSummaryPage] Fetching rights and modules for user: ${selectedUserId}, org: ${selectedOrgId}`);
         try {
           const [rightsResponse, modulesResponse] = await Promise.all([
             api.get(`/api/users/${selectedUserId}/rights-summary?organizationId=${selectedOrgId}`),
             api.get(`/api/modules?organizationId=${selectedOrgId}`)
           ]);
           
-          console.log("[UserRightsSummaryPage] API Response for rights summary:", rightsResponse);
+          logger.debug("[UserRightsSummaryPage] API Response for rights summary:", rightsResponse);
 
           if (rightsResponse.success && rightsResponse.data) {
-            console.log("[UserRightsSummaryPage] Received rights summary data:", rightsResponse.data);
+            logger.debug("[UserRightsSummaryPage] Received rights summary data:", rightsResponse.data);
             // Data validation
             if (typeof rightsResponse.data.permissions !== 'object' || rightsResponse.data.permissions === null) {
-                console.error("[UserRightsSummaryPage] Permissions data is not a valid object:", rightsResponse.data.permissions);
+                logger.error("[UserRightsSummaryPage] Permissions data is not a valid object:", rightsResponse.data.permissions);
                 throw new Error("Format de données de permissions invalide.");
             }
             setRightsSummary(rightsResponse.data);
@@ -123,16 +124,16 @@ const UserRightsSummaryPage = () => {
             throw new Error(rightsResponse.message || "Impossible de charger la synthèse des droits.");
           }
 
-          console.log("[UserRightsSummaryPage] API Response for org modules:", modulesResponse);
+          logger.debug("[UserRightsSummaryPage] API Response for org modules:", modulesResponse);
           if (modulesResponse.success && Array.isArray(modulesResponse.data)) {
             setOrganizationModules(modulesResponse.data);
           } else {
-            console.warn('Could not load organization modules:', modulesResponse.message);
+            logger.warn('Could not load organization modules:', modulesResponse.message);
             NotificationManager.warning(modulesResponse.message || "Les modules de l'organisation n'ont pas pu être chargés.");
           }
         } catch (err: unknown) {
           const errorMessage = err.message || "Une erreur est survenue lors de la récupération des données.";
-          console.error("[UserRightsSummaryPage] Error fetching summary data:", err);
+          logger.error("[UserRightsSummaryPage] Error fetching summary data:", err);
           setError(errorMessage);
           NotificationManager.error(errorMessage);
         } finally {

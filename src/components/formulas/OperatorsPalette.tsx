@@ -3,6 +3,7 @@ import type { Formula } from "../../store/slices/types";
 import { validateFormula, prepareFormulaForAPI, getAPIHeaders } from '../../utils/formulaValidator';
 import { Button, Tooltip, Space } from 'antd';
 import { CalculatorOutlined, QuestionCircleOutlined, BranchesOutlined, ControlOutlined } from '@ant-design/icons';
+import { logger } from '../../lib/logger';
 
 // Liste des opérateurs disponibles
 const OPERATORS = [
@@ -49,21 +50,21 @@ interface OperatorsPaletteProps {
 const OperatorsPalette = memo(({ formulaId, formula }: OperatorsPaletteProps) => {
     const addOperatorToFormula = useCallback((operatorValue: string) => {
         if (!formulaId) {
-            console.error(`[OperatorsPalette] ❌ Impossible d'ajouter l'opérateur: formulaId manquant`);
+            logger.error(`[OperatorsPalette] ❌ Impossible d'ajouter l'opérateur: formulaId manquant`);
             return;
         }
         
-        console.log(`[OperatorsPalette] ➕ Ajout de l'opérateur "${operatorValue}" à la formule ${formulaId}`);
+        logger.debug(`[OperatorsPalette] ➕ Ajout de l'opérateur "${operatorValue}" à la formule ${formulaId}`);
         
         // Valider la formule actuelle
         if (!formula) {
-            console.error(`[OperatorsPalette] ❌ Impossible d'ajouter l'opérateur: objet formula manquant`);
+            logger.error(`[OperatorsPalette] ❌ Impossible d'ajouter l'opérateur: objet formula manquant`);
             return;
         }
         
         const validation = validateFormula(formula, 'OperatorsPalette');
         if (!validation.isValid) {
-            console.error(`[OperatorsPalette] ❌ Validation de la formule échouée: ${validation.message}`, validation.details);
+            logger.error(`[OperatorsPalette] ❌ Validation de la formule échouée: ${validation.message}`, validation.details);
             return;
         }
         
@@ -94,7 +95,7 @@ const OperatorsPalette = memo(({ formulaId, formula }: OperatorsPaletteProps) =>
         
         const newSequence = [...validatedSequence, newOperator];
         
-        console.log(`[OperatorsPalette] 📊 Ajout de l'opérateur à la séquence: ${currentSequence.length} => ${newSequence.length} items`);
+        logger.debug(`[OperatorsPalette] 📊 Ajout de l'opérateur à la séquence: ${currentSequence.length} => ${newSequence.length} items`);
         
         // Préparer la formule pour l'API et effectuer des corrections automatiques si nécessaire
         const preparedFormula = prepareFormulaForAPI({
@@ -114,7 +115,7 @@ const OperatorsPalette = memo(({ formulaId, formula }: OperatorsPaletteProps) =>
         })
         .then(response => {
             if (response.ok) {
-                console.log(`[OperatorsPalette] ✅ Formule mise à jour via API directe`);
+                logger.debug(`[OperatorsPalette] ✅ Formule mise à jour via API directe`);
                 // Forcer le rechargement des formules
                 setTimeout(() => {
                     // Déclencher un événement personnalisé pour informer le parent
@@ -124,11 +125,11 @@ const OperatorsPalette = memo(({ formulaId, formula }: OperatorsPaletteProps) =>
                     document.dispatchEvent(event);
                 }, 300);
             } else {
-                console.error(`[OperatorsPalette] ❌ Échec de la mise à jour via API: ${response.statusText}`);
+                logger.error(`[OperatorsPalette] ❌ Échec de la mise à jour via API: ${response.statusText}`);
             }
         })
         .catch(error => {
-            console.error(`[OperatorsPalette] ❌ Erreur lors de la mise à jour via API:`, error);
+            logger.error(`[OperatorsPalette] ❌ Erreur lors de la mise à jour via API:`, error);
         });
     }, [formulaId, formula]);
     

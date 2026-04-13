@@ -10,6 +10,7 @@ import {
   describeGoogleOAuthConfig,
   isGoogleOAuthConfigured,
 } from '../../auth/googleConfig';
+import { logger } from '../../lib/logger';
 
 const { clientId: GOOGLE_CLIENT_ID, clientSecret: GOOGLE_CLIENT_SECRET, redirectUri: GOOGLE_REDIRECT_URI } = googleOAuthConfig;
 
@@ -33,7 +34,7 @@ export class GoogleOAuthService {
 
   constructor() {
     if (!isGoogleOAuthConfigured()) {
-      console.warn('[GoogleOAuthService] ⚠️ Configuration Google OAuth incomplète', describeGoogleOAuthConfig());
+      logger.warn('[GoogleOAuthService] ⚠️ Configuration Google OAuth incomplète', describeGoogleOAuthConfig());
     }
 
     this.oauth2Client = new google.auth.OAuth2(
@@ -80,9 +81,9 @@ export class GoogleOAuthService {
       enable_granular_consent: true // ✅ Protection multicompte
     });
     
-    console.log('[GoogleOAuthService] 🔗 URL d\'autorisation générée:', authUrl);
-    console.log('[GoogleOAuthService] 🎯 Redirect URI configuré:', GOOGLE_REDIRECT_URI);
-    console.log('[GoogleOAuthService] 🔄 Force consent:', forceConsent);
+    logger.debug('[GoogleOAuthService] 🔗 URL d\'autorisation générée:', authUrl);
+    logger.debug('[GoogleOAuthService] 🎯 Redirect URI configuré:', GOOGLE_REDIRECT_URI);
+    logger.debug('[GoogleOAuthService] 🔄 Force consent:', forceConsent);
     
     return authUrl;
   }
@@ -153,7 +154,7 @@ export class GoogleOAuthService {
         }
       });
     }
-    console.log(`[GoogleOAuthService] Tokens sauvegardés/mis à jour pour l'utilisateur ${userId} (org: ${organizationId}, email: ${googleEmail})`);
+    logger.debug(`[GoogleOAuthService] Tokens sauvegardés/mis à jour pour l'utilisateur ${userId} (org: ${organizationId}, email: ${googleEmail})`);
   }
 
   // Récupérer les tokens par userId et organizationId
@@ -179,7 +180,7 @@ export class GoogleOAuthService {
     });
 
     if (!userWithOrg || !userWithOrg.UserOrganization[0]) {
-      console.log(`[GoogleOAuthService] Utilisateur ${userId} ou organisation non trouvé`);
+      logger.debug(`[GoogleOAuthService] Utilisateur ${userId} ou organisation non trouvé`);
       return null;
     }
 
@@ -216,7 +217,7 @@ export class GoogleOAuthService {
     const clientId = googleConfig.clientId ? decrypt(googleConfig.clientId) : null;
     const clientSecret = googleConfig.clientSecret ? decrypt(googleConfig.clientSecret) : null;
     if (!clientId || !clientSecret) {
-      console.warn('[GoogleOAuthService] ❌ clientId/clientSecret manquants pour org', organizationId);
+      logger.warn('[GoogleOAuthService] ❌ clientId/clientSecret manquants pour org', organizationId);
       return null;
     }
 
@@ -277,7 +278,7 @@ export class GoogleOAuthService {
           });
         }
       } catch (error) {
-        console.error(`[GoogleOAuthService] ❌ Échec du rafraîchissement pour admin ${googleConfig.adminEmail}:`, this.formatOAuthError(error));
+        logger.error(`[GoogleOAuthService] ❌ Échec du rafraîchissement pour admin ${googleConfig.adminEmail}:`, this.formatOAuthError(error));
         return null;
       }
     }
@@ -289,7 +290,7 @@ export class GoogleOAuthService {
   async getAuthenticatedClient(userId: string, organizationId?: string): Promise<OAuth2Client | null> {
     const tokens = await this.getUserTokens(userId, organizationId);
     if (!tokens) {
-      console.log(`[GoogleOAuthService] ❌ Aucun token trouvé pour l'utilisateur ${userId}`);
+      logger.debug(`[GoogleOAuthService] ❌ Aucun token trouvé pour l'utilisateur ${userId}`);
       return null;
     }
 
@@ -309,7 +310,7 @@ export class GoogleOAuthService {
     }
 
     if (!orgId) {
-      console.log(`[GoogleOAuthService] ❌ Impossible de déterminer l'organisation pour l'utilisateur ${userId}`);
+      logger.debug(`[GoogleOAuthService] ❌ Impossible de déterminer l'organisation pour l'utilisateur ${userId}`);
       return null;
     }
 
@@ -318,14 +319,14 @@ export class GoogleOAuthService {
     const clientId = googleConfig?.clientId ? decrypt(googleConfig.clientId) : null;
     const clientSecret = googleConfig?.clientSecret ? decrypt(googleConfig.clientSecret) : null;
     if (!clientId || !clientSecret) {
-      console.warn('[GoogleOAuthService] ❌ clientId/clientSecret manquants pour org', orgId);
+      logger.warn('[GoogleOAuthService] ❌ clientId/clientSecret manquants pour org', orgId);
       return null;
     }
 
-    console.log(`[GoogleOAuthService] 🔍 Tokens trouvés pour ${userId}:`);
-    console.log(`[GoogleOAuthService] - Access token: ${tokens.accessToken ? 'Présent' : 'MANQUANT'}`);
-    console.log(`[GoogleOAuthService] - Refresh token: ${tokens.refreshToken ? 'Présent' : 'MANQUANT'}`);
-    console.log(`[GoogleOAuthService] - Expires at: ${tokens.expiresAt}`);
+    logger.debug(`[GoogleOAuthService] 🔍 Tokens trouvés pour ${userId}:`);
+    logger.debug(`[GoogleOAuthService] - Access token: ${tokens.accessToken ? 'Présent' : 'MANQUANT'}`);
+    logger.debug(`[GoogleOAuthService] - Refresh token: ${tokens.refreshToken ? 'Présent' : 'MANQUANT'}`);
+    logger.debug(`[GoogleOAuthService] - Expires at: ${tokens.expiresAt}`);
 
     // Configuration des credentials
     const credentials = {
@@ -335,7 +336,7 @@ export class GoogleOAuthService {
       expiry_date: tokens.expiresAt?.getTime()
     };
     
-    console.log(`[GoogleOAuthService] 🔧 Configuration credentials:`, {
+    logger.debug(`[GoogleOAuthService] 🔧 Configuration credentials:`, {
       hasAccessToken: !!credentials.access_token,
       hasRefreshToken: !!credentials.refresh_token,
       tokenType: credentials.token_type,
@@ -348,20 +349,20 @@ export class GoogleOAuthService {
 
     userOAuth2Client.setCredentials(credentials);
     
-    console.log(`[GoogleOAuthService] 📋 Credentials définies sur nouveau OAuth2Client`);
+    logger.debug(`[GoogleOAuthService] 📋 Credentials définies sur nouveau OAuth2Client`);
 
     // Vérifier si le token est expiré et le rafraîchir si nécessaire
     const now = new Date();
     const expiryDate = tokens.expiresAt;
     
-    console.log(`[GoogleOAuthService] ⏰ Vérification expiration: maintenant=${now.toISOString()}, expiry=${expiryDate?.toISOString()}`);
+    logger.debug(`[GoogleOAuthService] ⏰ Vérification expiration: maintenant=${now.toISOString()}, expiry=${expiryDate?.toISOString()}`);
     
     if (expiryDate && expiryDate <= now) {
-      console.log(`[GoogleOAuthService] ⚠️ Token expiré pour l'utilisateur ${userId}, rafraîchissement...`);
+      logger.debug(`[GoogleOAuthService] ⚠️ Token expiré pour l'utilisateur ${userId}, rafraîchissement...`);
       try {
         // Utiliser la méthode refresh du client OAuth2
         const { credentials } = await userOAuth2Client.refreshAccessToken();
-        console.log(`[GoogleOAuthService] ✅ Rafraîchissement réussi, nouvelles credentials:`, {
+        logger.debug(`[GoogleOAuthService] ✅ Rafraîchissement réussi, nouvelles credentials:`, {
           hasAccessToken: !!credentials.access_token,
           hasRefreshToken: !!credentials.refresh_token,
           newExpiry: credentials.expiry_date ? new Date(credentials.expiry_date).toISOString() : 'NON_DÉFINI'
@@ -376,19 +377,19 @@ export class GoogleOAuthService {
             expiresAt: new Date(credentials.expiry_date)
         });
         
-        console.log(`[GoogleOAuthService] ✅ Token rafraîchi avec succès pour l'utilisateur ${userId}`);
+        logger.debug(`[GoogleOAuthService] ✅ Token rafraîchi avec succès pour l'utilisateur ${userId}`);
       }
     } catch (error) {
-        console.error(`[GoogleOAuthService] ❌ Échec du rafraîchissement du token pour ${userId}:`, this.formatOAuthError(error));
+        logger.error(`[GoogleOAuthService] ❌ Échec du rafraîchissement du token pour ${userId}:`, this.formatOAuthError(error));
       return null;
     }
   } else if (expiryDate) {
-    console.log(`[GoogleOAuthService] ✅ Token encore valide pour ${userId} (expire dans ${Math.round((expiryDate.getTime() - now.getTime()) / 1000 / 60)} minutes)`);
+    logger.debug(`[GoogleOAuthService] ✅ Token encore valide pour ${userId} (expire dans ${Math.round((expiryDate.getTime() - now.getTime()) / 1000 / 60)} minutes)`);
   } else {
-    console.log(`[GoogleOAuthService] ⚠️ Pas de date d'expiration définie pour ${userId}`);
+    logger.debug(`[GoogleOAuthService] ⚠️ Pas de date d'expiration définie pour ${userId}`);
   }
 
-  console.log(`[GoogleOAuthService] 🚀 Retour du nouveau client OAuth2 configuré pour ${userId}`);
+  logger.debug(`[GoogleOAuthService] 🚀 Retour du nouveau client OAuth2 configuré pour ${userId}`);
   return userOAuth2Client;
   }
 
@@ -440,10 +441,10 @@ export class GoogleOAuthService {
       if (tokens?.refreshToken) {
         // Révoquer le refresh token, ce qui invalide l'accès.
         await this.oauth2Client.revokeToken(tokens.refreshToken);
-        console.log(`[GoogleOAuthService] Token révoqué pour l'utilisateur ${userId}`);
+        logger.debug(`[GoogleOAuthService] Token révoqué pour l'utilisateur ${userId}`);
       }
     } catch (error) {
-      console.error(`[GoogleOAuthService] Échec de la révocation du token pour ${userId}:`, error);
+      logger.error(`[GoogleOAuthService] Échec de la révocation du token pour ${userId}:`, error);
       // On continue même si la révocation échoue pour supprimer les données locales
     }
 
@@ -464,9 +465,9 @@ export class GoogleOAuthService {
       await db.googleToken.delete({ 
         where: { userId_organizationId: { userId, organizationId } } 
       });
-      console.log(`[GoogleOAuthService] Tokens supprimés de la DB pour l'utilisateur ${userId} (org: ${organizationId})`);
+      logger.debug(`[GoogleOAuthService] Tokens supprimés de la DB pour l'utilisateur ${userId} (org: ${organizationId})`);
     } else {
-      console.log(`[GoogleOAuthService] Impossible de trouver l'organization pour l'utilisateur ${userId}`);
+      logger.debug(`[GoogleOAuthService] Impossible de trouver l'organization pour l'utilisateur ${userId}`);
     }
   }
 
@@ -480,7 +481,7 @@ export class GoogleOAuthService {
       const response = await oauth2.userinfo.get();
       return { success: true, userInfo: response.data };
     } catch (error: unknown) {
-      console.error(`[GoogleOAuthService] Erreur lors du test de connexion pour ${userId}:`, error);
+      logger.error(`[GoogleOAuthService] Erreur lors du test de connexion pour ${userId}:`, error);
       if (error instanceof Error) {
         return { success: false, error: error.message };
       }

@@ -52,6 +52,7 @@ import {
 } from 'recharts';
 import dayjs, { Dayjs } from 'dayjs';
 import 'dayjs/locale/fr';
+import { logger } from '../../lib/logger';
 
 dayjs.locale('fr');
 
@@ -151,7 +152,7 @@ export default function CampaignAnalyticsPage() {
       const analyticsData = await api.get<AnalyticsData>(`/api/campaign-analytics?${params}`);
       setData(analyticsData);
     } catch (error) {
-      console.error('Erreur lors du chargement des analytics:', error);
+      logger.error('Erreur lors du chargement des analytics:', error);
     } finally {
       setLoading(false);
     }
@@ -183,7 +184,7 @@ export default function CampaignAnalyticsPage() {
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Erreur lors de l\'export:', error);
+      logger.error('Erreur lors de l\'export:', error);
     }
   };
 

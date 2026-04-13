@@ -15,6 +15,7 @@
 import { db } from '../lib/database';
 import { getOrgSocialSettings } from '../lib/feed-visibility';
 import { sendPushToUser } from '../routes/push';
+import { logger } from '../lib/logger';
 
 // ═══════════════════════════════════════════════════════
 // TYPES
@@ -103,7 +104,7 @@ export async function createBusinessAutoPost(params: AutoPostParams): Promise<{ 
       });
       postIds.push(clientPost.id);
     } catch (err) {
-      console.error(`[AUTO-POST] Error creating CLIENT post for ${eventType}:`, err);
+      logger.error(`[AUTO-POST] Error creating CLIENT post for ${eventType}:`, err);
     }
   }
 
@@ -125,7 +126,7 @@ export async function createBusinessAutoPost(params: AutoPostParams): Promise<{ 
     });
     postIds.push(internalPost.id);
   } catch (err) {
-    console.error(`[AUTO-POST] Error creating IN post for ${eventType}:`, err);
+    logger.error(`[AUTO-POST] Error creating IN post for ${eventType}:`, err);
   }
 
   // 4. Post ALL — Publication publique (publicité)
@@ -146,7 +147,7 @@ export async function createBusinessAutoPost(params: AutoPostParams): Promise<{ 
     });
     postIds.push(publicPost.id);
   } catch (err) {
-    console.error(`[AUTO-POST] Error creating ALL post for ${eventType}:`, err);
+    logger.error(`[AUTO-POST] Error creating ALL post for ${eventType}:`, err);
   }
 
   // 5. Send push notification to org members about the internal post
@@ -170,9 +171,9 @@ export async function createBusinessAutoPost(params: AutoPostParams): Promise<{ 
       }).catch(() => {});
     }
   } catch (err) {
-    console.error(`[AUTO-POST] Error sending push for ${eventType}:`, err);
+    logger.error(`[AUTO-POST] Error sending push for ${eventType}:`, err);
   }
 
-  console.log(`[AUTO-POST] Created ${postIds.length} posts for ${eventType} (${entityLabel})`);
+  logger.debug(`[AUTO-POST] Created ${postIds.length} posts for ${eventType} (${entityLabel})`);
   return { created: postIds.length, postIds };
 }

@@ -12,6 +12,7 @@ import LeadsHomePage from './LeadsHomePage';
 import LeadDetail from './LeadDetail';
 import CallModule from './CallModule';
 import EmailModule from './EmailModule';
+import { logger } from '../../lib/logger';
 
 /**
  * 📋 Page principale des Leads selon le cahier des charges V1.5
@@ -32,25 +33,25 @@ export default function LeadsMainPage() {
 
   // 📱 Handlers pour les actions leads (conformes au cahier des charges)
   const handleViewLead = useCallback((leadId: string) => {
-    console.log('🔍 [LeadsMainPage] Ouverture fiche lead:', leadId);
+    logger.debug('🔍 [LeadsMainPage] Ouverture fiche lead:', leadId);
     setSelectedLeadId(leadId);
     setIsLeadDetailOpen(true);
   }, []);
 
   const handleCallLead = useCallback((leadId: string) => {
-    console.log('📞 [LeadsMainPage] Lancement module appel:', leadId);
+    logger.debug('📞 [LeadsMainPage] Lancement module appel:', leadId);
     setSelectedLeadId(leadId);
     setIsCallModuleOpen(true);
   }, []);
 
   const handleEmailLead = useCallback((leadId: string) => {
-    console.log('✉️ [LeadsMainPage] Ouverture module email:', leadId);
+    logger.debug('✉️ [LeadsMainPage] Ouverture module email:', leadId);
     setSelectedLeadId(leadId);
     setIsEmailModuleOpen(true);
   }, []);
 
   const handleScheduleLead = useCallback((leadId: string) => {
-    console.log('📅 [LeadsMainPage] Ouverture module agenda:', leadId);
+    logger.debug('📅 [LeadsMainPage] Ouverture module agenda:', leadId);
     setSelectedLeadId(leadId);
     setIsCalendarOpen(true);
     // TODO: Implémenter module agenda
@@ -66,7 +67,7 @@ export default function LeadsMainPage() {
   }, []);
 
   const handleCreateLead = useCallback(() => {
-    console.log('➕ [LeadsMainPage] Création nouveau lead');
+    logger.debug('➕ [LeadsMainPage] Création nouveau lead');
     // Délégué à LeadsHomePage
     triggerRefresh();
   }, [triggerRefresh]);

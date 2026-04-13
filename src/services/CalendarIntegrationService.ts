@@ -1,4 +1,5 @@
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
+import { logger } from '../lib/logger';
 
 export interface CalendarEvent {
   id: string;
@@ -62,7 +63,7 @@ export class CalendarIntegrationService {
 
       return crmEvent.data;
     } catch (error) {
-      console.error('Erreur lors de la création du RDV projet:', error);
+      logger.error('Erreur lors de la création du RDV projet:', error);
       throw error;
     }
   }
@@ -89,7 +90,7 @@ export class CalendarIntegrationService {
         ...data
       });
     } catch (error) {
-      console.error('Erreur lors de la création du RDV lead:', error);
+      logger.error('Erreur lors de la création du RDV lead:', error);
       throw error;
     }
   }
@@ -100,7 +101,7 @@ export class CalendarIntegrationService {
       const response = await this.api.get(`/api/calendar/events/project/${projectId}`);
       return response.data;
     } catch (error) {
-      console.error('Erreur lors de la récupération des RDV:', error);
+      logger.error('Erreur lors de la récupération des RDV:', error);
       return [];
     }
   }
@@ -116,7 +117,7 @@ export class CalendarIntegrationService {
       const response = await this.api.get(`/api/calendar/events?${params.toString()}`);
       return response.data;
     } catch (error) {
-      console.error('Erreur lors de la récupération des RDV utilisateur:', error);
+      logger.error('Erreur lors de la récupération des RDV utilisateur:', error);
       return [];
     }
   }
@@ -139,7 +140,7 @@ export class CalendarIntegrationService {
       // Comparer avec la base CRM
       // Mettre à jour les différences
     } catch (error) {
-      console.error('Erreur de synchronisation:', error);
+      logger.error('Erreur de synchronisation:', error);
     }
   }
 }

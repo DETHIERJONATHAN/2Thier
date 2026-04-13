@@ -50,6 +50,7 @@ import { useAuth } from '../auth/useAuth';
 import { useTelnyxCall, type TelnyxEligibility } from '../hooks/useTelnyxCall';
 import { useNotificationSound, playNotificationSound } from '../hooks/useNotificationSound';
 import { FB, SF } from '../components/zhiive/ZhiiveTheme';
+import { logger } from '../lib/logger';
 
 // ═══════════════════════════════════════════════════════════════
 // TYPES
@@ -373,7 +374,7 @@ const MessengerChat: React.FC = () => {
       try {
         // 1. Register Service Worker
         const registration = await navigator.serviceWorker.register('/sw.js');
-        console.log('[SW] Service Worker enregistré');
+        logger.debug('[SW] Service Worker enregistré');
 
         // 2. Get VAPID public key
         const vapidResp = await api.get('/api/push/vapid-key') as unknown;
@@ -408,9 +409,9 @@ const MessengerChat: React.FC = () => {
           endpoint: subJSON.endpoint,
           keys: subJSON.keys,
         });
-        console.log('[PUSH] ✅ Notifications push activées');
+        logger.debug('[PUSH] ✅ Notifications push activées');
       } catch (err) {
-        console.warn('[SW] Erreur enregistrement push:', err);
+        logger.warn('[SW] Erreur enregistrement push:', err);
       }
     };
 
@@ -420,7 +421,7 @@ const MessengerChat: React.FC = () => {
     const handleSWMessage = (event: MessageEvent) => {
       if (event.data?.type === 'INCOMING_CALL' && event.data?.callId) {
         // SW tells us about an incoming call click — the polling will pick it up
-        console.log('[SW] Notification call clicked:', event.data.callId);
+        logger.debug('[SW] Notification call clicked:', event.data.callId);
       }
       if (event.data?.type === 'INCOMING_TELNYX_CALL') {
         // Open dialer on incoming Telnyx call notification click
@@ -607,7 +608,7 @@ const MessengerChat: React.FC = () => {
       await fetchInlineMessages();
       fetchConversations();
       inlineInputRef.current?.focus();
-    } catch (e) { console.error('[MESSENGER] Send error:', e); }
+    } catch (e) { logger.error('[MESSENGER] Send error:', e); }
     setInlineSending(false);
   };
 
@@ -625,7 +626,7 @@ const MessengerChat: React.FC = () => {
       triggerWizz();
       await fetchInlineMessages();
       fetchConversations();
-    } catch (e) { console.error('[MESSENGER] Wizz error:', e); }
+    } catch (e) { logger.error('[MESSENGER] Wizz error:', e); }
     setInlineSending(false);
     setTimeout(() => { wizzCooldownRef.current = false; }, 3000);
   };
@@ -661,14 +662,14 @@ const MessengerChat: React.FC = () => {
     try {
       await api.post(`/api/messenger/messages/${messageId}/reactions`, { emoji });
       fetchInlineMessages();
-    } catch (e) { console.error('[MESSENGER] Reaction error:', e); }
+    } catch (e) { logger.error('[MESSENGER] Reaction error:', e); }
   };
 
   const togglePin = async (messageId: string) => {
     try {
       await api.post(`/api/messenger/messages/${messageId}/pin`, {});
       fetchInlineMessages();
-    } catch (e) { console.error('[MESSENGER] Pin error:', e); }
+    } catch (e) { logger.error('[MESSENGER] Pin error:', e); }
   };
 
   const deleteMessage = async (messageId: string) => {
@@ -676,7 +677,7 @@ const MessengerChat: React.FC = () => {
       await api.delete(`/api/messenger/messages/${messageId}`);
       fetchInlineMessages();
       fetchConversations();
-    } catch (e) { console.error('[MESSENGER] Delete error:', e); }
+    } catch (e) { logger.error('[MESSENGER] Delete error:', e); }
   };
 
   const sendVoiceMessage = async (blob: Blob, duration: number) => {
@@ -698,7 +699,7 @@ const MessengerChat: React.FC = () => {
       });
       fetchInlineMessages();
       fetchConversations();
-    } catch (e) { console.error('[MESSENGER] Voice send error:', e); }
+    } catch (e) { logger.error('[MESSENGER] Voice send error:', e); }
     setShowVoiceRecorder(false);
   };
 
@@ -715,7 +716,7 @@ const MessengerChat: React.FC = () => {
     try {
       await api.put('/api/messenger/status', { customStatus: status, customStatusEmoji: emoji, expiresInMinutes });
       if (socket.connected) socket.updateStatus(status, emoji, expiresInMinutes);
-    } catch (e) { console.error('[MESSENGER] Status error:', e); }
+    } catch (e) { logger.error('[MESSENGER] Status error:', e); }
   };
 
   // ─── FILE UPLOAD ───────────────────────────────────────────
@@ -751,7 +752,7 @@ const MessengerChat: React.FC = () => {
       setInlineNewMessage('');
       await fetchInlineMessages();
       fetchConversations();
-    } catch (e) { console.error('[MESSENGER] File upload error:', e); antMessage.error('Erreur lors de l\'envoi du fichier'); }
+    } catch (e) { logger.error('[MESSENGER] File upload error:', e); antMessage.error('Erreur lors de l\'envoi du fichier'); }
     setUploadingFiles(false);
   };
 
@@ -842,7 +843,7 @@ const MessengerChat: React.FC = () => {
         openChat(conv.id);
         setShowNewChat(false);
       }
-    } catch (e) { console.error('[MESSENGER] Error starting chat:', e); }
+    } catch (e) { logger.error('[MESSENGER] Error starting chat:', e); }
   };
 
   // Start a call from a chat window
@@ -859,7 +860,7 @@ const MessengerChat: React.FC = () => {
           conversationName,
         });
       }
-    } catch (e) { console.error('[MESSENGER] Error starting call:', e); }
+    } catch (e) { logger.error('[MESSENGER] Error starting call:', e); }
   };
 
   // ─── HELPER: time ago ──────────────────────────────────────
@@ -1473,7 +1474,7 @@ const MessengerChat: React.FC = () => {
                   await api.post(`/api/messenger/messages/${taskModalMessage.id}/task`, data);
                   setTaskModalMessage(null);
                   antMessage.success('Tâche créée !');
-                } catch (e) { console.error('[MESSENGER] Task creation error:', e); antMessage.error('Erreur'); }
+                } catch (e) { logger.error('[MESSENGER] Task creation error:', e); antMessage.error('Erreur'); }
               }}
               messageContent={taskModalMessage.content || ''}
               participants={(conversations.find(c => c.id === activeConversationId)?.participants || []).map(p => ({
@@ -1879,7 +1880,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
       await fetchMessages();
       onRefresh();
       inputRef.current?.focus();
-    } catch (e) { console.error('[MESSENGER] Send error:', e); }
+    } catch (e) { logger.error('[MESSENGER] Send error:', e); }
     setSending(false);
   };
 
@@ -1916,7 +1917,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
       antMessage.success('Événement planifié !');
       setScheduleModalOpen(false);
     } catch (err) {
-      console.error('[Messenger] Schedule error:', err);
+      logger.error('[Messenger] Schedule error:', err);
       antMessage.error('Erreur lors de la planification');
     }
   };

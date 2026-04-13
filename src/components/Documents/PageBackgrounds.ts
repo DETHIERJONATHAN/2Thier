@@ -6,6 +6,7 @@
 import invoiceA from '../../../Depot/vecteezy_business-company-invoice-template_6314850.svg?raw';
 import invoiceB from '../../../Depot/vecteezy_corporate-business-invoice-template_6314448.svg?raw';
 import invoiceC from '../../../Depot/vecteezy_business-company-invoice-template_6315045.svg?raw';
+import { logger } from '../../lib/logger';
 
 export interface PageBackground {
   id: string;
@@ -486,7 +487,7 @@ export const buildCustomBackgroundDataUri = (
   rawSvg: string,
   colors: { primary: string; secondary: string; accent: string; text: string; bg: string }
 ) => {
-  console.log('🎨 [buildCustomBackgroundDataUri] Applying theme colors:', colors.primary, colors.secondary, colors.accent);
+  logger.debug('🎨 [buildCustomBackgroundDataUri] Applying theme colors:', colors.primary, colors.secondary, colors.accent);
   
   // Appliquer le thème au SVG
   const themed = applyThemeToSvg(rawSvg, colors);

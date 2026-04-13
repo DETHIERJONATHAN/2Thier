@@ -11,6 +11,7 @@
  */
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { logger } from '../lib/logger';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || '');
 
@@ -101,7 +102,7 @@ Si le contenu est acceptable, retourne : {"flagged": false, "categories": [], "c
       aiRaw: text,
     };
   } catch (error) {
-    console.error('[AI-Moderation] Error:', error);
+    logger.error('[AI-Moderation] Error:', error);
     // On failure, don't block content — flag for manual review instead
     return {
       flagged: false,

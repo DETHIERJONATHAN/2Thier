@@ -1,3 +1,4 @@
+import { logger } from '../../../../lib/logger';
 /**
  * 🌳 RÈGLES HIÉRARCHIQUES CENTRALISÉES - TreeBranchLeaf
  * 
@@ -81,7 +82,7 @@ export function calculateNodeLevel(nodeId: string, nodesMap: Map<string, TreeNod
     const genealogy = calculateGenealogy(nodeId, nodesMap);
     return genealogy.length;
   } catch (error) {
-    console.error('Erreur lors du calcul du niveau:', error);
+    logger.error('Erreur lors du calcul du niveau:', error);
     return -1; // Erreur
   }
 }

@@ -10,6 +10,7 @@ import {
     CheckCircleOutlined,
     DatabaseOutlined,
 } from '@ant-design/icons';
+import { logger } from '../../lib/logger';
 
 // Liste des fonctions avancées
 const FUNCTIONS = [
@@ -87,21 +88,21 @@ interface FunctionsPaletteProps {
 const FunctionsPalette = memo(({ formulaId, formula }: FunctionsPaletteProps) => {
     const addFunctionToFormula = useCallback((functionValue: string) => {
         if (!formulaId) {
-            console.error(`[FunctionsPalette] ❌ Impossible d'ajouter la fonction: formulaId manquant`);
+            logger.error(`[FunctionsPalette] ❌ Impossible d'ajouter la fonction: formulaId manquant`);
             return;
         }
         
-        console.log(`[FunctionsPalette] ➕ Ajout de la fonction "${functionValue}" à la formule ${formulaId}`);
+        logger.debug(`[FunctionsPalette] ➕ Ajout de la fonction "${functionValue}" à la formule ${formulaId}`);
         
         // Valider la formule actuelle
         if (!formula) {
-            console.error(`[FunctionsPalette] ❌ Impossible d'ajouter la fonction: objet formula manquant`);
+            logger.error(`[FunctionsPalette] ❌ Impossible d'ajouter la fonction: objet formula manquant`);
             return;
         }
         
         const validation = validateFormula(formula, 'FunctionsPalette');
         if (!validation.isValid) {
-            console.error(`[FunctionsPalette] ❌ Validation de la formule échouée: ${validation.message}`, validation.details);
+            logger.error(`[FunctionsPalette] ❌ Validation de la formule échouée: ${validation.message}`, validation.details);
             return;
         }
         
@@ -132,7 +133,7 @@ const FunctionsPalette = memo(({ formulaId, formula }: FunctionsPaletteProps) =>
         
         const newSequence = [...validatedSequence, newFunction];
         
-        console.log(`[FunctionsPalette] 📊 Ajout de la fonction à la séquence: ${currentSequence.length} => ${newSequence.length} items`);
+        logger.debug(`[FunctionsPalette] 📊 Ajout de la fonction à la séquence: ${currentSequence.length} => ${newSequence.length} items`);
         
         // Préparer la formule pour l'API et effectuer des corrections automatiques si nécessaire
         const preparedFormula = prepareFormulaForAPI({
@@ -152,7 +153,7 @@ const FunctionsPalette = memo(({ formulaId, formula }: FunctionsPaletteProps) =>
         })
         .then(response => {
             if (response.ok) {
-                console.log(`[FunctionsPalette] ✅ Formule mise à jour via API directe`);
+                logger.debug(`[FunctionsPalette] ✅ Formule mise à jour via API directe`);
                 // Forcer le rechargement des formules
                 setTimeout(() => {
                     // Déclencher un événement personnalisé pour informer le parent
@@ -162,11 +163,11 @@ const FunctionsPalette = memo(({ formulaId, formula }: FunctionsPaletteProps) =>
                     document.dispatchEvent(event);
                 }, 300);
             } else {
-                console.error(`[FunctionsPalette] ❌ Échec de la mise à jour via API: ${response.statusText}`);
+                logger.error(`[FunctionsPalette] ❌ Échec de la mise à jour via API: ${response.statusText}`);
             }
         })
         .catch(error => {
-            console.error(`[FunctionsPalette] ❌ Erreur lors de la mise à jour via API:`, error);
+            logger.error(`[FunctionsPalette] ❌ Erreur lors de la mise à jour via API:`, error);
         });
     }, [formulaId, formula]);
     

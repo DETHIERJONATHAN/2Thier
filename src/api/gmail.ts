@@ -11,6 +11,7 @@ import { Router } from 'express';
 import { google } from 'googleapis';
 import { authenticateToken } from '../middleware/auth';
 import { googleOAuthConfig, isGoogleOAuthConfigured } from '../auth/googleConfig';
+import { logger } from '../lib/logger';
 
 const router = Router();
 const gmail = google.gmail('v1');
@@ -95,7 +96,7 @@ router.post('/send-meeting-confirmation', authenticateToken, async (req, res) =>
     });
 
   } catch (error: unknown) {
-    console.error('[Gmail] ❌ Erreur envoi email confirmation:', error);
+    logger.error('[Gmail] ❌ Erreur envoi email confirmation:', error);
     res.status(500).json({
       error: 'Erreur lors de l\'envoi de l\'email de confirmation',
       details: error.message
@@ -223,7 +224,7 @@ async function logEmailActivity(data: {
     // TODO: Implémenter avec Prisma
     // Sauvegarder dans une table email_logs ou lead_activities
   } catch (error) {
-    console.error('[Gmail] ❌ Erreur log activité:', error);
+    logger.error('[Gmail] ❌ Erreur log activité:', error);
   }
 }
 

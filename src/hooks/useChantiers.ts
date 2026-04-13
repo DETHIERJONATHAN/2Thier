@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
 import type { Chantier } from '../types/chantier';
+import { logger } from '../lib/logger';
 
 /**
  * Hook pour récupérer et gérer les chantiers
@@ -35,7 +36,7 @@ export function useChantiers(filters?: {
       const response = await api.get(url) as { success: boolean; data: Chantier[] };
       setChantiers(response.data || []);
     } catch (err) {
-      console.error('[useChantiers] Erreur:', err);
+      logger.error('[useChantiers] Erreur:', err);
       setError(err instanceof Error ? err.message : 'Erreur inconnue');
       setChantiers([]);
     } finally {
@@ -55,7 +56,7 @@ export function useChantiers(filters?: {
         prev.map(c => c.id === chantierId ? { ...c, statusId } : c)
       );
     } catch (err) {
-      console.error('[useChantiers] Erreur changement statut:', err);
+      logger.error('[useChantiers] Erreur changement statut:', err);
       throw err;
     }
   }, [api]);
@@ -91,7 +92,7 @@ export function useChantiersByLead(leadId: string | undefined) {
       const response = await api.get(`/api/chantiers/by-lead/${leadId}`) as { success: boolean; data: Chantier[] };
       setChantiers(response.data || []);
     } catch (err) {
-      console.error('[useChantiersByLead] Erreur:', err);
+      logger.error('[useChantiersByLead] Erreur:', err);
       setError(err instanceof Error ? err.message : 'Erreur inconnue');
       setChantiers([]);
     } finally {

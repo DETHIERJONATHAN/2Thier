@@ -1,6 +1,7 @@
 import React, { useCallback, memo } from 'react';
 import type { Validation } from "../../types/validation";
 import { getAPIHeaders } from '../../utils/validationHelper';
+import { logger } from '../../lib/logger';
 
 // Liste des types de validations disponibles
 const VALIDATIONS = [
@@ -220,11 +221,11 @@ interface ValidationsPaletteProps {
 const ValidationsPalette = memo(({ validationId, fieldId, onAddValidation }: ValidationsPaletteProps) => {
     const handleAddValidation = useCallback((validationType: string) => {
         if (!fieldId) {
-            console.error(`[ValidationsPalette] ❌ Impossible d'ajouter la validation: fieldId manquant`);
+            logger.error(`[ValidationsPalette] ❌ Impossible d'ajouter la validation: fieldId manquant`);
             return;
         }
         
-        console.log(`[ValidationsPalette] ➕ Ajout de la validation "${validationType}" pour le champ ${fieldId}`);
+        logger.debug(`[ValidationsPalette] ➕ Ajout de la validation "${validationType}" pour le champ ${fieldId}`);
         
         // Si un callback est fourni, l'utiliser
         if (onAddValidation) {
@@ -249,7 +250,7 @@ const ValidationsPalette = memo(({ validationId, fieldId, onAddValidation }: Val
         })
         .then(response => {
             if (response.ok) {
-                console.log(`[ValidationsPalette] ✅ Validation créée avec succès`);
+                logger.debug(`[ValidationsPalette] ✅ Validation créée avec succès`);
                 // Forcer le rechargement des validations
                 setTimeout(() => {
                     // Déclencher un événement personnalisé pour informer le parent
@@ -259,11 +260,11 @@ const ValidationsPalette = memo(({ validationId, fieldId, onAddValidation }: Val
                     document.dispatchEvent(event);
                 }, 300);
             } else {
-                console.error(`[ValidationsPalette] ❌ Échec de la création de la validation: ${response.statusText}`);
+                logger.error(`[ValidationsPalette] ❌ Échec de la création de la validation: ${response.statusText}`);
             }
         })
         .catch(error => {
-            console.error(`[ValidationsPalette] ❌ Erreur lors de la création de la validation:`, error);
+            logger.error(`[ValidationsPalette] ❌ Erreur lors de la création de la validation:`, error);
         });
     }, [fieldId, onAddValidation]);
     
@@ -291,7 +292,7 @@ const ValidationsPalette = memo(({ validationId, fieldId, onAddValidation }: Val
                                 draggable="true"
                                 title={validation.label}
                                 onDragStart={(e) => {
-                                    console.log(`[VALIDATION_DRAG] Starting drag for validation: ${validation.value}`);
+                                    logger.debug(`[VALIDATION_DRAG] Starting drag for validation: ${validation.value}`);
                                     // Format standard pour être compatible avec ValidationZone
                                     const data = {
                                         type: 'validation',
@@ -336,7 +337,7 @@ const ValidationsPalette = memo(({ validationId, fieldId, onAddValidation }: Val
                                 draggable="true"
                                 title={validation.label}
                                 onDragStart={(e) => {
-                                    console.log(`[VALIDATION_DRAG] Starting drag for validation: ${validation.value}`);
+                                    logger.debug(`[VALIDATION_DRAG] Starting drag for validation: ${validation.value}`);
                                     const data = {
                                         type: 'validation',
                                         id: validation.value,
@@ -380,7 +381,7 @@ const ValidationsPalette = memo(({ validationId, fieldId, onAddValidation }: Val
                                 draggable="true"
                                 title={validation.label}
                                 onDragStart={(e) => {
-                                    console.log(`[VALIDATION_DRAG] Starting drag for validation: ${validation.value}`);
+                                    logger.debug(`[VALIDATION_DRAG] Starting drag for validation: ${validation.value}`);
                                     const data = {
                                         type: 'validation',
                                         id: validation.value,
@@ -424,7 +425,7 @@ const ValidationsPalette = memo(({ validationId, fieldId, onAddValidation }: Val
                                 draggable="true"
                                 title={validation.label}
                                 onDragStart={(e) => {
-                                    console.log(`[VALIDATION_DRAG] Starting drag for validation: ${validation.value}`);
+                                    logger.debug(`[VALIDATION_DRAG] Starting drag for validation: ${validation.value}`);
                                     // Format standard pour être compatible avec ValidationZone
                                     const data = {
                                         type: 'validation',
@@ -469,7 +470,7 @@ const ValidationsPalette = memo(({ validationId, fieldId, onAddValidation }: Val
                                 draggable="true"
                                 title={validation.label}
                                 onDragStart={(e) => {
-                                    console.log(`[VALIDATION_DRAG] Starting drag for validation: ${validation.value}`);
+                                    logger.debug(`[VALIDATION_DRAG] Starting drag for validation: ${validation.value}`);
                                     // Format standard pour être compatible avec ValidationZone
                                     const data = {
                                         type: 'validation',

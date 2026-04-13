@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
+import { logger } from '../lib/logger';
 
 export interface TimeSlot {
   start: string;
@@ -44,7 +45,7 @@ export const useGoogleCalendar = (options: UseGoogleCalendarOptions = {}) => {
       
       setAvailableSlots(sortedSlots);
     } catch (error) {
-      console.error('[useGoogleCalendar] Erreur lors de la récupération des créneaux:', error);
+      logger.error('[useGoogleCalendar] Erreur lors de la récupération des créneaux:', error);
       setAvailableSlots([]);
     } finally {
       setLoading(false);
@@ -67,7 +68,7 @@ export const useGoogleCalendar = (options: UseGoogleCalendarOptions = {}) => {
 
       return response;
     } catch (error) {
-      console.error('[useGoogleCalendar] Erreur lors de la création du RDV:', error);
+      logger.error('[useGoogleCalendar] Erreur lors de la création du RDV:', error);
       throw error;
     }
   }, [api, options.defaultDuration]);

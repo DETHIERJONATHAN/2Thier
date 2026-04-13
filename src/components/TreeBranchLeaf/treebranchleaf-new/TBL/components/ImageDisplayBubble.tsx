@@ -16,6 +16,7 @@ import { PictureOutlined, EyeOutlined, LoadingOutlined } from '@ant-design/icons
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import { tblLog } from '../../../../../utils/tblDebug';
 import { SF } from '../../../../zhiive/ZhiiveTheme';
+import { logger } from '../../../../../lib/logger';
 
 interface ImageDisplayBubbleProps {
   /** ID du champ courant */
@@ -164,7 +165,7 @@ export const ImageDisplayBubble: React.FC<ImageDisplayBubbleProps> = ({
         setImageUrl(null);
       } catch (err) {
         if (!cancelled) {
-          console.error(`❌ [ImageDisplayBubble] Erreur récupération image:`, err);
+          logger.error(`❌ [ImageDisplayBubble] Erreur récupération image:`, err);
           setError('Erreur de chargement');
           setImageUrl(null);
         }

@@ -1,4 +1,5 @@
 import { PrismaClient, OperationSource } from '@prisma/client';
+import { logger } from '../lib/logger';
 
 export class TreeBranchLeafResolver {
   private prisma: PrismaClient;
@@ -55,7 +56,7 @@ export class TreeBranchLeafResolver {
           throw new Error(`Unknown operation source: ${source}`);
       }
     } catch (error) {
-      console.error(`Failed to resolve operation ${sourceRef}:`, error);
+      logger.error(`Failed to resolve operation ${sourceRef}:`, error);
       return null;
     }
   }
@@ -72,7 +73,7 @@ export class TreeBranchLeafResolver {
       const operationDetail = await this.resolveOperation(operationSource, sourceRef);
       
       if (operationDetail === null) {
-        console.warn(`Could not resolve operation ${sourceRef}`);
+        logger.warn(`Could not resolve operation ${sourceRef}`);
         return false;
       }
 
@@ -86,7 +87,7 @@ export class TreeBranchLeafResolver {
 
       return true;
     } catch (error) {
-      console.error(`Failed to update submission ${submissionDataId}:`, error);
+      logger.error(`Failed to update submission ${submissionDataId}:`, error);
       return false;
     }
   }
@@ -132,7 +133,7 @@ export class TreeBranchLeafResolver {
       }
 
     } catch (error) {
-      console.error('❌ Background resolution failed:', error);
+      logger.error('❌ Background resolution failed:', error);
     }
   }
 
@@ -159,7 +160,7 @@ export class TreeBranchLeafResolver {
       }
 
     } catch (error) {
-      console.error(`Failed to invalidate cache for ${sourceRef}:`, error);
+      logger.error(`Failed to invalidate cache for ${sourceRef}:`, error);
     }
   }
 
@@ -206,7 +207,7 @@ export class TreeBranchLeafResolver {
 
       return result;
     } catch (error) {
-      console.error(`Failed to calculate result for ${submissionDataId}:`, error);
+      logger.error(`Failed to calculate result for ${submissionDataId}:`, error);
       return null;
     }
   }

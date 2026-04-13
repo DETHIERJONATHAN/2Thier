@@ -10,6 +10,7 @@ import { SF } from '../../components/zhiive/ZhiiveTheme';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import SignatureCanvas, { type SignatureCanvasRef } from '../../components/signature/SignatureCanvas';
+import { logger } from '../../lib/logger';
 
 const API_BASE = '/api';
 
@@ -55,7 +56,7 @@ const PublicSignaturePage: React.FC = () => {
       const filenameMatch = disposition?.match(/filename="?([^"]+)"?/);
       if (filenameMatch?.[1]) setPdfFilename(filenameMatch[1]);
     } catch (err) {
-      console.error('Erreur chargement PDF:', err);
+      logger.error('Erreur chargement PDF:', err);
     } finally {
       setPdfLoading(false);
     }

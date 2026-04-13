@@ -5,6 +5,7 @@ import { useAuthenticatedApi } from '../../../../../../hooks/useAuthenticatedApi
 import { useDebouncedCallback } from '../../../hooks/useDebouncedCallback';
 import NodeTreeSelector, { NodeTreeSelectorValue } from '../shared/NodeTreeSelector';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../../../../../lib/logger';
 
 const { Title, Text } = Typography;
 
@@ -87,7 +88,7 @@ const LinkPanel: React.FC<LinkPanelProps> = ({ treeId, nodeId, value, onChange, 
           onChange?.(initial as Record<string, unknown>);
         }
       } catch (err) {
-        console.error('❌ [LinkPanel] Erreur chargement:', err);
+        logger.error('❌ [LinkPanel] Erreur chargement:', err);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -136,9 +137,9 @@ const LinkPanel: React.FC<LinkPanelProps> = ({ treeId, nodeId, value, onChange, 
       }));
       
       onChange?.(next as Record<string, unknown>);
-      console.log('✅ [LinkPanel] Lien sauvegardé:', updatePayload);
+      logger.debug('✅ [LinkPanel] Lien sauvegardé:', updatePayload);
     } catch (err) {
-      console.error('❌ [LinkPanel] Erreur sauvegarde:', err);
+      logger.error('❌ [LinkPanel] Erreur sauvegarde:', err);
       message.error('Erreur de sauvegarde du lien');
     }
   }, [api, nodeId, treeId, onChange]);
@@ -146,7 +147,7 @@ const LinkPanel: React.FC<LinkPanelProps> = ({ treeId, nodeId, value, onChange, 
 
   // Handler pour la sélection via NodeTreeSelector
   const handleTreeSelection = useCallback(async (selection: NodeTreeSelectorValue) => {
-    console.log('🔗 [LinkPanel] Sélection:', selection);
+    logger.debug('🔗 [LinkPanel] Sélection:', selection);
     
     // Extraire le nodeId depuis le ref
     let selectedNodeId = selection.ref;
@@ -182,7 +183,7 @@ const LinkPanel: React.FC<LinkPanelProps> = ({ treeId, nodeId, value, onChange, 
       debouncedSave(next);
       message.success(`Lien configuré vers "${targetNodeLabel}"`);
     } catch (err) {
-      console.error('Erreur récupération nœud:', err);
+      logger.error('Erreur récupération nœud:', err);
       const next: LinkConfigValue = {
         ...config,
         targetNodeId: selectedNodeId,
@@ -211,7 +212,7 @@ const LinkPanel: React.FC<LinkPanelProps> = ({ treeId, nodeId, value, onChange, 
 
   // Supprimer le lien (appelé par Popconfirm)
   const handleDeleteLink = useCallback(async () => {
-    console.log('🗑️ [LinkPanel] handleDeleteLink appelé, nodeId:', nodeId);
+    logger.debug('🗑️ [LinkPanel] handleDeleteLink appelé, nodeId:', nodeId);
     try {
           const empty: LinkConfigValue = { 
             targetTreeId: undefined, 
@@ -255,9 +256,9 @@ const LinkPanel: React.FC<LinkPanelProps> = ({ treeId, nodeId, value, onChange, 
       setConfig(empty);
       onChange?.(empty as Record<string, unknown>);
       message.success('Lien supprimé');
-      console.log('✅ [LinkPanel] Lien supprimé');
+      logger.debug('✅ [LinkPanel] Lien supprimé');
     } catch (err) {
-      console.error('❌ [LinkPanel] Erreur suppression:', err);
+      logger.error('❌ [LinkPanel] Erreur suppression:', err);
       message.error('Impossible de supprimer le lien');
     }
   }, [api, nodeId, treeId, onChange]);

@@ -5,6 +5,7 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/fr';
+import { logger } from '../../lib/logger';
 
 dayjs.extend(relativeTime);
 dayjs.locale('fr');
@@ -56,7 +57,7 @@ const ChantierHistoryTab: React.FC<Props> = ({ chantierId, statusesMap }) => {
       const res = await api.get(`/api/chantier-workflow/chantiers/${chantierId}/history`);
       setHistory(res.data || []);
     } catch {
-      console.error('Erreur chargement historique');
+      logger.error('Erreur chargement historique');
     } finally {
       setLoading(false);
     }

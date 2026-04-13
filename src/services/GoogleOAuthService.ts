@@ -9,6 +9,7 @@ import {
   isGoogleOAuthConfigured,
 } from '../auth/googleConfig';
 import { computeRedirectUri } from '../auth/googleConfig'; // ⭐ Importer la fonction de calcul dynamique
+import { logger } from '../lib/logger';
 
 const SCOPES = [...GOOGLE_OAUTH_SCOPES];
 
@@ -32,7 +33,7 @@ export class GoogleOAuthService {
     const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
     
     if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
-      console.warn('[GoogleOAuthService] Credentials Google manquants');
+      logger.warn('[GoogleOAuthService] Credentials Google manquants');
       throw new Error('Google OAuth credentials not configured');
     }
     
@@ -45,7 +46,7 @@ export class GoogleOAuthService {
 
   constructor() {
     if (!isGoogleOAuthConfigured()) {
-      console.warn('[GoogleOAuthService] Configuration Google OAuth incomplète');
+      logger.warn('[GoogleOAuthService] Configuration Google OAuth incomplète');
     }
   }
 
@@ -147,7 +148,7 @@ export class GoogleOAuthService {
       });
       
     } catch (error) {
-      console.error(`[GoogleOAuthService] ❌ ERREUR lors de la sauvegarde des tokens:`, error);
+      logger.error(`[GoogleOAuthService] ❌ ERREUR lors de la sauvegarde des tokens:`, error);
       throw error;
     }
   }
@@ -259,7 +260,7 @@ export class GoogleOAuthService {
           });
         }
       } catch (error) {
-        console.error(`[GoogleOAuthService] Échec rafraîchissement token pour ${organization.name}:`, error);
+        logger.error(`[GoogleOAuthService] Échec rafraîchissement token pour ${organization.name}:`, error);
         return null;
       }
     }
@@ -328,7 +329,7 @@ export class GoogleOAuthService {
         
       }
     } catch (error) {
-      console.error(`[GoogleOAuthService] ❌ Échec du rafraîchissement du token pour ${userId}:`, error);
+      logger.error(`[GoogleOAuthService] ❌ Échec du rafraîchissement du token pour ${userId}:`, error);
       return null;
     }
   } else if (expiryDate) {
@@ -393,7 +394,7 @@ export class GoogleOAuthService {
         
       }
     } catch (error) {
-      console.error(`[GoogleOAuthService] Échec de la révocation du token pour ${userId}:`, error);
+      logger.error(`[GoogleOAuthService] Échec de la révocation du token pour ${userId}:`, error);
       // On continue même si la révocation échoue pour supprimer les données locales
     }
 
@@ -430,7 +431,7 @@ export class GoogleOAuthService {
       const response = await oauth2.userinfo.get();
       return { success: true, userInfo: response.data };
     } catch (error: unknown) {
-      console.error(`[GoogleOAuthService] Erreur lors du test de connexion pour ${userId}:`, error);
+      logger.error(`[GoogleOAuthService] Erreur lors du test de connexion pour ${userId}:`, error);
       if (error instanceof Error) {
         return { success: false, error: error.message };
       }

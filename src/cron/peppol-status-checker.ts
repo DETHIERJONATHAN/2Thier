@@ -20,6 +20,7 @@ import { notify } from '../services/NotificationHelper';
 import { sendPushToUser } from '../routes/push';
 import UniversalNotificationService from '../services/UniversalNotificationService';
 import { getPostalService } from '../services/PostalEmailService.js';
+import { logger } from '../lib/logger';
 
 const LOG_PREFIX = '🔄 [PEPPOL-CRON]';
 
@@ -41,7 +42,7 @@ export const checkTransitionStatuses = cron.schedule('*/30 * * * *', async () =>
 
     if (configs.length === 0) return;
 
-    console.log(`${LOG_PREFIX} Vérification de ${configs.length} organisation(s) en transition...`);
+    logger.debug(`${LOG_PREFIX} Vérification de ${configs.length} organisation(s) en transition...`);
 
     for (const config of configs) {
       try {
@@ -57,7 +58,7 @@ export const checkTransitionStatuses = cron.schedule('*/30 * * * *', async () =>
             // Transfert terminé ou activation confirmée → ACTIVE
             updateData.registrationStatus = 'ACTIVE';
             updateData.enabled = true;
-            console.log(`${LOG_PREFIX} ✅ ${orgName}: ${oldStatus} → ACTIVE (confirmé sur Peppol)`);
+            logger.debug(`${LOG_PREFIX} ✅ ${orgName}: ${oldStatus} → ACTIVE (confirmé sur Peppol)`);
           } else if (peppolCheck.isRegisteredElsewhere) {
             // Toujours chez l'ancien AP
             if (oldStatus !== 'MIGRATION_PENDING') {
@@ -67,7 +68,7 @@ export const checkTransitionStatuses = cron.schedule('*/30 * * * *', async () =>
               updateData.previousAccessPoint = peppolCheck.accessPoint;
               updateData.previousApDetectedAt = new Date();
             }
-            console.log(`${LOG_PREFIX} ⏳ ${orgName}: toujours chez ${peppolCheck.accessPoint || 'ancien AP'}`);
+            logger.debug(`${LOG_PREFIX} ⏳ ${orgName}: toujours chez ${peppolCheck.accessPoint || 'ancien AP'}`);
           }
         } else {
           // Pas dans l'annuaire — vérifier Odoo
@@ -79,20 +80,20 @@ export const checkTransitionStatuses = cron.schedule('*/30 * * * *', async () =>
                 // Odoo (Access Point certifié) confirme ACTIVE → faire confiance
                 updateData.registrationStatus = 'ACTIVE';
                 updateData.enabled = true;
-                console.log(`${LOG_PREFIX} ✅ ${orgName}: ${oldStatus} → ACTIVE (confirmé par Odoo AP)`);
+                logger.debug(`${LOG_PREFIX} ✅ ${orgName}: ${oldStatus} → ACTIVE (confirmé par Odoo AP)`);
               } else if (odooStatus === 'pending') {
                 if (oldStatus !== 'PENDING') {
                   updateData.registrationStatus = 'PENDING';
-                  console.log(`${LOG_PREFIX} ⏳ ${orgName}: ${oldStatus} → PENDING (Odoo confirme pending)`);
+                  logger.debug(`${LOG_PREFIX} ⏳ ${orgName}: ${oldStatus} → PENDING (Odoo confirme pending)`);
                 }
               } else if (odooStatus === 'not_verified' || odooStatus === 'sent_verification') {
                 if (oldStatus !== 'VERIFICATION_NEEDED') {
                   updateData.registrationStatus = 'VERIFICATION_NEEDED';
-                  console.log(`${LOG_PREFIX} 📱 ${orgName}: ${oldStatus} → VERIFICATION_NEEDED (SMS requis)`);
+                  logger.debug(`${LOG_PREFIX} 📱 ${orgName}: ${oldStatus} → VERIFICATION_NEEDED (SMS requis)`);
                 }
               } else if (odooStatus === 'not_registered' && oldStatus === 'MIGRATION_PENDING') {
                 // L'ancien AP a libéré le numéro, mais notre enregistrement n'est pas encore fait
-                console.log(`${LOG_PREFIX} 🔓 ${orgName}: ancien AP a libéré le numéro — prêt pour enregistrement`);
+                logger.debug(`${LOG_PREFIX} 🔓 ${orgName}: ancien AP a libéré le numéro — prêt pour enregistrement`);
               }
             } catch {
               // Service temporairement indisponible
@@ -114,11 +115,11 @@ export const checkTransitionStatuses = cron.schedule('*/30 * * * *', async () =>
           });
         }
       } catch (err) {
-        console.error(`${LOG_PREFIX} ❌ Erreur pour org ${config.organizationId}:`, (err as Error).message);
+        logger.error(`${LOG_PREFIX} ❌ Erreur pour org ${config.organizationId}:`, (err as Error).message);
       }
     }
   } catch (error) {
-    console.error(`${LOG_PREFIX} ❌ Erreur globale:`, error);
+    logger.error(`${LOG_PREFIX} ❌ Erreur globale:`, error);
   }
 }, { scheduled: false });
 
@@ -141,7 +142,7 @@ export const checkActiveStatuses = cron.schedule('0 */6 * * *', async () => {
 
     if (configs.length === 0) return;
 
-    console.log(`${LOG_PREFIX} Vérification santé de ${configs.length} organisation(s) active(s)...`);
+    logger.debug(`${LOG_PREFIX} Vérification santé de ${configs.length} organisation(s) active(s)...`);
 
     for (const config of configs) {
       try {
@@ -157,7 +158,7 @@ export const checkActiveStatuses = cron.schedule('0 */6 * * *', async () => {
           });
         } else if (peppolCheck.isRegistered && peppolCheck.isRegisteredElsewhere) {
           // ALERTE : quelqu'un d'autre a pris notre enregistrement !
-          console.warn(`${LOG_PREFIX} ⚠️ ALERTE: ${orgName} n'est plus chez nous ! Maintenant chez ${peppolCheck.accessPoint}`);
+          logger.warn(`${LOG_PREFIX} ⚠️ ALERTE: ${orgName} n'est plus chez nous ! Maintenant chez ${peppolCheck.accessPoint}`);
           await db.peppolConfig.update({
             where: { organizationId: config.organizationId },
             data: {
@@ -169,18 +170,18 @@ export const checkActiveStatuses = cron.schedule('0 */6 * * *', async () => {
           });
         } else {
           // Plus dans l'annuaire du tout — peut-être une erreur temporaire
-          console.warn(`${LOG_PREFIX} ⚠️ ${orgName}: plus visible dans l'annuaire Peppol (erreur réseau ?)`);
+          logger.warn(`${LOG_PREFIX} ⚠️ ${orgName}: plus visible dans l'annuaire Peppol (erreur réseau ?)`);
           await db.peppolConfig.update({
             where: { organizationId: config.organizationId },
             data: { lastCheckedAt: new Date() },
           });
         }
       } catch (err) {
-        console.error(`${LOG_PREFIX} ❌ Erreur santé org ${config.organizationId}:`, (err as Error).message);
+        logger.error(`${LOG_PREFIX} ❌ Erreur santé org ${config.organizationId}:`, (err as Error).message);
       }
     }
   } catch (error) {
-    console.error(`${LOG_PREFIX} ❌ Erreur globale santé:`, error);
+    logger.error(`${LOG_PREFIX} ❌ Erreur globale santé:`, error);
   }
 }, { scheduled: false });
 
@@ -204,7 +205,7 @@ export const fetchIncomingInvoices = cron.schedule('0 */1 * * *', async () => {
 
     if (configs.length === 0) return;
 
-    console.log(`${LOG_PREFIX} 📥 Récupération des factures entrantes pour ${configs.length} organisation(s)...`);
+    logger.debug(`${LOG_PREFIX} 📥 Récupération des factures entrantes pour ${configs.length} organisation(s)...`);
 
     for (const config of configs) {
       try {
@@ -267,7 +268,7 @@ export const fetchIncomingInvoices = cron.schedule('0 */1 * * *', async () => {
         }
 
         if (imported > 0) {
-          console.log(`${LOG_PREFIX} 📥 ${orgName}: ${imported} nouvelle(s) facture(s) importée(s)`);
+          logger.debug(`${LOG_PREFIX} 📥 ${orgName}: ${imported} nouvelle(s) facture(s) importée(s)`);
 
           // 4. Notifications (push + in-app + email)
           try {
@@ -305,7 +306,7 @@ export const fetchIncomingInvoices = cron.schedule('0 */1 * * *', async () => {
                 actionUrl: '/facture?tab=incoming',
                 tags: ['peppol', 'incoming', 'cron'],
                 metadata: { count: imported, invoices: newlyImported.map(i => i.invoiceNumber) },
-              }).catch(err => console.error(`${LOG_PREFIX} Erreur notification in-app:`, err.message));
+              }).catch(err => logger.error(`${LOG_PREFIX} Erreur notification in-app:`, err.message));
 
               // Push notification
               sendPushToUser(admin.userId, {
@@ -315,7 +316,7 @@ export const fetchIncomingInvoices = cron.schedule('0 */1 * * *', async () => {
                 tag: `peppol-incoming-${Date.now()}`,
                 url: '/facture?tab=incoming',
                 type: 'peppol_incoming',
-              }).catch(err => console.error(`${LOG_PREFIX} Erreur push:`, err.message));
+              }).catch(err => logger.error(`${LOG_PREFIX} Erreur push:`, err.message));
 
               // Email @zhiive.com
               const zhiiveEmail = admin.User?.EmailAccount?.emailAddress;
@@ -328,7 +329,7 @@ export const fetchIncomingInvoices = cron.schedule('0 */1 * * *', async () => {
                   subject: `${title} — ${orgName}`,
                   body: htmlEmail,
                   isHtml: true,
-                }).catch(err => console.error(`${LOG_PREFIX} Erreur email zhiive ${zhiiveEmail}:`, err.message));
+                }).catch(err => logger.error(`${LOG_PREFIX} Erreur email zhiive ${zhiiveEmail}:`, err.message));
               }
             }
 
@@ -342,20 +343,20 @@ export const fetchIncomingInvoices = cron.schedule('0 */1 * * *', async () => {
                 subject: `${title} — ${orgName}`,
                 body: htmlEmail,
                 isHtml: true,
-              }).catch(err => console.error(`${LOG_PREFIX} Erreur email colony ${org.email}:`, err.message));
+              }).catch(err => logger.error(`${LOG_PREFIX} Erreur email colony ${org.email}:`, err.message));
             }
 
-            console.log(`${LOG_PREFIX} 🔔 Notifications envoyées: ${imported} facture(s), ${orgAdmins.length} admin(s)`);
+            logger.debug(`${LOG_PREFIX} 🔔 Notifications envoyées: ${imported} facture(s), ${orgAdmins.length} admin(s)`);
           } catch (notifyErr) {
-            console.error(`${LOG_PREFIX} ❌ Erreur notifications:`, (notifyErr as Error).message);
+            logger.error(`${LOG_PREFIX} ❌ Erreur notifications:`, (notifyErr as Error).message);
           }
         }
       } catch (err) {
-        console.error(`${LOG_PREFIX} ❌ Erreur fetch incoming org ${config.organizationId}:`, (err as Error).message);
+        logger.error(`${LOG_PREFIX} ❌ Erreur fetch incoming org ${config.organizationId}:`, (err as Error).message);
       }
     }
   } catch (error) {
-    console.error(`${LOG_PREFIX} ❌ Erreur globale fetch incoming:`, error);
+    logger.error(`${LOG_PREFIX} ❌ Erreur globale fetch incoming:`, error);
   }
 }, { scheduled: false });
 
@@ -408,7 +409,7 @@ export const checkInvoiceDeliveryStatuses = cron.schedule('*/2 * * * *', async (
     const totalProcessing = standaloneInvoices.length + chantierInvoices.length;
     if (totalProcessing === 0) return;
 
-    console.log(`${LOG_PREFIX} 📬 Vérification statut de ${totalProcessing} facture(s) PROCESSING...`);
+    logger.debug(`${LOG_PREFIX} 📬 Vérification statut de ${totalProcessing} facture(s) PROCESSING...`);
 
     // 2. Grouper par organization pour optimiser les appels Odoo
     const orgIds = [...new Set([
@@ -442,8 +443,8 @@ export const checkInvoiceDeliveryStatuses = cron.schedule('*/2 * * * *', async (
         const odooByName = new Map(odooInvoices.map(inv => [inv.name, inv]));
         const odooByRef = new Map(odooInvoices.filter(inv => inv.ref).map(inv => [inv.ref!, inv]));
 
-        console.log(`${LOG_PREFIX} Odoo: ${odooInvoices.length} facture(s) trouvée(s) pour company ${peppolConfig.odooCompanyId}`);
-        odooInvoices.forEach(inv => console.log(`${LOG_PREFIX}   - ${inv.name} (ref: ${inv.ref || 'N/A'}) → ${inv.peppol_move_state}`));
+        logger.debug(`${LOG_PREFIX} Odoo: ${odooInvoices.length} facture(s) trouvée(s) pour company ${peppolConfig.odooCompanyId}`);
+        odooInvoices.forEach(inv => logger.debug(`${LOG_PREFIX}   - ${inv.name} (ref: ${inv.ref || 'N/A'}) → ${inv.peppol_move_state}`));
 
         const findOdooMatch = (invoiceNumber: string | null) => {
           if (!invoiceNumber) return undefined;
@@ -456,16 +457,16 @@ export const checkInvoiceDeliveryStatuses = cron.schedule('*/2 * * * *', async (
          */
         const retriggerPeppolSend = async (odooInvoiceId: number, invoiceNumber: string | null): Promise<boolean> => {
           try {
-            console.log(`${LOG_PREFIX} 🔄 Re-trigger Peppol send via wizard pour Odoo invoice ${odooInvoiceId} (${invoiceNumber})...`);
+            logger.debug(`${LOG_PREFIX} 🔄 Re-trigger Peppol send via wizard pour Odoo invoice ${odooInvoiceId} (${invoiceNumber})...`);
             const success = await bridge.sendViaWizard(odooInvoiceId, peppolConfig.odooCompanyId!);
             if (success) {
-              console.log(`${LOG_PREFIX} ✅ Re-trigger réussi pour ${invoiceNumber}`);
+              logger.debug(`${LOG_PREFIX} ✅ Re-trigger réussi pour ${invoiceNumber}`);
             } else {
-              console.warn(`${LOG_PREFIX} ⚠️ Re-trigger wizard retourné false pour ${invoiceNumber}`);
+              logger.warn(`${LOG_PREFIX} ⚠️ Re-trigger wizard retourné false pour ${invoiceNumber}`);
             }
             return success;
           } catch (err) {
-            console.error(`${LOG_PREFIX} ❌ Re-trigger échoué pour ${invoiceNumber}:`, (err as Error).message);
+            logger.error(`${LOG_PREFIX} ❌ Re-trigger échoué pour ${invoiceNumber}:`, (err as Error).message);
             return false;
           }
         };
@@ -502,7 +503,7 @@ export const checkInvoiceDeliveryStatuses = cron.schedule('*/2 * * * *', async (
                 await db.chantierInvoice.update({ where: { id: inv.id }, data: updateData });
               }
 
-              console.log(`${LOG_PREFIX} ✅ Facture ${inv.invoiceNumber} → SENT (Peppol delivered)`);
+              logger.debug(`${LOG_PREFIX} ✅ Facture ${inv.invoiceNumber} → SENT (Peppol delivered)`);
 
               // Notification
               const targetUserId = inv.createdById || undefined;
@@ -538,7 +539,7 @@ export const checkInvoiceDeliveryStatuses = cron.schedule('*/2 * * * *', async (
                   await db.chantierInvoice.update({ where: { id: inv.id }, data: updateData });
                 }
 
-                console.warn(`${LOG_PREFIX} ❌ Facture ${inv.invoiceNumber} → ERROR (Odoo peppol_move_state=error)`);
+                logger.warn(`${LOG_PREFIX} ❌ Facture ${inv.invoiceNumber} → ERROR (Odoo peppol_move_state=error)`);
 
                 const targetUserId = inv.createdById || undefined;
                 if (targetUserId) {
@@ -566,7 +567,7 @@ export const checkInvoiceDeliveryStatuses = cron.schedule('*/2 * * * *', async (
                 } else {
                   await db.chantierInvoice.update({ where: { id: inv.id }, data: updateData });
                 }
-                console.log(`${LOG_PREFIX} 🔄 Facture ${inv.invoiceNumber}: ERROR → PROCESSING (Odoo dit processing, recovery auto)`);
+                logger.debug(`${LOG_PREFIX} 🔄 Facture ${inv.invoiceNumber}: ERROR → PROCESSING (Odoo dit processing, recovery auto)`);
               }
               // Sinon, déjà PROCESSING dans Zhiive — rien à faire
 
@@ -574,7 +575,7 @@ export const checkInvoiceDeliveryStatuses = cron.schedule('*/2 * * * *', async (
               // 🔄 L'envoi Peppol n'a jamais été déclenché ou est bloqué → RETRY AUTO
               if (inv.peppolRetryCount < MAX_PEPPOL_RETRIES) {
                 const newRetryCount = inv.peppolRetryCount + 1;
-                console.warn(`${LOG_PREFIX} ⚠️ Facture ${inv.invoiceNumber}: Odoo state="${odooState}" — retry ${newRetryCount}/${MAX_PEPPOL_RETRIES}`);
+                logger.warn(`${LOG_PREFIX} ⚠️ Facture ${inv.invoiceNumber}: Odoo state="${odooState}" — retry ${newRetryCount}/${MAX_PEPPOL_RETRIES}`);
 
                 const retriggerSuccess = await retriggerPeppolSend(odooMatch.id, inv.invoiceNumber);
 
@@ -594,7 +595,7 @@ export const checkInvoiceDeliveryStatuses = cron.schedule('*/2 * * * *', async (
                 }
               } else {
                 // Max retries atteint → ERROR
-                console.error(`${LOG_PREFIX} 🚨 Facture ${inv.invoiceNumber}: MAX RETRIES (${MAX_PEPPOL_RETRIES}) atteint → ERROR`);
+                logger.error(`${LOG_PREFIX} 🚨 Facture ${inv.invoiceNumber}: MAX RETRIES (${MAX_PEPPOL_RETRIES}) atteint → ERROR`);
 
                 const updateData = {
                   peppolStatus: 'ERROR' as const,
@@ -623,7 +624,7 @@ export const checkInvoiceDeliveryStatuses = cron.schedule('*/2 * * * *', async (
             }
           } else if (isStuck) {
             // Pas trouvé dans Odoo ET bloqué depuis > 30 min → Alerte
-            console.warn(`${LOG_PREFIX} 🚨 Facture ${inv.invoiceNumber} PROCESSING depuis ${Math.round((now - sentAt) / 60000)} min — non trouvée dans Odoo !`);
+            logger.warn(`${LOG_PREFIX} 🚨 Facture ${inv.invoiceNumber} PROCESSING depuis ${Math.round((now - sentAt) / 60000)} min — non trouvée dans Odoo !`);
 
             if (inv.peppolRetryCount >= MAX_PEPPOL_RETRIES) {
               // Max retries + pas dans Odoo → ERROR définitif
@@ -685,11 +686,11 @@ export const checkInvoiceDeliveryStatuses = cron.schedule('*/2 * * * *', async (
         }
 
       } catch (err) {
-        console.error(`${LOG_PREFIX} ❌ Erreur vérification delivery org ${orgId}:`, (err as Error).message);
+        logger.error(`${LOG_PREFIX} ❌ Erreur vérification delivery org ${orgId}:`, (err as Error).message);
       }
     }
   } catch (error) {
-    console.error(`${LOG_PREFIX} ❌ Erreur globale check delivery:`, error);
+    logger.error(`${LOG_PREFIX} ❌ Erreur globale check delivery:`, error);
   }
 }, { scheduled: false });
 
@@ -701,9 +702,9 @@ export function startPeppolCronJobs() {
   checkActiveStatuses.start();
   fetchIncomingInvoices.start();
   checkInvoiceDeliveryStatuses.start();
-  console.log(`${LOG_PREFIX} ✅ Jobs démarrés:`);
-  console.log(`${LOG_PREFIX}   - Transition (PENDING/MIGRATION): toutes les 30 min`);
-  console.log(`${LOG_PREFIX}   - Santé (ACTIVE): toutes les 6h`);
-  console.log(`${LOG_PREFIX}   - Factures entrantes: toutes les 4h`);
-  console.log(`${LOG_PREFIX}   - Statut livraison factures: toutes les 2 min (retry auto + alerte stuck)`);
+  logger.debug(`${LOG_PREFIX} ✅ Jobs démarrés:`);
+  logger.debug(`${LOG_PREFIX}   - Transition (PENDING/MIGRATION): toutes les 30 min`);
+  logger.debug(`${LOG_PREFIX}   - Santé (ACTIVE): toutes les 6h`);
+  logger.debug(`${LOG_PREFIX}   - Factures entrantes: toutes les 4h`);
+  logger.debug(`${LOG_PREFIX}   - Statut livraison factures: toutes les 2 min (retry auto + alerte stuck)`);
 }

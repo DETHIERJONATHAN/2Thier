@@ -15,6 +15,7 @@ import { useAuthenticatedApi } from '../../../../hooks/useAuthenticatedApi';
 import TableFullscreenEditor, { type TableConfig } from '../components/Parameters/capabilities/TableFullscreenEditor';
 import * as XLSX from 'xlsx';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../../../lib/logger';
 
 const { Text, Title } = Typography;
 
@@ -103,7 +104,7 @@ const GestionnairePanel: React.FC<GestionnairePanelProps> = ({ open, onClose, tr
       setTables(res?.tables || []);
       setConstants(res?.constants || []);
     } catch (err) {
-      console.error('[GestionnairePanel] Failed to load:', err);
+      logger.error('[GestionnairePanel] Failed to load:', err);
       message.error('Erreur lors du chargement des éléments exposés');
     } finally {
       setLoading(false);
@@ -178,7 +179,7 @@ const GestionnairePanel: React.FC<GestionnairePanelProps> = ({ open, onClose, tr
       const tableName = table.gestionnaireLabel || table.name || res.name || 'Tableau';
       setTableCfg(apiToTableConfig(columns, apiRows, tableName));
     } catch (err) {
-      console.error('[GestionnairePanel] Failed to load table data:', err);
+      logger.error('[GestionnairePanel] Failed to load table data:', err);
       message.error('Erreur lors du chargement des données du tableau');
       setTableEditorOpen(false);
     } finally {
@@ -209,7 +210,7 @@ const GestionnairePanel: React.FC<GestionnairePanelProps> = ({ open, onClose, tr
         await loadExposed();
         onOverrideSaved?.();
       } catch (err) {
-        console.error('[GestionnairePanel] Failed to save table override:', err);
+        logger.error('[GestionnairePanel] Failed to save table override:', err);
         message.error('Erreur lors de la sauvegarde du tableau');
       }
     }
@@ -232,7 +233,7 @@ const GestionnairePanel: React.FC<GestionnairePanelProps> = ({ open, onClose, tr
       await loadExposed();
       onOverrideSaved?.();
     } catch (err) {
-      console.error('[GestionnairePanel] Save error:', err);
+      logger.error('[GestionnairePanel] Save error:', err);
       message.error('Erreur lors de la sauvegarde');
     } finally {
       setSaving(null);
@@ -248,7 +249,7 @@ const GestionnairePanel: React.FC<GestionnairePanelProps> = ({ open, onClose, tr
       await loadExposed();
       onOverrideSaved?.();
     } catch (err) {
-      console.error('[GestionnairePanel] Revert error:', err);
+      logger.error('[GestionnairePanel] Revert error:', err);
       message.error('Erreur lors de la suppression de l\'override');
     } finally {
       setSaving(null);
@@ -264,7 +265,7 @@ const GestionnairePanel: React.FC<GestionnairePanelProps> = ({ open, onClose, tr
       await loadExposed();
       onOverrideSaved?.();
     } catch (err) {
-      console.error('[GestionnairePanel] Revert table error:', err);
+      logger.error('[GestionnairePanel] Revert table error:', err);
       message.error('Erreur lors de la suppression');
     } finally {
       setSaving(null);
@@ -372,7 +373,7 @@ const GestionnairePanel: React.FC<GestionnairePanelProps> = ({ open, onClose, tr
       setTableEditorOpen(true);
       message.success(`${addedCount} ligne(s) ajoutée(s) depuis "${file.name}"`);
     } catch (err) {
-      console.error('[GestionnairePanel] Excel import error:', err);
+      logger.error('[GestionnairePanel] Excel import error:', err);
       message.error('Erreur lors de l\'import du fichier Excel');
     }
   }, [api, apiToTableConfig]);
@@ -393,7 +394,7 @@ const GestionnairePanel: React.FC<GestionnairePanelProps> = ({ open, onClose, tr
       await loadExposed();
       onOverrideSaved?.();
     } catch (err) {
-      console.error('[GestionnairePanel] Save constant error:', err);
+      logger.error('[GestionnairePanel] Save constant error:', err);
       message.error('Erreur lors de la sauvegarde');
     } finally {
       setSaving(null);
@@ -409,7 +410,7 @@ const GestionnairePanel: React.FC<GestionnairePanelProps> = ({ open, onClose, tr
       await loadExposed();
       onOverrideSaved?.();
     } catch (err) {
-      console.error('[GestionnairePanel] Revert constant error:', err);
+      logger.error('[GestionnairePanel] Revert constant error:', err);
       message.error('Erreur lors de la suppression');
     } finally {
       setSaving(null);
@@ -431,7 +432,7 @@ const GestionnairePanel: React.FC<GestionnairePanelProps> = ({ open, onClose, tr
       setEditLabelValue('');
       await loadExposed();
     } catch (err) {
-      console.error('[GestionnairePanel] Save label error:', err);
+      logger.error('[GestionnairePanel] Save label error:', err);
       message.error('Erreur lors de la sauvegarde du libellé');
     } finally {
       setSaving(null);
@@ -447,7 +448,7 @@ const GestionnairePanel: React.FC<GestionnairePanelProps> = ({ open, onClose, tr
       await loadExposed();
       onOverrideSaved?.();
     } catch (err) {
-      console.error('[GestionnairePanel] Delete constant error:', err);
+      logger.error('[GestionnairePanel] Delete constant error:', err);
       message.error('Erreur lors de la suppression');
     } finally {
       setSaving(null);

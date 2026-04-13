@@ -23,6 +23,7 @@
 
 import { db } from '../lib/database';
 import { getFieldMapping } from '../config/fieldMapping';
+import { logger } from '../lib/logger';
 
 // Types pour le système dynamique
 interface FieldConfiguration {
@@ -164,7 +165,7 @@ export class DynamicFormulaEngine {
       return configurations;
 
     } catch (error) {
-      console.error('❌ [DynamicFormulaEngine] Erreur chargement configurations:', error);
+      logger.error('❌ [DynamicFormulaEngine] Erreur chargement configurations:', error);
       throw new Error(`Erreur lors du chargement des configurations: ${error.message}`);
     }
   }
@@ -340,7 +341,7 @@ export class DynamicFormulaEngine {
       return results;
 
     } catch (error) {
-      console.error('❌ [DynamicFormulaEngine] Erreur dans les calculs:', error);
+      logger.error('❌ [DynamicFormulaEngine] Erreur dans les calculs:', error);
       throw error;
     }
   }
@@ -446,7 +447,7 @@ export class DynamicFormulaEngine {
       }
 
     } catch (error) {
-      console.error('❌ Erreur mise à jour configuration:', error);
+      logger.error('❌ Erreur mise à jour configuration:', error);
       throw error;
     }
   }
@@ -469,7 +470,7 @@ export class DynamicFormulaEngine {
     const changedFieldId = options?.changedFieldId;
     const preloadedRules = options?.preloadedRules;
     
-    if (debug) console.log('🚀 [DynamicFormulaEngine] Application des formules - déclenchée par:', changedFieldId, 'règles préchargées:', !!preloadedRules);
+    if (debug) logger.debug('🚀 [DynamicFormulaEngine] Application des formules - déclenchée par:', changedFieldId, 'règles préchargées:', !!preloadedRules);
     
     try {
       const calculatedValues: Record<string, unknown> = {};
@@ -481,7 +482,7 @@ export class DynamicFormulaEngine {
       
       if (preloadedRules) {
         // Utiliser les règles préchargées du DevisPage
-        if (debug) console.log('📋 Utilisation des règles préchargées');
+        if (debug) logger.debug('📋 Utilisation des règles préchargées');
         Object.entries(preloadedRules).forEach(([fieldId, rules]) => {
           if (rules.formulas && Array.isArray(rules.formulas)) {
             rules.formulas.forEach((formula: RuleFormula) => {
@@ -492,10 +493,10 @@ export class DynamicFormulaEngine {
             });
           }
         });
-        if (debug) console.log(`📊 ${formulas.length} formules trouvées dans les règles préchargées`);
+        if (debug) logger.debug(`📊 ${formulas.length} formules trouvées dans les règles préchargées`);
       } else {
         // Fallback: requêtes à la base de données
-        if (debug) console.log('🔄 Chargement des formules depuis la base de données');
+        if (debug) logger.debug('🔄 Chargement des formules depuis la base de données');
         formulas = await this.prisma.fieldFormula.findMany({
           orderBy: { order: 'asc' }
         });
@@ -512,13 +513,13 @@ export class DynamicFormulaEngine {
             try {
               sequence = JSON.parse(formula.sequence);
             } catch {
-              if (debug) console.warn('⚠️ Formule avec séquence JSON invalide:', formula.id);
+              if (debug) logger.warn('⚠️ Formule avec séquence JSON invalide:', formula.id);
               continue;
             }
           } else if (Array.isArray(formula.sequence)) {
             sequence = formula.sequence;
           } else {
-            if (debug) console.warn('⚠️ Formule avec format de séquence non supporté:', formula.id);
+            if (debug) logger.warn('⚠️ Formule avec format de séquence non supporté:', formula.id);
             continue;
           }
 
@@ -539,7 +540,7 @@ export class DynamicFormulaEngine {
         } catch (formulaError) {
           const errorMsg = formulaError instanceof Error ? formulaError.message : String(formulaError);
           errors.push(`Erreur formule ${formula.name || formula.id}: ${errorMsg}`);
-          if (debug) console.error('❌ Erreur formule:', formula.id, errorMsg);
+          if (debug) logger.error('❌ Erreur formule:', formula.id, errorMsg);
         }
       }
 
@@ -552,7 +553,7 @@ export class DynamicFormulaEngine {
 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      if (debug) console.error('❌ [DynamicFormulaEngine] Erreur générale:', errorMsg);
+      if (debug) logger.error('❌ [DynamicFormulaEngine] Erreur générale:', errorMsg);
       
       return {
         success: false,
@@ -694,7 +695,7 @@ export class DynamicFormulaEngine {
           return { success: false, error: 'Division par zéro' };
         }
         const result = num1 / num2;
-        if (debug) console.log(`🧮 Résultat division: ${result}`);
+        if (debug) logger.debug(`🧮 Résultat division: ${result}`);
         return { success: true, value: result };
       }
     } else {
@@ -725,7 +726,7 @@ export class DynamicFormulaEngine {
       // Référence à un sous-champ d'advanced_select (nextField:uuid)
       const nextFieldId = value.substring('nextField:'.length);
       
-      if (debug) console.log(`🔍 Recherche NextField: ${nextFieldId}`);
+      if (debug) logger.debug(`🔍 Recherche NextField: ${nextFieldId}`);
       
       // CORRECTION: Chercher directement le nodeId qui correspond
   for (const [_fieldId, fieldValue] of Object.entries(fieldValues)) {
@@ -735,7 +736,7 @@ export class DynamicFormulaEngine {
           if (obj.nodeId === nextFieldId && obj.extra !== undefined) {
             // Trouvé ! Retourner la valeur extra
             const result = parseFloat(String(obj.extra)) || 0;
-            if (debug) console.log(`📋 NextField trouvé directement: ${result} (nodeId: ${nextFieldId})`);
+            if (debug) logger.debug(`📋 NextField trouvé directement: ${result} (nodeId: ${nextFieldId})`);
             return { success: true, value: result };
           }
         }
@@ -762,7 +763,7 @@ export class DynamicFormulaEngine {
                     if (nextFieldObj.id === nextFieldId) {
                       // Trouvé ! Retourner la valeur extra
                       const result = parseFloat(String(obj.extra)) || 0;
-                      if (debug) console.log(`📋 NextField trouvé: ${result}`);
+                      if (debug) logger.debug(`📋 NextField trouvé: ${result}`);
                       return { success: true, value: result };
                     }
                   }
@@ -781,13 +782,13 @@ export class DynamicFormulaEngine {
       // Référence directe à un champ
       const fieldValue = fieldValues[value];
       const numValue = parseFloat(String(fieldValue)) || 0;
-      if (debug) console.log(`📋 Field ${value}: ${numValue}`);
+      if (debug) logger.debug(`📋 Field ${value}: ${numValue}`);
       return { success: true, value: numValue };
       
     } else if (type === 'value') {
       // Valeur littérale
       const numValue = parseFloat(String(value)) || 0;
-      if (debug) console.log(`📋 Value: ${numValue}`);
+      if (debug) logger.debug(`📋 Value: ${numValue}`);
       return { success: true, value: numValue };
     }
     

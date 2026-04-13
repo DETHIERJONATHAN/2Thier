@@ -20,6 +20,7 @@
 
 import { db } from '../lib/database.js';
 import crypto from 'crypto';
+import { logger } from '../lib/logger';
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -83,7 +84,7 @@ export class PostalEmailService {
     this.apiKey = apiKey || process.env.POSTAL_API_KEY || '';
 
     if (!this.apiUrl || !this.apiKey) {
-      console.warn('⚠️ [POSTAL] Configuration manquante: POSTAL_API_URL ou POSTAL_API_KEY');
+      logger.warn('⚠️ [POSTAL] Configuration manquante: POSTAL_API_URL ou POSTAL_API_KEY');
     }
   }
 
@@ -226,7 +227,7 @@ export class PostalEmailService {
       });
 
       if (!emailAccount) {
-        console.warn(`⚠️ [POSTAL] Aucun compte trouvé pour ${recipientEmail}`);
+        logger.warn(`⚠️ [POSTAL] Aucun compte trouvé pour ${recipientEmail}`);
         return null;
       }
 
@@ -263,7 +264,7 @@ export class PostalEmailService {
 
       return email.id;
     } catch (error) {
-      console.error('❌ [POSTAL] Erreur traitement email entrant:', error);
+      logger.error('❌ [POSTAL] Erreur traitement email entrant:', error);
       throw error;
     }
   }
@@ -278,7 +279,7 @@ export class PostalEmailService {
       const result = await this.apiCall('deliverability/domain_check', { domain: 'test.com' });
       return result.status === 'success';
     } catch (error) {
-      console.error('❌ [POSTAL] Erreur connexion:', error);
+      logger.error('❌ [POSTAL] Erreur connexion:', error);
       return false;
     }
   }

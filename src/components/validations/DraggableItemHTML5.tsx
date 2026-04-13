@@ -1,5 +1,6 @@
 import React from 'react';
 import { ValidationItem } from './types';
+import { logger } from '../../lib/logger';
 
 interface DraggableItemProps {
   id: string;
@@ -28,7 +29,7 @@ const DraggableItem: React.FC<DraggableItemProps> = ({ id, type, data, children,
     
     // Pour les valeurs, assurons-nous de bien gérer les valeurs spéciales
     if (type === 'value' && dragData.originalValue !== undefined) {
-      console.log('[DraggableItemHTML5] Démarrage du drag pour une valeur avec originalValue:', dragData.originalValue);
+      logger.debug('[DraggableItemHTML5] Démarrage du drag pour une valeur avec originalValue:', dragData.originalValue);
     }
     
     // Définir les données pour le transfert
@@ -51,7 +52,7 @@ const DraggableItem: React.FC<DraggableItemProps> = ({ id, type, data, children,
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       e.dataTransfer.setDragImage(e.currentTarget, rect.width / 2, rect.height / 2);
     } catch (error) {
-      console.warn('Impossible de définir l\'image de glisser-déposer:', error);
+      logger.warn('Impossible de définir l\'image de glisser-déposer:', error);
     }
   };
   

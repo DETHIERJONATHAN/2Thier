@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 /**
  * 🚀 SERVICE PROFESSIONNEL POUR ADVANCED_SELECT
@@ -309,7 +310,7 @@ class AdvancedSelectService {
             }
 
             // Log de l'opération pour audit
-            console.log(`[ADVANCED_SELECT] Mise à jour calculée:`, {
+            logger.debug(`[ADVANCED_SELECT] Mise à jour calculée:`, {
                 fieldId,
                 value,
                 organizationId,

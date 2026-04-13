@@ -9,6 +9,7 @@ import LeadsKanbanWrapper from './LeadsKanbanWrapper';
 // LeadsDashboard supprimé - Utilisez /dashboard à la place
 import LeadsSettingsPage from './LeadsSettingsPage';
 import { useAuth } from '../../auth/useAuth';
+import { logger } from '../../lib/logger';
 
 /**
  * Composant principal pour la gestion des leads
@@ -19,30 +20,30 @@ export default function LeadsPage() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  console.log('[LeadsPage] 🚀 Page chargée, location:', location.pathname);
+  logger.debug('[LeadsPage] 🚀 Page chargée, location:', location.pathname);
 
   // Vérification des permissions
   const canViewLeads = can('leads:read');
 
-  console.log('[LeadsPage] 🔐 Permissions canViewLeads:', canViewLeads);
+  logger.debug('[LeadsPage] 🔐 Permissions canViewLeads:', canViewLeads);
   // Handlers stables passés à LeadsHomePage (home + list)
   const handleViewLead = React.useCallback((leadId: string) => {
-    console.log('[LeadsPage] 👁️ handleViewLead -> details', leadId);
+    logger.debug('[LeadsPage] 👁️ handleViewLead -> details', leadId);
     navigate(`/leads/details/${leadId}`);
   }, [navigate]);
 
   const handleCallLead = React.useCallback((leadId: string) => {
-    console.log('[LeadsPage] 📞 handleCallLead -> call', leadId);
+    logger.debug('[LeadsPage] 📞 handleCallLead -> call', leadId);
     navigate(`/leads/call/${leadId}`);
   }, [navigate]);
 
   const handleEmailLead = React.useCallback((leadId: string) => {
-    console.log('[LeadsPage] ✉️ handleEmailLead -> email', leadId);
+    logger.debug('[LeadsPage] ✉️ handleEmailLead -> email', leadId);
     navigate(`/leads/email/${leadId}`);
   }, [navigate]);
 
   const handleScheduleLead = React.useCallback((leadId: string) => {
-    console.log('[LeadsPage] 🗓️ handleScheduleLead -> agenda', leadId);
+    logger.debug('[LeadsPage] 🗓️ handleScheduleLead -> agenda', leadId);
     navigate(`/leads/agenda/${leadId}`);
   }, [navigate]);
 
@@ -59,25 +60,25 @@ export default function LeadsPage() {
 
   // Rediriger vers la nouvelle page d'accueil par défaut
   if (location.pathname === '/leads') {
-    console.log('[LeadsPage] 🔄 Redirection /leads -> /leads/home');
+    logger.debug('[LeadsPage] 🔄 Redirection /leads -> /leads/home');
     return <Navigate to="/leads/home" replace />;
   }
 
-  console.log('[LeadsPage] 📍 Routing vers:', location.pathname);
+  logger.debug('[LeadsPage] 📍 Routing vers:', location.pathname);
 
   return (
     <Routes>
       <Route path="/" element={<LeadsLayout />}>
         <Route path="home" element={
           <>
-            {console.log('[LeadsPage] 🏠 Route HOME déclenchée - Affichage Kanban!')}
+            {logger.debug('[LeadsPage] 🏠 Route HOME déclenchée - Affichage Kanban!')}
             <LeadsKanbanWrapper />
           </>
         } />
         {/* Route dashboard supprimée - Redirection vers /dashboard principal */}
         <Route path="list" element={
           <>
-            {console.log('[LeadsPage] 📋 Route LIST déclenchée!')}
+            {logger.debug('[LeadsPage] 📋 Route LIST déclenchée!')}
             <div className="p-6">
               <LeadsHomePage
                 onViewLead={handleViewLead}
@@ -114,7 +115,7 @@ export default function LeadsPage() {
         {/* 🔧 Route pour les paramètres - DEBUG AJOUTÉ */}
         <Route path="settings" element={
           <>
-            {console.log('[LeadsPage] 🔧 Route SETTINGS déclenchée!')}
+            {logger.debug('[LeadsPage] 🔧 Route SETTINGS déclenchée!')}
             <LeadsSettingsPage />
           </>
         } />
@@ -122,7 +123,7 @@ export default function LeadsPage() {
         {/* Redirection par défaut */}
         <Route path="*" element={
           <>
-            {console.log('[LeadsPage] ❌ Route CATCH-ALL déclenchée pour:', location.pathname)}
+            {logger.debug('[LeadsPage] ❌ Route CATCH-ALL déclenchée pour:', location.pathname)}
             <Navigate to="/leads/list" replace />
           </>
         } />

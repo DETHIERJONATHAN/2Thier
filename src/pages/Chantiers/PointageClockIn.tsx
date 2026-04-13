@@ -21,6 +21,7 @@ const { Text, Title } = Typography;
 
 import { STATUS_LABELS } from './pointageConstants';
 import { SF } from '../../components/zhiive/ZhiiveTheme';
+import { logger } from '../../lib/logger';
 
 interface PointageClockInProps {
   chantierId: string;
@@ -172,7 +173,7 @@ const PointageClockIn: React.FC<PointageClockInProps> = ({
         };
       }
     } catch (err: unknown) {
-      console.error('[Camera]', err);
+      logger.error('[Camera]', err);
       if (err.name === 'NotAllowedError') {
         setCameraError('⛔ Permission caméra refusée. Activez la caméra dans les paramètres du navigateur.');
       } else if (err.name === 'NotFoundError') {

@@ -3,6 +3,7 @@ import { useDraggable, useDroppable } from '@dnd-kit/core';
 import type { TreeBranchLeafNode } from '../../types';
 import { TreeBranchLeafRegistry } from '../../core/registry';
 import { NodeActionMenu } from './NodeActionMenu';
+import { logger } from '../../../../../lib/logger';
 
 /**
  * Composant OptimizedStructureNode optimisé pour les performances.
@@ -204,7 +205,7 @@ const OptimizedStructureNodeComponent: React.FC<OptimizedStructureNodeProps> = (
       if (!allNodes || !node.parentId) return false;
       return TreeBranchLeafRegistry.isFieldInSection(node, allNodes);
     } catch (error) {
-      console.warn('❌ Erreur lors de la détection de section:', error);
+      logger.warn('❌ Erreur lors de la détection de section:', error);
       return false;
     }
   }, [node, allNodes]);
@@ -565,18 +566,18 @@ const OptimizedStructureNodeComponent: React.FC<OptimizedStructureNodeProps> = (
               treeId={treeId}
               isExpanded={isExpanded}
               onEdit={(nodeToEdit, newLabel) => {
-                console.log('🔗 [OptimizedStructureNode] Transmission onEdit vers NodeActionMenu');
+                logger.debug('🔗 [OptimizedStructureNode] Transmission onEdit vers NodeActionMenu');
                 if (onEditNode) onEditNode(nodeToEdit, newLabel);
-                else console.error('❌ [OptimizedStructureNode] onEditNode manquant!');
+                else logger.error('❌ [OptimizedStructureNode] onEditNode manquant!');
               }}
               onDuplicate={(nodeToDupe) => {
-                console.log('🔗 [OptimizedStructureNode] Transmission onDuplicate vers NodeActionMenu');
+                logger.debug('🔗 [OptimizedStructureNode] Transmission onDuplicate vers NodeActionMenu');
                 if (onDuplicateNode) onDuplicateNode(nodeToDupe);
-                else console.error('❌ [OptimizedStructureNode] onDuplicateNode manquant!');
+                else logger.error('❌ [OptimizedStructureNode] onDuplicateNode manquant!');
               }}
               onDelete={(nodeToDelete) => {
                 if (onDeleteNode) onDeleteNode(nodeToDelete);
-                else console.error('❌ [OptimizedStructureNode] onDeleteNode manquant!');
+                else logger.error('❌ [OptimizedStructureNode] onDeleteNode manquant!');
               }}
               onMoveUp={onMoveUpNode}
               onMoveDown={onMoveDownNode}

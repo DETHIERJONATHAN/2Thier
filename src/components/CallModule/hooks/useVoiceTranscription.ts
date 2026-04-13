@@ -22,6 +22,7 @@ import type {
   KeywordDetection,
   Lead
 } from '../types/CallTypes';
+import { logger } from '../../../lib/logger';
 
 // Types pour Speech Recognition API
 declare global {
@@ -171,11 +172,11 @@ export const useVoiceTranscription = (
           setKeywordDetections(prev => [...prev, ...response.keywords]);
         }
         
-        console.log('[useVoiceTranscription] 🧠 Analyse IA terminée - Sentiment:', response.sentiment);
+        logger.debug('[useVoiceTranscription] 🧠 Analyse IA terminée - Sentiment:', response.sentiment);
       }
       
     } catch (error: unknown) {
-      console.warn('[useVoiceTranscription] ⚠️ Erreur analyse contenu:', error);
+      logger.warn('[useVoiceTranscription] ⚠️ Erreur analyse contenu:', error);
     }
   }, [api, leadId, lead, transcriptionState.transcriptionHistory]);
   
@@ -211,7 +212,7 @@ export const useVoiceTranscription = (
     try {
       await analyzeTranscriptContent(transcriptionEntry);
     } catch (error) {
-      console.warn('[useVoiceTranscription] ⚠️ Erreur analyse IA:', error);
+      logger.warn('[useVoiceTranscription] ⚠️ Erreur analyse IA:', error);
     }
   }, [onTranscriptionUpdate, analyzeTranscriptContent, detectSpeaker]);
   
@@ -236,7 +237,7 @@ export const useVoiceTranscription = (
       
       // Événements de reconnaissance
       recognition.onstart = () => {
-        console.log('[useVoiceTranscription] 🎤 Reconnaissance vocale démarrée');
+        logger.debug('[useVoiceTranscription] 🎤 Reconnaissance vocale démarrée');
         setTranscriptionState(prev => ({ ...prev, isListening: true }));
       };
       
@@ -264,7 +265,7 @@ export const useVoiceTranscription = (
       };
       
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        console.error('[useVoiceTranscription] ❌ Erreur reconnaissance:', event.error);
+        logger.error('[useVoiceTranscription] ❌ Erreur reconnaissance:', event.error);
         if (event.error === 'no-speech') {
           // Pas de problème, pas de parole détectée
           return;
@@ -273,7 +274,7 @@ export const useVoiceTranscription = (
       };
       
       recognition.onend = () => {
-        console.log('[useVoiceTranscription] 🔚 Reconnaissance vocale terminée');
+        logger.debug('[useVoiceTranscription] 🔚 Reconnaissance vocale terminée');
         setTranscriptionState(prev => ({ ...prev, isListening: false }));
         
         // Redémarrer automatiquement si toujours actif
@@ -288,7 +289,7 @@ export const useVoiceTranscription = (
       return true;
       
     } catch (error: unknown) {
-      console.error('[useVoiceTranscription] ❌ Erreur initialisation:', error);
+      logger.error('[useVoiceTranscription] ❌ Erreur initialisation:', error);
       setError('Impossible d\'initialiser la reconnaissance vocale');
       return false;
     }
@@ -342,12 +343,12 @@ export const useVoiceTranscription = (
           streamRef.current.timer = timer;
         }
         
-        console.log('[useVoiceTranscription] ✅ Transcription démarrée');
+        logger.debug('[useVoiceTranscription] ✅ Transcription démarrée');
         NotificationManager.success('🎤 Transcription vocale activée');
       }
       
     } catch (error: unknown) {
-      console.error('[useVoiceTranscription] ❌ Erreur démarrage:', error);
+      logger.error('[useVoiceTranscription] ❌ Erreur démarrage:', error);
       const errorMessage = error instanceof Error ? error.message : 'Erreur d\'accès au microphone';
       setError(errorMessage);
       NotificationManager.error('Impossible d\'accéder au microphone');
@@ -385,11 +386,11 @@ export const useVoiceTranscription = (
         currentText: ''
       }));
       
-      console.log('[useVoiceTranscription] 🛑 Transcription arrêtée');
+      logger.debug('[useVoiceTranscription] 🛑 Transcription arrêtée');
       NotificationManager.info('Transcription vocale arrêtée');
       
     } catch (error: unknown) {
-      console.error('[useVoiceTranscription] ❌ Erreur arrêt:', error);
+      logger.error('[useVoiceTranscription] ❌ Erreur arrêt:', error);
     }
   }, []);
   

@@ -11,6 +11,7 @@
  */
 
 import { TBLElement, TBLBridge, type TreeBranchLeafNode, type TBLBridgeConfig } from '../index';
+import { logger } from '../../../../lib/logger';
 
 export interface TBLSyncEvent {
   type: 'CREATE' | 'UPDATE' | 'DELETE' | 'BULK_SYNC';
@@ -122,7 +123,7 @@ export class TBLSyncService {
 
   // 🔧 LOGGING
   private log(message: string): void {
-    console.log(`[TBL Sync] ${message}`);
+    logger.debug(`[TBL Sync] ${message}`);
   }
 
   // 🆕 SYNCHRONISATION CRÉATION
@@ -377,7 +378,7 @@ export function getTBLSyncService(): TBLSyncService {
  * 
  * // Écouter les événements
  * const unsubscribe = syncService.subscribe((event) => {
- *   console.log(`Événement TBL: ${event.type}`, event);
+ *   logger.debug(`Événement TBL: ${event.type}`, event);
  * });
  * 
  * // Synchroniser un nouveau nœud
@@ -388,6 +389,6 @@ export function getTBLSyncService(): TBLSyncService {
  * 
  * // Statistiques
  * const stats = syncService.getStats();
- * console.log(`${stats.totalElements} éléments, ${stats.successfulSyncs} succès`);
+ * logger.debug(`${stats.totalElements} éléments, ${stats.successfulSyncs} succès`);
  * ```
  */

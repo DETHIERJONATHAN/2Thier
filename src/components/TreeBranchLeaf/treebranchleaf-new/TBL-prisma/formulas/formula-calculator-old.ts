@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { FormulaDefinition, FormulaEvaluationResult, FormulaCalculationStep, FormulaToken } from './formula-types';
 import { TBLContext } from '../shared/types';
 import { ReferenceResolver } from '../shared/reference-resolver';
+import { logger } from '../../../../../lib/logger';
 
 /**
  * Calculator pour les formules avec calculs step-by-step détaillés
@@ -21,7 +22,7 @@ export class FormulaCalculator {
    */
   async calculateFormula(formulaId: string): Promise<FormulaEvaluationResult> {
     try {
-      console.log(`[FORMULA-CALC] 📐 Calcul formule: ${formulaId}`);
+      logger.debug(`[FORMULA-CALC] 📐 Calcul formule: ${formulaId}`);
 
       // Récupérer la formule
       const formula = await this.prisma.treeBranchLeafNodeFormula.findUnique({
@@ -42,7 +43,7 @@ export class FormulaCalculator {
       return await this.evaluateFormula(formulaDef);
 
     } catch (error) {
-      console.error(`[FORMULA-CALC] ❌ Erreur calcul formule ${formulaId}:`, error);
+      logger.error(`[FORMULA-CALC] ❌ Erreur calcul formule ${formulaId}:`, error);
       return this.createErrorResult(`Erreur calcul formule: ${error}`);
     }
   }
@@ -60,7 +61,7 @@ export class FormulaCalculator {
     }> = [];
 
     // 1. Résoudre toutes les références
-    console.log(`[FORMULA-CALC] 🔍 Résolution des références...`);
+    logger.debug(`[FORMULA-CALC] 🔍 Résolution des références...`);
     for (const token of formula.tokens) {
       if (token.type === 'reference' && token.ref) {
         const resolved = await this.resolver.resolveReference(token.ref);

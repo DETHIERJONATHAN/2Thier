@@ -30,6 +30,7 @@ import ThemeEditorModal from '../components/Documents/ThemeEditorModal';
 import { TemplateSelector } from '../components/Documents/TemplateSelector';
 import { DocumentTemplate as PrebuiltTemplate, instantiateTemplate } from '../components/Documents/DocumentTemplates';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../lib/logger';
 
 const { TabPane } = Tabs;
 const { TextArea } = Input;
@@ -95,7 +96,7 @@ const DocumentTemplatesPage = () => {
       setTemplates(response);
     } catch (error) {
       message.error('Erreur lors du chargement des templates');
-      console.error(error);
+      logger.error(error);
     } finally {
       setLoading(false);
     }
@@ -107,7 +108,7 @@ const DocumentTemplatesPage = () => {
       const response = await api.get('/api/documents/themes');
       setThemes(response);
     } catch (error) {
-      console.error('Erreur chargement thèmes:', error);
+      logger.error('Erreur chargement thèmes:', error);
     }
   };
 
@@ -118,7 +119,7 @@ const DocumentTemplatesPage = () => {
       const treeList = Array.isArray(response) ? response : (response?.data || []);
       setTrees(treeList);
     } catch (error) {
-      console.error('Erreur chargement arbres TBL:', error);
+      logger.error('Erreur chargement arbres TBL:', error);
     }
   };
 
@@ -157,7 +158,7 @@ const DocumentTemplatesPage = () => {
       const opts = Array.isArray(response) ? response : (response?.data || []);
       setProductOptions(opts);
     } catch (error) {
-      console.error('Erreur chargement options produit:', error);
+      logger.error('Erreur chargement options produit:', error);
       setProductOptions([]);
     }
   };
@@ -187,7 +188,7 @@ const DocumentTemplatesPage = () => {
       }
     } catch (error) {
       message.error('Erreur lors de la sauvegarde');
-      console.error(error);
+      logger.error(error);
     }
   };
 
@@ -254,22 +255,22 @@ const DocumentTemplatesPage = () => {
       loadThemes();
     } catch (error) {
       message.error('Erreur lors de la création du thème');
-      console.error(error);
+      logger.error(error);
     }
   };
 
   // Supprimer template (toujours force=true, la confirmation se fait côté UI)
   const handleDeleteTemplate = async (id: string) => {
-    console.log('🗑️ [handleDeleteTemplate] Suppression du template:', id);
+    logger.debug('🗑️ [handleDeleteTemplate] Suppression du template:', id);
     try {
       setDeleting(true);
       await api.delete(`/api/documents/templates/${id}?force=true`);
-      console.log('✅ [handleDeleteTemplate] Template supprimé avec succès');
+      logger.debug('✅ [handleDeleteTemplate] Template supprimé avec succès');
       message.success('Template supprimé');
       setDeleteConfirm(null);
       loadTemplates();
     } catch (error: unknown) {
-      console.error('❌ [handleDeleteTemplate] Erreur suppression template:', error);
+      logger.error('❌ [handleDeleteTemplate] Erreur suppression template:', error);
       message.error(error?.message || 'Erreur lors de la suppression');
     } finally {
       setDeleting(false);
@@ -353,7 +354,7 @@ const DocumentTemplatesPage = () => {
         label: 'Supprimer',
         danger: true,
         onClick: () => {
-          console.log('🗑️ [Supprimer] Clic sur Supprimer pour:', record.id, record.name);
+          logger.debug('🗑️ [Supprimer] Clic sur Supprimer pour:', record.id, record.name);
           setDeleteConfirm({
             id: record.id,
             name: record.name,

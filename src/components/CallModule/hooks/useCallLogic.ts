@@ -18,6 +18,7 @@ import type {
   CallSaveResponse,
   Lead
 } from '../types/CallTypes';
+import { logger } from '../../../lib/logger';
 
 export const useCallLogic = (
   leadId: string, 
@@ -88,7 +89,7 @@ export const useCallLogic = (
     setError(undefined);
     
     try {
-      console.log('[useCallLogic] 🚀 Démarrage appel vers:', lead.data.phone);
+      logger.debug('[useCallLogic] 🚀 Démarrage appel vers:', lead.data.phone);
       
       // 🤖 API Telnyx - Appel réel
       const response = await api.post<TelnyxResponse>('/api/telnyx/calls', {
@@ -111,7 +112,7 @@ export const useCallLogic = (
           duration: 0
         }));
         
-        console.log('[useCallLogic] ✅ Appel démarré - ID:', response.callId);
+        logger.debug('[useCallLogic] ✅ Appel démarré - ID:', response.callId);
         NotificationManager.success('Appel en cours...');
         
         // 🤖 Déclencher analyse IA en arrière-plan
@@ -125,7 +126,7 @@ export const useCallLogic = (
             previousInteractions: lead.notes
           }
         }).catch(err => {
-          console.warn('[useCallLogic] ⚠️ Erreur démarrage analyse IA:', err);
+          logger.warn('[useCallLogic] ⚠️ Erreur démarrage analyse IA:', err);
         });
         
       } else {
@@ -135,7 +136,7 @@ export const useCallLogic = (
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error, 'Erreur lors du démarrage de l\'appel');
       const errorDetails = getErrorResponseDetails(error);
-      console.error('[useCallLogic] ❌ Erreur démarrage appel:', {
+      logger.error('[useCallLogic] ❌ Erreur démarrage appel:', {
         error,
         status: errorDetails.status,
         data: errorDetails.data,
@@ -166,7 +167,7 @@ export const useCallLogic = (
     setIsLoading(true);
     
     try {
-      console.log('[useCallLogic] 🏁 Fin d\'appel - Sauvegarde...');
+      logger.debug('[useCallLogic] 🏁 Fin d\'appel - Sauvegarde...');
       
       // 💾 Sauvegarder les informations de l'appel
       const callData = {
@@ -182,14 +183,14 @@ export const useCallLogic = (
       const response = await api.post<CallSaveResponse>(`/api/leads/${leadId}/calls`, callData);
       
       if (response.success) {
-        console.log('[useCallLogic] ✅ Appel sauvegardé - ID:', response.callId);
+        logger.debug('[useCallLogic] ✅ Appel sauvegardé - ID:', response.callId);
         
         // 🔄 Mise à jour du statut lead selon le résultat d'appel
         const leadStatusUpdate = getLeadStatusFromCallResult(callState.status as CallStatusType);
         
         if (leadStatusUpdate) {
           await api.put(`/api/leads/${leadId}`, leadStatusUpdate);
-          console.log('[useCallLogic] ✅ Statut lead mis à jour:', leadStatusUpdate);
+          logger.debug('[useCallLogic] ✅ Statut lead mis à jour:', leadStatusUpdate);
         }
         
         // 🎉 Notification de succès
@@ -216,7 +217,7 @@ export const useCallLogic = (
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error, 'Erreur lors de la sauvegarde de l\'appel');
       const errorDetails = getErrorResponseDetails(error);
-      console.error('[useCallLogic] ❌ Erreur sauvegarde appel:', {
+      logger.error('[useCallLogic] ❌ Erreur sauvegarde appel:', {
         error,
         status: errorDetails.status,
         data: errorDetails.data,
@@ -252,7 +253,7 @@ export const useCallLogic = (
         api.put(`/api/leads/${leadId}`, leadUpdate).catch(err => {
           const errorMessage = getErrorMessage(err, 'Erreur mise à jour statut lead');
           const errorDetails = getErrorResponseDetails(err);
-          console.error('Erreur mise à jour statut lead:', {
+          logger.error('Erreur mise à jour statut lead:', {
             error: err,
             message: errorMessage,
             status: errorDetails.status,

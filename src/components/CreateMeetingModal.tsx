@@ -4,6 +4,7 @@ import { CalendarOutlined, UserOutlined, ProjectOutlined } from '@ant-design/ico
 import dayjs from 'dayjs';
 import { useCalendarIntegration, CalendarEvent } from '../services/CalendarIntegrationService';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../lib/logger';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -71,7 +72,7 @@ const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
       onSuccess(createdEvent);
       form.resetFields();
     } catch (error) {
-      console.error('Erreur lors de la création du RDV:', error);
+      logger.error('Erreur lors de la création du RDV:', error);
       message.error('Erreur lors de la création du rendez-vous');
     } finally {
       setLoading(false);

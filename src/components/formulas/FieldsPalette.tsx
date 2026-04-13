@@ -3,6 +3,7 @@ import useCRMStore from '../../store';
 import type { FormulaItem, Block, Section, Field } from '../../store/slices/types';
 import { Typography, Space, Button, Tooltip } from 'antd';
 import { FieldNumberOutlined } from '@ant-design/icons';
+import { logger } from '../../lib/logger';
 
 interface FieldsPaletteProps {
     formulaId: string | undefined;
@@ -66,11 +67,11 @@ export const FieldsPalette: React.FC<FieldsPaletteProps> = memo(({ formulaId, cu
     
     const addFieldToFormula = useCallback((fieldId: string, fieldLabel: string) => {
         if (!formulaId) {
-            console.error(`[FieldsPalette] ❌ Impossible d'ajouter le champ: formulaId manquant`);
+            logger.error(`[FieldsPalette] ❌ Impossible d'ajouter le champ: formulaId manquant`);
             return;
         }
         
-        console.log(`[FieldsPalette] ➕ Ajout du champ "${fieldLabel}" (${fieldId}) à la formule ${formulaId}`);
+        logger.debug(`[FieldsPalette] ➕ Ajout du champ "${fieldLabel}" (${fieldId}) à la formule ${formulaId}`);
         
         // Obtenir la dernière version du store
         const store = useCRMStore.getState();
@@ -86,7 +87,7 @@ export const FieldsPalette: React.FC<FieldsPaletteProps> = memo(({ formulaId, cu
                     const foundFormula = field.formulas.find(f => f && f.id === formulaId);
                     if (foundFormula) {
                         currentFormula = foundFormula;
-                        console.log(`[FieldsPalette] ✅ Formule trouvée dans le champ ${field.id}`);
+                        logger.debug(`[FieldsPalette] ✅ Formule trouvée dans le champ ${field.id}`);
                         break outerLoop;
                     }
                 }
@@ -94,7 +95,7 @@ export const FieldsPalette: React.FC<FieldsPaletteProps> = memo(({ formulaId, cu
         }
         
         if (!currentFormula) {
-            console.error(`[FieldsPalette] ❌ Formule ${formulaId} introuvable dans le store`);
+            logger.error(`[FieldsPalette] ❌ Formule ${formulaId} introuvable dans le store`);
             return;
         }
         
@@ -110,7 +111,7 @@ export const FieldsPalette: React.FC<FieldsPaletteProps> = memo(({ formulaId, cu
         const currentSequence = Array.isArray(currentFormula.sequence) ? currentFormula.sequence : [];
         const newSequence = [...currentSequence, newField];
         
-        console.log(`[FieldsPalette] 📊 Ajout du champ à la séquence: ${currentSequence.length} => ${newSequence.length} items`);
+        logger.debug(`[FieldsPalette] 📊 Ajout du champ à la séquence: ${currentSequence.length} => ${newSequence.length} items`);
         
         // Mettre à jour la formule avec la nouvelle séquence
         const { updateFormula } = useCRMStore.getState();

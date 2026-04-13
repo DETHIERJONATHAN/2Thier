@@ -11,6 +11,7 @@ import { Response } from 'express';
 import { WebsiteRequest } from '../middleware/websiteDetection';
 import * as fs from 'fs';
 import * as path from 'path';
+import { logger } from '../lib/logger';
 
 /**
  * Génère le HTML d'une section en fonction de son type
@@ -190,7 +191,7 @@ export async function renderWebsite(req: WebsiteRequest, res: Response) {
   try {
     const website = req.websiteData;
 
-    console.log(`🎨 [WEBSITE-RENDERER] Site détecté:`, {
+    logger.debug(`🎨 [WEBSITE-RENDERER] Site détecté:`, {
       hasWebsite: !!website,
       name: website?.name,
       slug: website?.slug,
@@ -246,12 +247,12 @@ export async function renderWebsite(req: WebsiteRequest, res: Response) {
       `;
       indexHtml = indexHtml.replace('</head>', `${siteDataScript}</head>`);
       
-      console.log(`📱 [WEBSITE-RENDERER] Serving React app with bundles for: ${website.name}`);
+      logger.debug(`📱 [WEBSITE-RENDERER] Serving React app with bundles for: ${website.name}`);
       return res.send(indexHtml);
     }
     
     // Fallback si pas de build React (environnement de dev)
-    console.warn('⚠️ [WEBSITE-RENDERER] dist/index.html non trouvé, fallback SSR basique');
+    logger.warn('⚠️ [WEBSITE-RENDERER] dist/index.html non trouvé, fallback SSR basique');
     
     // Générer un rendu SSR basique avec les sections
     const sections = website.sections || [];
@@ -282,7 +283,7 @@ export async function renderWebsite(req: WebsiteRequest, res: Response) {
 
     res.send(fallbackHtml);
   } catch (error) {
-    console.error('❌ [WEBSITE-RENDERER] Erreur:', error);
+    logger.error('❌ [WEBSITE-RENDERER] Erreur:', error);
     res.status(500).send('Erreur lors du chargement du site');
   }
 }

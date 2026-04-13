@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { TBLReference, TBLContext, TBLNode } from './types';
+import { logger } from '../../../../../lib/logger';
 
 /**
  * Résolveur universel pour toutes les références TBL
@@ -61,7 +62,7 @@ export class ReferenceResolver {
       };
 
     } catch (error) {
-      console.error(`[REFERENCE-RESOLVER] ❌ Erreur résolution ${ref}:`, error);
+      logger.error(`[REFERENCE-RESOLVER] ❌ Erreur résolution ${ref}:`, error);
       return {
         value: undefined,
         label: ref,
@@ -109,7 +110,7 @@ export class ReferenceResolver {
       });
 
       if (!formula) {
-        console.error(`[REFERENCE-RESOLVER] ❌ Formule non trouvée: ${formulaId}`);
+        logger.error(`[REFERENCE-RESOLVER] ❌ Formule non trouvée: ${formulaId}`);
         return {
           value: undefined,
           label: `Erreur: Formule ${formulaId} non trouvée`,
@@ -118,13 +119,13 @@ export class ReferenceResolver {
         };
       }
 
-      console.log(`[REFERENCE-RESOLVER] 📐 Formule trouvée: ${formula.name}, calcul en cours...`);
+      logger.debug(`[REFERENCE-RESOLVER] 📐 Formule trouvée: ${formula.name}, calcul en cours...`);
 
       // Calculer la formule avec FormulaCalculator
       if (this.formulaCalculator) {
         try {
           const calculationResult = await this.formulaCalculator.calculateFormula(formulaId);
-          console.log(`[REFERENCE-RESOLVER] ✅ Formule calculée: ${calculationResult.result}`);
+          logger.debug(`[REFERENCE-RESOLVER] ✅ Formule calculée: ${calculationResult.result}`);
           
           return {
             value: calculationResult.value,
@@ -133,7 +134,7 @@ export class ReferenceResolver {
             type: 'formula'
           };
         } catch (calcError) {
-          console.error(`[REFERENCE-RESOLVER] ❌ Erreur calcul formule:`, calcError);
+          logger.error(`[REFERENCE-RESOLVER] ❌ Erreur calcul formule:`, calcError);
           return {
             value: undefined,
             label: `Erreur calcul: ${formula.name}`,

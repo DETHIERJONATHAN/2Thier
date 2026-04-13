@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
 import { message } from 'antd';
 import dayjs from 'dayjs';
+import { logger } from '../lib/logger';
 
 // 🎯 INTERFACES POUR GOOGLE AGENDA
 export interface CalendarEvent {
@@ -202,7 +203,7 @@ export const useGoogleAgenda = () => {
       
       message.success(`${transformedEvents.length} événements chargés`);
     } catch (error) {
-      console.error('Erreur lors du chargement des événements:', error);
+      logger.error('Erreur lors du chargement des événements:', error);
       message.error('Erreur lors du chargement des événements');
     } finally {
       setLoading(false);
@@ -223,7 +224,7 @@ export const useGoogleAgenda = () => {
       await loadEvents();
       message.success('🔄 Synchronisation Google Calendar réussie');
     } catch (error) {
-      console.error('Erreur synchronisation:', error);
+      logger.error('Erreur synchronisation:', error);
       message.error('Erreur lors de la synchronisation');
     } finally {
       setSyncing(false);
@@ -253,7 +254,7 @@ export const useGoogleAgenda = () => {
       await loadEvents();
       return true;
     } catch (error) {
-      console.error('Erreur création événement:', error);
+      logger.error('Erreur création événement:', error);
       message.error('Erreur lors de la création de l\'événement');
       return false;
     }
@@ -280,7 +281,7 @@ export const useGoogleAgenda = () => {
       await loadEvents();
       return true;
     } catch (error) {
-      console.error('Erreur modification événement:', error);
+      logger.error('Erreur modification événement:', error);
       message.error('Erreur lors de la modification de l\'événement');
       return false;
     }
@@ -296,7 +297,7 @@ export const useGoogleAgenda = () => {
       await loadEvents();
       return true;
     } catch (error) {
-      console.error('Erreur suppression événement:', error);
+      logger.error('Erreur suppression événement:', error);
       message.error('Erreur lors de la suppression de l\'événement');
       return false;
     }

@@ -22,6 +22,7 @@ import {
   DownloadOutlined,
   EyeOutlined
 } from '@ant-design/icons';
+import { logger } from '../../lib/logger';
 
 interface DriveFile {
   id: string;
@@ -73,7 +74,7 @@ const DriveWidget: React.FC<DriveWidgetProps> = ({
       const response = await api.api.get(`/drive/files?leadId=${leadId}`);
       setFiles(response.files || []);
     } catch (error) {
-      console.error('Erreur lors du chargement des fichiers:', error);
+      logger.error('Erreur lors du chargement des fichiers:', error);
       // Fichiers simulés pour la démo
       setFiles([
         {
@@ -147,7 +148,7 @@ const DriveWidget: React.FC<DriveWidgetProps> = ({
       }, 1000);
       
     } catch (error) {
-      console.error('Erreur lors de l\'upload:', error);
+      logger.error('Erreur lors de l\'upload:', error);
       message.error('Erreur lors de l\'upload du fichier');
       setUploading(false);
       setUploadProgress(0);
@@ -189,7 +190,7 @@ const DriveWidget: React.FC<DriveWidgetProps> = ({
       }
       
     } catch (error) {
-      console.error('Erreur lors du partage:', error);
+      logger.error('Erreur lors du partage:', error);
       message.error('Erreur lors du partage du fichier');
     }
   };

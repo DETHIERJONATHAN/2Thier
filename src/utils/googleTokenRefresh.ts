@@ -6,6 +6,7 @@
 import { google } from 'googleapis';
 import { db } from '../lib/database.js';
 import { decrypt } from './crypto.js';
+import { logger } from '../lib/logger';
 
 export interface RefreshTokenResult {
   success: boolean;
@@ -22,7 +23,7 @@ export interface RefreshTokenResult {
  */
 export async function refreshGoogleTokenIfNeeded(organizationId: string, userId?: string): Promise<RefreshTokenResult> {
   try {
-    console.log('[REFRESH-TOKEN] 🔍 Vérification token pour organisation:', organizationId, 'userId:', userId);
+    logger.debug('[REFRESH-TOKEN] 🔍 Vérification token pour organisation:', organizationId, 'userId:', userId);
 
     // 1. Récupérer le token actuel
     let googleToken;
@@ -36,18 +37,18 @@ export async function refreshGoogleTokenIfNeeded(organizationId: string, userId?
       });
     } else {
       // Fallback legacy : chercher le premier token pour cette organisation
-      console.log('[REFRESH-TOKEN] ⚠️ userId non fourni, fallback sur findFirst');
+      logger.debug('[REFRESH-TOKEN] ⚠️ userId non fourni, fallback sur findFirst');
       googleToken = await db.googleToken.findFirst({
         where: { organizationId }
       });
     }
 
     if (!googleToken) {
-      console.log('[REFRESH-TOKEN] ❌ Aucun token trouvé pour l\'organisation:', organizationId);
+      logger.debug('[REFRESH-TOKEN] ❌ Aucun token trouvé pour l\'organisation:', organizationId);
       return { success: false, error: 'no_token_found' };
     }
 
-    console.log('[REFRESH-TOKEN] 📋 Token trouvé, expiration:', googleToken.expiresAt);
+    logger.debug('[REFRESH-TOKEN] 📋 Token trouvé, expiration:', googleToken.expiresAt);
 
     // 2. Vérifier si le token est proche de l'expiration (dans les 30 prochaines minutes)
     const now = new Date();
@@ -55,20 +56,20 @@ export async function refreshGoogleTokenIfNeeded(organizationId: string, userId?
     const isExpiring = googleToken.expiresAt && googleToken.expiresAt <= thirtyMinutesFromNow;
     const isExpired = googleToken.expiresAt && googleToken.expiresAt <= now;
 
-    console.log('[REFRESH-TOKEN] ⏰ Maintenant:', now.toISOString());
-    console.log('[REFRESH-TOKEN] ⏰ Token expire le:', googleToken.expiresAt?.toISOString());
-    console.log('[REFRESH-TOKEN] ⚠️ Token expirant bientôt (30min)?', isExpiring);
-    console.log('[REFRESH-TOKEN] ❌ Token déjà expiré?', isExpired);
+    logger.debug('[REFRESH-TOKEN] ⏰ Maintenant:', now.toISOString());
+    logger.debug('[REFRESH-TOKEN] ⏰ Token expire le:', googleToken.expiresAt?.toISOString());
+    logger.debug('[REFRESH-TOKEN] ⚠️ Token expirant bientôt (30min)?', isExpiring);
+    logger.debug('[REFRESH-TOKEN] ❌ Token déjà expiré?', isExpired);
 
-    console.log('[REFRESH-TOKEN] ⏰ État du token (délai 30min):');
-    console.log('  - Expire le:', googleToken.expiresAt);
-    console.log('  - Maintenant:', now);
-    console.log('  - Expiré:', isExpired);
-    console.log('  - Expire bientôt (30min):', isExpiring);
+    logger.debug('[REFRESH-TOKEN] ⏰ État du token (délai 30min):');
+    logger.debug('  - Expire le:', googleToken.expiresAt);
+    logger.debug('  - Maintenant:', now);
+    logger.debug('  - Expiré:', isExpired);
+    logger.debug('  - Expire bientôt (30min):', isExpiring);
 
     // 3. Si le token n'est pas expiré et pas proche de l'expiration, on le retourne tel quel
     if (!isExpiring && !isExpired) {
-      console.log('[REFRESH-TOKEN] ✅ Token encore valide (plus de 30min), pas de refresh nécessaire');
+      logger.debug('[REFRESH-TOKEN] ✅ Token encore valide (plus de 30min), pas de refresh nécessaire');
       return {
         success: true,
         accessToken: googleToken.accessToken,
@@ -79,11 +80,11 @@ export async function refreshGoogleTokenIfNeeded(organizationId: string, userId?
 
     // 4. Le token est expiré ou expire bientôt (moins de 30min), tentative de refresh
     if (!googleToken.refreshToken) {
-      console.log('[REFRESH-TOKEN] ❌ Token expiré mais pas de refresh token disponible');
+      logger.debug('[REFRESH-TOKEN] ❌ Token expiré mais pas de refresh token disponible');
       return { success: false, error: 'no_refresh_token' };
     }
 
-    console.log('[REFRESH-TOKEN] 🔄 Token expiré/expirant (moins de 30min), tentative de refresh...');
+    logger.debug('[REFRESH-TOKEN] 🔄 Token expiré/expirant (moins de 30min), tentative de refresh...');
 
     // 5. Récupérer la configuration OAuth
     const googleConfig = await db.googleWorkspaceConfig.findUnique({
@@ -91,21 +92,21 @@ export async function refreshGoogleTokenIfNeeded(organizationId: string, userId?
     });
 
     if (!googleConfig || !googleConfig.clientId || !googleConfig.clientSecret) {
-      console.log('[REFRESH-TOKEN] ❌ Configuration OAuth manquante pour l\'organisation:', organizationId);
-      console.log('[REFRESH-TOKEN] 📋 Config trouvée:', !!googleConfig);
+      logger.debug('[REFRESH-TOKEN] ❌ Configuration OAuth manquante pour l\'organisation:', organizationId);
+      logger.debug('[REFRESH-TOKEN] 📋 Config trouvée:', !!googleConfig);
       if (googleConfig) {
-        console.log('[REFRESH-TOKEN] 📋 ClientId présent:', !!googleConfig.clientId);
-        console.log('[REFRESH-TOKEN] 📋 ClientSecret présent:', !!googleConfig.clientSecret);
+        logger.debug('[REFRESH-TOKEN] 📋 ClientId présent:', !!googleConfig.clientId);
+        logger.debug('[REFRESH-TOKEN] 📋 ClientSecret présent:', !!googleConfig.clientSecret);
       }
       return { success: false, error: 'missing_oauth_config' };
     }
 
     // 6. Créer le client OAuth et tenter le refresh
-    console.log('[REFRESH-TOKEN] 🔧 Configuration OAuth client...');
+    logger.debug('[REFRESH-TOKEN] 🔧 Configuration OAuth client...');
     const clientId = googleConfig.clientId ? decrypt(googleConfig.clientId) : null;
     const clientSecret = googleConfig.clientSecret ? decrypt(googleConfig.clientSecret) : null;
     if (!clientId || !clientSecret) {
-      console.log('[REFRESH-TOKEN] ❌ Configuration OAuth manquante/invalide (après déchiffrement)');
+      logger.debug('[REFRESH-TOKEN] ❌ Configuration OAuth manquante/invalide (après déchiffrement)');
       return { success: false, error: 'missing_oauth_config' };
     }
 
@@ -113,25 +114,25 @@ export async function refreshGoogleTokenIfNeeded(organizationId: string, userId?
     const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
 
     // Configurer le refresh token
-    console.log('[REFRESH-TOKEN] 🔑 Configuration des credentials...');
+    logger.debug('[REFRESH-TOKEN] 🔑 Configuration des credentials...');
     oauth2Client.setCredentials({
       refresh_token: googleToken.refreshToken || undefined
     });
 
     try {
-      console.log('[REFRESH-TOKEN] 🚀 Tentative de refresh du token...');
+      logger.debug('[REFRESH-TOKEN] 🚀 Tentative de refresh du token...');
       // Forcer le refresh du token
       const { credentials } = await oauth2Client.refreshAccessToken();
       
-      console.log('[REFRESH-TOKEN] ✅ Refresh réussi!');
-      console.log('[REFRESH-TOKEN] 📋 Nouveau token expire le:', new Date(credentials.expiry_date || 0));
-      console.log('[REFRESH-TOKEN] 📋 Token reçu:', !!credentials.access_token);
-      console.log('[REFRESH-TOKEN] 📋 Nouveau refresh token reçu:', !!credentials.refresh_token);
+      logger.debug('[REFRESH-TOKEN] ✅ Refresh réussi!');
+      logger.debug('[REFRESH-TOKEN] 📋 Nouveau token expire le:', new Date(credentials.expiry_date || 0));
+      logger.debug('[REFRESH-TOKEN] 📋 Token reçu:', !!credentials.access_token);
+      logger.debug('[REFRESH-TOKEN] 📋 Nouveau refresh token reçu:', !!credentials.refresh_token);
 
       // 7. Sauvegarder le nouveau token
       const newExpiresAt = credentials.expiry_date ? new Date(credentials.expiry_date) : null;
       
-      console.log('[REFRESH-TOKEN] 💾 Sauvegarde du nouveau token...');
+      logger.debug('[REFRESH-TOKEN] 💾 Sauvegarde du nouveau token...');
       
       // Utiliser la clé composite pour la mise à jour
       if (userId) {
@@ -168,7 +169,7 @@ export async function refreshGoogleTokenIfNeeded(organizationId: string, userId?
         });
       }
 
-      console.log('[REFRESH-TOKEN] 💾 Token mis à jour en base de données');
+      logger.debug('[REFRESH-TOKEN] 💾 Token mis à jour en base de données');
 
       return {
         success: true,
@@ -178,28 +179,28 @@ export async function refreshGoogleTokenIfNeeded(organizationId: string, userId?
       };
 
     } catch (refreshError: unknown) {
-      console.error('[REFRESH-TOKEN] ❌ Erreur lors du refresh:', refreshError);
+      logger.error('[REFRESH-TOKEN] ❌ Erreur lors du refresh:', refreshError);
       
       // Analyser le type d'erreur
       const errorMessage = refreshError instanceof Error ? refreshError.message : String(refreshError);
-      console.log('[REFRESH-TOKEN] 🔍 Message d\'erreur:', errorMessage);
+      logger.debug('[REFRESH-TOKEN] 🔍 Message d\'erreur:', errorMessage);
       
       if (errorMessage.includes('invalid_grant')) {
-        console.log('[REFRESH-TOKEN] 🚨 Refresh token invalide ou révoqué');
+        logger.debug('[REFRESH-TOKEN] 🚨 Refresh token invalide ou révoqué');
         return { success: false, error: 'invalid_refresh_token' };
       } else if (errorMessage.includes('invalid_client')) {
-        console.log('[REFRESH-TOKEN] 🚨 Configuration OAuth invalide');
+        logger.debug('[REFRESH-TOKEN] 🚨 Configuration OAuth invalide');
         return { success: false, error: 'invalid_oauth_config' };
       } else {
-        console.log('[REFRESH-TOKEN] 🚨 Erreur générique:', errorMessage);
+        logger.debug('[REFRESH-TOKEN] 🚨 Erreur générique:', errorMessage);
         return { success: false, error: 'refresh_failed' };
       }
     }
 
   } catch (error) {
-    console.error('[REFRESH-TOKEN] ❌ Erreur générale dans refreshGoogleTokenIfNeeded:', error);
+    logger.error('[REFRESH-TOKEN] ❌ Erreur générale dans refreshGoogleTokenIfNeeded:', error);
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.log('[REFRESH-TOKEN] 🔍 Détails de l\'erreur générale:', errorMessage);
+    logger.debug('[REFRESH-TOKEN] 🔍 Détails de l\'erreur générale:', errorMessage);
     return { success: false, error: 'general_error' };
   }
 }

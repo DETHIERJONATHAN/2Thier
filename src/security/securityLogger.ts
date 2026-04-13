@@ -1,6 +1,7 @@
 import winston from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
 import path from 'path';
+import { logger } from '../lib/logger';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -109,7 +110,7 @@ export function logSecurityEvent(
   
   // 🔔 Alertes pour événements critiques
   if (level === 'error' || eventType.includes('ATTACK') || eventType.includes('BREACH')) {
-    console.error(`🚨 ALERTE SÉCURITÉ: ${eventType}`, securityEvent);
+    logger.error(`🚨 ALERTE SÉCURITÉ: ${eventType}`, securityEvent);
   }
 }
 

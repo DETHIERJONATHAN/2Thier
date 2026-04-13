@@ -22,6 +22,7 @@ import {
 } from '@ant-design/icons';
 import { useSmartCameraConfig, ReferenceObject } from '../../hooks/useSmartCameraConfig';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Text } = Typography;
 
@@ -95,7 +96,7 @@ export const ReferenceObjectsConfig: React.FC<Props> = ({ visible, onClose, node
       message.success('✅ Configuration IA Mesure sauvegardée');
       onClose();
     } catch (error) {
-      console.error('Error saving config:', error);
+      logger.error('Error saving config:', error);
       message.error('❌ Erreur lors de la sauvegarde');
     }
   };

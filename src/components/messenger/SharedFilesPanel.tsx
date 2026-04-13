@@ -6,6 +6,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Tabs, Spin, Empty } from 'antd';
 import { FileOutlined, PictureOutlined, VideoCameraOutlined, SoundOutlined } from '@ant-design/icons';
 import { FilePreview } from './FilePreview';
+import { logger } from '../../lib/logger';
 
 interface SharedFilesPanelProps {
   conversationId: string;
@@ -24,7 +25,7 @@ export const SharedFilesPanel: React.FC<SharedFilesPanelProps> = ({ conversation
       const data = await api.get(`/messenger/conversations/${conversationId}/files${params}`);
       setFiles(data);
     } catch (err) {
-      console.error('Error fetching files:', err);
+      logger.error('Error fetching files:', err);
     } finally {
       setLoading(false);
     }

@@ -17,6 +17,7 @@
  */
 
 import { db } from '../lib/database';
+import { logger } from '../lib/logger';
 
 const prisma = db;
 
@@ -156,40 +157,40 @@ async function fetchNode(nodeId: string): Promise<NodeSnapshot | null> {
 async function main() {
   const [originalNodeId, copyNodeId] = process.argv.slice(2);
   if (!originalNodeId || !copyNodeId) {
-    console.error('Usage: npx tsx src/scripts/compare-original-copy-display-field.ts <originalNodeId> <copyNodeId>');
+    logger.error('Usage: npx tsx src/scripts/compare-original-copy-display-field.ts <originalNodeId> <copyNodeId>');
     process.exit(1);
   }
 
-  console.log('🔎 === COMPARE ORIGINAL vs COPY (DISPLAY/TBL) ===');
-  console.log('Original:', originalNodeId);
-  console.log('Copy    :', copyNodeId);
+  logger.debug('🔎 === COMPARE ORIGINAL vs COPY (DISPLAY/TBL) ===');
+  logger.debug('Original:', originalNodeId);
+  logger.debug('Copy    :', copyNodeId);
 
   const [orig, copy] = await Promise.all([fetchNode(originalNodeId), fetchNode(copyNodeId)]);
 
   if (!orig) {
-    console.error('❌ Original introuvable en DB');
+    logger.error('❌ Original introuvable en DB');
     process.exit(2);
   }
   if (!copy) {
-    console.error('❌ Copie introuvable en DB');
+    logger.error('❌ Copie introuvable en DB');
     process.exit(3);
   }
 
   if (orig.treeId !== copy.treeId) {
-    console.warn('⚠️ TreeId différent entre original et copie:', { orig: orig.treeId, copy: copy.treeId });
+    logger.warn('⚠️ TreeId différent entre original et copie:', { orig: orig.treeId, copy: copy.treeId });
   }
 
-  console.log('\n🧾 1) Résumé');
-  console.log('   - label:', orig.label, '→', copy.label);
-  console.log('   - type/subType:', `${orig.type}/${orig.subType ?? '∅'}`, '→', `${copy.type}/${copy.subType ?? '∅'}`);
-  console.log('   - fieldType:', orig.fieldType ?? '∅', '→', copy.fieldType ?? '∅');
-  console.log('   - flags:', {
+  logger.debug('\n🧾 1) Résumé');
+  logger.debug('   - label:', orig.label, '→', copy.label);
+  logger.debug('   - type/subType:', `${orig.type}/${orig.subType ?? '∅'}`, '→', `${copy.type}/${copy.subType ?? '∅'}`);
+  logger.debug('   - fieldType:', orig.fieldType ?? '∅', '→', copy.fieldType ?? '∅');
+  logger.debug('   - flags:', {
     orig: { hasData: orig.hasData, hasFormula: orig.hasFormula, hasCondition: orig.hasCondition, hasTable: orig.hasTable },
     copy: { hasData: copy.hasData, hasFormula: copy.hasFormula, hasCondition: copy.hasCondition, hasTable: copy.hasTable }
   });
-  console.log('   - calculatedValue:', orig.calculatedValue ?? '∅', '→', copy.calculatedValue ?? '∅');
+  logger.debug('   - calculatedValue:', orig.calculatedValue ?? '∅', '→', copy.calculatedValue ?? '∅');
 
-  console.log('\n🧩 2) Diffs (propriétés clés)');
+  logger.debug('\n🧩 2) Diffs (propriétés clés)');
   const keyA: Record<string, unknown> = {
     treeId: orig.treeId,
     parentId: orig.parentId,
@@ -238,29 +239,29 @@ async function main() {
 
   const diffs = diffObjects(keyA, keyB);
   if (diffs.length === 0) {
-    console.log('   ✅ Aucune différence sur les propriétés clés');
+    logger.debug('   ✅ Aucune différence sur les propriétés clés');
   } else {
     for (const d of diffs) {
-      console.log(`   - ${d.key}:`);
-      console.log('       orig:', stableStringify(d.a).replace(/\n/g, '\n       '));
-      console.log('       copy:', stableStringify(d.b).replace(/\n/g, '\n       '));
+      logger.debug(`   - ${d.key}:`);
+      logger.debug('       orig:', stableStringify(d.a).replace(/\n/g, '\n       '));
+      logger.debug('       copy:', stableStringify(d.b).replace(/\n/g, '\n       '));
     }
   }
 
-  console.log('\n🧷 3) Metadata (extraits utiles)');
+  logger.debug('\n🧷 3) Metadata (extraits utiles)');
   const metaOrig = pickMeta(orig.metadata);
   const metaCopy = pickMeta(copy.metadata);
-  console.log('   orig:', stableStringify(metaOrig));
-  console.log('   copy:', stableStringify(metaCopy));
+  logger.debug('   orig:', stableStringify(metaOrig));
+  logger.debug('   copy:', stableStringify(metaCopy));
 
-  console.log('\n🧠 4) Instances (résumé)');
-  console.log('   data_instances     :', summarizeJson(orig.data_instances), '→', summarizeJson(copy.data_instances));
-  console.log('   formula_instances  :', summarizeJson(orig.formula_instances), '→', summarizeJson(copy.formula_instances));
-  console.log('   condition_instances:', summarizeJson(orig.condition_instances), '→', summarizeJson(copy.condition_instances));
-  console.log('   table_instances    :', summarizeJson(orig.table_instances), '→', summarizeJson(copy.table_instances));
-  console.log('   table_meta         :', summarizeJson(orig.table_meta), '→', summarizeJson(copy.table_meta));
+  logger.debug('\n🧠 4) Instances (résumé)');
+  logger.debug('   data_instances     :', summarizeJson(orig.data_instances), '→', summarizeJson(copy.data_instances));
+  logger.debug('   formula_instances  :', summarizeJson(orig.formula_instances), '→', summarizeJson(copy.formula_instances));
+  logger.debug('   condition_instances:', summarizeJson(orig.condition_instances), '→', summarizeJson(copy.condition_instances));
+  logger.debug('   table_instances    :', summarizeJson(orig.table_instances), '→', summarizeJson(copy.table_instances));
+  logger.debug('   table_meta         :', summarizeJson(orig.table_meta), '→', summarizeJson(copy.table_meta));
 
-  console.log('\n🧾 5) Formules / conditions / variables liées');
+  logger.debug('\n🧾 5) Formules / conditions / variables liées');
   const [formulas, conditions, variables, tables] = await Promise.all([
     prisma.treeBranchLeafNodeFormula.findMany({
       where: { nodeId: { in: [orig.id, copy.id] } },
@@ -312,49 +313,49 @@ async function main() {
   const tablesOrig = tables.filter((t) => t.nodeId === orig.id);
   const tablesCopy = tables.filter((t) => t.nodeId === copy.id);
 
-  console.log(`   - formulas: orig=${formulasOrig.length} copy=${formulasCopy.length}`);
-  console.log(`   - conditions: orig=${conditionsOrig.length} copy=${conditionsCopy.length}`);
-  console.log(`   - linkedVariableIds: orig=${orig.linkedVariableIds.length} copy=${copy.linkedVariableIds.length} (unique fetched=${variables.length})`);
-  console.log(`   - tables: orig=${tablesOrig.length} copy=${tablesCopy.length} (table_activeId: orig=${orig.table_activeId ?? '∅'} copy=${copy.table_activeId ?? '∅'})`);
+  logger.debug(`   - formulas: orig=${formulasOrig.length} copy=${formulasCopy.length}`);
+  logger.debug(`   - conditions: orig=${conditionsOrig.length} copy=${conditionsCopy.length}`);
+  logger.debug(`   - linkedVariableIds: orig=${orig.linkedVariableIds.length} copy=${copy.linkedVariableIds.length} (unique fetched=${variables.length})`);
+  logger.debug(`   - tables: orig=${tablesOrig.length} copy=${tablesCopy.length} (table_activeId: orig=${orig.table_activeId ?? '∅'} copy=${copy.table_activeId ?? '∅'})`);
 
   if (formulasOrig.length || formulasCopy.length) {
-    console.log('\n   📌 Formules (résumé par nom/targetProperty)');
+    logger.debug('\n   📌 Formules (résumé par nom/targetProperty)');
     for (const f of formulasOrig) {
-      console.log(`     orig - ${f.name} (target=${f.targetProperty ?? '∅'}) default=${f.isDefault}`);
+      logger.debug(`     orig - ${f.name} (target=${f.targetProperty ?? '∅'}) default=${f.isDefault}`);
     }
     for (const f of formulasCopy) {
-      console.log(`     copy - ${f.name} (target=${f.targetProperty ?? '∅'}) default=${f.isDefault}`);
+      logger.debug(`     copy - ${f.name} (target=${f.targetProperty ?? '∅'}) default=${f.isDefault}`);
     }
   }
 
   if (conditionsOrig.length || conditionsCopy.length) {
-    console.log('\n   📌 Conditions (noms)');
+    logger.debug('\n   📌 Conditions (noms)');
     for (const c of conditionsOrig) {
-      console.log(`     orig - ${c.name} default=${c.isDefault}`);
+      logger.debug(`     orig - ${c.name} default=${c.isDefault}`);
     }
     for (const c of conditionsCopy) {
-      console.log(`     copy - ${c.name} default=${c.isDefault}`);
+      logger.debug(`     copy - ${c.name} default=${c.isDefault}`);
     }
   }
 
   if (variables.length) {
-    console.log('\n   🔗 Variables liées (id → exposedKey/sourceRef)');
+    logger.debug('\n   🔗 Variables liées (id → exposedKey/sourceRef)');
     for (const v of variables) {
-      console.log(`     - ${v.id} nodeId=${v.nodeId} key=${v.exposedKey ?? '∅'} source=${v.sourceType ?? '∅'} ref=${v.sourceRef ?? '∅'}`);
+      logger.debug(`     - ${v.id} nodeId=${v.nodeId} key=${v.exposedKey ?? '∅'} source=${v.sourceType ?? '∅'} ref=${v.sourceRef ?? '∅'}`);
     }
   }
 
   if (tablesOrig.length || tablesCopy.length) {
-    console.log('\n   📋 Tables (résumé)');
+    logger.debug('\n   📋 Tables (résumé)');
     const printTables = (label: 'orig' | 'copy', nodeTables: typeof tablesOrig, activeId: string | null, linkedIds: string[]) => {
       const activeExists = activeId ? nodeTables.some((t) => t.id === activeId) : false;
-      console.log(`     ${label} - linkedTableIds: ${linkedIds.length ? linkedIds.join(', ') : '∅'}`);
-      console.log(`     ${label} - table_activeId: ${activeId ?? '∅'} (existsOnNodeTables=${activeExists})`);
+      logger.debug(`     ${label} - linkedTableIds: ${linkedIds.length ? linkedIds.join(', ') : '∅'}`);
+      logger.debug(`     ${label} - table_activeId: ${activeId ?? '∅'} (existsOnNodeTables=${activeExists})`);
       const defaults = nodeTables.filter((t) => t.isDefault);
-      console.log(`     ${label} - default tables: ${defaults.length ? defaults.map((t) => t.id).join(', ') : '∅'}`);
+      logger.debug(`     ${label} - default tables: ${defaults.length ? defaults.map((t) => t.id).join(', ') : '∅'}`);
       for (const t of nodeTables) {
         const columnsPreview = t.tableColumns.slice(0, 6).map((c) => `${c.columnIndex}:${c.name}`).join(' | ');
-        console.log(
+        logger.debug(
           `     ${label} - table ${t.id} name="${t.name}" type=${t.type} default=${t.isDefault} order=${t.order} cols=${t.columnCount} rows=${t.rowCount} lookupSelect=${t.lookupSelectColumn ?? '∅'} previewCols=[${columnsPreview}] sampleRows=${t.tableRows.length}`
         );
       }
@@ -364,21 +365,21 @@ async function main() {
     printTables('copy', tablesCopy, copy.table_activeId, copy.linkedTableIds);
   }
 
-  console.log('\n🧪 6) Hypothèse ciblée sur l’affichage du champ copié');
+  logger.debug('\n🧪 6) Hypothèse ciblée sur l’affichage du champ copié');
   if (copy.calculatedValue === '0') {
-    console.log('   ⚠️ La copie a calculatedValue="0".');
-    console.log('   ⚠️ Dans le contrôleur GET /api/tree-nodes/:nodeId/calculated-value, il existe un filtre qui considère "0" comme une valeur non valide pour certains display fields.');
-    console.log('   → Symptôme typique: la valeur est bien calculée (=0) mais le backend ne la renvoie pas, donc l’UI affiche ---.');
+    logger.debug('   ⚠️ La copie a calculatedValue="0".');
+    logger.debug('   ⚠️ Dans le contrôleur GET /api/tree-nodes/:nodeId/calculated-value, il existe un filtre qui considère "0" comme une valeur non valide pour certains display fields.');
+    logger.debug('   → Symptôme typique: la valeur est bien calculée (=0) mais le backend ne la renvoie pas, donc l’UI affiche ---.');
   } else {
-    console.log('   - calculatedValue(copy) n’est pas "0"; vérifier plutôt les IDs de capacités / metadata copiée (copiedFromNodeId, linkedVariableIds, etc.).');
+    logger.debug('   - calculatedValue(copy) n’est pas "0"; vérifier plutôt les IDs de capacités / metadata copiée (copiedFromNodeId, linkedVariableIds, etc.).');
   }
 
-  console.log('\n✅ Comparaison terminée (lecture seule).');
+  logger.debug('\n✅ Comparaison terminée (lecture seule).');
 }
 
 main()
   .catch((e) => {
-    console.error('❌ Erreur script:', e);
+    logger.error('❌ Erreur script:', e);
     process.exit(1);
   })
   .finally(async () => {

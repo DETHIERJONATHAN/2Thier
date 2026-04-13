@@ -15,6 +15,7 @@ import {
   CheckCircleOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
+import { logger } from '../lib/logger';
 
 const { TextArea } = Input;
 const { Title, Text, Paragraph } = Typography;
@@ -208,7 +209,7 @@ export const AIContentAssistant: React.FC<AIContentAssistantProps> = ({
         throw new Error(response.data.error || 'Erreur inconnue');
       }
     } catch (error: unknown) {
-      console.error('Erreur génération IA:', error);
+      logger.error('Erreur génération IA:', error);
       message.error(error.response?.data?.error || 'Erreur lors de la génération');
     } finally {
       setLoading(false);

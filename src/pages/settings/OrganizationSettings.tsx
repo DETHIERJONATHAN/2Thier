@@ -21,6 +21,7 @@ import {
   RightOutlined,
   CameraOutlined,
 } from '@ant-design/icons';
+import { logger } from '../../lib/logger';
 
 const useScreenSize = () => {
   const [w, setW] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
@@ -78,7 +79,7 @@ const GoogleWorkspaceSection: React.FC<{ organizationId: string }> = ({ organiza
       try {
         const r = await api.get(`/api/organizations/${organizationId}/google-workspace/config`);
         if (r.success) setConfig(r.data);
-      } catch (e) { console.error('Erreur config GW:', e); }
+      } catch (e) { logger.error('Erreur config GW:', e); }
       finally { setLoading(false); }
     })();
   }, [organizationId, api]);

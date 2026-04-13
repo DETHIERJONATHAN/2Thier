@@ -13,6 +13,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import { copyTableCapacity } from './copy-capacity-table.js';
+import { logger } from '../../../../lib/logger';
 
 export interface CopySelectorTablesOptions {
   nodeIdMap: Map<string, string>;
@@ -127,11 +128,11 @@ export async function copySelectorTablesAfterNodeCopy(
         } else {
         }
       } catch (e) {
-        console.warn(`      Ã¢Å¡Â Ã¯Â¸Â Erreur lors de la copie:`, (e as Error).message);
+        logger.warn(`      Ã¢Å¡Â Ã¯Â¸Â Erreur lors de la copie:`, (e as Error).message);
       }
     }
 
   } catch (e) {
-    console.warn(`Ã¢Å¡Â Ã¯Â¸Â Erreur dans copySelectorTablesAfterNodeCopy:`, (e as Error).message);
+    logger.warn(`Ã¢Å¡Â Ã¯Â¸Â Erreur dans copySelectorTablesAfterNodeCopy:`, (e as Error).message);
   }
 }

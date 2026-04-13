@@ -38,6 +38,7 @@ import {
   StarOutlined
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { logger } from '../../lib/logger';
 
 const { Title, Text, Paragraph } = Typography;
 const { Panel } = Collapse;
@@ -102,7 +103,7 @@ export const SectionAIOptimizer: React.FC<SectionAIOptimizerProps> = ({
       setAnalysis(response.data);
       message.success('✅ Analyse terminée !');
     } catch (error) {
-      console.error('Erreur analyse IA:', error);
+      logger.error('Erreur analyse IA:', error);
       message.error('Impossible d\'analyser la section');
     } finally {
       setAnalyzing(false);
@@ -247,7 +248,7 @@ Format de réponse attendu : JSON structuré
       message.success(`✅ ${selectedSuggestions.length} suggestion(s) appliquée(s) !`);
       onClose();
     } catch (error) {
-      console.error('Erreur application suggestions:', error);
+      logger.error('Erreur application suggestions:', error);
       message.error('Impossible d\'appliquer les suggestions');
     } finally {
       setApplying(false);

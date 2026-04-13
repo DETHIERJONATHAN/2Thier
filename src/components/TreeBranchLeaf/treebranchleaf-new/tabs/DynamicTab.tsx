@@ -4,6 +4,7 @@ import { IconC, IconO, IconOC } from '../components/Icons';
 import { TblNode } from '../types/types';
 import FieldRenderer from '../components/FieldRenderer';
 import { normalizeSubTabValues } from '../utils/subTabNormalization';
+import { logger } from '../../../../lib/logger';
 
 interface DynamicTabProps {
   groupNode: TblNode; // type GROUP, children = sous-sections ou feuilles
@@ -130,7 +131,7 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ groupNode, values, onChange, de
   }, [allSubTabs, groupNode, values]);
 
   useEffect(() => {
-    try { console.debug('[DynamicTab] subTabs for group', groupNode.id, visibleSubTabs); } catch { /* noop */ }
+    try { logger.debug('[DynamicTab] subTabs for group', groupNode.id, visibleSubTabs); } catch { /* noop */ }
   }, [visibleSubTabs, groupNode.id]);
 
   const showSubTabs = visibleSubTabs.length > 1;

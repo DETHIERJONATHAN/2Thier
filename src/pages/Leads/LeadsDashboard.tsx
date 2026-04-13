@@ -49,6 +49,7 @@ import {
   WarningOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Title, Text, Paragraph } = Typography;
 const { RangePicker } = DatePicker;
@@ -114,7 +115,7 @@ export default function LeadsDashboard() {
       const response = await api.get('/api/leads');
       const leadsData = Array.isArray(response) ? response : (response?.data || []);
       
-      console.log('📊 Leads récupérés avec relations Prisma:', leadsData.length, 'leads trouvés');
+      logger.debug('📊 Leads récupérés avec relations Prisma:', leadsData.length, 'leads trouvés');
       
       // 📊 Calculs basés sur les vraies données Prisma
       const totalLeads = leadsData.length;
@@ -270,14 +271,14 @@ export default function LeadsDashboard() {
         loading: false
       });
       
-      console.log('✅ Dashboard mis à jour avec les données Prisma');
+      logger.debug('✅ Dashboard mis à jour avec les données Prisma');
       
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(
         error,
         'Impossible de charger les données du dashboard. Veuillez réessayer.'
       );
-      console.error('❌ Erreur lors du chargement des données du dashboard:', errorMessage, error);
+      logger.error('❌ Erreur lors du chargement des données du dashboard:', errorMessage, error);
 
       setDashboardData(prev => ({
         ...prev,
@@ -310,7 +311,7 @@ export default function LeadsDashboard() {
       if (isTimeRange(next)) {
         setTimeRange(next);
       } else {
-        console.warn('[LeadsDashboard] Valeur de période inattendue reçue:', next);
+        logger.warn('[LeadsDashboard] Valeur de période inattendue reçue:', next);
       }
     },
     []
@@ -321,7 +322,7 @@ export default function LeadsDashboard() {
       if (isChartType(next)) {
         setChartType(next);
       } else {
-        console.warn('[LeadsDashboard] Type de graphique inattendu reçu:', next);
+        logger.warn('[LeadsDashboard] Type de graphique inattendu reçu:', next);
       }
     },
     []
@@ -330,14 +331,14 @@ export default function LeadsDashboard() {
   useEffect(() => {
     // ✅ PRODUCTION: Utiliser le hook useAuth au lieu de isAuthenticated()
     if (!user) {
-      console.log('Utilisateur non authentifié, abandon de la récupération des leads');
+      logger.debug('Utilisateur non authentifié, abandon de la récupération des leads');
       NotificationManager.warning("Authentification requise pour accéder aux données");
       return;
     }
     
     // Ne pas exécuter l'effet si l'organisation n'est pas définie et que l'utilisateur n'est pas super admin
     if (!currentOrganization && !isSuperAdmin) {
-      console.log('Aucune organisation sélectionnée, abandon de la récupération des leads');
+      logger.debug('Aucune organisation sélectionnée, abandon de la récupération des leads');
       return;
     }
     

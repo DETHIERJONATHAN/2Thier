@@ -1,3 +1,4 @@
+import { logger } from '../../../../../../lib/logger';
 /**
  * Ã°Å¸â€â€ž SYSTÃƒË†ME UNIVERSEL DE RÃƒâ€°Ãƒâ€°CRITURE DES RÃƒâ€°FÃƒâ€°RENCES
  * Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
@@ -370,11 +371,11 @@ export function forceSharedRefSuffixes(tokens: unknown, suffix: number): any {
         } else {
         }
       } else if (token.includes('shared-ref')) {
-        console.warn(`Ã°Å¸â€Â¥ [idx ${idx}] Ã¢Å¡Â Ã¯Â¸Â CONTAINS 'shared-ref' MAIS NE MATCHE PAS regex: "${token}"`);
+        logger.warn(`Ã°Å¸â€Â¥ [idx ${idx}] Ã¢Å¡Â Ã¯Â¸Â CONTAINS 'shared-ref' MAIS NE MATCHE PAS regex: "${token}"`);
       }
     } else {
       if (String(token).includes('shared-ref')) {
-        console.warn(`Ã°Å¸â€Â¥ [idx ${idx}] Ã¢Å¡Â Ã¯Â¸Â Token NOT STRING mais contient 'shared-ref': Type=${typeof token}, Value=`, token);
+        logger.warn(`Ã°Å¸â€Â¥ [idx ${idx}] Ã¢Å¡Â Ã¯Â¸Â Token NOT STRING mais contient 'shared-ref': Type=${typeof token}, Value=`, token);
       }
     }
     return token;

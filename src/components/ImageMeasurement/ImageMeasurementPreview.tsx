@@ -41,6 +41,7 @@ import type {
   ImageAnnotations,
   OrganizationMeasurementReferenceConfig
 } from '../../types/measurement';
+import { logger } from '../../lib/logger';
 
 const { Text, Title } = Typography;
 
@@ -277,7 +278,7 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
   // 🔄 RESET CRITICAL: Réinitialiser les états quand le composant redevient visible
   useEffect(() => {
     if (visible) {
-      console.log('🔄 [Preview] RESET: Composant visible, réinitialisation des états');
+      logger.debug('🔄 [Preview] RESET: Composant visible, réinitialisation des états');
       setHasInitialized(false);
       setStep('loading');
       setFinalAnnotations(null);
@@ -296,9 +297,9 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
     // Si pixelPerCmY n'est pas fourni, utiliser la même valeur que X
     const finalPixelPerCmY = newPixelPerCmY ?? newPixelPerCmX;
     
-    console.log('🔄 [Preview] Référence ajustée manuellement:', newBoundingBox);
-    console.log(`   🆕 pixelPerCmX (base 1000): ${newPixelPerCmX.toFixed(2)}`);
-    console.log(`   🆕 pixelPerCmY (base 1000): ${finalPixelPerCmY.toFixed(2)}`);
+    logger.debug('🔄 [Preview] Référence ajustée manuellement:', newBoundingBox);
+    logger.debug(`   🆕 pixelPerCmX (base 1000): ${newPixelPerCmX.toFixed(2)}`);
+    logger.debug(`   🆕 pixelPerCmY (base 1000): ${finalPixelPerCmY.toFixed(2)}`);
     
     // Mettre à jour le boundingBox
     setReferenceDetected(prev => prev ? {
@@ -331,10 +332,10 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
 
   // Étape 2 : Suggérer les points de mesure via IA (la détection de référence est faite dans runWorkflow)
   const suggestMeasurementPointsCallback = useCallback(async () => {
-    console.log('🎯 [ImageMeasurementPreview] suggestMeasurementPointsCallback appelé, imageBase64:', imageBase64 ? `${imageBase64.length} chars` : 'NULL');
+    logger.debug('🎯 [ImageMeasurementPreview] suggestMeasurementPointsCallback appelé, imageBase64:', imageBase64 ? `${imageBase64.length} chars` : 'NULL');
     
     if (!imageBase64) {
-      console.error('❌ [ImageMeasurementPreview] Pas d\'imageBase64 disponible dans callback');
+      logger.error('❌ [ImageMeasurementPreview] Pas d\'imageBase64 disponible dans callback');
       setError('Image non disponible pour l\'analyse');
       setStep('error');
       return;
@@ -343,15 +344,15 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
     try {
       setStep('measuring');
 
-      console.log(`📍 [ImageMeasurementPreview] Suggestion points pour mesures: ${measureKeys.join(', ')}`);
-      console.log(`📍 [ImageMeasurementPreview] Image base64 length: ${imageBase64.length}`);
+      logger.debug(`📍 [ImageMeasurementPreview] Suggestion points pour mesures: ${measureKeys.join(', ')}`);
+      logger.debug(`📍 [ImageMeasurementPreview] Image base64 length: ${imageBase64.length}`);
       
       // Extraire le contenu base64 pur (sans le préfixe data:image/xxx;base64,)
       let cleanBase64 = imageBase64;
       if (imageBase64.includes(',')) {
         cleanBase64 = imageBase64.split(',')[1];
       }
-      console.log(`📍 [ImageMeasurementPreview] Clean base64 length: ${cleanBase64.length}`);
+      logger.debug(`📍 [ImageMeasurementPreview] Clean base64 length: ${cleanBase64.length}`);
 
       // Suggérer les points sur l'objet à mesurer
       const response = await api.post('/api/measurement-reference/suggest-points', {
@@ -362,7 +363,7 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
         measureKeys
       });
 
-      console.log(`📍 [ImageMeasurementPreview] API Response:`, response);
+      logger.debug(`📍 [ImageMeasurementPreview] API Response:`, response);
 
       if (response?.success && response.points && response.points.length > 0) {
         // Convertir les points du format API vers MeasurementPoint
@@ -377,16 +378,16 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
           purpose: p.purpose // 🆕 Garder le but du point (haut-gauche, etc.)
         }));
 
-        console.log(`✅ [ImageMeasurementPreview] ${points.length} points suggérés par l'IA`, points);
+        logger.debug(`✅ [ImageMeasurementPreview] ${points.length} points suggérés par l'IA`, points);
         setSuggestedPoints(points);
         setStep('adjusting'); // Permettre ajustement
       } else {
-        console.warn('⚠️ [ImageMeasurementPreview] Aucun point suggéré, utilisation des points par défaut');
+        logger.warn('⚠️ [ImageMeasurementPreview] Aucun point suggéré, utilisation des points par défaut');
         // Points par défaut si détection échoue
         setDefaultPoints();
       }
     } catch (err) {
-      console.error('❌ [ImageMeasurementPreview] Erreur suggestion points:', err);
+      logger.error('❌ [ImageMeasurementPreview] Erreur suggestion points:', err);
       // Continuer avec les points par défaut
       setDefaultPoints();
     }
@@ -414,24 +415,24 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
 
     // 🔒 CRITICAL: Ne jamais re-suggérer les points si déjà initialisé
     if (hasInitialized) {
-      console.log('🔒 [ImageMeasurementPreview] Déjà initialisé, skip re-suggestion');
+      logger.debug('🔒 [ImageMeasurementPreview] Déjà initialisé, skip re-suggestion');
       return;
     }
 
-    console.log('🔄 [ImageMeasurementPreview] useEffect triggered:', { visible, hasImageBase64: !!imageBase64, imageBase64Length: imageBase64?.length, imageUrl: imageUrl?.substring(0, 50) });
+    logger.debug('🔄 [ImageMeasurementPreview] useEffect triggered:', { visible, hasImageBase64: !!imageBase64, imageBase64Length: imageBase64?.length, imageUrl: imageUrl?.substring(0, 50) });
 
     const runWorkflow = async () => {
       setStep('loading');
       setError(null);
       
-      console.log('🚀 [ImageMeasurementPreview] runWorkflow starting...');
+      logger.debug('🚀 [ImageMeasurementPreview] runWorkflow starting...');
 
       // 1. Charger config de référence (optionnelle)
       await loadReferenceConfig();
 
       // 2. Vérifier que l'image est disponible
       if (!imageBase64) {
-        console.error('❌ [ImageMeasurementPreview] Pas d\'imageBase64 dans useEffect!');
+        logger.error('❌ [ImageMeasurementPreview] Pas d\'imageBase64 dans useEffect!');
         setStep('adjusting');
         setHasInitialized(true);
         return;
@@ -439,8 +440,8 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
 
       // 🆕 WORKFLOW GUIDÉ: Passer directement au Canvas sans détection automatique
       // L'utilisateur va sélectionner lui-même la zone A4 puis la zone de mesure
-      console.log('📐 [ImageMeasurementPreview] Workflow guidé: passage direct au Canvas');
-      console.log('   ➡️ L\'utilisateur dessinera la zone A4 puis la zone de mesure');
+      logger.debug('📐 [ImageMeasurementPreview] Workflow guidé: passage direct au Canvas');
+      logger.debug('   ➡️ L\'utilisateur dessinera la zone A4 puis la zone de mesure');
       
       setStep('adjusting');
       setHasInitialized(true);
@@ -479,7 +480,7 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
   const handleValidate = useCallback(async () => {
     try {
       setStep('measuring');
-      console.log('🚀 [ImageMeasurementPreview] Lancement analyse IA avec calibration...');
+      logger.debug('🚀 [ImageMeasurementPreview] Lancement analyse IA avec calibration...');
       
       // Construire la config d'analyse IA
       const aiConfig = {
@@ -502,7 +503,7 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
       
       // Appeler l'API d'analyse avec la config de référence
       const measureEngine = (import.meta.env.VITE_AI_MEASURE_ENGINE || 'gemini').toLowerCase();
-      console.log('📡 [ImageMeasurementPreview] Analyse via', measureEngine, 'avec referenceConfig:', referenceConfig);
+      logger.debug('📡 [ImageMeasurementPreview] Analyse via', measureEngine, 'avec referenceConfig:', referenceConfig);
 
       const response = measureEngine === 'vision_ar'
         ? await api.post('/api/measurement-reference/ultra-fusion-detect', {
@@ -522,15 +523,15 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
             referenceConfig // 🎯 PASSER LA CONFIG DE RÉFÉRENCE POUR CALIBRATION
           });
       
-      console.log('📩 [ImageMeasurementPreview] Résultat analyse:', response);
+      logger.debug('📩 [ImageMeasurementPreview] Résultat analyse:', response);
       
       const isVisionAR = measureEngine === 'vision_ar';
       if (response?.success && (isVisionAR || response.measurements)) {
         const finalMeasurements = isVisionAR ? (response.measurements || {}) : response.measurements;
         const referenceDetected = isVisionAR ? { found: true } : response.referenceDetected;
         
-        console.log('✅ [ImageMeasurementPreview] Mesures obtenues:', finalMeasurements);
-        console.log('📐 [ImageMeasurementPreview] Référence détectée:', referenceDetected);
+        logger.debug('✅ [ImageMeasurementPreview] Mesures obtenues:', finalMeasurements);
+        logger.debug('📐 [ImageMeasurementPreview] Référence détectée:', referenceDetected);
         
         // Mettre à jour les mesures
         setMeasurements(finalMeasurements);
@@ -549,7 +550,7 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
         throw new Error(response?.error || 'Erreur analyse IA');
       }
     } catch (error) {
-      console.error('❌ [ImageMeasurementPreview] Erreur validation:', error);
+      logger.error('❌ [ImageMeasurementPreview] Erreur validation:', error);
       message.error('Erreur lors de l\'analyse des mesures');
       setStep('adjusting');
     }
@@ -561,9 +562,9 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
   }, []);
 
   const handleCanvasValidate = useCallback((annotations: ImageAnnotations) => {
-    console.log('[Preview] 🎯 handleCanvasValidate - MESURES REÇUES:', annotations.measurements);
-    console.log(`   largeur_cm = ${annotations.measurements.largeur_cm}`);
-    console.log(`   hauteur_cm = ${annotations.measurements.hauteur_cm}`);
+    logger.debug('[Preview] 🎯 handleCanvasValidate - MESURES REÇUES:', annotations.measurements);
+    logger.debug(`   largeur_cm = ${annotations.measurements.largeur_cm}`);
+    logger.debug(`   hauteur_cm = ${annotations.measurements.hauteur_cm}`);
     setMeasurements(annotations.measurements);
     setFinalAnnotations(annotations);
     setStep('complete');

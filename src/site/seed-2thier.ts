@@ -9,11 +9,12 @@
 
 // database singleton — always use the centralized db instance
 import { db } from '../lib/database';
+import { logger } from '../lib/logger';
 
 const prisma = db;
 
 async function seed2ThierSite() {
-  console.log('🌱 Seeding 2THIER site...');
+  logger.debug('🌱 Seeding 2THIER site...');
 
   // 1. Utiliser l'organisation 2THIER existante
   const organizationId = '1757366075153-otief8knu';
@@ -23,11 +24,11 @@ async function seed2ThierSite() {
   });
 
   if (!org) {
-    console.error('❌ Organization not found:', organizationId);
+    logger.error('❌ Organization not found:', organizationId);
     process.exit(1);
   }
 
-  console.log('✅ Organization found:', org.name, '(', org.id, ')');
+  logger.debug('✅ Organization found:', org.name, '(', org.id, ')');
 
   // 2. Créer ou récupérer le WebSite
   const website = await prisma.webSite.upsert({
@@ -47,14 +48,14 @@ async function seed2ThierSite() {
     },
   });
 
-  console.log('✅ Website created/found:', website.slug);
+  logger.debug('✅ Website created/found:', website.slug);
 
   // 3. Supprimer les anciennes sections
   await prisma.webSiteSection.deleteMany({
     where: { websiteId: website.id },
   });
 
-  console.log('🗑️  Old sections deleted');
+  logger.debug('🗑️  Old sections deleted');
 
   // 4. Créer les 7 sections
 
@@ -112,7 +113,7 @@ async function seed2ThierSite() {
     },
   });
 
-  console.log('✅ Section 1: Header created');
+  logger.debug('✅ Section 1: Header created');
 
   // SECTION 2: HERO
   await prisma.webSiteSection.create({
@@ -184,7 +185,7 @@ async function seed2ThierSite() {
     },
   });
 
-  console.log('✅ Section 2: Hero created');
+  logger.debug('✅ Section 2: Hero created');
 
   // SECTION 3: STATS
   await prisma.webSiteSection.create({
@@ -250,7 +251,7 @@ async function seed2ThierSite() {
     },
   });
 
-  console.log('✅ Section 3: Stats created');
+  logger.debug('✅ Section 3: Stats created');
 
   // SECTION 4: SERVICES
   await prisma.webSiteSection.create({
@@ -369,7 +370,7 @@ async function seed2ThierSite() {
     },
   });
 
-  console.log('✅ Section 4: Services created');
+  logger.debug('✅ Section 4: Services created');
 
   // SECTION 5: TESTIMONIALS
   await prisma.webSiteSection.create({
@@ -432,7 +433,7 @@ async function seed2ThierSite() {
     },
   });
 
-  console.log('✅ Section 5: Testimonials created');
+  logger.debug('✅ Section 5: Testimonials created');
 
   // SECTION 6: CTA
   await prisma.webSiteSection.create({
@@ -499,7 +500,7 @@ async function seed2ThierSite() {
     },
   });
 
-  console.log('✅ Section 6: CTA created');
+  logger.debug('✅ Section 6: CTA created');
 
   // SECTION 7: FOOTER
   await prisma.webSiteSection.create({
@@ -558,23 +559,23 @@ async function seed2ThierSite() {
     },
   });
 
-  console.log('✅ Section 7: Footer created');
+  logger.debug('✅ Section 7: Footer created');
 
-  console.log('');
-  console.log('🎉 2THIER site successfully seeded!');
-  console.log('📍 Website slug:', website.slug);
-  console.log('📊 Total sections:', 7);
-  console.log('');
-  console.log('Next steps:');
-  console.log('1. Navigate to NoCodeBuilder');
-  console.log('2. Load website: site-vitrine-2thier');
-  console.log('3. Preview and verify all sections render correctly');
+  logger.debug('');
+  logger.debug('🎉 2THIER site successfully seeded!');
+  logger.debug('📍 Website slug:', website.slug);
+  logger.debug('📊 Total sections:', 7);
+  logger.debug('');
+  logger.debug('Next steps:');
+  logger.debug('1. Navigate to NoCodeBuilder');
+  logger.debug('2. Load website: site-vitrine-2thier');
+  logger.debug('3. Preview and verify all sections render correctly');
 }
 
 // Exécution
 seed2ThierSite()
   .catch((e) => {
-    console.error('❌ Seed error:', e);
+    logger.error('❌ Seed error:', e);
     process.exit(1);
   })
   .finally(async () => {

@@ -38,6 +38,7 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import AIContentAssistant from '../AIContentAssistant';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { TextArea } = Input;
 
@@ -172,7 +173,7 @@ export const TestimonialsManager: React.FC<TestimonialsManagerProps> = ({ websit
       const response = await api.get(`/api/website-testimonials/${websiteId}`);
       setTestimonials(Array.isArray(response) ? response : []);
     } catch (error) {
-      console.error('Erreur chargement témoignages:', error);
+      logger.error('Erreur chargement témoignages:', error);
       message.error('Erreur lors du chargement des témoignages');
     } finally {
       setLoading(false);
@@ -195,7 +196,7 @@ export const TestimonialsManager: React.FC<TestimonialsManagerProps> = ({ websit
         });
         message.success('Ordre mis à jour');
       } catch (error) {
-        console.error('Erreur réorganisation:', error);
+        logger.error('Erreur réorganisation:', error);
         message.error('Erreur lors de la réorganisation');
         fetchTestimonials();
       }
@@ -224,7 +225,7 @@ export const TestimonialsManager: React.FC<TestimonialsManagerProps> = ({ websit
       message.success('Témoignage supprimé');
       fetchTestimonials();
     } catch (error) {
-      console.error('Erreur suppression:', error);
+      logger.error('Erreur suppression:', error);
       message.error('Erreur lors de la suppression');
     }
   };
@@ -237,7 +238,7 @@ export const TestimonialsManager: React.FC<TestimonialsManagerProps> = ({ websit
       message.success(testimonial.isFeatured ? 'Retiré des favoris' : 'Mis en avant');
       fetchTestimonials();
     } catch (error) {
-      console.error('Erreur toggle:', error);
+      logger.error('Erreur toggle:', error);
       message.error('Erreur lors de la modification');
     }
   };
@@ -262,7 +263,7 @@ export const TestimonialsManager: React.FC<TestimonialsManagerProps> = ({ websit
       setModalVisible(false);
       fetchTestimonials();
     } catch (error) {
-      console.error('Erreur sauvegarde:', error);
+      logger.error('Erreur sauvegarde:', error);
       message.error('Erreur lors de la sauvegarde');
     }
   };

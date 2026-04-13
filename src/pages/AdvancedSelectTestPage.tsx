@@ -4,6 +4,7 @@ import { PlayCircleOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import AdvancedSelectProfessional from '../components/AdvancedSelectProfessional';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { getFieldMapping } from '../config/fieldMapping';
+import { logger } from '../lib/logger';
 
 const { Title, Text } = Typography;
 
@@ -37,10 +38,10 @@ const AdvancedSelectTestPage: React.FC = () => {
         setTestResults([]);
         
         try {
-            console.log('🧪 Début des tests Advanced Select Professional...');
+            logger.debug('🧪 Début des tests Advanced Select Professional...');
 
             // Test 1: Récupération du champ advanced_select
-            console.log('📝 Test 1: Récupération du champ Prix Kw/h...');
+            logger.debug('📝 Test 1: Récupération du champ Prix Kw/h...');
             const fieldResponse = await api.get(`/advanced-select/${FIELD_IDS.prix_kwh}?organizationId=1`);
             
             setTestResults(prev => [...prev, {
@@ -51,7 +52,7 @@ const AdvancedSelectTestPage: React.FC = () => {
             }]);
 
             // Test 2: Test de calcul automatique
-            console.log('🧮 Test 2: Calcul automatique Prix Kw/h...');
+            logger.debug('🧮 Test 2: Calcul automatique Prix Kw/h...');
             const calculationData = {
                 optionValue: 'calcul-du-prix-kwh',
                 inputData: 1200, // Montant total 1200€
@@ -75,7 +76,7 @@ const AdvancedSelectTestPage: React.FC = () => {
             }]);
 
             // Test 3: Validation des résultats
-            console.log('✅ Test 3: Validation des résultats...');
+            logger.debug('✅ Test 3: Validation des résultats...');
             const validationResponse = await api.post('/advanced-select/validate', {
                 value: calculationResponse.data?.result || 0.15,
                 unit: 'EUR/kWh',
@@ -90,7 +91,7 @@ const AdvancedSelectTestPage: React.FC = () => {
             }]);
 
             // Test 4: Test template no-code
-            console.log('🏗️ Test 4: Template no-code...');
+            logger.debug('🏗️ Test 4: Template no-code...');
             const templateResponse = await api.post('/advanced-select/templates', {
                 templateType: 'energy_pricing',
                 fieldConfig: {
@@ -107,10 +108,10 @@ const AdvancedSelectTestPage: React.FC = () => {
                 timestamp: new Date().toLocaleTimeString()
             }]);
 
-            console.log('✅ Tests terminés avec succès!');
+            logger.debug('✅ Tests terminés avec succès!');
 
         } catch (error) {
-            console.error('❌ Erreur lors des tests:', error);
+            logger.error('❌ Erreur lors des tests:', error);
             setTestResults(prev => [...prev, {
                 test: 'Erreur générale',
                 status: 'error',
@@ -188,7 +189,7 @@ const AdvancedSelectTestPage: React.FC = () => {
                         ]
                     }}
                     value={null}
-                    onChange={(value) => console.log('Nouvelle valeur:', value)}
+                    onChange={(value) => logger.debug('Nouvelle valeur:', value)}
                     relatedFields={{
                         [FIELD_IDS.consommation]: 8000,
                         [FIELD_IDS.prix_mois]: null

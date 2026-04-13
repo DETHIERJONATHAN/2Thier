@@ -12,6 +12,7 @@ import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { useBookmarks } from '../hooks/useBookmarks';
 import { useZhiiveNav } from '../contexts/ZhiiveNavContext';
 import { SF } from '../components/zhiive/ZhiiveTheme';
+import { logger } from '../lib/logger';
 
 // ── Types ──
 interface FeedItem {
@@ -397,7 +398,7 @@ const HoneycombPage: React.FC = () => {
       const data = (await apiStable.get(url)) as { feeds: FeedResult[] };
       setFeeds(data.feeds || []);
     } catch (err) {
-      console.error('[Honeycomb] fetch error:', err);
+      logger.error('[Honeycomb] fetch error:', err);
     } finally {
       setLoading(false);
     }
@@ -416,7 +417,7 @@ const HoneycombPage: React.FC = () => {
           );
         }
       } catch (err) {
-        console.error('[Honeycomb] refresh error:', err);
+        logger.error('[Honeycomb] refresh error:', err);
       } finally {
         setRefreshingIds((prev) => {
           const next = new Set(prev);

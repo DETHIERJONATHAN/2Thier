@@ -1,3 +1,4 @@
+import { logger } from '../../../../../lib/logger';
 /**
  * Évaluateur dynamique pour les formules TreeBranchLeaf
  * Évalue les formules sans code en dur en récupérant depuis l'API
@@ -35,12 +36,12 @@ export class FormulaEvaluator {
     // Vérifier le cache d'abord avec TTL
     const cached = formulaCache.get(formulaId);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-      console.log(`🚀 [FormulaEvaluator] Cache hit pour formule ${formulaId}`);
+      logger.debug(`🚀 [FormulaEvaluator] Cache hit pour formule ${formulaId}`);
       return cached.formula;
     }
 
     try {
-      console.log(`⚠️ [FormulaEvaluator] Appel API pour formule ${formulaId}`);
+      logger.debug(`⚠️ [FormulaEvaluator] Appel API pour formule ${formulaId}`);
       // Appel API pour récupérer la formule
       const response = await this.api.get(`/treebranchleaf/formulas/${formulaId}`);
       const formula = response.data;
@@ -69,7 +70,7 @@ export class FormulaEvaluator {
     for (const [id, formula] of Object.entries(formulas)) {
       formulaCache.set(id, { formula, timestamp: now });
     }
-    console.log(`🚀 [FormulaEvaluator] ${Object.keys(formulas).length} formules injectées dans le cache`);
+    logger.debug(`🚀 [FormulaEvaluator] ${Object.keys(formulas).length} formules injectées dans le cache`);
   }
 
   /**
@@ -109,7 +110,7 @@ export class FormulaEvaluator {
       // Évaluer l'expression mathématique
       return this.evaluateExpression(expression.trim());
     } catch (error) {
-      console.error(`Erreur lors de l'évaluation de la formule ${formulaId}:`, error);
+      logger.error(`Erreur lors de l'évaluation de la formule ${formulaId}:`, error);
       return null;
     }
   }
@@ -151,7 +152,7 @@ export class FormulaEvaluator {
       
       return typeof result === 'number' && !isNaN(result) ? result : null;
     } catch (error) {
-      console.error('Erreur lors de l\'évaluation de l\'expression:', expression, error);
+      logger.error('Erreur lors de l\'évaluation de l\'expression:', expression, error);
       return null;
     }
   }

@@ -4,6 +4,7 @@ import { StateCreator } from 'zustand';
 import { CRMState, Field, FieldMeta } from './types';
 import { fetchWithAuth } from './api';
 import { toast } from 'react-toastify';
+import { logger } from '../../lib/logger';
 
 // Types pour ce slice spécifique
 export interface FieldsSlice {
@@ -83,7 +84,7 @@ export const createFieldsSlice: StateCreator<
       return createdField || null;
 
     } catch (err: unknown) {
-      console.error('[CRMStore] addFieldToSection error:', err);
+      logger.error('[CRMStore] addFieldToSection error:', err);
       toast.error(err.message || "Une erreur est survenue.");
       set({ blocks: stateBeforeUpdate.blocks });
       throw err;
@@ -94,9 +95,9 @@ export const createFieldsSlice: StateCreator<
     const { options, ...otherFieldData } = fieldData;
     const body = { ...otherFieldData };
 
-    console.log('[fieldsSlice] updateField - fieldId:', fieldId);
-    console.log('[fieldsSlice] updateField - fieldData reçu:', fieldData);
-    console.log('[fieldsSlice] updateField - body envoyé:', body);
+    logger.debug('[fieldsSlice] updateField - fieldId:', fieldId);
+    logger.debug('[fieldsSlice] updateField - fieldData reçu:', fieldData);
+    logger.debug('[fieldsSlice] updateField - body envoyé:', body);
 
     const res = await fetchWithAuth(`/api/fields/${fieldId}`, {
       method: 'PUT',
@@ -106,14 +107,14 @@ export const createFieldsSlice: StateCreator<
 
     if (!res.ok) {
       const errorText = await res.text();
-      console.error('[fieldsSlice] updateField - Erreur:', errorText);
+      logger.error('[fieldsSlice] updateField - Erreur:', errorText);
       toast.error(`Erreur lors de la mise à jour du champ: ${errorText}`);
       throw new Error(`Failed to update field: ${errorText}`);
     }
 
     const updatedField = await res.json();
-    console.log('[fieldsSlice] updateField - updatedField reçu du serveur:', updatedField);
-    console.log('[fieldsSlice] updateField - advancedConfig dans updatedField:', updatedField?.advancedConfig);
+    logger.debug('[fieldsSlice] updateField - updatedField reçu du serveur:', updatedField);
+    logger.debug('[fieldsSlice] updateField - advancedConfig dans updatedField:', updatedField?.advancedConfig);
 
     set((state) => ({
       blocks: state.blocks.map(block => ({
@@ -122,11 +123,11 @@ export const createFieldsSlice: StateCreator<
           ...section,
           fields: section.fields.map((f: Field) => {
             if (String(f.id) === String(fieldId)) {
-              console.log('[fieldsSlice] Avant mise à jour - field actuel:', f);
-              console.log('[fieldsSlice] Avant mise à jour - advancedConfig actuel:', f.advancedConfig);
+              logger.debug('[fieldsSlice] Avant mise à jour - field actuel:', f);
+              logger.debug('[fieldsSlice] Avant mise à jour - advancedConfig actuel:', f.advancedConfig);
               const newField = { ...f, ...updatedField, options: f.options };
-              console.log('[fieldsSlice] Après mise à jour - nouveau field:', newField);
-              console.log('[fieldsSlice] Après mise à jour - nouveau advancedConfig:', newField.advancedConfig);
+              logger.debug('[fieldsSlice] Après mise à jour - nouveau field:', newField);
+              logger.debug('[fieldsSlice] Après mise à jour - nouveau advancedConfig:', newField.advancedConfig);
               return newField;
             }
             return f;
@@ -138,7 +139,7 @@ export const createFieldsSlice: StateCreator<
     get().fetchFieldMetaCounts([fieldId]);
     
     // 🔧 FIX: Recharger les blocks depuis la base de données pour avoir les données fraîches
-    console.log('[fieldsSlice] Rechargement des blocks après updateField...');
+    logger.debug('[fieldsSlice] Rechargement des blocks après updateField...');
     // Réinitialiser le TTL pour forcer le rechargement
     const currentState = get();
     set({ ...currentState, _lastBlocksFetch: 0 });
@@ -171,7 +172,7 @@ export const createFieldsSlice: StateCreator<
       
       toast.success("Champ supprimé avec succès !");
     } catch (error) {
-      console.error("Erreur dans removeField:", error);
+      logger.error("Erreur dans removeField:", error);
       toast.error("La suppression du champ a échoué. Restauration de l'état.");
       set({ blocks: stateBeforeUpdate.blocks });
     }
@@ -211,7 +212,7 @@ export const createFieldsSlice: StateCreator<
       toast.success("Champ déplacé avec succès !");
     } catch (err: unknown) {
       toast.error(err.message);
-      console.error('[CRMStore] moveFieldToSection error:', err);
+      logger.error('[CRMStore] moveFieldToSection error:', err);
     }
   },
   
@@ -227,7 +228,7 @@ export const createFieldsSlice: StateCreator<
       });
       
       if (!res.ok) {
-        console.error('Erreur lors de la récupération des métadonnées des champs');
+        logger.error('Erreur lors de la récupération des métadonnées des champs');
         return;
       }
       
@@ -239,7 +240,7 @@ export const createFieldsSlice: StateCreator<
         },
       }));
     } catch (err) {
-      console.error('Impossible de contacter le serveur pour les métadonnées des champs.', err);
+      logger.error('Impossible de contacter le serveur pour les métadonnées des champs.', err);
     }
   },
   
@@ -278,7 +279,7 @@ export const createFieldsSlice: StateCreator<
       toast.success("Option ajoutée avec succès !");
     } catch (err: unknown) {
       toast.error(err.message);
-      console.error('[CRMStore] addOptionToField error:', err);
+      logger.error('[CRMStore] addOptionToField error:', err);
       throw err;
     }
   },
@@ -316,7 +317,7 @@ export const createFieldsSlice: StateCreator<
       toast.success("Option supprimée avec succès !");
     } catch (err: unknown) {
       toast.error(err.message);
-      console.error('[CRMStore] removeOptionFromField error:', err);
+      logger.error('[CRMStore] removeOptionFromField error:', err);
       throw err;
     }
   },

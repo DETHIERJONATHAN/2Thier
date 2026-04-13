@@ -17,6 +17,7 @@ import GoogleMailNotificationService from './GoogleMailNotificationService';
 import GoogleCalendarNotificationService from './GoogleCalendarNotificationService';
 import { EventEmitter } from 'events';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 interface NotificationSettings {
   userId: string;
@@ -67,11 +68,11 @@ export class NotificationOrchestrator extends EventEmitter {
    */
   async startCompleteSystem(): Promise<void> {
     if (this.isRunning) {
-      console.log('⚠️ [NotificationOrchestrator] Système déjà en cours...');
+      logger.debug('⚠️ [NotificationOrchestrator] Système déjà en cours...');
       return;
     }
 
-    console.log('🎯 [NotificationOrchestrator] DÉMARRAGE SYSTÈME COMPLET...');
+    logger.debug('🎯 [NotificationOrchestrator] DÉMARRAGE SYSTÈME COMPLET...');
     
     try {
       // 1. Démarrer le service universel
@@ -79,7 +80,7 @@ export class NotificationOrchestrator extends EventEmitter {
       
       // 2. Charger les utilisateurs actifs
       const activeUsers = await this.getActiveUsers();
-      console.log(`👥 [NotificationOrchestrator] ${activeUsers.length} utilisateurs actifs trouvés`);
+      logger.debug(`👥 [NotificationOrchestrator] ${activeUsers.length} utilisateurs actifs trouvés`);
 
       // 3. Démarrer la surveillance pour chaque utilisateur
       for (const user of activeUsers) {
@@ -90,10 +91,10 @@ export class NotificationOrchestrator extends EventEmitter {
       this.startAdvancedChecks();
 
       this.isRunning = true;
-      console.log('✅ [NotificationOrchestrator] SYSTÈME COMPLET DÉMARRÉ !');
+      logger.debug('✅ [NotificationOrchestrator] SYSTÈME COMPLET DÉMARRÉ !');
 
     } catch (error) {
-      console.error('❌ [NotificationOrchestrator] Erreur démarrage:', error);
+      logger.error('❌ [NotificationOrchestrator] Erreur démarrage:', error);
       throw error;
     }
   }
@@ -103,7 +104,7 @@ export class NotificationOrchestrator extends EventEmitter {
    */
   async startUserNotifications(userId: string): Promise<void> {
     try {
-      console.log(`🎯 [NotificationOrchestrator] Démarrage notifications: ${userId}`);
+      logger.debug(`🎯 [NotificationOrchestrator] Démarrage notifications: ${userId}`);
 
       // Charger les préférences utilisateur
       const settings = await this.loadUserSettings(userId);
@@ -119,10 +120,10 @@ export class NotificationOrchestrator extends EventEmitter {
         await this.calendarService.startCalendarWatching(userId);
       }
 
-      console.log(`✅ [NotificationOrchestrator] Utilisateur configuré: ${userId}`);
+      logger.debug(`✅ [NotificationOrchestrator] Utilisateur configuré: ${userId}`);
 
     } catch (error) {
-      console.error(`❌ [NotificationOrchestrator] Erreur utilisateur ${userId}:`, error);
+      logger.error(`❌ [NotificationOrchestrator] Erreur utilisateur ${userId}:`, error);
     }
   }
 
@@ -130,7 +131,7 @@ export class NotificationOrchestrator extends EventEmitter {
    * 🔄 VÉRIFICATIONS AVANCÉES PÉRIODIQUES
    */
   private startAdvancedChecks(): void {
-    console.log('🔄 [NotificationOrchestrator] Démarrage vérifications avancées...');
+    logger.debug('🔄 [NotificationOrchestrator] Démarrage vérifications avancées...');
 
     // Vérification toutes les 30 secondes pour les événements critiques
     setInterval(async () => {
@@ -171,7 +172,7 @@ export class NotificationOrchestrator extends EventEmitter {
       await this.checkImminentMeetings();
 
     } catch (error) {
-      console.error('❌ [NotificationOrchestrator] Erreur vérification critique:', error);
+      logger.error('❌ [NotificationOrchestrator] Erreur vérification critique:', error);
     }
   }
 
@@ -193,7 +194,7 @@ export class NotificationOrchestrator extends EventEmitter {
       await this.checkProjectUpdates();
 
     } catch (error) {
-      console.error('❌ [NotificationOrchestrator] Erreur vérification normale:', error);
+      logger.error('❌ [NotificationOrchestrator] Erreur vérification normale:', error);
     }
   }
 
@@ -202,7 +203,7 @@ export class NotificationOrchestrator extends EventEmitter {
    */
   private async performAIAnalysis(): Promise<void> {
     try {
-      console.log('🧠 [NotificationOrchestrator] Analyse IA périodique...');
+      logger.debug('🧠 [NotificationOrchestrator] Analyse IA périodique...');
 
       // Analyser les patterns de notifications
       await this.analyzeNotificationPatterns();
@@ -217,7 +218,7 @@ export class NotificationOrchestrator extends EventEmitter {
       await this.suggestImprovements();
 
     } catch (error) {
-      console.error('❌ [NotificationOrchestrator] Erreur analyse IA:', error);
+      logger.error('❌ [NotificationOrchestrator] Erreur analyse IA:', error);
     }
   }
 
@@ -272,7 +273,7 @@ export class NotificationOrchestrator extends EventEmitter {
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
 
     // TODO: Implémenter selon votre modèle d'appels
-    console.log('📞 [NotificationOrchestrator] Vérification appels manqués...', {
+    logger.debug('📞 [NotificationOrchestrator] Vérification appels manqués...', {
       since: tenMinutesAgo.toISOString()
     });
   }
@@ -282,7 +283,7 @@ export class NotificationOrchestrator extends EventEmitter {
    */
   private async checkVIPEmails(): Promise<void> {
     // TODO: Implémenter détection emails VIP avec IA
-    console.log('⭐ [NotificationOrchestrator] Vérification emails VIP...');
+    logger.debug('⭐ [NotificationOrchestrator] Vérification emails VIP...');
   }
 
   /**
@@ -290,7 +291,7 @@ export class NotificationOrchestrator extends EventEmitter {
    */
   private async checkImminentMeetings(): Promise<void> {
     // TODO: Implémenter vérification rendez-vous via Calendar API
-    console.log('⏰ [NotificationOrchestrator] Vérification rendez-vous imminents...');
+    logger.debug('⏰ [NotificationOrchestrator] Vérification rendez-vous imminents...');
   }
 
   /**
@@ -300,7 +301,7 @@ export class NotificationOrchestrator extends EventEmitter {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
 
     // TODO: Implémenter selon votre modèle de devis
-    console.log('💰 [NotificationOrchestrator] Vérification nouveaux devis...', {
+    logger.debug('💰 [NotificationOrchestrator] Vérification nouveaux devis...', {
       since: oneHourAgo.toISOString()
     });
   }
@@ -310,7 +311,7 @@ export class NotificationOrchestrator extends EventEmitter {
    */
   private async checkNewInvoices(): Promise<void> {
     // TODO: Implémenter selon votre modèle de factures
-    console.log('🧾 [NotificationOrchestrator] Vérification nouvelles factures...');
+    logger.debug('🧾 [NotificationOrchestrator] Vérification nouvelles factures...');
   }
 
   /**
@@ -318,7 +319,7 @@ export class NotificationOrchestrator extends EventEmitter {
    */
   private async checkOverdueTasks(): Promise<void> {
     // TODO: Implémenter selon votre modèle de tâches
-    console.log('⏰ [NotificationOrchestrator] Vérification tâches en retard...');
+    logger.debug('⏰ [NotificationOrchestrator] Vérification tâches en retard...');
   }
 
   /**
@@ -326,7 +327,7 @@ export class NotificationOrchestrator extends EventEmitter {
    */
   private async checkProjectUpdates(): Promise<void> {
     // TODO: Implémenter selon votre modèle de projets
-    console.log('📋 [NotificationOrchestrator] Vérification mises à jour projets...');
+    logger.debug('📋 [NotificationOrchestrator] Vérification mises à jour projets...');
   }
 
   /**
@@ -334,7 +335,7 @@ export class NotificationOrchestrator extends EventEmitter {
    */
   private async analyzeNotificationPatterns(): Promise<void> {
     // TODO: Implémenter analyse IA des patterns
-    console.log('📊 [NotificationOrchestrator] Analyse patterns notifications...');
+    logger.debug('📊 [NotificationOrchestrator] Analyse patterns notifications...');
   }
 
   /**
@@ -342,7 +343,7 @@ export class NotificationOrchestrator extends EventEmitter {
    */
   private async optimizeNotificationTiming(): Promise<void> {
     // TODO: Implémenter optimisation IA des horaires
-    console.log('⏰ [NotificationOrchestrator] Optimisation horaires...');
+    logger.debug('⏰ [NotificationOrchestrator] Optimisation horaires...');
   }
 
   /**
@@ -350,7 +351,7 @@ export class NotificationOrchestrator extends EventEmitter {
    */
   private async detectAnomalies(): Promise<void> {
     // TODO: Implémenter détection d'anomalies avec IA
-    console.log('🔍 [NotificationOrchestrator] Détection anomalies...');
+    logger.debug('🔍 [NotificationOrchestrator] Détection anomalies...');
   }
 
   /**
@@ -358,7 +359,7 @@ export class NotificationOrchestrator extends EventEmitter {
    */
   private async suggestImprovements(): Promise<void> {
     // TODO: Implémenter suggestions IA
-    console.log('💡 [NotificationOrchestrator] Suggestions améliorations...');
+    logger.debug('💡 [NotificationOrchestrator] Suggestions améliorations...');
   }
 
   /**
@@ -377,11 +378,11 @@ export class NotificationOrchestrator extends EventEmitter {
       });
 
       if (deleted.count > 0) {
-        console.log(`🧹 [NotificationOrchestrator] ${deleted.count} notifications nettoyées`);
+        logger.debug(`🧹 [NotificationOrchestrator] ${deleted.count} notifications nettoyées`);
       }
 
     } catch (error) {
-      console.error('❌ [NotificationOrchestrator] Erreur nettoyage:', error);
+      logger.error('❌ [NotificationOrchestrator] Erreur nettoyage:', error);
     }
   }
 
@@ -448,12 +449,12 @@ export class NotificationOrchestrator extends EventEmitter {
    * 🛑 ARRÊTER LE SYSTÈME
    */
   stop(): void {
-    console.log('🛑 [NotificationOrchestrator] Arrêt du système...');
+    logger.debug('🛑 [NotificationOrchestrator] Arrêt du système...');
     
     this.universalService.stop();
     this.isRunning = false;
     
-    console.log('✅ [NotificationOrchestrator] Système arrêté');
+    logger.debug('✅ [NotificationOrchestrator] Système arrêté');
   }
 }
 

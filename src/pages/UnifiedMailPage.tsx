@@ -44,6 +44,7 @@ import { usePostalMailService } from '../hooks/usePostalMailService';
 import { useAuth } from '../auth/useAuth';
 import type { FormattedGmailMessage, GmailMessage, GmailLabel } from '../hooks/useGmailService';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../lib/logger';
 
 
 const { Sider } = Layout;
@@ -402,7 +403,7 @@ const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
       }
       setPageToken(nextToken || '');
     } catch (error) {
-      console.error('Erreur chargement messages:', error);
+      logger.error('Erreur chargement messages:', error);
       msgApi.error('Erreur lors du chargement des messages');
     } finally {
       setIsLoading(false);
@@ -441,7 +442,7 @@ const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
         setMessages(items);
         setPageToken(nextToken || '');
       } catch (error) {
-        console.error('Erreur chargement initial:', error);
+        logger.error('Erreur chargement initial:', error);
       } finally {
         setIsLoading(false);
       }
@@ -494,7 +495,7 @@ const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
         }
       }
     } catch (error) {
-      console.error('Erreur ouverture message:', error);
+      logger.error('Erreur ouverture message:', error);
       msgApi.error('Impossible d\'ouvrir le message');
       setSelectedMessageMeta(null);
     }
@@ -576,7 +577,7 @@ const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
       setComposeBody('');
       setComposeAttachments([]);
     } catch (error) {
-      console.error('Erreur envoi:', error);
+      logger.error('Erreur envoi:', error);
       msgApi.error('Erreur lors de l\'envoi');
     }
   };
@@ -1482,7 +1483,7 @@ document.querySelectorAll('img').forEach(function(img) {
                               const blob = new Blob([arrayBuffer], { type: finalMime });
                               const url = URL.createObjectURL(blob);
 
-                              console.log('[Preview] Extension MIME:', mimeFromExt, '| Header MIME:', rawHeaderMime, '| Final MIME:', finalMime, '| Filename:', realFilename, '| Size:', blob.size);
+                              logger.debug('[Preview] Extension MIME:', mimeFromExt, '| Header MIME:', rawHeaderMime, '| Final MIME:', finalMime, '| Filename:', realFilename, '| Size:', blob.size);
 
                               setPreviewAttachment({
                                 url,
@@ -1492,11 +1493,11 @@ document.querySelectorAll('img').forEach(function(img) {
                                 attachmentId: att.attachmentId,
                               });
                             } else {
-                              console.error('[Preview] Erreur HTTP:', response.status, response.statusText);
+                              logger.error('[Preview] Erreur HTTP:', response.status, response.statusText);
                               msgApi.error(`Erreur ${response.status}: impossible d'ouvrir la pièce jointe`);
                             }
                           } catch (err) {
-                            console.error('Erreur preview:', err);
+                            logger.error('Erreur preview:', err);
                             msgApi.error('Impossible d\'ouvrir la pièce jointe');
                           } finally {
                             setPreviewLoading(false);
@@ -2115,7 +2116,7 @@ document.querySelectorAll('img').forEach(function(img) {
                 alt={previewAttachment.filename}
                 style={{ maxWidth: '100%', maxHeight: '75vh', objectFit: 'contain' }}
                 onError={(e) => {
-                  console.error('[Preview] Image load error for:', previewAttachment.filename);
+                  logger.error('[Preview] Image load error for:', previewAttachment.filename);
                   (e.target as HTMLImageElement).style.display = 'none';
                 }}
               />

@@ -50,6 +50,7 @@ import {
 import NodeTreeSelector, { NodeTreeSelectorValue } from '../TreeBranchLeaf/treebranchleaf-new/components/Parameters/shared/NodeTreeSelector';
 import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Text } = Typography;
 
@@ -182,7 +183,7 @@ const OptionsEditor: React.FC<OptionsEditorProps> = ({ value = [], onChange, for
       handleChange(index, 'imageUrl', data.file?.fileUrl || data.url);
       message.success('Image uploadée !');
     } catch (error) {
-      console.error('Erreur upload:', error);
+      logger.error('Erreur upload:', error);
       message.error('Échec de l\'upload');
     } finally {
       setUploadingIndex(null);
@@ -550,7 +551,7 @@ const QuestionsManagerModal: React.FC<QuestionsManagerModalProps> = ({
       questionForm.setFieldValue('imageUrl', imageUrl);
       message.success('Image uploadée !');
     } catch (error) {
-      console.error('Erreur upload:', error);
+      logger.error('Erreur upload:', error);
       message.error('Échec de l\'upload');
     } finally {
       setImageUploading(false);
@@ -565,7 +566,7 @@ const QuestionsManagerModal: React.FC<QuestionsManagerModalProps> = ({
       const response = await api.get(`/api/website-forms/${websiteForm.id}/questions`);
       setQuestions(response || []);
     } catch (error) {
-      console.error('Erreur chargement questions:', error);
+      logger.error('Erreur chargement questions:', error);
       setQuestions([]);
     } finally {
       setLoading(false);

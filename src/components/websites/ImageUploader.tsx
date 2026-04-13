@@ -3,6 +3,7 @@ import { Upload, message, Modal, Image, Card, Button, Select, Space, Typography,
 import { InboxOutlined, DeleteOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import type { UploadProps, UploadFile } from 'antd';
+import { logger } from '../../lib/logger';
 
 const { Dragger } = Upload;
 const { Title, Text } = Typography;
@@ -55,7 +56,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
       const data = await api.get(url);
       setImages(data.images || []);
     } catch (error) {
-      console.error('Erreur lors du chargement des images:', error);
+      logger.error('Erreur lors du chargement des images:', error);
       message.error('Impossible de charger les images');
     } finally {
       setLoading(false);
@@ -106,7 +107,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
 
         onSuccess?.(data);
       } catch (error: unknown) {
-        console.error('Erreur upload:', error);
+        logger.error('Erreur upload:', error);
         message.error(error.message || 'Échec de l\'upload');
         onError?.(error);
       } finally {
@@ -130,7 +131,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
           message.success('Image supprimée');
           await fetchImages();
         } catch (error) {
-          console.error('Erreur lors de la suppression:', error);
+          logger.error('Erreur lors de la suppression:', error);
           message.error('Impossible de supprimer l\'image');
         }
       },

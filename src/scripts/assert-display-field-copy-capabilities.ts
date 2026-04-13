@@ -10,6 +10,7 @@
  */
 
 import { db } from '../lib/database';
+import { logger } from '../lib/logger';
 
 const prisma = db;
 
@@ -33,17 +34,17 @@ function print(results: AssertResult[]) {
 
   for (const r of results) {
     const prefix = r.ok ? '✅' : '❌';
-    console.log(`${prefix} ${r.label}${r.details ? ` — ${r.details}` : ''}`);
+    logger.debug(`${prefix} ${r.label}${r.details ? ` — ${r.details}` : ''}`);
   }
 
-  console.log(`\n📌 Résumé: ${passed}/${results.length} OK, ${failed} FAIL`);
+  logger.debug(`\n📌 Résumé: ${passed}/${results.length} OK, ${failed} FAIL`);
   if (failed > 0) process.exitCode = 2;
 }
 
 async function main() {
   const [originalNodeId, copyNodeId] = process.argv.slice(2);
   if (!originalNodeId || !copyNodeId) {
-    console.error('Usage: npx tsx src/scripts/assert-display-field-copy-capabilities.ts <originalNodeId> <copyNodeId>');
+    logger.error('Usage: npx tsx src/scripts/assert-display-field-copy-capabilities.ts <originalNodeId> <copyNodeId>');
     process.exit(1);
   }
 
@@ -97,18 +98,18 @@ async function main() {
   ]);
 
   if (!orig) {
-    console.error('❌ Original introuvable en DB:', originalNodeId);
+    logger.error('❌ Original introuvable en DB:', originalNodeId);
     process.exit(2);
   }
   if (!copy) {
-    console.error('❌ Copie introuvable en DB:', copyNodeId);
+    logger.error('❌ Copie introuvable en DB:', copyNodeId);
     process.exit(3);
   }
 
-  console.log('🔎 ASSERT capacités (original vs copie)');
-  console.log('Original:', orig.id, JSON.stringify(orig.label));
-  console.log('Copie   :', copy.id, JSON.stringify(copy.label));
-  console.log('');
+  logger.debug('🔎 ASSERT capacités (original vs copie)');
+  logger.debug('Original:', orig.id, JSON.stringify(orig.label));
+  logger.debug('Copie   :', copy.id, JSON.stringify(copy.label));
+  logger.debug('');
 
   const results: AssertResult[] = [];
 
@@ -234,7 +235,7 @@ async function main() {
 
 main()
   .catch((e) => {
-    console.error('❌ Erreur script:', e);
+    logger.error('❌ Erreur script:', e);
     process.exit(1);
   })
   .finally(async () => {

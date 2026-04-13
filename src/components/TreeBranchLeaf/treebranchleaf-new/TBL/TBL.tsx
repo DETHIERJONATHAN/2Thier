@@ -64,6 +64,7 @@ import { buildMirrorKeys } from './utils/mirrorNormalization';
 import type { TBLLead } from '../../lead-integration/types/lead-types';
 import { useTBLSwipeNavigation } from './hooks/useTBLSwipeNavigation';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../../../lib/logger';
 
 // 🚀 LAZY IMPORTS - Composants chargés uniquement quand nécessaires (modals, panels dev)
 const DocumentsSection = lazy(() => import('../../../Documents/DocumentsSection'));
@@ -289,7 +290,7 @@ const TBL: React.FC<TBLProps> = ({
       try {
         await persistCompletedRevisionIfDirty('new-devis');
       } catch (e) {
-        console.warn('⚠️ [TBL] Persist revision avant Nouveau devis échoué (on continue):', e);
+        logger.warn('⚠️ [TBL] Persist revision avant Nouveau devis échoué (on continue):', e);
       }
 
       if (debounceTimerRef.current) {
@@ -329,7 +330,7 @@ const TBL: React.FC<TBLProps> = ({
         try {
           await api.post(`/api/treebranchleaf/submissions/${draftIdToClear}/reset-data`, {});
         } catch (e) {
-          console.warn('⚠️ [TBL] Impossible de vider le brouillon en DB:', e);
+          logger.warn('⚠️ [TBL] Impossible de vider le brouillon en DB:', e);
         }
       }
 
@@ -338,7 +339,7 @@ const TBL: React.FC<TBLProps> = ({
       (rawNodes as Array<{ id: string; metadata?: Record<string, unknown> }>).forEach((n) => {
         if ((n.metadata as Record<string, unknown>)?.isProtected) protectedNodeIds.add(n.id);
       });
-      console.log('🔒 [handleNewDevis] Nœuds protégés détectés:', Array.from(protectedNodeIds));
+      logger.debug('🔒 [handleNewDevis] Nœuds protégés détectés:', Array.from(protectedNodeIds));
 
       setFormData((prev) => {
         const kept: TBLFormData = {};
@@ -347,7 +348,7 @@ const TBL: React.FC<TBLProps> = ({
           if (k.startsWith('__')) kept[k] = prev[k];
           else if (protectedNodeIds.has(k)) {
             kept[k] = prev[k];
-            console.log(`🔒 [handleNewDevis] Valeur protégée préservée: ${k} = ${prev[k]}`);
+            logger.debug(`🔒 [handleNewDevis] Valeur protégée préservée: ${k} = ${prev[k]}`);
           }
         });
         if (isLeadDraftNow && leadId) {
@@ -409,7 +410,7 @@ const TBL: React.FC<TBLProps> = ({
       lastQueuedSignatureRef.current = null;
       message.success('Brouillon réinitialisé');
     } catch (error) {
-      console.error('❌ [TBL] Erreur Nouveau devis:', error);
+      logger.error('❌ [TBL] Erreur Nouveau devis:', error);
       message.error('Erreur lors de la réinitialisation');
     } finally {
       setTimeout(() => {
@@ -495,7 +496,7 @@ const TBL: React.FC<TBLProps> = ({
           // 🔥 FIX 01/02/2026: Forcer recalcul des DISPLAY fields pour le brouillon existant
           // Quand on sélectionne un lead avec un brouillon existant, les DISPLAY fields
           // (comme GRD qui dépend du code postal du lead) doivent être recalculés
-          console.log(`🔄 [TBL] Brouillon existant ${leadDraftId} - forcer recalcul DISPLAY fields`);
+          logger.debug(`🔄 [TBL] Brouillon existant ${leadDraftId} - forcer recalcul DISPLAY fields`);
           const refreshed = await api.post('/api/tbl/submissions/create-and-evaluate', {
             submissionId: leadDraftId,
             clientId: selectedLead.id,
@@ -556,7 +557,7 @@ const TBL: React.FC<TBLProps> = ({
             return { ...kept, ...restoredData, __leadId: selectedLead.id };
           });
         } catch (e) {
-          console.warn('⚠️ [TBL] Impossible de charger le brouillon du lead:', e);
+          logger.warn('⚠️ [TBL] Impossible de charger le brouillon du lead:', e);
         }
       }
 
@@ -564,7 +565,7 @@ const TBL: React.FC<TBLProps> = ({
         try {
           await api.post(`/api/treebranchleaf/submissions/${oldGlobalDraftId}/reset-data`, {});
         } catch (e) {
-          console.warn('⚠️ [TBL] Impossible de vider le brouillon global après transfert:', e);
+          logger.warn('⚠️ [TBL] Impossible de vider le brouillon global après transfert:', e);
         }
       }
 
@@ -574,7 +575,7 @@ const TBL: React.FC<TBLProps> = ({
       setLeadSelectorVisible(false);
       message.success(`Brouillon chargé pour "${selectedLead.firstName} ${selectedLead.lastName}"`);
     } catch (e) {
-      console.error('❌ [TBL] Erreur sélection lead:', e);
+      logger.error('❌ [TBL] Erreur sélection lead:', e);
       message.error('Erreur lors de la sélection du lead');
     } finally {
       setTimeout(() => {
@@ -612,8 +613,8 @@ const TBL: React.FC<TBLProps> = ({
       const runDiagnostic = () => {
         const data = window.TBL_FORM_DATA || {};
         const mirrorKeys = Object.keys(data).filter(k => k.startsWith('__mirror_data_'));
-        // console.log('🔧 [TBL] Diagnostic - FormData keys:', Object.keys(data).length);
-        // console.log('🪞 [TBL] Diagnostic - Mirror keys:', mirrorKeys.length);
+        // logger.debug('🔧 [TBL] Diagnostic - FormData keys:', Object.keys(data).length);
+        // logger.debug('🪞 [TBL] Diagnostic - Mirror keys:', mirrorKeys.length);
         return { data, mirrorKeys };
       };
       window.runTBLDiagnostic = runDiagnostic;
@@ -645,7 +646,7 @@ const TBL: React.FC<TBLProps> = ({
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
       const timer = setTimeout(() => {
-        // console.log('🚀 [TBL AUTO] ANALYSE AUTOMATIQUE DES MIRRORS');
+        // logger.debug('🚀 [TBL AUTO] ANALYSE AUTOMATIQUE DES MIRRORS');
         // ... code de debug ...
       }, 2000);
       
@@ -878,7 +879,7 @@ const TBL: React.FC<TBLProps> = ({
           : 'Tous les champs ont été vérifiés et validés. Le chantier peut continuer.',
       });
     } catch (err: unknown) {
-      console.error('[TBL Review] Erreur analyse:', err);
+      logger.error('[TBL Review] Erreur analyse:', err);
       message.error(err?.message || 'Erreur lors de l\'analyse');
     } finally {
       setSubmittingReview(false);
@@ -897,7 +898,7 @@ const TBL: React.FC<TBLProps> = ({
     const snapshot = { ...formData };
     originalFormDataRef.current = snapshot;
     setOriginalFormData(snapshot);
-    console.log(`📸 [TBL Review] Snapshot valeurs originales capturé: ${meaningfulKeys.length} champs`);
+    logger.debug(`📸 [TBL Review] Snapshot valeurs originales capturé: ${meaningfulKeys.length} champs`);
   }, [reviewMode, formData]);
 
   // 🔍 REVIEW MODE: Charger si le chantier a des sous-traitants
@@ -912,7 +913,7 @@ const TBL: React.FC<TBLProps> = ({
           setReviewSubcontractorNames((data.subcontractors || []).map((s: Record<string, unknown>) => s.company || s.name));
         }
       } catch (err) {
-        console.warn('[TBL Review] Impossible de vérifier sous-traitants:', err);
+        logger.warn('[TBL Review] Impossible de vérifier sous-traitants:', err);
       }
     })();
   }, [reviewMode, reviewEventId, api]);
@@ -922,7 +923,7 @@ const TBL: React.FC<TBLProps> = ({
     if (!rectificationMode || !reviewEventId) return;
     (async () => {
       try {
-        console.log('🔶 [TBL Rectification] Chargement modifications technicien pour event:', reviewEventId);
+        logger.debug('🔶 [TBL Rectification] Chargement modifications technicien pour event:', reviewEventId);
         const res = await api.get(`/api/chantier-workflow/events/${reviewEventId}/review-fields`) as unknown;
         const data = res?.data || res;
         const reviews: unknown[] = data?.reviews || [];
@@ -948,9 +949,9 @@ const TBL: React.FC<TBLProps> = ({
         }
         setRectificationFieldMap(fieldMap);
 
-        console.log(`🔶 [TBL Rectification] ${fields.length} champs modifiés par technicien chargés`);
+        logger.debug(`🔶 [TBL Rectification] ${fields.length} champs modifiés par technicien chargés`);
       } catch (err) {
-        console.error('[TBL Rectification] Erreur chargement review-fields:', err);
+        logger.error('[TBL Rectification] Erreur chargement review-fields:', err);
       }
     })();
   }, [rectificationMode, reviewEventId, api]);
@@ -984,7 +985,7 @@ const TBL: React.FC<TBLProps> = ({
     
     if (Object.keys(techUpdates).length > 0) {
       setFormData(prev => ({ ...prev, ...techUpdates }));
-      console.log(`🔶 [TBL Rectification] ${Object.keys(techUpdates).length} valeurs technicien injectées dans formData`);
+      logger.debug(`🔶 [TBL Rectification] ${Object.keys(techUpdates).length} valeurs technicien injectées dans formData`);
       
       // Mettre à jour TBL_FORM_DATA global aussi
       if ((window as any).TBL_FORM_DATA) {
@@ -998,13 +999,13 @@ const TBL: React.FC<TBLProps> = ({
           const updatedFormData = { ...formData, ...techUpdates };
           const changedIds = Object.keys(techUpdates).join(',');
           immediateEvaluateRef.current(updatedFormData, changedIds);
-          console.log(`🔶 [TBL Rectification] Recalcul formules déclenché pour ${Object.keys(techUpdates).length} champs`);
+          logger.debug(`🔶 [TBL Rectification] Recalcul formules déclenché pour ${Object.keys(techUpdates).length} champs`);
         }
       }, 500);
     }
     
     rectificationInjectedRef.current = true;
-    console.log(`📸 [TBL Rectification] Snapshot valeurs originales capturé + technicien injecté pour ${Object.keys(snapshot).length} champs`);
+    logger.debug(`📸 [TBL Rectification] Snapshot valeurs originales capturé + technicien injecté pour ${Object.keys(snapshot).length} champs`);
   }, [rectificationMode, rectificationFieldMap, rectificationFields, formData]);
 
   // 🔶 RECTIFICATION MODE: Soumettre les corrections commerciales
@@ -1062,7 +1063,7 @@ const TBL: React.FC<TBLProps> = ({
         });
       }
     } catch (err) {
-      console.error('[TBL Rectification] Erreur soumission corrections:', err);
+      logger.error('[TBL Rectification] Erreur soumission corrections:', err);
       Modal.error({
         title: 'Erreur',
         content: 'Impossible d\'enregistrer les corrections. Veuillez réessayer.',
@@ -1175,7 +1176,7 @@ const TBL: React.FC<TBLProps> = ({
       setPendingRevisionName(next);
       setDevisName(next);
     } catch (e) {
-      if (isVerbose()) console.warn('⚠️ [TBL] Impossible de préparer le nom de révision:', e);
+      if (isVerbose()) logger.warn('⚠️ [TBL] Impossible de préparer le nom de révision:', e);
     }
   }, [generateNextRevisionName, pendingRevisionName]);
 
@@ -1230,7 +1231,7 @@ const TBL: React.FC<TBLProps> = ({
         lastSavedSignatureRef.current = sig;
       } catch { /* noop */ }
     } catch (e) {
-      console.warn('⚠️ [TBL] Échec création révision -1 en base:', e);
+      logger.warn('⚠️ [TBL] Échec création révision -1 en base:', e);
     } finally {
       revisionCreateInFlightRef.current = false;
     }
@@ -1240,14 +1241,14 @@ const TBL: React.FC<TBLProps> = ({
     if (!api || !effectiveTreeId) return;
     if (!isDevisSaved || !isCompletedDirty) return;
     if (!leadId) {
-      console.warn('⚠️ [TBL] Revision impossible (leadId manquant)');
+      logger.warn('⚠️ [TBL] Revision impossible (leadId manquant)');
       return;
     }
 
     const root = revisionRootName || stripRevisionSuffix(originalDevisName || devisName || 'Devis');
     const nextName = pendingRevisionName || await generateNextRevisionName(root, leadId);
 
-    console.log(`💾 [TBL] Versioning: création '${nextName}' (${reason})`);
+    logger.debug(`💾 [TBL] Versioning: création '${nextName}' (${reason})`);
     const resp = await api.post('/api/tbl/submissions/create-and-evaluate', {
       treeId: effectiveTreeId,
       clientId: leadId,
@@ -1340,11 +1341,11 @@ const TBL: React.FC<TBLProps> = ({
   // 🆕 Initialiser ou charger le devis par défaut au montage (si pas de lead)
   useEffect(() => {
     const initDefaultDraft = async () => {
-      console.log('🔍 [TBL] initDefaultDraft check:', { leadId, api: !!api, effectiveTreeId, defaultDraftId, isGlobalDraftMode, userId: user?.id });
+      logger.debug('🔍 [TBL] initDefaultDraft check:', { leadId, api: !!api, effectiveTreeId, defaultDraftId, isGlobalDraftMode, userId: user?.id });
       
       // Ne pas initialiser si on a un lead ou si pas d'API
       if (!api || !effectiveTreeId || !defaultDraftId || !isGlobalDraftMode) {
-        console.log('⏭️ [TBL] initDefaultDraft skip - conditions not met');
+        logger.debug('⏭️ [TBL] initDefaultDraft skip - conditions not met');
         setIsInitializingDraft(false);
         return;
       }
@@ -1353,44 +1354,44 @@ const TBL: React.FC<TBLProps> = ({
         setIsDefaultDraft(true);
       }
       
-      console.log('📋 [TBL] Mode simulation - Recherche/création du devis par défaut');
+      logger.debug('📋 [TBL] Mode simulation - Recherche/création du devis par défaut');
       
       try {
         // Essayer de récupérer le draft par défaut existant
         const url = `/api/treebranchleaf/submissions?treeId=${effectiveTreeId}&status=default-draft&userId=${user?.id}`;
-        console.log('🔎 [TBL] Fetching drafts:', url);
+        logger.debug('🔎 [TBL] Fetching drafts:', url);
         const existingDrafts = await api.get(url);
-        console.log('📦 [TBL] existingDrafts response:', existingDrafts);
+        logger.debug('📦 [TBL] existingDrafts response:', existingDrafts);
         
         const draftsArray = Array.isArray(existingDrafts) ? existingDrafts : existingDrafts?.data || [];
-        console.log('📦 [TBL] draftsArray:', draftsArray.length, 'items');
+        logger.debug('📦 [TBL] draftsArray:', draftsArray.length, 'items');
         
         const defaultDraft = draftsArray.find((d: { id?: string, status?: string }) => d.status === 'default-draft');
-        console.log('🎯 [TBL] defaultDraft found:', defaultDraft?.id);
+        logger.debug('🎯 [TBL] defaultDraft found:', defaultDraft?.id);
         
         if (defaultDraft && defaultDraft.id) {
-          console.log('✅ [TBL] Devis par défaut trouvé:', defaultDraft.id);
+          logger.debug('✅ [TBL] Devis par défaut trouvé:', defaultDraft.id);
           setSubmissionId(defaultDraft.id);
           setDevisName('Brouillon');
           
           // Charger les données du draft depuis TreeBranchLeafSubmissionData
           try {
             const submissionDataResponse = await api.get(`/api/treebranchleaf/submissions/${defaultDraft.id}/fields`);
-            console.log('📥 [TBL] submissionDataResponse:', submissionDataResponse);
+            logger.debug('📥 [TBL] submissionDataResponse:', submissionDataResponse);
             const fieldsMap = submissionDataResponse?.fields || {};
-            console.log('📥 [TBL] fieldsMap keys:', Object.keys(fieldsMap));
+            logger.debug('📥 [TBL] fieldsMap keys:', Object.keys(fieldsMap));
 
             // ⚠️ Sécurité: le brouillon GLOBAL (default-draft) ne doit jamais être associé à un lead.
             // Si on détecte un leadId, c'est un reliquat d'un ancien comportement -> on détache côté DB.
             if (submissionDataResponse?.leadId) {
-              console.warn('⚠️ [TBL] default-draft était associé à un lead; détachement automatique', {
+              logger.warn('⚠️ [TBL] default-draft était associé à un lead; détachement automatique', {
                 draftId: defaultDraft.id,
                 leadId: submissionDataResponse.leadId
               });
               try {
                 await api.patch(`/api/treebranchleaf/submissions/${defaultDraft.id}`, { clientId: null });
               } catch (e) {
-                console.warn('⚠️ [TBL] Impossible de détacher le default-draft du lead:', e);
+                logger.warn('⚠️ [TBL] Impossible de détacher le default-draft du lead:', e);
               }
             }
             
@@ -1399,7 +1400,7 @@ const TBL: React.FC<TBLProps> = ({
               
               Object.entries(fieldsMap).forEach(([nodeId, fieldData]: [string, unknown]) => {
                 const field = fieldData as { value?: unknown; rawValue?: string; calculatedBy?: string };
-                console.log(`📥 [TBL] Field ${nodeId}:`, { calculatedBy: field.calculatedBy, rawValue: field.rawValue, value: field.value });
+                logger.debug(`📥 [TBL] Field ${nodeId}:`, { calculatedBy: field.calculatedBy, rawValue: field.rawValue, value: field.value });
                 // Ne restaurer que les valeurs entrées par l'utilisateur.
                 // Selon les versions, la saisie peut être taggée 'neutral' (legacy) ou 'field'/'fixed'.
                 const src = typeof field.calculatedBy === 'string' ? field.calculatedBy.toLowerCase() : null;
@@ -1409,21 +1410,21 @@ const TBL: React.FC<TBLProps> = ({
                 }
               });
               
-              console.log('📥 [TBL] Données à restaurer:', restoredData);
+              logger.debug('📥 [TBL] Données à restaurer:', restoredData);
               if (Object.keys(restoredData).length > 0) {
-                console.log('📥 [TBL] Données restaurées:', Object.keys(restoredData).length, 'champs');
+                logger.debug('📥 [TBL] Données restaurées:', Object.keys(restoredData).length, 'champs');
                 setFormData(prev => ({ ...prev, ...restoredData }));
               } else {
-                console.warn('⚠️ [TBL] Aucune donnée neutral trouvée dans les champs');
+                logger.warn('⚠️ [TBL] Aucune donnée neutral trouvée dans les champs');
               }
             } else {
-              console.warn('⚠️ [TBL] fieldsMap vide');
+              logger.warn('⚠️ [TBL] fieldsMap vide');
             }
           } catch (loadError) {
-            console.warn('⚠️ [TBL] Impossible de charger les données du draft:', loadError);
+            logger.warn('⚠️ [TBL] Impossible de charger les données du draft:', loadError);
           }
         } else {
-          console.log('📝 [TBL] Création du devis par défaut...');
+          logger.debug('📝 [TBL] Création du devis par défaut...');
           // Créer un nouveau draft par défaut
           const response = await api.post('/api/tbl/submissions/create-and-evaluate', {
             treeId: effectiveTreeId,
@@ -1435,11 +1436,11 @@ const TBL: React.FC<TBLProps> = ({
           if (response?.submission?.id) {
             setSubmissionId(response.submission.id);
             setDevisName('Brouillon');
-            console.log('✅ [TBL] Devis par défaut créé:', response.submission.id);
+            logger.debug('✅ [TBL] Devis par défaut créé:', response.submission.id);
           }
         }
       } catch (error) {
-        console.warn('⚠️ [TBL] Impossible d\'initialiser le devis par défaut:', error);
+        logger.warn('⚠️ [TBL] Impossible d\'initialiser le devis par défaut:', error);
         // Mode fallback: on continue sans draft persistant
         setDevisName('Brouillon');
       } finally {
@@ -1477,14 +1478,14 @@ const TBL: React.FC<TBLProps> = ({
             });
           }
         } catch (e) {
-          console.warn('⚠️ [TBL] Impossible de charger le lead (header):', e);
+          logger.warn('⚠️ [TBL] Impossible de charger le lead (header):', e);
         }
 
         // 🚀 FIX PERF-CHANTIER: Si un devisId est demandé via l'URL (?devisId=xxx),
         // ne PAS créer/chercher de brouillon ici — handleSelectDevis s'en charge.
         // Cela évite un appel create-and-evaluate INUTILE (~6s gaspillées).
         if (requestedDevisId) {
-          console.log('🚀 [TBL] requestedDevisId détecté → skip draft creation, handleSelectDevis prendra le relais');
+          logger.debug('🚀 [TBL] requestedDevisId détecté → skip draft creation, handleSelectDevis prendra le relais');
           setLeadId(effectiveLeadId);
           setIsDefaultDraft(false);
           // 🚀 FIX PERF-CHANTIER: Pré-initialiser lastClientIdRef pour éviter
@@ -1501,7 +1502,7 @@ const TBL: React.FC<TBLProps> = ({
           const draftsArray = Array.isArray(existing) ? existing : (existing as unknown)?.data || [];
           leadDraftId = (draftsArray as Array<{ id?: string }>)[0]?.id || null;
         } catch (e) {
-          console.warn('⚠️ [TBL] Impossible de lister les brouillons du lead:', e);
+          logger.warn('⚠️ [TBL] Impossible de lister les brouillons du lead:', e);
         }
 
         if (!leadDraftId) {
@@ -1551,7 +1552,7 @@ const TBL: React.FC<TBLProps> = ({
               return { ...kept, ...restoredData, __leadId: effectiveLeadId };
             });
           } catch (e) {
-            console.warn('⚠️ [TBL] Impossible de restaurer le brouillon du lead:', e);
+            logger.warn('⚠️ [TBL] Impossible de restaurer le brouillon du lead:', e);
           }
         }
 
@@ -1594,7 +1595,7 @@ const TBL: React.FC<TBLProps> = ({
           });
           
           if (syncCount > 0) {
-            // console.log(`✅ [SYNC] ${syncCount} mirrors synchronisés vers FormData`);
+            // logger.debug(`✅ [SYNC] ${syncCount} mirrors synchronisés vers FormData`);
           }
           
           return next;
@@ -1782,7 +1783,7 @@ const TBL: React.FC<TBLProps> = ({
                   : null;
               if (displayVal != null) {
                 calculatedValuesMap[item.nodeId] = displayVal;
-                console.log(`💡 [broadcastCalculatedRefresh] FIX BROADCAST-NULL: ${item.nodeId} → opResult inline: ${displayVal}`);
+                logger.debug(`💡 [broadcastCalculatedRefresh] FIX BROADCAST-NULL: ${item.nodeId} → opResult inline: ${displayVal}`);
               } else {
                 // 🚀 FIX BROADCAST-COMPLET: Même sans displayVal, marquer le nodeId comme présent
                 // pour empêcher le safety GET différé (la valeur est confirmée null/∅)
@@ -1806,7 +1807,7 @@ const TBL: React.FC<TBLProps> = ({
                 calculatedValuesMap[nodeId] = value;
               }
             }
-            if (isVerbose()) console.log(`🔗 [broadcastCalculatedRefresh] Fusionné ${Object.keys(accumulated).length} valeurs accumulées (broadcasts précédents sautés)`);
+            if (isVerbose()) logger.debug(`🔗 [broadcastCalculatedRefresh] Fusionné ${Object.keys(accumulated).length} valeurs accumulées (broadcasts précédents sautés)`);
             accumulatedDisplayValuesRef.current = {}; // Vider les accumulés
           }
           
@@ -1838,7 +1839,7 @@ const TBL: React.FC<TBLProps> = ({
       // les champs qui ont reçu une valeur via broadcast contre les GET obsolètes
       unblockGetRequests();
     } catch (err) {
-      console.warn('⚠️ [TBL][AUTOSAVE] Dispatch tbl-force-retransform échoué', err);
+      logger.warn('⚠️ [TBL][AUTOSAVE] Dispatch tbl-force-retransform échoué', err);
       // Débloquer aussi en cas d'erreur pour éviter un blocage permanent
       unblockGetRequests();
     }
@@ -1855,7 +1856,7 @@ const TBL: React.FC<TBLProps> = ({
       //   formData
       // });
     } catch (e) {
-      if (isVerbose()) console.warn('⚠️ [TBL][PREVIEW] Échec preview-evaluate', e);
+      if (isVerbose()) logger.warn('⚠️ [TBL][PREVIEW] Échec preview-evaluate', e);
     }
   }, [api, tree]);
 
@@ -1913,7 +1914,7 @@ const TBL: React.FC<TBLProps> = ({
       const sig = computeSignature(formData);
       // Anti-doublons: si déjà envoyé/sauvé, on ne renvoie pas
       if (lastSavedSignatureRef.current === sig || lastQueuedSignatureRef.current === sig) {
-        if (isVerbose()) // console.log('[TBL][AUTOSAVE] No-op (signature identique)');
+        if (isVerbose()) // logger.debug('[TBL][AUTOSAVE] No-op (signature identique)');
         return;
       }
       lastQueuedSignatureRef.current = sig;
@@ -1931,7 +1932,7 @@ const TBL: React.FC<TBLProps> = ({
         if (forceOpenAfterNewDevisRef.current && isUserChangeDraft) {
           draftEvaluationMode = 'open';
           forceOpenAfterNewDevisRef.current = false;
-          console.log(`🔄 [TBL] Mode forcé à 'open' pour draft car nouveau devis (première évaluation complète)`);
+          logger.debug(`🔄 [TBL] Mode forcé à 'open' pour draft car nouveau devis (première évaluation complète)`);
         }
 
         // ✅ Brouillon global (default-draft): persistant sans lead.
@@ -2093,7 +2094,7 @@ const TBL: React.FC<TBLProps> = ({
         // 🔥 FIX 01/02/2026: Forcer mode='open' si le clientId (leadId) a changé
         const clientIdJustChanged = effectiveClientId !== lastClientIdRef.current && effectiveClientId !== null;
         if (clientIdJustChanged) {
-          console.log(`🔄 [TBL] ClientId changé: ${lastClientIdRef.current} → ${effectiveClientId}`);
+          logger.debug(`🔄 [TBL] ClientId changé: ${lastClientIdRef.current} → ${effectiveClientId}`);
           lastClientIdRef.current = effectiveClientId;
         }
         
@@ -2102,14 +2103,14 @@ const TBL: React.FC<TBLProps> = ({
         let effectiveMode: 'open' | 'change' | 'autosave' = isUserChange ? 'change' : 'autosave';
         if (clientIdJustChanged) {
           effectiveMode = 'open';
-          console.log(`🔄 [TBL] Mode forcé à 'open' car clientId a changé`);
+          logger.debug(`🔄 [TBL] Mode forcé à 'open' car clientId a changé`);
         }
         // 🔥 FIX DISPLAY-ZERO: Après handleNewDevis, la première évaluation doit être 'open'
         // pour recalculer TOUS les display fields (pas seulement ceux affectés par un seul champ)
         if (forceOpenAfterNewDevisRef.current && isUserChange) {
           effectiveMode = 'open';
           forceOpenAfterNewDevisRef.current = false;
-          console.log(`🔄 [TBL] Mode forcé à 'open' car nouveau devis (première évaluation complète)`);
+          logger.debug(`🔄 [TBL] Mode forcé à 'open' car nouveau devis (première évaluation complète)`);
         }
         
         const evaluationResponse = await api.post('/api/tbl/submissions/create-and-evaluate', {
@@ -2198,7 +2199,7 @@ const TBL: React.FC<TBLProps> = ({
       }
     } catch (e) {
       // Discret: pas de toast pour éviter le spam, logs console seulement
-      console.warn('⚠️ [TBL][AUTOSAVE] Échec autosave', e);
+      logger.warn('⚠️ [TBL][AUTOSAVE] Échec autosave', e);
       // 🎯 FIX: Débloquer les GET en cas d'erreur
       unblockGetRequests();
     } finally {
@@ -2304,7 +2305,7 @@ const TBL: React.FC<TBLProps> = ({
         detail: { reason: 'preview-evaluate-error' } 
       }));
       
-      if (isVerbose()) console.warn('⚠️ [TBL][PREVIEW] Échec preview-evaluate live', err);
+      if (isVerbose()) logger.warn('⚠️ [TBL][PREVIEW] Échec preview-evaluate live', err);
     }
   }, [api, tree?.id, normalizePayload, computeSignature, buildPreviewPayload, submissionId, leadId, broadcastCalculatedRefresh]);
 
@@ -2353,19 +2354,19 @@ const TBL: React.FC<TBLProps> = ({
   useEffect(() => {
     if (typeof window !== 'undefined') {
       window.TBL_FORCE_REFRESH = () => {
-        console.log('🔄 [TBL] Force refresh déclenché depuis Parameters');
-        console.log('🔄 [TBL] useFixed:', useFixed);
-        console.log('🔄 [TBL] newData.refetch:', typeof newData.refetch);
-        console.log('🔄 [TBL] oldData.refetch:', typeof oldData.refetch);
+        logger.debug('🔄 [TBL] Force refresh déclenché depuis Parameters');
+        logger.debug('🔄 [TBL] useFixed:', useFixed);
+        logger.debug('🔄 [TBL] newData.refetch:', typeof newData.refetch);
+        logger.debug('🔄 [TBL] oldData.refetch:', typeof oldData.refetch);
         
         if (useFixed && newData.refetch) {
-          console.log('🔄 [TBL] Appel de newData.refetch()');
+          logger.debug('🔄 [TBL] Appel de newData.refetch()');
           newData.refetch();
         } else if (!useFixed && oldData.refetch) {
-          console.log('🔄 [TBL] Appel de oldData.refetch()');
+          logger.debug('🔄 [TBL] Appel de oldData.refetch()');
           oldData.refetch();
         } else {
-          console.warn('⚠️ [TBL] Aucune fonction refetch disponible !');
+          logger.warn('⚠️ [TBL] Aucune fonction refetch disponible !');
         }
       };
       // 🔎 Vérification rapide des champs conditionnels injectés par instance (original vs copies)
@@ -2385,20 +2386,20 @@ const TBL: React.FC<TBLProps> = ({
             grouped[key].fields.push({ fieldId: it.fieldId, label: it.label });
           }
           console.group('🧪 TBL VERIFY - Champs conditionnels injectés par parent');
-          console.log('Total champs conditionnels visibles:', items.length);
+          logger.debug('Total champs conditionnels visibles:', items.length);
           const parents = new Set(items.map(i => i.parentFieldId));
-          console.log('Parents distincts (instances):', Array.from(parents));
+          logger.debug('Parents distincts (instances):', Array.from(parents));
           Object.entries(grouped).forEach(([key, group]) => {
             const [parentFieldId] = key.split('::');
             console.group(`Parent ${parentFieldId} (option="${group.option}")`);
-            group.fields.forEach(f => console.log(`- ${f.label} [${f.fieldId}]`));
+            group.fields.forEach(f => logger.debug(`- ${f.label} [${f.fieldId}]`));
             console.groupEnd();
           });
           console.groupEnd();
           try { message.success(`Vérification: ${items.length} champs conditionnels, ${parents.size} parents distincts.`); } catch {/* noop */}
           return { count: items.length, parents: Array.from(parents), details: grouped };
         } catch (e) {
-          console.error('❌ TBL VERIFY a échoué:', e);
+          logger.error('❌ TBL VERIFY a échoué:', e);
           try { message.error('Vérification échouée (voir console)'); } catch {/* noop */}
           return null;
         }
@@ -2409,9 +2410,9 @@ const TBL: React.FC<TBLProps> = ({
         (window as any).TBL_PRINT_NODE_METADATA = (nodeId?: string) => {
           try {
             const match = (rawNodes || []).find(n => n.id === nodeId);
-            console.log('🔎 [TBL] node metadata for', nodeId, match?.metadata || match);
+            logger.debug('🔎 [TBL] node metadata for', nodeId, match?.metadata || match);
             return match?.metadata || match;
-          } catch (e) { console.error('[TBL] TBL_PRINT_NODE_METADATA failed', e); }
+          } catch (e) { logger.error('[TBL] TBL_PRINT_NODE_METADATA failed', e); }
           return null;
         };
 
@@ -2420,9 +2421,9 @@ const TBL: React.FC<TBLProps> = ({
             const sSet = (useFixed ? (newData.sectionsByTab || {}) : (oldData.sectionsByTab || {}));
             const sectionsList = Object.values(sSet).flat();
             const found = sectionsList.find((s: Record<string, unknown>) => s.id === sectionId);
-            console.log('🔎 [TBL] section metadata for', sectionId, found?.metadata || found);
+            logger.debug('🔎 [TBL] section metadata for', sectionId, found?.metadata || found);
             return found?.metadata || found;
-          } catch (e) { console.error('[TBL] TBL_PRINT_SECTION_METADATA failed', e); }
+          } catch (e) { logger.error('[TBL] TBL_PRINT_SECTION_METADATA failed', e); }
           return null;
         };
       }
@@ -2470,7 +2471,7 @@ const TBL: React.FC<TBLProps> = ({
       
       return uniqueName;
     } catch (error) {
-      console.error('❌ [TBL] Erreur lors de la génération du nom unique:', error);
+      logger.error('❌ [TBL] Erreur lors de la génération du nom unique:', error);
       return baseName;
     }
   }, [api]);
@@ -2512,7 +2513,7 @@ const TBL: React.FC<TBLProps> = ({
     
     try {
       setIsSavingDevis(true);
-      console.log('💾 [TBL] Enregistrement du devis - Conversion default-draft → vrai devis');
+      logger.debug('💾 [TBL] Enregistrement du devis - Conversion default-draft → vrai devis');
       message.loading('Enregistrement en cours...', 1);
       
       // Générer le nom unique basé sur le nom choisi par l'utilisateur
@@ -2539,7 +2540,7 @@ const TBL: React.FC<TBLProps> = ({
         // 🔥 FIX 30/01/2026: Marquer que le submissionId vient de changer
         // Les prochains appels dans les 3 secondes utiliseront mode='open'
         submissionIdJustChangedUntilRef.current = Date.now() + 3000;
-        console.log(`🔄 [TBL] submissionId changé → forcer mode='open' pendant 3s`);
+        logger.debug(`🔄 [TBL] submissionId changé → forcer mode='open' pendant 3s`);
         
         // Pointer vers le nouveau devis (les données restent à l'écran)
         setSubmissionId(newSubmissionId);
@@ -2566,24 +2567,24 @@ const TBL: React.FC<TBLProps> = ({
         // ⚠️ Important: si le backend a créé le devis avec le même ID (cas rare), ne surtout pas le vider.
         if (oldDraftIdToClear && api && oldDraftIdToClear !== newSubmissionId) {
           try {
-            console.log('🔄 [TBL] Vidage du brouillon courant:', oldDraftIdToClear);
+            logger.debug('🔄 [TBL] Vidage du brouillon courant:', oldDraftIdToClear);
             // Utiliser POST reset-data au lieu de PUT pour vider proprement
             await api.post(`/api/treebranchleaf/submissions/${oldDraftIdToClear}/reset-data`, {});
-            console.log('✅ [TBL] Brouillon vidé (prêt pour le prochain devis)');
+            logger.debug('✅ [TBL] Brouillon vidé (prêt pour le prochain devis)');
           } catch (error) {
-            console.warn('⚠️ [TBL] Impossible de vider le brouillon:', error);
+            logger.warn('⚠️ [TBL] Impossible de vider le brouillon:', error);
             // Ce n'est pas critique, on continue
           }
         }
         
         message.success(`Devis "${finalName}" enregistré avec succès !`);
-        console.log('✅ [TBL] Devis enregistré:', newSubmissionId);
+        logger.debug('✅ [TBL] Devis enregistré:', newSubmissionId);
         setSaveDevisModalVisible(false);
       } else {
         message.error('Erreur lors de l\'enregistrement');
       }
     } catch (error) {
-      console.error('❌ [TBL] Erreur enregistrement:', error);
+      logger.error('❌ [TBL] Erreur enregistrement:', error);
       message.error('Erreur lors de l\'enregistrement du devis');
     } finally {
       setIsSavingDevis(false);
@@ -2595,7 +2596,7 @@ const TBL: React.FC<TBLProps> = ({
     if (!originalDevisName || !leadId || !api || !effectiveTreeId) return null;
     
     try {
-      console.log('📋 [TBL] Copie → Brouillon (default-draft):', originalDevisName);
+      logger.debug('📋 [TBL] Copie → Brouillon (default-draft):', originalDevisName);
 
       // 1) Récupérer/créer le default-draft
       const currentUserId = user?.id;
@@ -2621,7 +2622,7 @@ const TBL: React.FC<TBLProps> = ({
       try {
         await api.patch(`/api/treebranchleaf/submissions/${defaultDraft.id}`, { clientId: leadId });
       } catch (e) {
-        console.warn('⚠️ [TBL] Impossible d\'associer le lead au brouillon:', e);
+        logger.warn('⚠️ [TBL] Impossible d\'associer le lead au brouillon:', e);
       }
 
       // 3) Persister le contenu dans le brouillon (pour reload)
@@ -2650,10 +2651,10 @@ const TBL: React.FC<TBLProps> = ({
       } catch {/* noop */}
 
       message.info('Copie chargée dans le brouillon');
-      console.log('✅ [TBL] Copie appliquée au brouillon:', defaultDraft.id);
+      logger.debug('✅ [TBL] Copie appliquée au brouillon:', defaultDraft.id);
       return defaultDraft.id;
     } catch (error) {
-      console.error('❌ [TBL] Erreur création copie:', error);
+      logger.error('❌ [TBL] Erreur création copie:', error);
       message.error('Erreur lors de la création de la copie');
       return null;
     }
@@ -2674,7 +2675,7 @@ const TBL: React.FC<TBLProps> = ({
     
     // ⚡ IGNORER COMPLÈTEMENT les champs miroirs - ils sont gérés automatiquement par le système
     if (fieldId?.startsWith('__mirror_data_')) {
-      console.log(`🚫 [TBL] Champ miroir ignoré: ${fieldId}`);
+      logger.debug(`🚫 [TBL] Champ miroir ignoré: ${fieldId}`);
       return; // Ne pas traiter les miroirs, éviter d'appeler debounce avec undefined
     }
 
@@ -2713,7 +2714,7 @@ const TBL: React.FC<TBLProps> = ({
           return null;
         })();
         if (dynamicField && tblConfig) {
-          console.info(`[TBL DynamicConfig] Intégration dynamique du champ conditionnel '${fieldId}'.`);
+          logger.info(`[TBL DynamicConfig] Intégration dynamique du champ conditionnel '${fieldId}'.`);
           (tblConfig.fields as unknown as DynamicFieldConfig[]).push(dynamicField);
           fieldConfig = dynamicField as unknown as typeof fieldConfig;
         } else if (!dynamicField) {
@@ -2726,7 +2727,7 @@ const TBL: React.FC<TBLProps> = ({
             };
             fieldConfig = minimal as unknown as typeof fieldConfig;
             if (localStorage.getItem('TBL_DIAG') === '1') {
-              console.warn('[TBL][DynamicConfig][FALLBACK_MIN]', fieldId);
+              logger.warn('[TBL][DynamicConfig][FALLBACK_MIN]', fieldId);
             }
         }
       }
@@ -2819,7 +2820,7 @@ const TBL: React.FC<TBLProps> = ({
     // Si la validation passe, mettre à jour le state
     setFormData(prev => {
       const next: Record<string, unknown> = { ...prev, [fieldId]: normalizedValue };
-      // console.log removed for performance
+      // logger.debug removed for performance
       
       // 🔗 NOUVEAU : Si le champ est une référence partagée (alias), ajouter aussi la clé shared-ref-*
       let fieldDef: unknown = null;
@@ -2839,7 +2840,7 @@ const TBL: React.FC<TBLProps> = ({
         // Si le champ a un sharedReferenceId, ajouter la valeur avec cette clé aussi
         if (fieldDef?.sharedReferenceId) {
           const sharedRefKey = fieldDef.sharedReferenceId;
-          console.log(`🔗 [TBL] Champ ${fieldId} est un alias de ${sharedRefKey}, ajout au formData`);
+          logger.debug(`🔗 [TBL] Champ ${fieldId} est un alias de ${sharedRefKey}, ajout au formData`);
           next[sharedRefKey] = normalizedValue;
         }
 
@@ -2849,14 +2850,14 @@ const TBL: React.FC<TBLProps> = ({
             for (const section of tab.sections) {
               const aliases = section.fields.filter((sf: Record<string, unknown>) => sf.sharedReferenceId === fieldId);
               aliases.forEach((alias: Record<string, unknown>) => {
-                console.log(`🔗 [TBL] Mise à jour alias ${alias.id} depuis shared-ref ${fieldId}`);
+                logger.debug(`🔗 [TBL] Mise à jour alias ${alias.id} depuis shared-ref ${fieldId}`);
                 next[alias.id] = normalizedValue;
               });
             }
           }
         }
       } catch (err) {
-        console.warn('[TBL] Erreur lors de la gestion des shared-ref:', err);
+        logger.warn('[TBL] Erreur lors de la gestion des shared-ref:', err);
       }
       
       try {
@@ -2882,7 +2883,7 @@ const TBL: React.FC<TBLProps> = ({
             const event = new CustomEvent('TBL_FORM_DATA_CHANGED', { detail: { fieldId, value } });
             window.dispatchEvent(event);
           } else {
-            if (localStorage.getItem('TBL_DIAG') === '1') console.log('🔕 [TBL] Dispatch TBL_FORM_DATA_CHANGED SKIPPED:', { fieldId, value, isMirrorKey, isSharedRef, mirrorUpdated, valueChanged });
+            if (localStorage.getItem('TBL_DIAG') === '1') logger.debug('🔕 [TBL] Dispatch TBL_FORM_DATA_CHANGED SKIPPED:', { fieldId, value, isMirrorKey, isSharedRef, mirrorUpdated, valueChanged });
           }
         }
       } catch { /* noop */ }
@@ -2932,7 +2933,7 @@ const TBL: React.FC<TBLProps> = ({
         if (immediateEvaluateRef.current) {
           immediateEvaluateRef.current(capturedNext, combinedFieldId);
         } else {
-          console.warn('⚠️ [TBL] immediateEvaluateRef pas encore initialisé');
+          logger.warn('⚠️ [TBL] immediateEvaluateRef pas encore initialisé');
         }
       }, 300); // 🚀 PERF FIX R15: Revenir à 300ms - 100ms cause trop de requêtes = lenteur !
 
@@ -2961,7 +2962,7 @@ const TBL: React.FC<TBLProps> = ({
       const shouldSkipPreload = Date.now() < skipPreloadUntil;
       
       if (shouldSkipPreload) {
-        console.log(`🔒 [PRELOAD] Sauté pour ${fieldId} car sync bidirectionnel en cours (skip jusqu'à ${new Date(skipPreloadUntil).toISOString()})`);
+        logger.debug(`🔒 [PRELOAD] Sauté pour ${fieldId} car sync bidirectionnel en cours (skip jusqu'à ${new Date(skipPreloadUntil).toISOString()})`);
       }
       
       if (fieldId && value !== null && value !== undefined && !shouldSkipPreload) {
@@ -2977,7 +2978,7 @@ const TBL: React.FC<TBLProps> = ({
         
         // Si ce champ est lié à un repeater, forcer min=1 (l'original ne peut pas être supprimé)
         if (repeatersUsingThisField.length > 0 && !isNaN(numericValue) && numericValue < 1) {
-          console.log(`🔒 [PRELOAD] Champ ${fieldId}: valeur ${numericValue} forcée à 1 (minimum obligatoire)`);
+          logger.debug(`🔒 [PRELOAD] Champ ${fieldId}: valeur ${numericValue} forcée à 1 (minimum obligatoire)`);
           numericValue = 1;
           // Mettre à jour la valeur dans le state pour afficher 1
           const currentFieldValue = next[fieldId];
@@ -2987,20 +2988,20 @@ const TBL: React.FC<TBLProps> = ({
         }
         
         if (!isNaN(numericValue) && numericValue >= 1 && repeatersUsingThisField.length > 0) {
-          console.log(`🚀 [PRELOAD] Champ ${fieldId} = ${numericValue} déclenche preload pour ${repeatersUsingThisField.length} repeater(s)`);
+          logger.debug(`🚀 [PRELOAD] Champ ${fieldId} = ${numericValue} déclenche preload pour ${repeatersUsingThisField.length} repeater(s)`);
           
           // Récupérer le treeId depuis le contexte (tree ou rawNodes[0])
           const currentTreeId = tree?.id || rawNodes?.[0]?.treeId || '';
           
           // Déclencher le preload pour chaque repeater concerné (en arrière-plan)
           repeatersUsingThisField.forEach((repeater: Record<string, unknown>) => {
-            console.log(`🚀 [PRELOAD] Appel /api/repeat/${repeater.id}/preload-copies avec targetCount=${numericValue}, treeId=${currentTreeId}`);
+            logger.debug(`🚀 [PRELOAD] Appel /api/repeat/${repeater.id}/preload-copies avec targetCount=${numericValue}, treeId=${currentTreeId}`);
             api.post(`/api/repeat/${repeater.id}/preload-copies`, { targetCount: numericValue })
               .then((result: unknown) => {
-                console.log(`✅ [PRELOAD] Repeater ${repeater.id}: ${result.createdCopies} copies créées (total: ${result.totalCopies})`, result.newNodeIds);
+                logger.debug(`✅ [PRELOAD] Repeater ${repeater.id}: ${result.createdCopies} copies créées (total: ${result.totalCopies})`, result.newNodeIds);
                 // Déclencher un refresh de l'arbre - TOUJOURS pour synchroniser
                 if (typeof window !== 'undefined' && currentTreeId) {
-                  console.log(`🔄 [PRELOAD] Déclenchement refresh arbre via tbl-repeater-updated (treeId=${currentTreeId})`);
+                  logger.debug(`🔄 [PRELOAD] Déclenchement refresh arbre via tbl-repeater-updated (treeId=${currentTreeId})`);
                   // Utiliser tbl-repeater-updated SANS suppressReload pour déclencher un fetchData() complet
                   window.dispatchEvent(new CustomEvent('tbl-repeater-updated', { 
                     detail: { 
@@ -3016,7 +3017,7 @@ const TBL: React.FC<TBLProps> = ({
                 }
               })
               .catch((err: unknown) => {
-                console.error(`❌ [PRELOAD] Erreur pour repeater ${repeater.id}:`, err);
+                logger.error(`❌ [PRELOAD] Erreur pour repeater ${repeater.id}:`, err);
               });
           });
         }
@@ -3040,16 +3041,16 @@ const TBL: React.FC<TBLProps> = ({
     try {
       console.group('[TBL][SAVE_AS_DEVIS] Début');
       console.time('[TBL] SAVE_AS_DEVIS');
-      // console.log('[TBL][SAVE_AS_DEVIS] Params', values);
+      // logger.debug('[TBL][SAVE_AS_DEVIS] Params', values);
   const _dataSize = (() => { try { return JSON.stringify(formData).length; } catch { return 'n/a'; } })();
-      // console.log('[TBL][SAVE_AS_DEVIS] formData', { keys: Object.keys(formData).length, approxBytes: dataSize });
+      // logger.debug('[TBL][SAVE_AS_DEVIS] formData', { keys: Object.keys(formData).length, approxBytes: dataSize });
       const result = await saveAsDevis(formData, tree!.id, {
         clientId: leadId,
         projectName: values.projectName,
         notes: values.notes,
         isDraft: false
       });
-      // console.log('[TBL][SAVE_AS_DEVIS] Résultat', result);
+      // logger.debug('[TBL][SAVE_AS_DEVIS] Résultat', result);
       if (result.success) {
         message.success('Devis sauvegardé avec succès !');
         setSaveModalVisible(false);
@@ -3121,7 +3122,7 @@ const TBL: React.FC<TBLProps> = ({
         message.info('Aucun template de document disponible pour cet arbre');
       }
     } catch (error) {
-      console.error('❌ Erreur chargement templates:', error);
+      logger.error('❌ Erreur chargement templates:', error);
       message.error('Erreur lors du chargement des templates');
     } finally {
       setLoadingTemplates(false);
@@ -3166,7 +3167,7 @@ const TBL: React.FC<TBLProps> = ({
         selectedProducts: productsForDoc.length > 0 ? productsForDoc : undefined,
       };
       
-      console.log('📄 [TBL] Génération PDF avec:', documentData);
+      logger.debug('📄 [TBL] Génération PDF avec:', documentData);
       
       const response = await api.post('/api/documents/generated/generate', documentData);
       
@@ -3179,7 +3180,7 @@ const TBL: React.FC<TBLProps> = ({
         
         // Ouvrir le PDF directement dans un nouvel onglet
         const pdfUrl = `/api/documents/generated/${response.id}/download`;
-        console.log('📄 [TBL] Ouverture du PDF:', pdfUrl);
+        logger.debug('📄 [TBL] Ouverture du PDF:', pdfUrl);
         window.open(pdfUrl, '_blank');
         
         // Émettre un événement pour rafraîchir la liste des documents
@@ -3189,7 +3190,7 @@ const TBL: React.FC<TBLProps> = ({
         setPdfModalVisible(false);
       }
     } catch (error: unknown) {
-      console.error('❌ Erreur génération PDF:', error);
+      logger.error('❌ Erreur génération PDF:', error);
       message.error(error?.response?.data?.error || 'Erreur lors de la génération du document');
     } finally {
       setGeneratingPdf(false);
@@ -3258,7 +3259,7 @@ const TBL: React.FC<TBLProps> = ({
         setDevisPdfSelectorVisible(true);
       }
     } catch (error) {
-      console.error('❌ Erreur chargement PDFs du devis:', error);
+      logger.error('❌ Erreur chargement PDFs du devis:', error);
       message.error('Erreur lors du chargement des documents');
     } finally {
       setLoadingDevisPdfs(false);
@@ -3343,7 +3344,7 @@ const TBL: React.FC<TBLProps> = ({
         } catch { /* noop */ }
       }
     } catch (error: unknown) {
-      console.error('❌ Erreur envoi email:', error);
+      logger.error('❌ Erreur envoi email:', error);
       message.error(error?.response?.data?.error || error?.message || 'Erreur lors de l\'envoi de l\'email');
     } finally {
       setSendingEmail(false);
@@ -3363,19 +3364,19 @@ const TBL: React.FC<TBLProps> = ({
     const leadIdFromUrl = leadId;
     const effectiveLeadId = clientData.id || leadIdFromUrl;
     
-    // console.log('🔍 [TBL] FILTRAGE STRICT - clientData.id:', clientData.id);
-    // console.log('🔍 [TBL] FILTRAGE STRICT - leadIdFromUrl:', leadIdFromUrl);
-    // console.log('🔍 [TBL] FILTRAGE STRICT - effectiveLeadId:', effectiveLeadId);
-    // console.log('🔍 [TBL] FILTRAGE STRICT - clientData:', clientData);
+    // logger.debug('🔍 [TBL] FILTRAGE STRICT - clientData.id:', clientData.id);
+    // logger.debug('🔍 [TBL] FILTRAGE STRICT - leadIdFromUrl:', leadIdFromUrl);
+    // logger.debug('🔍 [TBL] FILTRAGE STRICT - effectiveLeadId:', effectiveLeadId);
+    // logger.debug('🔍 [TBL] FILTRAGE STRICT - clientData:', clientData);
     
     try {
-      // console.log('🔍 [TBL] FILTRAGE STRICT - Chargement des devis pour:', effectiveLeadId, clientData.name);
+      // logger.debug('🔍 [TBL] FILTRAGE STRICT - Chargement des devis pour:', effectiveLeadId, clientData.name);
       
       // Charger TOUS les devis d'abord, puis filtrer côté client
       const apiUrl = `/api/treebranchleaf/submissions/by-leads?treeId=${effectiveTreeId}`;
       
       const allLeadsWithSubmissions = await api.get(apiUrl);
-      // console.log('🔍 [TBL] AVANT FILTRAGE - Tous les leads reçus:', allLeadsWithSubmissions);
+      // logger.debug('🔍 [TBL] AVANT FILTRAGE - Tous les leads reçus:', allLeadsWithSubmissions);
       
       // FILTRAGE STRICT : Ne garder QUE le lead sélectionné
       let filteredLeads = allLeadsWithSubmissions;
@@ -3383,27 +3384,27 @@ const TBL: React.FC<TBLProps> = ({
       if (effectiveLeadId) {
         filteredLeads = allLeadsWithSubmissions.filter(lead => {
           const isMatch = lead.id === effectiveLeadId;
-          // console.log(`🔍 [TBL] Vérification lead ${lead.id} (${lead.firstName} ${lead.lastName}) VS ${effectiveLeadId}: ${isMatch}`);
+          // logger.debug(`🔍 [TBL] Vérification lead ${lead.id} (${lead.firstName} ${lead.lastName}) VS ${effectiveLeadId}: ${isMatch}`);
           return isMatch;
         });
-        // console.log('🔍 [TBL] APRÈS FILTRAGE STRICT - Leads conservés:', filteredLeads);
+        // logger.debug('🔍 [TBL] APRÈS FILTRAGE STRICT - Leads conservés:', filteredLeads);
       } else {
-        // console.log('⚠️ [TBL] Aucun leadId trouvé, affichage de tous les devis');
+        // logger.debug('⚠️ [TBL] Aucun leadId trouvé, affichage de tous les devis');
       }
       
       if (!filteredLeads || filteredLeads.length === 0) {
-        // console.log('❌ [TBL] AUCUN devis trouvé pour le lead:', effectiveLeadId, clientData.name);
+        // logger.debug('❌ [TBL] AUCUN devis trouvé pour le lead:', effectiveLeadId, clientData.name);
         message.info(`Aucun devis trouvé pour ${clientData.name || 'ce lead'}`);
         setAvailableDevis([]);
       } else {
-        // console.log('✅ [TBL] Devis trouvés pour le lead:', clientData.name, filteredLeads);
+        // logger.debug('✅ [TBL] Devis trouvés pour le lead:', clientData.name, filteredLeads);
         setAvailableDevis(filteredLeads);
       }
       
       setDevisSelectorVisible(true);
       
     } catch (error) {
-      console.error('❌ [TBL] Erreur lors du chargement des devis par leads:', error);
+      logger.error('❌ [TBL] Erreur lors du chargement des devis par leads:', error);
       message.error('Erreur lors du chargement des devis');
       
       // Montrer la modale même en cas d'erreur pour que l'utilisateur comprenne
@@ -3455,19 +3456,19 @@ const TBL: React.FC<TBLProps> = ({
     if (!confirmed) return;
     
     try {
-      console.log('🗑️ [TBL][DELETE] Suppression du devis:', devisId);
+      logger.debug('🗑️ [TBL][DELETE] Suppression du devis:', devisId);
       
       // Appeler l'API de suppression
       await api.delete(`/api/treebranchleaf/submissions/${devisId}`);
       
-      console.log('✅ [TBL][DELETE] Devis supprimé, rechargement...');
+      logger.debug('✅ [TBL][DELETE] Devis supprimé, rechargement...');
       
       // Recharger la liste des devis
       await handleLoadDevis();
       
       message.success(`Devis "${devisName}" supprimé avec succès`);
     } catch (error) {
-      console.error('❌ [TBL][DELETE] Erreur lors de la suppression:', error);
+      logger.error('❌ [TBL][DELETE] Erreur lors de la suppression:', error);
       message.error('Erreur lors de la suppression du devis');
     }
   };
@@ -3480,32 +3481,32 @@ const TBL: React.FC<TBLProps> = ({
 
       const effectiveTreeId = treeId || 'cmf1mwoz10005gooked1j6orn';
   const _approxBytes = (() => { try { return JSON.stringify(formData).length; } catch { return 'n/a'; } })();
-      // console.log('🔍 [TBL] État actuel:', { leadId, treeId, effectiveTreeId, devisName, formDataKeys: Object.keys(formData), approxBytes });
+      // logger.debug('🔍 [TBL] État actuel:', { leadId, treeId, effectiveTreeId, devisName, formDataKeys: Object.keys(formData), approxBytes });
 
       const values = await form.validateFields();
-      // console.log('✅ [TBL] Validation formulaire réussie:', values);
+      // logger.debug('✅ [TBL] Validation formulaire réussie:', values);
 
       const baseDevisName = values.devisName || devisName;
-      // console.log('🔍 [TBL] Nom de base du devis:', baseDevisName);
+      // logger.debug('🔍 [TBL] Nom de base du devis:', baseDevisName);
 
       // Vérifier l'unicité du nom avant la sauvegarde finale
       const finalDevisName = await generateUniqueDevisName(baseDevisName, leadId || '');
-      // console.log('🔍 [TBL] Nom final du devis (unique):', finalDevisName);
+      // logger.debug('🔍 [TBL] Nom final du devis (unique):', finalDevisName);
 
       if (!effectiveTreeId) {
-        console.error('❌ [TBL] Tree ID manquant:', { effectiveTreeId });
+        logger.error('❌ [TBL] Tree ID manquant:', { effectiveTreeId });
         message.error('Arbre TreeBranchLeaf requis pour créer un devis');
         return;
       }
 
-      // console.log('🔍 [TBL] Création devis avec paramètres:', { leadId: leadId || 'aucun', treeId: effectiveTreeId, name: finalDevisName, dataKeys: Object.keys(formData).length, approxBytes });
+      // logger.debug('🔍 [TBL] Création devis avec paramètres:', { leadId: leadId || 'aucun', treeId: effectiveTreeId, name: finalDevisName, dataKeys: Object.keys(formData).length, approxBytes });
 
       // Créer le devis via API avec les données actuelles du formulaire
       // 🔥 VALIDATION: Le lead est OBLIGATOIRE
       const effectiveLeadId = selectedLeadForDevis?.id || leadId;
       
       if (!effectiveLeadId) {
-        console.error('❌ [TBL] Aucun lead sélectionné, création impossible');
+        logger.error('❌ [TBL] Aucun lead sélectionné, création impossible');
         message.error('Vous devez sélectionner un lead pour créer un devis');
         return;
       }
@@ -3520,7 +3521,7 @@ const TBL: React.FC<TBLProps> = ({
       // Tentative de création de la submission avec repli automatique si 404 (arbre introuvable ou non autorisé)
       let submission: unknown;
       try {
-        // console.log('📡 [TBL] POST TBL Prisma create-and-evaluate - payload meta', { treeId: submissionData.treeId, name: submissionData.name, dataKeys: Object.keys(submissionData.data || {}).length });
+        // logger.debug('📡 [TBL] POST TBL Prisma create-and-evaluate - payload meta', { treeId: submissionData.treeId, name: submissionData.name, dataKeys: Object.keys(submissionData.data || {}).length });
         
         const formData = Array.isArray(submissionData.data) 
           ? submissionData.data.reduce((acc, item) => {
@@ -3546,16 +3547,16 @@ const TBL: React.FC<TBLProps> = ({
         const status = err?.response?.status ?? err?.status;
         const statusText = err?.response?.statusText;
         const msg = err?.response?.data ?? err?.message;
-  console.warn('⚠️ [TBL] Échec création devis, tentative de repli…', { status, statusText, msg });
+  logger.warn('⚠️ [TBL] Échec création devis, tentative de repli…', { status, statusText, msg });
 
         if (status === 404) {
           try {
-            // console.log('🌲 [TBL] Chargement des arbres accessibles pour repli…');
+            // logger.debug('🌲 [TBL] Chargement des arbres accessibles pour repli…');
             const trees = await api.get('/api/treebranchleaf/trees') as Array<{ id: string; name?: string }>;
-            // console.log('🌲 [TBL] Arbres reçus (count):', Array.isArray(trees) ? trees.length : 'non-array');
+            // logger.debug('🌲 [TBL] Arbres reçus (count):', Array.isArray(trees) ? trees.length : 'non-array');
             if (Array.isArray(trees) && trees.length > 0) {
               const fallbackTreeId = trees[0].id;
-              console.info('🔁 [TBL] Repli: on essaie avec le premier arbre accessible', { fallbackTreeId, fallbackTreeName: trees[0]?.name });
+              logger.info('🔁 [TBL] Repli: on essaie avec le premier arbre accessible', { fallbackTreeId, fallbackTreeName: trees[0]?.name });
               const fallbackFormData = Array.isArray(submissionData.data) 
                 ? submissionData.data.reduce((acc, item) => {
                     if (item.nodeId && item.value != null) {
@@ -3582,7 +3583,7 @@ const TBL: React.FC<TBLProps> = ({
             }
           } catch (retryErr) {
             const r = retryErr as { response?: { status?: number; data?: unknown; statusText?: string }; status?: number; message?: string; url?: string };
-            console.error('❌ [TBL] Échec du repli de création de devis:', {
+            logger.error('❌ [TBL] Échec du repli de création de devis:', {
               status: r?.response?.status ?? r?.status,
               statusText: r?.response?.statusText,
               msg: r?.response?.data ?? r?.message
@@ -3595,7 +3596,7 @@ const TBL: React.FC<TBLProps> = ({
         }
       }
 
-      // console.log('✅ [TBL] Devis créé avec succès. Détails (clés):', submission && typeof submission === 'object' ? Object.keys(submission as Record<string, unknown>) : typeof submission);
+      // logger.debug('✅ [TBL] Devis créé avec succès. Détails (clés):', submission && typeof submission === 'object' ? Object.keys(submission as Record<string, unknown>) : typeof submission);
       message.success(`Nouveau devis "${finalDevisName}" créé avec succès`);
 
       // Mettre à jour le nom du devis IMMÉDIATEMENT pour l'affichage dans le header
@@ -3634,12 +3635,12 @@ const TBL: React.FC<TBLProps> = ({
                 setClientData(newClientData);
               }
             } catch (error) {
-              console.warn('⚠️ [TBL] Impossible de charger les données du lead pour le header:', error);
+              logger.warn('⚠️ [TBL] Impossible de charger les données du lead pour le header:', error);
             }
           }
           
-          console.log('🔄 [TBL] Set new submissionId:', newSubmissionId);
-          console.log('🔄 [TBL] useEffect will dispatch refresh after React updates all components');
+          logger.debug('🔄 [TBL] Set new submissionId:', newSubmissionId);
+          logger.debug('🔄 [TBL] useEffect will dispatch refresh after React updates all components');
         }
       } catch { /* noop */ }
 
@@ -3673,7 +3674,7 @@ const TBL: React.FC<TBLProps> = ({
           });
         }
       } catch (linkErr) {
-        console.warn('⚠️ [TBL] Impossible d\'enregistrer le devis dans Documents/History du lead:', linkErr);
+        logger.warn('⚠️ [TBL] Impossible d\'enregistrer le devis dans Documents/History du lead:', linkErr);
       }
 
       // Réinitialiser les modals (mais PAS le devisName car il est affiché dans le header)
@@ -3686,14 +3687,14 @@ const TBL: React.FC<TBLProps> = ({
       console.timeEnd('[TBL] CREATE_DEVIS');
       console.groupEnd();
     } catch (error) {
-      console.error('❌ [TBL] Erreur lors de la création du devis:', error);
+      logger.error('❌ [TBL] Erreur lors de la création du devis:', error);
       try {
         const _err = error as { response?: { status?: number; data?: unknown; statusText?: string }; status?: number; message?: string; url?: string };
         console.group('[TBL][CREATE_DEVIS][ERROR]');
-        // console.log('status:', err?.response?.status ?? err?.status);
-        // console.log('statusText:', err?.response?.statusText);
-        // console.log('message:', err?.message);
-        // console.log('data:', err?.response?.data);
+        // logger.debug('status:', err?.response?.status ?? err?.status);
+        // logger.debug('statusText:', err?.response?.statusText);
+        // logger.debug('message:', err?.message);
+        // logger.debug('data:', err?.response?.data);
         console.groupEnd();
       } catch { /* noop */ }
 
@@ -3702,13 +3703,13 @@ const TBL: React.FC<TBLProps> = ({
         const errObj = error as Record<string, unknown> & { response?: unknown };
         if ('errorFields' in errObj) {
           // On ne connaît pas le type exact ici, on logge la valeur brute
-          console.error('❌ [TBL] Erreurs de validation:', (errObj as Record<string, unknown>).errorFields);
+          logger.error('❌ [TBL] Erreurs de validation:', (errObj as Record<string, unknown>).errorFields);
           message.error('Veuillez remplir tous les champs requis');
         } else if ('response' in errObj) {
-          console.error('❌ [TBL] Erreur API:', errObj.response);
+          logger.error('❌ [TBL] Erreur API:', errObj.response);
           message.error('Erreur lors de la création du devis. Vérifiez la console pour plus de détails.');
         } else {
-          console.error('❌ [TBL] Erreur inconnue:', error);
+          logger.error('❌ [TBL] Erreur inconnue:', error);
           message.error('Erreur inattendue lors de la création du devis');
         }
       } else {
@@ -3803,7 +3804,7 @@ const TBL: React.FC<TBLProps> = ({
       const uniqueName = await generateUniqueDevisName(baseName, leadId || '');
       try {
         // 🔥 NOUVEAU: Utiliser TBL Prisma pour l'auto-sauvegarde
-        // console.log('🚀 [TBL] Auto-sauvegarde via TBL Prisma...');
+        // logger.debug('🚀 [TBL] Auto-sauvegarde via TBL Prisma...');
         
         await api.post('/api/tbl/submissions/create-and-evaluate', {
           treeId: effectiveTreeId,
@@ -3816,11 +3817,11 @@ const TBL: React.FC<TBLProps> = ({
         
         message.success(`Champs remplis (${count}) et devis enregistré via TBL Prisma: ${uniqueName}`);
       } catch (e) {
-        console.error('❌ [TBL] Échec enregistrement auto:', e);
+        logger.error('❌ [TBL] Échec enregistrement auto:', e);
         message.error('Remplissage OK, mais échec de l’enregistrement automatique');
       }
     } catch (e) {
-      console.error('❌ [TBL] Erreur auto-remplissage:', e);
+      logger.error('❌ [TBL] Erreur auto-remplissage:', e);
       message.error('Erreur lors du remplissage automatique');
     }
   };
@@ -3832,12 +3833,12 @@ const TBL: React.FC<TBLProps> = ({
       try {
         await persistCompletedRevisionIfDirty('load-devis');
       } catch (e) {
-        console.warn('⚠️ [TBL] Persist revision avant chargement devis échoué (on continue):', e);
+        logger.warn('⚠️ [TBL] Persist revision avant chargement devis échoué (on continue):', e);
       }
 
-      // console.log('🔍 [TBL] === DÉBUT CHARGEMENT DEVIS ===');
-      // console.log('🔍 [TBL] ID du devis:', devisId);
-      // console.log('🔍 [TBL] Données du lead:', leadData);
+      // logger.debug('🔍 [TBL] === DÉBUT CHARGEMENT DEVIS ===');
+      // logger.debug('🔍 [TBL] ID du devis:', devisId);
+      // logger.debug('🔍 [TBL] Données du lead:', leadData);
       
       // Indicateur de chargement
       message.loading('Chargement du devis...', 0.5);
@@ -3860,10 +3861,10 @@ const TBL: React.FC<TBLProps> = ({
             };
             setClientData(newClientData);
             setLeadId(lead.id);
-            // console.log('🔍 [TBL] Client mis à jour avec données complètes:', newClientData);
+            // logger.debug('🔍 [TBL] Client mis à jour avec données complètes:', newClientData);
           }
         } catch (error) {
-          console.warn('⚠️ [TBL] Impossible de charger les données complètes du lead:', error);
+          logger.warn('⚠️ [TBL] Impossible de charger les données complètes du lead:', error);
           // Fallback: utiliser les données partielles fournies
           const newClientData = {
             id: leadData.id,
@@ -3878,7 +3879,7 @@ const TBL: React.FC<TBLProps> = ({
       }
       
       // Charger les données du devis sélectionné
-      // console.log('🔍 [TBL] Appel API pour récupérer la submission...');
+      // logger.debug('🔍 [TBL] Appel API pour récupérer la submission...');
       const submissionResponse = await api.get(`/api/treebranchleaf/submissions/${devisId}`);
       const submission = (submissionResponse && typeof submissionResponse === 'object' && 'success' in submissionResponse)
         ? ((submissionResponse as unknown as { success?: boolean; data?: unknown }).data ?? submissionResponse)
@@ -3887,9 +3888,9 @@ const TBL: React.FC<TBLProps> = ({
       const submissionObj = (submission && typeof submission === 'object' && 'submission' in (submission as Record<string, unknown>))
         ? ((submission as Record<string, unknown>).submission as unknown)
         : submission;
-      // console.log('🔍 [TBL] Réponse API complète:', submission);
+      // logger.debug('🔍 [TBL] Réponse API complète:', submission);
       
-      // console.log('🔍 [TBL] Réponse API complète:', submission);
+      // logger.debug('🔍 [TBL] Réponse API complète:', submission);
       
       const submissionDataArray = (submissionObj && typeof submissionObj === 'object')
         ? ((submissionObj as any).TreeBranchLeafSubmissionData as Array<{ nodeId: string; value?: string; operationSource?: string | null }> | undefined)
@@ -3905,7 +3906,7 @@ const TBL: React.FC<TBLProps> = ({
 
       if (Array.isArray(submissionDataArray)) {
         hasSubmissionDataArray = true;
-        // console.log('🔍 [TBL] Données de submission trouvées:', submission.TreeBranchLeafSubmissionData.length, 'éléments');
+        // logger.debug('🔍 [TBL] Données de submission trouvées:', submission.TreeBranchLeafSubmissionData.length, 'éléments');
         
         // ✅ Filtrer pour recharger les entrées utilisateur.
         // Selon la source, les saisies peuvent être taguées 'neutral' (legacy) OU 'field' (interpreter).
@@ -3976,12 +3977,12 @@ const TBL: React.FC<TBLProps> = ({
             });
           }
         } catch (fallbackErr) {
-          console.warn('⚠️ [TBL LOAD] Fallback /fields impossible:', fallbackErr);
+          logger.warn('⚠️ [TBL LOAD] Fallback /fields impossible:', fallbackErr);
         }
       }
 
       if (skippedCalculated > 0) {
-        console.log(`🚫 [TBL LOAD] ${skippedCalculated} champs non-neutral ignorés (calculés/capacités)`);
+        logger.debug(`🚫 [TBL LOAD] ${skippedCalculated} champs non-neutral ignorés (calculés/capacités)`);
       }
 
       // 🧹 FIX STALE-DEVIS: Vider les caches de useNodeCalculatedValue AVANT de
@@ -3990,10 +3991,10 @@ const TBL: React.FC<TBLProps> = ({
       clearAllNodeValueCaches();
 
       const loadedCount = Object.keys(formattedData).length;
-      console.log(`✅ [TBL LOAD] ${loadedCount} champs utilisateur chargés`);
+      logger.debug(`✅ [TBL LOAD] ${loadedCount} champs utilisateur chargés`);
 
       if (loadedCount === 0) {
-        console.warn('⚠️ [TBL LOAD] 0 champ restauré - operationSource stats:', sourceStats);
+        logger.warn('⚠️ [TBL LOAD] 0 champ restauré - operationSource stats:', sourceStats);
       }
 
       if (loadedCount > 0) {
@@ -4070,7 +4071,7 @@ const TBL: React.FC<TBLProps> = ({
           if (hasSubmissionDataArray && storedComputedData.length > 0) {
             // ======== CHEMIN RAPIDE: Valeurs DISPLAY stockées en DB ========
             // Pas besoin de create-and-evaluate ! Les valeurs sont déjà là.
-            console.log(`⚡ [TBL LOAD] ${storedComputedData.length} valeurs DISPLAY chargées depuis DB (SANS create-and-evaluate)`);
+            logger.debug(`⚡ [TBL LOAD] ${storedComputedData.length} valeurs DISPLAY chargées depuis DB (SANS create-and-evaluate)`);
 
             // Broadcaster les valeurs calculées stockées avec replaceAll=true
             broadcastCalculatedRefresh({
@@ -4106,7 +4107,7 @@ const TBL: React.FC<TBLProps> = ({
 
           } else {
             // ======== CHEMIN FALLBACK: Pas de données stockées → recalculer ========
-            console.log(`🔄 [TBL LOAD] Fallback: recalcul DISPLAY via create-and-evaluate pour devis ${devisId}...`);
+            logger.debug(`🔄 [TBL LOAD] Fallback: recalcul DISPLAY via create-and-evaluate pour devis ${devisId}...`);
             const evaluationResponse = await api.post('/api/tbl/submissions/create-and-evaluate', {
               treeId: effectiveTreeId || (submissionObj as unknown)?.treeId,
               submissionId: devisId,
@@ -4152,10 +4153,10 @@ const TBL: React.FC<TBLProps> = ({
                 lastSavedSignatureRef.current = computeSignature(normalizePayload(allData));
               } catch { /* noop */ }
             }
-            console.log(`✅ [TBL LOAD] Fallback recalcul DISPLAY terminé pour devis ${devisId}`);
+            logger.debug(`✅ [TBL LOAD] Fallback recalcul DISPLAY terminé pour devis ${devisId}`);
           }
         } catch (recalcErr) {
-          console.warn('⚠️ [TBL LOAD] Chargement DISPLAY échoué (les champs calculés peuvent être vides):', recalcErr);
+          logger.warn('⚠️ [TBL LOAD] Chargement DISPLAY échoué (les champs calculés peuvent être vides):', recalcErr);
         } finally {
           // Réactiver l'autosave après un délai pour absorber les changements post-chargement
           // (table lookups, auto-select, etc.)
@@ -4173,17 +4174,17 @@ const TBL: React.FC<TBLProps> = ({
 
         message.success(`${loadedStatus === 'default-draft' ? 'Brouillon' : `Devis "${loadedDevisName}"`} chargé avec succès (${loadedCount} champs)`);
       } else {
-        console.warn('🔍 [TBL LOAD] Aucune donnée utilisateur restaurée pour ce devis');
+        logger.warn('🔍 [TBL LOAD] Aucune donnée utilisateur restaurée pour ce devis');
         message.warning('Devis chargé, mais aucune donnée de formulaire à restaurer');
       }
       
       // Fermer la modal
       setDevisSelectorVisible(false);
-      // console.log('🔍 [TBL] === FIN CHARGEMENT DEVIS ===');
+      // logger.debug('🔍 [TBL] === FIN CHARGEMENT DEVIS ===');
       
     } catch (error) {
-      console.error('❌ [TBL] Erreur lors du chargement du devis:', error);
-      console.error('❌ [TBL] Détails de l\'erreur:', error);
+      logger.error('❌ [TBL] Erreur lors du chargement du devis:', error);
+      logger.error('❌ [TBL] Détails de l\'erreur:', error);
       message.error('Erreur lors du chargement du devis. Vérifiez la console pour plus de détails.');
     }
   }, [api, normalizePayload, computeSignature, formatAddressValue, effectiveTreeId, user?.id, isSuperAdmin, userRole, broadcastCalculatedRefresh]);
@@ -4550,14 +4551,14 @@ const TBL: React.FC<TBLProps> = ({
                             onLoadDevis={(devisId) => handleSelectDevis(devisId)}
                             onDeleteDevis={async (devisId, devisName) => {
                               try {
-                                console.log('🗑️ [TBL][DELETE-DOC] Suppression du devis depuis Documents:', devisId);
+                                logger.debug('🗑️ [TBL][DELETE-DOC] Suppression du devis depuis Documents:', devisId);
                                 await api.delete(`/api/treebranchleaf/submissions/${devisId}`);
-                                console.log('✅ [TBL][DELETE-DOC] Devis supprimé avec succès');
+                                logger.debug('✅ [TBL][DELETE-DOC] Devis supprimé avec succès');
                                 message.success(`Devis "${devisName}" supprimé avec succès`);
                                 // Recharger la liste des devis dans le modal "Charger"
                                 await handleLoadDevis();
                               } catch (error) {
-                                console.error('❌ [TBL][DELETE-DOC] Erreur lors de la suppression:', error);
+                                logger.error('❌ [TBL][DELETE-DOC] Erreur lors de la suppression:', error);
                                 message.error('Erreur lors de la suppression du devis');
                                 // Ne pas throw - laisser le modal se fermer
                               }
@@ -4608,20 +4609,20 @@ const TBL: React.FC<TBLProps> = ({
                   
                   // 🔍 Logs pour debug
                   if (isValidatingIncomplete) {
-                    console.log(`🔴 [ONGLET ROUGE] ${tab.label} - incomplet pendant validation PDF`);
+                    logger.debug(`🔴 [ONGLET ROUGE] ${tab.label} - incomplet pendant validation PDF`);
                   } else if (isComplete && requiredFields.length > 0) {
-                    console.log(`🟢 [ONGLET VERT] ${tab.label} - complet (${requiredFields.length} champs requis)`);
+                    logger.debug(`🟢 [ONGLET VERT] ${tab.label} - complet (${requiredFields.length} champs requis)`);
                   } else {
-                    console.log(`⚪ [ONGLET NORMAL] ${tab.label} - normal`);
+                    logger.debug(`⚪ [ONGLET NORMAL] ${tab.label} - normal`);
                   }
 
                   // 🎯 STYLE DYNAMIQUE - API NATIVE ANT DESIGN
                   const tabStyle = (() => {
-                    console.log(`🎯 [STYLE DEBUG] ${tab.label}: isComplete=${isComplete}, requiredFields.length=${requiredFields.length}, isValidatingIncomplete=${isValidatingIncomplete}`);
+                    logger.debug(`🎯 [STYLE DEBUG] ${tab.label}: isComplete=${isComplete}, requiredFields.length=${requiredFields.length}, isValidatingIncomplete=${isValidatingIncomplete}`);
                     
                     // Si tentative PDF ET onglet incomplet → ROUGE
                     if (isValidatingIncomplete && !isComplete) {
-                      console.log(`🔴 [STYLE] ${tab.label} → ROUGE (validation PDF échouée)`);
+                      logger.debug(`🔴 [STYLE] ${tab.label} → ROUGE (validation PDF échouée)`);
                       return {
                         backgroundColor: '#fee2e2',
                         borderColor: '#dc2626',
@@ -4630,7 +4631,7 @@ const TBL: React.FC<TBLProps> = ({
                     }
                     // Si onglet complet (même si 0/0) → VERT  
                     else if (isComplete) {
-                      console.log(`🟢 [STYLE] ${tab.label} → VERT (${requiredFields.length} champs requis)`);
+                      logger.debug(`🟢 [STYLE] ${tab.label} → VERT (${requiredFields.length} champs requis)`);
                       return {
                         backgroundColor: '#0f766e', // Même vert que le bouton "Nouveau Devis"
                         borderColor: '#0f766e',
@@ -4638,7 +4639,7 @@ const TBL: React.FC<TBLProps> = ({
                       };
                     }
                     // Sinon onglet normal (incomplet)
-                    console.log(`⚪ [STYLE] ${tab.label} → NORMAL (incomplet)`);
+                    logger.debug(`⚪ [STYLE] ${tab.label} → NORMAL (incomplet)`);
                     return {};
                   })();
 
@@ -4803,7 +4804,7 @@ const TBL: React.FC<TBLProps> = ({
                 onClick={() => {
                   // 🧪 TEST: Déclencher la validation
                   validationActions.startValidation();
-                  console.log('🎯 VALIDATION DÉCLENCHÉE !', {
+                  logger.debug('🎯 VALIDATION DÉCLENCHÉE !', {
                     isValidating: validationState.isValidating,
                     completedTabs: Array.from(validationState.completedTabs),
                     incompleteTabs: Array.from(validationState.incompleteTabs)
@@ -4831,7 +4832,7 @@ const TBL: React.FC<TBLProps> = ({
           <LeadSelectorModal
             open={leadSelectorVisible}
             onClose={() => {
-              // console.log('🔍 [TBL] Fermeture LeadSelectorModal');
+              // logger.debug('🔍 [TBL] Fermeture LeadSelectorModal');
               setLeadSelectorVisible(false);
             }}
             onSelectLead={handleSelectLead}
@@ -4845,12 +4846,12 @@ const TBL: React.FC<TBLProps> = ({
           <LeadCreatorModalAdvanced
             open={leadCreatorVisible}
             onClose={() => {
-              // console.log('➕ [TBL] Fermeture LeadCreatorModal');
+              // logger.debug('➕ [TBL] Fermeture LeadCreatorModal');
               setLeadCreatorVisible(false);
             }}
             onCreateLead={handleCreateLead}
             onLeadCreated={(lead) => {
-              // console.log('✅ Lead créé:', lead);
+              // logger.debug('✅ Lead créé:', lead);
               setLeadCreatorVisible(false);
               
               // Si le modal de création de devis est ouvert, on met à jour le lead sélectionné
@@ -5672,7 +5673,7 @@ const TBL: React.FC<TBLProps> = ({
             signerEmail={clientData.email || ''}
             signerPhone={clientData.phone || ''}
             onSigned={(result) => {
-              console.log('[TBL] ✅ Document signé:', result);
+              logger.debug('[TBL] ✅ Document signé:', result);
               message.success('Signature enregistrée avec traçabilité complète');
             }}
           />
@@ -5855,7 +5856,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
     try {
       onChange(fieldId, value);
     } catch (error) {
-      console.error(`❌ [TBLTabContentWithSections] ERREUR dans onChange:`, error);
+      logger.error(`❌ [TBLTabContentWithSections] ERREUR dans onChange:`, error);
       throw error;
     }
   }, [onChange]);

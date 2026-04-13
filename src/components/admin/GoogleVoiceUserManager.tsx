@@ -28,6 +28,7 @@ import {
   ExclamationCircleOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 const { Title, Text } = Typography;
 
@@ -68,7 +69,7 @@ const GoogleVoiceUserManager: React.FC<GoogleVoiceUserManagerProps> = ({ onUserC
       const response = await api.api.get('/google-voice/users');
       setUsers(response.users || []);
     } catch (error: unknown) {
-      console.error('Erreur lors du chargement des utilisateurs:', error);
+      logger.error('Erreur lors du chargement des utilisateurs:', error);
       message.error('Erreur lors du chargement des utilisateurs');
     } finally {
       setLoading(false);
@@ -93,7 +94,7 @@ const GoogleVoiceUserManager: React.FC<GoogleVoiceUserManagerProps> = ({ onUserC
         onUserCreated();
       }
     } catch (error: unknown) {
-      console.error('Erreur lors de l\'initialisation:', error);
+      logger.error('Erreur lors de l\'initialisation:', error);
       message.error(
         error.response?.data?.error || 
         'Erreur lors de l\'initialisation de l\'utilisateur'
@@ -122,7 +123,7 @@ const GoogleVoiceUserManager: React.FC<GoogleVoiceUserManagerProps> = ({ onUserC
       setSettingsModalVisible(false);
       await loadUsers();
     } catch (error: unknown) {
-      console.error('Erreur lors de la mise à jour:', error);
+      logger.error('Erreur lors de la mise à jour:', error);
       message.error(
         error.response?.data?.error || 
         'Erreur lors de la mise à jour des paramètres'
@@ -142,7 +143,7 @@ const GoogleVoiceUserManager: React.FC<GoogleVoiceUserManagerProps> = ({ onUserC
       message.success(`Mode Ne pas déranger ${enabled ? 'activé' : 'désactivé'} pour ${user.displayName}`);
       await loadUsers();
     } catch (error: unknown) {
-      console.error('Erreur lors de la modification du mode Ne pas déranger:', error);
+      logger.error('Erreur lors de la modification du mode Ne pas déranger:', error);
       message.error('Erreur lors de la modification du mode Ne pas déranger');
     }
   };
@@ -171,7 +172,7 @@ const GoogleVoiceUserManager: React.FC<GoogleVoiceUserManagerProps> = ({ onUserC
           
           message.success(`Appel initié de ${user.phoneNumber} vers ${toNumber}`);
         } catch (error: unknown) {
-          console.error('Erreur lors de l\'appel:', error);
+          logger.error('Erreur lors de l\'appel:', error);
           message.error('Erreur lors de l\'initiation de l\'appel');
         }
       }
@@ -208,7 +209,7 @@ const GoogleVoiceUserManager: React.FC<GoogleVoiceUserManagerProps> = ({ onUserC
           
           message.success(`SMS envoyé de ${user.phoneNumber} vers ${toNumber}`);
         } catch (error: unknown) {
-          console.error('Erreur lors de l\'envoi SMS:', error);
+          logger.error('Erreur lors de l\'envoi SMS:', error);
           message.error('Erreur lors de l\'envoi du SMS');
         }
       }

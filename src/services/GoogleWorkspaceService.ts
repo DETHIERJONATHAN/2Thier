@@ -1,5 +1,6 @@
 import { google, admin_directory_v1 } from 'googleapis';
 import { JWT } from 'google-auth-library';
+import { logger } from '../lib/logger';
 
 interface GoogleWorkspaceUser {
   name: {
@@ -47,7 +48,7 @@ export class GoogleWorkspaceService {
 
       this.adminClient = google.admin({ version: 'directory_v1', auth: jwtClient });
     } catch (error) {
-      console.error('[GoogleWorkspace] Erreur initialisation client:', error);
+      logger.error('[GoogleWorkspace] Erreur initialisation client:', error);
       throw new Error('Impossible d\'initialiser le client Google Workspace');
     }
   }
@@ -69,7 +70,7 @@ export class GoogleWorkspaceService {
         message: `Connexion réussie au domaine ${this.config.domain}`
       };
     } catch (error: unknown) {
-      console.error('❌ [GoogleWorkspace] Erreur test connexion:', error);
+      logger.error('❌ [GoogleWorkspace] Erreur test connexion:', error);
       const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
       return {
         success: false,
@@ -109,7 +110,7 @@ export class GoogleWorkspaceService {
   user: response.data
       };
     } catch (error: unknown) {
-      console.error('❌ [GoogleWorkspace] Erreur création utilisateur:', error);
+      logger.error('❌ [GoogleWorkspace] Erreur création utilisateur:', error);
       const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
       return {
         success: false,
@@ -133,7 +134,7 @@ export class GoogleWorkspaceService {
 
       return { success: true };
     } catch (error: unknown) {
-      console.error('❌ [GoogleWorkspace] Erreur mise à jour mot de passe:', error);
+      logger.error('❌ [GoogleWorkspace] Erreur mise à jour mot de passe:', error);
       const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
       return {
         success: false,
@@ -165,7 +166,7 @@ export class GoogleWorkspaceService {
       });
   return response.data.users ?? [];
     } catch (error) {
-      console.error('[GoogleWorkspace] Erreur liste utilisateurs:', error);
+      logger.error('[GoogleWorkspace] Erreur liste utilisateurs:', error);
       return [];
     }
   }
@@ -180,7 +181,7 @@ export class GoogleWorkspaceService {
 
       return { success: true };
     } catch (error: unknown) {
-      console.error('❌ [GoogleWorkspace] Erreur suppression utilisateur:', error);
+      logger.error('❌ [GoogleWorkspace] Erreur suppression utilisateur:', error);
       const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
       return {
         success: false,

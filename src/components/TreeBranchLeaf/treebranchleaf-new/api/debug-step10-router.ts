@@ -5,6 +5,7 @@
 
 import { Router } from 'express';
 import { db } from '../../../../lib/database';
+import { logger } from '../../../../lib/logger';
 
 const router = Router();
 const prisma = db;
@@ -102,7 +103,7 @@ router.get('/debug/test-step10', async (req, res) => {
       action: 'STEP10_SIMULATED'
     });
   } catch (e) {
-    console.error('Ã¢ÂÅ’ Error:', (e as Error).message);
+    logger.error('Ã¢ÂÅ’ Error:', (e as Error).message);
     return res.status(500).json({ error: (e as Error).message });
   }
 });

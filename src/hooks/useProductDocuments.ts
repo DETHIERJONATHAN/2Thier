@@ -20,6 +20,7 @@
 import { useState, useCallback, useRef, useMemo } from 'react';
 import { useAuthenticatedApi } from './useAuthenticatedApi';
 import { useStorageProvider } from './useStorageProvider';
+import { logger } from '../lib/logger';
 
 export interface ProductDocument {
   id: string;
@@ -77,7 +78,7 @@ export const useProductDocuments = () => {
       const result = await apiCall();
       return result;
     } catch (err: unknown) {
-      console.error('[useProductDocuments] ❌', err);
+      logger.error('[useProductDocuments] ❌', err);
       setError(err.message || 'Erreur');
       return null;
     } finally {

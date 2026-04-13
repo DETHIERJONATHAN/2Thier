@@ -38,6 +38,7 @@ export {
   type MigrationResult,
   type MigrationStatistics
 } from './TBLMigration';
+import { logger } from '../../../lib/logger';
 
 // 🎯 EXEMPLES D'UTILISATION RAPIDE
 
@@ -49,11 +50,11 @@ export {
  * 
  * // 1. Traiter un élément TreeBranchLeaf
  * const result = await tblBridge.process(node);
- * console.log(result.element?.tbl_code); // "62-prix-total"
+ * logger.debug(result.element?.tbl_code); // "62-prix-total"
  * 
  * // 2. Décoder un code TBL
  * const info = TBLDecoder.decode("62-prix-total");
- * console.log(info.description); // "Champ données avec formule"
+ * logger.debug(info.description); // "Champ données avec formule"
  * 
  * // 3. Récupérer un élément
  * const element = tblBridge.getElementByCode("62-prix-total");
@@ -83,9 +84,9 @@ export {
  * import { CapacityDetector } from './tbl-bridge';
  * 
  * const analysis = CapacityDetector.detectCapacity(node);
- * console.log(analysis.capacity);    // "2" (formule)
- * console.log(analysis.confidence);  // 85
- * console.log(analysis.indicators);  // ["hasFormula=true", ...]
+ * logger.debug(analysis.capacity);    // "2" (formule)
+ * logger.debug(analysis.confidence);  // 85
+ * logger.debug(analysis.indicators);  // ["hasFormula=true", ...]
  * ```
  */
 
@@ -225,7 +226,7 @@ export const initializeTBLBridge = (config: Partial<TBLBridgeConfig> = {}) => {
     ...config
   });
   
-  console.log(`🚀 TBL Bridge V${TBL_BRIDGE_VERSION} initialisé`);
+  logger.debug(`🚀 TBL Bridge V${TBL_BRIDGE_VERSION} initialisé`);
   
   return bridge;
 };

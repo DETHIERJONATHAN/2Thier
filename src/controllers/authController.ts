@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import fs from 'fs';
+import { logger } from '../lib/logger';
 
 // Helper pour lire JWT_SECRET dynamiquement (amélioration pour la production)
 // En local: utilise la valeur par défaut ou .env
@@ -11,7 +12,7 @@ const getJWTSecret = (): string => {
   // ✅ PRIORITÉ 1: Lire depuis process.env (variable d'environnement)
   let secret = process.env.JWT_SECRET;
   if (secret && secret.trim()) {
-    console.log('[AUTH] ✅ JWT_SECRET trouvé dans process.env');
+    logger.debug('[AUTH] ✅ JWT_SECRET trouvé dans process.env');
     return secret;
   }
 
@@ -21,16 +22,16 @@ const getJWTSecret = (): string => {
     try {
       secret = fs.readFileSync(cloudRunSecretPath, 'utf-8').trim();
       if (secret) {
-        console.log('[AUTH] ✅ JWT_SECRET trouvé dans /run/secrets/JWT_SECRET');
+        logger.debug('[AUTH] ✅ JWT_SECRET trouvé dans /run/secrets/JWT_SECRET');
         return secret;
       }
     } catch (err) {
-      console.error('[AUTH] ❌ Erreur à la lecture de /run/secrets/JWT_SECRET:', err);
+      logger.error('[AUTH] ❌ Erreur à la lecture de /run/secrets/JWT_SECRET:', err);
     }
   }
 
   // ❌ FALLBACK: Clé de développement (ne jamais atteindre en production !)
-  console.warn('[AUTH] ⚠️ JWT_SECRET non disponible, utilisation de la clé de développement');
+  logger.warn('[AUTH] ⚠️ JWT_SECRET non disponible, utilisation de la clé de développement');
   return 'development-secret-key';
 };
 
@@ -42,7 +43,7 @@ export const login = async (req: Request, res: Response) => {
     const email = typeof rawEmail === 'string' ? stripInvisible(rawEmail).toLowerCase() : rawEmail;
     const password = typeof rawPassword === 'string' ? stripInvisible(rawPassword) : rawPassword;
 
-    console.log('[AUTH] 🔐 Tentative de connexion', {
+    logger.debug('[AUTH] 🔐 Tentative de connexion', {
       email,
       hasPassword: typeof password === 'string' && password.length > 0,
       rawPasswordLength: typeof rawPassword === 'string' ? rawPassword.length : 0,
@@ -51,7 +52,7 @@ export const login = async (req: Request, res: Response) => {
     });
 
     if (!email || !password) {
-      console.log(`[AUTH] ❌ Email ou password manquant`);
+      logger.debug(`[AUTH] ❌ Email ou password manquant`);
       return res.status(400).json({ message: 'Email et mot de passe requis' });
     }
 
@@ -95,28 +96,28 @@ export const login = async (req: Request, res: Response) => {
             },
           },
         });
-        console.log(`[AUTH] 🔄 Connexion via @zhiive.com: ${email} → user ${user?.email}`);
+        logger.debug(`[AUTH] 🔄 Connexion via @zhiive.com: ${email} → user ${user?.email}`);
       }
     }
 
     if (!user || !user.passwordHash) {
-      console.log(`[AUTH] ❌ Utilisateur non trouvé ou pas de passwordHash pour: ${email}`);
+      logger.debug(`[AUTH] ❌ Utilisateur non trouvé ou pas de passwordHash pour: ${email}`);
       return res.status(401).json({ message: 'Identifiants invalides' });
     }
 
-    console.log(`[AUTH] 👤 Utilisateur trouvé: ${user.firstName} ${user.lastName}`);
+    logger.debug(`[AUTH] 👤 Utilisateur trouvé: ${user.firstName} ${user.lastName}`);
     
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-    console.log(`[AUTH] 🔑 Comparaison mot de passe: ${isPasswordValid ? '✅ VALIDE' : '❌ INVALIDE'}`);
+    logger.debug(`[AUTH] 🔑 Comparaison mot de passe: ${isPasswordValid ? '✅ VALIDE' : '❌ INVALIDE'}`);
     
     if (!isPasswordValid) {
-      console.log(`[AUTH] ❌ Mot de passe incorrect pour: ${email}`);
+      logger.debug(`[AUTH] ❌ Mot de passe incorrect pour: ${email}`);
       return res.status(401).json({ message: 'Identifiants invalides' });
     }
 
     // Vérifier que l'email est activé (sauf pour les super_admin)
     if (!user.emailVerified && user.role !== 'super_admin') {
-      console.log(`[AUTH] ⚠️ Email non vérifié pour: ${email}`);
+      logger.debug(`[AUTH] ⚠️ Email non vérifié pour: ${email}`);
       return res.status(403).json({ 
         message: 'Votre email n\'est pas encore vérifié. Consultez votre boîte de réception pour le lien d\'activation.',
         emailNotVerified: true,
@@ -176,7 +177,7 @@ export const login = async (req: Request, res: Response) => {
     const cookieSecure = isProduction || isCodespaces;
     const cookieSameSite = isProduction ? 'none' as const : 'lax' as const;
     
-    console.log(`[AUTH] 🍪 Cookie config: isProduction=${isProduction}, isCodespaces=${isCodespaces}, secure=${cookieSecure}, sameSite=${cookieSameSite}`);
+    logger.debug(`[AUTH] 🍪 Cookie config: isProduction=${isProduction}, isCodespaces=${isCodespaces}, secure=${cookieSecure}, sameSite=${cookieSameSite}`);
     
     res.cookie('token', token, {
       httpOnly: true,
@@ -186,10 +187,10 @@ export const login = async (req: Request, res: Response) => {
       path: '/',
     });
 
-    console.log(`[AUTH] ✅ Connexion réussie pour ${email} (cookie secure=${cookieSecure}, sameSite=${cookieSameSite})`);
+    logger.debug(`[AUTH] ✅ Connexion réussie pour ${email} (cookie secure=${cookieSecure}, sameSite=${cookieSameSite})`);
     res.status(200).json(response);
   } catch (error) {
-    console.error('[AUTH] Erreur lors de la connexion:', error);
+    logger.error('[AUTH] Erreur lors de la connexion:', error);
     res.status(500).json({ message: 'Erreur interne du serveur' });
   }
 };
@@ -268,11 +269,11 @@ export const getMe = async (req: Request, res: Response) => {
     const isJwtError = error instanceof jwt.JsonWebTokenError || error instanceof jwt.TokenExpiredError;
     if (isJwtError) {
       const jwtErr = error as jwt.JsonWebTokenError;
-      console.warn(`[AUTH] ⚠️ Erreur JWT: ${jwtErr.name} - ${jwtErr.message}`);
+      logger.warn(`[AUTH] ⚠️ Erreur JWT: ${jwtErr.name} - ${jwtErr.message}`);
       res.clearCookie('token');
       res.status(401).json({ message: 'Token invalide ou expiré' });
     } else {
-      console.error('[AUTH] ❌ Erreur inattendue dans getMe (DB/serveur?):', error);
+      logger.error('[AUTH] ❌ Erreur inattendue dans getMe (DB/serveur?):', error);
       // Ne pas effacer le cookie sur une erreur serveur
       res.status(500).json({ message: 'Erreur serveur lors de la vérification' });
     }
@@ -282,10 +283,10 @@ export const getMe = async (req: Request, res: Response) => {
 export const logout = (_req: Request, res: Response) => {
   try {
     res.clearCookie('token');
-    console.log('[AUTH] Déconnexion réussie');
+    logger.debug('[AUTH] Déconnexion réussie');
     res.status(200).json({ message: 'Déconnexion réussie' });
   } catch (error) {
-    console.error('[AUTH] Erreur lors de la déconnexion:', error);
+    logger.error('[AUTH] Erreur lors de la déconnexion:', error);
     res.status(500).json({ message: 'Erreur lors de la déconnexion' });
   }
 };

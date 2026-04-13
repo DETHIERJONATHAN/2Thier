@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Button, Alert, Spin, Tag, Space, Typography, Divider } from 'antd';
 import { GoogleOutlined, DisconnectOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
+import { logger } from '../lib/logger';
 
 const { Title, Text } = Typography;
 
@@ -41,11 +42,11 @@ export const GoogleConnectionCard: React.FC<GoogleConnectionCardProps> = ({ orga
   const [error, setError] = useState<string | null>(null);
 
   const checkConnectionStatus = useCallback(async () => {
-    console.log('[GoogleConnectionCard] 🔍 Début checkConnectionStatus');
-    console.log('[GoogleConnectionCard] 🏢 OrganizationId:', organizationId);
+    logger.debug('[GoogleConnectionCard] 🔍 Début checkConnectionStatus');
+    logger.debug('[GoogleConnectionCard] 🏢 OrganizationId:', organizationId);
     
     if (!organizationId) {
-      console.log('[GoogleConnectionCard] ⚠️ Pas d\'organizationId, impossible de vérifier le statut');
+      logger.debug('[GoogleConnectionCard] ⚠️ Pas d\'organizationId, impossible de vérifier le statut');
       setConnectionStatus({ isConnected: false });
       setError('Organization ID requis pour vérifier la connexion Google');
       return;
@@ -55,72 +56,72 @@ export const GoogleConnectionCard: React.FC<GoogleConnectionCardProps> = ({ orga
       setLoading(true);
       // Passer l'organizationId dans la requête
       const statusUrl = `/api/google-auth/status?organizationId=${organizationId}`;
-      console.log('[GoogleConnectionCard] 📡 Appel API:', statusUrl);
+      logger.debug('[GoogleConnectionCard] 📡 Appel API:', statusUrl);
       
       const responseData = await api.get(statusUrl);
-      console.log('[GoogleConnectionCard] ✅ Données status reçues:', responseData);
-      console.log('[GoogleConnectionCard] 📊 Structure responseData:', JSON.stringify(responseData, null, 2));
-      console.log('[GoogleConnectionCard] 🔍 responseData.data:', responseData.data);
-      console.log('[GoogleConnectionCard] 🔍 responseData.connected:', responseData.connected);
-      console.log('[GoogleConnectionCard] 🔍 responseData.data?.connected:', responseData.data?.connected);
+      logger.debug('[GoogleConnectionCard] ✅ Données status reçues:', responseData);
+      logger.debug('[GoogleConnectionCard] 📊 Structure responseData:', JSON.stringify(responseData, null, 2));
+      logger.debug('[GoogleConnectionCard] 🔍 responseData.data:', responseData.data);
+      logger.debug('[GoogleConnectionCard] 🔍 responseData.connected:', responseData.connected);
+      logger.debug('[GoogleConnectionCard] 🔍 responseData.data?.connected:', responseData.data?.connected);
       
       // L'API retourne { success: true, data: { connected: true/false, ... } }
       const statusData = responseData.data || responseData;
       setConnectionStatus({ isConnected: statusData.connected, ...statusData });
       setError(null);
-      console.log('[GoogleConnectionCard] 📊 ConnectionStatus mis à jour:', { isConnected: statusData.connected, ...statusData });
+      logger.debug('[GoogleConnectionCard] 📊 ConnectionStatus mis à jour:', { isConnected: statusData.connected, ...statusData });
     } catch (err: unknown) {
-      console.log('[GoogleConnectionCard] ❌ Erreur dans checkConnectionStatus:', err);
+      logger.debug('[GoogleConnectionCard] ❌ Erreur dans checkConnectionStatus:', err);
       const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la vérification du statut';
-      console.log('[GoogleConnectionCard] 📝 Message erreur status:', errorMessage);
+      logger.debug('[GoogleConnectionCard] 📝 Message erreur status:', errorMessage);
       setError(errorMessage);
       setConnectionStatus({ isConnected: false });
     } finally {
-      console.log('[GoogleConnectionCard] 🏁 Fin checkConnectionStatus');
+      logger.debug('[GoogleConnectionCard] 🏁 Fin checkConnectionStatus');
       setLoading(false);
     }
   }, [api, organizationId]);
 
   const handleConnect = async () => {
-    console.log('[GoogleConnectionCard] 🚀 Début handleConnect');
-    console.log('[GoogleConnectionCard] État loading avant:', loading);
+    logger.debug('[GoogleConnectionCard] 🚀 Début handleConnect');
+    logger.debug('[GoogleConnectionCard] État loading avant:', loading);
     
     try {
       setLoading(true);
-      console.log('[GoogleConnectionCard] 📡 Appel API /api/google-auth/connect...');
-      console.log('[GoogleConnectionCard] 🏢 Avec organizationId:', organizationId);
+      logger.debug('[GoogleConnectionCard] 📡 Appel API /api/google-auth/connect...');
+      logger.debug('[GoogleConnectionCard] 🏢 Avec organizationId:', organizationId);
       
       // Construire l'URL avec organizationId si fourni
       const connectUrl = organizationId 
         ? `/api/google-auth/connect?organizationId=${organizationId}`
         : '/api/google-auth/connect';
         
-      console.log('[GoogleConnectionCard] 🔗 URL de connexion:', connectUrl);
+      logger.debug('[GoogleConnectionCard] 🔗 URL de connexion:', connectUrl);
       
       const responseData = await api.get(connectUrl);
-      console.log('[GoogleConnectionCard] ✅ Données API reçues:', responseData);
-      console.log('[GoogleConnectionCard] 📊 Structure complète responseData:', JSON.stringify(responseData, null, 2));
-      console.log('[GoogleConnectionCard] 🔍 Type des données:', typeof responseData);
-      console.log('[GoogleConnectionCard] 🔍 Clés des données:', Object.keys(responseData || {}));
+      logger.debug('[GoogleConnectionCard] ✅ Données API reçues:', responseData);
+      logger.debug('[GoogleConnectionCard] 📊 Structure complète responseData:', JSON.stringify(responseData, null, 2));
+      logger.debug('[GoogleConnectionCard] 🔍 Type des données:', typeof responseData);
+      logger.debug('[GoogleConnectionCard] 🔍 Clés des données:', Object.keys(responseData || {}));
       
       if (!responseData) {
-        console.log('[GoogleConnectionCard] ❌ responseData est undefined/null');
+        logger.debug('[GoogleConnectionCard] ❌ responseData est undefined/null');
         setError('Réponse vide du serveur');
         return;
       }
       
-      console.log('[GoogleConnectionCard] 🔑 Recherche authUrl dans:', responseData);
+      logger.debug('[GoogleConnectionCard] 🔑 Recherche authUrl dans:', responseData);
       const authUrl = responseData?.data?.authUrl || responseData?.authUrl;
-      console.log('[GoogleConnectionCard] 🔗 authUrl extrait:', authUrl);
+      logger.debug('[GoogleConnectionCard] 🔗 authUrl extrait:', authUrl);
       
       if (!authUrl) {
-        console.log('[GoogleConnectionCard] ❌ authUrl manquant dans la réponse');
-        console.log('[GoogleConnectionCard] 📋 Contenu complet des données:', JSON.stringify(responseData, null, 2));
+        logger.debug('[GoogleConnectionCard] ❌ authUrl manquant dans la réponse');
+        logger.debug('[GoogleConnectionCard] 📋 Contenu complet des données:', JSON.stringify(responseData, null, 2));
         setError('URL d\'authentification manquante');
         return;
       }
       
-      console.log('[GoogleConnectionCard] 🪟 Ouverture popup avec URL:', authUrl);
+      logger.debug('[GoogleConnectionCard] 🪟 Ouverture popup avec URL:', authUrl);
       
       // Ouvrir la fenêtre d'authentification Google
       const popup = window.open(
@@ -129,13 +130,13 @@ export const GoogleConnectionCard: React.FC<GoogleConnectionCardProps> = ({ orga
         'width=500,height=600,scrollbars=yes,resizable=yes'
       );
       
-      console.log('[GoogleConnectionCard] 🪟 Popup créée:', popup ? 'Succès' : 'Échec');
+      logger.debug('[GoogleConnectionCard] 🪟 Popup créée:', popup ? 'Succès' : 'Échec');
 
       // Écouter la fermeture de la popup
       const checkClosed = setInterval(() => {
         if (popup?.closed) {
           clearInterval(checkClosed);
-          console.log('[GoogleConnectionCard] 🪟 Popup fermée, vérification du statut...');
+          logger.debug('[GoogleConnectionCard] 🪟 Popup fermée, vérification du statut...');
           // Attendre un peu puis vérifier le statut
           setTimeout(() => {
             checkConnectionStatus();
@@ -144,15 +145,15 @@ export const GoogleConnectionCard: React.FC<GoogleConnectionCardProps> = ({ orga
       }, 1000);
 
     } catch (err: unknown) {
-      console.log('[GoogleConnectionCard] ❌ Erreur dans handleConnect:', err);
-      console.log('[GoogleConnectionCard] 🔍 Type erreur:', typeof err);
-      console.log('[GoogleConnectionCard] 📋 Détails erreur:', err);
+      logger.debug('[GoogleConnectionCard] ❌ Erreur dans handleConnect:', err);
+      logger.debug('[GoogleConnectionCard] 🔍 Type erreur:', typeof err);
+      logger.debug('[GoogleConnectionCard] 📋 Détails erreur:', err);
       
       const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la connexion';
-      console.log('[GoogleConnectionCard] 📝 Message erreur final:', errorMessage);
+      logger.debug('[GoogleConnectionCard] 📝 Message erreur final:', errorMessage);
       setError(errorMessage);
     } finally {
-      console.log('[GoogleConnectionCard] 🏁 Fin handleConnect, setLoading(false)');
+      logger.debug('[GoogleConnectionCard] 🏁 Fin handleConnect, setLoading(false)');
       setLoading(false);
     }
   };

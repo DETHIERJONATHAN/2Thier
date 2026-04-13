@@ -50,6 +50,7 @@ import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import dayjs from 'dayjs';
 import 'dayjs/locale/fr';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger';
 
 dayjs.locale('fr');
 
@@ -133,7 +134,7 @@ const CampaignForm: React.FC<CampaignFormProps> = ({
       };
       onSubmit(formattedValues);
     } catch (error) {
-      console.error('Erreur de validation:', error);
+      logger.error('Erreur de validation:', error);
     }
   };
 
@@ -366,7 +367,7 @@ export default function LeadGenerationPage() {
         thisMonthLeads: 0
       });
     } catch (error) {
-      console.error('Erreur lors du chargement:', error);
+      logger.error('Erreur lors du chargement:', error);
       message.error('Impossible de charger les campagnes');
       setCampaigns([]);
     } finally {
@@ -386,7 +387,7 @@ export default function LeadGenerationPage() {
       setFormModalVisible(false);
       loadData();
     } catch (error: unknown) {
-      console.error('Erreur lors de la création:', error);
+      logger.error('Erreur lors de la création:', error);
       const errorMessage = error instanceof Error && 'response' in error 
         ? (error as any).response?.data?.message 
         : 'Erreur lors de la création de la campagne';
@@ -408,7 +409,7 @@ export default function LeadGenerationPage() {
       setIsEditMode(false);
       loadData();
     } catch (error: unknown) {
-      console.error('Erreur lors de la mise à jour:', error);
+      logger.error('Erreur lors de la mise à jour:', error);
       const errorMessage = error instanceof Error && 'response' in error 
         ? (error as any).response?.data?.message 
         : 'Erreur lors de la mise à jour de la campagne';
@@ -425,7 +426,7 @@ export default function LeadGenerationPage() {
       message.success(`Campagne ${newStatus === 'active' ? 'activée' : 'mise en pause'} !`);
       loadData();
     } catch (error) {
-      console.error('Erreur lors du changement de statut:', error);
+      logger.error('Erreur lors du changement de statut:', error);
       message.error('Erreur lors du changement de statut');
     }
   };
@@ -436,7 +437,7 @@ export default function LeadGenerationPage() {
       message.success('Campagne dupliquée avec succès !');
       loadData();
     } catch (error) {
-      console.error('Erreur lors de la duplication:', error);
+      logger.error('Erreur lors de la duplication:', error);
       message.error('Erreur lors de la duplication');
     }
   };
@@ -447,7 +448,7 @@ export default function LeadGenerationPage() {
       message.success('Campagne supprimée avec succès !');
       loadData();
     } catch (error) {
-      console.error('Erreur lors de la suppression:', error);
+      logger.error('Erreur lors de la suppression:', error);
       message.error('Erreur lors de la suppression');
     }
   };
