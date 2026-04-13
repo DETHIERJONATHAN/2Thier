@@ -707,29 +707,101 @@ router.put('/entries/:id/status', authenticateToken, async (req: Request, res: R
 });
 
 // ═══════════════════════════════════════════════════════════
-// POST /tournaments/:id/courts — Ajouter des terrains
+// POST /tournaments/:id/courts — Ajouter des terrains (avec teamType)
 // ═══════════════════════════════════════════════════════════
 
 router.post('/tournaments/:id/courts', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const { courts } = req.body; // [{ name: "Terrain 1" }, ...]
+    const { courts } = req.body; // [{ name: "Terrain 1", teamType: "DOUBLETTE" }, ...]
 
     if (!Array.isArray(courts) || courts.length === 0) {
       return res.status(400).json({ success: false, message: 'Liste de terrains requise' });
     }
 
+    // Supprimer les anciens terrains avant de recréer
+    await db.arenaCourt.deleteMany({ where: { tournamentId: req.params.id } });
+
     const created = await db.arenaCourt.createMany({
-      data: courts.map((c: { name: string; location?: string }) => ({
+      data: courts.map((c: { name: string; teamType?: string; location?: string }) => ({
         tournamentId: req.params.id,
         name: c.name,
+        teamType: c.teamType || 'DOUBLETTE',
         location: c.location || null,
       })),
       skipDuplicates: true,
     });
 
+    // Mettre à jour courtsCount sur le tournoi
+    await db.arenaTournament.update({
+      where: { id: req.params.id },
+      data: { courtsCount: courts.length },
+    });
+
     res.status(201).json({ success: true, data: { count: created.count } });
   } catch (error: any) {
     logger.error('[ARENA] POST /courts error:', error.message);
+    res.status(500).json({ success: false, message: 'Erreur serveur' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// GET /tournaments/:id/court-proposal — Proposition de configuration des terrains
+// ═══════════════════════════════════════════════════════════
+
+router.get('/tournaments/:id/court-proposal', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const tournament = await db.arenaTournament.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true, courtsCount: true, teamType: true, playersPerTeam: true,
+        _count: { select: { PlayerEntries: true } },
+      },
+    });
+
+    if (!tournament) {
+      return res.status(404).json({ success: false, message: 'Tournoi introuvable' });
+    }
+
+    const courtsCount = Number(req.query.courts) || tournament.courtsCount || 4;
+    const playerCount = Number(req.query.players) || tournament._count.PlayerEntries;
+
+    // Algorithme : N joueurs, C terrains
+    // Chaque terrain = 1 match : doublette (2v2=4 joueurs) ou triplette (3v3=6 joueurs)
+    // d + t = C, et 4d + 6t = N => t = (N - 4C) / 2
+    const C = courtsCount;
+    const N = playerCount;
+
+    let triplettes = Math.max(0, Math.floor((N - 4 * C) / 2));
+    if (triplettes > C) triplettes = C;
+    const doublettes = C - triplettes;
+    const playersUsed = doublettes * 4 + triplettes * 6;
+    const playersOut = N - playersUsed; // joueurs qui ne jouent pas cette manche
+
+    // Construire la proposition par terrain
+    const proposal: { name: string; teamType: string; playersNeeded: number }[] = [];
+    for (let i = 0; i < C; i++) {
+      const isTriplette = i >= doublettes; // les derniers terrains sont triplettes
+      proposal.push({
+        name: `Terrain ${i + 1}`,
+        teamType: isTriplette ? 'TRIPLETTE' : 'DOUBLETTE',
+        playersNeeded: isTriplette ? 6 : 4,
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        playerCount: N,
+        courtsCount: C,
+        doublettes,
+        triplettes,
+        playersUsed,
+        playersOut,
+        courts: proposal,
+      },
+    });
+  } catch (error: any) {
+    logger.error('[ARENA] GET /court-proposal error:', error.message);
     res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });
@@ -1000,6 +1072,231 @@ router.get('/tournaments/:id/available-players', authenticateToken, async (req: 
   } catch (error: any) {
     logger.error('[ARENA] GET /available-players error:', error.message);
     res.status(500).json({ success: false, message: 'Erreur serveur' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// POST /tournaments/:id/seed-fake-players — Générer des faux joueurs/équipes (SUPER ADMIN ONLY)
+// ═══════════════════════════════════════════════════════════
+
+const FAKE_FIRST_NAMES = [
+  'Lucas', 'Emma', 'Hugo', 'Léa', 'Nathan', 'Chloé', 'Louis', 'Manon',
+  'Raphaël', 'Camille', 'Julien', 'Inès', 'Antoine', 'Sarah', 'Maxime',
+  'Jade', 'Thomas', 'Zoé', 'Théo', 'Lina', 'Arthur', 'Alice', 'Gabriel',
+  'Louise', 'Enzo', 'Margaux', 'Paul', 'Marie', 'Victor', 'Clara',
+  'Adam', 'Eva', 'Romain', 'Juliette', 'Baptiste', 'Rose', 'Clément',
+  'Anna', 'Nicolas', 'Agathe',
+];
+
+const FAKE_LAST_NAMES = [
+  'Dupont', 'Martin', 'Bernard', 'Dubois', 'Moreau', 'Laurent', 'Simon',
+  'Michel', 'Lefèvre', 'Leroy', 'Roux', 'David', 'Bertrand', 'Morel',
+  'Fournier', 'Girard', 'Bonnet', 'Durand', 'Lambert', 'Fontaine',
+  'Rousseau', 'Vincent', 'Muller', 'Lefebvre', 'Faure', 'André',
+  'Mercier', 'Blanc', 'Guérin', 'Boyer', 'Garcia', 'Perrin', 'Robin',
+  'Clément', 'Morin', 'Nicolas', 'Henry', 'Mathieu', 'Gauthier', 'Masson',
+];
+
+const TEAM_NAME_ADJECTIVES = [
+  'Furieux', 'Intrépides', 'Invincibles', 'Sauvages', 'Enragés',
+  'Électriques', 'Redoutables', 'Infernaux', 'Cosmiques', 'Légendaires',
+  'Fous', 'Rapides', 'Tonnants', 'Brûlants', 'Glaciaux',
+];
+
+const TEAM_NAME_NOUNS = [
+  'Lions', 'Aigles', 'Requins', 'Loups', 'Tigres', 'Dragons',
+  'Faucons', 'Ours', 'Panthères', 'Cobras', 'Mustangs', 'Spartiates',
+  'Gladiateurs', 'Vikings', 'Samouraïs',
+];
+
+router.post('/tournaments/:id/seed-fake-players', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const user = await db.user.findUnique({ where: { id: userId }, select: { role: true } });
+    if (!user || user.role !== 'super_admin') {
+      return res.status(403).json({ success: false, message: 'Super Admin uniquement' });
+    }
+
+    const tournamentId = req.params.id;
+    const tournament = await db.arenaTournament.findUnique({
+      where: { id: tournamentId },
+      select: { id: true, teamType: true, playersPerTeam: true, format: true, organizationId: true, maxTeams: true, maxPlayers: true },
+    });
+    if (!tournament) {
+      return res.status(404).json({ success: false, message: 'Tournoi introuvable' });
+    }
+
+    const count = Math.min(Number(req.body.count) || 16, 128); // max 128 joueurs
+    const orgId = tournament.organizationId;
+    const { randomUUID } = await import('crypto');
+
+    // Mélanger les noms pour éviter les doublons
+    const shuffledFirst = [...FAKE_FIRST_NAMES].sort(() => Math.random() - 0.5);
+    const shuffledLast = [...FAKE_LAST_NAMES].sort(() => Math.random() - 0.5);
+
+    // Créer les faux utilisateurs
+    const fakeUsers: { id: string; firstName: string; lastName: string }[] = [];
+    for (let i = 0; i < count; i++) {
+      const firstName = shuffledFirst[i % shuffledFirst.length];
+      const lastName = shuffledLast[i % shuffledLast.length];
+      const uid = randomUUID();
+      const email = `fake-${uid.slice(0, 8)}@arena-test.local`;
+
+      await db.user.create({
+        data: {
+          id: uid,
+          email,
+          passwordHash: 'FAKE_PLAYER_NO_LOGIN',
+          firstName,
+          lastName,
+          status: 'active',
+          role: 'user',
+          organizationId: orgId,
+          updatedAt: new Date(),
+        },
+      });
+      fakeUsers.push({ id: uid, firstName, lastName });
+    }
+
+    let teamsCreated = 0;
+    let playersCreated = 0;
+
+    if (tournament.format === 'RANDOM_DRAW') {
+      // Mêlée : inscrire en joueurs individuels
+      for (const fu of fakeUsers) {
+        await db.arenaPlayerEntry.create({
+          data: { tournamentId, userId: fu.id, status: 'CONFIRMED' },
+        });
+        playersCreated++;
+      }
+    } else if (tournament.teamType === 'SOLO') {
+      // Solo : inscrire individuellement
+      for (const fu of fakeUsers) {
+        await db.arenaPlayerEntry.create({
+          data: { tournamentId, userId: fu.id, status: 'CONFIRMED' },
+        });
+        playersCreated++;
+      }
+    } else {
+      // Équipes : grouper les joueurs en équipes
+      const teamSize = tournament.playersPerTeam || 2;
+      const nbTeams = Math.floor(fakeUsers.length / teamSize);
+      const shuffledAdj = [...TEAM_NAME_ADJECTIVES].sort(() => Math.random() - 0.5);
+      const shuffledNoun = [...TEAM_NAME_NOUNS].sort(() => Math.random() - 0.5);
+
+      for (let t = 0; t < nbTeams; t++) {
+        const teamName = `${shuffledAdj[t % shuffledAdj.length]} ${shuffledNoun[t % shuffledNoun.length]}`;
+        const members = fakeUsers.slice(t * teamSize, (t + 1) * teamSize);
+
+        const teamEntry = await db.arenaTeamEntry.create({
+          data: {
+            tournamentId,
+            name: teamName,
+            status: 'CONFIRMED',
+          },
+        });
+
+        for (let m = 0; m < members.length; m++) {
+          await db.arenaTeamMember.create({
+            data: {
+              teamEntryId: teamEntry.id,
+              userId: members[m].id,
+              isCaptain: m === 0, // premier = capitaine
+            },
+          });
+        }
+        teamsCreated++;
+      }
+    }
+
+    logger.info(`[ARENA] Seed fake: ${playersCreated} joueurs, ${teamsCreated} équipes pour tournoi ${tournamentId}`);
+
+    res.json({
+      success: true,
+      data: {
+        usersCreated: fakeUsers.length,
+        playersCreated,
+        teamsCreated,
+      },
+    });
+  } catch (error: any) {
+    logger.error('[ARENA] POST /seed-fake-players error:', error.message);
+    res.status(500).json({ success: false, message: error.message || 'Erreur serveur' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// DELETE /tournaments/:id/fake-players — Nettoyer les faux joueurs (SUPER ADMIN ONLY)
+// ═══════════════════════════════════════════════════════════
+
+router.delete('/tournaments/:id/fake-players', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const user = await db.user.findUnique({ where: { id: userId }, select: { role: true } });
+    if (!user || user.role !== 'super_admin') {
+      return res.status(403).json({ success: false, message: 'Super Admin uniquement' });
+    }
+
+    const tournamentId = req.params.id;
+
+    // Trouver tous les faux utilisateurs liés à ce tournoi
+    const fakePlayerEntries = await db.arenaPlayerEntry.findMany({
+      where: {
+        tournamentId,
+        User: { email: { endsWith: '@arena-test.local' } },
+      },
+      select: { userId: true },
+    });
+
+    const fakeTeamMembers = await db.arenaTeamMember.findMany({
+      where: {
+        TeamEntry: { tournamentId },
+        User: { email: { endsWith: '@arena-test.local' } },
+      },
+      select: { userId: true, teamEntryId: true },
+    });
+
+    const fakeUserIds = new Set([
+      ...fakePlayerEntries.map(p => p.userId),
+      ...fakeTeamMembers.map(m => m.userId),
+    ]);
+
+    // Supprimer les équipes dont TOUS les membres sont fake
+    const fakeTeamEntryIds = new Set(fakeTeamMembers.map(m => m.teamEntryId));
+    for (const teamId of fakeTeamEntryIds) {
+      const allMembers = await db.arenaTeamMember.findMany({
+        where: { teamEntryId: teamId },
+        select: { userId: true },
+      });
+      const allFake = allMembers.every(m => fakeUserIds.has(m.userId));
+      if (allFake) {
+        await db.arenaTeamEntry.delete({ where: { id: teamId } });
+      }
+    }
+
+    // Supprimer les inscriptions joueurs fake
+    if (fakePlayerEntries.length > 0) {
+      await db.arenaPlayerEntry.deleteMany({
+        where: { tournamentId, userId: { in: Array.from(fakeUserIds) } },
+      });
+    }
+
+    // Supprimer les faux utilisateurs
+    if (fakeUserIds.size > 0) {
+      await db.user.deleteMany({
+        where: { id: { in: Array.from(fakeUserIds) } },
+      });
+    }
+
+    logger.info(`[ARENA] Cleanup fake: ${fakeUserIds.size} fake users supprimés pour tournoi ${tournamentId}`);
+
+    res.json({
+      success: true,
+      data: { usersDeleted: fakeUserIds.size },
+    });
+  } catch (error: any) {
+    logger.error('[ARENA] DELETE /fake-players error:', error.message);
+    res.status(500).json({ success: false, message: error.message || 'Erreur serveur' });
   }
 });
 

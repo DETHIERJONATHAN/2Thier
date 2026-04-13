@@ -1,30 +1,33 @@
 /**
  * 🏟️ ArenaPanel — Panel swipeable pour le Dashboard Zhiive
  * 
- * Affiche la liste des tournois + actions rapides.
+ * Affiche la liste des tournois + vue détail inline.
  * S'intègre dans le système de swipe du MainLayoutNew.
+ * Tout reste dans le Mur — pas de navigation vers une page externe.
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Card, Button, Tag, Space, Avatar, Empty, Spin, Divider,
   Typography, Badge, Modal, Form, Input, Select, InputNumber,
-  Switch, DatePicker, Row, Col, App,
+  Switch, DatePicker, Row, Col, App, Tabs, Table,
+  Popconfirm,
 } from 'antd';
 import {
-  TrophyOutlined, TeamOutlined, PlusOutlined,
+  TrophyOutlined, TeamOutlined, PlusOutlined, PlayCircleOutlined,
   ThunderboltOutlined, EnvironmentOutlined, CalendarOutlined,
   EditOutlined, UserAddOutlined, ClockCircleOutlined, DeleteOutlined,
-  ReloadOutlined,
+  ReloadOutlined, ArrowLeftOutlined, CheckCircleOutlined,
+  CrownOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
 import { SF } from './ZhiiveTheme';
-import { useNavigate } from 'react-router-dom';
+import { TEAM_TYPE_SIZES } from '../../services/arena/sportConfigs';
 import dayjs from 'dayjs';
 
-const { Title, Text } = Typography;
+const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
 
 // ── Types ──
@@ -40,14 +43,98 @@ interface Tournament {
   maxTeams: number | null;
   maxPlayers: number | null;
   pointsToWin: number;
+  nbRounds: number;
+  allowMixedTeams: boolean;
+  withCourts: boolean;
+  courtsCount: number | null;
   location: string | null;
   startsAt: string | null;
-  status: string;
+  endsAt: string | null;
+  rules: string | null;
   isPublic: boolean;
+  status: string;
   creatorId: string;
+  organizationId: string;
   Creator: { id: string; firstName: string; lastName: string; avatarUrl: string | null };
   Organization: { id: string; name: string; logoUrl: string | null };
   _count: { TeamEntries: number; PlayerEntries: number; Matches: number };
+  Rounds?: Round[];
+  TeamEntries?: TeamEntry[];
+  PlayerEntries?: PlayerEntry[];
+  Courts?: Court[];
+  Standings?: Standing[];
+}
+
+interface Round {
+  id: string;
+  roundNumber: number;
+  name: string | null;
+  Matches: Match[];
+}
+
+interface Match {
+  id: string;
+  matchNumber: number;
+  status: string;
+  score1: number | null;
+  score2: number | null;
+  team1Id: string | null;
+  team2Id: string | null;
+  winnerId?: string | null;
+  Team1: TeamEntry | null;
+  Team2: TeamEntry | null;
+  Winner: { id: string; name: string } | null;
+  Court: { id: string; name: string } | null;
+}
+
+interface TeamEntry {
+  id: string;
+  name: string;
+  status: string;
+  Members?: TeamMember[];
+}
+
+interface TeamMember {
+  id: string;
+  isCaptain: boolean;
+  User: { id: string; firstName: string; lastName: string; avatarUrl: string | null };
+}
+
+interface PlayerEntry {
+  id: string;
+  status: string;
+  User: { id: string; firstName: string; lastName: string; avatarUrl: string | null };
+}
+
+interface Court {
+  id: string;
+  name: string;
+  teamType: string;
+  location: string | null;
+  isAvailable: boolean;
+}
+
+interface CourtProposal {
+  playerCount: number;
+  courtsCount: number;
+  doublettes: number;
+  triplettes: number;
+  playersUsed: number;
+  playersOut: number;
+  courts: { name: string; teamType: string; playersNeeded: number }[];
+}
+
+interface Standing {
+  id: string;
+  rank: number;
+  played: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  pointsFor: number;
+  pointsAgainst: number;
+  points: number;
+  TeamEntry: { id: string; name: string };
 }
 
 interface ArenaPanelProps {
@@ -86,15 +173,33 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
   const { api } = useAuthenticatedApi();
   const { user, isSuperAdmin } = useAuth();
   const { message: antMessage } = App.useApp();
-  const navigate = useNavigate();
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const stableApi = useMemo(() => api, []);
 
+  // ── State: Liste ──
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createForm] = Form.useForm();
+
+  // ── State: Détail (inline) ──
+  const [selectedTournament, setSelectedTournament] = useState<Tournament | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('matches');
+  const [showScoreModal, setShowScoreModal] = useState(false);
+  const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const [showCourtsModal, setShowCourtsModal] = useState(false);
+  const [courtProposal, setCourtProposal] = useState<CourtProposal | null>(null);
+  const [proposalCourts, setProposalCourts] = useState<{ name: string; teamType: string }[]>([]);
+  const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
+  const [availablePlayers, setAvailablePlayers] = useState<{ id: string; firstName: string; lastName: string; avatarUrl: string | null }[]>([]);
+  const [myRegistration, setMyRegistration] = useState<{ isRegistered: boolean; asPlayer: any; asTeamMember: any; isCaptain: boolean; team: any } | null>(null);
+  const [scoreForm] = Form.useForm();
+  const [registerForm] = Form.useForm();
+  const [courtsForm] = Form.useForm();
+
+  // ── Data fetching: Liste ──
 
   const fetchTournaments = useCallback(async () => {
     setLoading(true);
@@ -111,6 +216,86 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
   useEffect(() => {
     fetchTournaments();
   }, [fetchTournaments]);
+
+  // ── Data fetching: Détail ──
+
+  const fetchTournamentDetail = useCallback(async (id: string) => {
+    setDetailLoading(true);
+    try {
+      const res = await stableApi.get<{ success: boolean; data: Tournament }>(
+        `/api/arena/tournaments/${id}`
+      );
+      if (res.success) setSelectedTournament(res.data);
+    } catch {
+      antMessage.error(t('messages.loadingError'));
+    } finally {
+      setDetailLoading(false);
+    }
+  }, [stableApi, t, antMessage]);
+
+  const fetchMyRegistration = useCallback(async (tournamentId: string) => {
+    try {
+      const res = await stableApi.get<any>(`/api/arena/tournaments/${tournamentId}/my-registration`);
+      setMyRegistration(res.data);
+    } catch {
+      setMyRegistration(null);
+    }
+  }, [stableApi]);
+
+  const fetchAvailablePlayers = useCallback(async (tournamentId: string, query = '') => {
+    try {
+      const res = await stableApi.get<any>(`/api/arena/tournaments/${tournamentId}/available-players?q=${encodeURIComponent(query)}`);
+      setAvailablePlayers(res.data || []);
+    } catch {
+      setAvailablePlayers([]);
+    }
+  }, [stableApi]);
+
+  // Quand on sélectionne un tournoi, charger l'inscription
+  useEffect(() => {
+    if (selectedTournament) {
+      fetchMyRegistration(selectedTournament.id);
+    } else {
+      setMyRegistration(null);
+    }
+  }, [selectedTournament?.id, fetchMyRegistration]);
+
+  // ── Socket.IO realtime ──
+  useEffect(() => {
+    if (!selectedTournament) return;
+    let socket: any;
+    try {
+      const io = (window as any).__ZHIIVE_SOCKET_IO__;
+      if (io) {
+        socket = io;
+        socket.emit('arena:join', { tournamentId: selectedTournament.id });
+        const refresh = () => fetchTournamentDetail(selectedTournament.id);
+        socket.on('arena:score-updated', refresh);
+        socket.on('arena:tournament-updated', refresh);
+        socket.on('arena:standings-updated', refresh);
+        socket.on('arena:round-generated', refresh);
+        socket.on('arena:teams-generated', refresh);
+        socket.on('arena:tournament-status', refresh);
+      }
+    } catch (_) { /* socket optional */ }
+    return () => {
+      if (socket && selectedTournament) {
+        socket.emit('arena:leave', { tournamentId: selectedTournament.id });
+        socket.off('arena:score-updated');
+        socket.off('arena:tournament-updated');
+        socket.off('arena:standings-updated');
+        socket.off('arena:round-generated');
+        socket.off('arena:teams-generated');
+        socket.off('arena:tournament-status');
+      }
+    };
+  }, [selectedTournament?.id, fetchTournamentDetail]);
+
+  // ── Actions ──
+
+  const isOrganizer = useCallback((tournament: Tournament) => {
+    return tournament.creatorId === user?.id || isSuperAdmin;
+  }, [user?.id, isSuperAdmin]);
 
   const handleCreate = useCallback(async (values: Record<string, unknown>) => {
     try {
@@ -130,15 +315,163 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
     }
   }, [stableApi, t, antMessage, createForm, fetchTournaments]);
 
-  const handleRegisterPlayer = useCallback(async (tournamentId: string) => {
+  const handleRegisterPlayer = useCallback(async (tournamentId?: string) => {
+    const id = tournamentId || selectedTournament?.id;
+    if (!id) return;
     try {
-      await stableApi.post(`/api/arena/tournaments/${tournamentId}/players`);
+      await stableApi.post(`/api/arena/tournaments/${id}/players`);
       antMessage.success(t('arena.confirmed'));
+      if (selectedTournament) {
+        fetchTournamentDetail(selectedTournament.id);
+        fetchMyRegistration(selectedTournament.id);
+      }
       fetchTournaments();
     } catch (err: any) {
       antMessage.error(err.message || t('messages.loadingError'));
     }
-  }, [stableApi, t, antMessage, fetchTournaments]);
+  }, [stableApi, selectedTournament, fetchTournamentDetail, fetchMyRegistration, fetchTournaments, t, antMessage]);
+
+  const handleStatusChange = useCallback(async () => {
+    if (!selectedTournament) return;
+    try {
+      await stableApi.post(`/api/arena/tournaments/${selectedTournament.id}/start`);
+      fetchTournamentDetail(selectedTournament.id);
+      fetchTournaments();
+    } catch (err: any) {
+      antMessage.error(err.message || t('messages.loadingError'));
+    }
+  }, [stableApi, selectedTournament, fetchTournamentDetail, fetchTournaments, t, antMessage]);
+
+  const handleGenerateRound = useCallback(async () => {
+    if (!selectedTournament) return;
+    try {
+      await stableApi.post(`/api/arena/tournaments/${selectedTournament.id}/generate-round`);
+      antMessage.success(t('arena.round') + ' ' + t('common.created'));
+      fetchTournamentDetail(selectedTournament.id);
+    } catch (err: any) {
+      antMessage.error(err.message || t('messages.loadingError'));
+    }
+  }, [stableApi, selectedTournament, fetchTournamentDetail, t, antMessage]);
+
+  const handleGenerateTeams = useCallback(async () => {
+    if (!selectedTournament) return;
+    try {
+      await stableApi.post(`/api/arena/tournaments/${selectedTournament.id}/generate-teams`);
+      antMessage.success(t('arena.teams') + ' ' + t('common.created'));
+      fetchTournamentDetail(selectedTournament.id);
+    } catch (err: any) {
+      antMessage.error(err.message || t('messages.loadingError'));
+    }
+  }, [stableApi, selectedTournament, fetchTournamentDetail, t, antMessage]);
+
+  const handleSubmitScore = useCallback(async (values: { score1: number; score2: number }) => {
+    if (!selectedMatch) return;
+    try {
+      await stableApi.put(`/api/arena/matches/${selectedMatch.id}/score`, values);
+      antMessage.success(t('arena.score') + ' ' + t('common.saved'));
+      setShowScoreModal(false);
+      scoreForm.resetFields();
+      if (selectedTournament) fetchTournamentDetail(selectedTournament.id);
+    } catch (err: any) {
+      antMessage.error(err.message || t('messages.loadingError'));
+    }
+  }, [stableApi, selectedMatch, selectedTournament, fetchTournamentDetail, scoreForm, t, antMessage]);
+
+  const handleRegisterTeam = useCallback(async (values: { name: string; memberIds?: string[] }) => {
+    if (!selectedTournament) return;
+    try {
+      await stableApi.post(`/api/arena/tournaments/${selectedTournament.id}/teams`, values);
+      antMessage.success(t('arena.confirmed'));
+      setShowRegisterModal(false);
+      registerForm.resetFields();
+      fetchTournamentDetail(selectedTournament.id);
+      fetchMyRegistration(selectedTournament.id);
+    } catch (err: any) {
+      antMessage.error(err.message || t('messages.loadingError'));
+    }
+  }, [stableApi, selectedTournament, fetchTournamentDetail, fetchMyRegistration, registerForm, t, antMessage]);
+
+  const fetchCourtProposal = useCallback(async (courtsCount?: number) => {
+    if (!selectedTournament) return;
+    try {
+      const q = courtsCount ? `?courts=${courtsCount}` : '';
+      const res = await stableApi.get<{ success: boolean; data: CourtProposal }>(
+        `/api/arena/tournaments/${selectedTournament.id}/court-proposal${q}`
+      );
+      if (res.success) {
+        setCourtProposal(res.data);
+        setProposalCourts(res.data.courts.map(c => ({ name: c.name, teamType: c.teamType })));
+      }
+    } catch { /* silent */ }
+  }, [stableApi, selectedTournament]);
+
+  const handleSaveCourts = useCallback(async () => {
+    if (!selectedTournament || proposalCourts.length === 0) return;
+    try {
+      await stableApi.post(`/api/arena/tournaments/${selectedTournament.id}/courts`, {
+        courts: proposalCourts,
+      });
+      antMessage.success(t('arena.courts') + ' ' + t('common.created'));
+      setShowCourtsModal(false);
+      setCourtProposal(null);
+      fetchTournamentDetail(selectedTournament.id);
+    } catch (err: any) {
+      antMessage.error(err.message || t('messages.loadingError'));
+    }
+  }, [stableApi, selectedTournament, proposalCourts, fetchTournamentDetail, t, antMessage]);
+
+  const handleDeleteTournament = useCallback(async (id: string) => {
+    try {
+      await stableApi.delete(`/api/arena/tournaments/${id}`);
+      antMessage.success(t('common.deleted'));
+      setSelectedTournament(null);
+      fetchTournaments();
+    } catch (err: any) {
+      antMessage.error(err.message || t('messages.loadingError'));
+    }
+  }, [stableApi, fetchTournaments, t, antMessage]);
+
+  // ── Super Admin: Seed fake players/teams ──
+  const [seeding, setSeeding] = useState(false);
+  const [fakeCount, setFakeCount] = useState<number>(16);
+
+  const handleSeedFakePlayers = useCallback(async (count: number) => {
+    if (!selectedTournament) return;
+    setSeeding(true);
+    try {
+      const res = await stableApi.post<{ success: boolean; data: { usersCreated: number; playersCreated: number; teamsCreated: number } }>(
+        `/api/arena/tournaments/${selectedTournament.id}/seed-fake-players`,
+        { count }
+      );
+      if (res.success) {
+        const d = res.data;
+        antMessage.success(`${d.usersCreated} joueurs créés${d.teamsCreated ? `, ${d.teamsCreated} équipes` : ''}`);
+        fetchTournamentDetail(selectedTournament.id);
+      }
+    } catch (err: any) {
+      antMessage.error(err.message || t('messages.loadingError'));
+    } finally {
+      setSeeding(false);
+    }
+  }, [stableApi, selectedTournament, fetchTournamentDetail, t, antMessage]);
+
+  const handleCleanFakePlayers = useCallback(async () => {
+    if (!selectedTournament) return;
+    setSeeding(true);
+    try {
+      const res = await stableApi.delete<{ success: boolean; data: { usersDeleted: number } }>(
+        `/api/arena/tournaments/${selectedTournament.id}/fake-players`
+      );
+      if (res.success) {
+        antMessage.success(`${res.data.usersDeleted} faux joueurs supprimés`);
+        fetchTournamentDetail(selectedTournament.id);
+      }
+    } catch (err: any) {
+      antMessage.error(err.message || t('messages.loadingError'));
+    } finally {
+      setSeeding(false);
+    }
+  }, [stableApi, selectedTournament, fetchTournamentDetail, t, antMessage]);
 
   // ── Active tournaments (in progress) ──
   const activeTournaments = useMemo(() =>
@@ -150,8 +483,12 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
   const otherTournaments = useMemo(() =>
     tournaments.filter(t => !['IN_PROGRESS', 'REGISTRATION_OPEN'].includes(t.status)), [tournaments]);
 
+  // ═══════════════════════════════════════════════
+  // RENDER — Carte tournoi (liste)
+  // ═══════════════════════════════════════════════
+
   const renderTournamentCard = (tournament: Tournament, compact?: boolean) => {
-    const isOrganizer = tournament.creatorId === user?.id || isSuperAdmin;
+    const isOrg = tournament.creatorId === user?.id || isSuperAdmin;
 
     return (
       <Card
@@ -165,7 +502,8 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
         }}
         bodyStyle={{ padding: compact ? 10 : 14 }}
         onClick={() => {
-          navigate(`/arena?id=${tournament.id}`);
+          fetchTournamentDetail(tournament.id);
+          setActiveTab('matches');
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -188,6 +526,15 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
             <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
               <Tag color="purple" style={{ fontSize: 10 }}>{t(`arena.formats.${tournament.format}`)}</Tag>
               <Tag color="blue" style={{ fontSize: 10 }}>{t(`arena.teamTypes.${tournament.teamType}`)}</Tag>
+              {tournament.pointsToWin > 0 && (
+                <Tag style={{ fontSize: 10 }}>{tournament.pointsToWin} pts</Tag>
+              )}
+              {tournament.nbRounds > 0 && (
+                <Tag color="cyan" style={{ fontSize: 10 }}>{tournament.nbRounds} {t('arena.rounds')}</Tag>
+              )}
+              {tournament.courtsCount && tournament.courtsCount > 0 && (
+                <Tag color="green" style={{ fontSize: 10 }}><EnvironmentOutlined /> {tournament.courtsCount}</Tag>
+              )}
             </div>
 
             {tournament.location && (
@@ -206,7 +553,7 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
             <Badge count={tournament._count.TeamEntries} style={{ background: SF.primary }} overflowCount={99}>
               <TeamOutlined style={{ fontSize: 18, color: SF.textSecondary }} />
             </Badge>
-            {tournament.status === 'REGISTRATION_OPEN' && !isOrganizer && (
+            {tournament.status === 'REGISTRATION_OPEN' && !isOrg && (
               <Button
                 size="small"
                 type="primary"
@@ -230,8 +577,12 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
     );
   };
 
-  return (
-    <div style={{ height: '100%', overflowY: 'auto', padding: '8px 12px 80px' }}>
+  // ═══════════════════════════════════════════════
+  // RENDER — Vue liste (page d'accueil du panel)
+  // ═══════════════════════════════════════════════
+
+  const renderListView = () => (
+    <>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -283,7 +634,6 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
         </Empty>
       ) : (
         <>
-          {/* En cours */}
           {activeTournaments.length > 0 && (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
@@ -295,7 +645,6 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
             </>
           )}
 
-          {/* Inscriptions ouvertes */}
           {openTournaments.length > 0 && (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, marginTop: 12 }}>
@@ -307,7 +656,6 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
             </>
           )}
 
-          {/* Autres */}
           {otherTournaments.length > 0 && (
             <>
               <Divider style={{ margin: '12px 0 8px', fontSize: 12 }}>{t('arena.tournaments')}</Divider>
@@ -316,6 +664,404 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
           )}
         </>
       )}
+    </>
+  );
+
+  // ═══════════════════════════════════════════════
+  // RENDER — Vue détail tournoi (inline dans le panel)
+  // ═══════════════════════════════════════════════
+
+  const renderDetailView = () => {
+    if (!selectedTournament) return null;
+    const t_ = selectedTournament;
+    const isOrg = isOrganizer(t_);
+
+    return (
+      <>
+        {/* Header détail avec bouton retour */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <Button
+            type="text"
+            icon={<ArrowLeftOutlined />}
+            onClick={() => setSelectedTournament(null)}
+            style={{ padding: '4px 8px' }}
+          />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Text strong style={{ fontSize: 15, color: SF.text, display: 'block' }} ellipsis>
+              {t_.name}
+            </Text>
+            <Space size={4} wrap>
+              <Tag color={STATUS_COLORS[t_.status]} icon={STATUS_ICONS[t_.status]} style={{ borderRadius: 12, fontSize: 10 }}>
+                {t(`arena.status.${t_.status}`)}
+              </Tag>
+              <Tag style={{ fontSize: 10 }}>{t(`arena.sports.${t_.sport}`)}</Tag>
+            </Space>
+          </div>
+          {isOrg && t_.status === 'DRAFT' && (
+            <Popconfirm title={t('actions.confirmDelete')} onConfirm={() => handleDeleteTournament(t_.id)}>
+              <Button danger size="small" icon={<DeleteOutlined />} />
+            </Popconfirm>
+          )}
+        </div>
+
+        <Spin spinning={detailLoading}>
+          {/* Info tags */}
+          <div style={{ marginBottom: 10, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            <Tag color="purple" style={{ fontSize: 10 }}>{t(`arena.formats.${t_.format}`)}</Tag>
+            <Tag color="blue" style={{ fontSize: 10 }}>{t(`arena.teamTypes.${t_.teamType}`)}</Tag>
+            {t_.allowMixedTeams && <Tag color="green" style={{ fontSize: 10 }}>{t('arena.mixedTeams')}</Tag>}
+            <Tag style={{ fontSize: 10 }}>{t('arena.pointsToWin')}: {t_.pointsToWin}</Tag>
+          </div>
+
+          {t_.description && (
+            <Paragraph style={{ fontSize: 12, color: SF.textSecondary, marginBottom: 8 }}>{t_.description}</Paragraph>
+          )}
+          {t_.location && (
+            <div style={{ color: SF.textSecondary, fontSize: 11, marginBottom: 4 }}><EnvironmentOutlined /> {t_.location}</div>
+          )}
+          {t_.startsAt && (
+            <div style={{ color: SF.textSecondary, fontSize: 11, marginBottom: 8 }}>
+              <CalendarOutlined /> {dayjs(t_.startsAt).format('DD/MM/YYYY HH:mm')}
+            </div>
+          )}
+
+          {/* Actions organisateur */}
+          {isOrg && (
+            <div style={{
+              display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10,
+              padding: '8px 10px',
+              background: `${SF.primary}08`,
+              borderRadius: SF.radius,
+              border: `1px solid ${SF.primary}20`,
+            }}>
+              {(t_.status === 'DRAFT' || t_.status === 'REGISTRATION_OPEN' || t_.status === 'REGISTRATION_CLOSED') && (
+                <Button size="small" type="primary" icon={<PlayCircleOutlined />} onClick={handleStatusChange}>
+                  {t_.status === 'DRAFT' ? t('arena.openRegistrations') : t('arena.startTournament')}
+                </Button>
+              )}
+              {t_.status === 'IN_PROGRESS' && (
+                <Button size="small" icon={<ThunderboltOutlined />} onClick={handleGenerateRound}>
+                  {t_.format === 'RANDOM_DRAW' ? t('arena.generateAllRounds') : t('arena.generateRound')}
+                </Button>
+              )}
+              <Button size="small" icon={<EnvironmentOutlined />} onClick={() => { setShowCourtsModal(true); setCourtProposal(null); }}>
+                {t_.Courts && t_.Courts.length > 0 ? t('arena.editCourts') : t('arena.addCourts')}
+              </Button>
+            </div>
+          )}
+
+          {/* 🧪 Super Admin Test Tools — Seed fake players */}
+          {isSuperAdmin && (
+            <div style={{
+              marginBottom: 10, padding: '8px 10px',
+              background: `${SF.fire}08`, borderRadius: SF.radius,
+              border: `1px dashed ${SF.fire}40`,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <ThunderboltOutlined style={{ color: SF.fire }} />
+                <Text strong style={{ fontSize: 11, color: SF.fire }}>🧪 Test Mode (Super Admin)</Text>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+                <InputNumber
+                  size="small"
+                  min={2} max={128}
+                  value={fakeCount}
+                  onChange={(v) => setFakeCount(v ?? 16)}
+                  style={{ width: 70, fontSize: 10 }}
+                />
+                <Button size="small" type="primary" loading={seeding}
+                  onClick={() => handleSeedFakePlayers(fakeCount)}
+                  icon={<UserAddOutlined />}
+                  style={{ fontSize: 10 }}>
+                  Ajouter joueurs
+                </Button>
+                <Button size="small" loading={seeding}
+                  onClick={handleGenerateRound}
+                  icon={<ThunderboltOutlined />}
+                  style={{ fontSize: 10 }}>
+                  Générer matches
+                </Button>
+                <Popconfirm title="Supprimer tous les faux joueurs ?" onConfirm={handleCleanFakePlayers}>
+                  <Button size="small" danger loading={seeding} icon={<DeleteOutlined />}
+                    style={{ fontSize: 10 }}>
+                    Nettoyer fakes
+                  </Button>
+                </Popconfirm>
+              </div>
+            </div>
+          )}
+
+          {/* Inscription joueur/équipe */}
+          {(t_.status === 'REGISTRATION_OPEN' || t_.status === 'DRAFT') && !isOrg && (
+            <div style={{ marginBottom: 10, padding: '8px 10px', background: `${SF.success}08`, borderRadius: SF.radius, border: `1px solid ${SF.success}20` }}>
+              {myRegistration?.isRegistered ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Tag color="green" icon={<CheckCircleOutlined />} style={{ fontSize: 11 }}>{t('arena.alreadyRegistered')}</Tag>
+                  {myRegistration.isCaptain && myRegistration.team && (
+                    <Button size="small" icon={<EditOutlined />} onClick={() => {
+                      setShowRegisterModal(true);
+                      fetchAvailablePlayers(t_.id);
+                    }}>
+                      {t('arena.manageTeam')}
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <Space>
+                  {t_.format === 'RANDOM_DRAW' ? (
+                    <Button size="small" type="primary" icon={<UserAddOutlined />} onClick={() => handleRegisterPlayer()}>
+                      {t('arena.registerMelee')}
+                    </Button>
+                  ) : t_.teamType === 'SOLO' ? (
+                    <Button size="small" type="primary" icon={<UserAddOutlined />} onClick={() => handleRegisterPlayer()}>
+                      {t('arena.registerPlayer')}
+                    </Button>
+                  ) : (
+                    <Button size="small" type="primary" icon={<TeamOutlined />} onClick={() => {
+                      setShowRegisterModal(true);
+                      fetchAvailablePlayers(t_.id);
+                    }}>
+                      {t('arena.registerTeam')}
+                    </Button>
+                  )}
+                </Space>
+              )}
+            </div>
+          )}
+
+          {/* Onglets: Matchs / Classement / Équipes / Terrains */}
+          <Tabs
+            activeKey={activeTab}
+            onChange={setActiveTab}
+            size="small"
+            style={{ fontSize: 12 }}
+            items={[
+              {
+                key: 'matches',
+                label: <span><ThunderboltOutlined /> {t('arena.matches')}</span>,
+                children: renderMatchesTab(),
+              },
+              {
+                key: 'standings',
+                label: <span><TrophyOutlined /> {t('arena.standings')}</span>,
+                children: renderStandingsTab(),
+              },
+              {
+                key: 'teams',
+                label: <span><TeamOutlined /> {t('arena.teams')}</span>,
+                children: renderTeamsTab(),
+              },
+              {
+                key: 'courts',
+                label: <span><EnvironmentOutlined /> {t('arena.courts')}</span>,
+                children: renderCourtsTab(),
+              },
+            ]}
+          />
+        </Spin>
+      </>
+    );
+  };
+
+  // ═══════════════════════════════ Onglet Matchs ══
+  const renderMatchesTab = () => {
+    const rounds = selectedTournament?.Rounds || [];
+    if (rounds.length === 0) return <Empty description={t('arena.noMatches')} style={{ padding: 16 }} />;
+
+    return (
+      <div>
+        {rounds.map(round => (
+          <Card
+            key={round.id}
+            title={<span style={{ fontSize: 12 }}>{t('arena.round')} {round.roundNumber}{round.name ? ` — ${round.name}` : ''}</span>}
+            size="small"
+            style={{ marginBottom: 8, borderRadius: SF.radius }}
+            bodyStyle={{ padding: 0 }}
+          >
+            {round.Matches.map(match => (
+              <div
+                key={match.id}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '6px 10px', borderBottom: `1px solid ${SF.border}`,
+                  background: match.status === 'COMPLETED' ? `${SF.success}08` : undefined,
+                  fontSize: 12,
+                }}
+              >
+                <div style={{ flex: 1, textAlign: 'right', fontWeight: match.winnerId === match.team1Id ? 700 : 400 }}>
+                  {match.Team1?.name || t('arena.bye')}
+                </div>
+                <div style={{ flex: '0 0 80px', textAlign: 'center' }}>
+                  {match.status === 'COMPLETED' ? (
+                    <span>
+                      <span style={{ fontWeight: 700, color: (match.score1 ?? 0) > (match.score2 ?? 0) ? SF.success : SF.text }}>
+                        {match.score1}
+                      </span>
+                      <span style={{ color: SF.textSecondary, margin: '0 4px' }}>-</span>
+                      <span style={{ fontWeight: 700, color: (match.score2 ?? 0) > (match.score1 ?? 0) ? SF.success : SF.text }}>
+                        {match.score2}
+                      </span>
+                    </span>
+                  ) : (
+                    <Button size="small" type="link" style={{ fontSize: 11, padding: 0 }}
+                      onClick={(e) => { e.stopPropagation(); setSelectedMatch(match); setShowScoreModal(true); }}>
+                      {t('arena.submitScore')}
+                    </Button>
+                  )}
+                </div>
+                <div style={{ flex: 1, textAlign: 'left', fontWeight: match.winnerId === match.team2Id ? 700 : 400 }}>
+                  {match.Team2?.name || t('arena.bye')}
+                </div>
+                {match.Court && (
+                  <Tag style={{ marginLeft: 4, fontSize: 10 }}>{match.Court.name}</Tag>
+                )}
+              </div>
+            ))}
+          </Card>
+        ))}
+      </div>
+    );
+  };
+
+  // ═══════════════════════════════ Onglet Classement ══
+  const renderStandingsTab = () => {
+    const standings = selectedTournament?.Standings || [];
+    if (standings.length === 0) return <Empty description={t('arena.noMatches')} style={{ padding: 16 }} />;
+
+    return (
+      <Table
+        dataSource={standings}
+        rowKey="id"
+        pagination={false}
+        size="small"
+        scroll={{ x: 'max-content' }}
+        columns={[
+          {
+            title: '#', dataIndex: 'rank', key: 'rank', width: 36,
+            render: (rank: number) => (
+              <span style={{ fontWeight: 700, color: rank <= 3 ? SF.gold : SF.text }}>
+                {rank <= 3 && <CrownOutlined style={{ marginRight: 2, color: ['#FFD700', '#C0C0C0', '#CD7F32'][rank - 1] }} />}
+                {rank}
+              </span>
+            ),
+          },
+          { title: t('arena.team'), dataIndex: ['TeamEntry', 'name'], key: 'team', ellipsis: true, render: (name: string) => <Text strong style={{ fontSize: 12 }}>{name}</Text> },
+          { title: 'J', dataIndex: 'played', key: 'played', width: 30, align: 'center' as const },
+          { title: 'V', dataIndex: 'wins', key: 'wins', width: 30, align: 'center' as const, render: (v: number) => <span style={{ color: SF.success, fontWeight: 600 }}>{v}</span> },
+          { title: 'D', dataIndex: 'losses', key: 'losses', width: 30, align: 'center' as const, render: (v: number) => <span style={{ color: v > 0 ? SF.danger : SF.text }}>{v}</span> },
+          { title: 'Pts', dataIndex: 'points', key: 'points', width: 36, align: 'center' as const, render: (pts: number) => <span style={{ fontWeight: 700, color: SF.primary }}>{pts}</span> },
+        ]}
+      />
+    );
+  };
+
+  // ═══════════════════════════════ Onglet Équipes ══
+  const renderTeamsTab = () => {
+    const teams = selectedTournament?.TeamEntries || [];
+    const players = selectedTournament?.PlayerEntries || [];
+
+    if (teams.length === 0 && players.length === 0) return <Empty description={t('arena.noTeams')} style={{ padding: 16 }} />;
+
+    return (
+      <div>
+        {teams.map(team => (
+          <div key={team.id} style={{ padding: '8px 0', borderBottom: `1px solid ${SF.border}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <Avatar size={20} style={{ background: team.status === 'CONFIRMED' ? SF.success : SF.textSecondary }}>
+                <TeamOutlined style={{ fontSize: 10 }} />
+              </Avatar>
+              <Text strong style={{ fontSize: 12 }}>{team.name}</Text>
+              <Tag color={team.status === 'CONFIRMED' ? 'green' : team.status === 'REJECTED' ? 'red' : 'orange'} style={{ fontSize: 10 }}>
+                {t(`arena.${team.status.toLowerCase()}`)}
+              </Tag>
+              {isOrganizer(selectedTournament!) && team.status === 'PENDING' && (
+                <Button size="small" type="primary" icon={<CheckCircleOutlined />} style={{ fontSize: 10 }}
+                  onClick={async () => {
+                    await stableApi.put(`/api/arena/entries/${team.id}/status`, { status: 'CONFIRMED', type: 'team' });
+                    fetchTournamentDetail(selectedTournament!.id);
+                  }}>
+                  {t('arena.confirmed')}
+                </Button>
+              )}
+            </div>
+            {team.Members && team.Members.length > 0 && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', paddingLeft: 28 }}>
+                {team.Members.map(m => (
+                  <Space key={m.id} size={2}>
+                    <Avatar size={16} src={m.User.avatarUrl}>{m.User.firstName?.[0]}</Avatar>
+                    <span style={{ fontSize: 11 }}>{m.User.firstName} {m.User.lastName}</span>
+                    {m.isCaptain && <CrownOutlined style={{ color: SF.gold, fontSize: 10 }} />}
+                  </Space>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+        {players.length > 0 && (
+          <>
+            <Divider style={{ margin: '8px 0', fontSize: 11 }}>{t('arena.players')}</Divider>
+            {players.map(p => (
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0' }}>
+                <Avatar size={20} src={p.User.avatarUrl}>{p.User.firstName?.[0]}</Avatar>
+                <span style={{ fontSize: 12 }}>{p.User.firstName} {p.User.lastName}</span>
+                <Tag color={p.status === 'CONFIRMED' ? 'green' : 'orange'} style={{ fontSize: 10 }}>
+                  {t(`arena.${p.status.toLowerCase()}`)}
+                </Tag>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+    );
+  };
+
+  // ═══════════════════════════════ Onglet Terrains ══
+  const renderCourtsTab = () => {
+    const courts = selectedTournament?.Courts || [];
+    if (courts.length === 0) {
+      return (
+        <Empty description={t('arena.courts')} style={{ padding: 16 }}>
+          {isOrganizer(selectedTournament!) && (
+            <Button size="small" icon={<PlusOutlined />} onClick={() => setShowCourtsModal(true)}>
+              {t('arena.addCourts')}
+            </Button>
+          )}
+        </Empty>
+      );
+    }
+    return (
+      <div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+          {courts.map(court => (
+            <Card key={court.id} size="small" style={{ borderRadius: SF.radius, borderColor: court.isAvailable ? SF.success : SF.fire, minWidth: 140 }}>
+              <Text strong style={{ fontSize: 11 }}><EnvironmentOutlined /> {court.name}</Text>
+              <div>
+                <Tag color={court.teamType === 'TRIPLETTE' ? 'orange' : 'blue'} style={{ fontSize: 10, marginTop: 2 }}>
+                  {court.teamType === 'TRIPLETTE' ? 'Triplette (3v3)' : 'Doublette (2v2)'}
+                </Tag>
+              </div>
+              <div>
+                <Badge status={court.isAvailable ? 'success' : 'processing'} text={<span style={{ fontSize: 10 }}>{court.isAvailable ? t('common.available') : t('common.inUse')}</span>} />
+              </div>
+            </Card>
+          ))}
+        </div>
+        {isOrganizer(selectedTournament!) && (
+          <Button size="small" icon={<EditOutlined />} onClick={() => setShowCourtsModal(true)}>
+            {t('arena.editCourts')}
+          </Button>
+        )}
+      </div>
+    );
+  };
+
+  // ═══════════════════════════════════════════════
+  // RENDER Principal
+  // ═══════════════════════════════════════════════
+
+  return (
+    <div style={{ height: '100%', overflowY: 'auto', padding: '8px 12px 80px' }}>
+      {selectedTournament ? renderDetailView() : renderListView()}
 
       {/* Create Modal */}
       <Modal
@@ -344,11 +1090,9 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
           <Form.Item name="name" label={t('arena.tournament')} rules={[{ required: true }]}>
             <Input placeholder={t('arena.tournament')} />
           </Form.Item>
-
           <Form.Item name="description" label={t('common.description')}>
             <TextArea rows={2} />
           </Form.Item>
-
           <Row gutter={12}>
             <Col span={8}>
               <Form.Item name="sport" label={t('arena.sport')}>
@@ -375,7 +1119,6 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
               </Form.Item>
             </Col>
           </Row>
-
           <Row gutter={12}>
             <Col span={8}>
               <Form.Item name="pointsToWin" label={t('arena.pointsToWin')}>
@@ -393,11 +1136,9 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
               </Form.Item>
             </Col>
           </Row>
-
           <Form.Item name="location" label={t('arena.location')}>
             <Input prefix={<EnvironmentOutlined />} />
           </Form.Item>
-
           <Row gutter={12}>
             <Col span={12}>
               <Form.Item name="startsAt" label={t('common.startDate')}>
@@ -410,7 +1151,6 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
               </Form.Item>
             </Col>
           </Row>
-
           <Row gutter={12}>
             <Col span={8}>
               <Form.Item name="allowMixedTeams" valuePropName="checked">
@@ -423,13 +1163,195 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
               </Form.Item>
             </Col>
           </Row>
-
           <Form.Item>
             <Button type="primary" htmlType="submit" block style={{ background: SF.gradientPrimary, border: 'none' }}>
               {t('arena.createTournament')}
             </Button>
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* Score Modal */}
+      <Modal
+        open={showScoreModal}
+        onCancel={() => { setShowScoreModal(false); setSelectedMatch(null); }}
+        title={<Space><ThunderboltOutlined />{t('arena.submitScore')}</Space>}
+        footer={null}
+        width={400}
+      >
+        {selectedMatch && (
+          <Form form={scoreForm} layout="vertical" onFinish={handleSubmitScore}>
+            <div style={{ textAlign: 'center', marginBottom: 16 }}>
+              <Text strong style={{ fontSize: 14 }}>
+                {selectedMatch.Team1?.name || '?'} {t('arena.vs')} {selectedMatch.Team2?.name || '?'}
+              </Text>
+            </div>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item name="score1" label={selectedMatch.Team1?.name || t('arena.team') + ' 1'} rules={[{ required: true }]}>
+                  <InputNumber min={0} style={{ width: '100%', fontSize: 20, textAlign: 'center' }} />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item name="score2" label={selectedMatch.Team2?.name || t('arena.team') + ' 2'} rules={[{ required: true }]}>
+                  <InputNumber min={0} style={{ width: '100%', fontSize: 20, textAlign: 'center' }} />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Form.Item>
+              <Button type="primary" htmlType="submit" block>{t('arena.submitScore')}</Button>
+            </Form.Item>
+          </Form>
+        )}
+      </Modal>
+
+      {/* Register Team Modal */}
+      {selectedTournament && (
+        <Modal
+          open={showRegisterModal}
+          onCancel={() => { setShowRegisterModal(false); registerForm.resetFields(); }}
+          title={<Space><TeamOutlined />{myRegistration?.isCaptain ? t('arena.manageTeam') : t('arena.registerTeam')}</Space>}
+          footer={null}
+          width={480}
+        >
+          <Form
+            form={registerForm}
+            layout="vertical"
+            onFinish={handleRegisterTeam}
+            initialValues={myRegistration?.isCaptain && myRegistration?.team ? { name: myRegistration.team.name } : {}}
+          >
+            <Form.Item name="name" label={t('arena.teamName')} rules={[{ required: true }]}>
+              <Input placeholder={t('arena.teamName')} disabled={!!(myRegistration?.isCaptain && myRegistration?.team)} />
+            </Form.Item>
+            <div style={{ background: `${SF.primary}10`, borderRadius: SF.radius, padding: '8px 12px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <CrownOutlined style={{ color: SF.gold }} />
+              <Text style={{ color: SF.text, fontSize: 13 }}>{t('arena.captain')} : {user?.firstName} {user?.lastName}</Text>
+            </div>
+            {(() => {
+              const teamSize = TEAM_TYPE_SIZES[selectedTournament.teamType] || selectedTournament.playersPerTeam;
+              const membersNeeded = teamSize - 1;
+              if (membersNeeded <= 0) return null;
+              return (
+                <Form.Item
+                  name="memberIds"
+                  label={t('arena.selectMembers')}
+                  rules={[{ required: true, type: 'array', len: membersNeeded, message: t('arena.membersRequired', { count: membersNeeded }) }]}
+                  extra={<Text type="secondary" style={{ fontSize: 12 }}>{t('arena.membersRequired', { count: membersNeeded })}</Text>}
+                >
+                  <Select
+                    mode="multiple"
+                    placeholder={t('arena.searchMember')}
+                    showSearch
+                    filterOption={false}
+                    onSearch={(q) => fetchAvailablePlayers(selectedTournament.id, q)}
+                    onFocus={() => fetchAvailablePlayers(selectedTournament.id)}
+                    maxCount={membersNeeded}
+                    style={{ width: '100%' }}
+                    optionLabelProp="label"
+                  >
+                    {availablePlayers.map(p => (
+                      <Select.Option key={p.id} value={p.id} label={`${p.firstName} ${p.lastName}`}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <Avatar size="small" src={p.avatarUrl}>{(p.firstName?.[0] || '') + (p.lastName?.[0] || '')}</Avatar>
+                          <span>{p.firstName} {p.lastName}</span>
+                        </div>
+                      </Select.Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              );
+            })()}
+            <Form.Item>
+              <Button type="primary" htmlType="submit" block style={{ background: SF.gradientPrimary, border: 'none' }}>
+                {myRegistration?.isCaptain ? t('common.save') : t('arena.registerTeam')}
+              </Button>
+            </Form.Item>
+          </Form>
+        </Modal>
+      )}
+
+      {/* Courts Modal — Proposition intelligente */}
+      <Modal
+        open={showCourtsModal}
+        onCancel={() => { setShowCourtsModal(false); setCourtProposal(null); }}
+        title={<Space><EnvironmentOutlined />{t('arena.addCourts')}</Space>}
+        footer={courtProposal ? (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={{ fontSize: 11, color: SF.textSecondary }}>
+              {courtProposal.playersUsed}/{courtProposal.playerCount} {t('arena.players')}
+              {courtProposal.playersOut > 0 && <span style={{ color: SF.fire }}> — {courtProposal.playersOut} en attente</span>}
+            </Text>
+            <Button type="primary" onClick={handleSaveCourts}>{t('common.save')}</Button>
+          </div>
+        ) : null}
+        width={560}
+      >
+        {/* Étape 1 : Nombre de terrains */}
+        {!courtProposal && (
+          <Form form={courtsForm} layout="vertical" onFinish={(v) => fetchCourtProposal(v.courtsCount)}
+            initialValues={{ courtsCount: selectedTournament?.courtsCount || 4 }}>
+            <div style={{ marginBottom: 12, padding: 8, background: `${SF.primary}08`, borderRadius: SF.radius }}>
+              <Text style={{ fontSize: 12 }}>
+                <TeamOutlined /> {selectedTournament?._count?.PlayerEntries || 0} {t('arena.players')} {t('common.registered')}
+              </Text>
+            </div>
+            <Form.Item name="courtsCount" label={t('arena.courts')} rules={[{ required: true }]}>
+              <InputNumber min={1} max={50} style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item>
+              <Button type="primary" htmlType="submit" block icon={<ThunderboltOutlined />}>
+                {t('arena.propose')}
+              </Button>
+            </Form.Item>
+          </Form>
+        )}
+
+        {/* Étape 2 : Proposition modifiable par terrain */}
+        {courtProposal && (
+          <div>
+            <div style={{ marginBottom: 10, padding: 8, background: `${SF.primary}08`, borderRadius: SF.radius }}>
+              <Text style={{ fontSize: 12 }}>
+                <TeamOutlined /> {courtProposal.playerCount} {t('arena.players')} → {courtProposal.courtsCount} {t('arena.courts')} : {courtProposal.doublettes} doublettes, {courtProposal.triplettes} triplettes
+              </Text>
+              {courtProposal.playersOut > 0 && (
+                <div style={{ color: SF.fire, fontSize: 11, marginTop: 2 }}>
+                  ⚠ {courtProposal.playersOut} joueur(s) en attente (pas assez de terrains)
+                </div>
+              )}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {proposalCourts.map((court, idx) => (
+                <div key={idx} style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '6px 10px', borderRadius: SF.radius,
+                  border: `1px solid ${SF.border}`, background: SF.cardBg,
+                }}>
+                  <EnvironmentOutlined style={{ color: SF.primary }} />
+                  <Text strong style={{ fontSize: 12, minWidth: 90 }}>{court.name}</Text>
+                  <Select
+                    size="small"
+                    value={court.teamType}
+                    onChange={(val) => {
+                      const updated = [...proposalCourts];
+                      updated[idx] = { ...updated[idx], teamType: val };
+                      setProposalCourts(updated);
+                    }}
+                    style={{ width: 130 }}
+                  >
+                    <Select.Option value="DOUBLETTE">Doublette (2v2)</Select.Option>
+                    <Select.Option value="TRIPLETTE">Triplette (3v3)</Select.Option>
+                  </Select>
+                  <Text style={{ fontSize: 10, color: SF.textSecondary }}>
+                    {court.teamType === 'TRIPLETTE' ? '6 joueurs' : '4 joueurs'}
+                  </Text>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: 10, textAlign: 'right' }}>
+              <Button size="small" onClick={() => setCourtProposal(null)}>{t('common.back')}</Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

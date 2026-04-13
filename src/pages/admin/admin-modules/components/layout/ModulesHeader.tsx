@@ -116,7 +116,7 @@ export default function ModulesHeader(props: ModulesHeaderProps) {
 							style={{ maxWidth: 200 }}
 						/>
 						<button onClick={onRefresh} title={t('common.refresh')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: 'none', background: FB.btnGray, color: FB.text, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-							<span>🔄</span><span>Actualiser</span>
+							<span>🔄</span><span>{	('common.refresh')}</span>
 						</button>
 					</div>
 					<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

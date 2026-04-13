@@ -5945,6 +5945,7 @@ var SF = {
   successMd: "#4CAF50",
   orange: "#FF9800",
   orangeAlt: "#fa8c16",
+  warning: "#faad14",
   purple: "#9C27B0",
   // Scope / visibility
   scopeColony: "#1890ff",
@@ -5992,11 +5993,13 @@ var SF = {
   bgLightest: "#fafafa",
   bgCard: "#f0f0f0",
   borderLight: "#d9d9d9",
+  borderMd: "#e8e8e8",
   borderLighter: "#eee",
   textTertiary: "#65676b",
   textQuaternary: "#8c8c8c",
   textDark: "#333",
   textPlaceholder: "#999",
+  infoPrimary: "#1677ff",
   bgPrimaryTint: "rgba(108, 92, 231, 0.1)",
   // Tinted backgrounds (status/info)
   bgInfoTint: "#e6f7ff",
@@ -31450,6 +31453,13 @@ var import_express29 = __toESM(require("express"), 1);
 var import_express_rate_limit4 = __toESM(require("express-rate-limit"), 1);
 var import_zod11 = require("zod");
 init_logger();
+
+// src/utils/asyncHandler.ts
+var asyncHandler = (fn) => (req2, res, next) => {
+  Promise.resolve(fn(req2, res, next)).catch(next);
+};
+
+// src/routes/services.ts
 var router28 = import_express29.default.Router();
 var servicesRateLimit = (0, import_express_rate_limit4.default)({
   windowMs: 15 * 60 * 1e3,
@@ -31543,14 +31553,14 @@ router28.post("/status/bulk", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur." });
   }
 });
-router28.post("/:serviceName/enable/:userId", async (req2, res) => {
+router28.post("/:serviceName/enable/:userId", asyncHandler(async (req2, res) => {
   const { serviceName, userId } = serviceParamsSchema.parse(req2.params);
   await handleServiceToggle(res, userId, serviceName.toUpperCase(), true);
-});
-router28.post("/:serviceName/disable/:userId", async (req2, res) => {
+}));
+router28.post("/:serviceName/disable/:userId", asyncHandler(async (req2, res) => {
   const { serviceName, userId } = serviceParamsSchema.parse(req2.params);
   await handleServiceToggle(res, userId, serviceName.toUpperCase(), false);
-});
+}));
 var services_default = router28;
 
 // src/routes/permissions.ts
@@ -77892,7 +77902,7 @@ setInterval(() => {
     }
   }
 }, 6e4);
-router85.post("/:id/signal", async (req2, res) => {
+router85.post("/:id/signal", asyncHandler(async (req2, res) => {
   const user = req2.user;
   if (!user?.id) {
     res.status(401).json({ error: "Non authentifi\xE9" });
@@ -77908,7 +77918,7 @@ router85.post("/:id/signal", async (req2, res) => {
   const cleaned = signals.filter((s) => now - s.ts < SIGNAL_EXPIRY_MS);
   signalingBuffer.set(key2, cleaned);
   res.json({ success: true });
-});
+}));
 router85.get("/:id/signal", async (req2, res) => {
   const user = req2.user;
   if (!user?.id) {
@@ -80097,7 +80107,7 @@ function buildInterceptorScript(pageUrl) {
 })();
 </script>`;
 }
-router88.get("/browse-proxy", async (req2, res) => {
+router88.get("/browse-proxy", asyncHandler(async (req2, res) => {
   const user = req2.user;
   if (!user?.id) {
     res.status(401).json({ error: "Non authentifi\xE9" });
@@ -80257,7 +80267,7 @@ router88.get("/browse-proxy", async (req2, res) => {
       res.status(502).json({ error: "Impossible de charger cette page" });
     }
   }
-});
+}));
 var globalSearch_default = router88;
 
 // src/routes/index.ts
@@ -96595,6 +96605,7 @@ init_database();
 
 // src/services/arena/tournamentEngine.ts
 init_database();
+init_logger();
 function shuffleArray(array) {
   const shuffled = [...array];
   for (let i = shuffled.length - 1; i > 0; i--) {
@@ -96603,66 +96614,90 @@ function shuffleArray(array) {
   }
   return shuffled;
 }
-function generateRandomDraw(teams) {
-  const shuffled = shuffleArray(teams);
-  const matches = [];
-  let matchNumber = 1;
-  for (let i = 0; i < shuffled.length; i += 2) {
-    matches.push({
-      matchNumber,
-      team1Id: shuffled[i].id,
-      team2Id: i + 1 < shuffled.length ? shuffled[i + 1].id : null
-      // bye
-    });
-    matchNumber++;
+function generateRoundRobinSchedule(teams) {
+  const teamList = [...teams];
+  const hasBye = teamList.length % 2 !== 0;
+  if (hasBye) {
+    teamList.push({ id: "__BYE__", name: "BYE" });
   }
-  return matches;
-}
-function generateRoundRobin(teams) {
-  const matches = [];
-  let matchNumber = 1;
-  for (let i = 0; i < teams.length; i++) {
-    for (let j = i + 1; j < teams.length; j++) {
-      matches.push({
+  const n = teamList.length;
+  const totalRounds = n - 1;
+  const matchesPerRound = n / 2;
+  const rounds = [];
+  const fixed = teamList[0];
+  const rotating = teamList.slice(1);
+  for (let round = 0; round < totalRounds; round++) {
+    const roundMatches = [];
+    let matchNumber = 1;
+    const opponent = rotating[0];
+    if (fixed.id !== "__BYE__" && opponent.id !== "__BYE__") {
+      roundMatches.push({
         matchNumber,
-        team1Id: teams[i].id,
-        team2Id: teams[j].id
+        team1Id: fixed.id,
+        team2Id: opponent.id
       });
       matchNumber++;
     }
+    for (let i = 1; i < matchesPerRound; i++) {
+      const home = rotating[i];
+      const away = rotating[rotating.length - i];
+      if (home.id !== "__BYE__" && away.id !== "__BYE__") {
+        roundMatches.push({
+          matchNumber,
+          team1Id: home.id,
+          team2Id: away.id
+        });
+        matchNumber++;
+      }
+    }
+    rounds.push({
+      roundNumber: round + 1,
+      name: `Journ\xE9e ${round + 1}`,
+      matches: roundMatches
+    });
+    rotating.unshift(rotating.pop());
   }
-  return matches;
+  return rounds;
 }
-function generateSingleElimination(teams) {
+function generateSingleEliminationBracket(teams) {
   const sorted = teams.some((t) => t.seed != null) ? [...teams].sort((a, b) => (a.seed ?? 999) - (b.seed ?? 999)) : shuffleArray(teams);
   const bracketSize = Math.pow(2, Math.ceil(Math.log2(sorted.length)));
-  const byes = bracketSize - sorted.length;
-  const matches = [];
+  const totalRounds = Math.ceil(Math.log2(sorted.length));
+  const _byes = bracketSize - sorted.length;
+  const slots = new Array(bracketSize).fill(null);
+  for (let i = 0; i < sorted.length; i++) {
+    slots[i] = sorted[i];
+  }
+  const firstRoundMatches = [];
   let matchNumber = 1;
-  const firstRoundTeams = [...sorted];
-  for (let i = 0; i < bracketSize / 2; i++) {
-    const team1 = firstRoundTeams[i] || null;
-    const team2Idx = bracketSize - 1 - i;
-    const team2 = team2Idx < firstRoundTeams.length ? firstRoundTeams[team2Idx] : null;
-    if (team1 && team2) {
-      matches.push({
-        matchNumber,
-        team1Id: team1.id,
-        team2Id: team2.id
-      });
-    } else if (team1) {
-      matches.push({
-        matchNumber,
-        team1Id: team1.id,
-        team2Id: null
-        // bye
-      });
-    }
+  for (let i = 0; i < bracketSize; i += 2) {
+    const team1 = slots[i];
+    const team2 = slots[i + 1];
+    firstRoundMatches.push({
+      matchNumber,
+      team1Id: team1?.id || null,
+      team2Id: team2?.id || null
+    });
     matchNumber++;
   }
-  return matches;
+  const getRoundName = (roundIdx, totalR) => {
+    const remaining = totalR - roundIdx;
+    if (remaining === 1) return "Finale";
+    if (remaining === 2) return "Demi-finales";
+    if (remaining === 3) return "Quarts de finale";
+    if (remaining === 4) return "Huiti\xE8mes de finale";
+    return `Tour ${roundIdx + 1}`;
+  };
+  return [{
+    roundNumber: 1,
+    name: getRoundName(0, totalRounds),
+    matches: firstRoundMatches
+  }];
 }
-async function generateSwissRound(tournamentId, roundNumber) {
+function generateDoubleEliminationBracket(teams) {
+  return generateSingleEliminationBracket(teams);
+}
+async function generateSwissRound(tournamentId, _roundNumber) {
   const standings = await db.arenaStanding.findMany({
     where: { tournamentId },
     orderBy: { totalPoints: "desc" },
@@ -96709,90 +96744,250 @@ async function generateRound(tournamentId) {
     where: { id: tournamentId },
     include: {
       TeamEntries: { where: { status: "CONFIRMED" } },
+      PlayerEntries: { where: { status: "CONFIRMED" }, select: { userId: true } },
       Rounds: { orderBy: { roundNumber: "desc" }, take: 1 }
     }
   });
   if (!tournament) throw new Error("Tournament not found");
+  const format = tournament.format;
+  const lastRound = tournament.Rounds[0]?.roundNumber ?? 0;
+  const courts = tournament.withCourts ? await db.arenaCourt.findMany({
+    where: { tournamentId, isAvailable: true },
+    orderBy: { name: "asc" }
+  }) : [];
+  if (format === "RANDOM_DRAW") {
+    if (lastRound > 0) {
+      throw new Error("Les manches ont d\xE9j\xE0 \xE9t\xE9 g\xE9n\xE9r\xE9es pour ce tournoi. Supprimez-les pour recommencer.");
+    }
+    const playerIds = tournament.PlayerEntries.map((p) => p.userId);
+    if (playerIds.length < 4) {
+      throw new Error(`Pas assez de joueurs inscrits (${playerIds.length}/4 minimum)`);
+    }
+    if (courts.length === 0) {
+      throw new Error("Aucun terrain configur\xE9. Veuillez d'abord configurer les terrains via 'Ajouter des terrains'.");
+    }
+    const nbRounds = tournament.nbRounds || 5;
+    const result = await db.$transaction(async (tx) => {
+      let firstRoundId = "";
+      let totalMatches = 0;
+      for (let r = 1; r <= nbRounds; r++) {
+        const shuffled = shuffleArray([...playerIds]);
+        const round = await tx.arenaRound.create({
+          data: {
+            tournamentId,
+            roundNumber: r,
+            name: `Manche ${r}`,
+            status: "SCHEDULED"
+          }
+        });
+        if (r === 1) firstRoundId = round.id;
+        let playerIdx = 0;
+        let matchNumber = 1;
+        for (const court of courts) {
+          const teamSize = court.teamType === "TRIPLETTE" ? 3 : 2;
+          const playersNeeded = teamSize * 2;
+          if (playerIdx + playersNeeded > shuffled.length) break;
+          const team1Players = shuffled.slice(playerIdx, playerIdx + teamSize);
+          const team2Players = shuffled.slice(playerIdx + teamSize, playerIdx + playersNeeded);
+          playerIdx += playersNeeded;
+          const team1 = await tx.arenaTeamEntry.create({
+            data: { tournamentId, name: `M${r}-${court.name}-A`, status: "CONFIRMED" }
+          });
+          await tx.arenaTeamMember.createMany({
+            data: team1Players.map((uid, i) => ({ teamEntryId: team1.id, userId: uid, isCaptain: i === 0 }))
+          });
+          const team2 = await tx.arenaTeamEntry.create({
+            data: { tournamentId, name: `M${r}-${court.name}-B`, status: "CONFIRMED" }
+          });
+          await tx.arenaTeamMember.createMany({
+            data: team2Players.map((uid, i) => ({ teamEntryId: team2.id, userId: uid, isCaptain: i === 0 }))
+          });
+          await tx.arenaMatch.create({
+            data: {
+              tournamentId,
+              roundId: round.id,
+              matchNumber,
+              team1Id: team1.id,
+              team2Id: team2.id,
+              courtId: court.id,
+              status: "SCHEDULED"
+            }
+          });
+          matchNumber++;
+          totalMatches++;
+        }
+      }
+      await tx.arenaTournament.update({
+        where: { id: tournamentId },
+        data: { currentRound: 1, status: "IN_PROGRESS", nbRounds }
+      });
+      return { roundId: firstRoundId, matchCount: totalMatches, roundsCreated: nbRounds };
+    });
+    const io2 = getIO();
+    if (io2) {
+      io2.to(`arena:${tournamentId}`).emit("arena:round-generated", {
+        tournamentId,
+        roundId: result.roundId,
+        roundNumber: 1,
+        roundsCreated: result.roundsCreated,
+        matchCount: result.matchCount
+      });
+    }
+    logger.info(`[ARENA] RANDOM_DRAW: ${result.roundsCreated} manches, ${result.matchCount} matchs pour ${playerIds.length} joueurs sur ${courts.length} terrains`);
+    return result;
+  }
   const teams = tournament.TeamEntries.map((t) => ({
     id: t.id,
     name: t.name,
     seed: t.seed
   }));
   if (teams.length < 2) throw new Error("Not enough teams to generate matches");
-  const nextRound = (tournament.Rounds[0]?.roundNumber ?? 0) + 1;
-  let roundName;
-  if (tournament.format === "SINGLE_ELIMINATION" || tournament.format === "DOUBLE_ELIMINATION") {
-    const totalRounds = Math.ceil(Math.log2(teams.length));
-    const remaining = totalRounds - nextRound + 1;
-    if (remaining === 1) roundName = "Finale";
-    else if (remaining === 2) roundName = "Demi-finale";
-    else if (remaining === 3) roundName = "Quart de finale";
-    else roundName = `Tour ${nextRound}`;
-  } else {
-    roundName = `Tour ${nextRound}`;
-  }
-  let generatedMatches;
-  switch (tournament.format) {
-    case "RANDOM_DRAW":
-      generatedMatches = generateRandomDraw(teams);
-      break;
-    case "ROUND_ROBIN":
-      if (nextRound === 1) {
-        generatedMatches = generateRoundRobin(teams);
-      } else {
-        throw new Error("Round-robin generates all matches in round 1");
+  if (format === "ROUND_ROBIN" || format === "CHAMPIONSHIP") {
+    if (lastRound > 0) {
+      throw new Error("Les journ\xE9es ont d\xE9j\xE0 \xE9t\xE9 g\xE9n\xE9r\xE9es pour ce tournoi round-robin/championnat");
+    }
+    const schedule = generateRoundRobinSchedule(teams);
+    const result = await db.$transaction(async (tx) => {
+      let totalMatches = 0;
+      let firstRoundId = "";
+      for (const roundData of schedule) {
+        const round = await tx.arenaRound.create({
+          data: {
+            tournamentId,
+            roundNumber: roundData.roundNumber,
+            name: roundData.name,
+            status: "SCHEDULED"
+          }
+        });
+        if (roundData.roundNumber === 1) firstRoundId = round.id;
+        const matchData = roundData.matches.map((m, idx) => ({
+          tournamentId,
+          roundId: round.id,
+          matchNumber: m.matchNumber,
+          team1Id: m.team1Id,
+          team2Id: m.team2Id,
+          courtId: courts.length > 0 ? courts[idx % courts.length].id : null,
+          status: "SCHEDULED"
+        }));
+        await tx.arenaMatch.createMany({ data: matchData });
+        totalMatches += matchData.length;
       }
-      break;
-    case "SINGLE_ELIMINATION":
-      generatedMatches = generateSingleElimination(teams);
-      break;
-    case "SWISS":
-      generatedMatches = await generateSwissRound(tournamentId, nextRound);
-      break;
-    default:
-      generatedMatches = generateRandomDraw(teams);
-  }
-  const courts = tournament.withCourts ? await db.arenaCourt.findMany({
-    where: { tournamentId, isAvailable: true },
-    orderBy: { name: "asc" }
-  }) : [];
-  const result = await db.$transaction(async (tx) => {
-    const round = await tx.arenaRound.create({
-      data: {
+      await tx.arenaTournament.update({
+        where: { id: tournamentId },
+        data: {
+          currentRound: 1,
+          status: "IN_PROGRESS",
+          nbRounds: schedule.length
+        }
+      });
+      return { roundId: firstRoundId, matchCount: totalMatches, roundsCreated: schedule.length };
+    });
+    const io2 = getIO();
+    if (io2) {
+      io2.to(`arena:${tournamentId}`).emit("arena:round-generated", {
         tournamentId,
-        roundNumber: nextRound,
-        name: roundName,
-        status: "SCHEDULED"
-      }
-    });
-    const matchData = generatedMatches.map((m, idx) => ({
-      tournamentId,
-      roundId: round.id,
-      matchNumber: m.matchNumber,
-      team1Id: m.team1Id,
-      team2Id: m.team2Id,
-      courtId: courts[idx % courts.length]?.id ?? null,
-      // Assignation cyclique des terrains
-      status: "SCHEDULED"
-    }));
-    await tx.arenaMatch.createMany({ data: matchData });
-    await tx.arenaTournament.update({
-      where: { id: tournamentId },
-      data: { currentRound: nextRound, status: "IN_PROGRESS" }
-    });
-    return { roundId: round.id, matchCount: matchData.length };
-  });
-  const io2 = getIO();
-  if (io2) {
-    io2.to(`arena:${tournamentId}`).emit("arena:round-generated", {
-      tournamentId,
-      roundId: result.roundId,
-      roundNumber: nextRound,
-      roundName,
-      matchCount: result.matchCount
-    });
+        roundId: result.roundId,
+        roundNumber: 1,
+        roundsCreated: result.roundsCreated,
+        matchCount: result.matchCount
+      });
+    }
+    logger.info(`[ARENA] Round-robin: ${result.roundsCreated} journ\xE9es, ${result.matchCount} matchs for ${teams.length} teams`);
+    return result;
   }
-  return result;
+  if (format === "SINGLE_ELIMINATION" || format === "DOUBLE_ELIMINATION") {
+    if (lastRound > 0) {
+      throw new Error("Le bracket a d\xE9j\xE0 \xE9t\xE9 g\xE9n\xE9r\xE9. Les tours suivants sont cr\xE9\xE9s automatiquement apr\xE8s chaque score.");
+    }
+    const bracketRounds = format === "DOUBLE_ELIMINATION" ? generateDoubleEliminationBracket(teams) : generateSingleEliminationBracket(teams);
+    const result = await db.$transaction(async (tx) => {
+      const roundData = bracketRounds[0];
+      const round = await tx.arenaRound.create({
+        data: {
+          tournamentId,
+          roundNumber: 1,
+          name: roundData.name,
+          status: "SCHEDULED"
+        }
+      });
+      const matchData = roundData.matches.map((m, idx) => ({
+        tournamentId,
+        roundId: round.id,
+        matchNumber: m.matchNumber,
+        team1Id: m.team1Id,
+        team2Id: m.team2Id,
+        courtId: courts.length > 0 ? courts[idx % courts.length].id : null,
+        status: "SCHEDULED"
+      }));
+      await tx.arenaMatch.createMany({ data: matchData });
+      const byeMatches = matchData.filter((m) => m.team1Id && !m.team2Id || !m.team1Id && m.team2Id);
+      for (const bye of byeMatches) {
+        const winnerId = bye.team1Id || bye.team2Id;
+        await tx.arenaMatch.updateMany({
+          where: { roundId: round.id, matchNumber: bye.matchNumber },
+          data: { winnerId, status: "COMPLETED", score1: 0, score2: 0 }
+        });
+      }
+      await tx.arenaTournament.update({
+        where: { id: tournamentId },
+        data: { currentRound: 1, status: "IN_PROGRESS" }
+      });
+      return { roundId: round.id, matchCount: matchData.length };
+    });
+    const io2 = getIO();
+    if (io2) {
+      io2.to(`arena:${tournamentId}`).emit("arena:round-generated", {
+        tournamentId,
+        roundId: result.roundId,
+        roundNumber: 1,
+        matchCount: result.matchCount
+      });
+    }
+    return result;
+  }
+  if (format === "SWISS") {
+    const nextRound = lastRound + 1;
+    const swissMatches = await generateSwissRound(tournamentId, nextRound);
+    if (swissMatches.length === 0) {
+      throw new Error("Impossible de g\xE9n\xE9rer plus de matchs suisses (tous les appariements ont \xE9t\xE9 faits)");
+    }
+    const result = await db.$transaction(async (tx) => {
+      const round = await tx.arenaRound.create({
+        data: {
+          tournamentId,
+          roundNumber: nextRound,
+          name: `Tour ${nextRound}`,
+          status: "SCHEDULED"
+        }
+      });
+      const matchData = swissMatches.map((m, idx) => ({
+        tournamentId,
+        roundId: round.id,
+        matchNumber: m.matchNumber,
+        team1Id: m.team1Id,
+        team2Id: m.team2Id,
+        courtId: courts.length > 0 ? courts[idx % courts.length].id : null,
+        status: "SCHEDULED"
+      }));
+      await tx.arenaMatch.createMany({ data: matchData });
+      await tx.arenaTournament.update({
+        where: { id: tournamentId },
+        data: { currentRound: nextRound, status: "IN_PROGRESS" }
+      });
+      return { roundId: round.id, matchCount: matchData.length };
+    });
+    const io2 = getIO();
+    if (io2) {
+      io2.to(`arena:${tournamentId}`).emit("arena:round-generated", {
+        tournamentId,
+        roundId: result.roundId,
+        roundNumber: nextRound,
+        matchCount: result.matchCount
+      });
+    }
+    return result;
+  }
+  throw new Error(`Format de tournoi non support\xE9 : ${format}`);
 }
 async function recalculateStandings(tournamentId) {
   const tournament = await db.arenaTournament.findUnique({
@@ -97477,17 +97672,73 @@ router117.post("/tournaments/:id/courts", authenticateToken, async (req2, res) =
     if (!Array.isArray(courts) || courts.length === 0) {
       return res.status(400).json({ success: false, message: "Liste de terrains requise" });
     }
+    await db.arenaCourt.deleteMany({ where: { tournamentId: req2.params.id } });
     const created = await db.arenaCourt.createMany({
       data: courts.map((c) => ({
         tournamentId: req2.params.id,
         name: c.name,
+        teamType: c.teamType || "DOUBLETTE",
         location: c.location || null
       })),
       skipDuplicates: true
     });
+    await db.arenaTournament.update({
+      where: { id: req2.params.id },
+      data: { courtsCount: courts.length }
+    });
     res.status(201).json({ success: true, data: { count: created.count } });
   } catch (error) {
     logger.error("[ARENA] POST /courts error:", error.message);
+    res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
+});
+router117.get("/tournaments/:id/court-proposal", authenticateToken, async (req2, res) => {
+  try {
+    const tournament = await db.arenaTournament.findUnique({
+      where: { id: req2.params.id },
+      select: {
+        id: true,
+        courtsCount: true,
+        teamType: true,
+        playersPerTeam: true,
+        _count: { select: { PlayerEntries: true } }
+      }
+    });
+    if (!tournament) {
+      return res.status(404).json({ success: false, message: "Tournoi introuvable" });
+    }
+    const courtsCount = Number(req2.query.courts) || tournament.courtsCount || 4;
+    const playerCount = Number(req2.query.players) || tournament._count.PlayerEntries;
+    const C = courtsCount;
+    const N = playerCount;
+    let triplettes = Math.max(0, Math.floor((N - 4 * C) / 2));
+    if (triplettes > C) triplettes = C;
+    const doublettes = C - triplettes;
+    const playersUsed = doublettes * 4 + triplettes * 6;
+    const playersOut = N - playersUsed;
+    const proposal = [];
+    for (let i = 0; i < C; i++) {
+      const isTriplette = i >= doublettes;
+      proposal.push({
+        name: `Terrain ${i + 1}`,
+        teamType: isTriplette ? "TRIPLETTE" : "DOUBLETTE",
+        playersNeeded: isTriplette ? 6 : 4
+      });
+    }
+    res.json({
+      success: true,
+      data: {
+        playerCount: N,
+        courtsCount: C,
+        doublettes,
+        triplettes,
+        playersUsed,
+        playersOut,
+        courts: proposal
+      }
+    });
+  } catch (error) {
+    logger.error("[ARENA] GET /court-proposal error:", error.message);
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
@@ -97534,6 +97785,440 @@ router117.put("/matches/:id/reassign", authenticateToken, async (req2, res) => {
   } catch (error) {
     logger.error("[ARENA] PUT /matches/:id/reassign error:", error.message);
     res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
+});
+router117.get("/tournaments/:id/my-registration", authenticateToken, async (req2, res) => {
+  try {
+    const userId = getUserId4(req2);
+    const tournamentId = req2.params.id;
+    const playerEntry = await db.arenaPlayerEntry.findUnique({
+      where: { tournamentId_userId: { tournamentId, userId } }
+    });
+    const teamMembership = await db.arenaTeamMember.findFirst({
+      where: {
+        userId,
+        TeamEntry: { tournamentId }
+      },
+      include: {
+        TeamEntry: {
+          include: {
+            Members: {
+              include: {
+                User: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } }
+              }
+            }
+          }
+        }
+      }
+    });
+    res.json({
+      success: true,
+      data: {
+        isRegistered: !!(playerEntry || teamMembership),
+        asPlayer: playerEntry || null,
+        asTeamMember: teamMembership || null,
+        isCaptain: teamMembership?.isCaptain || false,
+        team: teamMembership?.TeamEntry || null
+      }
+    });
+  } catch (error) {
+    logger.error("[ARENA] GET /my-registration error:", error.message);
+    res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
+});
+router117.put("/teams/:id/members", authenticateToken, async (req2, res) => {
+  try {
+    const userId = getUserId4(req2);
+    const teamEntryId = req2.params.id;
+    const { addUserIds, removeUserIds } = req2.body;
+    const teamEntry = await db.arenaTeamEntry.findUnique({
+      where: { id: teamEntryId },
+      include: {
+        Members: true,
+        Tournament: true
+      }
+    });
+    if (!teamEntry) return res.status(404).json({ success: false, message: "\xC9quipe introuvable" });
+    const isCaptain = teamEntry.Members.some((m) => m.userId === userId && m.isCaptain);
+    const isOrganizer = teamEntry.Tournament.creatorId === userId || req2.user?.role === "super_admin";
+    if (!isCaptain && !isOrganizer) {
+      return res.status(403).json({ success: false, message: "Seul le capitaine ou l'organisateur peut g\xE9rer l'\xE9quipe" });
+    }
+    if (!["DRAFT", "REGISTRATION_OPEN"].includes(teamEntry.Tournament.status)) {
+      return res.status(400).json({ success: false, message: "Le tournoi n'est plus en phase d'inscription" });
+    }
+    const currentCount = teamEntry.Members.length;
+    const addCount = (addUserIds || []).length;
+    const removeCount = (removeUserIds || []).length;
+    const newCount = currentCount + addCount - removeCount;
+    if (newCount > teamEntry.Tournament.playersPerTeam) {
+      return res.status(400).json({
+        success: false,
+        message: `Maximum ${teamEntry.Tournament.playersPerTeam} joueurs par \xE9quipe (actuellement ${currentCount})`
+      });
+    }
+    await db.$transaction(async (tx) => {
+      if (addUserIds && addUserIds.length > 0) {
+        for (const newUserId of addUserIds) {
+          const existingMembership = await tx.arenaTeamMember.findFirst({
+            where: {
+              userId: newUserId,
+              TeamEntry: { tournamentId: teamEntry.tournamentId }
+            }
+          });
+          if (existingMembership) {
+            throw new Error(`L'utilisateur est d\xE9j\xE0 dans une \xE9quipe de ce tournoi`);
+          }
+        }
+        await tx.arenaTeamMember.createMany({
+          data: addUserIds.map((uid) => ({
+            teamEntryId,
+            userId: uid,
+            isCaptain: false
+          })),
+          skipDuplicates: true
+        });
+      }
+      if (removeUserIds && removeUserIds.length > 0) {
+        const captainMember = teamEntry.Members.find((m) => m.isCaptain);
+        if (captainMember && removeUserIds.includes(captainMember.userId)) {
+          throw new Error("Impossible de retirer le capitaine");
+        }
+        await tx.arenaTeamMember.deleteMany({
+          where: {
+            teamEntryId,
+            userId: { in: removeUserIds }
+          }
+        });
+      }
+    });
+    const updated = await db.arenaTeamEntry.findUnique({
+      where: { id: teamEntryId },
+      include: {
+        Members: {
+          include: {
+            User: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } }
+          }
+        }
+      }
+    });
+    res.json({ success: true, data: updated });
+  } catch (error) {
+    logger.error("[ARENA] PUT /teams/:id/members error:", error.message);
+    res.status(400).json({ success: false, message: error.message });
+  }
+});
+router117.get("/tournaments/:id/available-players", authenticateToken, async (req2, res) => {
+  try {
+    const organizationId = getOrganizationId4(req2);
+    const tournamentId = req2.params.id;
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: "Organisation requise" });
+    }
+    const query = (req2.query.q || "").trim().toLowerCase();
+    const alreadyInTeam = await db.arenaTeamMember.findMany({
+      where: { TeamEntry: { tournamentId } },
+      select: { userId: true }
+    });
+    const excludeIds = new Set(alreadyInTeam.map((m) => m.userId));
+    const alreadyAsPlayer = await db.arenaPlayerEntry.findMany({
+      where: { tournamentId },
+      select: { userId: true }
+    });
+    alreadyAsPlayer.forEach((p) => excludeIds.add(p.userId));
+    const users = await db.user.findMany({
+      where: {
+        organizationId,
+        id: { notIn: Array.from(excludeIds) },
+        isActive: true,
+        ...query ? {
+          OR: [
+            { firstName: { contains: query, mode: "insensitive" } },
+            { lastName: { contains: query, mode: "insensitive" } }
+          ]
+        } : {}
+      },
+      select: { id: true, firstName: true, lastName: true, avatarUrl: true },
+      take: 20
+    });
+    res.json({ success: true, data: users });
+  } catch (error) {
+    logger.error("[ARENA] GET /available-players error:", error.message);
+    res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
+});
+var FAKE_FIRST_NAMES = [
+  "Lucas",
+  "Emma",
+  "Hugo",
+  "L\xE9a",
+  "Nathan",
+  "Chlo\xE9",
+  "Louis",
+  "Manon",
+  "Rapha\xEBl",
+  "Camille",
+  "Julien",
+  "In\xE8s",
+  "Antoine",
+  "Sarah",
+  "Maxime",
+  "Jade",
+  "Thomas",
+  "Zo\xE9",
+  "Th\xE9o",
+  "Lina",
+  "Arthur",
+  "Alice",
+  "Gabriel",
+  "Louise",
+  "Enzo",
+  "Margaux",
+  "Paul",
+  "Marie",
+  "Victor",
+  "Clara",
+  "Adam",
+  "Eva",
+  "Romain",
+  "Juliette",
+  "Baptiste",
+  "Rose",
+  "Cl\xE9ment",
+  "Anna",
+  "Nicolas",
+  "Agathe"
+];
+var FAKE_LAST_NAMES = [
+  "Dupont",
+  "Martin",
+  "Bernard",
+  "Dubois",
+  "Moreau",
+  "Laurent",
+  "Simon",
+  "Michel",
+  "Lef\xE8vre",
+  "Leroy",
+  "Roux",
+  "David",
+  "Bertrand",
+  "Morel",
+  "Fournier",
+  "Girard",
+  "Bonnet",
+  "Durand",
+  "Lambert",
+  "Fontaine",
+  "Rousseau",
+  "Vincent",
+  "Muller",
+  "Lefebvre",
+  "Faure",
+  "Andr\xE9",
+  "Mercier",
+  "Blanc",
+  "Gu\xE9rin",
+  "Boyer",
+  "Garcia",
+  "Perrin",
+  "Robin",
+  "Cl\xE9ment",
+  "Morin",
+  "Nicolas",
+  "Henry",
+  "Mathieu",
+  "Gauthier",
+  "Masson"
+];
+var TEAM_NAME_ADJECTIVES = [
+  "Furieux",
+  "Intr\xE9pides",
+  "Invincibles",
+  "Sauvages",
+  "Enrag\xE9s",
+  "\xC9lectriques",
+  "Redoutables",
+  "Infernaux",
+  "Cosmiques",
+  "L\xE9gendaires",
+  "Fous",
+  "Rapides",
+  "Tonnants",
+  "Br\xFBlants",
+  "Glaciaux"
+];
+var TEAM_NAME_NOUNS = [
+  "Lions",
+  "Aigles",
+  "Requins",
+  "Loups",
+  "Tigres",
+  "Dragons",
+  "Faucons",
+  "Ours",
+  "Panth\xE8res",
+  "Cobras",
+  "Mustangs",
+  "Spartiates",
+  "Gladiateurs",
+  "Vikings",
+  "Samoura\xEFs"
+];
+router117.post("/tournaments/:id/seed-fake-players", authenticateToken, async (req2, res) => {
+  try {
+    const userId = getUserId4(req2);
+    const user = await db.user.findUnique({ where: { id: userId }, select: { role: true } });
+    if (!user || user.role !== "super_admin") {
+      return res.status(403).json({ success: false, message: "Super Admin uniquement" });
+    }
+    const tournamentId = req2.params.id;
+    const tournament = await db.arenaTournament.findUnique({
+      where: { id: tournamentId },
+      select: { id: true, teamType: true, playersPerTeam: true, format: true, organizationId: true, maxTeams: true, maxPlayers: true }
+    });
+    if (!tournament) {
+      return res.status(404).json({ success: false, message: "Tournoi introuvable" });
+    }
+    const count = Math.min(Number(req2.body.count) || 16, 128);
+    const orgId = tournament.organizationId;
+    const { randomUUID: randomUUID16 } = await import("crypto");
+    const shuffledFirst = [...FAKE_FIRST_NAMES].sort(() => Math.random() - 0.5);
+    const shuffledLast = [...FAKE_LAST_NAMES].sort(() => Math.random() - 0.5);
+    const fakeUsers = [];
+    for (let i = 0; i < count; i++) {
+      const firstName = shuffledFirst[i % shuffledFirst.length];
+      const lastName = shuffledLast[i % shuffledLast.length];
+      const uid = randomUUID16();
+      const email = `fake-${uid.slice(0, 8)}@arena-test.local`;
+      await db.user.create({
+        data: {
+          id: uid,
+          email,
+          passwordHash: "FAKE_PLAYER_NO_LOGIN",
+          firstName,
+          lastName,
+          status: "active",
+          role: "user",
+          organizationId: orgId,
+          updatedAt: /* @__PURE__ */ new Date()
+        }
+      });
+      fakeUsers.push({ id: uid, firstName, lastName });
+    }
+    let teamsCreated = 0;
+    let playersCreated = 0;
+    if (tournament.format === "RANDOM_DRAW") {
+      for (const fu of fakeUsers) {
+        await db.arenaPlayerEntry.create({
+          data: { tournamentId, userId: fu.id, status: "CONFIRMED" }
+        });
+        playersCreated++;
+      }
+    } else if (tournament.teamType === "SOLO") {
+      for (const fu of fakeUsers) {
+        await db.arenaPlayerEntry.create({
+          data: { tournamentId, userId: fu.id, status: "CONFIRMED" }
+        });
+        playersCreated++;
+      }
+    } else {
+      const teamSize = tournament.playersPerTeam || 2;
+      const nbTeams = Math.floor(fakeUsers.length / teamSize);
+      const shuffledAdj = [...TEAM_NAME_ADJECTIVES].sort(() => Math.random() - 0.5);
+      const shuffledNoun = [...TEAM_NAME_NOUNS].sort(() => Math.random() - 0.5);
+      for (let t = 0; t < nbTeams; t++) {
+        const teamName = `${shuffledAdj[t % shuffledAdj.length]} ${shuffledNoun[t % shuffledNoun.length]}`;
+        const members = fakeUsers.slice(t * teamSize, (t + 1) * teamSize);
+        const teamEntry = await db.arenaTeamEntry.create({
+          data: {
+            tournamentId,
+            name: teamName,
+            status: "CONFIRMED"
+          }
+        });
+        for (let m = 0; m < members.length; m++) {
+          await db.arenaTeamMember.create({
+            data: {
+              teamEntryId: teamEntry.id,
+              userId: members[m].id,
+              isCaptain: m === 0
+              // premier = capitaine
+            }
+          });
+        }
+        teamsCreated++;
+      }
+    }
+    logger.info(`[ARENA] Seed fake: ${playersCreated} joueurs, ${teamsCreated} \xE9quipes pour tournoi ${tournamentId}`);
+    res.json({
+      success: true,
+      data: {
+        usersCreated: fakeUsers.length,
+        playersCreated,
+        teamsCreated
+      }
+    });
+  } catch (error) {
+    logger.error("[ARENA] POST /seed-fake-players error:", error.message);
+    res.status(500).json({ success: false, message: error.message || "Erreur serveur" });
+  }
+});
+router117.delete("/tournaments/:id/fake-players", authenticateToken, async (req2, res) => {
+  try {
+    const userId = getUserId4(req2);
+    const user = await db.user.findUnique({ where: { id: userId }, select: { role: true } });
+    if (!user || user.role !== "super_admin") {
+      return res.status(403).json({ success: false, message: "Super Admin uniquement" });
+    }
+    const tournamentId = req2.params.id;
+    const fakePlayerEntries = await db.arenaPlayerEntry.findMany({
+      where: {
+        tournamentId,
+        User: { email: { endsWith: "@arena-test.local" } }
+      },
+      select: { userId: true }
+    });
+    const fakeTeamMembers = await db.arenaTeamMember.findMany({
+      where: {
+        TeamEntry: { tournamentId },
+        User: { email: { endsWith: "@arena-test.local" } }
+      },
+      select: { userId: true, teamEntryId: true }
+    });
+    const fakeUserIds = /* @__PURE__ */ new Set([
+      ...fakePlayerEntries.map((p) => p.userId),
+      ...fakeTeamMembers.map((m) => m.userId)
+    ]);
+    const fakeTeamEntryIds = new Set(fakeTeamMembers.map((m) => m.teamEntryId));
+    for (const teamId of fakeTeamEntryIds) {
+      const allMembers = await db.arenaTeamMember.findMany({
+        where: { teamEntryId: teamId },
+        select: { userId: true }
+      });
+      const allFake = allMembers.every((m) => fakeUserIds.has(m.userId));
+      if (allFake) {
+        await db.arenaTeamEntry.delete({ where: { id: teamId } });
+      }
+    }
+    if (fakePlayerEntries.length > 0) {
+      await db.arenaPlayerEntry.deleteMany({
+        where: { tournamentId, userId: { in: Array.from(fakeUserIds) } }
+      });
+    }
+    if (fakeUserIds.size > 0) {
+      await db.user.deleteMany({
+        where: { id: { in: Array.from(fakeUserIds) } }
+      });
+    }
+    logger.info(`[ARENA] Cleanup fake: ${fakeUserIds.size} fake users supprim\xE9s pour tournoi ${tournamentId}`);
+    res.json({
+      success: true,
+      data: { usersDeleted: fakeUserIds.size }
+    });
+  } catch (error) {
+    logger.error("[ARENA] DELETE /fake-players error:", error.message);
+    res.status(500).json({ success: false, message: error.message || "Erreur serveur" });
   }
 });
 var arena_default = router117;

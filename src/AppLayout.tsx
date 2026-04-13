@@ -29,6 +29,7 @@ const TechniquePage = lazy(() => import('./pages/TechniquePage'));
 const FormulairePage = lazy(() => import('./pages/FormulairePage'));
 const DevisPage = lazy(() => import('./pages/DevisPage'));
 const ProductDocumentsPage = lazy(() => import('./pages/ProductDocumentsPage'));
+const ArenaPage = lazy(() => import('./pages/ArenaPage'));
 // Rendu utilisateur TBL centralisé – import direct pour éviter toute divergence
 // UserRenderer components supprimés
 
@@ -248,6 +249,9 @@ export default function AppLayout() {
 
             {/* Fiches Techniques - Documents produits */}
             {(hasFeature('fiches_techniques') || isSuperAdmin) && <Route path="/fiches-techniques" element={<ProductDocumentsPage />} />}
+
+            {/* Arena - Tournois & Championnats (toujours disponible si authentifié) */}
+            <Route path="/arena" element={<ArenaPage />} />
 
             {/* Routes Devis1Minute - Lead Generation Marketplace */}
             {(hasFeature('marketplace') || isSuperAdmin) && <Route path="/marketplace" element={<MarketplacePage />} />}

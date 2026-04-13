@@ -5345,6 +5345,7 @@ model ArenaCourt {
   id           String          @id @default(cuid())
   tournamentId String
   name         String          // "Terrain 1", "Terrain A"...
+  teamType     String          @default("DOUBLETTE") // DOUBLETTE (2v2) ou TRIPLETTE (3v3)
   location     String?
   isAvailable  Boolean         @default(true)
   createdAt    DateTime        @default(now())

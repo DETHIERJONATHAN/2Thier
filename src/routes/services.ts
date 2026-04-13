@@ -5,6 +5,7 @@ import { UserService as PrismaUserService } from '@prisma/client';
 import { authMiddleware as authenticateToken } from '../middlewares/auth.js';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
+import { asyncHandler } from '../utils/asyncHandler';
 
 const router = express.Router();
 
@@ -117,15 +118,15 @@ router.post('/status/bulk', async (req, res) => {
 });
 
 // Activer un service
-router.post('/:serviceName/enable/:userId', async (req, res) => {
+router.post('/:serviceName/enable/:userId', asyncHandler(async (req, res) => {
   const { serviceName, userId } = serviceParamsSchema.parse(req.params);
   await handleServiceToggle(res, userId, serviceName.toUpperCase() as 'EMAIL' | 'TELNYX', true);
-});
+}));
 
 // Désactiver un service
-router.post('/:serviceName/disable/:userId', async (req, res) => {
+router.post('/:serviceName/disable/:userId', asyncHandler(async (req, res) => {
   const { serviceName, userId } = serviceParamsSchema.parse(req.params);
   await handleServiceToggle(res, userId, serviceName.toUpperCase() as 'EMAIL' | 'TELNYX', false);
-});
+}));
 
 export default router;

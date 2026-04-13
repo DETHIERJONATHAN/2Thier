@@ -820,7 +820,7 @@ const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
             size="small"
             icon={<SearchOutlined />}
             onClick={() => setSearchExpanded(!searchExpanded)}
-            style={{ color: searchExpanded ? '#1677ff' : undefined }}
+            style={{ color: searchExpanded ? SF.infoPrimary : undefined }}
           />
         </Tooltip>
 
@@ -881,7 +881,7 @@ const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <EditOutlined
             onClick={() => handleCompose('new')}
-            style={{ fontSize: 20, color: '#1677ff', cursor: 'pointer', padding: 4 }}
+            style={{ fontSize: 20, color: SF.infoPrimary, cursor: 'pointer', padding: 4 }}
           />
         </div>
       )}
@@ -1837,11 +1837,11 @@ document.querySelectorAll('img').forEach(function(img) {
           }}
           role="button" tabIndex={0} onClick={() => fileInputRef.current?.click()}
           onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.style.borderColor = '#1a73e8'; e.currentTarget.style.background = '#e8f0fe'; }}
-          onDragLeave={(e) => { e.currentTarget.style.borderColor = '#d9d9d9'; e.currentTarget.style.background = 'transparent'; }}
+          onDragLeave={(e) => { e.currentTarget.style.borderColor = SF.borderLight; e.currentTarget.style.background = 'transparent'; }}
           onDrop={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            e.currentTarget.style.borderColor = '#d9d9d9';
+            e.currentTarget.style.borderColor = SF.borderLight;
             e.currentTarget.style.background = 'transparent';
             if (e.dataTransfer.files.length > 0) handleAddAttachments(e.dataTransfer.files);
           }}
@@ -1897,18 +1897,18 @@ document.querySelectorAll('img').forEach(function(img) {
             <span style={{ fontWeight: 600, fontSize: 14, color: SF.dark, whiteSpace: 'nowrap' }}>Mail</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 2, overflow: 'hidden', flex: 1, justifyContent: 'flex-end' }}>
-            <Button type="text" size="small" icon={<SearchOutlined />} onClick={() => setSearchExpanded(!searchExpanded)} style={{ color: searchExpanded ? '#1677ff' : undefined }} />
+            <Button type="text" size="small" icon={<SearchOutlined />} onClick={() => setSearchExpanded(!searchExpanded)} style={{ color: searchExpanded ? SF.infoPrimary : undefined }} />
             <Button type="text" size="small" icon={<ReloadOutlined />} onClick={() => loadMessages(currentLabelId, searchQuery)} loading={isLoading} />
             <Button type="text" size="small" icon={<CloudSyncOutlined />} onClick={handleMailSync} loading={isSyncing} style={{ color: '#d48806' }} />
           </div>
-          <EditOutlined onClick={() => handleCompose('new')} style={{ fontSize: 18, color: '#1677ff', cursor: 'pointer', padding: 4, flexShrink: 0 }} />
+          <EditOutlined onClick={() => handleCompose('new')} style={{ fontSize: 18, color: SF.infoPrimary, cursor: 'pointer', padding: 4, flexShrink: 0 }} />
         </div>
         {searchExpanded && (
           <div style={{ backgroundColor: '#f8f9fa', borderBottom: '1px solid #e0e0e0', padding: '6px 8px', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, width: '100%' }}>
             <Input
               ref={searchInputRef}
               placeholder={t('common.searchPlaceholder')}
-              prefix={<SearchOutlined style={{ color: '#999' }} />}
+              prefix={<SearchOutlined style={{ color: SF.textPlaceholder }} />}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onPressEnter={() => handleSearch(searchQuery)}
@@ -2010,7 +2010,7 @@ document.querySelectorAll('img').forEach(function(img) {
             <Input
               ref={searchInputRef}
               placeholder="Rechercher dans les mails..."
-              prefix={<SearchOutlined style={{ color: '#999' }} />}
+              prefix={<SearchOutlined style={{ color: SF.textPlaceholder }} />}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onPressEnter={() => handleSearch(searchQuery)}
@@ -2138,7 +2138,7 @@ document.querySelectorAll('img').forEach(function(img) {
             <div style={{ padding: 40, textAlign: 'center', color: '#fff' }}>
               <PaperClipOutlined style={{ fontSize: 48, marginBottom: 16, display: 'block' }} />
               <div style={{ fontSize: 16, marginBottom: 8 }}>{previewAttachment.filename}</div>
-              <div style={{ fontSize: 13, color: '#999', marginBottom: 16 }}>
+              <div style={{ fontSize: 13, color: SF.textPlaceholder, marginBottom: 16 }}>
                 Ce type de fichier ne peut pas être prévisualisé.
               </div>
               <Button

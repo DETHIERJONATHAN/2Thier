@@ -694,7 +694,7 @@ const ExplorePanel: React.FC<{ api: unknown; openModule?: (route: string) => voi
                   <video src={selectedPost.mediaUrl} controls autoPlay muted playsInline
                     style={{ maxWidth: '100%', maxHeight: '72vh', borderRadius: 8, objectFit: 'contain' }} />
                 ) : (
-                  <img src={selectedPost.mediaUrl} alt="" draggable={false}
+                  <img src={selectedPost.mediaUrl} alt="" draggable={false} loading="lazy"
                     style={{ maxWidth: '100%', maxHeight: '72vh', borderRadius: 8, objectFit: 'contain', userSelect: 'none' }} />
                 )}
               </div>

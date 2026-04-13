@@ -128,7 +128,7 @@ export const AddLeadForm: React.FC<AddLeadFormProps> = ({
             <Select.Option value="referral">Recommandation</Select.Option>
             <Select.Option value="linkedin">LinkedIn</Select.Option>
             <Select.Option value="email">{t('common.email')}</Select.Option>
-            <Select.Option value="phone">Téléphone</Select.Option>
+            <Select.Option value="phone">{	('common.phone')}</Select.Option>
             <Select.Option value="other">Autre</Select.Option>
           </Select>
         </Form.Item>

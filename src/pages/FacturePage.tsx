@@ -2044,7 +2044,7 @@ const FacturePage: React.FC = () => {
                 />
               </div>
               <div>
-                <label style={{ fontSize: 12, color: FB.textSecondary, display: 'block', marginBottom: 4 }}>Téléphone</label>
+                <label style={{ fontSize: 12, color: FB.textSecondary, display: 'block', marginBottom: 4 }}>{	('common.phone')}</label>
                 <input
                   value={formData.clientPhone}
                   onChange={e => setFormData(p => ({ ...p, clientPhone: e.target.value }))}
@@ -3121,7 +3121,7 @@ const FacturePage: React.FC = () => {
                       }}
                     >
                       <UploadOutlined style={{ fontSize: 32, color: FB.blue }} />
-                      <span style={{ fontWeight: 600, fontSize: 14, color: FB.blue }}>Télécharger</span>
+                      <span style={{ fontWeight: 600, fontSize: 14, color: FB.blue }}>{	('common.download')}</span>
                     </button>
                   </div>
                   <div style={{ fontSize: 13, color: FB.textSecondary }}>
@@ -3182,7 +3182,7 @@ const FacturePage: React.FC = () => {
                 </div>
               )}
               {scanPreview === 'PDF' && (
-                <div style={{ marginBottom: 14, textAlign: 'center', padding: 12, background: '#f0f0f0', borderRadius: 8 }}>
+                <div style={{ marginBottom: 14, textAlign: 'center', padding: 12, background: SF.bgCard, borderRadius: 8 }}>
                   📄 Document PDF analysé
                 </div>
               )}
@@ -3257,7 +3257,7 @@ const FacturePage: React.FC = () => {
 
                 {/* Date */}
                 <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: FB.textSecondary, display: 'block', marginBottom: 4 }}>Date</label>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: FB.textSecondary, display: 'block', marginBottom: 4 }}>{	('common.date')}</label>
                   <DatePicker
                     value={expenseForm.expenseDate ? dayjs(expenseForm.expenseDate) : null}
                     onChange={d => setExpenseForm(p => ({ ...p, expenseDate: d?.format('YYYY-MM-DD') || dayjs().format('YYYY-MM-DD') }))}

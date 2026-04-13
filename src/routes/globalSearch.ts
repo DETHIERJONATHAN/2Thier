@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
 import { authenticateToken, fetchFullUser } from '../middleware/auth';
 import { logger } from '../lib/logger';
+import { asyncHandler } from '../utils/asyncHandler';
 
 const router = Router();
 router.use(authenticateToken as unknown);
@@ -284,7 +285,7 @@ router.get('/web', async (req: Request, res: Response): Promise<void> => {
     // White-label: strip engine/source info, only expose what the user needs
     const results = (data.results || []).slice(0, limit).map((r) => {
       let favicon = '';
-      try { const u = new URL(r.url || ''); favicon = `https://www.google.com/s2/favicons?domain=${u.hostname}&sz=32`; } catch {}
+      try { const u = new URL(r.url || ''); favicon = `https://www.google.com/s2/favicons?domain=${u.hostname}&sz=32`; } catch { /* ok */ }
       return {
         title: r.title || '',
         content: r.content || '',
@@ -585,7 +586,7 @@ function buildInterceptorScript(pageUrl: string): string {
 </script>`;
 }
 
-router.get('/browse-proxy', async (req: Request, res: Response): Promise<void> => {
+router.get('/browse-proxy', asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
@@ -635,6 +636,7 @@ router.get('/browse-proxy', async (req: Request, res: Response): Promise<void> =
     const targetOrigin = new URL(targetUrl).origin;
 
     if (storedCookies) {
+      // Cookie injection placeholder — currently unused by the fetch pipeline
     }
 
     const fetchHeaders: Record<string, string> = {
@@ -789,7 +791,7 @@ router.get('/browse-proxy', async (req: Request, res: Response): Promise<void> =
       res.status(502).json({ error: 'Impossible de charger cette page' });
     }
   }
-});
+}));
 
 
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { SF, FB } from '../../components/zhiive/ZhiiveTheme';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useModuleNavigation } from '../../contexts/WallNavigationContext';
 import {
@@ -260,7 +261,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
     ? `${chantier.Commercial.firstName || ''} ${chantier.Commercial.lastName || ''}`.trim()
     : null;
 
-  const statusColor = chantier.ChantierStatus?.color || '#1890ff';
+  const statusColor = chantier.ChantierStatus?.color || SF.info;
   const statusName = chantier.ChantierStatus?.name || 'Non défini';
 
   // URL TBL avec le devisId lié — mode=review pour la version technique
@@ -351,7 +352,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
               <Button
                 icon={<PartitionOutlined />}
                 onClick={() => tblUrl && moduleNavigate('/tbl')}
-                style={{ borderColor: '#722ed1', color: '#722ed1' }}
+                style={{ borderColor: FB.purple, color: FB.purple }}
               >
                 Ouvrir TBL
               </Button>
@@ -390,7 +391,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                 type="primary"
                 icon={<SafetyCertificateOutlined />}
                 size="small"
-                style={{ background: '#52c41a', borderColor: '#52c41a' }}
+                style={{ background: SF.successAlt, borderColor: SF.successAlt }}
                 onClick={async () => {
                   try {
                     await api.post(`/api/chantier-workflow/chantiers/${chantier.id}/validate`, {});
@@ -472,7 +473,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
 
               {/* Lien public */}
               {receptionData.clientAccessToken && (
-                <div style={{ padding: '8px 12px', background: '#f6ffed', borderRadius: 6, marginBottom: 8 }}>
+                <div style={{ padding: '8px 12px', background: SF.bgSuccessTint, borderRadius: 6, marginBottom: 8 }}>
                   <Text type="secondary" style={{ fontSize: 12 }}>Lien de réception client :</Text>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <Input
@@ -500,9 +501,9 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
 
               {/* Satisfaction si signé */}
               {receptionData.satisfactionRating && (
-                <div style={{ padding: '6px 12px', background: '#fafafa', borderRadius: 6 }}>
+                <div style={{ padding: '6px 12px', background: SF.bgLightest, borderRadius: 6 }}>
                   <Text type="secondary">Note de satisfaction : </Text>
-                  <Text strong style={{ color: '#faad14' }}>{'⭐'.repeat(receptionData.satisfactionRating)}</Text>
+                  <Text strong style={{ color: SF.warning }}>{'⭐'.repeat(receptionData.satisfactionRating)}</Text>
                 </div>
               )}
             </div>
@@ -518,7 +519,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
             <Card title="Détails du chantier" size="small">
               <Descriptions column={1} styles={{ label: { fontWeight: 600, maxWidth: '140px' } }}>
                 <Descriptions.Item label="Produit">
-                  <Tag color={chantier.productColor || '#722ed1'}>
+                  <Tag color={chantier.productColor || FB.purple}>
                     {renderProductIcon(chantier.productIcon, 14)} {chantier.productLabel}
                   </Tag>
                 </Descriptions.Item>
@@ -572,7 +573,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                       />
                     ) : (
                       displayAmount
-                        ? <Text strong style={{ color: '#52c41a' }}>{displayAmount.toLocaleString('fr-BE', { minimumFractionDigits: 2 })} €</Text>
+                        ? <Text strong style={{ color: SF.successAlt }}>{displayAmount.toLocaleString('fr-BE', { minimumFractionDigits: 2 })} €</Text>
                         : <Text type="secondary">—</Text>
                     )
                   ) : (
@@ -611,7 +612,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                     />
                   ) : (
                     chantier.plannedDate
-                      ? <><CalendarOutlined style={{ marginRight: '4px', color: '#1677ff' }} />{dayjs(chantier.plannedDate).format('DD/MM/YYYY')}</>
+                      ? <><CalendarOutlined style={{ marginRight: '4px', color: SF.infoPrimary }} />{dayjs(chantier.plannedDate).format('DD/MM/YYYY')}</>
                       : <Text type="secondary">—</Text>
                   )}
                 </Descriptions.Item>
@@ -627,7 +628,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                     />
                   ) : (
                     chantier.deliveryDate
-                      ? <><CalendarOutlined style={{ marginRight: '4px', color: '#722ed1' }} />{dayjs(chantier.deliveryDate).format('DD/MM/YYYY')}</>
+                      ? <><CalendarOutlined style={{ marginRight: '4px', color: FB.purple }} />{dayjs(chantier.deliveryDate).format('DD/MM/YYYY')}</>
                       : <Text type="secondary">—</Text>
                   )}
                 </Descriptions.Item>
@@ -643,7 +644,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                     />
                   ) : (
                     chantier.receptionDate
-                      ? <><CalendarOutlined style={{ marginRight: '4px', color: '#52c41a' }} />{dayjs(chantier.receptionDate).format('DD/MM/YYYY')}</>
+                      ? <><CalendarOutlined style={{ marginRight: '4px', color: SF.successAlt }} />{dayjs(chantier.receptionDate).format('DD/MM/YYYY')}</>
                       : <Text type="secondary">—</Text>
                   )}
                 </Descriptions.Item>
@@ -659,7 +660,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                     />
                   ) : (
                     chantier.completedDate
-                      ? <><CalendarOutlined style={{ marginRight: '4px', color: '#fa8c16' }} />{dayjs(chantier.completedDate).format('DD/MM/YYYY')}</>
+                      ? <><CalendarOutlined style={{ marginRight: '4px', color: SF.orangeAlt }} />{dayjs(chantier.completedDate).format('DD/MM/YYYY')}</>
                       : <Text type="secondary">—</Text>
                   )}
                 </Descriptions.Item>
@@ -677,7 +678,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
               {/* Client */}
               <Card title={t('fields.client')} size="small">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                  <Avatar size={40} icon={<UserOutlined />} style={{ backgroundColor: '#1890ff' }}>
+                  <Avatar size={40} icon={<UserOutlined />} style={{ backgroundColor: SF.info }}>
                     {clientName.charAt(0).toUpperCase()}
                   </Avatar>
                   <div>
@@ -689,14 +690,14 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                 </div>
                 {chantier.Lead?.email && (
                   <div style={{ marginBottom: '4px' }}>
-                    <MailOutlined style={{ marginRight: '6px', color: '#8c8c8c' }} />
+                    <MailOutlined style={{ marginRight: '6px', color: SF.textQuaternary }} />
                     <a href={`mailto:${chantier.Lead.email}`}>{chantier.Lead.email}</a>
                   </div>
                 )}
                 {chantier.Lead?.phone && (
                   <div style={{ marginBottom: '4px', display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span>
-                      <PhoneOutlined style={{ marginRight: '6px', color: '#8c8c8c' }} />
+                      <PhoneOutlined style={{ marginRight: '6px', color: SF.textQuaternary }} />
                       <a href={`tel:${chantier.Lead.phone}`}>{chantier.Lead.phone}</a>
                     </span>
                     <a
@@ -727,7 +728,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                 <Card 
                   title={<Space><LinkOutlined /> Devis lié</Space>} 
                   size="small"
-                  style={{ borderColor: '#722ed1', borderWidth: 1 }}
+                  style={{ borderColor: FB.purple, borderWidth: 1 }}
                 >
                   <Descriptions column={1} styles={{ label: { fontWeight: 600, maxWidth: '120px' } }} size="small">
                     {genDoc.documentNumber && (
@@ -752,7 +753,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                         ) : null}
                         {quoteData.totalTTC ? (
                           <Descriptions.Item label="Total TTC">
-                            <Text strong style={{ color: '#52c41a', fontSize: '14px' }}>
+                            <Text strong style={{ color: SF.successAlt, fontSize: '14px' }}>
                               {Number(quoteData.totalTTC).toLocaleString('fr-BE', { minimumFractionDigits: 2 })} €
                             </Text>
                           </Descriptions.Item>
@@ -792,7 +793,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                   <div>
                     <Text type="secondary" style={{ fontSize: '12px' }}>Responsable chantier</Text>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-                      <Avatar size={28} icon={<UserOutlined />} style={{ backgroundColor: '#52c41a' }}>
+                      <Avatar size={28} icon={<UserOutlined />} style={{ backgroundColor: SF.successAlt }}>
                         {responsableName?.charAt(0) || '?'}
                       </Avatar>
                       <Text>{responsableName || <Text type="secondary">Non assigné</Text>}</Text>
@@ -802,7 +803,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                   <div>
                     <Text type="secondary" style={{ fontSize: '12px' }}>Commercial</Text>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-                      <Avatar size={28} icon={<UserOutlined />} style={{ backgroundColor: '#1890ff' }}>
+                      <Avatar size={28} icon={<UserOutlined />} style={{ backgroundColor: SF.info }}>
                         {commercialName?.charAt(0) || '?'}
                       </Avatar>
                       <Text>{commercialName || <Text type="secondary">Non assigné</Text>}</Text>
@@ -817,11 +818,11 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                         <Text type="secondary" style={{ fontSize: '12px' }}>Techniciens assignés</Text>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' }}>
                           {chantier.ChantierAssignments.map((a: Record<string, unknown>) => (
-                            <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 8px', borderRadius: 6, background: '#fafafa' }}>
+                            <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 8px', borderRadius: 6, background: SF.bgLightest }}>
                               <Avatar
                                 size={28}
                                 style={{
-                                  backgroundColor: a.Technician?.color || '#722ed1',
+                                  backgroundColor: a.Technician?.color || FB.purple,
                                   fontSize: 11,
                                   border: a.Technician?.type === 'SUBCONTRACTOR' ? '2px dashed #8c8c8c' : undefined,
                                 }}
@@ -901,9 +902,9 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                       <div key={evt.id} style={{
                         display: 'flex', alignItems: 'center', gap: 8,
                         padding: '6px 8px', borderRadius: 6,
-                        background: '#fafafa', border: '1px solid #f0f0f0',
+                        background: SF.bgLightest, border: '1px solid #f0f0f0',
                       }}>
-                        <CalendarOutlined style={{ color: '#1890ff', fontSize: 14 }} />
+                        <CalendarOutlined style={{ color: SF.info, fontSize: 14 }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <Text style={{ fontSize: 12, fontWeight: 500, display: 'block' }} ellipsis>
                             {evt.type === 'VISITE' ? 'Visite' : evt.type === 'INSTALLATION' ? 'Installation' : evt.type === 'LIVRAISON' ? 'Livraison' : evt.type === 'REUNION' ? 'Réunion' : evt.type}
@@ -947,7 +948,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
               <Card title="Document signé">
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: 1 }}>
-                    <FileTextOutlined style={{ fontSize: '28px', color: '#52c41a', flexShrink: 0 }} />
+                    <FileTextOutlined style={{ fontSize: '28px', color: SF.successAlt, flexShrink: 0 }} />
                     <div style={{ minWidth: 0 }}>
                       <Text strong style={{ wordBreak: 'break-word' }}>{chantier.documentName || 'Document'}</Text>
                       <div>
@@ -982,10 +983,10 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
 
             {/* Devis PDF généré (lié) */}
             {genDoc?.pdfUrl && (
-              <Card title={<Space><LinkOutlined /> Devis PDF généré</Space>} style={{ borderColor: '#722ed1' }}>
+              <Card title={<Space><LinkOutlined /> Devis PDF généré</Space>} style={{ borderColor: FB.purple }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: 1 }}>
-                    <FileTextOutlined style={{ fontSize: '28px', color: '#722ed1', flexShrink: 0 }} />
+                    <FileTextOutlined style={{ fontSize: '28px', color: FB.purple, flexShrink: 0 }} />
                     <div style={{ minWidth: 0 }}>
                       <Text strong>{genDoc.documentNumber || genDoc.title || 'Devis TBL'}</Text>
                       <div>
@@ -993,7 +994,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                           {genDoc.createdAt ? `Généré le ${new Date(genDoc.createdAt).toLocaleDateString('fr-FR')}` : 'Document TBL'}
                         </Text>
                         {quoteData.totalTTC && canSeePrices && (
-                          <Text strong style={{ marginLeft: 12, color: '#52c41a' }}>
+                          <Text strong style={{ marginLeft: 12, color: SF.successAlt }}>
                             {Number(quoteData.totalTTC).toLocaleString('fr-BE', { minimumFractionDigits: 2 })} € TTC
                           </Text>
                         )}
@@ -1004,7 +1005,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                     <Button
                       icon={<DownloadOutlined />}
                       onClick={() => window.open(genDoc.pdfUrl!, '_blank')}
-                      style={{ borderColor: '#722ed1', color: '#722ed1' }}
+                      style={{ borderColor: FB.purple, color: FB.purple }}
                     >
                       Ouvrir le devis
                     </Button>
@@ -1018,7 +1019,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
           <div style={{ padding: '24px 0' }}>
             <Card>
               <div style={{ textAlign: 'center', padding: '32px 16px' }}>
-                <PartitionOutlined style={{ fontSize: 48, color: '#722ed1', marginBottom: 16 }} />
+                <PartitionOutlined style={{ fontSize: 48, color: FB.purple, marginBottom: 16 }} />
                 <Title level={4} style={{ marginBottom: 8 }}>Formulaire TBL</Title>
                 <Text type="secondary" style={{ display: 'block', marginBottom: 24 }}>
                   Accédez au formulaire Tree Branch Leaf pour visualiser et compléter les données techniques de ce chantier.
@@ -1029,7 +1030,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                     size="large"
                     icon={<PartitionOutlined />}
                     onClick={() => tblUrl && moduleNavigate('/tbl')}
-                    style={{ backgroundColor: '#722ed1', borderColor: '#722ed1' }}
+                    style={{ backgroundColor: FB.purple, borderColor: FB.purple }}
                   >
                     Ouvrir le TBL
                   </Button>
@@ -1043,7 +1044,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
             <Card title="Résumé du chantier" size="small" style={{ marginTop: 16 }}>
               <Descriptions column={{ xs: 1, sm: 2 }} size="small" styles={{ label: { fontWeight: 600 } }}>
                 <Descriptions.Item label="Produit">
-                  <Tag color={chantier.productColor || '#722ed1'}>
+                  <Tag color={chantier.productColor || FB.purple}>
                     {renderProductIcon(chantier.productIcon, 14)} {chantier.productLabel}
                   </Tag>
                 </Descriptions.Item>
@@ -1051,7 +1052,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                 <Descriptions.Item label="Montant">
                   {canSeePrices ? (
                     displayAmount
-                      ? <Text strong style={{ color: '#52c41a' }}>{displayAmount.toLocaleString('fr-BE', { minimumFractionDigits: 2 })} €</Text>
+                      ? <Text strong style={{ color: SF.successAlt }}>{displayAmount.toLocaleString('fr-BE', { minimumFractionDigits: 2 })} €</Text>
                       : <Text type="secondary">—</Text>
                   ) : (
                     <Text type="secondary">🔒 Réservé</Text>
@@ -1071,7 +1072,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
 
             {chantier.TreeBranchLeafSubmission?.summary && (
               <Card title="Données de soumission TBL" size="small" style={{ marginTop: 16 }}>
-                <pre style={{ fontSize: 12, maxHeight: 300, overflow: 'auto', background: '#fafafa', padding: 12, borderRadius: 6 }}>
+                <pre style={{ fontSize: 12, maxHeight: 300, overflow: 'auto', background: SF.bgLightest, padding: 12, borderRadius: 6 }}>
                   {JSON.stringify(chantier.TreeBranchLeafSubmission.summary, null, 2)}
                 </pre>
               </Card>

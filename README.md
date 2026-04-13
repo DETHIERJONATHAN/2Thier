@@ -80,9 +80,92 @@ npm run dev
 ## 🤝 Contribution
 Toute contribution est la bienvenue ! Merci de proposer vos idées, corrections ou améliorations via issues ou pull requests.
 
+## 🛠️ Stack Technique
+
+| Couche | Technologie |
+|--------|-------------|
+| Frontend | React 19 + TypeScript + Vite 6 |
+| UI | Ant Design 5 + Tailwind CSS |
+| Backend | Express 5 (Node.js) |
+| Base de données | PostgreSQL (Google Cloud SQL) + Prisma ORM |
+| Auth | JWT + Google OAuth 2.0 |
+| i18n | react-i18next (FR/EN) |
+| Tests | Vitest + 1210+ tests |
+| CI/CD | GitHub Actions → Cloud Build → Cloud Run |
+| PWA | vite-plugin-pwa (Workbox) |
+
+## 📂 Structure du projet
+
+```
+src/
+├── api-server-clean.ts   # Serveur API Express
+├── auth/                 # Authentification (useAuth, JWT)
+├── components/           # Composants React réutilisables
+├── contexts/             # Contexts React (ActiveIdentity, etc.)
+├── hooks/                # Hooks personnalisés (useAuthenticatedApi, etc.)
+├── i18n/                 # Internationalisation (fr.json, en.json)
+├── lib/                  # Utilitaires (database.ts, logger.ts)
+├── pages/                # Pages de l'application
+├── routes/               # Routes API Express
+├── services/             # Services métier
+└── utils/                # Utilitaires partagés
+prisma/
+├── schema.prisma         # Schéma de la base de données
+├── migrations/           # Migrations Prisma
+└── seed.ts               # Données de seed
+tests/                    # Tests Vitest
+```
+
+## 🚀 Démarrage rapide
+
+```bash
+# Prérequis : Node.js 20+, accès Cloud SQL proxy
+# 1. Installer les dépendances
+npm install
+
+# 2. Lancer l'environnement complet (proxy DB + frontend + backend)
+bash scripts/start-local.sh
+
+# 3. Résultat :
+#   🌐 Frontend: http://localhost:5173
+#   🔧 Backend:  http://localhost:4000
+```
+
+## 🧪 Tests
+
+```bash
+# Lancer tous les tests
+npx vitest run
+
+# Mode watch
+npx vitest
+
+# Couverture
+npx vitest run --coverage
+```
+
+## 📦 Build & Déploiement
+
+```bash
+# Build frontend + backend
+npm run build
+
+# Le déploiement se fait automatiquement via GitHub Actions
+# sur push vers main → Cloud Build → Cloud Run
+```
+
+## 🔑 Conventions de code
+
+- **DB** : Toujours utiliser `import { db } from '@/lib/database'` (jamais `new PrismaClient()`)
+- **API** : Toujours utiliser `useAuthenticatedApi()` (jamais `fetch` directement)
+- **Identité** : Toujours utiliser `useActiveIdentity()` (jamais calculer `isOrgMode` localement)
+- **Logs** : Toujours utiliser `import { logger } from '@/lib/logger'` (jamais `console.log`)
+- **i18n** : Toujours utiliser `t('clé')` (jamais de texte français en dur)
+- **Thème** : Toujours utiliser `SF.*`, `FB.*` depuis ZhiiveTheme (jamais de hex en dur)
+
 ## 🧠 Philosophie
-Le but est de rendre le CRM/ERP totalement évolutif, scalable et modulable, pour que chaque utilisateur puisse l’adapter à ses besoins sans jamais dépendre d’un développeur. L’intelligence artificielle viendra en support pour guider, automatiser et optimiser l’expérience.
+Le but est de rendre Zhiive totalement évolutif, scalable et modulable, pour que chaque utilisateur puisse l'adapter à ses besoins sans jamais dépendre d'un développeur. L'intelligence artificielle viendra en support pour guider, automatiser et optimiser l'expérience.
 
 ---
 
-© 2025 2Thier – Tous droits réservés.
+© 2025-2026 Zhiive (2Thier) – Tous droits réservés.

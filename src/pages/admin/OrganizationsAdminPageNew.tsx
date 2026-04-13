@@ -81,7 +81,7 @@ const FBToggle = ({ checked, onChange, disabled, size = 'default' }: {
       role="button" tabIndex={0} onClick={() => !disabled && onChange(!checked)}
       style={{
         width: w, height: h, borderRadius: h,
-        background: disabled ? '#ccc' : checked ? FB.blue : '#ccc',
+        background: disabled ? COLORS.grayLight : checked ? FB.blue : COLORS.grayLight,
         cursor: disabled ? 'not-allowed' : 'pointer',
         position: 'relative', transition: 'background 0.2s',
         opacity: disabled ? 0.5 : 1, flexShrink: 0,
@@ -782,11 +782,11 @@ const OrganizationsAdminPageNew: React.FC = () => {
   // 🎨 ICÔNES MODULES CRM
   const getCrmModuleIcon = (moduleKey: string) => {
     const icons: Record<string, React.ReactNode> = {
-      leads: <UserOutlined style={{ color: '#1890ff' }} />,
-      customers: <TeamOutlined style={{ color: '#52c41a' }} />,
-      projects: <DatabaseOutlined style={{ color: '#722ed1' }} />,
-      tasks: <CheckCircleOutlined style={{ color: '#fa8c16' }} />,
-      documents: <FileOutlined style={{ color: '#13c2c2' }} />,
+      leads: <UserOutlined style={{ color: SF.info }} />,
+      customers: <TeamOutlined style={{ color: SF.successAlt }} />,
+      projects: <DatabaseOutlined style={{ color: FB.purple }} />,
+      tasks: <CheckCircleOutlined style={{ color: SF.orangeAlt }} />,
+      documents: <FileOutlined style={{ color: FB.teal }} />,
       reports: <BarChartOutlined style={{ color: '#eb2f96' }} />
     };
     return icons[moduleKey] || <AppstoreOutlined style={{ color: '#666' }} />;
@@ -844,18 +844,18 @@ const OrganizationsAdminPageNew: React.FC = () => {
       case 'admin':
         return <UserSwitchOutlined style={{ color: '#f5222d', fontSize: '20px' }} />;
       case 'forms':
-        return <FormOutlined style={{ color: '#52c41a', fontSize: '20px' }} />;
+        return <FormOutlined style={{ color: SF.successAlt, fontSize: '20px' }} />;
       case 'technical':
-        return <ToolOutlined style={{ color: '#fa8c16', fontSize: '20px' }} />;
+        return <ToolOutlined style={{ color: SF.orangeAlt, fontSize: '20px' }} />;
       case 'googleWorkspace':
         return <GoogleOutlined style={{ color: '#4285f4', fontSize: '20px' }} />;
       case 'devis1minuteAdmin':
-        return <RocketOutlined style={{ color: '#722ed1', fontSize: '20px' }} />;
+        return <RocketOutlined style={{ color: FB.purple, fontSize: '20px' }} />;
       case 'devis1minute':
         return <RocketOutlined style={{ color: '#ff7a00', fontSize: '20px' }} />;
       case 'other':
       default:
-        return <AppstoreOutlined style={{ color: '#722ed1', fontSize: '20px' }} />;
+        return <AppstoreOutlined style={{ color: FB.purple, fontSize: '20px' }} />;
     }
   }, []);
 
@@ -898,7 +898,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
             </div>
             <Badge 
               count={modules.length} 
-              style={{ backgroundColor: sectionActive ? '#52c41a' : '#f5222d' }} 
+              style={{ backgroundColor: sectionActive ? SF.successAlt : '#f5222d' }} 
             />
           </div>
           {isOpen ? <CaretDownOutlined /> : <CaretRightOutlined />}
@@ -920,7 +920,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
                     style={{
                       padding: 16, borderRadius: FB.radius, transition: 'box-shadow 0.2s',
                       border: `1px solid ${!sectionActive ? '#ffa39e' : isActive ? FB.green : FB.border}`,
-                      background: !sectionActive ? '#fff1f0' : isActive ? '#f6ffed' : FB.white,
+                      background: !sectionActive ? '#fff1f0' : isActive ? SF.bgSuccessTint : FB.white,
                       opacity: !sectionActive ? 0.6 : 1,
                     }}
                   >
@@ -1062,7 +1062,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
       width: 120,
       render: (_, record: Organization) => (
         <Space>
-          <UserOutlined style={{ color: '#1890ff' }} />
+          <UserOutlined style={{ color: SF.info }} />
           <Text strong>{record.stats?.totalUsers || 0}</Text>
         </Space>
       ),
@@ -1088,8 +1088,8 @@ const OrganizationsAdminPageNew: React.FC = () => {
         // Utiliser UNIQUEMENT la valeur du cache - Plus jamais de recalcul
         return (
           <Space>
-            <AppstoreOutlined style={{ color: count > 0 ? '#52c41a' : '#d9d9d9' }} />
-            <Text strong style={{ color: count > 0 ? '#52c41a' : '#999' }}>{count}</Text>
+            <AppstoreOutlined style={{ color: count > 0 ? SF.successAlt : SF.borderLight }} />
+            <Text strong style={{ color: count > 0 ? SF.successAlt : SF.textPlaceholder }}>{count}</Text>
           </Space>
         );
       },
@@ -1105,7 +1105,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
             text={
               <Text style={{ 
                 fontWeight: record.stats?.googleWorkspaceEnabled ? 600 : 400,
-                color: record.stats?.googleWorkspaceEnabled ? '#52c41a' : '#999'
+                color: record.stats?.googleWorkspaceEnabled ? SF.successAlt : SF.textPlaceholder
               }}>
                 {record.stats?.googleWorkspaceEnabled ? 'Activé' : 'Désactivé'}
               </Text>
@@ -1176,7 +1176,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
         );
         return (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-            {ab('📋', 'Détails', () => openOrganizationDetails(record), { bg: '#e7f3ff', color: FB.blue })}
+            {ab('📋', 'Détails', () => openOrganizationDetails(record), { bg: FB.activeBlue, color: FB.blue })}
             {canManageOrgs && (
               <>
                 <Popconfirm
@@ -1186,13 +1186,13 @@ const OrganizationsAdminPageNew: React.FC = () => {
                   okText={record.status === 'ACTIVE' ? 'Désactiver' : 'Activer'}
                   cancelText={t('common.cancel')}
                 >
-                  {ab(record.status === 'ACTIVE' ? '⛔' : '✅', record.status === 'ACTIVE' ? 'Désactiver' : 'Activer', () => {}, { bg: record.status === 'ACTIVE' ? '#fff2f0' : '#f6ffed', color: record.status === 'ACTIVE' ? FB.red : FB.green })}
+                  {ab(record.status === 'ACTIVE' ? '⛔' : '✅', record.status === 'ACTIVE' ? 'Désactiver' : 'Activer', () => {}, { bg: record.status === 'ACTIVE' ? '#fff2f0' : SF.bgSuccessTint, color: record.status === 'ACTIVE' ? FB.red : FB.green })}
                 </Popconfirm>
                 {ab('✏️', 'Modifier', () => openEditOrganization(record), { bg: '#f9f0ff', color: FB.purple })}
                 {ab('🔗', 'Google WS', () => openGoogleWorkspaceConfig(record), { bg: '#e6f4ff', color: '#4285F4' })}
                 {ab('🚀', 'GW Modules', () => handleActivateGoogleWorkspaceModules(record.id), { bg: '#fff1f0', color: FB.red })}
                 {ab('📞', 'Telnyx', () => openTelnyxConfig(record), { bg: '#fff0f0', color: SF.like })}
-                {ab('🧩', 'Modules', () => openModulesManager(record), { bg: '#f6ffed', color: FB.green })}
+                {ab('🧩', 'Modules', () => openModulesManager(record), { bg: SF.bgSuccessTint, color: FB.green })}
                 {ab('🚀', 'Devis1Min', () => openDevis1Minute(record), { bg: '#fff7e6', color: '#ff7a00' })}
                 <Popconfirm
                   title="⚠️ Supprimer cette organisation ?"
@@ -1305,7 +1305,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ color: FB.textSecondary, fontSize: 12 }}>Modules actifs</div>
-            <div style={{ fontWeight: 700, fontSize: 20, color: moduleCount > 0 ? FB.green : '#999' }}>{moduleCount}</div>
+            <div style={{ fontWeight: 700, fontSize: 20, color: moduleCount > 0 ? FB.green : SF.textPlaceholder }}>{moduleCount}</div>
           </div>
         </div>
 
@@ -1762,7 +1762,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
       <Modal
         title={
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <AppstoreAddOutlined style={{ color: '#1890ff' }} />
+            <AppstoreAddOutlined style={{ color: SF.info }} />
             Gestion des modules - {selectedOrganization?.name}
           </div>
         }
@@ -1904,7 +1904,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
                   })
                 ) : (
                   <div style={{ textAlign: 'center', padding: '32px 0' }}>
-                    <RocketOutlined style={{ fontSize: 32, color: '#d9d9d9', marginBottom: 16, display: 'block' }} />
+                    <RocketOutlined style={{ fontSize: 32, color: SF.borderLight, marginBottom: 16, display: 'block' }} />
                     <p style={{ color: FB.textSecondary }}>Aucun module Devis1Minute disponible</p>
                     <p style={{ fontSize: 13, color: '#bfbfbf', marginTop: 8 }}>
                       Les modules doivent être créés par le Super Admin

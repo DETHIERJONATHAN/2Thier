@@ -23,6 +23,7 @@ export const SF = {
   successMd: '#4CAF50',
   orange: '#FF9800',
   orangeAlt: '#fa8c16',
+  warning: '#faad14',
   purple: '#9C27B0',
 
   // Scope / visibility
@@ -74,11 +75,13 @@ export const SF = {
   bgLightest: '#fafafa',
   bgCard: '#f0f0f0',
   borderLight: '#d9d9d9',
+  borderMd: '#e8e8e8',
   borderLighter: '#eee',
   textTertiary: '#65676b',
   textQuaternary: '#8c8c8c',
   textDark: '#333',
   textPlaceholder: '#999',
+  infoPrimary: '#1677ff',
   bgPrimaryTint: 'rgba(108, 92, 231, 0.1)',
 
   // Tinted backgrounds (status/info)
@@ -193,6 +196,15 @@ export const FB = {
   warningBg: '#fffbe6',
   warningBorder: '#ffe58f',
   warningText: '#ad6800',
+  // Extended UI colors
+  blueStrong: '#0866FF',
+  dangerDark: '#cf1322',
+  dangerLightBg: '#ffccc7',
+  dangerHoverBg: '#ffe9e9',
+  placeholderIcon: '#aab2bd',
+  emptyIcon: '#BEC3C9',
+  leadOrange: '#D67D35',
+  teal: '#13c2c2',
 } as const;
 
 /**

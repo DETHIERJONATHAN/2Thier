@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { SF, FB } from '../../components/zhiive/ZhiiveTheme';
 import {
   Card, Button, Tag, Modal, Form, Input, Select, DatePicker, Empty, Typography, Popconfirm, Badge, Alert, Calendar, App, Spin,
   Divider, Segmented,
@@ -82,10 +83,10 @@ interface Props {
 }
 
 const EVENT_TYPES = [
-  { value: 'VISITE_TECHNIQUE', label: '🔍 Visite technique', color: '#1890ff' },
-  { value: 'CHANTIER', label: '🏗️ Chantier', color: '#faad14' },
-  { value: 'RECEPTION', label: '✅ Réception', color: '#52c41a' },
-  { value: 'CUSTOM', label: '📋 Autre', color: '#722ed1' },
+  { value: 'VISITE_TECHNIQUE', label: '🔍 Visite technique', color: SF.info },
+  { value: 'CHANTIER', label: '🏗️ Chantier', color: SF.warning },
+  { value: 'RECEPTION', label: '✅ Réception', color: SF.successAlt },
+  { value: 'CUSTOM', label: '📋 Autre', color: FB.purple },
 ];
 
 const EVENT_STATUSES: Record<string, { label: string; color: string; badgeStatus: string }> = {
@@ -325,7 +326,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
     let subAmount = '';
     modal.confirm({
       title: 'Valider cet événement',
-      icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+      icon: <CheckCircleOutlined style={{ color: SF.successAlt }} />,
       content: (
         <div>
           <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
@@ -372,7 +373,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
     let problemText = '';
     modal.confirm({
       title: 'Signaler un problème',
-      icon: <WarningOutlined style={{ color: '#ff4d4f' }} />,
+      icon: <WarningOutlined style={{ color: SF.danger }} />,
       content: (
         <Input.TextArea
           rows={4}
@@ -445,7 +446,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
 
               return (
                 <Card key={event.id} size="small" style={{
-                  borderLeft: `3px solid ${typeInfo?.color || '#d9d9d9'}`,
+                  borderLeft: `3px solid ${typeInfo?.color || SF.borderLight}`,
                   background: event.status === 'PROBLEM' ? '#fff2f0' : undefined,
                 }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -497,13 +498,13 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                       <div style={{
                         padding: '6px 10px',
                         borderRadius: 6,
-                        background: event.reviewStatus === 'CONFIRMED' ? '#f6ffed' : '#fff7e6',
-                        border: `1px solid ${event.reviewStatus === 'CONFIRMED' ? '#b7eb8f' : '#ffd591'}`,
+                        background: event.reviewStatus === 'CONFIRMED' ? SF.bgSuccessTint : '#fff7e6',
+                        border: `1px solid ${event.reviewStatus === 'CONFIRMED' ? SF.successBorder : '#ffd591'}`,
                       }}>
                         {event.reviewStatus === 'CONFIRMED' ? (
-                          <Text style={{ color: '#52c41a', fontSize: 12 }}>✅ Revue technique : toutes les données confirmées</Text>
+                          <Text style={{ color: SF.successAlt, fontSize: 12 }}>✅ Revue technique : toutes les données confirmées</Text>
                         ) : (
-                          <Text style={{ color: '#fa8c16', fontSize: 12 }}>
+                          <Text style={{ color: SF.orangeAlt, fontSize: 12 }}>
                             ⚠️ Revue technique : {(event.reviewData as unknown)?.modifiedFields || '?'} modification(s) détectée(s)
                           </Text>
                         )}
@@ -533,7 +534,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                           onClick={() => {
                             moduleNavigate('/tbl');
                           }}
-                          style={{ minHeight: 36, background: '#1890ff', fontWeight: 600 }}
+                          style={{ minHeight: 36, background: SF.info, fontWeight: 600 }}
                         >
                           Analyser
                         </Button>
@@ -629,7 +630,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                     </div>
 
                     {/* Titre de la période */}
-                    <div style={{ textAlign: 'center', fontWeight: 600, fontSize: 13, marginBottom: 6, color: '#333' }}>
+                    <div style={{ textAlign: 'center', fontWeight: 600, fontSize: 13, marginBottom: 6, color: SF.textDark }}>
                       {agendaView === 'month' && agendaDate.format('MMMM YYYY')}
                       {agendaView === 'day' && agendaDate.format('dddd D MMMM YYYY')}
                       {agendaView === 'week' && `${agendaDate.startOf('week').format('D MMM')} — ${agendaDate.endOf('week').format('D MMM YYYY')}`}
@@ -673,10 +674,10 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                               e => e.CalendarEvent && dayjs(e.CalendarEvent.startDate).format('YYYY-MM-DD') === dateStr
                             );
                             if (hasChantierEvent) {
-                              return <div style={{ position: 'absolute', bottom: 1, left: '50%', transform: 'translateX(-50%)', width: 5, height: 5, borderRadius: '50%', background: '#faad14' }} />;
+                              return <div style={{ position: 'absolute', bottom: 1, left: '50%', transform: 'translateX(-50%)', width: 5, height: 5, borderRadius: '50%', background: SF.warning }} />;
                             }
                             if (hasEvent) {
-                              return <div style={{ position: 'absolute', bottom: 1, left: '50%', transform: 'translateX(-50%)', width: 5, height: 5, borderRadius: '50%', background: '#1890ff' }} />;
+                              return <div style={{ position: 'absolute', bottom: 1, left: '50%', transform: 'translateX(-50%)', width: 5, height: 5, borderRadius: '50%', background: SF.info }} />;
                             }
                             return null;
                           }}
@@ -720,14 +721,14 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                                   alignItems: 'stretch',
                                   borderBottom: '1px solid #f5f5f5',
                                   cursor: 'pointer',
-                                  background: hasAny ? '#fafafa' : 'white',
+                                  background: hasAny ? SF.bgLightest : 'white',
                                   minHeight: 36,
                                   transition: 'background 0.15s',
                                 }}
-                                onMouseEnter={(e) => { if (!hasAny) e.currentTarget.style.background = '#e6f7ff'; }}
+                                onMouseEnter={(e) => { if (!hasAny) e.currentTarget.style.background = SF.bgInfoTint; }}
                                 onMouseLeave={(e) => { if (!hasAny) e.currentTarget.style.background = 'white'; }}
                               >
-                                <div style={{ width: 44, flexShrink: 0, padding: '6px 4px', textAlign: 'right', fontSize: 11, color: '#8c8c8c', borderRight: '1px solid #f0f0f0' }}>
+                                <div style={{ width: 44, flexShrink: 0, padding: '6px 4px', textAlign: 'right', fontSize: 11, color: SF.textQuaternary, borderRight: '1px solid #f0f0f0' }}>
                                   {String(hour).padStart(2, '0')}:00
                                 </div>
                                 <div style={{ flex: 1, padding: '3px 6px', display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -746,7 +747,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                                   {eventsThisHour.map(ce => (
                                     <div key={ce.id} style={{
                                       fontSize: 10, padding: '2px 6px', borderRadius: 4,
-                                      background: '#e6f7ff', border: '1px solid #91d5ff', color: '#0050b3',
+                                      background: SF.bgInfoTint, border: '1px solid #91d5ff', color: '#0050b3',
                                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                                     }}>
                                       📅 {ce.title}
@@ -782,8 +783,8 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                                   style={{
                                     flex: 1, textAlign: 'center', padding: '4px 2px', fontSize: 10, cursor: 'pointer',
                                     fontWeight: isToday ? 700 : 400,
-                                    color: isToday ? '#1890ff' : d.day() === 0 ? '#ff4d4f' : '#333',
-                                    background: isToday ? '#e6f7ff' : 'transparent',
+                                    color: isToday ? SF.info : d.day() === 0 ? SF.danger : SF.textDark,
+                                    background: isToday ? SF.bgInfoTint : 'transparent',
                                     borderLeft: '1px solid #f0f0f0',
                                   }}
                                 >
@@ -797,7 +798,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                           <div style={{ maxHeight: 280, overflowY: 'auto' }}>
                             {HOURS.map(hour => (
                               <div key={hour} style={{ display: 'flex', borderBottom: '1px solid #f5f5f5', minHeight: 28 }}>
-                                <div style={{ width: 36, flexShrink: 0, fontSize: 9, color: '#8c8c8c', textAlign: 'right', padding: '2px 3px 0 0', borderRight: '1px solid #f0f0f0' }}>
+                                <div style={{ width: 36, flexShrink: 0, fontSize: 9, color: SF.textQuaternary, textAlign: 'right', padding: '2px 3px 0 0', borderRight: '1px solid #f0f0f0' }}>
                                   {String(hour).padStart(2, '0')}h
                                 </div>
                                 {DAYS.map(d => {
@@ -819,7 +820,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                                       }}
                                       style={{
                                         flex: 1, borderLeft: '1px solid #f0f0f0', padding: '1px 2px', cursor: 'pointer',
-                                        background: hasAny ? (chEvts.length > 0 ? '#fff7e6' : '#e6f7ff') : 'white',
+                                        background: hasAny ? (chEvts.length > 0 ? '#fff7e6' : SF.bgInfoTint) : 'white',
                                         transition: 'background 0.15s',
                                       }}
                                       onMouseEnter={(e) => { if (!hasAny) e.currentTarget.style.background = '#f0f5ff'; }}
@@ -829,8 +830,8 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                                         ...evts.map(ce => `📅 ${ce.title}`),
                                       ].join('\n') || `${d.format('DD/MM')} ${hour}h — Cliquer pour réserver`}
                                     >
-                                      {chEvts.length > 0 && <div style={{ width: '100%', height: 4, borderRadius: 2, background: '#faad14', marginBottom: 1 }} />}
-                                      {evts.length > 0 && <div style={{ width: '100%', height: 4, borderRadius: 2, background: '#1890ff' }} />}
+                                      {chEvts.length > 0 && <div style={{ width: '100%', height: 4, borderRadius: 2, background: SF.warning, marginBottom: 1 }} />}
+                                      {evts.length > 0 && <div style={{ width: '100%', height: 4, borderRadius: 2, background: SF.info }} />}
                                     </div>
                                   );
                                 })}
@@ -842,9 +843,9 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                     })()}
 
                     {/* Légende */}
-                    <div style={{ display: 'flex', gap: 12, marginTop: 4, fontSize: 10, color: '#8c8c8c' }}>
-                      <span><span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#1890ff', marginRight: 3 }} />{t('entity.calendar')}</span>
-                      <span><span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#faad14', marginRight: 3 }} />Ce chantier</span>
+                    <div style={{ display: 'flex', gap: 12, marginTop: 4, fontSize: 10, color: SF.textQuaternary }}>
+                      <span><span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: SF.info, marginRight: 3 }} />{t('entity.calendar')}</span>
+                      <span><span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: SF.warning, marginRight: 3 }} />Ce chantier</span>
                       <span style={{ marginLeft: 'auto' }}>Cliquez pour sélectionner un créneau</span>
                     </div>
                   </div>
@@ -960,8 +961,8 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                     key={field.nodeId}
                     size="small"
                     style={{
-                      borderLeft: `3px solid ${isModified ? '#fa8c16' : '#52c41a'}`,
-                      background: isModified ? '#fffbe6' : '#f6ffed',
+                      borderLeft: `3px solid ${isModified ? SF.orangeAlt : SF.successAlt}`,
+                      background: isModified ? '#fffbe6' : SF.bgSuccessTint,
                     }}
                   >
                     <div style={{ marginBottom: 4 }}>
@@ -974,7 +975,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                       <Text type="secondary" style={{ fontSize: 11 }}>Valeur devis : </Text>
                       <Text style={{
                         textDecoration: isModified ? 'line-through' : 'none',
-                        color: isModified ? '#8c8c8c' : '#262626',
+                        color: isModified ? SF.textQuaternary : '#262626',
                         fontWeight: isModified ? 'normal' : 'bold',
                       }}>
                         {field.originalValue || '—'}
@@ -987,10 +988,10 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                       value={edit?.value || ''}
                       onChange={e => handleReviewFieldChange(field.nodeId, e.target.value)}
                       style={{
-                        borderColor: isModified ? '#fa8c16' : '#b7eb8f',
+                        borderColor: isModified ? SF.orangeAlt : SF.successBorder,
                         background: isModified ? '#fff7e6' : '#fff',
                       }}
-                      suffix={isModified ? <ExclamationCircleOutlined style={{ color: '#fa8c16' }} /> : <CheckCircleOutlined style={{ color: '#52c41a' }} />}
+                      suffix={isModified ? <ExclamationCircleOutlined style={{ color: SF.orangeAlt }} /> : <CheckCircleOutlined style={{ color: SF.successAlt }} />}
                     />
 
                     {/* Note si modifié (obligatoire) */}
@@ -1003,7 +1004,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                           placeholder="Expliquez pourquoi la valeur a changé..."
                           value={edit?.note || ''}
                           onChange={e => handleReviewNoteChange(field.nodeId, e.target.value)}
-                          style={{ borderColor: '#fa8c16', marginTop: 2 }}
+                          style={{ borderColor: SF.orangeAlt, marginTop: 2 }}
                         />
                       </div>
                     )}
@@ -1034,7 +1035,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                     <div>
                       <Text style={{
                         fontSize: 12,
-                        color: Number(reviewSubAmount) > reviewChantierAmount * 0.5 ? '#ff4d4f' : Number(reviewSubAmount) > reviewChantierAmount * 0.3 ? '#fa8c16' : '#52c41a',
+                        color: Number(reviewSubAmount) > reviewChantierAmount * 0.5 ? SF.danger : Number(reviewSubAmount) > reviewChantierAmount * 0.3 ? SF.orangeAlt : SF.successAlt,
                         fontWeight: 'bold',
                       }}>
                         {(Number(reviewSubAmount) / reviewChantierAmount * 100).toFixed(1)}% du devis

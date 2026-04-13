@@ -293,23 +293,18 @@ export async function generateRound(tournamentId: string): Promise<{
     where: { id: tournamentId },
     include: {
       TeamEntries: { where: { status: 'CONFIRMED' } },
+      PlayerEntries: { where: { status: 'CONFIRMED' }, select: { userId: true } },
       Rounds: { orderBy: { roundNumber: 'desc' }, take: 1 },
     },
   });
 
   if (!tournament) throw new Error('Tournament not found');
 
-  const teams: TeamForDraw[] = tournament.TeamEntries.map(t => ({
-    id: t.id,
-    name: t.name,
-    seed: t.seed,
-  }));
-
-  if (teams.length < 2) throw new Error('Not enough teams to generate matches');
+  const format = tournament.format;
 
   const lastRound = tournament.Rounds[0]?.roundNumber ?? 0;
 
-  // Récupérer les terrains disponibles
+  // Récupérer les terrains disponibles (avec teamType)
   const courts = tournament.withCourts
     ? await db.arenaCourt.findMany({
         where: { tournamentId, isAvailable: true },
@@ -317,7 +312,119 @@ export async function generateRound(tournamentId: string): Promise<{
       })
     : [];
 
-  const format = tournament.format;
+  // ═══════════════════════════════════════════
+  // RANDOM_DRAW (mêlée) : générer TOUTES les manches d'un coup
+  // Chaque manche = tirage aléatoire des joueurs sur les terrains
+  // Les équipes sont formées à la volée selon le type de chaque terrain (doublette/triplette)
+  // ═══════════════════════════════════════════
+  if (format === 'RANDOM_DRAW') {
+    if (lastRound > 0) {
+      throw new Error('Les manches ont déjà été générées pour ce tournoi. Supprimez-les pour recommencer.');
+    }
+
+    const playerIds = tournament.PlayerEntries.map(p => p.userId);
+    if (playerIds.length < 4) {
+      throw new Error(`Pas assez de joueurs inscrits (${playerIds.length}/4 minimum)`);
+    }
+    if (courts.length === 0) {
+      throw new Error("Aucun terrain configuré. Veuillez d'abord configurer les terrains via 'Ajouter des terrains'.");
+    }
+
+    const nbRounds = tournament.nbRounds || 5;
+
+    const result = await db.$transaction(async (tx) => {
+      let firstRoundId = '';
+      let totalMatches = 0;
+
+      for (let r = 1; r <= nbRounds; r++) {
+        const shuffled = shuffleArray([...playerIds]);
+
+        const round = await tx.arenaRound.create({
+          data: {
+            tournamentId,
+            roundNumber: r,
+            name: `Manche ${r}`,
+            status: 'SCHEDULED',
+          },
+        });
+
+        if (r === 1) firstRoundId = round.id;
+
+        let playerIdx = 0;
+        let matchNumber = 1;
+
+        for (const court of courts) {
+          const teamSize = (court as { teamType?: string }).teamType === 'TRIPLETTE' ? 3 : 2;
+          const playersNeeded = teamSize * 2;
+
+          if (playerIdx + playersNeeded > shuffled.length) break;
+
+          const team1Players = shuffled.slice(playerIdx, playerIdx + teamSize);
+          const team2Players = shuffled.slice(playerIdx + teamSize, playerIdx + playersNeeded);
+          playerIdx += playersNeeded;
+
+          const team1 = await tx.arenaTeamEntry.create({
+            data: { tournamentId, name: `M${r}-${court.name}-A`, status: 'CONFIRMED' },
+          });
+          await tx.arenaTeamMember.createMany({
+            data: team1Players.map((uid, i) => ({ teamEntryId: team1.id, userId: uid, isCaptain: i === 0 })),
+          });
+
+          const team2 = await tx.arenaTeamEntry.create({
+            data: { tournamentId, name: `M${r}-${court.name}-B`, status: 'CONFIRMED' },
+          });
+          await tx.arenaTeamMember.createMany({
+            data: team2Players.map((uid, i) => ({ teamEntryId: team2.id, userId: uid, isCaptain: i === 0 })),
+          });
+
+          await tx.arenaMatch.create({
+            data: {
+              tournamentId,
+              roundId: round.id,
+              matchNumber,
+              team1Id: team1.id,
+              team2Id: team2.id,
+              courtId: court.id,
+              status: 'SCHEDULED',
+            },
+          });
+
+          matchNumber++;
+          totalMatches++;
+        }
+      }
+
+      await tx.arenaTournament.update({
+        where: { id: tournamentId },
+        data: { currentRound: 1, status: 'IN_PROGRESS', nbRounds },
+      });
+
+      return { roundId: firstRoundId, matchCount: totalMatches, roundsCreated: nbRounds };
+    });
+
+    const io = getIO();
+    if (io) {
+      io.to(`arena:${tournamentId}`).emit('arena:round-generated', {
+        tournamentId,
+        roundId: result.roundId,
+        roundNumber: 1,
+        roundsCreated: result.roundsCreated,
+        matchCount: result.matchCount,
+      });
+    }
+
+    logger.info(`[ARENA] RANDOM_DRAW: ${result.roundsCreated} manches, ${result.matchCount} matchs pour ${playerIds.length} joueurs sur ${courts.length} terrains`);
+    return result;
+  }
+
+  // Pour tous les autres formats, on travaille avec les TeamEntries
+  const teams: TeamForDraw[] = tournament.TeamEntries.map(t => ({
+    id: t.id,
+    name: t.name,
+    seed: t.seed,
+  }));
+
+  if (teams.length < 2) throw new Error('Not enough teams to generate matches');
 
   // ═══════════════════════════════════════════
   // ROUND_ROBIN / CHAMPIONSHIP : toutes les journées d'un coup
@@ -507,53 +614,8 @@ export async function generateRound(tournamentId: string): Promise<{
     return result;
   }
 
-  // ═══════════════════════════════════════════
-  // RANDOM_DRAW (mêlée) : 1 manche par appel
-  // ═══════════════════════════════════════════
-  const nextRound = lastRound + 1;
-  const randomMatches = generateRandomDraw(teams);
-
-  const result = await db.$transaction(async (tx) => {
-    const round = await tx.arenaRound.create({
-      data: {
-        tournamentId,
-        roundNumber: nextRound,
-        name: `Manche ${nextRound}`,
-        status: 'SCHEDULED',
-      },
-    });
-
-    const matchData = randomMatches.map((m, idx) => ({
-      tournamentId,
-      roundId: round.id,
-      matchNumber: m.matchNumber,
-      team1Id: m.team1Id,
-      team2Id: m.team2Id,
-      courtId: courts.length > 0 ? courts[idx % courts.length].id : null,
-      status: 'SCHEDULED' as const,
-    }));
-
-    await tx.arenaMatch.createMany({ data: matchData });
-
-    await tx.arenaTournament.update({
-      where: { id: tournamentId },
-      data: { currentRound: nextRound, status: 'IN_PROGRESS' },
-    });
-
-    return { roundId: round.id, matchCount: matchData.length };
-  });
-
-  const io = getIO();
-  if (io) {
-    io.to(`arena:${tournamentId}`).emit('arena:round-generated', {
-      tournamentId,
-      roundId: result.roundId,
-      roundNumber: nextRound,
-      matchCount: result.matchCount,
-    });
-  }
-
-  return result;
+  // Fallback (format inconnu)
+  throw new Error(`Format de tournoi non supporté : ${format}`);
 }
 
 /**

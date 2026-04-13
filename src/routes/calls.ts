@@ -5,6 +5,7 @@ import { authenticateToken } from '../middleware/auth';
 import { getGeminiService } from '../services/GoogleGeminiService';
 import { sendPushToUser } from './push';
 import { logger } from '../lib/logger';
+import { asyncHandler } from '../utils/asyncHandler';
 
 const router = Router();
 
@@ -414,7 +415,7 @@ setInterval(() => {
   }
 }, 60000);
 
-router.post('/:id/signal', async (req: Request, res: Response): Promise<void> => {
+router.post('/:id/signal', asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
@@ -432,7 +433,7 @@ router.post('/:id/signal', async (req: Request, res: Response): Promise<void> =>
   signalingBuffer.set(key, cleaned);
 
   res.json({ success: true });
-});
+}));
 
 // GET /calls/:id/signal — Poll for signaling messages
 router.get('/:id/signal', async (req: Request, res: Response): Promise<void> => {

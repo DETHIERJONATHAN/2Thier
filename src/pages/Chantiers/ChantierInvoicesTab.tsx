@@ -666,7 +666,7 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
                       {alreadyExists ? (
                         <Tag color="success" icon={<CheckCircleOutlined />}>Créée</Tag>
                       ) : (
-                        <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={() => handleCreateFromTemplate(tpl)}>Créer</Button>
+                        <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={() => handleCreateFromTemplate(tpl)}>{	('common.create')}</Button>
                       )}
                     </div>
                   </Card>

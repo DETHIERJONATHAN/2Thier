@@ -461,7 +461,7 @@ const NodeEditModal: React.FC<{
                   >
                     <Option value="text">Texte</Option>
                     <Option value="number">Nombre</Option>
-                    <Option value="date">Date</Option>
+                    <Option value="date">{	('common.date')}</Option>
                     <Option value="select">Liste déroulante</Option>
                     <Option value="boolean">Oui/Non</Option>
                     <Option value="file">Fichier</Option>

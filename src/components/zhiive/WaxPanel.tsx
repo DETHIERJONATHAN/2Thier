@@ -212,7 +212,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
               'text-padding': 2,
             },
             paint: {
-              'text-color': '#ffffff',
+              'text-color': FB.white,
               'text-halo-color': SF.overlayDarkHeavy,
               'text-halo-width': 1.5,
             },
@@ -232,7 +232,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
               'text-padding': 4,
             },
             paint: {
-              'text-color': '#ffffff',
+              'text-color': FB.white,
               'text-halo-color': SF.overlayDarkExtraHeavy,
               'text-halo-width': 2,
             },

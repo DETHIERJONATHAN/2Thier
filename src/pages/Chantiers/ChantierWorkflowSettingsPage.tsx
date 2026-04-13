@@ -270,7 +270,7 @@ const ChantierWorkflowSettingsPage: React.FC<{ onBack?: () => void }> = ({ onBac
       dataIndex: 'isActive',
       key: 'isActive',
       width: 60,
-      render: (v: boolean) => v ? <Tag color="green">Oui</Tag> : <Tag color="default">Non</Tag>,
+      render: (v: boolean) => v ? <Tag color="green">{	('common.yes')}</Tag> : <Tag color="default">{	('common.no')}</Tag>,
     },
     {
       title: 'Actions',
@@ -322,7 +322,7 @@ const ChantierWorkflowSettingsPage: React.FC<{ onBack?: () => void }> = ({ onBac
       dataIndex: 'isRequired',
       key: 'isRequired',
       width: 70,
-      render: (v: boolean) => v ? <Tag color="red">Oui</Tag> : <Tag>Non</Tag>,
+      render: (v: boolean) => v ? <Tag color="red">{	('common.yes')}</Tag> : <Tag>{	('common.no')}</Tag>,
     },
     {
       title: 'Actions',

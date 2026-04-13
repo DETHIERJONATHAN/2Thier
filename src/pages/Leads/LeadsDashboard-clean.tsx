@@ -667,7 +667,7 @@ export default function LeadsDashboard() {
                     unCheckedChildren="Manuel"
                     defaultChecked 
                   />
-                  <Button size="small" icon={<ReloadOutlined />}>Actualiser</Button>
+                  <Button size="small" icon={<ReloadOutlined />}>{	('common.refresh')}</Button>
                 </Space>
               }
               hoverable

@@ -316,7 +316,7 @@ const activityColor = (type: string) => {
     case "creation": return FB.green;
     case "email": return FB.blue;
     case "meeting": return FB.orange;
-    case "task": return "#722ed1";
+    case "task": return FB.purple;
     default: return FB.blue;
   }
 };
@@ -419,7 +419,7 @@ const ShortcutItem: React.FC<{
         style={{
           display: "flex", alignItems: "center", gap: 12,
           padding: "8px 8px", borderRadius: FB.radius,
-          background: isActive ? '#e7f3ff' : hovered ? FB.btnGray : "transparent",
+          background: isActive ? FB.activeBlue : hovered ? FB.btnGray : "transparent",
           cursor: "pointer", transition: "background 0.15s",
         }}
       >
@@ -843,7 +843,7 @@ export const WallPostCard: React.FC<{
                   if (isVideo) {
                     return <video key={i} src={url} controls style={{ width: isSingle ? "100%" : "calc(50% - 2px)", maxHeight: 300, objectFit: "contain", background: SF.black }} />;
                   }
-                  return <img key={i} src={url} alt="" loading="lazy" onClick={() => setLightboxUrl(url)} style={{ width: isSingle ? "100%" : "calc(50% - 2px)", maxHeight: 300, objectFit: isSingle ? "contain" : "cover", cursor: "pointer", background: isSingle ? "#f0f0f0" : "transparent" }} />;
+                  return <img key={i} src={url} alt="" loading="lazy" onClick={() => setLightboxUrl(url)} style={{ width: isSingle ? "100%" : "calc(50% - 2px)", maxHeight: 300, objectFit: isSingle ? "contain" : "cover", cursor: "pointer", background: isSingle ? SF.bgCard : "transparent" }} />;
                 })}
               </div>
             )}
@@ -884,7 +884,7 @@ export const WallPostCard: React.FC<{
                     objectFit: isSingle ? "contain" : "cover",
                     borderRadius: isSingle ? 0 : 8,
                     cursor: "pointer",
-                    background: isSingle ? "#f0f0f0" : "transparent",
+                    background: isSingle ? SF.bgCard : "transparent",
                   }} />
               );
             })}
@@ -905,7 +905,7 @@ export const WallPostCard: React.FC<{
           <div role="button" tabIndex={0} onClick={e => e.stopPropagation()}
             style={{ position: "absolute", top: 16, right: 16, color: SF.textLight, fontSize: 32,
               cursor: "pointer", fontWeight: 700, lineHeight: 1, zIndex: 10000 }}
-            onMouseEnter={e => (e.currentTarget.style.color = "#ccc")}
+            onMouseEnter={e => (e.currentTarget.style.color = COLORS.grayLight)}
             onMouseLeave={e => (e.currentTarget.style.color = "#fff")}
           >
             <span role="button" tabIndex={0} onClick={() => setLightboxUrl(null)}>✕</span>
@@ -2453,10 +2453,10 @@ export default function DashboardPageUnified() {
             {/* KPIs pour Admin/Comptable */}
             {(isAdminRole || user?.role === "comptable") && !selectedCollaborator && (
               <>
-                <StatWidget icon={<FunnelPlotOutlined />} label={t('dashboard.totalLeads')} value={analytics.totalLeads} color="#1890ff" sub={t('dashboard.thisMonth', { count: analytics.newLeadsThisMonth })} />
+                <StatWidget icon={<FunnelPlotOutlined />} label={t('dashboard.totalLeads')} value={analytics.totalLeads} color={SF.info} sub={t('dashboard.thisMonth', { count: analytics.newLeadsThisMonth })} />
                 <StatWidget icon={<TrophyOutlined />} label={t('dashboard.converted')} value={analytics.convertedLeads} color={FB.green} sub={`${analytics.conversionRate}%`} />
-                <StatWidget icon={<ToolOutlined />} label={t('dashboard.chantiers')} value={analytics.totalChantiers} color="#fa8c16" />
-                <StatWidget icon={<RiseOutlined />} label={t('dashboard.revenue')} value={formatRevenue(analytics.totalRevenue)} color="#722ed1" />
+                <StatWidget icon={<ToolOutlined />} label={t('dashboard.chantiers')} value={analytics.totalChantiers} color={SF.orangeAlt} />
+                <StatWidget icon={<RiseOutlined />} label={t('dashboard.revenue')} value={formatRevenue(analytics.totalRevenue)} color={FB.purple} />
                 {analytics.roleStats?.totalUsers != null && (
                   <StatWidget icon={<TeamOutlined />} label={t('dashboard.activeTeam')} value={analytics.roleStats.totalUsers} color={FB.blue} />
                 )}
@@ -2466,17 +2466,17 @@ export default function DashboardPageUnified() {
             {/* KPIs pour Commercial / User ou collaborateur sélectionné */}
             {((!isTechRole && !isAdminRole) || selectedCollaborator) && analytics.roleStats?.myLeads != null && (
               <>
-                <StatWidget icon={<FunnelPlotOutlined />} label={t('dashboard.myLeads')} value={analytics.roleStats.myLeads} color="#1890ff" />
+                <StatWidget icon={<FunnelPlotOutlined />} label={t('dashboard.myLeads')} value={analytics.roleStats.myLeads} color={SF.info} />
                 <StatWidget icon={<TrophyOutlined />} label={t('dashboard.myConverted')} value={analytics.roleStats.myConvertedLeads} color={FB.green} sub={`${analytics.roleStats.myConversion}%`} />
-                <StatWidget icon={<ToolOutlined />} label={t('dashboard.myChantiers')} value={analytics.roleStats.myChantiers} color="#fa8c16" />
-                <StatWidget icon={<RiseOutlined />} label={t('dashboard.myRevenue')} value={formatRevenue(analytics.roleStats.myRevenue)} color="#722ed1" />
+                <StatWidget icon={<ToolOutlined />} label={t('dashboard.myChantiers')} value={analytics.roleStats.myChantiers} color={SF.orangeAlt} />
+                <StatWidget icon={<RiseOutlined />} label={t('dashboard.myRevenue')} value={formatRevenue(analytics.roleStats.myRevenue)} color={FB.purple} />
               </>
             )}
 
             {/* KPIs pour Technicien / Chef d'équipe / Contremaître / Sous-traitant */}
             {(isTechRole || (selectedCollaborator && analytics.roleStats?.assignedChantiers != null)) && (
               <>
-                <StatWidget icon={<ToolOutlined />} label={t('dashboard.assignedChantiers')} value={analytics.roleStats.assignedChantiers || 0} color="#fa8c16" />
+                <StatWidget icon={<ToolOutlined />} label={t('dashboard.assignedChantiers')} value={analytics.roleStats.assignedChantiers || 0} color={SF.orangeAlt} />
                 <StatWidget icon={<ClockCircleOutlined />} label={t('dashboard.hoursThisMonth')} value={`${analytics.roleStats.hoursThisMonth || 0}h`} color={FB.blue} />
                 <StatWidget icon={<CalendarOutlined />} label={t('dashboard.daysWorked')} value={analytics.roleStats.daysWorkedThisMonth || 0} color={FB.green} />
               </>
@@ -2518,8 +2518,8 @@ export default function DashboardPageUnified() {
               <AreaChart data={analytics.monthlyData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#722ed1" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#722ed1" stopOpacity={0} />
+                    <stop offset="5%" stopColor={FB.purple} stopOpacity={0.3} />
+                    <stop offset="95%" stopColor={FB.purple} stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <XAxis dataKey="month" tick={{ fontSize: 10, fill: FB.textSecondary }} axisLine={false} tickLine={false} />
@@ -2528,7 +2528,7 @@ export default function DashboardPageUnified() {
                   contentStyle={{ fontSize: 12, borderRadius: 8, border: "none", boxShadow: FB.shadow }}
                   formatter={(value: unknown) => [formatRevenue(value), "CA"]}
                 />
-                <Area type="monotone" dataKey="revenue" stroke="#722ed1" strokeWidth={2} fill="url(#revenueGradient)" />
+                <Area type="monotone" dataKey="revenue" stroke={FB.purple} strokeWidth={2} fill="url(#revenueGradient)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -2598,7 +2598,7 @@ export default function DashboardPageUnified() {
               onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
               onClick={() => setSelectedCollaborator(c.userId)}
             >
-              <Avatar size={28} style={{ background: ["#1890ff", "#52c41a", "#fa8c16", "#722ed1", "#eb2f96"][i % 5] }}>
+              <Avatar size={28} style={{ background: [SF.info, SF.successAlt, SF.orangeAlt, FB.purple, "#eb2f96"][i % 5] }}>
                 {c.name?.[0] || "?"}
               </Avatar>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -2695,23 +2695,23 @@ export default function DashboardPageUnified() {
           <>
             {(isAdminRole || user?.role === "comptable") && !selectedCollaborator && (
               <>
-                <StatWidget icon={<FunnelPlotOutlined />} label={t('dashboard.totalLeads')} value={analytics.totalLeads} color="#1890ff" sub={t('dashboard.thisMonth', { count: analytics.newLeadsThisMonth })} />
+                <StatWidget icon={<FunnelPlotOutlined />} label={t('dashboard.totalLeads')} value={analytics.totalLeads} color={SF.info} sub={t('dashboard.thisMonth', { count: analytics.newLeadsThisMonth })} />
                 <StatWidget icon={<TrophyOutlined />} label={t('dashboard.converted')} value={analytics.convertedLeads} color={FB.green} sub={`${analytics.conversionRate}%`} />
-                <StatWidget icon={<ToolOutlined />} label={t('dashboard.chantiers')} value={analytics.totalChantiers} color="#fa8c16" />
-                <StatWidget icon={<RiseOutlined />} label={t('dashboard.revenueShort')} value={formatRevenue(analytics.totalRevenue)} color="#722ed1" />
+                <StatWidget icon={<ToolOutlined />} label={t('dashboard.chantiers')} value={analytics.totalChantiers} color={SF.orangeAlt} />
+                <StatWidget icon={<RiseOutlined />} label={t('dashboard.revenueShort')} value={formatRevenue(analytics.totalRevenue)} color={FB.purple} />
               </>
             )}
             {((!isTechRole && !isAdminRole) || selectedCollaborator) && analytics.roleStats?.myLeads != null && (
               <>
-                <StatWidget icon={<FunnelPlotOutlined />} label={t('dashboard.myLeads')} value={analytics.roleStats.myLeads} color="#1890ff" />
+                <StatWidget icon={<FunnelPlotOutlined />} label={t('dashboard.myLeads')} value={analytics.roleStats.myLeads} color={SF.info} />
                 <StatWidget icon={<TrophyOutlined />} label={t('dashboard.myConverted')} value={analytics.roleStats.myConvertedLeads} color={FB.green} sub={`${analytics.roleStats.myConversion}%`} />
-                <StatWidget icon={<ToolOutlined />} label={t('dashboard.myChantiers')} value={analytics.roleStats.myChantiers} color="#fa8c16" />
-                <StatWidget icon={<RiseOutlined />} label={t('dashboard.myRevenue')} value={formatRevenue(analytics.roleStats.myRevenue)} color="#722ed1" />
+                <StatWidget icon={<ToolOutlined />} label={t('dashboard.myChantiers')} value={analytics.roleStats.myChantiers} color={SF.orangeAlt} />
+                <StatWidget icon={<RiseOutlined />} label={t('dashboard.myRevenue')} value={formatRevenue(analytics.roleStats.myRevenue)} color={FB.purple} />
               </>
             )}
             {(isTechRole || (selectedCollaborator && analytics.roleStats?.assignedChantiers != null)) && (
               <>
-                <StatWidget icon={<ToolOutlined />} label={t('dashboard.assignedChantiers')} value={analytics.roleStats.assignedChantiers || 0} color="#fa8c16" />
+                <StatWidget icon={<ToolOutlined />} label={t('dashboard.assignedChantiers')} value={analytics.roleStats.assignedChantiers || 0} color={SF.orangeAlt} />
                 <StatWidget icon={<ClockCircleOutlined />} label={t('dashboard.hoursThisMonth')} value={`${analytics.roleStats.hoursThisMonth || 0}h`} color={FB.blue} />
                 <StatWidget icon={<CalendarOutlined />} label={t('dashboard.daysWorked')} value={analytics.roleStats.daysWorkedThisMonth || 0} color={FB.green} />
               </>
@@ -2746,14 +2746,14 @@ export default function DashboardPageUnified() {
               <AreaChart data={analytics.monthlyData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="mobileRevenueGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#722ed1" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#722ed1" stopOpacity={0} />
+                    <stop offset="5%" stopColor={FB.purple} stopOpacity={0.3} />
+                    <stop offset="95%" stopColor={FB.purple} stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <XAxis dataKey="month" tick={{ fontSize: 10, fill: FB.textSecondary }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 10, fill: FB.textSecondary }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? `${v / 1000}k` : v} />
                 <RechartsTooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: "none", boxShadow: FB.shadow }} formatter={(value: unknown) => [formatRevenue(value), t('dashboard.revenueShort')]} />
-                <Area type="monotone" dataKey="revenue" stroke="#722ed1" strokeWidth={2} fill="url(#mobileRevenueGrad)" />
+                <Area type="monotone" dataKey="revenue" stroke={FB.purple} strokeWidth={2} fill="url(#mobileRevenueGrad)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -3034,7 +3034,7 @@ export default function DashboardPageUnified() {
                   flex: "0 0 auto", display: "flex", alignItems: "center",
                   gap: 4, padding: "4px 8px",
                   borderRadius: 14,
-                  background: isActive ? '#e7f3ff' : isFav ? 'linear-gradient(135deg, #FFF8E1, #FFF3CD)' : FB.white,
+                  background: isActive ? FB.activeBlue : isFav ? 'linear-gradient(135deg, #FFF8E1, #FFF3CD)' : FB.white,
                   boxShadow: isFav ? '0 1px 4px rgba(218,165,32,0.3)' : FB.shadow,
                   border: isActive ? `1.5px solid ${FB.blue}` : isFav ? '1.5px solid #DAA520' : '1.5px solid transparent',
                 }}>

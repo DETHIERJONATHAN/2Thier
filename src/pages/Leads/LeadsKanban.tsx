@@ -1,4 +1,5 @@
 ﻿import React, { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
+import { SF, FB } from '../../components/zhiive/ZhiiveTheme';
 import { useGrabScroll } from '../../hooks/useGrabScroll';
 import { Button, Spin, message, Alert, Avatar, Tooltip, Grid, Modal, Select, App } from 'antd';
 import { renderProductIcon } from '../../components/TreeBranchLeaf/treebranchleaf-new/components/Parameters/capabilities/ProductFilterPanel';
@@ -377,7 +378,7 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, onView, onCall, onEmail, onSc
         {leadProducts.length > 0 && (
           <div style={{ display: 'flex', gap: '4px', marginBottom: '6px', flexWrap: 'wrap' }}>
             {leadProducts.map((p, i) => {
-              const bgColor = p.color || '#722ed1';
+              const bgColor = p.color || FB.purple;
               return (
                 <Tooltip key={i} title={p.label}>
                   <span
@@ -1318,7 +1319,7 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
                 size="small" 
                 icon={<SettingOutlined />}
                 onClick={() => onSettings?.()}
-                style={{ color: '#ff4d4f' }}
+                style={{ color: SF.danger }}
                 type="text"
               >
                 Paramètres
@@ -1334,7 +1335,7 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
                 {activeAlertsCount > 0 && (
                   <span style={{ 
                     marginLeft: '4px', 
-                    backgroundColor: metrics.critical > 0 && !isNotificationSnoozed('critical') ? '#ff4d4f' : '#faad14',
+                    backgroundColor: metrics.critical > 0 && !isNotificationSnoozed('critical') ? SF.danger : SF.warning,
                     color: 'white',
                     borderRadius: '10px',
                     padding: '0 6px',
@@ -1355,7 +1356,7 @@ const LeadsKanban: React.FC<LeadsKanbanProps> = ({
                 Filter
                 {(filterSource || filterPriority || filterAssignee) && ' (active)'}
               </Button>
-              <Avatar size={28} style={{ backgroundColor: '#1890ff' }}>
+              <Avatar size={28} style={{ backgroundColor: SF.info }}>
                 {user?.firstName?.[0] || 'U'}
               </Avatar>
             </div>

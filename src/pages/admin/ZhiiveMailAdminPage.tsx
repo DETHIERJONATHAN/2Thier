@@ -510,13 +510,13 @@ const ZhiiveMailAdminPage: React.FC = () => {
         <Table scroll={{ x: isMobile ? "max-content" : undefined }} dataSource={postalDomains} rowKey="id" size="small" pagination={false}
           columns={[
             { title: 'Domaine', dataIndex: 'name', key: 'name', render: (n: string) => <Text strong>{n}</Text> },
-            { title: 'Vérifié', dataIndex: 'verified', key: 'verified', render: (v: boolean) => v ? <Tag color="green">Oui</Tag> : <Tag color="red">Non</Tag> },
+            { title: 'Vérifié', dataIndex: 'verified', key: 'verified', render: (v: boolean) => v ? <Tag color="green">{	('common.yes')}</Tag> : <Tag color="red">{	('common.no')}</Tag> },
             { title: 'SPF', dataIndex: 'spf', key: 'spf', render: (s: string) => <Tag color={s === 'OK' ? 'green' : s === 'unchecked' ? 'default' : 'orange'}>{s}</Tag> },
             { title: 'DKIM', dataIndex: 'dkim', key: 'dkim', render: (s: string) => <Tag color={s === 'OK' ? 'green' : s === 'unchecked' ? 'default' : 'orange'}>{s}</Tag> },
             { title: 'MX', dataIndex: 'mx', key: 'mx', render: (s: string) => <Tag color={s === 'OK' ? 'green' : s === 'unchecked' ? 'default' : 'orange'}>{s}</Tag> },
             { title: 'Return Path', dataIndex: 'returnPath', key: 'returnPath', render: (s: string) => <Tag color={s === 'OK' ? 'green' : s === 'unchecked' ? 'default' : 'orange'}>{s}</Tag> },
-            { title: 'Sortant', dataIndex: 'outgoing', key: 'outgoing', render: (v: boolean) => v ? <Tag color="green">Oui</Tag> : <Tag>Non</Tag> },
-            { title: 'Entrant', dataIndex: 'incoming', key: 'incoming', render: (v: boolean) => v ? <Tag color="green">Oui</Tag> : <Tag>Non</Tag> },
+            { title: 'Sortant', dataIndex: 'outgoing', key: 'outgoing', render: (v: boolean) => v ? <Tag color="green">{	('common.yes')}</Tag> : <Tag>{	('common.no')}</Tag> },
+            { title: 'Entrant', dataIndex: 'incoming', key: 'incoming', render: (v: boolean) => v ? <Tag color="green">{	('common.yes')}</Tag> : <Tag>{	('common.no')}</Tag> },
           ]}
         />
       </Card>
@@ -526,7 +526,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
           columns={[
             { title: 'Nom', dataIndex: 'name', key: 'name' },
             { title: 'Type', dataIndex: 'type', key: 'type', render: (t: string) => <Tag color={t === 'API' ? 'purple' : 'blue'}>{t}</Tag> },
-            { title: 'Hold', dataIndex: 'hold', key: 'hold', render: (h: boolean) => h ? <Tag color="red">Oui</Tag> : <Tag color="green">Non</Tag> },
+            { title: 'Hold', dataIndex: 'hold', key: 'hold', render: (h: boolean) => h ? <Tag color="red">{	('common.yes')}</Tag> : <Tag color="green">{	('common.no')}</Tag> },
             { title: 'Dernière utilisation', dataIndex: 'lastUsed', key: 'lastUsed', render: (d: string) => d ? new Date(d).toLocaleString('fr-BE') : '—' },
           ]}
         />

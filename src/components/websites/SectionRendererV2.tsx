@@ -721,6 +721,7 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
                         <img 
                           alt={project.title} 
                           src={project.image} 
+                          loading="lazy"
                           style={{ 
                             height: '100%',
                             width: '100%',

@@ -505,7 +505,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
                         width: 80, minWidth: 80, height: 56, borderRadius: 6,
                         overflow: 'hidden', background: '#f0f0f0', flexShrink: 0,
                       }}>
-                        <img src={item.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                        <img src={item.imageUrl} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                           onError={e => { (e.target as HTMLImageElement).parentElement!.style.display = 'none'; }} />
                       </div>
                     ) : (
@@ -522,7 +522,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
                       {/* Favicon + domain */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
                         {item.favicon && (
-                          <img src={item.favicon} alt="" style={{ width: 14, height: 14, borderRadius: 2 }}
+                          <img src={item.favicon} alt="" loading="lazy" style={{ width: 14, height: 14, borderRadius: 2 }}
                             onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                         )}
                         <span style={{ fontSize: 10, color: SF.textMuted }}>
@@ -713,7 +713,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
                       width: 80, minWidth: 80, height: 56, borderRadius: 6,
                       overflow: 'hidden', background: '#f0f0f0', flexShrink: 0,
                     }}>
-                      <img src={item.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                      <img src={item.imageUrl} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                         onError={e => { (e.target as HTMLImageElement).parentElement!.style.display = 'none'; }} />
                     </div>
                   ) : null}
@@ -721,7 +721,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
                     {/* Favicon + domain */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
                       {item.favicon && (
-                        <img src={item.favicon} alt="" style={{ width: 14, height: 14, borderRadius: 2 }}
+                        <img src={item.favicon} alt="" loading="lazy" style={{ width: 14, height: 14, borderRadius: 2 }}
                           onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                       )}
                       <span style={{ fontSize: 10, color: SF.textMuted }}>

@@ -13,7 +13,7 @@ import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { setNotificationBadgeCount } from '../lib/pwaBadge';
 import { useBookmarks, Bookmark } from '../hooks/useBookmarks';
 import { useTranslation } from 'react-i18next';
-import { SF } from '../components/zhiive/ZhiiveTheme';
+import { SF, FB } from '../components/zhiive/ZhiiveTheme';
 
 interface NotificationItem {
   id: string;
@@ -30,40 +30,40 @@ interface NotificationItem {
 type TabFilter = 'all' | 'unread';
 
 const NOTIF_CONFIG: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
-  NEW_LEAD_RECEIVED:          { icon: <UserAddOutlined />,       color: '#D67D35', label: 'Nouveau lead' },
-  NEW_LEAD_ASSIGNED:          { icon: <RocketOutlined />,        color: '#D67D35', label: 'Lead assigné' },
-  LEAD_STATUS_CHANGED:        { icon: <RocketOutlined />,        color: '#fa8c16', label: 'Statut lead' },
-  FORM_SUBMISSION_RECEIVED:   { icon: <FormOutlined />,          color: '#1890ff', label: 'Formulaire' },
-  INVITATION_CREATED:         { icon: <MailOutlined />,          color: '#722ed1', label: 'Invitation envoyée' },
-  INVITATION_ACCEPTED:        { icon: <CheckCircleOutlined />,   color: '#52c41a', label: 'Invitation acceptée' },
-  INVITATION_RECEIVED:        { icon: <MailOutlined />,          color: '#722ed1', label: 'Invitation reçue' },
-  JOIN_REQUEST_RECEIVED:      { icon: <TeamOutlined />,          color: '#13c2c2', label: 'Demande adhésion' },
-  JOIN_REQUEST_APPROVED:      { icon: <CheckCircleOutlined />,   color: '#52c41a', label: 'Adhésion approuvée' },
-  JOIN_REQUEST_REJECTED:      { icon: <CloseCircleOutlined />,   color: '#ff4d4f', label: 'Adhésion refusée' },
-  QUOTE_SENT:                 { icon: <DollarOutlined />,        color: '#1890ff', label: 'Devis envoyé' },
-  QUOTE_ACCEPTED:             { icon: <CheckCircleOutlined />,   color: '#52c41a', label: 'Devis accepté' },
-  QUOTE_REJECTED:             { icon: <CloseCircleOutlined />,   color: '#ff4d4f', label: 'Devis rejeté' },
-  DOCUMENT_SIGNED:            { icon: <FileProtectOutlined />,   color: '#52c41a', label: 'Document signé' },
-  DOCUMENT_VIEWED:            { icon: <EyeOutlined />,           color: '#1890ff', label: 'Document consulté' },
-  CALENDAR_EVENT_INVITATION:  { icon: <CalendarOutlined />,      color: '#1890ff', label: 'Événement' },
-  CALENDAR_EVENT_UPDATED:     { icon: <CalendarOutlined />,      color: '#fa8c16', label: 'Événement modifié' },
-  CALENDAR_EVENT_CANCELLED:   { icon: <CalendarOutlined />,      color: '#ff4d4f', label: 'Événement annulé' },
-  CALENDAR_EVENT_REMINDER:    { icon: <AlertOutlined />,         color: '#faad14', label: 'Rappel' },
-  MISSED_CALL:                { icon: <PhoneOutlined />,         color: '#ff4d4f', label: 'Appel manqué' },
-  INCOMING_SMS:               { icon: <MessageOutlined />,       color: '#1890ff', label: 'SMS reçu' },
-  INCOMING_CALL:              { icon: <PhoneOutlined />,         color: '#52c41a', label: 'Appel entrant' },
-  CHANTIER_STATUS_CHANGED:    { icon: <AlertOutlined />,         color: '#fa8c16', label: 'Chantier' },
-  CHANTIER_PROBLEM_REPORTED:  { icon: <AlertOutlined />,         color: '#ff4d4f', label: 'Problème chantier' },
-  CHANTIER_INVOICE_PAID:      { icon: <DollarOutlined />,        color: '#52c41a', label: 'Facture payée' },
-  CHANTIER_VISIT_VALIDATED:   { icon: <CheckCircleOutlined />,   color: '#52c41a', label: 'Visite validée' },
-  CHANTIER_MATERIAL_RECEIVED: { icon: <CheckCircleOutlined />,   color: '#52c41a', label: 'Matériel reçu' },
-  CHANTIER_INVOICE_CREATED:   { icon: <DollarOutlined />,        color: '#fa8c16', label: 'Nouvelle facture' },
-  NEW_MAIL_RECEIVED:          { icon: <MailOutlined />,          color: '#1890ff', label: 'Email reçu' },
-  TASK_COMPLETED:             { icon: <CheckOutlined />,         color: '#52c41a', label: 'Tâche terminée' },
-  ROLE_UPDATE_AVAILABLE:      { icon: <TeamOutlined />,          color: '#722ed1', label: 'Rôle mis à jour' },
-  AI_DAILY_DIGEST:            { icon: <RobotOutlined />,         color: '#722ed1', label: 'Résumé IA' },
-  FRIEND_REQUEST_RECEIVED:    { icon: <UserAddOutlined />,       color: '#13c2c2', label: 'Demande d\'ami' },
-  FRIEND_REQUEST_ACCEPTED:    { icon: <TeamOutlined />,          color: '#52c41a', label: 'Ami accepté' },
+  NEW_LEAD_RECEIVED:          { icon: <UserAddOutlined />,       color: FB.leadOrange, label: 'Nouveau lead' },
+  NEW_LEAD_ASSIGNED:          { icon: <RocketOutlined />,        color: FB.leadOrange, label: 'Lead assigné' },
+  LEAD_STATUS_CHANGED:        { icon: <RocketOutlined />,        color: SF.orangeAlt, label: 'Statut lead' },
+  FORM_SUBMISSION_RECEIVED:   { icon: <FormOutlined />,          color: SF.info, label: 'Formulaire' },
+  INVITATION_CREATED:         { icon: <MailOutlined />,          color: FB.purple, label: 'Invitation envoyée' },
+  INVITATION_ACCEPTED:        { icon: <CheckCircleOutlined />,   color: SF.successAlt, label: 'Invitation acceptée' },
+  INVITATION_RECEIVED:        { icon: <MailOutlined />,          color: FB.purple, label: 'Invitation reçue' },
+  JOIN_REQUEST_RECEIVED:      { icon: <TeamOutlined />,          color: FB.teal, label: 'Demande adhésion' },
+  JOIN_REQUEST_APPROVED:      { icon: <CheckCircleOutlined />,   color: SF.successAlt, label: 'Adhésion approuvée' },
+  JOIN_REQUEST_REJECTED:      { icon: <CloseCircleOutlined />,   color: SF.danger, label: 'Adhésion refusée' },
+  QUOTE_SENT:                 { icon: <DollarOutlined />,        color: SF.info, label: 'Devis envoyé' },
+  QUOTE_ACCEPTED:             { icon: <CheckCircleOutlined />,   color: SF.successAlt, label: 'Devis accepté' },
+  QUOTE_REJECTED:             { icon: <CloseCircleOutlined />,   color: SF.danger, label: 'Devis rejeté' },
+  DOCUMENT_SIGNED:            { icon: <FileProtectOutlined />,   color: SF.successAlt, label: 'Document signé' },
+  DOCUMENT_VIEWED:            { icon: <EyeOutlined />,           color: SF.info, label: 'Document consulté' },
+  CALENDAR_EVENT_INVITATION:  { icon: <CalendarOutlined />,      color: SF.info, label: 'Événement' },
+  CALENDAR_EVENT_UPDATED:     { icon: <CalendarOutlined />,      color: SF.orangeAlt, label: 'Événement modifié' },
+  CALENDAR_EVENT_CANCELLED:   { icon: <CalendarOutlined />,      color: SF.danger, label: 'Événement annulé' },
+  CALENDAR_EVENT_REMINDER:    { icon: <AlertOutlined />,         color: SF.warning, label: 'Rappel' },
+  MISSED_CALL:                { icon: <PhoneOutlined />,         color: SF.danger, label: 'Appel manqué' },
+  INCOMING_SMS:               { icon: <MessageOutlined />,       color: SF.info, label: 'SMS reçu' },
+  INCOMING_CALL:              { icon: <PhoneOutlined />,         color: SF.successAlt, label: 'Appel entrant' },
+  CHANTIER_STATUS_CHANGED:    { icon: <AlertOutlined />,         color: SF.orangeAlt, label: 'Chantier' },
+  CHANTIER_PROBLEM_REPORTED:  { icon: <AlertOutlined />,         color: SF.danger, label: 'Problème chantier' },
+  CHANTIER_INVOICE_PAID:      { icon: <DollarOutlined />,        color: SF.successAlt, label: 'Facture payée' },
+  CHANTIER_VISIT_VALIDATED:   { icon: <CheckCircleOutlined />,   color: SF.successAlt, label: 'Visite validée' },
+  CHANTIER_MATERIAL_RECEIVED: { icon: <CheckCircleOutlined />,   color: SF.successAlt, label: 'Matériel reçu' },
+  CHANTIER_INVOICE_CREATED:   { icon: <DollarOutlined />,        color: SF.orangeAlt, label: 'Nouvelle facture' },
+  NEW_MAIL_RECEIVED:          { icon: <MailOutlined />,          color: SF.info, label: 'Email reçu' },
+  TASK_COMPLETED:             { icon: <CheckOutlined />,         color: SF.successAlt, label: 'Tâche terminée' },
+  ROLE_UPDATE_AVAILABLE:      { icon: <TeamOutlined />,          color: FB.purple, label: 'Rôle mis à jour' },
+  AI_DAILY_DIGEST:            { icon: <RobotOutlined />,         color: FB.purple, label: 'Résumé IA' },
+  FRIEND_REQUEST_RECEIVED:    { icon: <UserAddOutlined />,       color: FB.teal, label: 'Demande d\'ami' },
+  FRIEND_REQUEST_ACCEPTED:    { icon: <TeamOutlined />,          color: SF.successAlt, label: 'Ami accepté' },
 };
 
 function getRelativeTime(dateStr: string): string {
@@ -81,7 +81,7 @@ function getRelativeTime(dateStr: string): string {
 }
 
 function cfg(type: string) {
-  return NOTIF_CONFIG[type] || { icon: <BellOutlined />, color: '#65676B', label: type };
+  return NOTIF_CONFIG[type] || { icon: <BellOutlined />, color: FB.textSecondary, label: type };
 }
 
 const NotificationsBell = () => {
@@ -119,28 +119,28 @@ const NotificationsBell = () => {
       }
       lastCountRef.current = pendingCount;
       setNotifications(notifs);
-    } catch (_) {}
+    } catch (_) { /* ok */ }
   }, [api]);
 
   const markAsRead = useCallback(async (id: string) => {
     try {
       await api.patch(`/api/notifications/${id}/read`);
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, status: 'READ', readAt: new Date().toISOString() } : n));
-    } catch (_) {}
+    } catch (_) { /* ok */ }
   }, [api]);
 
   const markAllAsRead = useCallback(async () => {
     try {
       await api.patch('/api/notifications/mark-all-read');
       setNotifications(prev => prev.map(n => n.status === 'PENDING' ? { ...n, status: 'READ', readAt: new Date().toISOString() } : n));
-    } catch (_) {}
+    } catch (_) { /* ok */ }
   }, [api]);
 
   const deleteNotification = useCallback(async (id: string) => {
     try {
       await api.delete(`/api/notifications/${id}`);
       setNotifications(prev => prev.filter(n => n.id !== id));
-    } catch (_) {}
+    } catch (_) { /* ok */ }
   }, [api]);
 
   const handleNavigate = useCallback((notif: NotificationItem) => {
@@ -169,13 +169,13 @@ const NotificationsBell = () => {
       // Persist handled state in notification data via PATCH
       try {
         await api.patch(`/api/notifications/${notif.id}/read`);
-      } catch (_) {}
+      } catch (_) { /* ok */ }
     } catch (err: unknown) {
       // If 404 = friendship was cancelled by the other party, remove notification
       const status = err?.status || err?.response?.status || err?.data?.status;
       if (status === 404 || err?.message?.includes('404')) {
         setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, data: { ...n.data, handled: 'cancelled' }, status: 'READ' } : n));
-        try { await api.delete(`/api/notifications/${notif.id}`); } catch (_) {}
+        try { await api.delete(`/api/notifications/${notif.id}`); } catch (_) { /* ok */ }
       }
     }
   }, [api]);
@@ -218,7 +218,7 @@ const NotificationsBell = () => {
         style={{
           display: 'flex', alignItems: 'flex-start', gap: 12,
           padding: '8px 12px', cursor: 'pointer', borderRadius: 8,
-          backgroundColor: isHovered ? '#f2f2f2' : isUnread ? '#E7F3FF' : 'transparent',
+          backgroundColor: isHovered ? FB.hover : isUnread ? FB.activeBlue : 'transparent',
           transition: 'background 0.15s',
           position: 'relative',
         }}
@@ -230,9 +230,9 @@ const NotificationsBell = () => {
         <div style={{ position: 'relative', flexShrink: 0 }}>
           <div style={{
             width: 56, height: 56, borderRadius: '50%',
-            backgroundColor: '#E4E6EB', display: 'flex',
+            backgroundColor: FB.btnGray, display: 'flex',
             alignItems: 'center', justifyContent: 'center',
-            fontSize: 24, color: '#65676B',
+            fontSize: 24, color: FB.textSecondary,
           }}>
             <span style={{ color: c.color, fontSize: 22 }}>{c.icon}</span>
           </div>
@@ -250,7 +250,7 @@ const NotificationsBell = () => {
         {/* Texte */}
         <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
           <div style={{
-            fontSize: 13, lineHeight: '18px', color: '#050505',
+            fontSize: 13, lineHeight: '18px', color: FB.text,
             fontWeight: isUnread ? 600 : 400,
             display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
             overflow: 'hidden',
@@ -259,7 +259,7 @@ const NotificationsBell = () => {
           </div>
           <div style={{
             fontSize: 12, marginTop: 2, fontWeight: isUnread ? 600 : 400,
-            color: isUnread ? '#0866FF' : '#65676B',
+            color: isUnread ? FB.blueStrong : FB.textSecondary,
           }}>
             {getRelativeTime(notif.createdAt)}
           </div>
@@ -270,7 +270,7 @@ const NotificationsBell = () => {
                 role="button" tabIndex={0} onClick={e => { e.stopPropagation(); handleFriendRequestAction(notif, 'accept'); }}
                 style={{
                   padding: '4px 16px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-                  background: '#0866FF', color: 'white', cursor: 'pointer',
+                  background: FB.blueStrong, color: 'white', cursor: 'pointer',
                   transition: 'opacity 0.15s',
                 }}
               >
@@ -280,7 +280,7 @@ const NotificationsBell = () => {
                 role="button" tabIndex={0} onClick={e => { e.stopPropagation(); handleFriendRequestAction(notif, 'reject'); }}
                 style={{
                   padding: '4px 16px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-                  background: '#E4E6EB', color: '#050505', cursor: 'pointer',
+                  background: FB.btnGray, color: FB.text, cursor: 'pointer',
                   transition: 'opacity 0.15s',
                 }}
               >
@@ -290,7 +290,7 @@ const NotificationsBell = () => {
                 role="button" tabIndex={0} onClick={e => { e.stopPropagation(); handleFriendRequestAction(notif, 'block'); }}
                 style={{
                   padding: '4px 16px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-                  background: '#ffccc7', color: '#cf1322', cursor: 'pointer',
+                  background: FB.dangerLightBg, color: FB.dangerDark, cursor: 'pointer',
                   transition: 'opacity 0.15s',
                 }}
               >
@@ -299,16 +299,16 @@ const NotificationsBell = () => {
             </div>
           )}
           {notif.type === 'FRIEND_REQUEST_RECEIVED' && notif.data?.handled === 'accepted' && (
-            <div style={{ fontSize: 11, marginTop: 4, color: '#52c41a', fontWeight: 600 }}>Demande acceptée ✅</div>
+            <div style={{ fontSize: 11, marginTop: 4, color: SF.successAlt, fontWeight: 600 }}>Demande acceptée ✅</div>
           )}
           {notif.type === 'FRIEND_REQUEST_RECEIVED' && notif.data?.handled === 'rejected' && (
-            <div style={{ fontSize: 11, marginTop: 4, color: '#ff4d4f', fontWeight: 600 }}>Demande refusée</div>
+            <div style={{ fontSize: 11, marginTop: 4, color: SF.danger, fontWeight: 600 }}>Demande refusée</div>
           )}
           {notif.type === 'FRIEND_REQUEST_RECEIVED' && notif.data?.handled === 'blocked' && (
-            <div style={{ fontSize: 11, marginTop: 4, color: '#cf1322', fontWeight: 600 }}>Utilisateur bloqué 🚫</div>
+            <div style={{ fontSize: 11, marginTop: 4, color: FB.dangerDark, fontWeight: 600 }}>Utilisateur bloqué 🚫</div>
           )}
           {notif.type === 'FRIEND_REQUEST_RECEIVED' && notif.data?.handled === 'cancelled' && (
-            <div style={{ fontSize: 11, marginTop: 4, color: '#8c8c8c', fontWeight: 600 }}>Demande annulée</div>
+            <div style={{ fontSize: 11, marginTop: 4, color: SF.textQuaternary, fontWeight: 600 }}>Demande annulée</div>
           )}
         </div>
 
@@ -326,7 +326,7 @@ const NotificationsBell = () => {
                       backgroundColor: '#fff', boxShadow: '0 1px 3px ${SF.overlayDarkLight}',
                     }}
                   >
-                    <CheckOutlined style={{ fontSize: 14, color: '#65676B' }} />
+                    <CheckOutlined style={{ fontSize: 14, color: FB.textSecondary }} />
                   </div>
                 </Tooltip>
               )}
@@ -339,7 +339,7 @@ const NotificationsBell = () => {
                     backgroundColor: '#fff', boxShadow: '0 1px 3px ${SF.overlayDarkLight}',
                   }}
                 >
-                  <DeleteOutlined style={{ fontSize: 14, color: '#65676B' }} />
+                  <DeleteOutlined style={{ fontSize: 14, color: FB.textSecondary }} />
                 </div>
               </Tooltip>
             </>
@@ -347,7 +347,7 @@ const NotificationsBell = () => {
           {isUnread && !isHovered && (
             <div style={{
               width: 12, height: 12, borderRadius: '50%',
-              backgroundColor: '#0866FF', flexShrink: 0,
+              backgroundColor: FB.blueStrong, flexShrink: 0,
             }} />
           )}
         </div>
@@ -362,8 +362,8 @@ const NotificationsBell = () => {
       height: '100%',
     }}>
       <div style={{ padding: '12px 16px 8px' }}>
-        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#050505', margin: 0 }}>
-          <StarFilled style={{ color: '#faad14', marginRight: 8, fontSize: 16 }} />
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: FB.text, margin: 0 }}>
+          <StarFilled style={{ color: SF.warning, marginRight: 8, fontSize: 16 }} />
           Favoris
         </h2>
       </div>
@@ -379,14 +379,14 @@ const NotificationsBell = () => {
                 padding: '8px 10px', cursor: 'pointer', borderRadius: 8,
                 transition: 'background 0.15s',
               }}
-              onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#f2f2f2'; }}
+              onMouseEnter={e => { e.currentTarget.style.backgroundColor = FB.hover; }}
               onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
               onClick={() => { window.open(bm.url, '_blank'); }}
             >
               {/* Favicon / thumbnail */}
               <div style={{
                 width: 40, height: 40, borderRadius: 8,
-                overflow: 'hidden', background: '#f0f0f0',
+                overflow: 'hidden', background: SF.bgCard,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 flexShrink: 0,
               }}>
@@ -397,19 +397,19 @@ const NotificationsBell = () => {
                   <img src={bm.favicon} alt="" style={{ width: 20, height: 20 }}
                     onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                 ) : (
-                  <GlobalOutlined style={{ fontSize: 18, color: '#aab2bd' }} />
+                  <GlobalOutlined style={{ fontSize: 18, color: FB.placeholderIcon }} />
                 )}
               </div>
               {/* Text */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{
-                  fontSize: 13, fontWeight: 600, color: '#050505',
+                  fontSize: 13, fontWeight: 600, color: FB.text,
                   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                 }}>
                   {bm.title}
                 </div>
                 <div style={{
-                  fontSize: 11, color: '#65676B',
+                  fontSize: 11, color: FB.textSecondary,
                   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                 }}>
                   {bm.domain || bm.url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
@@ -424,10 +424,10 @@ const NotificationsBell = () => {
                     alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
                     flexShrink: 0, transition: 'background 0.15s',
                   }}
-                  onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#ffe9e9'; }}
+                  onMouseEnter={e => { e.currentTarget.style.backgroundColor = FB.dangerHoverBg; }}
                   onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                 >
-                  <DeleteOutlined style={{ fontSize: 12, color: '#ff4d4f' }} />
+                  <DeleteOutlined style={{ fontSize: 12, color: SF.danger }} />
                 </div>
               </Tooltip>
             </div>
@@ -435,10 +435,10 @@ const NotificationsBell = () => {
         ) : (
           <div style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center',
-            justifyContent: 'center', padding: '40px 20px', color: '#65676B',
+            justifyContent: 'center', padding: '40px 20px', color: FB.textSecondary,
           }}>
-            <StarFilled style={{ fontSize: 40, color: '#E4E6EB', marginBottom: 12 }} />
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#050505', marginBottom: 4 }}>
+            <StarFilled style={{ fontSize: 40, color: FB.btnGray, marginBottom: 12 }} />
+            <div style={{ fontSize: 16, fontWeight: 700, color: FB.text, marginBottom: 4 }}>
               Aucun favori
             </div>
             <div style={{ fontSize: 13, textAlign: 'center', lineHeight: 1.4 }}>
@@ -465,10 +465,10 @@ const NotificationsBell = () => {
                 marginRight: 8,
               }}
             >
-              <ArrowLeftOutlined style={{ fontSize: 18, color: '#050505' }} />
+              <ArrowLeftOutlined style={{ fontSize: 18, color: FB.text }} />
             </div>
           )}
-          <h2 style={{ fontSize: 20, fontWeight: 700, color: '#050505', margin: 0, flex: 1 }}>{t('common.notifications')}</h2>
+          <h2 style={{ fontSize: 20, fontWeight: 700, color: FB.text, margin: 0, flex: 1 }}>{t('common.notifications')}</h2>
           <Tooltip title="Tout marquer comme lu">
             <div
               role="button" tabIndex={0} onClick={e => { e.stopPropagation(); if (unreadCount > 0) markAllAsRead(); }}
@@ -477,10 +477,10 @@ const NotificationsBell = () => {
                 alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
                 backgroundColor: 'transparent', transition: 'background 0.15s',
               }}
-              onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f2f2f2')}
+              onMouseEnter={e => (e.currentTarget.style.backgroundColor = FB.hover)}
               onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
             >
-              <EllipsisOutlined style={{ fontSize: 20, color: '#65676B' }} />
+              <EllipsisOutlined style={{ fontSize: 20, color: FB.textSecondary }} />
             </div>
           </Tooltip>
         </div>
@@ -498,10 +498,10 @@ const NotificationsBell = () => {
             style={{
               padding: '6px 14px', borderRadius: 20, fontSize: 14, fontWeight: 600,
               cursor: 'pointer', transition: 'all 0.15s', userSelect: 'none',
-              backgroundColor: tab === t.key ? '#E7F3FF' : 'transparent',
-              color: tab === t.key ? '#0866FF' : '#65676B',
+              backgroundColor: tab === t.key ? FB.activeBlue : 'transparent',
+              color: tab === t.key ? FB.blueStrong : FB.textSecondary,
             }}
-            onMouseEnter={e => { if (tab !== t.key) e.currentTarget.style.backgroundColor = '#f2f2f2'; }}
+            onMouseEnter={e => { if (tab !== t.key) e.currentTarget.style.backgroundColor = FB.hover; }}
             onMouseLeave={e => { if (tab !== t.key) e.currentTarget.style.backgroundColor = 'transparent'; }}
           >
             {t.label}
@@ -515,13 +515,13 @@ const NotificationsBell = () => {
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           padding: '12px 16px 4px',
         }}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: '#050505' }}>
+          <span style={{ fontSize: 16, fontWeight: 700, color: FB.text }}>
             {tab === 'unread' ? 'Non lues' : 'Plus récentes'}
           </span>
           {unreadCount > 0 && (
             <span
               role="button" tabIndex={0} onClick={markAllAsRead}
-              style={{ fontSize: 14, color: '#0866FF', cursor: 'pointer', fontWeight: 400 }}
+              style={{ fontSize: 14, color: FB.blueStrong, cursor: 'pointer', fontWeight: 400 }}
               onMouseEnter={e => (e.currentTarget.style.textDecoration = 'underline')}
               onMouseLeave={e => (e.currentTarget.style.textDecoration = 'none')}
             >
@@ -540,10 +540,10 @@ const NotificationsBell = () => {
         ) : (
           <div style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center',
-            justifyContent: 'center', padding: '60px 20px', color: '#65676B',
+            justifyContent: 'center', padding: '60px 20px', color: FB.textSecondary,
           }}>
-            <BellOutlined style={{ fontSize: 48, color: '#BEC3C9', marginBottom: 16 }} />
-            <div style={{ fontSize: 20, fontWeight: 700, color: '#050505', marginBottom: 4 }}>
+            <BellOutlined style={{ fontSize: 48, color: FB.emptyIcon, marginBottom: 16 }} />
+            <div style={{ fontSize: 20, fontWeight: 700, color: FB.text, marginBottom: 4 }}>
               {tab === 'unread' ? 'Vous êtes à jour !' : 'Aucune notification'}
             </div>
             <div style={{ fontSize: 14, textAlign: 'center' }}>
@@ -572,7 +572,7 @@ const NotificationsBell = () => {
       }}>
         {([
           { key: 'notifs' as const, label: 'Notifications', icon: <BellOutlined /> },
-          { key: 'bookmarks' as const, label: 'Favoris', icon: <StarFilled style={{ color: '#faad14' }} /> },
+          { key: 'bookmarks' as const, label: 'Favoris', icon: <StarFilled style={{ color: SF.warning }} /> },
         ]).map(p => (
           <div
             key={p.key}
@@ -580,7 +580,7 @@ const NotificationsBell = () => {
             style={{
               flex: 1, padding: '12px 0', textAlign: 'center',
               fontSize: 14, fontWeight: 600, cursor: 'pointer',
-              color: mobilePanel === p.key ? '#0866FF' : '#65676B',
+              color: mobilePanel === p.key ? FB.blueStrong : FB.textSecondary,
               borderBottom: mobilePanel === p.key ? '2px solid #0866FF' : '2px solid transparent',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             }}
@@ -641,7 +641,7 @@ const NotificationsBell = () => {
             <div style={{
               position: 'absolute', top: 0, right: -2,
               minWidth: 16, height: 16, padding: '0 4px',
-              borderRadius: 8, backgroundColor: '#D67D35',
+              borderRadius: 8, backgroundColor: FB.leadOrange,
               color: '#fff', fontSize: 10, fontWeight: 700,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               border: '2px solid #1F3B53',
@@ -694,7 +694,7 @@ const NotificationsBell = () => {
           <div style={{
             position: 'absolute', top: 0, right: -2,
             minWidth: 16, height: 16, padding: '0 4px',
-            borderRadius: 8, backgroundColor: '#D67D35',
+            borderRadius: 8, backgroundColor: FB.leadOrange,
             color: '#fff', fontSize: 10, fontWeight: 700,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             border: '2px solid #1F3B53',

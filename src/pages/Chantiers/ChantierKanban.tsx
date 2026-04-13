@@ -38,11 +38,11 @@ type DatePreset = 'today' | 'yesterday' | '7days' | '30days' | 'this_week' | 'th
 type DateField = 'createdAt' | 'signedAt' | 'plannedDate' | 'deliveryDate' | 'receptionDate' | 'completedDate';
 
 const DATE_FIELDS: { key: DateField; label: string; icon: string; color: string }[] = [
-  { key: 'createdAt', label: "Date d'arrivée", icon: '📥', color: '#8c8c8c' },
-  { key: 'signedAt', label: 'Signature', icon: '✍️', color: '#1677ff' },
-  { key: 'plannedDate', label: 'Chantier prévu', icon: '📅', color: '#fa8c16' },
-  { key: 'deliveryDate', label: 'Livraison', icon: '📦', color: '#722ed1' },
-  { key: 'receptionDate', label: 'Réception', icon: '✅', color: '#52c41a' },
+  { key: 'createdAt', label: "Date d'arrivée", icon: '📥', color: SF.textQuaternary },
+  { key: 'signedAt', label: 'Signature', icon: '✍️', color: SF.infoPrimary },
+  { key: 'plannedDate', label: 'Chantier prévu', icon: '📅', color: SF.orangeAlt },
+  { key: 'deliveryDate', label: 'Livraison', icon: '📦', color: FB.purple },
+  { key: 'receptionDate', label: 'Réception', icon: '✅', color: SF.successAlt },
   { key: 'completedDate', label: 'Fin chantier', icon: '🏁', color: '#f5222d' },
 ];
 
@@ -329,7 +329,7 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCom
               height: 4,
               flex: 1,
               borderRadius: 3,
-              backgroundColor: chantier.productColor || '#722ed1',
+              backgroundColor: chantier.productColor || FB.purple,
             }}
           />
         </div>
@@ -365,15 +365,15 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCom
                 style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 3, cursor: 'pointer' }}
                 role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); onViewCompta?.(); }}
               >
-                <FileTextOutlined style={{ fontSize: 10, color: chantier._invoiceSummary.overdue > 0 ? '#ff4d4f' : chantier._invoiceSummary.paid === chantier._invoiceSummary.total ? '#52c41a' : '#faad14' }} />
+                <FileTextOutlined style={{ fontSize: 10, color: chantier._invoiceSummary.overdue > 0 ? SF.danger : chantier._invoiceSummary.paid === chantier._invoiceSummary.total ? SF.successAlt : SF.warning }} />
                 {/* Mini barre de progression */}
                 <div style={{ display: 'flex', gap: 2 }}>
                   {Array.from({ length: chantier._invoiceSummary.total }).map((_, i) => {
                     const inv = chantier._invoiceSummary!;
-                    let color = '#e8e8e8'; // draft
-                    if (i < inv.paid) color = '#52c41a'; // payé
-                    else if (i < inv.paid + inv.sent) color = '#1677ff'; // envoyé
-                    else if (inv.overdue > 0 && i >= inv.total - inv.overdue) color = '#ff4d4f'; // overdue
+                    let color = SF.borderMd; // draft
+                    if (i < inv.paid) color = SF.successAlt; // payé
+                    else if (i < inv.paid + inv.sent) color = SF.infoPrimary; // envoyé
+                    else if (inv.overdue > 0 && i >= inv.total - inv.overdue) color = SF.danger; // overdue
                     return <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: color }} />;
                   })}
                 </div>
@@ -401,7 +401,7 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCom
           )}
 
           {canFinances && chantier.amount != null && chantier.amount > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 10, color: '#52c41a' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 10, color: SF.successAlt }}>
               <DollarOutlined style={{ fontSize: 9 }} />
               <span>{chantier.amount.toLocaleString('fr-BE')} €</span>
             </div>
@@ -417,7 +417,7 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCom
           {/* Date chantier prévu */}
           {chantier.plannedDate && (
             <Tooltip title={`Chantier prévu: ${new Date(chantier.plannedDate).toLocaleDateString('fr-BE', { weekday: 'short', day: 'numeric', month: 'short' })}`}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 10, color: '#fa8c16' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 10, color: SF.orangeAlt }}>
                 📅 {new Date(chantier.plannedDate).toLocaleDateString('fr-BE', { day: 'numeric', month: 'short' })}
               </div>
             </Tooltip>
@@ -428,13 +428,13 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCom
             {/* Badges techniciens assignés */}
             {chantier.ChantierAssignments && chantier.ChantierAssignments.length > 0 && (
               <Tooltip title={chantier.ChantierAssignments.map(a => `${a.role === 'CHEF_EQUIPE' ? '👑 ' : '🔧 '}${a.Technician.firstName || ''} ${a.Technician.lastName || ''}${a.Technician.type === 'SUBCONTRACTOR' ? ' (ST)' : ''}`).join('\n')}>
-                <Avatar.Group size={20} max={{ count: 3, style: { fontSize: 9, backgroundColor: '#722ed1' } }}>
+                <Avatar.Group size={20} max={{ count: 3, style: { fontSize: 9, backgroundColor: FB.purple } }}>
                   {chantier.ChantierAssignments.map(a => (
                     <Avatar
                       key={a.id}
                       size={20}
                       style={{
-                        backgroundColor: a.role === 'CHEF_EQUIPE' ? '#fa8c16' : (a.Technician.color || a.Team?.color || '#722ed1'),
+                        backgroundColor: a.role === 'CHEF_EQUIPE' ? SF.orangeAlt : (a.Technician.color || a.Team?.color || FB.purple),
                         fontSize: 9,
                         border: a.role === 'CHEF_EQUIPE' ? '2px solid #fa8c16' : a.Technician.type === 'SUBCONTRACTOR' ? '2px dashed #8c8c8c' : '1px solid #fff',
                       }}
@@ -453,12 +453,12 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCom
               </Tooltip>
             ) : chantier.Commercial ? (
               <Tooltip title={`${chantier.Commercial.firstName} ${chantier.Commercial.lastName}`}>
-                <Avatar size={22} style={{ backgroundColor: '#1677ff', fontSize: 10 }}>
+                <Avatar size={22} style={{ backgroundColor: SF.infoPrimary, fontSize: 10 }}>
                   {(chantier.Commercial.firstName?.[0] || '') + (chantier.Commercial.lastName?.[0] || '')}
                 </Avatar>
               </Tooltip>
             ) : (
-              <Avatar size={22} icon={<UserOutlined />} style={{ backgroundColor: '#d9d9d9', fontSize: 10 }} />
+              <Avatar size={22} icon={<UserOutlined />} style={{ backgroundColor: SF.borderLight, fontSize: 10 }} />
             )}
           </div>
         </div>
@@ -554,7 +554,7 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({ status, chantiers, onDrop, 
           borderRadius: '50%',
           padding: 16,
         }}>
-          <LockOutlined style={{ fontSize: 28, color: '#ff4d4f' }} />
+          <LockOutlined style={{ fontSize: 28, color: SF.danger }} />
         </div>
       )}
       {/* Header */}
@@ -661,7 +661,7 @@ const TechnicianDragItem: React.FC<TechnicianDragItemProps> = ({ technician, isS
 
   // Charge de travail semaine : vert (0-2), orange (3-4), rouge (5+)
   const wc = technician.weekChantierCount || 0;
-  const loadColor = wc <= 2 ? '#52c41a' : wc <= 4 ? '#fa8c16' : '#ff4d4f';
+  const loadColor = wc <= 2 ? SF.successAlt : wc <= 4 ? SF.orangeAlt : SF.danger;
 
   // Disponibilité
   const isBusy = technician.busyToday;
@@ -701,14 +701,14 @@ const TechnicianDragItem: React.FC<TechnicianDragItemProps> = ({ technician, isS
         }}
       >
         <div style={{ position: 'relative', flexShrink: 0 }}>
-          <Avatar size={24} style={{ backgroundColor: technician.color || technician.teams?.[0]?.teamColor || '#1677ff', fontSize: 10, border: isSubcontractor ? '2px dashed #8c8c8c' : undefined }}>
+          <Avatar size={24} style={{ backgroundColor: technician.color || technician.teams?.[0]?.teamColor || SF.infoPrimary, fontSize: 10, border: isSubcontractor ? '2px dashed #8c8c8c' : undefined }}>
             {initials}
           </Avatar>
           {isBusy && !isUnavailable && (
-            <div style={{ position: 'absolute', bottom: -1, right: -1, width: 8, height: 8, borderRadius: '50%', backgroundColor: '#fa8c16', border: '1px solid #fff' }} />
+            <div style={{ position: 'absolute', bottom: -1, right: -1, width: 8, height: 8, borderRadius: '50%', backgroundColor: SF.orangeAlt, border: '1px solid #fff' }} />
           )}
           {isUnavailable && (
-            <div style={{ position: 'absolute', bottom: -1, right: -1, width: 8, height: 8, borderRadius: '50%', backgroundColor: '#ff4d4f', border: '1px solid #fff' }} />
+            <div style={{ position: 'absolute', bottom: -1, right: -1, width: 8, height: 8, borderRadius: '50%', backgroundColor: SF.danger, border: '1px solid #fff' }} />
           )}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -716,16 +716,16 @@ const TechnicianDragItem: React.FC<TechnicianDragItemProps> = ({ technician, isS
             <span style={{ fontWeight: 500, color: '#262626', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11 }}>
               {name}
             </span>
-            {isSubcontractor && <span style={{ fontSize: 8, color: '#8c8c8c', flexShrink: 0 }}>🏢</span>}
+            {isSubcontractor && <span style={{ fontSize: 8, color: SF.textQuaternary, flexShrink: 0 }}>🏢</span>}
           </div>
           <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap', marginTop: 1 }}>
             {technician.specialties?.map(s => (
-              <span key={s} style={{ fontSize: 9, padding: '1px 4px', borderRadius: 3, backgroundColor: s === 'all' ? '#e6f7ff' : '#f6ffed', color: s === 'all' ? '#1890ff' : '#52c41a', lineHeight: '16px' }}>
+              <span key={s} style={{ fontSize: 9, padding: '1px 4px', borderRadius: 3, backgroundColor: s === 'all' ? SF.bgInfoTint : SF.bgSuccessTint, color: s === 'all' ? SF.info : SF.successAlt, lineHeight: '16px' }}>
                 {specLabels[s] || s}
               </span>
             ))}
             {technician.teams && technician.teams.length > 0 && (
-              <span style={{ fontSize: 8, color: '#8c8c8c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span style={{ fontSize: 8, color: SF.textQuaternary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {technician.teams.map(t => t.memberRole === 'LEADER' ? `👑${t.teamName}` : t.teamName).join(', ')}
               </span>
             )}
@@ -794,7 +794,7 @@ const TeamDragItem: React.FC<TeamDragItemProps> = ({ team, isSelected, onClick, 
           <div style={{ fontWeight: 600, color: '#262626', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {team.name}
           </div>
-          <div style={{ fontSize: 10, color: '#8c8c8c' }}>
+          <div style={{ fontSize: 10, color: SF.textQuaternary }}>
             {leaders.length > 0 && <span>👑 {leaders.map(l => l.Technician.firstName).join(', ')} </span>}
             {members.length > 0 && <span>🔧 {members.length}</span>}
           </div>
@@ -802,7 +802,7 @@ const TeamDragItem: React.FC<TeamDragItemProps> = ({ team, isSelected, onClick, 
         <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
           <button
             onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
-            style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 11, color: '#8c8c8c', padding: 4, minWidth: 28, minHeight: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 11, color: SF.textQuaternary, padding: 4, minWidth: 28, minHeight: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             title={t('common.details')}
           >
             {expanded ? '▲' : '▼'}
@@ -827,7 +827,7 @@ const TeamDragItem: React.FC<TeamDragItemProps> = ({ team, isSelected, onClick, 
               {onRemoveMember && (
                 <button
                   onClick={() => onRemoveMember(m.id)}
-                  style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#ff4d4f', fontSize: 9, padding: 0 }}
+                  style={{ border: 'none', background: 'none', cursor: 'pointer', color: SF.danger, fontSize: 9, padding: 0 }}
                   title="Retirer"
                 >
                   <CloseOutlined />
@@ -838,14 +838,14 @@ const TeamDragItem: React.FC<TeamDragItemProps> = ({ team, isSelected, onClick, 
           {onAddMember && (
             <button
               onClick={onAddMember}
-              style={{ border: '1px dashed #d9d9d9', borderRadius: 4, background: '#fafafa', cursor: 'pointer', fontSize: 10, color: '#8c8c8c', padding: '2px 6px', width: '100%', marginTop: 2 }}
+              style={{ border: '1px dashed #d9d9d9', borderRadius: 4, background: SF.bgLightest, cursor: 'pointer', fontSize: 10, color: SF.textQuaternary, padding: '2px 6px', width: '100%', marginTop: 2 }}
             >
               <PlusOutlined /> Ajouter
             </button>
           )}
           {onDelete && (
             <Popconfirm title="Supprimer cette équipe ?" onConfirm={onDelete} okText={t('common.yes')} cancelText={t('common.no')}>
-              <button style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#ff4d4f', fontSize: 10, padding: '2px 0', marginTop: 2, display: 'flex', alignItems: 'center', gap: 3 }}>
+              <button style={{ border: 'none', background: 'none', cursor: 'pointer', color: SF.danger, fontSize: 10, padding: '2px 0', marginTop: 2, display: 'flex', alignItems: 'center', gap: 3 }}>
                 <DeleteOutlined /> Supprimer l'équipe
               </button>
             </Popconfirm>
@@ -880,7 +880,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
   const [teamModalOpen, setTeamModalOpen] = useState(false);
   const [creatingTeam, setCreatingTeam] = useState(false);
   const [newTeamName, setNewTeamName] = useState('');
-  const [newTeamColor, setNewTeamColor] = useState('#1677ff');
+  const [newTeamColor, setNewTeamColor] = useState(SF.infoPrimary);
   const [addMemberTeamId, setAddMemberTeamId] = useState<string | null>(null);
   const [addMemberTechId, setAddMemberTechId] = useState<string>('');
 
@@ -902,7 +902,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
     city: string;
     country: string;
     iban: string;
-  }>({ type: 'INTERNAL', billingMode: '', firstName: '', lastName: '', email: '', phone: '', company: '', specialties: [], color: '#1677ff', vatNumber: '', address: '', postalCode: '', city: '', country: 'Belgique', iban: '' });
+  }>({ type: 'INTERNAL', billingMode: '', firstName: '', lastName: '', email: '', phone: '', company: '', specialties: [], color: SF.infoPrimary, vatNumber: '', address: '', postalCode: '', city: '', country: 'Belgique', iban: '' });
   const [unavailModalOpen, setUnavailModalOpen] = useState(false);
   const [unavailTechId, setUnavailTechId] = useState<string>('');
   const [unavailData, setUnavailData] = useState<{ startDate: string; endDate: string; type: string; note: string }>({ startDate: '', endDate: '', type: 'CONGE', note: '' });
@@ -1284,17 +1284,17 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
 
         {/* Tech panel toggle — on mobile, right after the title as a badge icon */}
         {isMobile && canSeeTeamPanel && (
-          <Badge count={technicians.length} size="small" offset={[-2, 2]} style={{ backgroundColor: techPanelOpen ? '#1677ff' : '#8c8c8c' }}>
+          <Badge count={technicians.length} size="small" offset={[-2, 2]} style={{ backgroundColor: techPanelOpen ? SF.infoPrimary : SF.textQuaternary }}>
             <div
               role="button" tabIndex={0} onClick={() => setTechPanelOpen(!techPanelOpen)}
               style={{
                 width: 28, height: 28, borderRadius: '50%',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: techPanelOpen ? '#e6f4ff' : '#f5f5f5',
+                background: techPanelOpen ? '#e6f4ff' : SF.bgLighter,
                 cursor: 'pointer',
               }}
             >
-              <TeamOutlined style={{ fontSize: 14, color: techPanelOpen ? '#1677ff' : '#595959' }} />
+              <TeamOutlined style={{ fontSize: 14, color: techPanelOpen ? SF.infoPrimary : '#595959' }} />
             </div>
           </Badge>
         )}
@@ -1309,15 +1309,15 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                 width: 28, height: 28, borderRadius: '50%',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 background: (dateField !== 'createdAt' || dateRange)
-                  ? `${DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff'}18`
-                  : '#f5f5f5',
+                  ? `${DATE_FIELDS.find(f => f.key === dateField)?.color || SF.infoPrimary}18`
+                  : SF.bgLighter,
                 cursor: 'pointer',
                 border: (dateField !== 'createdAt' || dateRange)
-                  ? `2px solid ${DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff'}`
+                  ? `2px solid ${DATE_FIELDS.find(f => f.key === dateField)?.color || SF.infoPrimary}`
                   : '1px solid #e8e8e8',
               }}
             >
-              <CalendarOutlined style={{ fontSize: 14, color: (dateField !== 'createdAt' || dateRange) ? (DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff') : '#595959' }} />
+              <CalendarOutlined style={{ fontSize: 14, color: (dateField !== 'createdAt' || dateRange) ? (DATE_FIELDS.find(f => f.key === dateField)?.color || SF.infoPrimary) : '#595959' }} />
             </div>
           ) : (
             /* Desktop: full button with text */
@@ -1330,12 +1330,12 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                   gap: 5,
                   padding: '3px 10px',
                   borderRadius: 16,
-                  border: (dateField !== 'createdAt' || dateRange) ? `2px solid ${DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff'}` : '1px solid #d9d9d9',
-                  background: (dateField !== 'createdAt' || dateRange) ? `${DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff'}12` : '#fff',
+                  border: (dateField !== 'createdAt' || dateRange) ? `2px solid ${DATE_FIELDS.find(f => f.key === dateField)?.color || SF.infoPrimary}` : '1px solid #d9d9d9',
+                  background: (dateField !== 'createdAt' || dateRange) ? `${DATE_FIELDS.find(f => f.key === dateField)?.color || SF.infoPrimary}12` : '#fff',
                   cursor: 'pointer',
                   fontSize: 12,
                   fontWeight: (dateField !== 'createdAt' || dateRange) ? 600 : 400,
-                  color: (dateField !== 'createdAt' || dateRange) ? (DATE_FIELDS.find(f => f.key === dateField)?.color || '#1677ff') : '#595959',
+                  color: (dateField !== 'createdAt' || dateRange) ? (DATE_FIELDS.find(f => f.key === dateField)?.color || SF.infoPrimary) : '#595959',
                   transition: 'all 0.2s',
                   whiteSpace: 'nowrap',
                   minHeight: 32,
@@ -1363,7 +1363,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                     padding: '3px 6px',
                     borderRadius: '50%',
                     border: 'none',
-                    background: '#ff4d4f',
+                    background: SF.danger,
                     color: '#fff',
                     cursor: 'pointer',
                     fontSize: 10,
@@ -1438,11 +1438,11 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
               {/* Header */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                 <span style={{ fontSize: 14, fontWeight: 600, color: '#262626' }}>📅 Filtre par date</span>
-                <Button icon={<CloseOutlined />} size="small" type="text" onClick={() => setDateDropdownOpen(false)} style={{ color: '#8c8c8c' }} />
+                <Button icon={<CloseOutlined />} size="small" type="text" onClick={() => setDateDropdownOpen(false)} style={{ color: SF.textQuaternary }} />
               </div>
 
               {/* Sélecteur du type de date */}
-              <div style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sur quelle date ?</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: SF.textQuaternary, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sur quelle date ?</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>
                 {DATE_FIELDS.map(df => (
                   <button
@@ -1452,11 +1452,11 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                       padding: '3px 8px',
                       borderRadius: 12,
                       border: dateField === df.key ? `2px solid ${df.color}` : '1px solid #e8e8e8',
-                      background: dateField === df.key ? `${df.color}12` : '#fafafa',
+                      background: dateField === df.key ? `${df.color}12` : SF.bgLightest,
                       cursor: 'pointer',
                       fontSize: 11,
                       fontWeight: dateField === df.key ? 600 : 400,
-                      color: dateField === df.key ? df.color : '#8c8c8c',
+                      color: dateField === df.key ? df.color : SF.textQuaternary,
                       transition: 'all 0.2s',
                       whiteSpace: 'nowrap',
                     }}
@@ -1468,7 +1468,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
 
               {/* Présets de période */}
               <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 8, marginBottom: 8 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Période</div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: SF.textQuaternary, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Période</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                   {DATE_PRESETS.map(preset => (
                     <button
@@ -1482,7 +1482,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                         cursor: 'pointer',
                         fontSize: 12,
                         fontWeight: activePreset === preset.key ? 600 : 400,
-                        color: activePreset === preset.key ? '#1677ff' : '#595959',
+                        color: activePreset === preset.key ? SF.infoPrimary : '#595959',
                         transition: 'all 0.2s',
                         whiteSpace: 'nowrap',
                       }}
@@ -1495,7 +1495,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
 
               {/* Plage personnalisée */}
               <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 8 }}>
-                <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 4 }}>Plage personnalisée</div>
+                <div style={{ fontSize: 11, color: SF.textQuaternary, marginBottom: 4 }}>Plage personnalisée</div>
                 <RangePicker
                   size="small"
                   format="DD/MM/YYYY"
@@ -1520,7 +1520,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                   </span>
                   <button
                     onClick={() => { clearDateFilter(); setDateDropdownOpen(false); }}
-                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#ff4d4f', fontSize: 12, display: 'flex', alignItems: 'center', gap: 3 }}
+                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: SF.danger, fontSize: 12, display: 'flex', alignItems: 'center', gap: 3 }}
                   >
                     <CloseCircleOutlined style={{ fontSize: 11 }} /> Effacer
                   </button>
@@ -1537,7 +1537,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
               {uniqueProducts.map(product => {
                 const isActive = selectedProducts.has(product.value);
-                const bgColor = product.color || '#1677ff';
+                const bgColor = product.color || SF.infoPrimary;
                 return (
                   <Tooltip key={product.value} title={`${product.label} (${product.count})`}>
                     <Badge count={product.count} size="small" offset={[-2, 2]} style={{ backgroundColor: isActive ? bgColor : '#bfbfbf' }}>
@@ -1546,7 +1546,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                         style={{
                           width: 28, height: 28, borderRadius: '50%',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          background: isActive ? hexToRgba(bgColor, 0.15) : '#f5f5f5',
+                          background: isActive ? hexToRgba(bgColor, 0.15) : SF.bgLighter,
                           border: isActive ? `2px solid ${bgColor}` : '1px solid #e8e8e8',
                           cursor: 'pointer',
                           fontSize: 15,
@@ -1564,7 +1564,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                   style={{
                     width: 22, height: 22, borderRadius: '50%',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: '#ff4d4f', color: '#fff', cursor: 'pointer', fontSize: 10,
+                    background: SF.danger, color: '#fff', cursor: 'pointer', fontSize: 10,
                   }}
                 >
                   ✕
@@ -1576,7 +1576,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', flex: 1, justifyContent: 'center' }}>
               {uniqueProducts.map(product => {
                 const isActive = selectedProducts.has(product.value);
-                const bgColor = product.color || '#1677ff';
+                const bgColor = product.color || SF.infoPrimary;
                 return (
                   <Tooltip key={product.value} title={`${product.label} (${product.count})`}>
                     <button
@@ -1603,8 +1603,8 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                       </span>
                       <span>{product.label}</span>
                       <span style={{
-                        background: isActive ? bgColor : '#e8e8e8',
-                        color: isActive ? '#fff' : '#8c8c8c',
+                        background: isActive ? bgColor : SF.borderMd,
+                        color: isActive ? '#fff' : SF.textQuaternary,
                         borderRadius: 8,
                         padding: '0 5px',
                         fontSize: 10,
@@ -1626,10 +1626,10 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                     padding: '3px 8px',
                     borderRadius: 16,
                     border: '1px dashed #d9d9d9',
-                    background: '#fafafa',
+                    background: SF.bgLightest,
                     cursor: 'pointer',
                     fontSize: 11,
-                    color: '#8c8c8c',
+                    color: SF.textQuaternary,
                   }}
                 >
                   ✕ Tous
@@ -1678,7 +1678,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                 style={{
                   width: 28, height: 28, borderRadius: '50%',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: '#f5f5f5', cursor: 'pointer',
+                  background: SF.bgLighter, cursor: 'pointer',
                   border: '1px solid #e8e8e8',
                 }}
               >
@@ -1722,7 +1722,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
             width: 250,
             zIndex: 20,
             borderRight: '1px solid #f0f0f0',
-            backgroundColor: '#fafafa',
+            backgroundColor: SF.bgLightest,
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
@@ -1739,7 +1739,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                 size="small"
                 type="text"
                 onClick={() => setTechPanelOpen(false)}
-                style={{ color: '#8c8c8c' }}
+                style={{ color: SF.textQuaternary }}
               />
             </div>
               <div style={{ overflowY: 'auto', flex: 1, padding: '8px 6px' }}>
@@ -1755,14 +1755,14 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                         message.error(err?.message || 'Erreur sync');
                       }
                     }}
-                    style={{ flex: 1, padding: '6px 8px', borderRadius: 4, border: '1px solid #d9d9d9', background: '#fff', cursor: 'pointer', fontSize: 11, color: '#1677ff', minHeight: 36 }}
+                    style={{ flex: 1, padding: '6px 8px', borderRadius: 4, border: '1px solid #d9d9d9', background: '#fff', cursor: 'pointer', fontSize: 11, color: SF.infoPrimary, minHeight: 36 }}
                     title="Importer les utilisateurs de l'organisation comme techniciens"
                   >
                     🔄 Sync
                   </button>
                   <button
-                      onClick={() => { setTechFormData({ type: 'SUBCONTRACTOR', billingMode: 'FORFAIT', firstName: '', lastName: '', email: '', phone: '', company: '', specialties: [], color: '#8c8c8c', vatNumber: '', address: '', postalCode: '', city: '', country: 'Belgique', iban: '' }); setTechFormOpen(true); }}
-                      style={{ flex: 1, padding: '6px 8px', borderRadius: 4, border: '1px dashed #8c8c8c', background: '#fff', cursor: 'pointer', fontSize: 11, color: '#8c8c8c', minHeight: 36 }}
+                      onClick={() => { setTechFormData({ type: 'SUBCONTRACTOR', billingMode: 'FORFAIT', firstName: '', lastName: '', email: '', phone: '', company: '', specialties: [], color: SF.textQuaternary, vatNumber: '', address: '', postalCode: '', city: '', country: 'Belgique', iban: '' }); setTechFormOpen(true); }}
+                      style={{ flex: 1, padding: '6px 8px', borderRadius: 4, border: '1px dashed #8c8c8c', background: '#fff', cursor: 'pointer', fontSize: 11, color: SF.textQuaternary, minHeight: 36 }}
                       title="Ajouter un sous-traitant"
                     >
                       🏢 + Sous-traitant
@@ -1784,7 +1784,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                       cursor: 'pointer',
                       fontSize: 11,
                       fontWeight: selectedTechFilter === 'unassigned' ? 600 : 400,
-                      color: selectedTechFilter === 'unassigned' ? '#ff4d4f' : '#8c8c8c',
+                      color: selectedTechFilter === 'unassigned' ? SF.danger : SF.textQuaternary,
                       textAlign: 'left',
                       display: 'flex',
                       alignItems: 'center',
@@ -1796,7 +1796,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                     <span style={{
                       marginLeft: 'auto',
                       background: '#fff1f0',
-                      color: '#ff4d4f',
+                      color: SF.danger,
                       borderRadius: 8,
                       padding: '0 5px',
                       fontSize: 10,
@@ -1812,13 +1812,13 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                 <div style={{ display: 'flex', gap: 0, marginBottom: 8, borderBottom: '1px solid #f0f0f0' }}>
                   <button
                     onClick={() => setPanelTab('techs')}
-                    style={{ flex: 1, padding: '6px 0', border: 'none', borderBottom: panelTab === 'techs' ? '2px solid #722ed1' : '2px solid transparent', background: 'none', cursor: 'pointer', fontSize: 11, fontWeight: panelTab === 'techs' ? 600 : 400, color: panelTab === 'techs' ? '#722ed1' : '#8c8c8c', minHeight: 36 }}
+                    style={{ flex: 1, padding: '6px 0', border: 'none', borderBottom: panelTab === 'techs' ? '2px solid #722ed1' : '2px solid transparent', background: 'none', cursor: 'pointer', fontSize: 11, fontWeight: panelTab === 'techs' ? 600 : 400, color: panelTab === 'techs' ? FB.purple : SF.textQuaternary, minHeight: 36 }}
                   >
                     👤 Techniciens ({technicians.length})
                   </button>
                   <button
                     onClick={() => setPanelTab('teams')}
-                    style={{ flex: 1, padding: '6px 0', border: 'none', borderBottom: panelTab === 'teams' ? '2px solid #722ed1' : '2px solid transparent', background: 'none', cursor: 'pointer', fontSize: 11, fontWeight: panelTab === 'teams' ? 600 : 400, color: panelTab === 'teams' ? '#722ed1' : '#8c8c8c', minHeight: 36 }}
+                    style={{ flex: 1, padding: '6px 0', border: 'none', borderBottom: panelTab === 'teams' ? '2px solid #722ed1' : '2px solid transparent', background: 'none', cursor: 'pointer', fontSize: 11, fontWeight: panelTab === 'teams' ? 600 : 400, color: panelTab === 'teams' ? FB.purple : SF.textQuaternary, minHeight: 36 }}
                   >
                     👥 Équipes ({teams.length})
                   </button>
@@ -1829,7 +1829,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                     {/* Internes */}
                     {technicians.filter(t => t.type !== 'SUBCONTRACTOR').length > 0 && (
                       <>
-                        <div style={{ fontSize: 9, fontWeight: 600, color: '#52c41a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3, padding: '0 4px' }}>
+                        <div style={{ fontSize: 9, fontWeight: 600, color: SF.successAlt, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3, padding: '0 4px' }}>
                           Internes ({technicians.filter(t => t.type !== 'SUBCONTRACTOR').length})
                         </div>
                         {technicians.filter(t => t.type !== 'SUBCONTRACTOR').map(tech => (
@@ -1847,7 +1847,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                     {/* Sous-traitants */}
                     {technicians.filter(t => t.type === 'SUBCONTRACTOR').length > 0 && (
                       <>
-                        <div style={{ fontSize: 9, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: 8, marginBottom: 3, padding: '0 4px' }}>
+                        <div style={{ fontSize: 9, fontWeight: 600, color: SF.textQuaternary, textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: 8, marginBottom: 3, padding: '0 4px' }}>
                           🏢 Sous-traitants ({technicians.filter(t => t.type === 'SUBCONTRACTOR').length})
                         </div>
                         {technicians.filter(t => t.type === 'SUBCONTRACTOR').map(tech => (
@@ -1867,7 +1867,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                         {canManageTeams ? (
                           <>
                             Aucun technicien.<br />
-                            <button onClick={async () => { try { const r = await syncTechnicians(); message.success(r.message || 'Sync OK'); } catch { message.error('Erreur sync'); } }} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#1677ff', textDecoration: 'underline', fontSize: 11 }}>
+                            <button onClick={async () => { try { const r = await syncTechnicians(); message.success(r.message || 'Sync OK'); } catch { message.error('Erreur sync'); } }} style={{ border: 'none', background: 'none', cursor: 'pointer', color: SF.infoPrimary, textDecoration: 'underline', fontSize: 11 }}>
                               Synchroniser les utilisateurs
                             </button>
                           </>
@@ -1885,7 +1885,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                       {canManageTeams && (
                         <button
                           onClick={() => setTeamModalOpen(true)}
-                          style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#1677ff', fontSize: 12, padding: 0, lineHeight: 1 }}
+                          style={{ border: 'none', background: 'none', cursor: 'pointer', color: SF.infoPrimary, fontSize: 12, padding: 0, lineHeight: 1 }}
                           title="Créer une équipe"
                         >
                           <PlusOutlined /> Nouvelle
@@ -1990,7 +1990,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
         open={!!billingBlock}
         title={
           <span>
-            <WarningOutlined style={{ color: '#faad14', marginRight: 8 }} />
+            <WarningOutlined style={{ color: SF.warning, marginRight: 8 }} />
             Facture(s) non payée(s)
           </span>
         }
@@ -2016,7 +2016,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
             <div key={i} style={{ fontWeight: 500 }}>• {inv.label} ({inv.percentage}%)</div>
           ))}
         </div>
-        <p style={{ color: '#8c8c8c', fontSize: 13 }}>
+        <p style={{ color: SF.textQuaternary, fontSize: 13 }}>
           Vous pouvez ouvrir le chantier pour marquer les factures comme payées,
           ou forcer le déplacement.
         </p>
@@ -2045,7 +2045,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
           <div>
             <label style={{ fontSize: 12, fontWeight: 500 }}>Couleur</label>
             <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-              {['#1677ff', '#52c41a', '#fa8c16', '#722ed1', '#f5222d', '#13c2c2', '#eb2f96', '#faad14'].map(c => (
+              {[SF.infoPrimary, SF.successAlt, SF.orangeAlt, FB.purple, '#f5222d', FB.teal, '#eb2f96', SF.warning].map(c => (
                 <div
                   key={c}
                   role="button" tabIndex={0} onClick={() => setNewTeamColor(c)}
@@ -2113,7 +2113,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
             await createTechnician(payload);
             message.success('Technicien créé !');
             setTechFormOpen(false);
-            setTechFormData({ type: 'INTERNAL', billingMode: '', firstName: '', lastName: '', email: '', phone: '', company: '', specialties: [], color: '#1677ff', vatNumber: '', address: '', postalCode: '', city: '', country: 'Belgique', iban: '' });
+            setTechFormData({ type: 'INTERNAL', billingMode: '', firstName: '', lastName: '', email: '', phone: '', company: '', specialties: [], color: SF.infoPrimary, vatNumber: '', address: '', postalCode: '', city: '', country: 'Belgique', iban: '' });
           } catch (err: unknown) {
             message.error(err?.message || 'Erreur création');
           }
@@ -2123,7 +2123,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div>
-            <label style={{ fontSize: 12, fontWeight: 500 }}>Type</label>
+            <label style={{ fontSize: 12, fontWeight: 500 }}>{	('common.type')}</label>
             <Select
               style={{ width: '100%' }}
               value={techFormData.type}
@@ -2167,20 +2167,20 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
           {techFormData.type === 'SUBCONTRACTOR' && (
             <>
               <div>
-                <label style={{ fontSize: 12, fontWeight: 500 }}>N° TVA <span style={{ color: '#ff4d4f' }}>*</span></label>
+                <label style={{ fontSize: 12, fontWeight: 500 }}>N° TVA <span style={{ color: SF.danger }}>*</span></label>
                 <Input value={techFormData.vatNumber} onChange={e => setTechFormData(d => ({ ...d, vatNumber: e.target.value }))} placeholder="BE0123.456.789" />
               </div>
               <div>
-                <label style={{ fontSize: 12, fontWeight: 500 }}>Adresse <span style={{ color: '#ff4d4f' }}>*</span></label>
+                <label style={{ fontSize: 12, fontWeight: 500 }}>Adresse <span style={{ color: SF.danger }}>*</span></label>
                 <Input value={techFormData.address} onChange={e => setTechFormData(d => ({ ...d, address: e.target.value }))} placeholder="Rue et numéro" />
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: 12, fontWeight: 500 }}>Code postal <span style={{ color: '#ff4d4f' }}>*</span></label>
+                  <label style={{ fontSize: 12, fontWeight: 500 }}>Code postal <span style={{ color: SF.danger }}>*</span></label>
                   <Input value={techFormData.postalCode} onChange={e => setTechFormData(d => ({ ...d, postalCode: e.target.value }))} placeholder="1000" />
                 </div>
                 <div style={{ flex: 2 }}>
-                  <label style={{ fontSize: 12, fontWeight: 500 }}>Ville <span style={{ color: '#ff4d4f' }}>*</span></label>
+                  <label style={{ fontSize: 12, fontWeight: 500 }}>Ville <span style={{ color: SF.danger }}>*</span></label>
                   <Input value={techFormData.city} onChange={e => setTechFormData(d => ({ ...d, city: e.target.value }))} placeholder="Bruxelles" />
                 </div>
               </div>
@@ -2189,7 +2189,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                 <Input value={techFormData.country} onChange={e => setTechFormData(d => ({ ...d, country: e.target.value }))} placeholder="Belgique" />
               </div>
               <div>
-                <label style={{ fontSize: 12, fontWeight: 500 }}>IBAN <span style={{ color: '#ff4d4f' }}>*</span></label>
+                <label style={{ fontSize: 12, fontWeight: 500 }}>IBAN <span style={{ color: SF.danger }}>*</span></label>
                 <Input value={techFormData.iban} onChange={e => setTechFormData(d => ({ ...d, iban: e.target.value }))} placeholder="BE68 5390 0754 7034" />
               </div>
             </>
@@ -2200,7 +2200,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
               <Input value={techFormData.email} onChange={e => setTechFormData(d => ({ ...d, email: e.target.value }))} placeholder="email@exemple.com" />
             </div>
             <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 12, fontWeight: 500 }}>Téléphone</label>
+              <label style={{ fontSize: 12, fontWeight: 500 }}>{	('common.phone')}</label>
               <Input value={techFormData.phone} onChange={e => setTechFormData(d => ({ ...d, phone: e.target.value }))} placeholder="+32..." />
             </div>
           </div>
@@ -2218,7 +2218,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
           <div>
             <label style={{ fontSize: 12, fontWeight: 500 }}>Couleur</label>
             <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-              {['#1677ff', '#52c41a', '#fa8c16', '#722ed1', '#f5222d', '#13c2c2', '#eb2f96', '#8c8c8c'].map(c => (
+              {[SF.infoPrimary, SF.successAlt, SF.orangeAlt, FB.purple, '#f5222d', FB.teal, '#eb2f96', SF.textQuaternary].map(c => (
                 <div
                   key={c}
                   role="button" tabIndex={0} onClick={() => setTechFormData(d => ({ ...d, color: c }))}
@@ -2277,7 +2277,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
             />
           </div>
           <div>
-            <label style={{ fontSize: 12, fontWeight: 500 }}>Type</label>
+            <label style={{ fontSize: 12, fontWeight: 500 }}>{	('common.type')}</label>
             <Select
               style={{ width: '100%' }}
               value={unavailData.type}
