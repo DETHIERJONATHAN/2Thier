@@ -1,3 +1,4 @@
+"use strict";
 var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -120,9 +121,10 @@ function getDatabaseInfo() {
     connected: globalForDb.__db_initialized || false
   };
 }
-var import_client, CURRENT_ADAPTER, DB_CONFIG, globalForDb, db, prisma;
+var import_client, CURRENT_ADAPTER, DB_CONFIG, globalForDb, MAX_DEFAULT_TAKE, _basePrisma, db, prisma;
 var init_database = __esm({
   "src/lib/database.ts"() {
+    "use strict";
     import_client = require("@prisma/client");
     CURRENT_ADAPTER = "prisma";
     DB_CONFIG = {
@@ -146,7 +148,20 @@ var init_database = __esm({
       }
     };
     globalForDb = globalThis;
-    db = createPrismaInstance();
+    MAX_DEFAULT_TAKE = 1e3;
+    _basePrisma = createPrismaInstance();
+    db = _basePrisma.$extends({
+      query: {
+        $allModels: {
+          async findMany({ args, query }) {
+            if (args.take === void 0) {
+              args.take = MAX_DEFAULT_TAKE;
+            }
+            return query(args);
+          }
+        }
+      }
+    });
     prisma = db;
     process.on("beforeExit", async () => {
       await disconnectDatabase();
@@ -170,6 +185,7 @@ function getPostalService() {
 var import_crypto2, PostalEmailService, _postalService;
 var init_PostalEmailService = __esm({
   "src/services/PostalEmailService.ts"() {
+    "use strict";
     init_database();
     import_crypto2 = __toESM(require("crypto"), 1);
     PostalEmailService = class {
@@ -438,6 +454,7 @@ function extractKey(keyOrUrl) {
 var import_storage, import_child_process, import_promises, isProduction2, GCS_BUCKET, GcloudAuth, storage;
 var init_storage = __esm({
   "src/lib/storage.ts"() {
+    "use strict";
     import_storage = require("@google-cloud/storage");
     import_child_process = require("child_process");
     import_promises = __toESM(require("fs/promises"), 1);
@@ -533,6 +550,7 @@ function decrypt(text) {
 var crypto3, ALGORITHM, IV_LENGTH, ENCRYPTION_KEY, key;
 var init_crypto = __esm({
   "src/utils/crypto.ts"() {
+    "use strict";
     crypto3 = __toESM(require("crypto"), 1);
     ALGORITHM = "aes-256-cbc";
     IV_LENGTH = 16;
@@ -625,6 +643,7 @@ function describeGoogleOAuthConfig() {
 var import_meta, envCache, DEFAULT_PROD_API_BASE, DEFAULT_DEV_API_BASE, GOOGLE_OAUTH_SCOPES, googleOAuthConfig;
 var init_googleConfig = __esm({
   "src/auth/googleConfig.ts"() {
+    "use strict";
     import_meta = {};
     envCache = /* @__PURE__ */ new Map();
     DEFAULT_PROD_API_BASE = "https://www.zhiive.com";
@@ -672,6 +691,7 @@ var init_googleConfig = __esm({
 var import_googleapis3, import_crypto7, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, GOOGLE_SCOPES_LIST, SCOPES, GoogleOAuthService, googleOAuthService;
 var init_GoogleOAuthCore = __esm({
   "src/google-auth/core/GoogleOAuthCore.ts"() {
+    "use strict";
     import_googleapis3 = require("googleapis");
     import_crypto7 = require("crypto");
     init_database();
@@ -2014,6 +2034,7 @@ async function evaluateExpression(expr, roleToNodeId, opts) {
 var OP_PRECEDENCE, OP_ASSOC, rpnCache, rpnParseCount, logicMetrics;
 var init_formulaEngine = __esm({
   "src/components/TreeBranchLeaf/treebranchleaf-new/api/formulaEngine.ts"() {
+    "use strict";
     OP_PRECEDENCE = {
       "+": 1,
       "-": 1,
@@ -4365,6 +4386,7 @@ async function evaluateVariableOperation(variableNodeId, submissionId, prisma50,
 var normalizeLookupValue, parseNumericLookupValue, RE_NODE_FORMULA, RE_LEGACY_FORMULA, UUID_REGEX;
 var init_operation_interpreter = __esm({
   "src/components/TreeBranchLeaf/treebranchleaf-new/api/operation-interpreter.ts"() {
+    "use strict";
     init_formulaEngine();
     normalizeLookupValue = (value) => {
       const raw = String(value ?? "").trim().toLowerCase();
@@ -4391,6 +4413,7 @@ var init_operation_interpreter = __esm({
 var GoogleAuthManager, googleAuthManager;
 var init_GoogleAuthManager = __esm({
   "src/google-auth/core/GoogleAuthManager.ts"() {
+    "use strict";
     init_GoogleOAuthCore();
     GoogleAuthManager = class _GoogleAuthManager {
       static instance;
@@ -4454,6 +4477,7 @@ var init_GoogleAuthManager = __esm({
 var import_googleapis5, GoogleCalendarService, googleCalendarService;
 var init_GoogleCalendarService = __esm({
   "src/google-auth/services/GoogleCalendarService.ts"() {
+    "use strict";
     import_googleapis5 = require("googleapis");
     init_google_auth();
     GoogleCalendarService = class _GoogleCalendarService {
@@ -4596,6 +4620,7 @@ __export(GoogleDriveService_exports, {
 var import_googleapis6, GoogleDriveService, googleDriveService;
 var init_GoogleDriveService = __esm({
   "src/google-auth/services/GoogleDriveService.ts"() {
+    "use strict";
     import_googleapis6 = require("googleapis");
     init_google_auth();
     GoogleDriveService = class _GoogleDriveService {
@@ -5334,6 +5359,7 @@ __export(google_auth_exports, {
 });
 var init_google_auth = __esm({
   "src/google-auth/index.ts"() {
+    "use strict";
     init_GoogleAuthManager();
     init_GoogleCalendarService();
     init_GoogleDriveService();
@@ -5580,6 +5606,7 @@ function forceSharedRefSuffixesInJson(obj, suffix) {
 }
 var init_universal_reference_rewriter = __esm({
   "src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/utils/universal-reference-rewriter.ts"() {
+    "use strict";
   }
 });
 
@@ -5852,6 +5879,135 @@ var authRoutes_default = authRouter;
 
 // src/routes/misc.ts
 var import_express2 = require("express");
+
+// src/components/zhiive/ZhiiveTheme.ts
+var SF = {
+  // Brand
+  primary: "#6C5CE7",
+  primaryLight: "#A29BFE",
+  secondary: "#00CEC9",
+  secondaryLight: "#81ECEC",
+  accent: "#FD79A8",
+  accentLight: "#FAB1D0",
+  gold: "#FDCB6E",
+  success: "#00B894",
+  fire: "#E17055",
+  // Social / interaction
+  like: "#ff2d55",
+  danger: "#ff4d4f",
+  dangerAlt: "#e74c3c",
+  info: "#1890ff",
+  infoAlt: "#2196F3",
+  successAlt: "#52c41a",
+  successMd: "#4CAF50",
+  orange: "#FF9800",
+  orangeAlt: "#fa8c16",
+  purple: "#9C27B0",
+  // Scope / visibility
+  scopeColony: "#1890ff",
+  scopePublic: "#52c41a",
+  scopePrivate: "#8c8c8c",
+  // Primary alpha variations
+  primaryAlpha03: "rgba(108, 92, 231, 0.03)",
+  primaryAlpha08: "rgba(108, 92, 231, 0.08)",
+  // Dark mode / overlay
+  dark: "#1a1a2e",
+  darkDeep: "#16213e",
+  darkBg: "#222",
+  black: "#000",
+  textLight: "#ffffff",
+  textLightMuted: "rgba(255,255,255,0.7)",
+  textLightDimmed: "rgba(255,255,255,0.5)",
+  overlayLight: "rgba(255,255,255,0.2)",
+  overlayLighter: "rgba(255,255,255,0.15)",
+  overlayLightest: "rgba(255,255,255,0.08)",
+  overlayLightFaint: "rgba(255,255,255,0.06)",
+  overlayLightBorder: "rgba(255,255,255,0.4)",
+  overlayLightActive: "rgba(255,255,255,0.3)",
+  overlayDark: "rgba(0,0,0,0.3)",
+  overlayDarkMd: "rgba(0,0,0,0.5)",
+  overlayDarkStrong: "rgba(0,0,0,0.6)",
+  overlayDarkHeavy: "rgba(0,0,0,0.7)",
+  overlayDarkVeryHeavy: "rgba(0,0,0,0.85)",
+  overlayPlayBtn: "rgba(255,255,255,0.8)",
+  gradientOverlayTop: "linear-gradient(180deg, rgba(0,0,0,0.6) 0%, transparent 100%)",
+  gradientOverlayBottom: "linear-gradient(0deg, rgba(0,0,0,0.7) 0%, transparent 100%)",
+  gradientOverlayThumb: "linear-gradient(transparent, rgba(0,0,0,0.7))",
+  // Neutral / surface    
+  bgLight: "#f0f2f5",
+  bgLighter: "#f5f5f5",
+  bgLightest: "#fafafa",
+  bgCard: "#f0f0f0",
+  borderLight: "#d9d9d9",
+  borderLighter: "#eee",
+  textTertiary: "#65676b",
+  textQuaternary: "#8c8c8c",
+  textDark: "#333",
+  textPlaceholder: "#999",
+  bgPrimaryTint: "rgba(108, 92, 231, 0.1)",
+  // Tinted backgrounds (status/info)
+  bgInfoTint: "#e6f7ff",
+  bgSuccessTint: "#f6ffed",
+  bgWarningTint: "#fff7e6",
+  bgWarningTintAlt: "#FFF8E1",
+  bgDangerTint: "#FFF3E0",
+  bgPurpleTint: "#F3E5F5",
+  bgGreenTint: "#E8F5E9",
+  bgBlueTint: "#E3F2FD",
+  successBorder: "#b7eb8f",
+  warningBorder: "#ffd591",
+  // Gradients
+  gradientPrimary: "linear-gradient(135deg, #6C5CE7, #A29BFE)",
+  gradientSecondary: "linear-gradient(135deg, #00CEC9, #81ECEC)",
+  gradientHot: "linear-gradient(135deg, #FD79A8, #E17055)",
+  gradientGold: "linear-gradient(135deg, #FDCB6E, #F39C12)",
+  gradientDark: "linear-gradient(135deg, #2D3436, #636E72)",
+  gradientStory: "linear-gradient(135deg, #6C5CE7, #FD79A8, #FDCB6E)",
+  gradientAccent: "linear-gradient(135deg, #6C5CE7 0%, #FD79A8 100%)",
+  gradientFull: "linear-gradient(135deg, #6C5CE7 0%, #FD79A8 50%, #FDCB6E 100%)",
+  // Layout
+  bg: "#F8F9FA",
+  cardBg: "#FFFFFF",
+  text: "#2D3436",
+  textSecondary: "#636E72",
+  textMuted: "#B2BEC3",
+  border: "#DFE6E9",
+  radius: 16,
+  radiusSm: 10,
+  shadow: "0 2px 12px rgba(0,0,0,0.06)",
+  shadowMd: "0 4px 20px rgba(0,0,0,0.1)",
+  // Tailwind-equivalent named colors (for bridge / compat)
+  emerald: "#10b981",
+  emeraldDark: "#059669",
+  emeraldDeep: "#047857",
+  blue: "#3b82f6",
+  blueDark: "#2563eb",
+  violet: "#8b5cf6",
+  violetDark: "#7c3aed",
+  red: "#ef4444",
+  amber: "#f59e0b",
+  amberDark: "#F39C12",
+  // Panel labels & icons
+  panels: [
+    { key: "explore", label: "Explore", icon: "\u{1F50D}", color: "#00CEC9" },
+    { key: "flow", label: "Flow", icon: "\u{1F30A}", color: "#6C5CE7" },
+    { key: "mur", label: "Mur", icon: "\u{1F3E0}", color: "#1877F2" },
+    { key: "universe", label: "Universe", icon: "\u{1F30C}", color: "#FD79A8" },
+    { key: "dashboard", label: "Stats", icon: "\u{1F4CA}", color: "#FDCB6E" }
+  ]
+};
+var WEBSITE_DEFAULTS = {
+  primaryColor: SF.emerald,
+  primaryColorDark: SF.emeraldDark,
+  primaryColorDeep: SF.emeraldDeep,
+  gradient: `linear-gradient(135deg, ${SF.emerald} 0%, ${SF.emeraldDark} 100%)`,
+  gradientFull: `linear-gradient(135deg, ${SF.emerald} 0%, ${SF.emeraldDark} 50%, ${SF.emeraldDeep} 100%)`,
+  iconColor: SF.emerald,
+  badgeColor: SF.blue,
+  hoverBorderColor: SF.blue
+};
+
+// src/routes/misc.ts
 var import_client2 = require("@prisma/client");
 var import_bcryptjs3 = __toESM(require("bcryptjs"), 1);
 var import_jsonwebtoken3 = __toESM(require("jsonwebtoken"), 1);
@@ -5886,10 +6042,11 @@ var getJWTSecretFromConfig = () => {
       console.error("[CONFIG] \u274C Erreur \xE0 la lecture de /run/secrets/JWT_SECRET:", err);
     }
   }
-  const fallbackSecret = isProduction ? "prod_secret_key" : "dev_secret_key";
   if (isProduction) {
-    console.warn("[CONFIG] \u26A0\uFE0F JWT_SECRET non disponible en production, utilisateur une cl\xE9 par d\xE9faut");
+    console.error("[CONFIG] \u274C FATAL: JWT_SECRET non disponible en production \u2014 arr\xEAt imm\xE9diat");
+    process.exit(1);
   }
+  const fallbackSecret = "dev_secret_key";
   return fallbackSecret;
 };
 var JWT_SECRET2 = getJWTSecretFromConfig();
@@ -5943,6 +6100,7 @@ var authMiddleware = async (req2, res, next) => {
       }
     }
     req2.user = {
+      id: user.id,
       userId: user.id,
       role: user.role || "user",
       organizationId,
@@ -6179,6 +6337,31 @@ var emailService = new EmailService();
 
 // src/routes/misc.ts
 init_PostalEmailService();
+
+// src/lib/logger.ts
+var IS_PROD = process.env.NODE_ENV === "production";
+var LOG_LEVEL = process.env.LOG_LEVEL || (IS_PROD ? "warn" : "debug");
+var LEVELS = { debug: 0, info: 1, warn: 2, error: 3 };
+var currentLevel = LEVELS[LOG_LEVEL] ?? LEVELS.debug;
+function shouldLog(level) {
+  return LEVELS[level] >= currentLevel;
+}
+var logger = {
+  debug: (...args) => {
+    if (shouldLog("debug")) console.log("[DEBUG]", ...args);
+  },
+  info: (...args) => {
+    if (shouldLog("info")) console.log("[INFO]", ...args);
+  },
+  warn: (...args) => {
+    if (shouldLog("warn")) console.warn("[WARN]", ...args);
+  },
+  error: (...args) => {
+    if (shouldLog("error")) console.error("[ERROR]", ...args);
+  }
+};
+
+// src/routes/misc.ts
 var router = (0, import_express2.Router)();
 var ZHIIVE_ORG_ID = "zhiive-global-org";
 var ZHIIVE_USER_ROLE_ID = "zhiive-global-user-role";
@@ -6310,7 +6493,7 @@ router.post("/register", async (req2, res) => {
             }
           });
         } catch (emailAccErr) {
-          console.error(`\u26A0\uFE0F [Register] Erreur cr\xE9ation EmailAccount:`, emailAccErr);
+          logger.error(`\u26A0\uFE0F [Register] Erreur cr\xE9ation EmailAccount:`, emailAccErr);
         }
       }
       return { user, organization, zhiiveEmail };
@@ -6320,7 +6503,7 @@ router.post("/register", async (req2, res) => {
         const postal = getPostalService();
         await postal.createMailbox(result.zhiiveEmail, `${firstName} ${lastName || ""}`.trim());
       } catch (postalErr) {
-        console.error(`\u26A0\uFE0F [Register] Erreur provisionnement Postal (non bloquant):`, postalErr);
+        logger.error(`\u26A0\uFE0F [Register] Erreur provisionnement Postal (non bloquant):`, postalErr);
       }
     }
     if (result.organization) {
@@ -6332,7 +6515,7 @@ router.post("/register", async (req2, res) => {
           data: { email: orgEmail }
         });
       } catch (orgEmailErr) {
-        console.error(`\u26A0\uFE0F [Register] Erreur email organisation (non bloquant):`, orgEmailErr);
+        logger.error(`\u26A0\uFE0F [Register] Erreur email organisation (non bloquant):`, orgEmailErr);
       }
     }
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
@@ -6359,7 +6542,7 @@ Si vous n'avez pas cree de compte, ignorez simplement cet email.
               <div style="text-align: center; margin-bottom: 30px;">
                 <h1 style="color: #2563eb; margin: 0; font-size: 28px;">Zhiive</h1>
               </div>
-              <h2 style="color: #1a1a2e; margin-top: 0;">Bienvenue ${firstName} !</h2>
+              <h2 style="color: ${SF.dark}; margin-top: 0;">Bienvenue ${firstName} !</h2>
               <p style="color: #444; line-height: 1.6;">Merci de vous etre inscrit(e) sur Zhiive. Pour activer votre compte et commencer a utiliser la plateforme, cliquez sur le bouton ci-dessous :</p>
               <p style="text-align: center; margin: 35px 0;">
                 <a href="${verifyUrl}" style="background-color: #2563eb; color: white; padding: 14px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block;">Activer mon compte</a>
@@ -6374,7 +6557,7 @@ Si vous n'avez pas cree de compte, ignorez simplement cet email.
       });
       emailSent = true;
     } catch (emailError) {
-      console.error(`[Register] \u26A0\uFE0F \xC9chec envoi email d'activation \xE0 ${normalizedEmail}:`, emailError);
+      logger.error(`[Register] \u26A0\uFE0F \xC9chec envoi email d'activation \xE0 ${normalizedEmail}:`, emailError);
     }
     let successMessage = emailSent ? "Inscription r\xE9ussie ! Un email d'activation a \xE9t\xE9 envoy\xE9 \xE0 votre adresse. V\xE9rifiez votre bo\xEEte de r\xE9ception (et vos spams)." : `Inscription r\xE9ussie ! L'envoi de l'email a \xE9chou\xE9. Utilisez "Renvoyer le lien d'activation" sur la page de connexion.`;
     if (registrationType === "createOrg") {
@@ -6390,7 +6573,7 @@ Si vous n'avez pas cree de compte, ignorez simplement cet email.
       message: successMessage
     });
   } catch (error) {
-    console.error("[API][register] Erreur lors de l'inscription:", error);
+    logger.error("[API][register] Erreur lors de l'inscription:", error);
     if (error instanceof import_client2.Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       return res.status(409).json({ error: "Cette adresse email est d\xE9j\xE0 utilis\xE9e." });
     }
@@ -6429,7 +6612,7 @@ router.get("/verify-email", async (req2, res) => {
     });
     res.json({ success: true, message: "Votre compte est activ\xE9 ! Vous pouvez maintenant vous connecter." });
   } catch (error) {
-    console.error("[API][verify-email] Erreur:", error);
+    logger.error("[API][verify-email] Erreur:", error);
     res.status(500).json({ error: "Erreur lors de la v\xE9rification de l'email" });
   }
 });
@@ -6480,7 +6663,7 @@ Ce lien est valide pendant 24 heures.
             <div style="text-align: center; margin-bottom: 30px;">
               <h1 style="color: #2563eb; margin: 0; font-size: 28px;">Zhiive</h1>
             </div>
-            <h2 style="color: #1a1a2e; margin-top: 0;">Nouveau lien d'activation</h2>
+            <h2 style="color: ${SF.dark}; margin-top: 0;">Nouveau lien d'activation</h2>
             <p style="color: #444; line-height: 1.6;">Voici votre nouveau lien pour activer votre compte Zhiive :</p>
             <p style="text-align: center; margin: 35px 0;">
               <a href="${verifyUrl}" style="background-color: #2563eb; color: white; padding: 14px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block;">Activer mon compte</a>
@@ -6494,7 +6677,7 @@ Ce lien est valide pendant 24 heures.
     });
     res.json({ success: true, message: "Si cette adresse est enregistr\xE9e, un email d'activation a \xE9t\xE9 envoy\xE9." });
   } catch (error) {
-    console.error("[API][resend-verification] Erreur:", error);
+    logger.error("[API][resend-verification] Erreur:", error);
     res.status(500).json({ error: "Erreur lors de l'envoi de l'email" });
   }
 });
@@ -6602,7 +6785,7 @@ router.post("/login", async (req2, res) => {
       organizations
     });
   } catch (error) {
-    console.error("[API][login] Erreur lors de la connexion:", error);
+    logger.error("[API][login] Erreur lors de la connexion:", error);
     if (!res.headersSent) {
       res.status(500).json({ error: "Erreur interne du serveur." });
     }
@@ -6695,7 +6878,7 @@ router.get(
       }));
       res.json({ currentUser: { ...userInfos, organizations }, isImpersonating: !!req2.originalUser });
     } catch (err) {
-      console.error(err);
+      logger.error(err);
       res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration de l'utilisateur." });
     }
   }
@@ -6712,7 +6895,7 @@ router.patch("/me/feed-mode", authMiddleware, async (req2, res) => {
     });
     res.json({ success: true });
   } catch (err) {
-    console.error("[API] Erreur mise \xE0 jour feedMode:", err);
+    logger.error("[API] Erreur mise \xE0 jour feedMode:", err);
     res.status(500).json({ error: "Erreur interne du serveur." });
   }
 });
@@ -6784,7 +6967,7 @@ router.get(
       }
       res.json({ success: true, data: organizations });
     } catch (error) {
-      console.error("[API][me/organizations] Erreur:", error);
+      logger.error("[API][me/organizations] Erreur:", error);
       res.status(500).json({ success: false, message: "Erreur interne du serveur." });
     }
   }
@@ -6842,7 +7025,7 @@ router.get(
         res.status(404).json({ error: "R\xF4le non trouv\xE9 pour l'utilisateur dans cette organisation" });
       }
     } catch (error) {
-      console.error("[API][me/role] Erreur:", error);
+      logger.error("[API][me/role] Erreur:", error);
       res.status(500).json({ error: "Erreur interne du serveur" });
     }
   }
@@ -6934,7 +7117,7 @@ router2.get("/", async (req2, res) => {
     };
     return res.json(formattedUser);
   } catch (error) {
-    console.error("Error fetching user profile:", error);
+    logger.error("Error fetching user profile:", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -6998,7 +7181,7 @@ router2.post("/avatar", async (req2, res) => {
       avatarUrl: buildAvatarUrl(req2, updatedUser.avatarUrl)
     });
   } catch (error) {
-    console.error("Erreur lors du t\xE9l\xE9versement de l'avatar:", error);
+    logger.error("Erreur lors du t\xE9l\xE9versement de l'avatar:", error);
     res.status(500).json({ error: "Erreur interne du serveur" });
   }
 });
@@ -7027,7 +7210,7 @@ router2.post("/cover", async (req2, res) => {
     });
     res.json({ coverUrl: buildAvatarUrl(req2, updatedUser.coverUrl) });
   } catch (error) {
-    console.error("Erreur lors du t\xE9l\xE9versement de la couverture:", error);
+    logger.error("Erreur lors du t\xE9l\xE9versement de la couverture:", error);
     res.status(500).json({ error: "Erreur interne du serveur" });
   }
 });
@@ -7045,7 +7228,7 @@ router2.put("/cover-position", async (req2, res) => {
     });
     res.json({ positionY: posY });
   } catch (error) {
-    console.error("Erreur cover-position:", error);
+    logger.error("Erreur cover-position:", error);
     res.status(500).json({ error: "Erreur interne du serveur" });
   }
 });
@@ -7091,7 +7274,7 @@ router2.get("/permissions", (async (req2, res) => {
     const permissions = userOrgLink.Role.Permission.map((p) => `${p.action}:${p.resource}`);
     res.json({ permissions });
   } catch (error) {
-    console.error("Failed to fetch permissions:", error);
+    logger.error("Failed to fetch permissions:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 }));
@@ -7169,7 +7352,7 @@ router2.put("/", (async (req2, res) => {
       avatarUrl: buildAvatarUrl(req2, updatedUser.avatarUrl)
     });
   } catch (error) {
-    console.error("Error updating profile:", error);
+    logger.error("Error updating profile:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 }));
@@ -7210,7 +7393,7 @@ router2.get("/user/:userId", async (req2, res) => {
       } : null
     });
   } catch (error) {
-    console.error("Error fetching user profile:", error);
+    logger.error("Error fetching user profile:", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -7232,7 +7415,7 @@ router2.get("/photos", async (req2, res) => {
     }
     return res.json({ photos, grouped });
   } catch (error) {
-    console.error("Error fetching user photos:", error);
+    logger.error("Error fetching user photos:", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -7294,7 +7477,7 @@ router2.get("/media", async (req2, res) => {
     }).slice(0, limit);
     return res.json({ media });
   } catch (error) {
-    console.error("Error fetching user media:", error);
+    logger.error("Error fetching user media:", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -7315,7 +7498,7 @@ router2.delete("/photos/:id", async (req2, res) => {
     await prisma4.userPhoto.delete({ where: { id: req2.params.id } });
     return res.json({ success: true });
   } catch (error) {
-    console.error("Error deleting photo:", error);
+    logger.error("Error deleting photo:", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -7324,9 +7507,78 @@ var profile_default = router2;
 // src/routes/modules.ts
 var import_express4 = require("express");
 init_database();
+var import_jsonwebtoken5 = __toESM(require("jsonwebtoken"), 1);
+
+// src/middleware/auth.ts
 var import_jsonwebtoken4 = __toESM(require("jsonwebtoken"), 1);
+
+// src/prisma.ts
+init_database();
+var prisma_default = db;
+
+// src/middleware/auth.ts
+var JWT_SECRET3 = JWT_SECRET2;
+var authenticateToken = (req2, res, next) => {
+  if (req2.headers["x-test-bypass-auth"] === "1") {
+    req2.user = req2.user || {
+      id: "test-user",
+      email: "test@example.com",
+      organizationId: "org-test",
+      isSuperAdmin: true,
+      role: "super_admin"
+    };
+    return next();
+  }
+  const authHeader = req2.headers["authorization"];
+  let token = authHeader && authHeader.split(" ")[1];
+  if (!token && req2.cookies && req2.cookies.token) {
+    token = req2.cookies.token;
+  }
+  if (!token) {
+    return res.status(401).json({ error: "Token d'acc\xE8s requis" });
+  }
+  try {
+    const decoded = import_jsonwebtoken4.default.verify(token, JWT_SECRET3);
+    if (!decoded.role && decoded.isSuperAdmin) {
+      decoded.role = "super_admin";
+    }
+    req2.user = { ...decoded, id: decoded.userId };
+    next();
+  } catch (error) {
+    console.error("[AUTH] \u274C Token invalide:", error.message);
+    return res.status(401).json({ error: "Token invalide ou expir\xE9" });
+  }
+};
+var fetchFullUser = async (req2, res, next) => {
+  if (!req2.user || !req2.user.userId) {
+    return res.status(401).json({ message: "Utilisateur non authentifi\xE9." });
+  }
+  try {
+    const userFromDb = await prisma_default.user.findUnique({
+      where: { id: req2.user.userId }
+    });
+    if (!userFromDb) {
+      return res.status(401).json({ message: "Utilisateur non valide." });
+    }
+    req2.user = { ...userFromDb, ...req2.user };
+    next();
+  } catch (error) {
+    console.error("[MIDDLEWARE] fetchFullUser: Erreur", error);
+    res.status(500).json({ message: "Erreur interne du serveur." });
+  }
+};
+var isAdmin = (req2, res, next) => {
+  const role = req2.user?.role?.toLowerCase().replace(/_/g, "");
+  if (role === "admin" || role === "superadmin") {
+    return next();
+  }
+  return res.status(403).json({ error: "Acc\xE8s non autoris\xE9. R\xF4le Administrateur requis." });
+};
+
+// src/routes/modules.ts
 var prisma5 = db;
 var router3 = (0, import_express4.Router)();
+router3.use(authenticateToken);
 function deriveRoute(key2, provided) {
   if (!key2 && !provided) return null;
   let route = provided && provided.trim() !== "" ? provided.trim() : "";
@@ -7386,7 +7638,7 @@ function extractUserFromRequest(req2) {
       token = authHeader && typeof authHeader === "string" ? authHeader.split(" ")[1] : null;
     }
     if (!token) return null;
-    const decoded = import_jsonwebtoken4.default.verify(token, JWT_SECRET2);
+    const decoded = import_jsonwebtoken5.default.verify(token, JWT_SECRET2);
     const role = decoded.role || decoded.roles?.[0];
     const isSuperAdmin2 = decoded.isSuperAdmin || role === "super_admin" || decoded.roles?.includes("super_admin");
     return { userId: decoded.userId, role, isSuperAdmin: isSuperAdmin2 };
@@ -7462,12 +7714,12 @@ router3.get("/", async (req2, res) => {
           }
         }
       } catch (permErr) {
-        console.error("[modules] Erreur lors du filtrage par permissions du r\xF4le:", permErr);
+        logger.error("[modules] Erreur lors du filtrage par permissions du r\xF4le:", permErr);
       }
     }
     res.json({ success: true, data: filtered });
   } catch (e) {
-    console.error("[modules] GET / erreur", e);
+    logger.error("[modules] GET / erreur", e);
     res.status(500).json({ success: false, message: "Erreur r\xE9cup\xE9ration modules" });
   }
 });
@@ -7510,9 +7762,14 @@ router3.get("/swipe-tabs", async (req2, res) => {
         byKey.set(m.key, m);
       }
     }
+    const LABEL_OVERRIDES = {
+      explore: "Friends",
+      flow: "Nectar",
+      universe: "Nectar"
+    };
     const tabs = Array.from(byKey.values()).sort((a, b) => (a.order ?? 99) - (b.order ?? 99)).map((m) => ({
       id: m.key === "flow" || m.key === "universe" ? "nectar" : m.key,
-      label: m.key === "flow" || m.key === "universe" ? "Nectar" : m.label,
+      label: LABEL_OVERRIDES[m.key] || m.label,
       color: m.key === "flow" || m.key === "universe" ? "#FDCB6E" : m.tabColor || "#999",
       icon: m.key === "flow" || m.key === "universe" ? "nectar" : m.tabIcon || "app",
       order: m.order ?? 99,
@@ -7527,7 +7784,7 @@ router3.get("/swipe-tabs", async (req2, res) => {
     });
     res.json({ success: true, data: dedupedTabs });
   } catch (e) {
-    console.error("[modules] GET /swipe-tabs erreur", e);
+    logger.error("[modules] GET /swipe-tabs erreur", e);
     res.status(500).json({ success: false, message: "Erreur r\xE9cup\xE9ration swipe tabs" });
   }
 });
@@ -7549,7 +7806,7 @@ router3.get("/all", async (_req, res) => {
     const mapped = modules.map((m) => mapModule(m, null));
     res.json({ success: true, data: mapped });
   } catch (e) {
-    console.error("[modules] GET /all erreur", e);
+    logger.error("[modules] GET /all erreur", e);
     res.status(500).json({ success: false, message: "Erreur r\xE9cup\xE9ration modules (all)" });
   }
 });
@@ -7566,7 +7823,7 @@ router3.patch("/status", async (req2, res) => {
     });
     res.json({ success: true, data: status });
   } catch (e) {
-    console.error("[modules] PATCH /status erreur", e);
+    logger.error("[modules] PATCH /status erreur", e);
     res.status(500).json({ success: false, message: "Erreur mise \xE0 jour statut module" });
   }
 });
@@ -7597,7 +7854,7 @@ router3.post("/", async (req2, res) => {
     res.json({ success: true, data: mapModule(created, null, organizationId) });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Erreur inconnue";
-    console.error("[modules] POST / erreur", e);
+    logger.error("[modules] POST / erreur", e);
     res.status(500).json({ success: false, message: "Erreur cr\xE9ation module", detail: message });
   }
 });
@@ -7633,7 +7890,7 @@ router3.put("/:id", async (req2, res) => {
     });
     res.json({ success: true, data: mapModule(updated, null) });
   } catch (e) {
-    console.error("[modules] PUT /:id erreur", e);
+    logger.error("[modules] PUT /:id erreur", e);
     if (e?.code === "P2002") {
       return res.status(409).json({ success: false, message: "Conflit d'unicit\xE9 (cl\xE9 ou feature d\xE9j\xE0 utilis\xE9e)" });
     }
@@ -7649,7 +7906,7 @@ router3.delete("/:id", async (req2, res) => {
     const deleted = await prisma5.module.delete({ where: { id } });
     res.json({ success: true, data: { id: deleted.id } });
   } catch (e) {
-    console.error("[modules] DELETE /:id erreur", e);
+    logger.error("[modules] DELETE /:id erreur", e);
     res.status(500).json({ success: false, message: "Erreur suppression module" });
   }
 });
@@ -7809,7 +8066,7 @@ router4.get("/", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("[ADMIN-MODULES-V1] Erreur GET:", error);
+    logger.error("[ADMIN-MODULES-V1] Erreur GET:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de la r\xE9cup\xE9ration des modules",
@@ -7844,7 +8101,7 @@ router4.get("/categories", async (req2, res) => {
       total: categories.length
     });
   } catch (error) {
-    console.error("[ADMIN-MODULES] Erreur GET /categories:", error);
+    logger.error("[ADMIN-MODULES] Erreur GET /categories:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de la r\xE9cup\xE9ration des categories",
@@ -7886,7 +8143,7 @@ router4.post("/categories", requireRole2(["admin", "super_admin"]), async (req2,
       res.status(400).json({ success: false, error: "organizationId invalide" });
       return;
     }
-    console.error("[ADMIN-MODULES] Erreur POST /categories:", error);
+    logger.error("[ADMIN-MODULES] Erreur POST /categories:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de la cr\xE9ation de la category",
@@ -7911,7 +8168,7 @@ router4.put("/categories/reorder", requireRole2(["admin", "super_admin"]), async
       message: `${updates.length} categories r\xE9organis\xE9es avec succ\xE8s`
     });
   } catch (error) {
-    console.error("[ADMIN-MODULES] Erreur PUT /categories/reorder:", error);
+    logger.error("[ADMIN-MODULES] Erreur PUT /categories/reorder:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de la r\xE9organisation des categories",
@@ -7946,7 +8203,7 @@ router4.put("/categories/:id", requireRole2(["admin", "super_admin"]), async (re
       data: category
     });
   } catch (error) {
-    console.error("[ADMIN-MODULES] Erreur PUT /categories/:id:", error);
+    logger.error("[ADMIN-MODULES] Erreur PUT /categories/:id:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de la modification de la category",
@@ -7975,7 +8232,7 @@ router4.delete("/categories/:id", requireRole2(["admin", "super_admin"]), async 
       message: "Category supprim\xE9e avec succ\xE8s"
     });
   } catch (error) {
-    console.error("[ADMIN-MODULES] Erreur DELETE /categories/:id:", error);
+    logger.error("[ADMIN-MODULES] Erreur DELETE /categories/:id:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de la suppression de la category",
@@ -8005,7 +8262,7 @@ router4.put("/modules/:id", requireRole2(["admin", "super_admin"]), async (req2,
       data: module2
     });
   } catch (error) {
-    console.error("[ADMIN-MODULES] Erreur PUT /modules/:id:", error);
+    logger.error("[ADMIN-MODULES] Erreur PUT /modules/:id:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de la modification du module",
@@ -8022,7 +8279,7 @@ router4.delete("/modules/:id", requireRole2(["admin", "super_admin"]), async (re
     await db.module.delete({ where: { id } });
     res.json({ success: true, data: { id } });
   } catch (error) {
-    console.error("[ADMIN-MODULES] Erreur DELETE /modules/:id (alias):", error);
+    logger.error("[ADMIN-MODULES] Erreur DELETE /modules/:id (alias):", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de la suppression du module",
@@ -8076,7 +8333,8 @@ router5.get("/", async (req2, res) => {
           }
         }
       },
-      orderBy: { createdAt: "desc" }
+      orderBy: { createdAt: "desc" },
+      take: 200
     });
     const enrichedTrees = await Promise.all(
       trees.map(async (tree) => {
@@ -8095,7 +8353,7 @@ router5.get("/", async (req2, res) => {
     );
     res.json(enrichedTrees);
   } catch (error) {
-    console.error("[ADMIN-TREES] Erreur GET /:", error);
+    logger.error("[ADMIN-TREES] Erreur GET /:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des arbres" });
   }
 });
@@ -8146,7 +8404,7 @@ router5.get("/:treeId", async (req2, res) => {
             parsedSubTabs = raw;
           }
         } catch (e) {
-          console.warn(`[ADMIN-TREES] Erreur parsing subtabs pour ${tab.label}:`, e);
+          logger.warn(`[ADMIN-TREES] Erreur parsing subtabs pour ${tab.label}:`, e);
         }
       }
       return {
@@ -8206,7 +8464,7 @@ router5.get("/:treeId", async (req2, res) => {
           productOptions = raw;
         }
       } catch (e) {
-        console.warn("[ADMIN-TREES] Erreur parsing product_options:", e);
+        logger.warn("[ADMIN-TREES] Erreur parsing product_options:", e);
       }
     }
     res.json({
@@ -8222,7 +8480,7 @@ router5.get("/:treeId", async (req2, res) => {
       } : null
     });
   } catch (error) {
-    console.error("[ADMIN-TREES] Erreur GET /:treeId:", error);
+    logger.error("[ADMIN-TREES] Erreur GET /:treeId:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration de l'arbre" });
   }
 });
@@ -8272,7 +8530,7 @@ router5.post("/:treeId/access", async (req2, res) => {
     });
     res.json(access);
   } catch (error) {
-    console.error("[ADMIN-TREES] Erreur POST /:treeId/access:", error);
+    logger.error("[ADMIN-TREES] Erreur POST /:treeId/access:", error);
     res.status(500).json({ error: "Erreur lors de la cr\xE9ation de l'acc\xE8s" });
   }
 });
@@ -8301,7 +8559,7 @@ router5.put("/:treeId/access/:organizationId", async (req2, res) => {
     });
     res.json(access);
   } catch (error) {
-    console.error("[ADMIN-TREES] Erreur PUT access:", error);
+    logger.error("[ADMIN-TREES] Erreur PUT access:", error);
     res.status(500).json({ error: "Erreur lors de la mise \xE0 jour de l'acc\xE8s" });
   }
 });
@@ -8319,7 +8577,7 @@ router5.delete("/:treeId/access/:organizationId", async (req2, res) => {
     });
     res.json({ success: true });
   } catch (error) {
-    console.error("[ADMIN-TREES] Erreur DELETE access:", error);
+    logger.error("[ADMIN-TREES] Erreur DELETE access:", error);
     res.status(500).json({ error: "Erreur lors de la suppression de l'acc\xE8s" });
   }
 });
@@ -8363,9 +8621,9 @@ router5.post("/:treeId/duplicate", async (req2, res) => {
       }
     });
     const idMap = /* @__PURE__ */ new Map();
-    const crypto15 = await import("crypto");
+    const crypto14 = await import("crypto");
     for (const node of sourceTree.TreeBranchLeafNode) {
-      const newId = crypto15.randomUUID();
+      const newId = crypto14.randomUUID();
       idMap.set(node.id, newId);
     }
     for (const node of sourceTree.TreeBranchLeafNode) {
@@ -8394,7 +8652,7 @@ router5.post("/:treeId/duplicate", async (req2, res) => {
       nodesCount: sourceTree.TreeBranchLeafNode.length
     });
   } catch (error) {
-    console.error("[ADMIN-TREES] Erreur POST duplicate:", error);
+    logger.error("[ADMIN-TREES] Erreur POST duplicate:", error);
     res.status(500).json({ error: "Erreur lors de la duplication de l'arbre" });
   }
 });
@@ -8411,7 +8669,7 @@ router5.get("/organizations/list", async (req2, res) => {
     });
     res.json(organizations);
   } catch (error) {
-    console.error("[ADMIN-TREES] Erreur GET organizations:", error);
+    logger.error("[ADMIN-TREES] Erreur GET organizations:", error);
     res.status(500).json({ error: "Erreur" });
   }
 });
@@ -8427,7 +8685,7 @@ router5.get("/roles/list", async (req2, res) => {
     });
     res.json(roles);
   } catch (error) {
-    console.error("[ADMIN-TREES] Erreur GET roles:", error);
+    logger.error("[ADMIN-TREES] Erreur GET roles:", error);
     res.status(500).json({ error: "Erreur" });
   }
 });
@@ -8481,7 +8739,7 @@ router6.get("/", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("[ICONS-API] Erreur lors de la r\xE9cup\xE9ration des ic\xF4nes:", error);
+    logger.error("[ICONS-API] Erreur lors de la r\xE9cup\xE9ration des ic\xF4nes:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de la r\xE9cup\xE9ration des ic\xF4nes",
@@ -8505,7 +8763,7 @@ router6.get("/categories", async (req2, res) => {
       }))
     });
   } catch (error) {
-    console.error("[ICONS-API] Erreur lors de la r\xE9cup\xE9ration des cat\xE9gories:", error);
+    logger.error("[ICONS-API] Erreur lors de la r\xE9cup\xE9ration des cat\xE9gories:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de la r\xE9cup\xE9ration des cat\xE9gories",
@@ -8538,7 +8796,7 @@ router6.post("/", requireRole2(["super_admin"]), async (req2, res) => {
       message: `Ic\xF4ne "${name}" cr\xE9\xE9e avec succ\xE8s`
     });
   } catch (error) {
-    console.error("[ICONS-API] Erreur lors de la cr\xE9ation de l'ic\xF4ne:", error);
+    logger.error("[ICONS-API] Erreur lors de la cr\xE9ation de l'ic\xF4ne:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de la cr\xE9ation de l'ic\xF4ne",
@@ -8563,7 +8821,7 @@ router6.put("/:id", requireRole2(["super_admin"]), async (req2, res) => {
       message: `Ic\xF4ne mise \xE0 jour avec succ\xE8s`
     });
   } catch (error) {
-    console.error("[ICONS-API] Erreur lors de la modification de l'ic\xF4ne:", error);
+    logger.error("[ICONS-API] Erreur lors de la modification de l'ic\xF4ne:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de la modification de l'ic\xF4ne",
@@ -8584,7 +8842,7 @@ router6.delete("/:id", requireRole2(["super_admin"]), async (req2, res) => {
       message: `Ic\xF4ne d\xE9sactiv\xE9e avec succ\xE8s`
     });
   } catch (error) {
-    console.error("[ICONS-API] Erreur lors de la d\xE9sactivation de l'ic\xF4ne:", error);
+    logger.error("[ICONS-API] Erreur lors de la d\xE9sactivation de l'ic\xF4ne:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de la d\xE9sactivation de l'ic\xF4ne",
@@ -8596,27 +8854,20 @@ var icons_default = router6;
 
 // src/routes/company.ts
 var import_express8 = require("express");
+init_database();
 var router7 = (0, import_express8.Router)();
 router7.use(authMiddleware);
 router7.get("/", async (req2, res) => {
   try {
     const { organizationId } = req2.user;
-    const companyInfo = {
-      id: organizationId,
-      name: "2Thier CRM",
-      address: "Rue de Floreffe 37, 5150 Frani\xE8re",
-      phone: "0470/29.50.77",
-      email: "info@2thier.be",
-      website: "https://2thier.be",
-      vatNumber: "BE0123456789",
-      registrationNumber: "123456789"
-    };
-    res.json({
-      success: true,
-      data: companyInfo
+    const org = await db.organization.findUnique({
+      where: { id: organizationId },
+      select: { id: true, name: true, address: true, phone: true, email: true, website: true, vatNumber: true, legalName: true, logoUrl: true }
     });
+    if (!org) return res.status(404).json({ success: false, message: "Organisation introuvable" });
+    res.json({ success: true, data: org });
   } catch (error) {
-    console.error("\u274C [CompanyAPI] Erreur r\xE9cup\xE9ration entreprise:", error);
+    logger.error("\u274C [CompanyAPI] Erreur r\xE9cup\xE9ration entreprise:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la r\xE9cup\xE9ration des informations de l'entreprise"
@@ -8626,14 +8877,28 @@ router7.get("/", async (req2, res) => {
 router7.put("/", requireRole(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { organizationId } = req2.user;
-    const updateData = req2.body;
+    const { name, address, phone, email, website, vatNumber, legalName } = req2.body;
+    const updated = await db.organization.update({
+      where: { id: organizationId },
+      data: {
+        ...name !== void 0 && { name },
+        ...address !== void 0 && { address },
+        ...phone !== void 0 && { phone },
+        ...email !== void 0 && { email },
+        ...website !== void 0 && { website },
+        ...vatNumber !== void 0 && { vatNumber },
+        ...legalName !== void 0 && { legalName },
+        updatedAt: /* @__PURE__ */ new Date()
+      },
+      select: { id: true, name: true, address: true, phone: true, email: true, website: true, vatNumber: true, legalName: true }
+    });
     res.json({
       success: true,
       message: "Informations de l'entreprise mises \xE0 jour avec succ\xE8s",
-      data: updateData
+      data: updated
     });
   } catch (error) {
-    console.error("\u274C [CompanyAPI] Erreur mise \xE0 jour entreprise:", error);
+    logger.error("\u274C [CompanyAPI] Erreur mise \xE0 jour entreprise:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la mise \xE0 jour des informations de l'entreprise"
@@ -8643,6 +8908,11 @@ router7.put("/", requireRole(["admin", "super_admin"]), async (req2, res) => {
 router7.get("/settings", requireRole(["admin", "super_admin"]), async (req2, res) => {
   try {
     const { organizationId } = req2.user;
+    const org = await db.organization.findUnique({
+      where: { id: organizationId },
+      select: { id: true, name: true }
+    });
+    if (!org) return res.status(404).json({ success: false, message: "Organisation introuvable" });
     const settings = {
       organizationId,
       currency: "EUR",
@@ -8652,12 +8922,9 @@ router7.get("/settings", requireRole(["admin", "super_admin"]), async (req2, res
       invoicePrefix: "INV-",
       quotePrefix: "DEV-"
     };
-    res.json({
-      success: true,
-      data: settings
-    });
+    res.json({ success: true, data: settings });
   } catch (error) {
-    console.error("\u274C [CompanyAPI] Erreur param\xE8tres entreprise:", error);
+    logger.error("\u274C [CompanyAPI] Erreur param\xE8tres entreprise:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la r\xE9cup\xE9ration des param\xE8tres"
@@ -8996,74 +9263,6 @@ var import_uuid = require("uuid");
 var import_express9 = require("express");
 var import_web_push = __toESM(require("web-push"), 1);
 init_database();
-
-// src/middleware/auth.ts
-var import_jsonwebtoken5 = __toESM(require("jsonwebtoken"), 1);
-
-// src/prisma.ts
-init_database();
-var prisma_default = db;
-
-// src/middleware/auth.ts
-var JWT_SECRET3 = JWT_SECRET2;
-var authenticateToken = (req2, res, next) => {
-  if (req2.headers["x-test-bypass-auth"] === "1") {
-    req2.user = req2.user || {
-      id: "test-user",
-      email: "test@example.com",
-      organizationId: "org-test",
-      isSuperAdmin: true,
-      role: "super_admin"
-    };
-    return next();
-  }
-  const authHeader = req2.headers["authorization"];
-  let token = authHeader && authHeader.split(" ")[1];
-  if (!token && req2.cookies && req2.cookies.token) {
-    token = req2.cookies.token;
-  }
-  if (!token) {
-    return res.status(401).json({ error: "Token d'acc\xE8s requis" });
-  }
-  try {
-    const decoded = import_jsonwebtoken5.default.verify(token, JWT_SECRET3);
-    if (!decoded.role && decoded.isSuperAdmin) {
-      decoded.role = "super_admin";
-    }
-    req2.user = { ...decoded, id: decoded.userId };
-    next();
-  } catch (error) {
-    console.error("[AUTH] \u274C Token invalide:", error.message);
-    return res.status(401).json({ error: "Token invalide ou expir\xE9" });
-  }
-};
-var fetchFullUser = async (req2, res, next) => {
-  if (!req2.user || !req2.user.userId) {
-    return res.status(401).json({ message: "Utilisateur non authentifi\xE9." });
-  }
-  try {
-    const userFromDb = await prisma_default.user.findUnique({
-      where: { id: req2.user.userId }
-    });
-    if (!userFromDb) {
-      return res.status(401).json({ message: "Utilisateur non valide." });
-    }
-    req2.user = { ...userFromDb, ...req2.user };
-    next();
-  } catch (error) {
-    console.error("[MIDDLEWARE] fetchFullUser: Erreur", error);
-    res.status(500).json({ message: "Erreur interne du serveur." });
-  }
-};
-var isAdmin = (req2, res, next) => {
-  const role = req2.user?.role?.toLowerCase().replace(/_/g, "");
-  if (role === "admin" || role === "superadmin") {
-    return next();
-  }
-  return res.status(403).json({ error: "Acc\xE8s non autoris\xE9. R\xF4le Administrateur requis." });
-};
-
-// src/routes/push.ts
 var router8 = (0, import_express9.Router)();
 var VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "";
 var VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
@@ -9071,7 +9270,7 @@ var VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:info@2thier.be";
 if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
   import_web_push.default.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 } else {
-  console.warn("[PUSH] \u26A0\uFE0F VAPID keys manquantes \u2014 notifications push d\xE9sactiv\xE9es");
+  logger.warn("[PUSH] \u26A0\uFE0F VAPID keys manquantes \u2014 notifications push d\xE9sactiv\xE9es");
 }
 router8.get("/vapid-key", (_req, res) => {
   res.json({ publicKey: VAPID_PUBLIC_KEY });
@@ -9106,7 +9305,7 @@ router8.post("/subscribe", authenticateToken, async (req2, res) => {
     });
     res.json({ success: true });
   } catch (err) {
-    console.error("[PUSH] Error saving subscription:", err);
+    logger.error("[PUSH] Error saving subscription:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -9127,7 +9326,7 @@ router8.delete("/unsubscribe", authenticateToken, async (req2, res) => {
     });
     res.json({ success: true });
   } catch (err) {
-    console.error("[PUSH] Error removing subscription:", err);
+    logger.error("[PUSH] Error removing subscription:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -9155,7 +9354,7 @@ async function sendPushToUser(userId, payload) {
         }).catch(() => {
         });
       }
-      console.warn(`[PUSH] Failed to send to ${sub.endpoint.slice(0, 50)}...`, err.statusCode || err.message);
+      logger.warn(`[PUSH] Failed to send to ${sub.endpoint.slice(0, 50)}...`, err.statusCode || err.message);
     }
   }
   return sent;
@@ -9680,7 +9879,7 @@ router9.post("/", authMiddleware, requireRole2(["admin", "super_admin"]), async 
         organizationId
       });
     } catch (emailError) {
-      console.error("\xC9chec de l'envoi de l'e-mail d'invitation:", emailError);
+      logger.error("\xC9chec de l'envoi de l'e-mail d'invitation:", emailError);
     }
     notify.invitationCreated(
       organizationId,
@@ -9713,14 +9912,14 @@ router9.post("/", authMiddleware, requireRole2(["admin", "super_admin"]), async 
     if (error instanceof import_client3.Prisma.PrismaClientKnownRequestError) {
       if (error.code === "P2002") {
         const target = error.meta?.target ?? "champs inconnus";
-        console.error(`Erreur de contrainte unique (P2002) sur ${target}:`, error);
+        logger.error(`Erreur de contrainte unique (P2002) sur ${target}:`, error);
         res.status(409).json({
           message: `Conflit de donn\xE9es. Une entr\xE9e avec ces informations existe d\xE9j\xE0.`
         });
         return;
       }
     }
-    console.error("Erreur lors de la cr\xE9ation de l'invitation:", error);
+    logger.error("Erreur lors de la cr\xE9ation de l'invitation:", error);
     res.status(500).json({ message: "Erreur interne du serveur." });
   }
 });
@@ -9798,7 +9997,7 @@ router9.post("/invite-user", authMiddleware, requireRole2(["admin", "super_admin
         organizationId
       });
     } catch (emailError) {
-      console.error("\xC9chec envoi e-mail invitation:", emailError);
+      logger.error("\xC9chec envoi e-mail invitation:", emailError);
     }
     notify.invitationCreated(organizationId, { email: targetUser.email, roleName: newInvitation.Role?.label || newInvitation.Role?.name || "" }, inviterId);
     notify.invitationReceivedByExistingUser(
@@ -9816,7 +10015,7 @@ router9.post("/invite-user", authMiddleware, requireRole2(["admin", "super_admin
       res.status(400).json({ message: "Donn\xE9es invalides.", details: error.errors });
       return;
     }
-    console.error("Erreur lors de l'invitation par userId:", error);
+    logger.error("Erreur lors de l'invitation par userId:", error);
     res.status(500).json({ message: "Erreur interne du serveur." });
   }
 });
@@ -9844,7 +10043,7 @@ router9.post("/:id/resend", authMiddleware, requireRole2(["admin", "super_admin"
     });
     res.status(200).json({ success: true, message: "L'invitation a \xE9t\xE9 renvoy\xE9e avec succ\xE8s.", data: { token: updatedInvitation.token } });
   } catch (error) {
-    console.error("Erreur lors du renvoi de l'invitation:", error);
+    logger.error("Erreur lors du renvoi de l'invitation:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur." });
   }
 });
@@ -9871,7 +10070,7 @@ router9.patch("/:id/status", authMiddleware, requireRole2(["admin", "super_admin
     });
     res.json({ success: true, data: updatedInvitation });
   } catch (error) {
-    console.error(`Erreur lors de la mise \xE0 jour du statut de l'invitation ${id}:`, error);
+    logger.error(`Erreur lors de la mise \xE0 jour du statut de l'invitation ${id}:`, error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur." });
   }
 });
@@ -9912,7 +10111,7 @@ router9.get("/verify", async (req2, res) => {
       res.status(400).json({ message: "Jeton invalide fourni.", details: error.errors });
       return;
     }
-    console.error("Erreur lors de la v\xE9rification du jeton d'invitation:", error);
+    logger.error("Erreur lors de la v\xE9rification du jeton d'invitation:", error);
     res.status(500).json({ message: "Erreur interne du serveur." });
   }
 });
@@ -10007,10 +10206,10 @@ router9.post("/accept", async (req2, res) => {
             const postal = getPostalService();
             await postal.createMailbox(zhiiveEmail, `${user.firstName} ${user.lastName}`);
           } catch (postalErr) {
-            console.error(`\u26A0\uFE0F [Invitation] Erreur provisionnement Postal (non bloquant):`, postalErr);
+            logger.error(`\u26A0\uFE0F [Invitation] Erreur provisionnement Postal (non bloquant):`, postalErr);
           }
         } catch (emailAccErr) {
-          console.error(`\u26A0\uFE0F [Invitation] Erreur cr\xE9ation EmailAccount (existant):`, emailAccErr);
+          logger.error(`\u26A0\uFE0F [Invitation] Erreur cr\xE9ation EmailAccount (existant):`, emailAccErr);
         }
       }
       if (invitation.createWorkspaceAccount) {
@@ -10024,10 +10223,10 @@ router9.post("/accept", async (req2, res) => {
           );
           if (workspaceResult.success) {
           } else {
-            console.error(`\u26A0\uFE0F [Invitation] \xC9chec cr\xE9ation workspace pour ${user.email}:`, workspaceResult.error);
+            logger.error(`\u26A0\uFE0F [Invitation] \xC9chec cr\xE9ation workspace pour ${user.email}:`, workspaceResult.error);
           }
         } catch (wsError) {
-          console.error(`\u26A0\uFE0F [Invitation] Erreur cr\xE9ation workspace:`, wsError);
+          logger.error(`\u26A0\uFE0F [Invitation] Erreur cr\xE9ation workspace:`, wsError);
         }
       }
       notify.invitationAccepted(
@@ -10105,7 +10304,7 @@ router9.post("/accept", async (req2, res) => {
           }
         });
       } catch (emailAccErr) {
-        console.error(`\u26A0\uFE0F [Invitation] Erreur cr\xE9ation EmailAccount:`, emailAccErr);
+        logger.error(`\u26A0\uFE0F [Invitation] Erreur cr\xE9ation EmailAccount:`, emailAccErr);
       }
       return { user: createdUser, zhiiveEmail };
     });
@@ -10114,7 +10313,7 @@ router9.post("/accept", async (req2, res) => {
         const postal = getPostalService();
         await postal.createMailbox(newUser.zhiiveEmail, `${firstName} ${lastName}`);
       } catch (postalErr) {
-        console.error(`\u26A0\uFE0F [Invitation] Erreur provisionnement Postal (non bloquant):`, postalErr);
+        logger.error(`\u26A0\uFE0F [Invitation] Erreur provisionnement Postal (non bloquant):`, postalErr);
       }
     }
     let workspaceEmail = null;
@@ -10130,10 +10329,10 @@ router9.post("/accept", async (req2, res) => {
         if (workspaceResult.success) {
           workspaceEmail = workspaceResult.email || null;
         } else {
-          console.error(`\u26A0\uFE0F [Invitation] \xC9chec cr\xE9ation workspace:`, workspaceResult.error);
+          logger.error(`\u26A0\uFE0F [Invitation] \xC9chec cr\xE9ation workspace:`, workspaceResult.error);
         }
       } catch (wsError) {
-        console.error(`\u26A0\uFE0F [Invitation] Erreur cr\xE9ation workspace:`, wsError);
+        logger.error(`\u26A0\uFE0F [Invitation] Erreur cr\xE9ation workspace:`, wsError);
       }
     }
     notify.invitationAccepted(
@@ -10153,7 +10352,7 @@ router9.post("/accept", async (req2, res) => {
       res.status(400).json({ message: "Donn\xE9es d'inscription invalides.", details: error.errors });
       return;
     }
-    console.error("Erreur lors de l'acceptation de l'invitation:", error);
+    logger.error("Erreur lors de l'acceptation de l'invitation:", error);
     res.status(500).json({ message: "Erreur interne du serveur." });
   }
 });
@@ -10178,7 +10377,7 @@ router9.delete("/:id", authMiddleware, requireRole2(["admin", "super_admin"]), a
     });
     res.status(200).json({ success: true, message: "L'invitation a \xE9t\xE9 annul\xE9e avec succ\xE8s." });
   } catch (error) {
-    console.error("Erreur lors de l'annulation de l'invitation:", error);
+    logger.error("Erreur lors de l'annulation de l'invitation:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur." });
   }
 });
@@ -10243,7 +10442,7 @@ router9.post("/:id/force-accept", requireRole2(["super_admin"]), async (req2, re
     );
     res.status(201).json({ success: true, message: "L'utilisateur a \xE9t\xE9 cr\xE9\xE9 et l'invitation accept\xE9e.", data: newUser });
   } catch (error) {
-    console.error("Erreur lors de l'acceptation forc\xE9e de l'invitation:", error);
+    logger.error("Erreur lors de l'acceptation forc\xE9e de l'invitation:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur." });
   }
 });
@@ -10278,7 +10477,7 @@ router9.get("/", authMiddleware, requireRole2(["admin", "super_admin"]), async (
     }));
     res.json({ success: true, data: invitations });
   } catch (error) {
-    console.error("Erreur lors de la r\xE9cup\xE9ration des invitations:", error);
+    logger.error("Erreur lors de la r\xE9cup\xE9ration des invitations:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration des invitations." });
   }
 });
@@ -10369,6 +10568,9 @@ function hasGoogleWorkspaceEnabled(moduleStatuses = [], googleWorkspaceConfig) {
   return hasActiveModules || hasActiveConfig;
 }
 var extractGoogleWorkspaceDomain = (organization) => {
+  if (organization.GoogleWorkspaceConfig?.domain) {
+    return organization.GoogleWorkspaceConfig.domain;
+  }
   if (organization.features?.includes("google_workspace")) {
     return `${organization.name.toLowerCase().replace(/\s+/g, "")}.com`;
   }
@@ -10379,7 +10581,7 @@ var cleanupOrganizationData = async (tx, organizationId) => {
     try {
       await action();
     } catch (error) {
-      console.error(`[ORGANIZATIONS] \u274C \xC9chec suppression ${label} pour ${organizationId}`, error);
+      logger.error(`[ORGANIZATIONS] \u274C \xC9chec suppression ${label} pour ${organizationId}`, error);
       throw error;
     }
   };
@@ -10585,7 +10787,7 @@ router10.get("/public", async (_req, res) => {
       data: publicOrgs
     });
   } catch (error) {
-    console.error("[Organizations] Erreur /public:", error);
+    logger.error("[Organizations] Erreur /public:", error);
     res.status(500).json({ success: false, error: "Erreur serveur" });
   }
 });
@@ -10658,7 +10860,7 @@ router10.get("/public/:id", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("[Organizations] Erreur /public/:id:", error);
+    logger.error("[Organizations] Erreur /public/:id:", error);
     res.status(500).json({ success: false, error: "Erreur serveur" });
   }
 });
@@ -10756,7 +10958,7 @@ router10.get("/active", async (req2, res) => {
       data: enrichedOrganizations
     });
   } catch (error) {
-    console.error("[ORGANIZATIONS] Erreur GET /active:", error);
+    logger.error("[ORGANIZATIONS] Erreur GET /active:", error);
     res.status(500).json({
       success: false,
       message: "Erreur serveur lors de la r\xE9cup\xE9ration des organisations actives"
@@ -10854,7 +11056,7 @@ router10.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
       data: enrichedOrganizations
     });
   } catch (error) {
-    console.error("[ORGANIZATIONS] Erreur GET:", error);
+    logger.error("[ORGANIZATIONS] Erreur GET:", error);
     res.status(500).json({
       success: false,
       message: "Erreur serveur lors de la r\xE9cup\xE9ration des organisations"
@@ -10921,7 +11123,7 @@ router10.post("/", organizationsCreateRateLimit, requireRole2(["super_admin"]), 
       data: newOrganization
     });
   } catch (error) {
-    console.error("[ORGANIZATIONS] Erreur POST:", error);
+    logger.error("[ORGANIZATIONS] Erreur POST:", error);
     if (error instanceof import_zod2.z.ZodError) {
       return res.status(400).json(handleZodError(error));
     }
@@ -11022,7 +11224,7 @@ router10.get("/:id", requireRole2(["admin", "super_admin"]), async (req2, res) =
       data: enrichedOrganization
     });
   } catch (error) {
-    console.error("[ORGANIZATIONS] Erreur GET /:id:", error);
+    logger.error("[ORGANIZATIONS] Erreur GET /:id:", error);
     res.status(500).json({
       success: false,
       message: "Erreur serveur lors de la r\xE9cup\xE9ration de l'organisation"
@@ -11035,7 +11237,7 @@ router10.put("/:id", requireRole2(["super_admin"]), async (req2, res) => {
     const sanitizedId = validateAndSanitizeId(id, "ID organisation");
     const validation = organizationUpdateSchema.safeParse(req2.body);
     if (!validation.success) {
-      console.error("\u274C [ORGANIZATIONS] Erreur validation Zod:", validation.error.errors);
+      logger.error("\u274C [ORGANIZATIONS] Erreur validation Zod:", validation.error.errors);
       return res.status(400).json(handleZodError(validation.error));
     }
     const data = validation.data;
@@ -11147,7 +11349,7 @@ router10.put("/:id", requireRole2(["super_admin"]), async (req2, res) => {
       data: updatedOrganization
     });
   } catch (error) {
-    console.error("[ORGANIZATIONS] Erreur PUT:", error);
+    logger.error("[ORGANIZATIONS] Erreur PUT:", error);
     if (error instanceof import_zod2.z.ZodError) {
       return res.status(400).json(handleZodError(error));
     }
@@ -11194,7 +11396,7 @@ router10.delete("/:id", organizationsDeleteRateLimit, requireRole2(["super_admin
       message: "Organisation supprim\xE9e avec succ\xE8s"
     });
   } catch (error) {
-    console.error("[ORGANIZATIONS] Erreur DELETE:", error);
+    logger.error("[ORGANIZATIONS] Erreur DELETE:", error);
     if (error instanceof import_client.Prisma.PrismaClientKnownRequestError) {
       if (error.code === "P2003") {
         return res.status(409).json({
@@ -11256,7 +11458,7 @@ router10.get("/:id/google-modules", requireRole2(["admin", "super_admin"]), asyn
       data: defaultModules
     });
   } catch (error) {
-    console.error("[ORGANIZATIONS] Erreur GET google-modules:", error);
+    logger.error("[ORGANIZATIONS] Erreur GET google-modules:", error);
     res.status(500).json({
       success: false,
       message: "Erreur serveur lors de la r\xE9cup\xE9ration des modules Google"
@@ -11318,7 +11520,7 @@ router10.post("/:id/google-modules/:module/toggle", requireRole2(["super_admin"]
       message: `Module ${sanitizedModule} ${enabled ? "activ\xE9" : "d\xE9sactiv\xE9"} avec succ\xE8s`
     });
   } catch (error) {
-    console.error("[ORGANIZATIONS] Erreur POST google-modules toggle:", error);
+    logger.error("[ORGANIZATIONS] Erreur POST google-modules toggle:", error);
     res.status(500).json({
       success: false,
       message: "Erreur serveur lors de la mise \xE0 jour du module Google"
@@ -11377,7 +11579,7 @@ router10.get("/:id/google-workspace/domain-status", requireRole2(["admin", "supe
       }
     });
   } catch (error) {
-    console.error("[ORGANIZATIONS] Erreur GET domain-status:", error);
+    logger.error("[ORGANIZATIONS] Erreur GET domain-status:", error);
     res.status(500).json({
       success: false,
       message: "Erreur serveur lors de la v\xE9rification du domaine"
@@ -11491,7 +11693,7 @@ router10.post("/create-my-org", createMyOrgRateLimit, async (req2, res) => {
       organization: { id: result.id, name: result.name }
     });
   } catch (error) {
-    console.error("[ORGANIZATIONS] Erreur create-my-org:", error);
+    logger.error("[ORGANIZATIONS] Erreur create-my-org:", error);
     if (error instanceof import_client.Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       return res.status(409).json({
         success: false,
@@ -11543,7 +11745,7 @@ router10.post("/:id/logo", async (req2, res) => {
     });
     res.json({ success: true, data: updatedOrg });
   } catch (error) {
-    console.error("\u274C [POST /api/organizations/:id/logo] Erreur:", error);
+    logger.error("\u274C [POST /api/organizations/:id/logo] Erreur:", error);
     res.status(500).json({ success: false, message: "Erreur serveur lors de l'upload du logo" });
   }
 });
@@ -11586,7 +11788,7 @@ router10.post("/:id/cover", async (req2, res) => {
     });
     res.json({ success: true, data: updatedOrg });
   } catch (error) {
-    console.error("\u274C [POST /api/organizations/:id/cover] Erreur:", error);
+    logger.error("\u274C [POST /api/organizations/:id/cover] Erreur:", error);
     res.status(500).json({ success: false, message: "Erreur serveur lors de l'upload de la couverture" });
   }
 });
@@ -11613,7 +11815,7 @@ router10.put("/:id/cover-position", async (req2, res) => {
     });
     res.json({ success: true, positionY: posY });
   } catch (error) {
-    console.error("\u274C [PUT /api/organizations/:id/cover-position] Erreur:", error);
+    logger.error("\u274C [PUT /api/organizations/:id/cover-position] Erreur:", error);
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
@@ -11665,7 +11867,7 @@ router11.get("/status", authMiddleware, async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("[AutoGoogleAuth] Erreur status:", error);
+    logger.error("[AutoGoogleAuth] Erreur status:", error);
     return res.json({
       success: true,
       data: {
@@ -11721,7 +11923,7 @@ router11.post("/connect", authMiddleware, async (req2, res) => {
       requiresAdmin: true
     });
   } catch (error) {
-    console.error("[AutoGoogleAuth] Erreur lors de la connexion automatique:", error);
+    logger.error("[AutoGoogleAuth] Erreur lors de la connexion automatique:", error);
     res.status(500).json({ success: false, error: "Erreur interne du serveur lors de la connexion Google." });
   }
 });
@@ -11733,7 +11935,7 @@ router11.post("/trigger-logout", authMiddleware, async (req2, res) => {
   try {
     return res.status(200).json({ success: true, message: "Aucune d\xE9connexion Google effectu\xE9e (politique persistante)." });
   } catch (error) {
-    console.error("[AutoGoogleAuth] Erreur inattendue trigger-logout (no-op):", error);
+    logger.error("[AutoGoogleAuth] Erreur inattendue trigger-logout (no-op):", error);
     return res.status(200).json({ success: true, message: "Aucune d\xE9connexion Google effectu\xE9e (no-op avec erreur interne ignor\xE9e)." });
   }
 });
@@ -12068,7 +12270,7 @@ async function getGoogleWorkspaceConfig(organizationId) {
     };
     return decryptedConfig;
   } catch (error) {
-    console.error("[GOOGLE-AUTH] \u274C Erreur r\xE9cup\xE9ration config:", error);
+    logger.error("[GOOGLE-AUTH] \u274C Erreur r\xE9cup\xE9ration config:", error);
     return null;
   }
 }
@@ -12161,12 +12363,12 @@ async function activateGoogleModules(organizationId, grantedScopes) {
         } else {
         }
       } catch (moduleError) {
-        console.error("[GOOGLE-AUTH] \u274C Erreur activation module", moduleName, ":", moduleError);
+        logger.error("[GOOGLE-AUTH] \u274C Erreur activation module", moduleName, ":", moduleError);
       }
     }
     return modulesToActivate;
   } catch (error) {
-    console.error("[GOOGLE-AUTH] \u274C Erreur activation modules:", error);
+    logger.error("[GOOGLE-AUTH] \u274C Erreur activation modules:", error);
     return [];
   }
 }
@@ -12223,7 +12425,7 @@ router12.get("/url", authMiddleware, async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("[GOOGLE-AUTH] Erreur g\xE9n\xE9ration URL:", error);
+    logger.error("[GOOGLE-AUTH] Erreur g\xE9n\xE9ration URL:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la g\xE9n\xE9ration de l'URL d'authentification"
@@ -12249,7 +12451,7 @@ router12.get("/connect", authMiddleware, async (req2, res) => {
           }
         });
       } catch (deleteError) {
-        console.warn("[GOOGLE-AUTH] \u26A0\uFE0F Erreur suppression ancien token:", deleteError);
+        logger.warn("[GOOGLE-AUTH] \u26A0\uFE0F Erreur suppression ancien token:", deleteError);
       }
     }
     const config = await getGoogleWorkspaceConfig(organizationId);
@@ -12278,7 +12480,7 @@ router12.get("/connect", authMiddleware, async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("[GOOGLE-AUTH] Erreur g\xE9n\xE9ration URL connect:", error);
+    logger.error("[GOOGLE-AUTH] Erreur g\xE9n\xE9ration URL connect:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la g\xE9n\xE9ration de l'URL d'authentification"
@@ -12313,7 +12515,7 @@ router12.get("/callback", async (req2, res) => {
         return res.redirect(redirectUrl);
       }
     } catch {
-      console.error("[GOOGLE-AUTH] \u274C State invalide, non-JSON ou champs manquants:", state);
+      logger.error("[GOOGLE-AUTH] \u274C State invalide, non-JSON ou champs manquants:", state);
       return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_error=invalid_state`);
     }
     const config = await getGoogleWorkspaceConfig(organizationId);
@@ -12343,12 +12545,12 @@ router12.get("/callback", async (req2, res) => {
       return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_success=1&organizationId=${organizationId}&admin_email=${encodeURIComponent(config.adminEmail)}`);
     } catch (tokenError) {
       const error2 = tokenError;
-      console.error("[GOOGLE-AUTH] \u274C Erreur lors de l'\xE9change des tokens:", error2);
-      console.error("[GOOGLE-AUTH] \u{1F4CA} D\xE9tails erreur:");
-      console.error("[GOOGLE-AUTH] \u{1F194} Status:", error2.response?.status);
-      console.error("[GOOGLE-AUTH] \u{1F4DD} Message:", error2.message);
-      console.error("[GOOGLE-AUTH] \u{1F4CB} Data:", error2.response?.data);
-      console.error("[GOOGLE-AUTH] \u{1F517} URL appel\xE9e:", error2.config?.url);
+      logger.error("[GOOGLE-AUTH] \u274C Erreur lors de l'\xE9change des tokens:", error2);
+      logger.error("[GOOGLE-AUTH] \u{1F4CA} D\xE9tails erreur:");
+      logger.error("[GOOGLE-AUTH] \u{1F194} Status:", error2.response?.status);
+      logger.error("[GOOGLE-AUTH] \u{1F4DD} Message:", error2.message);
+      logger.error("[GOOGLE-AUTH] \u{1F4CB} Data:", error2.response?.data);
+      logger.error("[GOOGLE-AUTH] \u{1F517} URL appel\xE9e:", error2.config?.url);
       let errorType = "token_exchange_failed";
       if (error2.response?.status === 400) {
         if (error2.response?.data?.error === "invalid_client") {
@@ -12362,7 +12564,7 @@ router12.get("/callback", async (req2, res) => {
       return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_error=${errorType}&details=${encodeURIComponent(error2.message || "Erreur inconnue")}`);
     }
   } catch (error) {
-    console.error("[GOOGLE-AUTH] \u274C Erreur callback g\xE9n\xE9rale:", error);
+    logger.error("[GOOGLE-AUTH] \u274C Erreur callback g\xE9n\xE9rale:", error);
     return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_error=callback_error`);
   }
 });
@@ -12497,7 +12699,7 @@ router12.get("/status", authMiddleware, async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("[GOOGLE-AUTH] \u274C Erreur statut:", error);
+    logger.error("[GOOGLE-AUTH] \u274C Erreur statut:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la v\xE9rification du statut"
@@ -12527,7 +12729,7 @@ router12.post("/disconnect", authMiddleware, async (req2, res) => {
         userAgent: req2.headers["user-agent"] || null
       }, "info");
     } catch (e) {
-      console.warn("[GOOGLE-AUTH] Warn: \xE9chec logSecurityEvent (REQUESTED):", e?.message);
+      logger.warn("[GOOGLE-AUTH] Warn: \xE9chec logSecurityEvent (REQUESTED):", e?.message);
     }
     const currentUserId = req2.user.userId;
     let googleToken;
@@ -12601,14 +12803,14 @@ router12.post("/disconnect", authMiddleware, async (req2, res) => {
         userAgent: req2.headers["user-agent"] || null
       }, "info");
     } catch (e) {
-      console.warn("[GOOGLE-AUTH] Warn: \xE9chec logSecurityEvent (COMPLETED):", e?.message);
+      logger.warn("[GOOGLE-AUTH] Warn: \xE9chec logSecurityEvent (COMPLETED):", e?.message);
     }
     res.json({
       success: true,
       message: "D\xE9connect\xE9 de Google Workspace avec succ\xE8s"
     });
   } catch (error) {
-    console.error("[GOOGLE-AUTH] \u274C Erreur d\xE9connexion:", error);
+    logger.error("[GOOGLE-AUTH] \u274C Erreur d\xE9connexion:", error);
     try {
       const orgIdFromBody = req2.body && typeof req2.body.organizationId === "string" ? req2.body.organizationId : null;
       const errMsg = error instanceof Error ? error.message : String(error);
@@ -12620,7 +12822,7 @@ router12.post("/disconnect", authMiddleware, async (req2, res) => {
         error: errMsg
       }, "error");
     } catch (e) {
-      console.warn("[GOOGLE-AUTH] Warn: \xE9chec logSecurityEvent (ERROR):", e?.message);
+      logger.warn("[GOOGLE-AUTH] Warn: \xE9chec logSecurityEvent (ERROR):", e?.message);
     }
     res.status(500).json({
       success: false,
@@ -12722,7 +12924,7 @@ router12.post("/toggle-module", authMiddleware, async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("[GOOGLE-AUTH] \u274C Erreur toggle module:", error);
+    logger.error("[GOOGLE-AUTH] \u274C Erreur toggle module:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la modification du module"
@@ -12833,7 +13035,7 @@ router13.get("/:id/google-workspace/config", requireRole2(["admin", "super_admin
       data: safeConfig
     });
   } catch (error) {
-    console.error("[GOOGLE-WORKSPACE] Erreur GET config:", error);
+    logger.error("[GOOGLE-WORKSPACE] Erreur GET config:", error);
     res.status(500).json({
       success: false,
       message: "Erreur serveur lors de la r\xE9cup\xE9ration de la configuration"
@@ -12912,9 +13114,9 @@ router13.post("/:id/google-workspace/config", requireRole2(["super_admin"]), asy
       }
     });
   } catch (error) {
-    console.error("[GOOGLE-WORKSPACE] Erreur POST config:", error);
-    console.error("[GOOGLE-WORKSPACE] D\xE9tails erreur:", error instanceof Error ? error.message : String(error));
-    console.error("[GOOGLE-WORKSPACE] Stack:", error instanceof Error ? error.stack : "N/A");
+    logger.error("[GOOGLE-WORKSPACE] Erreur POST config:", error);
+    logger.error("[GOOGLE-WORKSPACE] D\xE9tails erreur:", error instanceof Error ? error.message : String(error));
+    logger.error("[GOOGLE-WORKSPACE] Stack:", error instanceof Error ? error.stack : "N/A");
     res.status(500).json({
       success: false,
       message: "Erreur serveur lors de la sauvegarde de la configuration",
@@ -12996,7 +13198,7 @@ router13.get("/:id/google-workspace/auth-url", requireRole2(["admin", "super_adm
       }
     });
   } catch (error) {
-    console.error("[GOOGLE-WORKSPACE] Erreur GET auth-url:", error);
+    logger.error("[GOOGLE-WORKSPACE] Erreur GET auth-url:", error);
     res.status(500).json({
       success: false,
       message: "Erreur serveur lors de la g\xE9n\xE9ration de l'URL d'authentification"
@@ -13068,7 +13270,7 @@ router13.get("/users/:userId/status", requireRole2(["admin", "super_admin"]), as
       data: status
     });
   } catch (error) {
-    console.error("[GOOGLE-WORKSPACE] Erreur GET status:", error);
+    logger.error("[GOOGLE-WORKSPACE] Erreur GET status:", error);
     res.status(500).json({
       success: false,
       message: "Erreur serveur lors de la r\xE9cup\xE9ration du statut"
@@ -13160,7 +13362,7 @@ router13.post("/users/create", requireRole2(["admin", "super_admin"]), async (re
       });
     }
   } catch (error) {
-    console.error("[GOOGLE-WORKSPACE] Erreur POST create:", error);
+    logger.error("[GOOGLE-WORKSPACE] Erreur POST create:", error);
     res.status(500).json({
       success: false,
       message: "Erreur serveur lors de la cr\xE9ation du compte"
@@ -13206,7 +13408,7 @@ router13.post("/users/:userId/sync", requireRole2(["admin", "super_admin"]), asy
       data: updatedGoogleUser
     });
   } catch (error) {
-    console.error("[GOOGLE-WORKSPACE] Erreur POST sync:", error);
+    logger.error("[GOOGLE-WORKSPACE] Erreur POST sync:", error);
     res.status(500).json({
       success: false,
       message: "Erreur serveur lors de la synchronisation"
@@ -13257,7 +13459,7 @@ router13.post("/users/:userId/deactivate", requireRole2(["admin", "super_admin"]
       data: updatedGoogleUser
     });
   } catch (error) {
-    console.error("[GOOGLE-WORKSPACE] Erreur POST deactivate:", error);
+    logger.error("[GOOGLE-WORKSPACE] Erreur POST deactivate:", error);
     res.status(500).json({
       success: false,
       message: "Erreur serveur lors de la d\xE9sactivation"
@@ -13294,7 +13496,7 @@ async function ensureSectionTypeColumnExists() {
       `ALTER TABLE "Section" ADD COLUMN IF NOT EXISTS "sectionType" TEXT NOT NULL DEFAULT 'normal'`
     );
   } catch (e) {
-    console.warn("[API] ensureSectionTypeColumnExists (blocks.ts) - avertissement:", e);
+    logger.warn("[API] ensureSectionTypeColumnExists (blocks.ts) - avertissement:", e);
   }
 }
 router14.get(
@@ -13354,7 +13556,7 @@ router14.get(
       });
       res.json({ success: true, data: blocksWithAdaptedStructure });
     } catch (error) {
-      console.error("[API] Erreur lors de la r\xE9cup\xE9ration des blocks:", error);
+      logger.error("[API] Erreur lors de la r\xE9cup\xE9ration des blocks:", error);
       res.status(500).json({ success: false, message: "Erreur serveur lors de la r\xE9cup\xE9ration des formulaires" });
     }
   }
@@ -13385,7 +13587,7 @@ router14.get("/read", async (req2, res) => {
     const adapted = blocks.map(adaptBlockStructure);
     res.json({ success: true, data: adapted });
   } catch (error) {
-    console.error("[API] Erreur GET /api/blocks/read:", error);
+    logger.error("[API] Erreur GET /api/blocks/read:", error);
     res.status(500).json({ success: false, message: "Erreur serveur lors de la r\xE9cup\xE9ration des formulaires (lecture)" });
   }
 });
@@ -13419,7 +13621,7 @@ router14.get("/:id/read", async (req2, res) => {
     const adapted = adaptBlockStructure(block);
     res.json({ success: true, data: adapted });
   } catch (error) {
-    console.error("[API] Erreur GET /api/blocks/:id/read:", error);
+    logger.error("[API] Erreur GET /api/blocks/:id/read:", error);
     res.status(500).json({ success: false, message: "Erreur serveur lors de la r\xE9cup\xE9ration du formulaire" });
   }
 });
@@ -13449,7 +13651,7 @@ router14.delete("/:id", requireRole2(["admin", "super_admin"]), async (req2, res
     await db.block.delete({ where: { id } });
     res.json({ success: true });
   } catch (error) {
-    console.error(`[API] Erreur lors de la suppression du block ${id}:`, error);
+    logger.error(`[API] Erreur lors de la suppression du block ${id}:`, error);
     res.status(500).json({ success: false, message: "Erreur serveur lors de la suppression du block." });
   }
 });
@@ -13532,7 +13734,7 @@ router14.post("/:blockId/sections", requireRole2(["admin", "super_admin"]), asyn
     const adaptedBlock = adaptBlockStructure(updatedBlockWithRelations);
     res.status(201).json(adaptedBlock);
   } catch (error) {
-    console.error("Erreur lors de l'ajout de la section:", error);
+    logger.error("Erreur lors de l'ajout de la section:", error);
     res.status(500).json({ success: false, message: "Erreur serveur lors de l'ajout de la section." });
   }
 });
@@ -13573,7 +13775,7 @@ router14.delete("/:blockId/sections/:sectionId", requireRole2(["admin", "super_a
     const adaptedBlock = adaptBlockStructure(updatedBlockWithRelations);
     res.json(adaptedBlock);
   } catch (error) {
-    console.error("Erreur lors de la suppression de la section:", error);
+    logger.error("Erreur lors de la suppression de la section:", error);
     res.status(500).json({ success: false, message: "Erreur serveur lors de la suppression de la section." });
   }
 });
@@ -13636,7 +13838,7 @@ router14.put("/:blockId/sections/reorder", requireRole2(["admin", "super_admin"]
     const adaptedBlock = adaptBlockStructure(updatedBlockWithRelations);
     res.json(adaptedBlock);
   } catch (error) {
-    console.error("Erreur lors du r\xE9ordonnancement des sections:", error);
+    logger.error("Erreur lors du r\xE9ordonnancement des sections:", error);
     res.status(500).json({ success: false, message: "Erreur serveur lors du r\xE9ordonnancement des sections." });
   }
 });
@@ -14816,7 +15018,7 @@ router15.get("/", async (req2, res) => {
     });
     res.json({ success: true, data: notifications });
   } catch (error) {
-    console.error("\xC9chec de la r\xE9cup\xE9ration des notifications:", error);
+    logger.error("\xC9chec de la r\xE9cup\xE9ration des notifications:", error);
     res.status(500).json({ success: false, message: "\xC9chec de la r\xE9cup\xE9ration des notifications" });
   }
 });
@@ -14855,7 +15057,7 @@ router15.post("/", async (req2, res) => {
     });
     res.status(201).json({ success: true, data: notification });
   } catch (error) {
-    console.error("\xC9chec de la cr\xE9ation de la notification:", error);
+    logger.error("\xC9chec de la cr\xE9ation de la notification:", error);
     res.status(500).json({ success: false, message: "\xC9chec de la cr\xE9ation de la notification" });
   }
 });
@@ -14891,7 +15093,7 @@ router15.patch("/:id/read", async (req2, res) => {
     });
     res.json({ success: true, data: updatedNotification });
   } catch (error) {
-    console.error("\xC9chec de la mise \xE0 jour de la notification:", error);
+    logger.error("\xC9chec de la mise \xE0 jour de la notification:", error);
     res.status(500).json({ success: false, message: "\xC9chec de la mise \xE0 jour de la notification" });
   }
 });
@@ -14926,7 +15128,7 @@ router15.delete("/:id", async (req2, res) => {
     });
     res.json({ success: true, message: "Notification supprim\xE9e avec succ\xE8s." });
   } catch (error) {
-    console.error("\xC9chec de la suppression de la notification:", error);
+    logger.error("\xC9chec de la suppression de la notification:", error);
     res.status(500).json({ success: false, message: "\xC9chec de la suppression de la notification" });
   }
 });
@@ -14941,7 +15143,7 @@ router15.post("/check-emails", async (req2, res) => {
       const { autoMailSync } = await import("../services/AutoMailSyncService.js");
       await autoMailSync.syncForUser(user.userId);
     } catch (syncError) {
-      console.error("\u274C [API] Erreur sync manuelle:", syncError);
+      logger.error("\u274C [API] Erreur sync manuelle:", syncError);
     }
     const notificationService = UniversalNotificationService_default.getInstance();
     notificationService.emit("manual-check-requested", { userId: user.userId });
@@ -14950,7 +15152,7 @@ router15.post("/check-emails", async (req2, res) => {
       message: "V\xE9rification des nouveaux emails effectu\xE9e avec succ\xE8s."
     });
   } catch (error) {
-    console.error("\xC9chec de la v\xE9rification des emails:", error);
+    logger.error("\xC9chec de la v\xE9rification des emails:", error);
     res.status(500).json({ success: false, message: "\xC9chec de la v\xE9rification des emails" });
   }
 });
@@ -14972,7 +15174,7 @@ router15.post("/check-emails-all", async (req2, res) => {
       message: "V\xE9rification des nouveaux emails effectu\xE9e pour tous les utilisateurs."
     });
   } catch (error) {
-    console.error("\xC9chec de la v\xE9rification globale des emails:", error);
+    logger.error("\xC9chec de la v\xE9rification globale des emails:", error);
     res.status(500).json({ success: false, message: "\xC9chec de la v\xE9rification globale des emails" });
   }
 });
@@ -15001,7 +15203,7 @@ router15.patch("/mark-all-read", async (req2, res) => {
     });
     res.json({ success: true, updated: result.count });
   } catch (error) {
-    console.error("Erreur mark-all-read:", error);
+    logger.error("Erreur mark-all-read:", error);
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
@@ -15045,7 +15247,7 @@ router15.get("/stats", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("Erreur stats notifications:", error);
+    logger.error("Erreur stats notifications:", error);
     res.status(500).json({ success: false });
   }
 });
@@ -15127,7 +15329,7 @@ Sois concis et actionnable. Utilise des emojis pertinents.`;
         }
       });
     } catch (aiError) {
-      console.warn("[Notifications] Gemini non disponible, fallback sans IA:", aiError);
+      logger.warn("[Notifications] Gemini non disponible, fallback sans IA:", aiError);
       const pending = notifications.filter((n) => n.status === "PENDING");
       const urgent = notifications.filter((n) => n.priority === "urgent");
       res.json({
@@ -15148,7 +15350,7 @@ Sois concis et actionnable. Utilise des emojis pertinents.`;
       });
     }
   } catch (error) {
-    console.error("Erreur AI digest:", error);
+    logger.error("Erreur AI digest:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la g\xE9n\xE9ration du r\xE9sum\xE9 IA" });
   }
 });
@@ -15168,7 +15370,7 @@ router16.get("/status", async (req2, res) => {
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
     });
   } catch (error) {
-    console.error("\u274C [NotificationSystemAPI] Erreur statut:", error);
+    logger.error("\u274C [NotificationSystemAPI] Erreur statut:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la r\xE9cup\xE9ration du statut"
@@ -15191,7 +15393,7 @@ router16.post("/test-email", requireRole(["admin", "super_admin"]), async (req2,
       message: "Notification email de test cr\xE9\xE9e avec succ\xE8s"
     });
   } catch (error) {
-    console.error("\u274C [NotificationSystemAPI] Erreur test email:", error);
+    logger.error("\u274C [NotificationSystemAPI] Erreur test email:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la cr\xE9ation de la notification test"
@@ -15216,7 +15418,7 @@ router16.post("/test-lead", requireRole(["admin", "super_admin"]), async (req2, 
       message: "Notification lead de test cr\xE9\xE9e avec succ\xE8s"
     });
   } catch (error) {
-    console.error("\u274C [NotificationSystemAPI] Erreur test lead:", error);
+    logger.error("\u274C [NotificationSystemAPI] Erreur test lead:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la cr\xE9ation de la notification test"
@@ -15238,7 +15440,7 @@ router16.post("/test-call", requireRole(["admin", "super_admin"]), async (req2, 
       message: "Notification appel manqu\xE9 de test cr\xE9\xE9e avec succ\xE8s"
     });
   } catch (error) {
-    console.error("\u274C [NotificationSystemAPI] Erreur test appel:", error);
+    logger.error("\u274C [NotificationSystemAPI] Erreur test appel:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la cr\xE9ation de la notification test"
@@ -15256,7 +15458,7 @@ router16.get("/stats/:organizationId", requireRole(["admin", "super_admin"]), as
       organizationId
     });
   } catch (error) {
-    console.error("\u274C [NotificationSystemAPI] Erreur stats:", error);
+    logger.error("\u274C [NotificationSystemAPI] Erreur stats:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la r\xE9cup\xE9ration des statistiques"
@@ -15275,7 +15477,7 @@ router16.post("/restart", requireRole(["super_admin"]), async (req2, res) => {
       message: "Syst\xE8me de notifications red\xE9marr\xE9 avec succ\xE8s"
     });
   } catch (error) {
-    console.error("\u274C [NotificationSystemAPI] Erreur red\xE9marrage:", error);
+    logger.error("\u274C [NotificationSystemAPI] Erreur red\xE9marrage:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors du red\xE9marrage du syst\xE8me"
@@ -15307,7 +15509,7 @@ router17.get("/lead-statuses", async (req2, res) => {
     });
     res.json(statuses);
   } catch (error) {
-    console.error("[LEAD-STATUSES] Erreur lors de la r\xE9cup\xE9ration des statuts:", error);
+    logger.error("[LEAD-STATUSES] Erreur lors de la r\xE9cup\xE9ration des statuts:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9cup\xE9ration des statuts",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -15346,7 +15548,7 @@ router17.post("/lead-statuses", async (req2, res) => {
     });
     res.status(201).json(newStatus);
   } catch (error) {
-    console.error("[LEAD-STATUSES] Erreur lors de la cr\xE9ation du statut:", error);
+    logger.error("[LEAD-STATUSES] Erreur lors de la cr\xE9ation du statut:", error);
     res.status(500).json({
       error: "Erreur lors de la cr\xE9ation du statut",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -15370,7 +15572,7 @@ router17.put("/lead-statuses/reorder", async (req2, res) => {
     }
     for (const status of statuses) {
       if (!status.id || status.order === void 0) {
-        console.error("[LEAD-STATUSES] \u274C Statut invalide:", status);
+        logger.error("[LEAD-STATUSES] \u274C Statut invalide:", status);
         return res.status(400).json({
           error: `Statut invalide: ${JSON.stringify(status)}`
         });
@@ -15389,7 +15591,7 @@ router17.put("/lead-statuses/reorder", async (req2, res) => {
       message: "Ordre mis \xE0 jour avec succ\xE8s"
     });
   } catch (error) {
-    console.error("[LEAD-STATUSES] Erreur lors de la r\xE9organisation:", error);
+    logger.error("[LEAD-STATUSES] Erreur lors de la r\xE9organisation:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9organisation"
     });
@@ -15420,10 +15622,10 @@ router17.get("/call-statuses", async (req2, res) => {
     });
     if (callStatuses.length === 0) {
     }
-    console.log(`[CALL-STATUSES] ${callStatuses.length} statuts trouv\xE9s`);
+    logger.info(`[CALL-STATUSES] ${callStatuses.length} statuts trouv\xE9s`);
     res.json(callStatuses);
   } catch (error) {
-    console.error("[CALL-STATUSES] Erreur lors de la r\xE9cup\xE9ration des statuts:", error);
+    logger.error("[CALL-STATUSES] Erreur lors de la r\xE9cup\xE9ration des statuts:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9cup\xE9ration des statuts d'appel",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -15465,7 +15667,7 @@ router17.post("/call-statuses", async (req2, res) => {
     }
     res.json(savedStatuses);
   } catch (error) {
-    console.error("[CALL-STATUSES] Erreur lors de la sauvegarde des statuts:", error);
+    logger.error("[CALL-STATUSES] Erreur lors de la sauvegarde des statuts:", error);
     res.status(500).json({
       error: "Erreur lors de la sauvegarde des statuts d'appel",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -15508,7 +15710,7 @@ router17.post("/call-statuses/reorder", async (req2, res) => {
     });
     res.json(updatedStatuses);
   } catch (error) {
-    console.error("[CALL-STATUSES] Erreur lors de la r\xE9organisation:", error);
+    logger.error("[CALL-STATUSES] Erreur lors de la r\xE9organisation:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9organisation des statuts d'appel",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -15542,7 +15744,7 @@ router17.put("/call-statuses/reorder", async (req2, res) => {
       message: "Ordre mis \xE0 jour avec succ\xE8s"
     });
   } catch (error) {
-    console.error("[CALL-STATUSES] PUT Erreur lors de la r\xE9organisation:", error);
+    logger.error("[CALL-STATUSES] PUT Erreur lors de la r\xE9organisation:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9organisation des statuts d'appel",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -15583,7 +15785,7 @@ router17.post("/call-statuses/add", async (req2, res) => {
     });
     res.status(201).json(newStatus);
   } catch (error) {
-    console.error("[CALL-STATUSES] Erreur lors de la cr\xE9ation du statut:", error);
+    logger.error("[CALL-STATUSES] Erreur lors de la cr\xE9ation du statut:", error);
     res.status(500).json({
       error: "Erreur lors de la cr\xE9ation du statut d'appel",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -15613,7 +15815,7 @@ router17.put("/call-statuses/:id", async (req2, res) => {
     });
     res.json(updatedStatus);
   } catch (error) {
-    console.error("[CALL-STATUSES] Erreur lors de la mise \xE0 jour du statut:", error);
+    logger.error("[CALL-STATUSES] Erreur lors de la mise \xE0 jour du statut:", error);
     res.status(500).json({
       error: "Erreur lors de la mise \xE0 jour du statut d'appel",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -15638,7 +15840,7 @@ router17.delete("/call-statuses/:id", async (req2, res) => {
     });
     res.status(204).send();
   } catch (error) {
-    console.error("[CALL-STATUSES] Erreur lors de la suppression du statut:", error);
+    logger.error("[CALL-STATUSES] Erreur lors de la suppression du statut:", error);
     res.status(500).json({
       error: "Erreur lors de la suppression du statut d'appel",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -15669,7 +15871,7 @@ router17.get("/call-to-lead-mappings", async (req2, res) => {
     });
     res.json(mappings);
   } catch (error) {
-    console.error("[MAPPINGS] Erreur lors de la r\xE9cup\xE9ration des mappings:", error);
+    logger.error("[MAPPINGS] Erreur lors de la r\xE9cup\xE9ration des mappings:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9cup\xE9ration des mappings",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -15706,7 +15908,7 @@ router17.post("/call-to-lead-mappings", async (req2, res) => {
     });
     res.status(201).json(mapping);
   } catch (error) {
-    console.error("[MAPPINGS] Erreur lors de la cr\xE9ation du mapping:", error);
+    logger.error("[MAPPINGS] Erreur lors de la cr\xE9ation du mapping:", error);
     res.status(500).json({
       error: "Erreur lors de la cr\xE9ation du mapping",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -15743,7 +15945,7 @@ router17.put("/call-to-lead-mappings/:id", async (req2, res) => {
     });
     res.json(mapping);
   } catch (error) {
-    console.error("[MAPPINGS] Erreur lors de la mise \xE0 jour du mapping:", error);
+    logger.error("[MAPPINGS] Erreur lors de la mise \xE0 jour du mapping:", error);
     res.status(500).json({
       error: "Erreur lors de la mise \xE0 jour du mapping",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -15768,7 +15970,7 @@ router17.delete("/call-to-lead-mappings/:id", async (req2, res) => {
     });
     res.status(204).send();
   } catch (error) {
-    console.error("[MAPPINGS] Erreur lors de la suppression du mapping:", error);
+    logger.error("[MAPPINGS] Erreur lors de la suppression du mapping:", error);
     res.status(500).json({
       error: "Erreur lors de la suppression du mapping",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -15816,7 +16018,7 @@ router17.post("/call-to-lead-mappings/bulk", async (req2, res) => {
     }
     res.json(savedMappings);
   } catch (error) {
-    console.error("[MAPPINGS] Erreur lors de la sauvegarde des mappings:", error);
+    logger.error("[MAPPINGS] Erreur lors de la sauvegarde des mappings:", error);
     res.status(500).json({
       error: "Erreur lors de la sauvegarde des mappings",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -15846,7 +16048,7 @@ router17.get("/call-lead-mappings", async (req2, res) => {
     });
     res.json(mappings);
   } catch (error) {
-    console.error("[MAPPINGS] Erreur lors de la r\xE9cup\xE9ration des mappings:", error);
+    logger.error("[MAPPINGS] Erreur lors de la r\xE9cup\xE9ration des mappings:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9cup\xE9ration des mappings",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -15876,7 +16078,7 @@ router17.get("/call-lead-mappings", async (req2, res) => {
     });
     res.json(mappings);
   } catch (error) {
-    console.error("[MAPPINGS] Erreur lors de la r\xE9cup\xE9ration des mappings:", error);
+    logger.error("[MAPPINGS] Erreur lors de la r\xE9cup\xE9ration des mappings:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9cup\xE9ration des mappings",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -15897,7 +16099,7 @@ router17.get("/email-templates", async (req2, res) => {
     });
     res.json(templates);
   } catch (error) {
-    console.error("[TEMPLATES] Erreur lors de la r\xE9cup\xE9ration des mod\xE8les:", error);
+    logger.error("[TEMPLATES] Erreur lors de la r\xE9cup\xE9ration des mod\xE8les:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9cup\xE9ration des mod\xE8les",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -15924,7 +16126,7 @@ router17.post("/email-templates", async (req2, res) => {
     });
     res.status(201).json(template);
   } catch (error) {
-    console.error("[TEMPLATES] Erreur cr\xE9ation template:", error);
+    logger.error("[TEMPLATES] Erreur cr\xE9ation template:", error);
     res.status(500).json({ error: "Erreur lors de la cr\xE9ation du mod\xE8le", message: error instanceof Error ? error.message : "Erreur inconnue" });
   }
 });
@@ -15946,7 +16148,7 @@ router17.put("/email-templates/:id", async (req2, res) => {
     });
     res.json(template);
   } catch (error) {
-    console.error("[TEMPLATES] Erreur modification template:", error);
+    logger.error("[TEMPLATES] Erreur modification template:", error);
     res.status(500).json({ error: "Erreur lors de la modification du mod\xE8le", message: error instanceof Error ? error.message : "Erreur inconnue" });
   }
 });
@@ -15958,7 +16160,7 @@ router17.delete("/email-templates/:id", async (req2, res) => {
     await db.emailTemplate.delete({ where: { id: req2.params.id } });
     res.json({ success: true });
   } catch (error) {
-    console.error("[TEMPLATES] Erreur suppression template:", error);
+    logger.error("[TEMPLATES] Erreur suppression template:", error);
     res.status(500).json({ error: "Erreur lors de la suppression du mod\xE8le", message: error instanceof Error ? error.message : "Erreur inconnue" });
   }
 });
@@ -15976,7 +16178,7 @@ router17.get("/lead-sources", async (req2, res) => {
     });
     res.json(sources);
   } catch (error) {
-    console.error("[SOURCES] Erreur lors de la r\xE9cup\xE9ration des sources:", error);
+    logger.error("[SOURCES] Erreur lors de la r\xE9cup\xE9ration des sources:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9cup\xE9ration des sources",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -16008,7 +16210,7 @@ router17.post("/call-lead-mappings", async (req2, res) => {
     });
     res.status(201).json(newMapping);
   } catch (error) {
-    console.error("[MAPPINGS] Erreur lors de la cr\xE9ation du mapping:", error);
+    logger.error("[MAPPINGS] Erreur lors de la cr\xE9ation du mapping:", error);
     res.status(500).json({
       error: "Erreur lors de la cr\xE9ation du mapping",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -16044,7 +16246,7 @@ router17.put("/call-lead-mappings/:id", async (req2, res) => {
     });
     res.json(updatedMapping);
   } catch (error) {
-    console.error("[MAPPINGS] Erreur lors de la mise \xE0 jour du mapping:", error);
+    logger.error("[MAPPINGS] Erreur lors de la mise \xE0 jour du mapping:", error);
     res.status(500).json({
       error: "Erreur lors de la mise \xE0 jour du mapping",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -16069,7 +16271,7 @@ router17.delete("/call-lead-mappings/:id", async (req2, res) => {
     });
     res.status(204).send();
   } catch (error) {
-    console.error("[MAPPINGS] Erreur lors de la suppression du mapping:", error);
+    logger.error("[MAPPINGS] Erreur lors de la suppression du mapping:", error);
     res.status(500).json({
       error: "Erreur lors de la suppression du mapping",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -16126,7 +16328,7 @@ router17.post("/call-lead-mappings", async (req2, res) => {
       return res.json(newMapping);
     }
   } catch (error) {
-    console.error("[MAPPING] Erreur lors de la cr\xE9ation du mapping:", error);
+    logger.error("[MAPPING] Erreur lors de la cr\xE9ation du mapping:", error);
     res.status(500).json({
       error: "Erreur lors de la cr\xE9ation du mapping",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -16161,7 +16363,7 @@ router17.put("/call-lead-mappings/:id", async (req2, res) => {
     });
     res.json(updatedMapping);
   } catch (error) {
-    console.error("[MAPPING] Erreur lors de la modification du mapping:", error);
+    logger.error("[MAPPING] Erreur lors de la modification du mapping:", error);
     res.status(500).json({
       error: "Erreur lors de la modification du mapping",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -16186,7 +16388,7 @@ router17.delete("/call-lead-mappings/:id", async (req2, res) => {
     });
     res.json({ success: true, message: "Mapping supprim\xE9 avec succ\xE8s" });
   } catch (error) {
-    console.error("[MAPPING] Erreur lors de la suppression du mapping:", error);
+    logger.error("[MAPPING] Erreur lors de la suppression du mapping:", error);
     res.status(500).json({
       error: "Erreur lors de la suppression du mapping",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -16333,7 +16535,7 @@ router17.post("/initialize-default-statuses", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\u274C [INIT] Erreur lors de l'initialisation des statuts:", error);
+    logger.error("\u274C [INIT] Erreur lors de l'initialisation des statuts:", error);
     res.status(500).json({
       error: "Erreur lors de l'initialisation des statuts",
       details: error instanceof Error ? error.message : "Erreur inconnue"
@@ -16351,7 +16553,7 @@ router17.get("/ai-measure", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("[AI-MEASURE] Erreur r\xE9cup\xE9ration config:", error);
+    logger.error("[AI-MEASURE] Erreur r\xE9cup\xE9ration config:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de la r\xE9cup\xE9ration de la configuration",
@@ -16366,7 +16568,7 @@ router17.post("/ai-measure", async (req2, res) => {
       error: "Configuration d\xE9sactiv\xE9e: M\xE9tr\xE9 A4 V10 est fixe (13\xD720.5cm)."
     });
   } catch (error) {
-    console.error("[AI-MEASURE] Erreur sauvegarde config:", error);
+    logger.error("[AI-MEASURE] Erreur sauvegarde config:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de la sauvegarde de la configuration",
@@ -16543,7 +16745,7 @@ router18.get("/", async (req2, res) => {
         res.json({ success: true, data: formattedLeads2 });
         return;
       } catch (error) {
-        console.error("[LEADS] Erreur lors de la r\xE9cup\xE9ration des leads pour SuperAdmin:", error);
+        logger.error("[LEADS] Erreur lors de la r\xE9cup\xE9ration des leads pour SuperAdmin:", error);
         res.status(500).json({
           success: false,
           error: "Erreur lors de la r\xE9cup\xE9ration des leads pour SuperAdmin",
@@ -16604,7 +16806,7 @@ router18.get("/", async (req2, res) => {
     });
     res.json({ success: true, data: formattedLeads });
   } catch (error) {
-    console.error("[LEADS] Erreur lors de la r\xE9cup\xE9ration des leads:", error);
+    logger.error("[LEADS] Erreur lors de la r\xE9cup\xE9ration des leads:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de la r\xE9cup\xE9ration des leads",
@@ -16730,7 +16932,7 @@ router18.post("/", async (req2, res) => {
     };
     res.status(201).json(formattedLead);
   } catch (error) {
-    console.error("[LEADS] Erreur lors de la cr\xE9ation du lead:", error);
+    logger.error("[LEADS] Erreur lors de la cr\xE9ation du lead:", error);
     res.status(500).json({
       error: "Erreur lors de la cr\xE9ation du lead",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -16812,7 +17014,7 @@ router18.get("/:id", async (req2, res) => {
     };
     res.json(formattedLead);
   } catch (error) {
-    console.error("[LEADS] Erreur lors de la r\xE9cup\xE9ration du lead:", error);
+    logger.error("[LEADS] Erreur lors de la r\xE9cup\xE9ration du lead:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9cup\xE9ration du lead",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -16901,7 +17103,7 @@ router18.post("/:id/form-pdf/regenerate", async (req2, res) => {
       leadId: updatedLead.id
     });
   } catch (error) {
-    console.error("[LEADS] Erreur r\xE9g\xE9n\xE9ration PDF formulaire:", error);
+    logger.error("[LEADS] Erreur r\xE9g\xE9n\xE9ration PDF formulaire:", error);
     return res.status(500).json({
       error: "Erreur lors de la r\xE9g\xE9n\xE9ration du PDF",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -16971,7 +17173,7 @@ router18.put("/:id", async (req2, res) => {
       };
       const normalizedStatus = statusMapping[status.toLowerCase()] || status;
       if (!validStatuses.includes(normalizedStatus)) {
-        console.warn("[LEADS] Statut invalide:", status, '- utilisation de "new" par d\xE9faut');
+        logger.warn("[LEADS] Statut invalide:", status, '- utilisation de "new" par d\xE9faut');
         updateData.status = "new";
       } else {
         updateData.status = normalizedStatus;
@@ -17044,7 +17246,7 @@ router18.put("/:id", async (req2, res) => {
     };
     res.json(formattedLead);
   } catch (error) {
-    console.error("[LEADS] Erreur lors de la modification du lead:", error);
+    logger.error("[LEADS] Erreur lors de la modification du lead:", error);
     res.status(500).json({
       error: "Erreur lors de la modification du lead",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -17071,7 +17273,7 @@ router18.delete("/:id", async (req2, res) => {
     await db.lead.delete({ where: { id } });
     return res.status(204).send();
   } catch (error) {
-    console.error("[LEADS] Erreur lors de la suppression du lead:", error);
+    logger.error("[LEADS] Erreur lors de la suppression du lead:", error);
     return res.status(500).json({
       error: "Erreur lors de la suppression du lead",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -17090,7 +17292,7 @@ router18.get("/:id/history", async (req2, res) => {
     const history = Array.isArray(dataObj.history) ? dataObj.history : [];
     return res.json({ success: true, data: history });
   } catch (e) {
-    console.error("[LEADS] GET history error", e);
+    logger.error("[LEADS] GET history error", e);
     return res.status(500).json({ success: false, error: "Erreur lors du chargement de l'historique" });
   }
 });
@@ -17116,7 +17318,7 @@ router18.post("/:id/history", async (req2, res) => {
     await db.lead.update({ where: { id: lead.id }, data: { data: dataObj } });
     return res.status(201).json({ success: true, item: historyItem });
   } catch (e) {
-    console.error("[LEADS] POST history error", e);
+    logger.error("[LEADS] POST history error", e);
     return res.status(500).json({ success: false, error: "Erreur lors de l'ajout \xE0 l'historique" });
   }
 });
@@ -17132,7 +17334,7 @@ router18.get("/:id/documents", async (req2, res) => {
     const docs = Array.isArray(dataObj.documents) ? dataObj.documents : [];
     return res.json({ success: true, data: docs });
   } catch (e) {
-    console.error("[LEADS] GET documents error", e);
+    logger.error("[LEADS] GET documents error", e);
     return res.status(500).json({ success: false, error: "Erreur lors du chargement des documents" });
   }
 });
@@ -17161,7 +17363,7 @@ router18.post("/:id/documents", async (req2, res) => {
     await db.lead.update({ where: { id: lead.id }, data: { data: dataObj } });
     return res.status(201).json({ success: true, item: newDoc });
   } catch (e) {
-    console.error("[LEADS] POST documents error", e);
+    logger.error("[LEADS] POST documents error", e);
     return res.status(500).json({ success: false, error: "Erreur lors de l'ajout du document" });
   }
 });
@@ -17471,6 +17673,8 @@ var DEFAULT_SETTINGS = {
   battlesEnabled: true,
   exploreEnabled: true,
   hiveLiveEnabled: true,
+  messengerEnabled: true,
+  callsEnabled: true,
   reactionsEnabled: true,
   commentsEnabled: true,
   sharesEnabled: true,
@@ -17483,51 +17687,79 @@ var DEFAULT_SETTINGS = {
   allowMembersPost: true,
   allowMembersStory: true,
   allowMembersReel: true,
-  allowMembersSpark: true,
+  allowMembersSpark: false,
   requirePostApproval: false,
+  // Content moderation
+  allowGifs: true,
+  allowLinks: true,
+  allowHashtags: true,
+  profanityFilterEnabled: false,
+  pinnedPostsLimit: 3,
+  autoArchiveDays: 0,
+  // Interactions
+  commentDepthLimit: 3,
+  // Follow & Friends
+  allowFollowColony: true,
+  autoFollowOnJoin: true,
+  friendRequestsEnabled: true,
+  maxFriendsPerUser: 5e3,
+  allowBlockColony: true,
+  // Privacy
+  showMemberList: true,
+  showMemberCount: true,
+  profileVisibility: "public",
+  // Notifications
+  notifyOnNewPost: true,
+  notifyOnComment: true,
+  notifyOnReaction: false,
+  notifyOnNewFollower: true,
+  notifyOnFriendRequest: true,
+  notifyOnMention: true,
+  // Analytics
+  showPostAnalytics: false,
+  showProfileViews: false,
+  // Wax
   waxEnabled: true,
   waxAlertsEnabled: true,
   waxDefaultRadiusKm: 10,
+  waxGhostModeAllowed: true,
+  // Nectar sub-apps
+  questsEnabled: true,
   eventsEnabled: true,
   capsulesEnabled: true,
-  questsEnabled: true
+  orbitEnabled: true,
+  pulseEnabled: true,
+  // Modération IA
+  moderationMode: "ai_auto",
+  aiBannedCategories: [],
+  bannedWords: [],
+  // Business auto-post
+  autoPostOnDevisSigned: true,
+  autoPostOnInvoicePaid: false,
+  autoPostOnChantierCreated: true,
+  autoPostOnChantierCompleted: true,
+  autoPostOnNewClient: false,
+  autoPostOnCalendarEvent: false,
+  autoPostOnTaskCompleted: false,
+  autoPostDefaultVisibility: "IN",
+  // RGPD
+  gdprDataExportEnabled: true,
+  gdprRetentionDays: 0,
+  // Advanced
+  customReactions: null
 };
 async function getOrgSocialSettings(orgId) {
   if (!orgId) return DEFAULT_SETTINGS;
   const settings = await db.socialSettings.findUnique({ where: { organizationId: orgId } });
   if (!settings) return DEFAULT_SETTINGS;
-  return {
-    showPublicPostsInFeed: settings.showPublicPostsInFeed ?? DEFAULT_SETTINGS.showPublicPostsInFeed,
-    showFriendsPostsInFeed: settings.showFriendsPostsInFeed ?? DEFAULT_SETTINGS.showFriendsPostsInFeed,
-    showFollowedColoniesInFeed: settings.showFollowedColoniesInFeed ?? DEFAULT_SETTINGS.showFollowedColoniesInFeed,
-    wallEnabled: settings.wallEnabled ?? DEFAULT_SETTINGS.wallEnabled,
-    storiesEnabled: settings.storiesEnabled ?? DEFAULT_SETTINGS.storiesEnabled,
-    reelsEnabled: settings.reelsEnabled ?? DEFAULT_SETTINGS.reelsEnabled,
-    sparksEnabled: settings.sparksEnabled ?? DEFAULT_SETTINGS.sparksEnabled,
-    battlesEnabled: settings.battlesEnabled ?? DEFAULT_SETTINGS.battlesEnabled,
-    exploreEnabled: settings.exploreEnabled ?? DEFAULT_SETTINGS.exploreEnabled,
-    hiveLiveEnabled: settings.hiveLiveEnabled ?? DEFAULT_SETTINGS.hiveLiveEnabled,
-    reactionsEnabled: settings.reactionsEnabled ?? DEFAULT_SETTINGS.reactionsEnabled,
-    commentsEnabled: settings.commentsEnabled ?? DEFAULT_SETTINGS.commentsEnabled,
-    sharesEnabled: settings.sharesEnabled ?? DEFAULT_SETTINGS.sharesEnabled,
-    maxPostLength: settings.maxPostLength ?? DEFAULT_SETTINGS.maxPostLength,
-    maxCommentLength: settings.maxCommentLength ?? DEFAULT_SETTINGS.maxCommentLength,
-    maxMediaPerPost: settings.maxMediaPerPost ?? DEFAULT_SETTINGS.maxMediaPerPost,
-    maxVideoSizeMB: settings.maxVideoSizeMB ?? DEFAULT_SETTINGS.maxVideoSizeMB,
-    maxImageSizeMB: settings.maxImageSizeMB ?? DEFAULT_SETTINGS.maxImageSizeMB,
-    defaultPostVisibility: settings.defaultPostVisibility ?? DEFAULT_SETTINGS.defaultPostVisibility,
-    allowMembersPost: settings.allowMembersPost ?? DEFAULT_SETTINGS.allowMembersPost,
-    allowMembersStory: settings.allowMembersStory ?? DEFAULT_SETTINGS.allowMembersStory,
-    allowMembersReel: settings.allowMembersReel ?? DEFAULT_SETTINGS.allowMembersReel,
-    allowMembersSpark: settings.allowMembersSpark ?? DEFAULT_SETTINGS.allowMembersSpark,
-    requirePostApproval: settings.requirePostApproval ?? DEFAULT_SETTINGS.requirePostApproval,
-    waxEnabled: settings.waxEnabled ?? DEFAULT_SETTINGS.waxEnabled,
-    waxAlertsEnabled: settings.waxAlertsEnabled ?? DEFAULT_SETTINGS.waxAlertsEnabled,
-    waxDefaultRadiusKm: settings.waxDefaultRadiusKm ?? DEFAULT_SETTINGS.waxDefaultRadiusKm,
-    eventsEnabled: settings.eventsEnabled ?? DEFAULT_SETTINGS.eventsEnabled,
-    capsulesEnabled: settings.capsulesEnabled ?? DEFAULT_SETTINGS.capsulesEnabled,
-    questsEnabled: settings.questsEnabled ?? DEFAULT_SETTINGS.questsEnabled
-  };
+  const result = { ...DEFAULT_SETTINGS };
+  for (const key2 of Object.keys(DEFAULT_SETTINGS)) {
+    const dbVal = settings[key2];
+    if (dbVal !== void 0 && dbVal !== null) {
+      result[key2] = dbVal;
+    }
+  }
+  return result;
 }
 
 // src/services/business-auto-post.ts
@@ -17701,7 +17933,7 @@ router19.get("/transitions", authenticateToken, async (req2, res) => {
     });
     res.json({ success: true, data: transitions });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur GET /transitions:", error);
+    logger.error("[ChantierWorkflow] Erreur GET /transitions:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -17740,7 +17972,7 @@ router19.post("/transitions", authenticateToken, isAdmin, async (req2, res) => {
     });
     res.status(201).json({ success: true, data: transition });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur POST /transitions:", error);
+    logger.error("[ChantierWorkflow] Erreur POST /transitions:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -17775,7 +18007,7 @@ router19.put("/transitions/:id", authenticateToken, isAdmin, async (req2, res) =
     });
     res.json({ success: true, data: transition });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur PUT /transitions/:id:", error);
+    logger.error("[ChantierWorkflow] Erreur PUT /transitions/:id:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -17795,7 +18027,7 @@ router19.delete("/transitions/:id", authenticateToken, isAdmin, async (req2, res
     await db.chantierStatusTransition.delete({ where: { id } });
     res.json({ success: true, message: "Transition supprim\xE9e" });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur DELETE /transitions/:id:", error);
+    logger.error("[ChantierWorkflow] Erreur DELETE /transitions/:id:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -17850,7 +18082,7 @@ router19.get("/transitions/allowed-targets", authenticateToken, async (req2, res
     }
     res.json({ success: true, data: allowedMap });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur GET /transitions/allowed-targets:", error);
+    logger.error("[ChantierWorkflow] Erreur GET /transitions/allowed-targets:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -17897,7 +18129,7 @@ router19.post("/transitions/check", authenticateToken, async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur POST /transitions/check:", error);
+    logger.error("[ChantierWorkflow] Erreur POST /transitions/check:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -17926,7 +18158,7 @@ router19.get("/invoice-templates", authenticateToken, async (req2, res) => {
     });
     res.json({ success: true, data: templates });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur GET /invoice-templates:", error);
+    logger.error("[ChantierWorkflow] Erreur GET /invoice-templates:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -17961,7 +18193,7 @@ router19.post("/invoice-templates", authenticateToken, isAdmin, async (req2, res
     });
     res.status(201).json({ success: true, data: template });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur POST /invoice-templates:", error);
+    logger.error("[ChantierWorkflow] Erreur POST /invoice-templates:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -17994,7 +18226,7 @@ router19.put("/invoice-templates/:id", authenticateToken, isAdmin, async (req2, 
     });
     res.json({ success: true, data: template });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur PUT /invoice-templates/:id:", error);
+    logger.error("[ChantierWorkflow] Erreur PUT /invoice-templates/:id:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -18014,7 +18246,7 @@ router19.delete("/invoice-templates/:id", authenticateToken, isAdmin, async (req
     await db.chantierInvoiceTemplate.delete({ where: { id } });
     res.json({ success: true, message: "Template supprim\xE9" });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur DELETE /invoice-templates/:id:", error);
+    logger.error("[ChantierWorkflow] Erreur DELETE /invoice-templates/:id:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -18037,7 +18269,7 @@ router19.get("/chantiers/:chantierId/billing-plan", authenticateToken, async (re
     });
     res.json({ success: true, data: templates, source: "templates" });
   } catch (error) {
-    console.error("[BILLING-PLAN] Erreur GET:", error);
+    logger.error("[BILLING-PLAN] Erreur GET:", error);
     res.status(500).json({ success: false, message: "Erreur interne" });
   }
 });
@@ -18091,7 +18323,7 @@ router19.put("/chantiers/:chantierId/billing-plan", authenticateToken, isAdmin, 
     });
     res.json({ success: true, data: created });
   } catch (error) {
-    console.error("[BILLING-PLAN] Erreur PUT:", error);
+    logger.error("[BILLING-PLAN] Erreur PUT:", error);
     res.status(500).json({ success: false, message: "Erreur interne" });
   }
 });
@@ -18127,7 +18359,7 @@ router19.post("/chantiers/:chantierId/billing-plan/init", authenticateToken, isA
     }
     res.json({ success: true, data: created, message: `${created.length} lignes initialis\xE9es depuis les templates` });
   } catch (error) {
-    console.error("[BILLING-PLAN] Erreur INIT:", error);
+    logger.error("[BILLING-PLAN] Erreur INIT:", error);
     res.status(500).json({ success: false, message: "Erreur interne" });
   }
 });
@@ -18200,7 +18432,7 @@ router19.post("/chantiers/:chantierId/validate", authenticateToken, isAdmin, asy
           where: { id: acompteInvoice.id },
           data: { status: "SENT", sentAt: /* @__PURE__ */ new Date(), updatedAt: /* @__PURE__ */ new Date() }
         });
-        console.log(`[VALIDATION] Facture acompte ${acompteInvoice.id} auto-envoy\xE9e pour chantier ${chantierId}`);
+        logger.info(`[VALIDATION] Facture acompte ${acompteInvoice.id} auto-envoy\xE9e pour chantier ${chantierId}`);
       }
     }
     await db.chantierHistory.create({
@@ -18215,7 +18447,7 @@ router19.post("/chantiers/:chantierId/validate", authenticateToken, isAdmin, asy
     const invoiceMsg = invoicesCreated > 0 ? ` ${invoicesCreated} facture(s) cr\xE9\xE9e(s) automatiquement.` : "";
     res.json({ success: true, data: updated, message: `Chantier valid\xE9 avec succ\xE8s.${invoiceMsg}` });
   } catch (error) {
-    console.error("[VALIDATION] Erreur:", error);
+    logger.error("[VALIDATION] Erreur:", error);
     res.status(500).json({ success: false, message: "Erreur interne" });
   }
 });
@@ -18246,7 +18478,7 @@ router19.post("/chantiers/:chantierId/unvalidate", authenticateToken, isAdmin, a
     });
     res.json({ success: true, message: "Validation retir\xE9e" });
   } catch (error) {
-    console.error("[VALIDATION] Erreur unvalidate:", error);
+    logger.error("[VALIDATION] Erreur unvalidate:", error);
     res.status(500).json({ success: false, message: "Erreur interne" });
   }
 });
@@ -18281,7 +18513,7 @@ router19.get("/chantiers/:chantierId/invoices", authenticateToken, async (req2, 
     });
     res.json({ success: true, data: invoices });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur GET /chantiers/:id/invoices:", error);
+    logger.error("[ChantierWorkflow] Erreur GET /chantiers/:id/invoices:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -18334,7 +18566,7 @@ router19.post("/chantiers/:chantierId/invoices", authenticateToken, isAdmin, asy
     });
     res.status(201).json({ success: true, data: invoice });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur POST /chantiers/:id/invoices:", error);
+    logger.error("[ChantierWorkflow] Erreur POST /chantiers/:id/invoices:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -18379,7 +18611,7 @@ router19.put("/invoices/:id", authenticateToken, isAdmin, async (req2, res) => {
         entityId: id,
         entityLabel: existing.label || `Facture ${existing.type}`,
         amount: existing.amount ? Number(existing.amount) : void 0
-      }).catch((err) => console.error("[ChantierWorkflow] Auto-post error:", err));
+      }).catch((err) => logger.error("[ChantierWorkflow] Auto-post error:", err));
     }
     if (data.status === "SENT" && existing.status !== "SENT") {
       updateData.sentAt = /* @__PURE__ */ new Date();
@@ -18393,7 +18625,7 @@ router19.put("/invoices/:id", authenticateToken, isAdmin, async (req2, res) => {
     });
     res.json({ success: true, data: invoice });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur PUT /invoices/:id:", error);
+    logger.error("[ChantierWorkflow] Erreur PUT /invoices/:id:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -18413,7 +18645,7 @@ router19.delete("/invoices/:id", authenticateToken, isAdmin, async (req2, res) =
     await db.chantierInvoice.delete({ where: { id } });
     res.json({ success: true, message: "Facture supprim\xE9e" });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur DELETE /invoices/:id:", error);
+    logger.error("[ChantierWorkflow] Erreur DELETE /invoices/:id:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -18459,7 +18691,7 @@ router19.get("/chantiers/:chantierId/events", authenticateToken, async (req2, re
     });
     res.json({ success: true, data: events });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur GET /chantiers/:id/events:", error);
+    logger.error("[ChantierWorkflow] Erreur GET /chantiers/:id/events:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -18512,7 +18744,7 @@ router19.post("/chantiers/:chantierId/events", authenticateToken, requireChantie
     });
     res.status(201).json({ success: true, data: event });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur POST /chantiers/:id/events:", error);
+    logger.error("[ChantierWorkflow] Erreur POST /chantiers/:id/events:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -18586,7 +18818,7 @@ router19.put("/events/:id", authenticateToken, requireChantierAction("edit"), as
     });
     res.json({ success: true, data: event });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur PUT /events/:id:", error);
+    logger.error("[ChantierWorkflow] Erreur PUT /events/:id:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -18621,7 +18853,7 @@ router19.put("/events/:id/lock-subcontract", authenticateToken, isAdmin, async (
     });
     res.json({ success: true, data: event });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur PUT /events/:id/lock-subcontract:", error);
+    logger.error("[ChantierWorkflow] Erreur PUT /events/:id/lock-subcontract:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -18642,7 +18874,7 @@ router19.delete("/events/:id", authenticateToken, isAdmin, async (req2, res) => 
     await db.chantierEvent.delete({ where: { id } });
     res.json({ success: true, message: "\xC9v\xE9nement supprim\xE9" });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur DELETE /events/:id:", error);
+    logger.error("[ChantierWorkflow] Erreur DELETE /events/:id:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -18670,7 +18902,7 @@ router19.get("/chantiers/:chantierId/history", authenticateToken, async (req2, r
     });
     res.json({ success: true, data: history });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur GET /chantiers/:id/history:", error);
+    logger.error("[ChantierWorkflow] Erreur GET /chantiers/:id/history:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -18715,7 +18947,7 @@ router19.post("/chantiers/:chantierId/history", authenticateToken, async (req2, 
     });
     res.status(201).json({ success: true, data: entry });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur POST /chantiers/:id/history:", error);
+    logger.error("[ChantierWorkflow] Erreur POST /chantiers/:id/history:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -18788,9 +19020,9 @@ async function checkAutoTransitions(chantierId, organizationId, triggerType, use
       const roles = transition.notifyRoles;
       await sendTransitionNotifications(chantierId, organizationId, oldStatusId, transition.toStatusId, roles, transition.sendEmail);
     }
-    console.log(`[ChantierWorkflow] Auto-transition: chantier ${chantierId} \u2192 ${transition.ToStatus.name} (trigger: ${triggerType})`);
+    logger.info(`[ChantierWorkflow] Auto-transition: chantier ${chantierId} \u2192 ${transition.ToStatus.name} (trigger: ${triggerType})`);
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur checkAutoTransitions:", error);
+    logger.error("[ChantierWorkflow] Erreur checkAutoTransitions:", error);
   }
 }
 async function sendTransitionNotifications(chantierId, organizationId, fromStatusId, toStatusId, notifyRoles, sendEmail) {
@@ -18892,18 +19124,18 @@ async function sendTransitionNotifications(chantierId, organizationId, fromStatu
               subject,
               html
             });
-            console.log(`[ChantierWorkflow] \u2709\uFE0F Email envoy\xE9 \xE0 ${emailTargets.length} destinataires`);
+            logger.info(`[ChantierWorkflow] \u2709\uFE0F Email envoy\xE9 \xE0 ${emailTargets.length} destinataires`);
           }
         } else {
-          console.warn("[ChantierWorkflow] \u26A0\uFE0F sendEmail=true mais aucun EmailAccount configur\xE9 dans l'org");
+          logger.warn("[ChantierWorkflow] \u26A0\uFE0F sendEmail=true mais aucun EmailAccount configur\xE9 dans l'org");
         }
       } catch (emailErr) {
-        console.error("[ChantierWorkflow] \u274C Erreur envoi email (non bloquant):", emailErr);
+        logger.error("[ChantierWorkflow] \u274C Erreur envoi email (non bloquant):", emailErr);
       }
     }
-    console.log(`[ChantierWorkflow] ${targetUsers.length} notifications envoy\xE9es pour transition ${fromStatus?.name} \u2192 ${toStatus?.name}`);
+    logger.info(`[ChantierWorkflow] ${targetUsers.length} notifications envoy\xE9es pour transition ${fromStatus?.name} \u2192 ${toStatus?.name}`);
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur sendTransitionNotifications:", error);
+    logger.error("[ChantierWorkflow] Erreur sendTransitionNotifications:", error);
   }
 }
 async function notifyProblem(chantierId, organizationId, problemNote, user) {
@@ -18966,7 +19198,7 @@ async function notifyProblem(chantierId, organizationId, problemNote, user) {
       });
     }
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur notifyProblem:", error);
+    logger.error("[ChantierWorkflow] Erreur notifyProblem:", error);
   }
 }
 router19.get("/events/:id/review-fields", authenticateToken, async (req2, res) => {
@@ -19074,7 +19306,7 @@ router19.get("/events/:id/review-fields", authenticateToken, async (req2, res) =
       }
     });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur GET /events/:id/review-fields:", error);
+    logger.error("[ChantierWorkflow] Erreur GET /events/:id/review-fields:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -19111,7 +19343,7 @@ router19.get("/events/:id/has-subcontractors", authenticateToken, async (req2, r
       }))
     });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur GET /events/:id/has-subcontractors:", error);
+    logger.error("[ChantierWorkflow] Erreur GET /events/:id/has-subcontractors:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -19301,7 +19533,7 @@ router19.post("/events/:id/submit-review", authenticateToken, async (req2, res) 
           });
         }
       } catch (notifError) {
-        console.error("[ChantierWorkflow] Erreur envoi notifications review:", notifError);
+        logger.error("[ChantierWorkflow] Erreur envoi notifications review:", notifError);
       }
     }
     if (hasModifications && event.Chantier.leadId) {
@@ -19325,7 +19557,7 @@ router19.post("/events/:id/submit-review", authenticateToken, async (req2, res) 
               updatedAt: /* @__PURE__ */ new Date()
             }
           });
-          console.log(`[ChantierWorkflow] Cr\xE9\xE9 LeadStatus "\xC0 rectifier" (${rectifyStatus.id}) pour org ${organizationId}`);
+          logger.info(`[ChantierWorkflow] Cr\xE9\xE9 LeadStatus "\xC0 rectifier" (${rectifyStatus.id}) pour org ${organizationId}`);
         }
         await db.lead.update({
           where: { id: event.Chantier.leadId },
@@ -19335,7 +19567,7 @@ router19.post("/events/:id/submit-review", authenticateToken, async (req2, res) 
             updatedAt: /* @__PURE__ */ new Date()
           }
         });
-        console.log(`[ChantierWorkflow] Lead ${event.Chantier.leadId} d\xE9plac\xE9 vers "\xC0 rectifier"`);
+        logger.info(`[ChantierWorkflow] Lead ${event.Chantier.leadId} d\xE9plac\xE9 vers "\xC0 rectifier"`);
         const lead = await db.lead.findUnique({
           where: { id: event.Chantier.leadId },
           select: { assignedToId: true, firstName: true, lastName: true }
@@ -19358,7 +19590,7 @@ router19.post("/events/:id/submit-review", authenticateToken, async (req2, res) 
           });
         }
       } catch (leadErr) {
-        console.error("[ChantierWorkflow] Erreur auto-return lead:", leadErr);
+        logger.error("[ChantierWorkflow] Erreur auto-return lead:", leadErr);
       }
     }
     if (event.type === "VISITE_TECHNIQUE" && !hasModifications) {
@@ -19374,7 +19606,7 @@ router19.post("/events/:id/submit-review", authenticateToken, async (req2, res) 
       message: hasModifications ? `Analyse termin\xE9e \u2014 ${reviews.filter((r) => r.isModified).length} probl\xE8me(s) d\xE9tect\xE9(s). Lead renvoy\xE9 au commercial.` : "Analyse termin\xE9e \u2014 Toutes les donn\xE9es confirm\xE9es \u2705"
     });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur POST /events/:id/submit-review:", error);
+    logger.error("[ChantierWorkflow] Erreur POST /events/:id/submit-review:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -19446,7 +19678,7 @@ router19.get("/chantiers/:chantierId/review-summary", authenticateToken, async (
       }
     });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur GET review-summary:", error);
+    logger.error("[ChantierWorkflow] Erreur GET review-summary:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -19560,7 +19792,7 @@ Veuillez corriger le TBL et reg\xE9n\xE9rer le devis.`,
           }
         });
       } catch (notifError) {
-        console.error("[ChantierWorkflow] Erreur notification reject-to-lead:", notifError);
+        logger.error("[ChantierWorkflow] Erreur notification reject-to-lead:", notifError);
       }
     }
     res.json({
@@ -19569,7 +19801,7 @@ Veuillez corriger le TBL et reg\xE9n\xE9rer le devis.`,
       data: { leadId: chantier.leadId }
     });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur POST reject-to-lead:", error);
+    logger.error("[ChantierWorkflow] Erreur POST reject-to-lead:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -19700,7 +19932,7 @@ router19.post("/chantiers/:chantierId/reception/prepare", authenticateToken, asy
       message: "PV de r\xE9ception pr\xE9par\xE9 \u2014 Lien client g\xE9n\xE9r\xE9"
     });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur POST reception/prepare:", error);
+    logger.error("[ChantierWorkflow] Erreur POST reception/prepare:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -19751,7 +19983,7 @@ router19.get("/reception/:token", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur GET /reception/:token:", error);
+    logger.error("[ChantierWorkflow] Erreur GET /reception/:token:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -19877,7 +20109,7 @@ router19.post("/reception/:token/sign", async (req2, res) => {
         }
       }
     } catch (notifError) {
-      console.error("[ChantierWorkflow] Erreur notification reception sign:", notifError);
+      logger.error("[ChantierWorkflow] Erreur notification reception sign:", notifError);
     }
     res.json({
       success: true,
@@ -19885,7 +20117,7 @@ router19.post("/reception/:token/sign", async (req2, res) => {
       data: { status: hasReserves ? "ACCEPTED_WITH_RESERVES" : "ACCEPTED" }
     });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur POST /reception/:token/sign:", error);
+    logger.error("[ChantierWorkflow] Erreur POST /reception/:token/sign:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -19907,7 +20139,7 @@ router19.get("/chantiers/:chantierId/reception", authenticateToken, async (req2,
     });
     res.json({ success: true, data: reception });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur GET reception:", error);
+    logger.error("[ChantierWorkflow] Erreur GET reception:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -19986,7 +20218,7 @@ router19.post("/chantiers/:chantierId/reception/send-to-client", authenticateTok
         });
       }
     } catch (emailError) {
-      console.error("[ChantierWorkflow] Erreur envoi email reception:", emailError);
+      logger.error("[ChantierWorkflow] Erreur envoi email reception:", emailError);
     }
     await db.chantierHistory.create({
       data: {
@@ -20002,7 +20234,7 @@ router19.post("/chantiers/:chantierId/reception/send-to-client", authenticateTok
       message: `Lien de r\xE9ception envoy\xE9 \xE0 ${reception.clientEmail}`
     });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur POST send-to-client:", error);
+    logger.error("[ChantierWorkflow] Erreur POST send-to-client:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -20118,14 +20350,14 @@ router19.post("/seed", authenticateToken, isAdmin, async (req2, res) => {
       });
       results.templates++;
     }
-    console.log(`[ChantierWorkflow] Seed termin\xE9 pour org ${organizationId}: ${results.transitions} transitions, ${results.templates} templates${results.skipped.length ? `, ${results.skipped.length} ignor\xE9s` : ""}`);
+    logger.info(`[ChantierWorkflow] Seed termin\xE9 pour org ${organizationId}: ${results.transitions} transitions, ${results.templates} templates${results.skipped.length ? `, ${results.skipped.length} ignor\xE9s` : ""}`);
     res.status(201).json({
       success: true,
       data: results,
       message: `Workflow initialis\xE9 : ${results.transitions} transitions, ${results.templates} templates de factures${results.skipped.length ? `. ${results.skipped.length} ignor\xE9(s).` : ""}`
     });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur POST /seed:", error);
+    logger.error("[ChantierWorkflow] Erreur POST /seed:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -20218,7 +20450,7 @@ router19.post("/events/:id/submit-commercial-correction", authenticateToken, asy
         }
       });
     });
-    console.log(
+    logger.info(
       `[ChantierWorkflow] ${corrections.length} corrections commerciales enregistr\xE9es pour event ${eventId}`
     );
     res.json({
@@ -20227,7 +20459,7 @@ router19.post("/events/:id/submit-commercial-correction", authenticateToken, asy
       data: { totalCorrections: corrections.length }
     });
   } catch (error) {
-    console.error("[ChantierWorkflow] Erreur POST /events/:id/submit-commercial-correction:", error);
+    logger.error("[ChantierWorkflow] Erreur POST /events/:id/submit-commercial-correction:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -20398,7 +20630,7 @@ router20.get("/", authenticateToken, async (req2, res) => {
       data: chantiersWithSummary
     });
   } catch (error) {
-    console.error("[Chantiers] Erreur GET /:", error);
+    logger.error("[Chantiers] Erreur GET /:", error);
     res.status(500).json({
       success: false,
       message: "Erreur interne du serveur"
@@ -20457,7 +20689,7 @@ router20.get("/stats/overview", authenticateToken, async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("[Chantiers] Erreur GET /stats/overview:", error);
+    logger.error("[Chantiers] Erreur GET /stats/overview:", error);
     res.status(500).json({
       success: false,
       message: "Erreur interne du serveur"
@@ -20511,7 +20743,7 @@ router20.get("/by-lead/:leadId", authenticateToken, async (req2, res) => {
       data: chantiers
     });
   } catch (error) {
-    console.error("[Chantiers] Erreur GET /by-lead/:leadId:", error);
+    logger.error("[Chantiers] Erreur GET /by-lead/:leadId:", error);
     res.status(500).json({
       success: false,
       message: "Erreur interne du serveur"
@@ -20660,7 +20892,7 @@ router20.get("/:id", authenticateToken, async (req2, res) => {
           }
         }
       } catch (err) {
-        console.warn("[Chantiers] \u26A0\uFE0F Lazy-compute montant \xE9chou\xE9:", err.message);
+        logger.warn("[Chantiers] \u26A0\uFE0F Lazy-compute montant \xE9chou\xE9:", err.message);
       }
     }
     res.json({
@@ -20671,7 +20903,7 @@ router20.get("/:id", authenticateToken, async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("[Chantiers] Erreur GET /:id:", error);
+    logger.error("[Chantiers] Erreur GET /:id:", error);
     res.status(500).json({
       success: false,
       message: "Erreur interne du serveur"
@@ -20789,14 +21021,14 @@ router20.post("/", authenticateToken, async (req2, res) => {
       entityLabel: data.productLabel || "Nouveau chantier",
       clientName: clientName || void 0,
       amount: data.amount ? Number(data.amount) : void 0
-    }).catch((err) => console.error("[Chantiers] Auto-post error:", err));
+    }).catch((err) => logger.error("[Chantiers] Auto-post error:", err));
     res.status(201).json({
       success: true,
       data: chantier,
       message: `Chantier "${data.productLabel}" cr\xE9\xE9 avec succ\xE8s`
     });
   } catch (error) {
-    console.error("[Chantiers] Erreur POST /:", error);
+    logger.error("[Chantiers] Erreur POST /:", error);
     res.status(500).json({
       success: false,
       message: "Erreur interne du serveur"
@@ -20916,7 +21148,7 @@ router20.post("/from-lead-document", authenticateToken, async (req2, res) => {
                 }
               }
             } catch (formulaErr) {
-              console.warn("[Chantiers] \u26A0\uFE0F Impossible de r\xE9soudre le montant via formules TBL:", formulaErr.message);
+              logger.warn("[Chantiers] \u26A0\uFE0F Impossible de r\xE9soudre le montant via formules TBL:", formulaErr.message);
             }
           }
           if (!siteAddress && snapshot.lead) {
@@ -20935,7 +21167,7 @@ router20.post("/from-lead-document", authenticateToken, async (req2, res) => {
           }
         }
       } catch (err) {
-        console.warn("[Chantiers] Impossible de lire le dataSnapshot du GeneratedDocument:", err.message);
+        logger.warn("[Chantiers] Impossible de lire le dataSnapshot du GeneratedDocument:", err.message);
       }
     }
     let documentUrl = null;
@@ -20981,7 +21213,7 @@ router20.post("/from-lead-document", authenticateToken, async (req2, res) => {
           updatedAt: /* @__PURE__ */ new Date()
         }
       }).catch((err) => {
-        console.warn("[Chantiers] Impossible de mettre \xE0 jour le GeneratedDocument:", err.message);
+        logger.warn("[Chantiers] Impossible de mettre \xE0 jour le GeneratedDocument:", err.message);
       });
     }
     const chantier = await db.chantier.create({
@@ -21040,14 +21272,14 @@ router20.post("/from-lead-document", authenticateToken, async (req2, res) => {
       entityLabel: productLabel || "Nouveau chantier",
       clientName: clientName || void 0,
       amount: amount ? parseFloat(amount) : void 0
-    }).catch((err) => console.error("[Chantiers] Auto-post error:", err));
+    }).catch((err) => logger.error("[Chantiers] Auto-post error:", err));
     res.status(201).json({
       success: true,
       data: chantier,
       message: `\u{1F3D7}\uFE0F Chantier "${productLabel}" cr\xE9\xE9 \xE0 partir du document sign\xE9`
     });
   } catch (error) {
-    console.error("[Chantiers] Erreur POST /from-lead-document:", error);
+    logger.error("[Chantiers] Erreur POST /from-lead-document:", error);
     res.status(500).json({
       success: false,
       message: "Erreur interne du serveur"
@@ -21134,7 +21366,7 @@ router20.put("/:id", authenticateToken, isAdmin, async (req2, res) => {
       message: "Chantier mis \xE0 jour avec succ\xE8s"
     });
   } catch (error) {
-    console.error("[Chantiers] Erreur PUT /:id:", error);
+    logger.error("[Chantiers] Erreur PUT /:id:", error);
     res.status(500).json({
       success: false,
       message: "Erreur interne du serveur"
@@ -21213,7 +21445,7 @@ router20.put("/:id/status", authenticateToken, async (req2, res) => {
           }
         }
       } catch (checkErr) {
-        console.error("[Chantiers] Erreur v\xE9rif factures requises (non bloquant):", checkErr);
+        logger.error("[Chantiers] Erreur v\xE9rif factures requises (non bloquant):", checkErr);
       }
     }
     const chantier = await db.chantier.update({
@@ -21239,7 +21471,7 @@ router20.put("/:id/status", authenticateToken, async (req2, res) => {
         }
       });
     } catch (histErr) {
-      console.error("[Chantiers] Erreur historique (non bloquant):", histErr);
+      logger.error("[Chantiers] Erreur historique (non bloquant):", histErr);
     }
     if (oldStatusId) {
       try {
@@ -21258,7 +21490,7 @@ router20.put("/:id/status", authenticateToken, async (req2, res) => {
           }
         }
       } catch (notifErr) {
-        console.error("[Chantiers] Erreur notifications (non bloquant):", notifErr);
+        logger.error("[Chantiers] Erreur notifications (non bloquant):", notifErr);
       }
     }
     try {
@@ -21319,7 +21551,7 @@ router20.put("/:id/status", authenticateToken, async (req2, res) => {
         }
       }
     } catch (autoInvErr) {
-      console.error("[Chantiers] Erreur auto-cr\xE9ation factures (non bloquant):", autoInvErr);
+      logger.error("[Chantiers] Erreur auto-cr\xE9ation factures (non bloquant):", autoInvErr);
     }
     const statusName = (chantier.ChantierStatus?.name || "").toLowerCase();
     if (statusName.includes("termin") || statusName.includes("r\xE9ception") || statusName.includes("clotur") || statusName.includes("fini")) {
@@ -21329,7 +21561,7 @@ router20.put("/:id/status", authenticateToken, async (req2, res) => {
         eventType: "chantier_completed",
         entityId: id,
         entityLabel: `Chantier ${chantier.ChantierStatus?.name}`
-      }).catch((err) => console.error("[Chantiers] Auto-post error:", err));
+      }).catch((err) => logger.error("[Chantiers] Auto-post error:", err));
     }
     res.json({
       success: true,
@@ -21337,7 +21569,7 @@ router20.put("/:id/status", authenticateToken, async (req2, res) => {
       message: `Statut chang\xE9 vers "${chantier.ChantierStatus?.name}"`
     });
   } catch (error) {
-    console.error("[Chantiers] Erreur PUT /:id/status:", error);
+    logger.error("[Chantiers] Erreur PUT /:id/status:", error);
     res.status(500).json({
       success: false,
       message: "Erreur interne du serveur"
@@ -21375,7 +21607,7 @@ router20.delete("/:id", authenticateToken, isAdmin, async (req2, res) => {
       message: "Chantier supprim\xE9 avec succ\xE8s"
     });
   } catch (error) {
-    console.error("[Chantiers] Erreur DELETE /:id:", error);
+    logger.error("[Chantiers] Erreur DELETE /:id:", error);
     res.status(500).json({
       success: false,
       message: "Erreur interne du serveur"
@@ -21453,7 +21685,7 @@ router20.get("/rectification-context/:leadId", authenticateToken, async (req2, r
       }
     });
   } catch (error) {
-    console.error("[Chantiers] Erreur GET /rectification-context/:leadId:", error);
+    logger.error("[Chantiers] Erreur GET /rectification-context/:leadId:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -21550,7 +21782,7 @@ router20.post("/resubmit-to-chantier/:leadId", authenticateToken, async (req2, r
       data: { chantierId: chantier.id, leadStatus: "won" }
     });
   } catch (error) {
-    console.error("[Chantiers] Erreur POST /resubmit-to-chantier/:leadId:", error);
+    logger.error("[Chantiers] Erreur POST /resubmit-to-chantier/:leadId:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -21590,7 +21822,7 @@ router21.get("/", authenticateToken, async (req2, res) => {
       data: statuses
     });
   } catch (error) {
-    console.error("[ChantierStatuses] Erreur GET /:", error);
+    logger.error("[ChantierStatuses] Erreur GET /:", error);
     res.status(500).json({
       success: false,
       message: "Erreur interne du serveur"
@@ -21653,7 +21885,7 @@ router21.post("/", authenticateToken, isAdmin, async (req2, res) => {
       message: "Statut de chantier cr\xE9\xE9 avec succ\xE8s"
     });
   } catch (error) {
-    console.error("[ChantierStatuses] Erreur POST /:", error);
+    logger.error("[ChantierStatuses] Erreur POST /:", error);
     res.status(500).json({
       success: false,
       message: "Erreur interne du serveur"
@@ -21715,7 +21947,7 @@ router21.put("/:id", authenticateToken, isAdmin, async (req2, res) => {
       message: "Statut mis \xE0 jour avec succ\xE8s"
     });
   } catch (error) {
-    console.error("[ChantierStatuses] Erreur PUT /:id:", error);
+    logger.error("[ChantierStatuses] Erreur PUT /:id:", error);
     res.status(500).json({
       success: false,
       message: "Erreur interne du serveur"
@@ -21758,7 +21990,7 @@ router21.delete("/:id", authenticateToken, isAdmin, async (req2, res) => {
       message: "Statut supprim\xE9 avec succ\xE8s"
     });
   } catch (error) {
-    console.error("[ChantierStatuses] Erreur DELETE /:id:", error);
+    logger.error("[ChantierStatuses] Erreur DELETE /:id:", error);
     res.status(500).json({
       success: false,
       message: "Erreur interne du serveur"
@@ -21793,7 +22025,7 @@ router21.post("/reorder", authenticateToken, isAdmin, async (req2, res) => {
       message: "Ordre mis \xE0 jour avec succ\xE8s"
     });
   } catch (error) {
-    console.error("[ChantierStatuses] Erreur POST /reorder:", error);
+    logger.error("[ChantierStatuses] Erreur POST /reorder:", error);
     res.status(500).json({
       success: false,
       message: "Erreur interne du serveur"
@@ -21847,7 +22079,7 @@ router21.post("/seed", authenticateToken, isAdmin, async (req2, res) => {
       message: `${created.length} statuts par d\xE9faut cr\xE9\xE9s`
     });
   } catch (error) {
-    console.error("[ChantierStatuses] Erreur POST /seed:", error);
+    logger.error("[ChantierStatuses] Erreur POST /seed:", error);
     res.status(500).json({
       success: false,
       message: "Erreur interne du serveur"
@@ -21860,7 +22092,18 @@ var chantier_statuses_default = router21;
 var import_express24 = require("express");
 init_database();
 var import_zod7 = require("zod");
-var import_crypto15 = __toESM(require("crypto"), 1);
+
+// src/lib/constants.ts
+var MAX_PHOTO_SIZE = 50 * 1024 * 1024;
+var MAX_VIDEO_SIZE = 100 * 1024 * 1024;
+var MAX_DOCUMENT_SIZE = 10 * 1024 * 1024;
+var MAX_LOGO_SIZE = 5 * 1024 * 1024;
+var MAX_AVATAR_SIZE = 10 * 1024 * 1024;
+var OTP_MIN = 1e5;
+var OTP_MAX = 999999;
+var SIGNAL_EXPIRY_MS = 12e4;
+
+// src/routes/e-signature.ts
 var import_nodemailer3 = __toESM(require("nodemailer"), 1);
 init_crypto();
 
@@ -21906,7 +22149,7 @@ async function generateTblPdf(data) {
       const margin = 45;
       const contentWidth = 595.28 - margin * 2;
       const primaryColor = "#1677ff";
-      const darkColor = "#1a1a2e";
+      const darkColor = SF.dark;
       const lightGray = "#f5f5f5";
       const borderColor = "#e0e0e0";
       doc.rect(0, 0, 595.28, 120).fill(darkColor);
@@ -22104,6 +22347,7 @@ init_PostalEmailService();
 // src/routes/documents.ts
 var import_express23 = require("express");
 init_database();
+init_storage();
 var import_nanoid2 = require("nanoid");
 var import_crypto14 = __toESM(require("crypto"), 1);
 
@@ -25904,6 +26148,7 @@ async function renderDocumentPdf(context) {
 // src/routes/documents.ts
 init_PostalEmailService();
 var router22 = (0, import_express23.Router)();
+router22.use(authenticateToken);
 var prisma9 = db;
 async function buildSelectOptionsMap(organizationId, tblData) {
   const map = {};
@@ -25970,7 +26215,7 @@ async function buildSelectOptionsMap(organizationId, tblData) {
       }
     }
   } catch (error) {
-    console.error("\u26A0\uFE0F [buildSelectOptionsMap] Erreur (non bloquante):", error?.message);
+    logger.error("\u26A0\uFE0F [buildSelectOptionsMap] Erreur (non bloquante):", error?.message);
   }
   return map;
 }
@@ -26091,12 +26336,12 @@ router22.get("/product-options/:treeId", async (req2, res) => {
           productOptions = raw.filter((o) => o.value !== "all");
         }
       } catch (e) {
-        console.warn("[DOCS] Erreur parsing product_options:", e);
+        logger.warn("[DOCS] Erreur parsing product_options:", e);
       }
     }
     res.json(productOptions);
   } catch (error) {
-    console.error("Erreur r\xE9cup\xE9ration product options:", error);
+    logger.error("Erreur r\xE9cup\xE9ration product options:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -26153,7 +26398,7 @@ router22.get("/templates", async (req2, res) => {
     });
     res.json(templates);
   } catch (error) {
-    console.error("Erreur r\xE9cup\xE9ration templates:", error);
+    logger.error("Erreur r\xE9cup\xE9ration templates:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -26180,7 +26425,7 @@ router22.get("/templates/:id", async (req2, res) => {
     }
     res.json(template);
   } catch (error) {
-    console.error("Erreur r\xE9cup\xE9ration template:", error);
+    logger.error("Erreur r\xE9cup\xE9ration template:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -26239,7 +26484,7 @@ router22.post("/templates", async (req2, res) => {
     });
     res.status(201).json(template);
   } catch (error) {
-    console.error("Erreur cr\xE9ation template:", error);
+    logger.error("Erreur cr\xE9ation template:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -26316,7 +26561,7 @@ router22.put("/templates/:id", async (req2, res) => {
     });
     res.json(template);
   } catch (error) {
-    console.error("Erreur mise \xE0 jour template:", error);
+    logger.error("Erreur mise \xE0 jour template:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -26358,7 +26603,7 @@ router22.delete("/templates/:id", async (req2, res) => {
     });
     res.json({ success: true, message: "Template supprim\xE9" });
   } catch (error) {
-    console.error("Erreur suppression template:", error);
+    logger.error("Erreur suppression template:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -26374,7 +26619,7 @@ router22.get("/themes", async (req2, res) => {
     });
     res.json(themes);
   } catch (error) {
-    console.error("Erreur r\xE9cup\xE9ration th\xE8mes:", error);
+    logger.error("Erreur r\xE9cup\xE9ration th\xE8mes:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -26397,7 +26642,7 @@ router22.post("/themes", async (req2, res) => {
     });
     res.status(201).json(theme);
   } catch (error) {
-    console.error("Erreur cr\xE9ation th\xE8me:", error);
+    logger.error("Erreur cr\xE9ation th\xE8me:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -26422,7 +26667,7 @@ router22.put("/themes/:id", async (req2, res) => {
     });
     res.json(theme);
   } catch (error) {
-    console.error("Erreur mise \xE0 jour th\xE8me:", error);
+    logger.error("Erreur mise \xE0 jour th\xE8me:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -26443,7 +26688,7 @@ router22.delete("/themes/:id", async (req2, res) => {
     });
     res.json({ success: true });
   } catch (error) {
-    console.error("Erreur suppression th\xE8me:", error);
+    logger.error("Erreur suppression th\xE8me:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -26468,7 +26713,7 @@ router22.get("/templates/:templateId/sections", async (req2, res) => {
     });
     res.json(sections);
   } catch (error) {
-    console.error("Erreur r\xE9cup\xE9ration sections:", error);
+    logger.error("Erreur r\xE9cup\xE9ration sections:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -26500,8 +26745,8 @@ router22.post("/templates/:templateId/sections", async (req2, res) => {
     });
     res.json(section);
   } catch (error) {
-    console.error("Erreur cr\xE9ation section:", error?.message || error);
-    console.error("Stack:", error?.stack);
+    logger.error("Erreur cr\xE9ation section:", error?.message || error);
+    logger.error("Stack:", error?.stack);
     res.status(500).json({ error: "Erreur serveur", details: error?.message });
   }
 });
@@ -26530,7 +26775,7 @@ router22.put("/templates/:templateId/sections/:sectionId", async (req2, res) => 
     });
     res.json(section);
   } catch (error) {
-    console.error("Erreur mise \xE0 jour section:", error);
+    logger.error("Erreur mise \xE0 jour section:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -26554,7 +26799,7 @@ router22.delete("/templates/:templateId/sections/:sectionId", async (req2, res) 
     });
     res.json({ success: true });
   } catch (error) {
-    console.error("Erreur suppression section:", error);
+    logger.error("Erreur suppression section:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -26617,7 +26862,7 @@ router22.get("/generated", async (req2, res) => {
     }));
     res.json(mappedDocuments);
   } catch (error) {
-    console.error("\u274C [GET /generated] Erreur r\xE9cup\xE9ration documents g\xE9n\xE9r\xE9s:", error?.message);
+    logger.error("\u274C [GET /generated] Erreur r\xE9cup\xE9ration documents g\xE9n\xE9r\xE9s:", error?.message);
     res.status(500).json({ error: "Erreur serveur", details: error?.message });
   }
 });
@@ -26657,7 +26902,7 @@ router22.get("/generated/:id", async (req2, res) => {
     };
     res.json(mappedDocument);
   } catch (error) {
-    console.error("Erreur r\xE9cup\xE9ration document:", error);
+    logger.error("Erreur r\xE9cup\xE9ration document:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -26676,7 +26921,7 @@ router22.post("/generated/generate", async (req2, res) => {
     } = req2.body;
     try {
     } catch (e) {
-      console.warn("\u{1F4C4} [GENERATE DOC] Body non serialisable (log simplifi\xE9):", {
+      logger.warn("\u{1F4C4} [GENERATE DOC] Body non serialisable (log simplifi\xE9):", {
         templateId,
         leadId,
         submissionId,
@@ -26709,7 +26954,7 @@ router22.post("/generated/generate", async (req2, res) => {
       }
     });
     if (!template) {
-      console.error("\u274C [GENERATE DOC] Template non trouv\xE9 avec templateId=" + templateId + " et organizationId=" + organizationId);
+      logger.error("\u274C [GENERATE DOC] Template non trouv\xE9 avec templateId=" + templateId + " et organizationId=" + organizationId);
       return res.status(404).json({
         error: "Template non trouv\xE9",
         details: `Template ${templateId} not found for organization ${organizationId}`,
@@ -26788,11 +27033,11 @@ router22.post("/generated/generate", async (req2, res) => {
     });
     res.status(201).json(updatedDocument);
   } catch (error) {
-    console.error("\u274C [GENERATE DOC] Erreur g\xE9n\xE9ration document:", error);
-    console.error("\u274C [GENERATE DOC] Error name:", error?.name);
-    console.error("\u274C [GENERATE DOC] Error code:", error?.code);
-    console.error("\u274C [GENERATE DOC] Error message:", error?.message);
-    console.error("\u274C [GENERATE DOC] Error meta:", error?.meta);
+    logger.error("\u274C [GENERATE DOC] Erreur g\xE9n\xE9ration document:", error);
+    logger.error("\u274C [GENERATE DOC] Error name:", error?.name);
+    logger.error("\u274C [GENERATE DOC] Error code:", error?.code);
+    logger.error("\u274C [GENERATE DOC] Error message:", error?.message);
+    logger.error("\u274C [GENERATE DOC] Error meta:", error?.meta);
     res.status(500).json({
       error: "Erreur serveur lors de la g\xE9n\xE9ration",
       details: error?.message,
@@ -26816,12 +27061,16 @@ router22.delete("/generated/:id", async (req2, res) => {
     if (!document) {
       return res.status(404).json({ error: "Document non trouv\xE9" });
     }
+    if (document.pdfUrl) {
+      await deleteFile(document.pdfUrl).catch(() => {
+      });
+    }
     await prisma9.generatedDocument.delete({
       where: { id }
     });
     res.json({ success: true, message: "Document supprim\xE9" });
   } catch (error) {
-    console.error("Erreur suppression document:", error);
+    logger.error("Erreur suppression document:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -27063,12 +27312,12 @@ router22.get("/generated/:id/download", async (req2, res) => {
               formulaResultsMap[ref] = String(resultValue);
             }
           } catch (refErr) {
-            console.warn(`\u{1F4E5} [DOWNLOAD] \u26A0\uFE0F R\xE9solution "${ref}" \xE9chou\xE9e:`, refErr);
+            logger.warn(`\u{1F4E5} [DOWNLOAD] \u26A0\uFE0F R\xE9solution "${ref}" \xE9chou\xE9e:`, refErr);
           }
         }
       }
     } catch (err) {
-      console.warn("\u{1F4E5} [DOWNLOAD] Erreur r\xE9solution dynamique:", err);
+      logger.warn("\u{1F4E5} [DOWNLOAD] Erreur r\xE9solution dynamique:", err);
     }
     const dataSnapshot = document.dataSnapshot || {};
     const templateTheme = document.DocumentTemplate?.DocumentTheme;
@@ -27186,7 +27435,7 @@ router22.get("/generated/:id/download", async (req2, res) => {
     res.setHeader("Content-Length", pdfBuffer.length.toString());
     res.send(pdfBuffer);
   } catch (error) {
-    console.error("\u274C [DOWNLOAD] Erreur t\xE9l\xE9chargement:", error);
+    logger.error("\u274C [DOWNLOAD] Erreur t\xE9l\xE9chargement:", error);
     res.status(500).json({ error: "Erreur serveur", details: error?.message });
   }
 });
@@ -27266,7 +27515,7 @@ async function downloadDriveFileAsBuffer(organizationId, driveFileId, userId) {
     );
     return Buffer.from(response.data);
   } catch (error) {
-    console.error("\u{1F4CE} [FICHES-TECH] \u274C Erreur t\xE9l\xE9chargement Drive:", driveFileId, error);
+    logger.error("\u{1F4CE} [FICHES-TECH] \u274C Erreur t\xE9l\xE9chargement Drive:", driveFileId, error);
     return null;
   }
 }
@@ -27435,16 +27684,16 @@ router22.post("/generated/:id/send-email", async (req2, res) => {
               attachedProductDocsCount++;
               attachedProductDocNames.push(doc.name || doc.fileName);
             } else {
-              console.warn("\u{1F4CE} [SEND-EMAIL] \u26A0\uFE0F Impossible de t\xE9l\xE9charger:", doc.fileName);
+              logger.warn("\u{1F4CE} [SEND-EMAIL] \u26A0\uFE0F Impossible de t\xE9l\xE9charger:", doc.fileName);
             }
           } catch (docErr) {
-            console.warn("\u{1F4CE} [SEND-EMAIL] \u26A0\uFE0F Erreur t\xE9l\xE9chargement fiche:", doc.fileName, docErr);
+            logger.warn("\u{1F4CE} [SEND-EMAIL] \u26A0\uFE0F Erreur t\xE9l\xE9chargement fiche:", doc.fileName, docErr);
           }
         }
         if (attachedProductDocsCount > 0) {
         }
       } catch (prodDocErr) {
-        console.warn("\u{1F4CE} [SEND-EMAIL] \u26A0\uFE0F Erreur r\xE9cup\xE9ration fiches techniques (envoi sans):", prodDocErr);
+        logger.warn("\u{1F4CE} [SEND-EMAIL] \u26A0\uFE0F Erreur r\xE9cup\xE9ration fiches techniques (envoi sans):", prodDocErr);
       }
     }
     const orgName = organization?.name || "2Thier CRM";
@@ -27504,7 +27753,7 @@ router22.post("/generated/:id/send-email", async (req2, res) => {
           <p style="font-size: 11px; color: #aaa; margin-top: 10px;">Ce lien est valable 72 heures.</p>
         </div>`;
       } catch (sigErr) {
-        console.warn("\u26A0\uFE0F [SEND-EMAIL] Impossible de cr\xE9er le lien de signature:", sigErr);
+        logger.warn("\u26A0\uFE0F [SEND-EMAIL] Impossible de cr\xE9er le lien de signature:", sigErr);
       }
     }
     const htmlBody = `<!DOCTYPE html>
@@ -27513,7 +27762,7 @@ router22.post("/generated/:id/send-email", async (req2, res) => {
 <body style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #333; line-height: 1.6; margin: 0; padding: 0; background-color: #f5f5f5;">
   <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
     <tr>
-      <td style="background-color: #1a1a2e; padding: 20px 30px; text-align: center;">
+      <td style="background-color: ${SF.dark}; padding: 20px 30px; text-align: center;">
         <h2 style="color: #ffffff; margin: 0; font-size: 20px;">${orgName}</h2>
       </td>
     </tr>
@@ -27592,7 +27841,7 @@ router22.post("/generated/:id/send-email", async (req2, res) => {
           }
         });
       } catch (tlErr) {
-        console.warn("\u26A0\uFE0F [SEND-EMAIL] Impossible de cr\xE9er TimelineEvent:", tlErr);
+        logger.warn("\u26A0\uFE0F [SEND-EMAIL] Impossible de cr\xE9er TimelineEvent:", tlErr);
       }
     }
     const fichesMsg = attachedProductDocsCount > 0 ? ` + ${attachedProductDocsCount} fiche(s) technique(s)` : "";
@@ -27604,7 +27853,7 @@ router22.post("/generated/:id/send-email", async (req2, res) => {
       signatureLinkIncluded: !!signatureAccessToken
     });
   } catch (error) {
-    console.error("\u274C [SEND-EMAIL] Erreur:", error);
+    logger.error("\u274C [SEND-EMAIL] Erreur:", error);
     res.status(500).json({ error: "Erreur lors de l'envoi", details: error?.message });
   }
 });
@@ -27728,7 +27977,7 @@ router22.post("/templates/:templateId/preview-pdf", async (req2, res) => {
     res.setHeader("Content-Length", pdfBuffer.length.toString());
     res.send(pdfBuffer);
   } catch (error) {
-    console.error("\u274C [PREVIEW-PDF] Erreur g\xE9n\xE9ration:", error);
+    logger.error("\u274C [PREVIEW-PDF] Erreur g\xE9n\xE9ration:", error);
     res.status(500).json({ error: "Erreur serveur", details: error?.message });
   }
 });
@@ -27778,7 +28027,7 @@ router22.get("/generated/:id/preview", async (req2, res) => {
       paymentMethod: document.paymentMethod
     });
   } catch (error) {
-    console.error("\u274C [PREVIEW] Erreur aper\xE7u:", error);
+    logger.error("\u274C [PREVIEW] Erreur aper\xE7u:", error);
     res.status(500).json({ error: "Erreur serveur", details: error?.message });
   }
 });
@@ -27787,10 +28036,10 @@ var documents_default = router22;
 // src/routes/e-signature.ts
 var router23 = (0, import_express24.Router)();
 function generateOtp() {
-  return import_crypto15.default.randomInt(1e5, 999999).toString();
+  return crypto.randomInt(OTP_MIN, OTP_MAX).toString();
 }
 function hashOtp(otp) {
-  return import_crypto15.default.createHash("sha256").update(otp).digest("hex");
+  return crypto.createHash("sha256").update(otp).digest("hex");
 }
 function addAuditEntry(existing, action, details, req2) {
   const trail = Array.isArray(existing) ? [...existing] : [];
@@ -27974,7 +28223,7 @@ router23.post("/tbl/:submissionId/pdf", authenticateToken, async (req2, res) => 
     res.setHeader("Content-Length", buffer.length);
     return res.send(buffer);
   } catch (error) {
-    console.error("[E-Signature] Erreur g\xE9n\xE9ration PDF:", error);
+    logger.error("[E-Signature] Erreur g\xE9n\xE9ration PDF:", error);
     return res.status(500).json({ success: false, message: "Erreur g\xE9n\xE9ration PDF", error: String(error) });
   }
 });
@@ -27990,7 +28239,7 @@ router23.get("/tbl/:submissionId/pdf/preview", authenticateToken, async (req2, r
     res.setHeader("Content-Length", buffer.length);
     return res.send(buffer);
   } catch (error) {
-    console.error("[E-Signature] Erreur pr\xE9visualisation PDF:", error);
+    logger.error("[E-Signature] Erreur pr\xE9visualisation PDF:", error);
     return res.status(500).json({ success: false, message: "Erreur pr\xE9visualisation PDF", error: String(error) });
   }
 });
@@ -28017,7 +28266,7 @@ router23.post("/initiate", authenticateToken, async (req2, res) => {
       return res.status(400).json({ success: false, message: "Donn\xE9es invalides", errors: validation.error.errors });
     }
     const data = validation.data;
-    const accessToken = import_crypto15.default.randomUUID();
+    const accessToken = crypto.randomUUID();
     const expiresAt = new Date(Date.now() + data.expiresInHours * 60 * 60 * 1e3);
     const legalText = data.legalText || `En signant ce document, je, ${data.signerName}, confirme avoir pris connaissance de l'integralite du devis ci-joint et accepte les termes et conditions qui y sont decrits. Cette signature electronique a la meme valeur juridique qu'une signature manuscrite conformement au reglement europeen eIDAS. Date: ${(/* @__PURE__ */ new Date()).toLocaleDateString("fr-BE")}`;
     const signature = await db.electronicSignature.create({
@@ -28056,7 +28305,7 @@ router23.post("/initiate", authenticateToken, async (req2, res) => {
       expiresAt
     });
   } catch (error) {
-    console.error("[E-Signature] Erreur initiation:", error);
+    logger.error("[E-Signature] Erreur initiation:", error);
     return res.status(500).json({ success: false, message: "Erreur initiation signature" });
   }
 });
@@ -28105,7 +28354,7 @@ router23.post("/:id/send-otp", authenticateToken, async (req2, res) => {
       });
       emailSent = true;
     } catch (emailErr) {
-      console.error("[E-Signature] Erreur envoi email OTP:", emailErr);
+      logger.error("[E-Signature] Erreur envoi email OTP:", emailErr);
       if (process.env.NODE_ENV !== "production") {
       } else {
         return res.status(500).json({ success: false, message: "Erreur envoi email OTP. V\xE9rifiez la configuration SMTP." });
@@ -28126,7 +28375,7 @@ router23.post("/:id/send-otp", authenticateToken, async (req2, res) => {
     });
     return res.json({ success: true, message: emailSent ? "Code de v\xE9rification envoy\xE9 par email" : `[DEV] Code OTP affich\xE9 dans les logs serveur` });
   } catch (error) {
-    console.error("[E-Signature] Erreur envoi OTP:", error);
+    logger.error("[E-Signature] Erreur envoi OTP:", error);
     return res.status(500).json({ success: false, message: "Erreur envoi OTP" });
   }
 });
@@ -28189,7 +28438,7 @@ router23.post("/:id/verify-otp", async (req2, res) => {
     });
     return res.json({ success: true, message: "Identit\xE9 v\xE9rifi\xE9e" });
   } catch (error) {
-    console.error("[E-Signature] Erreur v\xE9rification OTP:", error);
+    logger.error("[E-Signature] Erreur v\xE9rification OTP:", error);
     return res.status(500).json({ success: false, message: "Erreur v\xE9rification OTP" });
   }
 });
@@ -28222,7 +28471,7 @@ router23.post("/:id/sign", async (req2, res) => {
     if (signature.expiresAt && signature.expiresAt < /* @__PURE__ */ new Date()) {
       return res.status(410).json({ success: false, message: "Demande de signature expir\xE9e" });
     }
-    const signatureHash = import_crypto15.default.createHash("sha256").update(data.signatureData).digest("hex");
+    const signatureHash = crypto.createHash("sha256").update(data.signatureData).digest("hex");
     let documentHash = null;
     let signedPdfUrl = null;
     if (signature.submissionId) {
@@ -28255,7 +28504,7 @@ router23.post("/:id/sign", async (req2, res) => {
         documentHash = pdfResult.hash;
         signedPdfUrl = `/api/e-signature/${id}/download-signed-pdf`;
       } catch (pdfErr) {
-        console.error("[E-Signature] Erreur g\xE9n\xE9ration PDF sign\xE9 (non bloquant):", pdfErr);
+        logger.error("[E-Signature] Erreur g\xE9n\xE9ration PDF sign\xE9 (non bloquant):", pdfErr);
       }
     }
     const documentSnapshot = {
@@ -28303,7 +28552,7 @@ router23.post("/:id/sign", async (req2, res) => {
         entityId: id,
         entityLabel: `Document sign\xE9 par ${signature.signerName}`,
         clientName: signature.signerName || void 0
-      }).catch((err) => console.error("[E-Signature] Auto-post error:", err));
+      }).catch((err) => logger.error("[E-Signature] Auto-post error:", err));
     }
     return res.json({
       success: true,
@@ -28314,7 +28563,7 @@ router23.post("/:id/sign", async (req2, res) => {
       signedAt: (/* @__PURE__ */ new Date()).toISOString()
     });
   } catch (error) {
-    console.error("[E-Signature] Erreur signature:", error);
+    logger.error("[E-Signature] Erreur signature:", error);
     return res.status(500).json({ success: false, message: "Erreur lors de la signature" });
   }
 });
@@ -28377,7 +28626,7 @@ router23.get("/:id/download-signed-pdf", async (req2, res) => {
     const tblFilename = `devis-signe-${signature.submissionId.substring(0, 8)}.pdf`;
     return sendPdf(buffer, tblFilename, { "X-PDF-Hash": hash, "X-Signature-Count": allSignatures.length.toString() });
   } catch (error) {
-    console.error("[E-Signature] Erreur download PDF sign\xE9:", error);
+    logger.error("[E-Signature] Erreur download PDF sign\xE9:", error);
     return res.status(500).json({ success: false, message: "Erreur t\xE9l\xE9chargement PDF sign\xE9" });
   }
 });
@@ -28410,7 +28659,7 @@ router23.get("/submission/:submissionId/status", authenticateToken, async (req2,
       totalPending: signatures.filter((s) => !["SIGNED", "EXPIRED", "REVOKED"].includes(s.status)).length
     });
   } catch (error) {
-    console.error("[E-Signature] Erreur statut signatures:", error);
+    logger.error("[E-Signature] Erreur statut signatures:", error);
     return res.status(500).json({ success: false, message: "Erreur r\xE9cup\xE9ration statut" });
   }
 });
@@ -28445,7 +28694,7 @@ router23.get("/:id/audit-trail", authenticateToken, async (req2, res) => {
     if (!signature) return res.status(404).json({ success: false, message: "Signature non trouv\xE9e" });
     return res.json({ success: true, ...signature });
   } catch (error) {
-    console.error("[E-Signature] Erreur audit trail:", error);
+    logger.error("[E-Signature] Erreur audit trail:", error);
     return res.status(500).json({ success: false, message: "Erreur r\xE9cup\xE9ration audit trail" });
   }
 });
@@ -28478,7 +28727,7 @@ router23.post("/:id/revoke", authenticateToken, async (req2, res) => {
     });
     return res.json({ success: true, message: "Signature r\xE9voqu\xE9e" });
   } catch (error) {
-    console.error("[E-Signature] Erreur r\xE9vocation:", error);
+    logger.error("[E-Signature] Erreur r\xE9vocation:", error);
     return res.status(500).json({ success: false, message: "Erreur r\xE9vocation" });
   }
 });
@@ -28522,7 +28771,7 @@ router23.get("/sign/:token", async (req2, res) => {
       submissionId: signature.submissionId
     });
   } catch (error) {
-    console.error("[E-Signature] Erreur acc\xE8s token:", error);
+    logger.error("[E-Signature] Erreur acc\xE8s token:", error);
     return res.status(500).json({ success: false, message: "Erreur acc\xE8s" });
   }
 });
@@ -28560,7 +28809,7 @@ router23.post("/sign/:token/send-otp", async (req2, res) => {
         `
       });
     } catch (emailErr) {
-      console.error("[E-Signature] Erreur envoi OTP (token):", emailErr);
+      logger.error("[E-Signature] Erreur envoi OTP (token):", emailErr);
       return res.status(500).json({ success: false, message: "Erreur envoi email" });
     }
     await db.electronicSignature.update({
@@ -28578,7 +28827,7 @@ router23.post("/sign/:token/send-otp", async (req2, res) => {
     });
     return res.json({ success: true, message: "Code envoy\xE9" });
   } catch (error) {
-    console.error("[E-Signature] Erreur send-otp token:", error);
+    logger.error("[E-Signature] Erreur send-otp token:", error);
     return res.status(500).json({ success: false, message: "Erreur" });
   }
 });
@@ -28619,7 +28868,7 @@ router23.post("/sign/:token/verify-otp", async (req2, res) => {
     });
     return res.json({ success: true, signatureId: signature.id });
   } catch (error) {
-    console.error("[E-Signature] Erreur verify-otp token:", error);
+    logger.error("[E-Signature] Erreur verify-otp token:", error);
     return res.status(500).json({ success: false, message: "Erreur" });
   }
 });
@@ -28645,7 +28894,7 @@ router23.post("/sign/:token/submit", async (req2, res) => {
     if (!validation.data.legalAccepted) {
       return res.status(400).json({ success: false, message: "Clause juridique non accept\xE9e" });
     }
-    const signatureHash = import_crypto15.default.createHash("sha256").update(validation.data.signatureData).digest("hex");
+    const signatureHash = crypto.createHash("sha256").update(validation.data.signatureData).digest("hex");
     let documentHash = null;
     if (signature.documentId) {
       try {
@@ -28657,9 +28906,9 @@ router23.post("/sign/:token/submit", async (req2, res) => {
             signedAt: /* @__PURE__ */ new Date()
           }]
         });
-        documentHash = import_crypto15.default.createHash("sha256").update(buffer).digest("hex");
+        documentHash = crypto.createHash("sha256").update(buffer).digest("hex");
       } catch (pdfErr) {
-        console.error("[E-Signature] Erreur hash PDF client (non bloquant):", pdfErr);
+        logger.error("[E-Signature] Erreur hash PDF client (non bloquant):", pdfErr);
       }
     } else if (signature.submissionId) {
       try {
@@ -28688,7 +28937,7 @@ router23.post("/sign/:token/submit", async (req2, res) => {
         const pdfResult = await generateTblPdfWithHash(pdfData);
         documentHash = pdfResult.hash;
       } catch (pdfErr) {
-        console.error("[E-Signature] Erreur PDF (non bloquant):", pdfErr);
+        logger.error("[E-Signature] Erreur PDF (non bloquant):", pdfErr);
       }
     }
     await db.electronicSignature.update({
@@ -28743,7 +28992,7 @@ router23.post("/sign/:token/submit", async (req2, res) => {
               pdfFilename = `devis-signe-${signature.submissionId.substring(0, 8)}.pdf`;
             }
           } catch (pdfErr) {
-            console.warn("[E-Signature] \u26A0\uFE0F Erreur g\xE9n\xE9ration PDF pour email:", pdfErr);
+            logger.warn("[E-Signature] \u26A0\uFE0F Erreur g\xE9n\xE9ration PDF pour email:", pdfErr);
           }
           if (pdfBuffer) {
           }
@@ -28780,7 +29029,7 @@ router23.post("/sign/:token/submit", async (req2, res) => {
                 attachments: attachments.map((a) => ({ name: a.filename, contentType: a.mimeType, data: a.content.toString("base64") }))
               });
             } catch (clientEmailErr) {
-              console.warn("[E-Signature] \u26A0\uFE0F \xC9chec email client:", clientEmailErr);
+              logger.warn("[E-Signature] \u26A0\uFE0F \xC9chec email client:", clientEmailErr);
             }
           }
           if (signature.createdBy) {
@@ -28813,11 +29062,11 @@ router23.post("/sign/:token/submit", async (req2, res) => {
                 });
               }
             } catch (adminEmailErr) {
-              console.warn("[E-Signature] \u26A0\uFE0F \xC9chec email commercial:", adminEmailErr);
+              logger.warn("[E-Signature] \u26A0\uFE0F \xC9chec email commercial:", adminEmailErr);
             }
           }
         } catch (notifErr) {
-          console.warn("[E-Signature] \u26A0\uFE0F \xC9chec envoi emails (non bloquant):", notifErr);
+          logger.warn("[E-Signature] \u26A0\uFE0F \xC9chec envoi emails (non bloquant):", notifErr);
         }
       })();
     }
@@ -28879,7 +29128,7 @@ router23.post("/sign/:token/submit", async (req2, res) => {
           if (firstStatus) {
             statusId = firstStatus.id;
           } else {
-            const newStatusId = import_crypto15.default.randomUUID();
+            const newStatusId = crypto.randomUUID();
             const created = await db.chantierStatus.create({
               data: { id: newStatusId, organizationId: signature.organizationId, name: "Nouveau", color: "#1677ff", order: 0, isDefault: true, updatedAt: /* @__PURE__ */ new Date() }
             });
@@ -28888,12 +29137,12 @@ router23.post("/sign/:token/submit", async (req2, res) => {
           await db.generatedDocument.update({
             where: { id: signature.documentId },
             data: { status: "SIGNED", signedAt: /* @__PURE__ */ new Date(), updatedAt: /* @__PURE__ */ new Date() }
-          }).catch((err) => console.warn("[E-Signature] \u26A0\uFE0F Erreur update doc SIGNED:", err));
+          }).catch((err) => logger.warn("[E-Signature] \u26A0\uFE0F Erreur update doc SIGNED:", err));
           for (const product of selectedProducts) {
             try {
               await db.chantier.create({
                 data: {
-                  id: import_crypto15.default.randomUUID(),
+                  id: crypto.randomUUID(),
                   organizationId: signature.organizationId,
                   leadId: leadId || null,
                   statusId,
@@ -28914,11 +29163,11 @@ router23.post("/sign/:token/submit", async (req2, res) => {
                 }
               });
             } catch (chantierErr) {
-              console.warn(`[E-Signature] \u26A0\uFE0F Erreur cr\xE9ation chantier "${product.label}":`, chantierErr);
+              logger.warn(`[E-Signature] \u26A0\uFE0F Erreur cr\xE9ation chantier "${product.label}":`, chantierErr);
             }
           }
         } catch (err) {
-          console.warn("[E-Signature] \u26A0\uFE0F Erreur auto-cr\xE9ation chantiers (non bloquant):", err);
+          logger.warn("[E-Signature] \u26A0\uFE0F Erreur auto-cr\xE9ation chantiers (non bloquant):", err);
         }
       })();
     }
@@ -28931,7 +29180,7 @@ router23.post("/sign/:token/submit", async (req2, res) => {
       signedPdfUrl: `/api/e-signature/${signature.id}/download-signed-pdf`
     });
   } catch (error) {
-    console.error("[E-Signature] Erreur submit token:", error);
+    logger.error("[E-Signature] Erreur submit token:", error);
     return res.status(500).json({ success: false, message: "Erreur" });
   }
 });
@@ -29129,7 +29378,7 @@ router24.get("/technicians", authenticateToken, async (req2, res) => {
     });
     return res.json({ success: true, data: enriched });
   } catch (error) {
-    console.error("[Teams] Erreur liste techniciens:", error);
+    logger.error("[Teams] Erreur liste techniciens:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -29167,7 +29416,7 @@ router24.post("/technicians", authenticateToken, requireChantierAction("team_pan
     return res.status(201).json({ success: true, data: tech });
   } catch (error) {
     if (error.code === "P2002") return res.status(409).json({ success: false, message: "Un technicien avec ces informations existe d\xE9j\xE0" });
-    console.error("[Teams] Erreur cr\xE9ation technicien:", error);
+    logger.error("[Teams] Erreur cr\xE9ation technicien:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -29182,7 +29431,7 @@ router24.put("/technicians/:id", authenticateToken, requireChantierAction("team_
     });
     return res.json({ success: true, data: tech });
   } catch (error) {
-    console.error("[Teams] Erreur modif technicien:", error);
+    logger.error("[Teams] Erreur modif technicien:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -29192,7 +29441,7 @@ router24.delete("/technicians/:id", authenticateToken, requireChantierAction("te
     await db.technician.update({ where: { id: req2.params.id, organizationId }, data: { isActive: false } });
     return res.json({ success: true, message: "Technicien d\xE9sactiv\xE9" });
   } catch (error) {
-    console.error("[Teams] Erreur suppression technicien:", error);
+    logger.error("[Teams] Erreur suppression technicien:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -29232,7 +29481,7 @@ router24.post("/technicians/sync", authenticateToken, requireChantierAction("tea
       data: { created: newTechs.length, total: userOrgs.length }
     });
   } catch (error) {
-    console.error("[Teams] Erreur sync techniciens:", error);
+    logger.error("[Teams] Erreur sync techniciens:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -29255,7 +29504,7 @@ router24.get("/technicians/org-users", authenticateToken, async (req2, res) => {
     const available = userOrgs.filter((uo) => !existingUserIds.has(uo.userId)).map((uo) => ({ ...uo.User, orgRole: uo.Role }));
     return res.json({ success: true, data: available });
   } catch (error) {
-    console.error("[Teams] Erreur org-users:", error);
+    logger.error("[Teams] Erreur org-users:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -29283,7 +29532,7 @@ router24.get("/unavailabilities", authenticateToken, async (req2, res) => {
     });
     return res.json({ success: true, data: items });
   } catch (error) {
-    console.error("[Teams] Erreur unavailabilities:", error);
+    logger.error("[Teams] Erreur unavailabilities:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -29304,7 +29553,7 @@ router24.post("/unavailabilities", authenticateToken, requireChantierAction("tea
     });
     return res.status(201).json({ success: true, data: item });
   } catch (error) {
-    console.error("[Teams] Erreur cr\xE9ation unavailability:", error);
+    logger.error("[Teams] Erreur cr\xE9ation unavailability:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -29313,7 +29562,7 @@ router24.delete("/unavailabilities/:id", authenticateToken, requireChantierActio
     await db.technicianUnavailability.delete({ where: { id: req2.params.id } });
     return res.json({ success: true, message: "Indisponibilit\xE9 supprim\xE9e" });
   } catch (error) {
-    console.error("[Teams] Erreur delete unavailability:", error);
+    logger.error("[Teams] Erreur delete unavailability:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -29347,7 +29596,7 @@ router24.get("/", authenticateToken, async (req2, res) => {
     });
     return res.json({ success: true, data: teams });
   } catch (error) {
-    console.error("[Teams] Erreur liste:", error);
+    logger.error("[Teams] Erreur liste:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -29364,7 +29613,7 @@ router24.post("/", authenticateToken, requireChantierAction("team_panel"), async
     return res.status(201).json({ success: true, data: team });
   } catch (error) {
     if (error.code === "P2002") return res.status(409).json({ success: false, message: "Une \xE9quipe avec ce nom existe d\xE9j\xE0" });
-    console.error("[Teams] Erreur cr\xE9ation:", error);
+    logger.error("[Teams] Erreur cr\xE9ation:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -29380,7 +29629,7 @@ router24.put("/:id", authenticateToken, requireChantierAction("team_panel"), asy
     });
     return res.json({ success: true, data: team });
   } catch (error) {
-    console.error("[Teams] Erreur modification:", error);
+    logger.error("[Teams] Erreur modification:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -29390,7 +29639,7 @@ router24.delete("/:id", authenticateToken, requireChantierAction("team_panel"), 
     await db.team.delete({ where: { id: req2.params.id, organizationId } });
     return res.json({ success: true, message: "\xC9quipe supprim\xE9e" });
   } catch (error) {
-    console.error("[Teams] Erreur suppression:", error);
+    logger.error("[Teams] Erreur suppression:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -29413,7 +29662,7 @@ router24.post("/:teamId/members", authenticateToken, requireChantierAction("team
     return res.status(201).json({ success: true, data: member });
   } catch (error) {
     if (error.code === "P2002") return res.status(409).json({ success: false, message: "Ce technicien est d\xE9j\xE0 dans l'\xE9quipe" });
-    console.error("[Teams] Erreur ajout membre:", error);
+    logger.error("[Teams] Erreur ajout membre:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -29428,7 +29677,7 @@ router24.put("/:teamId/members/:memberId", authenticateToken, requireChantierAct
     });
     return res.json({ success: true, data: member });
   } catch (error) {
-    console.error("[Teams] Erreur modif membre:", error);
+    logger.error("[Teams] Erreur modif membre:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -29437,7 +29686,7 @@ router24.delete("/:teamId/members/:memberId", authenticateToken, requireChantier
     await db.teamMember.delete({ where: { id: req2.params.memberId } });
     return res.json({ success: true, message: "Membre retir\xE9" });
   } catch (error) {
-    console.error("[Teams] Erreur suppression membre:", error);
+    logger.error("[Teams] Erreur suppression membre:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -29458,7 +29707,7 @@ router24.get("/assignments/by-chantier/:chantierId", authenticateToken, async (r
     });
     return res.json({ success: true, data: assignments });
   } catch (error) {
-    console.error("[Teams] Erreur assignments:", error);
+    logger.error("[Teams] Erreur assignments:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -29481,7 +29730,7 @@ router24.post("/assignments/:chantierId", authenticateToken, requireChantierActi
     return res.status(201).json({ success: true, data: assignment });
   } catch (error) {
     if (error.code === "P2002") return res.status(409).json({ success: false, message: "Ce technicien est d\xE9j\xE0 assign\xE9 \xE0 ce chantier" });
-    console.error("[Teams] Erreur assignation:", error);
+    logger.error("[Teams] Erreur assignation:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -29521,7 +29770,7 @@ router24.post("/assignments/:chantierId/team", authenticateToken, requireChantie
       message: `${results.length} technicien(s) assign\xE9(s) depuis l'\xE9quipe`
     });
   } catch (error) {
-    console.error("[Teams] Erreur assignation \xE9quipe:", error);
+    logger.error("[Teams] Erreur assignation \xE9quipe:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -29530,7 +29779,7 @@ router24.delete("/assignments/:assignmentId", authenticateToken, requireChantier
     await db.chantierAssignment.delete({ where: { id: req2.params.assignmentId } });
     return res.json({ success: true, message: "Assignation supprim\xE9e" });
   } catch (error) {
-    console.error("[Teams] Erreur suppression assignation:", error);
+    logger.error("[Teams] Erreur suppression assignation:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -29567,7 +29816,7 @@ router24.get("/time-entries", authenticateToken, async (req2, res) => {
     });
     return res.json({ success: true, data: entries });
   } catch (error) {
-    console.error("[Teams] Erreur liste pointages:", error);
+    logger.error("[Teams] Erreur liste pointages:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -29611,7 +29860,7 @@ router24.post("/time-entries", authenticateToken, requireChantierAction("pointag
       try {
         clockInPhotoUrl = await savePointagePhoto(photo, "in");
       } catch (e) {
-        console.error("[Pointage] Erreur sauvegarde photo:", e);
+        logger.error("[Pointage] Erreur sauvegarde photo:", e);
       }
     }
     let clockInDistance = null;
@@ -29673,7 +29922,7 @@ router24.post("/time-entries", authenticateToken, requireChantierAction("pointag
     });
     return res.status(201).json({ success: true, data: entry });
   } catch (error) {
-    console.error("[Teams] Erreur cr\xE9ation pointage:", error);
+    logger.error("[Teams] Erreur cr\xE9ation pointage:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -29711,7 +29960,7 @@ router24.get("/time-entries/summary", authenticateToken, async (req2, res) => {
     }));
     return res.json({ success: true, data: summary });
   } catch (error) {
-    console.error("[Teams] Erreur r\xE9sum\xE9 pointages:", error);
+    logger.error("[Teams] Erreur r\xE9sum\xE9 pointages:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -29748,7 +29997,7 @@ router24.put("/time-entries/:id", authenticateToken, requireChantierAction("poin
     });
     return res.json({ success: true, data: entry });
   } catch (error) {
-    console.error("[Teams] Erreur update pointage:", error);
+    logger.error("[Teams] Erreur update pointage:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -29771,7 +30020,7 @@ router24.put("/time-entries/:id/clock-out", authenticateToken, requireChantierAc
       try {
         clockOutPhotoUrl = await savePointagePhoto(photo, "out");
       } catch (e) {
-        console.error("[Pointage] Erreur sauvegarde photo sortie:", e);
+        logger.error("[Pointage] Erreur sauvegarde photo sortie:", e);
       }
     }
     let clockOutDistance = null;
@@ -29802,7 +30051,7 @@ router24.put("/time-entries/:id/clock-out", authenticateToken, requireChantierAc
     });
     return res.json({ success: true, data: entry });
   } catch (error) {
-    console.error("[Teams] Erreur clock-out:", error);
+    logger.error("[Teams] Erreur clock-out:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -29817,7 +30066,7 @@ router24.delete("/time-entries/:id", authenticateToken, requireChantierAction("p
     await db.timeEntry.delete({ where: { id: req2.params.id } });
     return res.json({ success: true, message: "Pointage supprim\xE9" });
   } catch (error) {
-    console.error("[Teams] Erreur suppression pointage:", error);
+    logger.error("[Teams] Erreur suppression pointage:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -29921,7 +30170,7 @@ router25.get("/", async (req2, res) => {
     res.status(200).json({ success: true, data: roles });
     return;
   } catch (error) {
-    console.error("[ROLES] Erreur lors de la r\xE9cup\xE9ration des r\xF4les:", error);
+    logger.error("[ROLES] Erreur lors de la r\xE9cup\xE9ration des r\xF4les:", error);
     res.status(500).json({
       success: false,
       message: "Erreur interne lors de la r\xE9cup\xE9ration des r\xF4les"
@@ -29983,7 +30232,7 @@ router25.get("/:id", async (req2, res) => {
       data: role
     });
   } catch (error) {
-    console.error("[ROLES] Error fetching role:", error);
+    logger.error("[ROLES] Error fetching role:", error);
     res.status(500).json({
       success: false,
       message: "Erreur interne du serveur"
@@ -30066,7 +30315,7 @@ router25.post("/", rolesCreateRateLimit, async (req2, res) => {
       message: `R\xF4le "${sanitizedName}" cr\xE9\xE9 avec succ\xE8s`
     });
   } catch (error) {
-    console.error("[ROLES] Error creating role:", error);
+    logger.error("[ROLES] Error creating role:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -30181,7 +30430,7 @@ var handleUpdateRole = async (req2, res) => {
       message: "R\xF4le modifi\xE9 avec succ\xE8s"
     });
   } catch (error) {
-    console.error("[ROLES] Erreur lors de la modification du r\xF4le:", error);
+    logger.error("[ROLES] Erreur lors de la modification du r\xF4le:", error);
     res.status(500).json({
       success: false,
       message: "Erreur interne lors de la modification du r\xF4le"
@@ -30254,7 +30503,7 @@ router25.delete("/:id", async (req2, res) => {
       message: `R\xF4le "${existingRole.name}" supprim\xE9 avec succ\xE8s`
     });
   } catch (error) {
-    console.error("[ROLES] Erreur lors de la suppression du r\xF4le:", error);
+    logger.error("[ROLES] Erreur lors de la suppression du r\xF4le:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -30265,7 +30514,7 @@ var import_express27 = require("express");
 init_database();
 var import_zod10 = require("zod");
 var import_express_rate_limit3 = __toESM(require("express-rate-limit"), 1);
-var import_crypto17 = require("crypto");
+var import_crypto16 = require("crypto");
 var router26 = (0, import_express27.Router)();
 var prisma11 = db;
 var sanitizeString3 = (input) => {
@@ -30336,7 +30585,7 @@ router26.get("/free", requireRole2(["admin", "super_admin"]), async (req2, res) 
     });
     res.json({ success: true, data: freeUsers });
   } catch (error) {
-    console.error("[USERS] Erreur r\xE9cup\xE9ration utilisateurs libres:", error);
+    logger.error("[USERS] Erreur r\xE9cup\xE9ration utilisateurs libres:", error);
     res.status(500).json({
       success: false,
       message: "Erreur serveur lors de la r\xE9cup\xE9ration des utilisateurs libres"
@@ -30394,7 +30643,7 @@ router26.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
     });
     res.json({ success: true, data: usersInOrg });
   } catch (error) {
-    console.error("[USERS] Erreur r\xE9cup\xE9ration utilisateurs:", error);
+    logger.error("[USERS] Erreur r\xE9cup\xE9ration utilisateurs:", error);
     res.status(500).json({
       success: false,
       message: "Erreur interne du serveur"
@@ -30422,7 +30671,7 @@ router26.get("/:userId/organizations", requireRole2(["admin", "super_admin"]), a
     });
     res.json({ success: true, data: userOrganizations });
   } catch (error) {
-    console.error(`[USERS] Erreur organisations utilisateur ${userId}:`, error);
+    logger.error(`[USERS] Erreur organisations utilisateur ${userId}:`, error);
     res.status(500).json({
       success: false,
       message: "Erreur interne du serveur"
@@ -30463,7 +30712,7 @@ router26.post("/user-organizations", usersModifyRateLimit, requireRole2(["admin"
     });
     res.status(201).json({ success: true, data: newUserOrganization });
   } catch (error) {
-    console.error("[USERS] Erreur assignation utilisateur:", error);
+    logger.error("[USERS] Erreur assignation utilisateur:", error);
     res.status(500).json({
       success: false,
       message: "Erreur interne du serveur"
@@ -30512,7 +30761,7 @@ router26.patch("/user-organizations/:userOrganizationId", usersModifyRateLimit, 
         message: "Relation utilisateur-organisation introuvable"
       });
     }
-    console.error("[USERS] Erreur mise \xE0 jour utilisateur:", error);
+    logger.error("[USERS] Erreur mise \xE0 jour utilisateur:", error);
     res.status(500).json({
       success: false,
       message: "Erreur interne du serveur"
@@ -30555,7 +30804,7 @@ router26.delete("/user-organizations/:userOrganizationId", usersModifyRateLimit,
     });
     res.json({ success: true, message: "Utilisateur retir\xE9 de l'organisation avec succ\xE8s" });
   } catch (error) {
-    console.error("[USERS] Erreur suppression relation:", error);
+    logger.error("[USERS] Erreur suppression relation:", error);
     res.status(500).json({
       success: false,
       message: "Erreur interne du serveur"
@@ -30576,7 +30825,7 @@ router26.patch("/:userId", usersModifyRateLimit, requireRole2(["admin", "super_a
     });
     const validationResult2 = userInfoSchema.safeParse(req2.body);
     if (!validationResult2.success) {
-      console.error("[USERS] Validation error:", validationResult2.error.errors);
+      logger.error("[USERS] Validation error:", validationResult2.error.errors);
       return res.status(400).json({
         success: false,
         message: "Donn\xE9es invalides",
@@ -30630,7 +30879,7 @@ router26.patch("/:userId", usersModifyRateLimit, requireRole2(["admin", "super_a
       data: updatedUser
     });
   } catch (error) {
-    console.error("[USERS] Erreur modification utilisateur:", error);
+    logger.error("[USERS] Erreur modification utilisateur:", error);
     res.status(500).json({
       success: false,
       message: "Erreur interne du serveur lors de la modification"
@@ -30723,7 +30972,7 @@ router26.delete("/:userId", usersModifyRateLimit, requireRole2(["admin", "super_
       message: `Utilisateur ${userToDelete.email} supprim\xE9 avec succ\xE8s`
     });
   } catch (error) {
-    console.error("[USERS] Erreur suppression utilisateur:", error);
+    logger.error("[USERS] Erreur suppression utilisateur:", error);
     if (error?.code === "P2003") {
       return res.status(400).json({
         success: false,
@@ -30850,7 +31099,7 @@ router26.get("/:userId/rights-summary", requireRole2(["admin", "super_admin"]), 
       data: rightsSummary
     });
   } catch (error) {
-    console.error("[USERS] Erreur r\xE9cup\xE9ration r\xE9sum\xE9 des droits:", error);
+    logger.error("[USERS] Erreur r\xE9cup\xE9ration r\xE9sum\xE9 des droits:", error);
     res.status(500).json({
       success: false,
       message: "Erreur interne du serveur lors de la r\xE9cup\xE9ration du r\xE9sum\xE9 des droits"
@@ -30914,7 +31163,7 @@ router26.post("/me/current-organization", async (req2, res) => {
       });
     }
   } catch (error) {
-    console.error("[USERS] Erreur changement organisation:", error);
+    logger.error("[USERS] Erreur changement organisation:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors du changement d'organisation"
@@ -30931,7 +31180,7 @@ router26.post("/:userId/resend-verification", requireRole2(["admin", "super_admi
     if (user.emailVerified) {
       return res.json({ success: true, message: "Cet utilisateur a d\xE9j\xE0 v\xE9rifi\xE9 son email.", alreadyVerified: true });
     }
-    const newToken = (0, import_crypto17.randomBytes)(32).toString("hex");
+    const newToken = (0, import_crypto16.randomBytes)(32).toString("hex");
     const newExpires = new Date(Date.now() + 24 * 60 * 60 * 1e3);
     await prisma11.user.update({
       where: { id: userId },
@@ -30963,7 +31212,7 @@ Ce lien est valide pendant 24 heures.
             <div style="text-align: center; margin-bottom: 30px;">
               <h1 style="color: #2563eb; margin: 0; font-size: 28px;">Zhiive</h1>
             </div>
-            <h2 style="color: #1a1a2e; margin-top: 0;">Bonjour ${firstName} !</h2>
+            <h2 style="color: ${SF.dark}; margin-top: 0;">Bonjour ${firstName} !</h2>
             <p style="color: #444; line-height: 1.6;">Un administrateur vous a renvoy&eacute; le lien d'activation. Cliquez ci-dessous pour activer votre compte :</p>
             <p style="text-align: center; margin: 35px 0;">
               <a href="${verifyUrl}" style="background-color: #2563eb; color: white; padding: 14px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block;">Activer mon compte</a>
@@ -30977,7 +31226,7 @@ Ce lien est valide pendant 24 heures.
     });
     res.json({ success: true, message: `Email de confirmation renvoy\xE9 \xE0 ${user.email}` });
   } catch (error) {
-    console.error("[USERS] Erreur renvoi email v\xE9rification:", error);
+    logger.error("[USERS] Erreur renvoi email v\xE9rification:", error);
     res.status(500).json({ success: false, message: "Erreur lors de l'envoi de l'email de v\xE9rification" });
   }
 });
@@ -31003,7 +31252,7 @@ router26.patch("/:userId/global-status", requireRole2(["admin", "super_admin"]),
     });
     res.json({ success: true, message: `Statut Zhiive mis \xE0 jour: ${parsed.data.status}` });
   } catch (error) {
-    console.error("[USERS] Erreur changement statut global:", error);
+    logger.error("[USERS] Erreur changement statut global:", error);
     res.status(500).json({ success: false, message: "Erreur lors du changement de statut global" });
   }
 });
@@ -31053,7 +31302,7 @@ router27.get("/users-emails", async (req2, res) => {
     });
     res.json({ success: true, data });
   } catch (error) {
-    console.error("[ADMIN-PASSWORD] Erreur:", error);
+    logger.error("[ADMIN-PASSWORD] Erreur:", error);
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
@@ -31103,7 +31352,7 @@ router27.post("/update-email-config", async (req2, res) => {
     }
     res.json({ success: true, message: "Configuration email mise \xE0 jour" });
   } catch (error) {
-    console.error("[ADMIN-PASSWORD] Erreur update-email-config:", error);
+    logger.error("[ADMIN-PASSWORD] Erreur update-email-config:", error);
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
@@ -31165,7 +31414,7 @@ var handleServiceToggle = async (res, userId, serviceType, isActive) => {
       data: { userId: validatedUserId, serviceType, isActive }
     });
   } catch (error) {
-    console.error(`[API/Services] Erreur lors de la mise \xE0 jour du service ${serviceType}:`, error);
+    logger.error(`[API/Services] Erreur lors de la mise \xE0 jour du service ${serviceType}:`, error);
     if (error instanceof import_zod11.z.ZodError) {
       return res.status(400).json({ success: false, message: "Param\xE8tres invalides", errors: error.errors });
     }
@@ -31189,10 +31438,10 @@ var mapService = (s) => ({
 router28.get("/status/:userId", async (req2, res) => {
   try {
     const { userId } = import_zod11.z.object({ userId: import_zod11.z.string().min(1) }).parse(req2.params);
-    const services = await db.userService.findMany({ where: { userId } });
+    const services = await db.userService.findMany({ where: { userId }, take: 200 });
     res.json({ success: true, data: services.map(mapService) });
   } catch (error) {
-    console.error(`[API/Services] Erreur GET /status/${req2.params.userId}:`, error);
+    logger.error(`[API/Services] Erreur GET /status/${req2.params.userId}:`, error);
     if (error instanceof import_zod11.z.ZodError) {
       return res.status(400).json({ success: false, message: "ID utilisateur invalide." });
     }
@@ -31215,7 +31464,7 @@ router28.post("/status/bulk", async (req2, res) => {
     }, {});
     res.json({ success: true, data: servicesByUser });
   } catch (error) {
-    console.error("[API/Services] Erreur POST /status/bulk:", error);
+    logger.error("[API/Services] Erreur POST /status/bulk:", error);
     if (error instanceof import_zod11.z.ZodError) {
       return res.status(400).json({ success: false, message: "Donn\xE9es invalides." });
     }
@@ -31297,7 +31546,7 @@ router29.get("/", async (req2, res) => {
     const accessCount = permissions.filter((p) => p.action === "access" && p.allowed).length;
     res.json({ success: true, data: permissions });
   } catch (error) {
-    console.error("[API][permissions] Erreur lors de la r\xE9cup\xE9ration des permissions :", error);
+    logger.error("[API][permissions] Erreur lors de la r\xE9cup\xE9ration des permissions :", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -31364,7 +31613,7 @@ router29.post("/bulk", async (req2, res) => {
     ]);
     res.status(200).json({ success: true, message: "Permissions mises \xE0 jour avec succ\xE8s" });
   } catch (error) {
-    console.error("[API][permissions/bulk] Erreur lors de la mise \xE0 jour en masse:", error);
+    logger.error("[API][permissions/bulk] Erreur lors de la mise \xE0 jour en masse:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -31428,7 +31677,7 @@ router29.post("/", async (req2, res) => {
     ]);
     res.status(200).json({ success: true, message: "Permissions mises \xE0 jour avec succ\xE8s" });
   } catch (error) {
-    console.error("[API][permissions] Erreur lors de la mise \xE0 jour:", error);
+    logger.error("[API][permissions] Erreur lors de la mise \xE0 jour:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -31462,7 +31711,7 @@ router30.get("/users/:id", requireRole2(["super_admin"]), async (req2, res) => {
     }
     res.json(user);
   } catch (error) {
-    console.error(`Erreur lors de la r\xE9cup\xE9ration de l'utilisateur ${id}:`, error);
+    logger.error(`Erreur lors de la r\xE9cup\xE9ration de l'utilisateur ${id}:`, error);
     res.status(500).json({ error: "Erreur interne du serveur" });
   }
 });
@@ -31483,7 +31732,7 @@ router30.get("/users/mail-status", requireRole2(["super_admin"]), async (_req, r
     });
     res.json(usersWithMailStatus);
   } catch (error) {
-    console.error("Erreur lors de la r\xE9cup\xE9ration des utilisateurs:", error);
+    logger.error("Erreur lors de la r\xE9cup\xE9ration des utilisateurs:", error);
     res.status(500).json({ error: "Erreur interne du serveur" });
   }
 });
@@ -31525,7 +31774,7 @@ router30.post("/mail/settings", requireRole2(["super_admin"]), async (req2, res)
     });
     res.status(200).json({ message: "Configuration mail mise \xE0 jour avec succ\xE8s." });
   } catch (error) {
-    console.error("Erreur lors de la mise \xE0 jour de la configuration mail:", error);
+    logger.error("Erreur lors de la mise \xE0 jour de la configuration mail:", error);
     res.status(500).json({ error: "Erreur interne du serveur" });
   }
 });
@@ -31546,7 +31795,7 @@ router30.get("/mail/settings", async (req2, res) => {
     const { encryptedPassword: _encryptedPassword, ...settings } = mailSettings;
     res.status(200).json(settings);
   } catch (error) {
-    console.error("Erreur lors de la r\xE9cup\xE9ration des param\xE8tres mail:", error);
+    logger.error("Erreur lors de la r\xE9cup\xE9ration des param\xE8tres mail:", error);
     res.status(500).json({ error: "Erreur interne du serveur" });
   }
 });
@@ -31574,7 +31823,7 @@ router31.post("/", authMiddleware, async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("[Impersonate Route] Erreur:", error);
+    logger.error("[Impersonate Route] Erreur:", error);
     return res.status(500).json({
       success: false,
       message: "Erreur lors de la configuration de l'usurpation"
@@ -31595,7 +31844,7 @@ router31.delete("/", authMiddleware, async (req2, res) => {
       message: "Usurpation d'identit\xE9 d\xE9sactiv\xE9e"
     });
   } catch (error) {
-    console.error("[Impersonate Route] Erreur lors de l'arr\xEAt:", error);
+    logger.error("[Impersonate Route] Erreur lors de l'arr\xEAt:", error);
     return res.status(500).json({
       success: false,
       message: "Erreur lors de l'arr\xEAt de l'usurpation"
@@ -31653,7 +31902,7 @@ router32.get("/", async (req2, res) => {
     });
     res.json(clients);
   } catch (error) {
-    console.error("[CLIENTS] Erreur lors de la r\xE9cup\xE9ration des clients:", error);
+    logger.error("[CLIENTS] Erreur lors de la r\xE9cup\xE9ration des clients:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9cup\xE9ration des clients",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -31698,7 +31947,7 @@ router32.get("/:id", async (req2, res) => {
     };
     res.json(client);
   } catch (error) {
-    console.error("[CLIENTS] Erreur lors de la r\xE9cup\xE9ration du client:", error);
+    logger.error("[CLIENTS] Erreur lors de la r\xE9cup\xE9ration du client:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9cup\xE9ration du client",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -31749,10 +31998,10 @@ router32.post("/", async (req2, res) => {
       entityId: lead.id,
       entityLabel: company || name || "Nouveau client",
       clientName: name || company || void 0
-    }).catch((err) => console.error("[CLIENTS] Auto-post error:", err));
+    }).catch((err) => logger.error("[CLIENTS] Auto-post error:", err));
     res.status(201).json(client);
   } catch (error) {
-    console.error("[CLIENTS] Erreur lors de la cr\xE9ation du client:", error);
+    logger.error("[CLIENTS] Erreur lors de la cr\xE9ation du client:", error);
     res.status(500).json({
       error: "Erreur lors de la cr\xE9ation du client",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -31842,7 +32091,7 @@ router33.get("/", async (req2, res) => {
     }
     res.json(projects);
   } catch (error) {
-    console.error("[PROJECTS] Erreur lors de la r\xE9cup\xE9ration des projets:", error);
+    logger.error("[PROJECTS] Erreur lors de la r\xE9cup\xE9ration des projets:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9cup\xE9ration des projets",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -31904,7 +32153,7 @@ router33.get("/:id", async (req2, res) => {
     };
     res.json(project);
   } catch (error) {
-    console.error("[PROJECTS] Erreur lors de la r\xE9cup\xE9ration du projet:", error);
+    logger.error("[PROJECTS] Erreur lors de la r\xE9cup\xE9ration du projet:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9cup\xE9ration du projet",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -31954,7 +32203,7 @@ router33.post("/", async (req2, res) => {
     };
     res.status(201).json(project);
   } catch (error) {
-    console.error("[PROJECTS] Erreur lors de la cr\xE9ation du projet:", error);
+    logger.error("[PROJECTS] Erreur lors de la cr\xE9ation du projet:", error);
     res.status(500).json({
       error: "Erreur lors de la cr\xE9ation du projet",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -31965,6 +32214,7 @@ var projects_default = router33;
 
 // src/routes/gemini.ts
 var import_express35 = __toESM(require("express"), 1);
+init_database();
 var router34 = import_express35.default.Router();
 var geminiService = getGeminiService();
 router34.use(authenticateToken);
@@ -31996,7 +32246,7 @@ router34.post("/generate-email", async (req2, res) => {
       });
     }
   } catch (error) {
-    console.error("\u274C Erreur route generate-email:", error);
+    logger.error("\u274C Erreur route generate-email:", error);
     res.status(500).json({
       success: false,
       message: "Erreur serveur lors de la g\xE9n\xE9ration d'email"
@@ -32030,7 +32280,7 @@ router34.post("/analyze-lead", async (req2, res) => {
       });
     }
   } catch (error) {
-    console.error("\u274C Erreur route analyze-lead:", error);
+    logger.error("\u274C Erreur route analyze-lead:", error);
     res.status(500).json({
       success: false,
       message: "Erreur serveur lors de l'analyse du lead"
@@ -32065,7 +32315,7 @@ router34.post("/generate-proposal", async (req2, res) => {
       });
     }
   } catch (error) {
-    console.error("\u274C Erreur route generate-proposal:", error);
+    logger.error("\u274C Erreur route generate-proposal:", error);
     res.status(500).json({
       success: false,
       message: "Erreur serveur lors de la g\xE9n\xE9ration de proposition"
@@ -32099,7 +32349,7 @@ router34.post("/analyze-sentiment", async (req2, res) => {
       });
     }
   } catch (error) {
-    console.error("\u274C Erreur route analyze-sentiment:", error);
+    logger.error("\u274C Erreur route analyze-sentiment:", error);
     res.status(500).json({
       success: false,
       message: "Erreur serveur lors de l'analyse de sentiment"
@@ -32133,7 +32383,7 @@ router34.post("/suggest-response", async (req2, res) => {
       });
     }
   } catch (error) {
-    console.error("\u274C Erreur route suggest-response:", error);
+    logger.error("\u274C Erreur route suggest-response:", error);
     res.status(500).json({
       success: false,
       message: "Erreur serveur lors de la suggestion de r\xE9ponse"
@@ -32155,7 +32405,7 @@ router34.get("/test", async (req2, res) => {
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
     });
   } catch (error) {
-    console.error("\u274C Erreur test Gemini:", error);
+    logger.error("\u274C Erreur test Gemini:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors du test Gemini",
@@ -32165,20 +32415,21 @@ router34.get("/test", async (req2, res) => {
 });
 router34.get("/stats", async (req2, res) => {
   try {
+    const organizationId = req2.user?.organizationId;
+    const where = organizationId ? { organizationId } : {};
+    const [total, lastEntry] = await Promise.all([
+      db.aIRecommendation.count({ where }),
+      db.aIRecommendation.findFirst({ where, orderBy: { createdAt: "desc" }, select: { createdAt: true } })
+    ]);
     res.json({
       success: true,
       stats: {
-        emailsGenerated: 0,
-        leadsAnalyzed: 0,
-        proposalsCreated: 0,
-        sentimentAnalyses: 0,
-        responseSuggestions: 0,
-        lastUsed: (/* @__PURE__ */ new Date()).toISOString()
-      },
-      message: "Statistiques Gemini (\xE0 impl\xE9menter)"
+        totalRecommendations: total,
+        lastUsed: lastEntry?.createdAt ?? null
+      }
     });
   } catch (error) {
-    console.error("\u274C Erreur stats Gemini:", error);
+    logger.error("\u274C Erreur stats Gemini:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la r\xE9cup\xE9ration des statistiques"
@@ -32434,7 +32685,7 @@ var TelnyxCascadeService = {
 
 // src/api/telnyx.ts
 init_crypto();
-var import_crypto21 = __toESM(require("crypto"), 1);
+var import_crypto20 = __toESM(require("crypto"), 1);
 var router35 = (0, import_express36.Router)();
 var prisma17 = db;
 router35.use(async (_req, _res, next) => {
@@ -32616,7 +32867,7 @@ async function getTelnyxAuth(organizationId) {
 function getApiKeyMeta(rawKey) {
   const trimmed = rawKey.replace(/^Bearer\s+/i, "").trim();
   const prefix = trimmed.length >= 4 ? trimmed.slice(0, 4) : trimmed.length > 0 ? trimmed : null;
-  const fingerprint = import_crypto21.default.createHash("sha256").update(trimmed).digest("hex").slice(0, 12);
+  const fingerprint = import_crypto20.default.createHash("sha256").update(trimmed).digest("hex").slice(0, 12);
   return { length: trimmed.length, prefix, fingerprint };
 }
 function normalizeE164(value) {
@@ -32836,13 +33087,23 @@ router35.get("/diagnostic", async (req2, res) => {
       TelnyxSipEndpoint: false,
       TelnyxCallLeg: false
     };
-    for (const tableName of Object.keys(present)) {
-      try {
-        await prisma17.$queryRawUnsafe(`SELECT 1 FROM "${tableName}" LIMIT 1`);
-        present[tableName] = true;
-      } catch {
-        present[tableName] = false;
-      }
+    try {
+      await prisma17.$queryRaw`SELECT 1 FROM "TelnyxConfig" LIMIT 1`;
+      present.TelnyxConfig = true;
+    } catch {
+      present.TelnyxConfig = false;
+    }
+    try {
+      await prisma17.$queryRaw`SELECT 1 FROM "TelnyxSipEndpoint" LIMIT 1`;
+      present.TelnyxSipEndpoint = true;
+    } catch {
+      present.TelnyxSipEndpoint = false;
+    }
+    try {
+      await prisma17.$queryRaw`SELECT 1 FROM "TelnyxCallLeg" LIMIT 1`;
+      present.TelnyxCallLeg = true;
+    } catch {
+      present.TelnyxCallLeg = false;
     }
     result.checks.push({
       name: "db_telnyx_cascade_schema",
@@ -33941,7 +34202,7 @@ router35.post("/config", async (req2, res) => {
       ...incomingKey ? { apiKeyMeta: getApiKeyMeta(incomingKey) } : {}
     });
   } catch (error) {
-    const errorId = import_crypto21.default.randomUUID();
+    const errorId = import_crypto20.default.randomUUID();
     console.error(`\u274C [Telnyx API] Erreur sauvegarde configuration (errorId=${errorId}):`, error);
     const anyErr = error;
     const prismaCode = anyErr?.code;
@@ -35265,7 +35526,7 @@ router37.get("/", async (req2, res) => {
     ]);
     res.json({ success: true, total, page: pageNum, pageSize: sizeNum, data });
   } catch (e) {
-    console.error("[QUOTES] GET list error", e);
+    logger.error("[QUOTES] GET list error", e);
     res.status(500).json({ success: false, error: "Erreur lors du chargement des devis" });
   }
 });
@@ -35285,7 +35546,7 @@ router37.get("/:id", async (req2, res) => {
     if (!quote) return res.status(404).json({ error: "Devis introuvable" });
     res.json(quote);
   } catch (e) {
-    console.error("[QUOTES] GET detail error", e);
+    logger.error("[QUOTES] GET detail error", e);
     res.status(500).json({ error: "Erreur lors du chargement du devis" });
   }
 });
@@ -35317,7 +35578,7 @@ router37.post("/", async (req2, res) => {
     });
     res.status(201).json(created);
   } catch (e) {
-    console.error("[QUOTES] POST create error", e);
+    logger.error("[QUOTES] POST create error", e);
     res.status(500).json({ error: "Erreur lors de la cr\xE9ation du devis" });
   }
 });
@@ -35353,7 +35614,7 @@ router37.patch("/:id", async (req2, res) => {
     }
     res.json(updated);
   } catch (e) {
-    console.error("[QUOTES] PATCH update error", e);
+    logger.error("[QUOTES] PATCH update error", e);
     res.status(500).json({ error: "Erreur lors de la mise \xE0 jour du devis" });
   }
 });
@@ -35368,7 +35629,7 @@ router37.delete("/:id", async (req2, res) => {
     await prisma18.quote.update({ where: { id }, data: { status: "CANCELLED" /* CANCELLED */ } });
     res.status(204).send();
   } catch (e) {
-    console.error("[QUOTES] DELETE error", e);
+    logger.error("[QUOTES] DELETE error", e);
     res.status(500).json({ error: "Erreur lors de l'annulation du devis" });
   }
 });
@@ -35426,7 +35687,7 @@ router37.post("/:id/items", async (req2, res) => {
     });
     res.json({ success: true, quote: updated });
   } catch (e) {
-    console.error("[QUOTES] POST items error", e);
+    logger.error("[QUOTES] POST items error", e);
     res.status(500).json({ error: "Erreur lors de la mise \xE0 jour des lignes" });
   }
 });
@@ -35479,7 +35740,7 @@ router37.post("/:id/duplicate", async (req2, res) => {
     });
     res.status(201).json(newQuote);
   } catch (e) {
-    console.error("[QUOTES] duplicate error", e);
+    logger.error("[QUOTES] duplicate error", e);
     res.status(500).json({ error: "Erreur lors de la duplication du devis" });
   }
 });
@@ -35551,7 +35812,7 @@ router38.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, 
     }
     res.json({ success: true, data: metrics });
   } catch (error) {
-    console.error("[ANALYTICS] Erreur m\xE9triques dashboard:", error);
+    logger.error("[ANALYTICS] Erreur m\xE9triques dashboard:", error);
     res.status(500).json({ success: false, message: "Erreur g\xE9n\xE9ration m\xE9triques" });
   }
 });
@@ -35584,7 +35845,7 @@ router38.get("/export", requireRole2(["admin", "super_admin"]), async (req2, res
       res.json({ success: true, data, filename });
     }
   } catch (error) {
-    console.error("[ANALYTICS] Erreur export:", error);
+    logger.error("[ANALYTICS] Erreur export:", error);
     res.status(500).json({ success: false, message: "Erreur export donn\xE9es" });
   }
 });
@@ -35621,7 +35882,7 @@ router38.get("/audit-trail", requireRole2(["admin", "super_admin"]), async (req2
       }
     });
   } catch (error) {
-    console.error("[ANALYTICS] Erreur audit trail:", error);
+    logger.error("[ANALYTICS] Erreur audit trail:", error);
     res.status(500).json({ success: false, message: "Erreur r\xE9cup\xE9ration audit" });
   }
 });
@@ -35712,7 +35973,7 @@ var analytics_default = router38;
 var import_express40 = __toESM(require("express"), 1);
 var import_fs5 = __toESM(require("fs"), 1);
 var import_path4 = __toESM(require("path"), 1);
-var import_crypto22 = require("crypto");
+var import_crypto21 = require("crypto");
 var geminiSingleton = getGeminiService();
 var router39 = import_express40.default.Router();
 router39.use(authMiddleware);
@@ -35741,7 +36002,7 @@ async function ensureAiUsageLogTable() {
         await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "AiUsageLog_type_idx" ON "AiUsageLog"(type);');
         await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "AiUsageLog_createdAt_idx" ON "AiUsageLog"("createdAt");');
       } catch (e) {
-        console.warn("\u26A0\uFE0F Impossible de garantir la table AiUsageLog (continuation sans log):", e.message);
+        logger.warn("\u26A0\uFE0F Impossible de garantir la table AiUsageLog (continuation sans log):", e.message);
       }
     })();
   }
@@ -35786,7 +36047,7 @@ async function logAiUsage(params) {
     };
     await db.aiUsageLog?.create?.({
       data: {
-        id: (0, import_crypto22.randomUUID)(),
+        id: (0, import_crypto21.randomUUID)(),
         organizationId: organizationId || void 0,
         userId: userId || void 0,
         type,
@@ -35802,7 +36063,7 @@ async function logAiUsage(params) {
     }).catch(async () => {
       await db.$executeRawUnsafe(
         'INSERT INTO "AiUsageLog" (id, "userId", "organizationId", type, model, "tokensPrompt", "tokensOutput", "latencyMs", success, "errorCode", "errorMessage", meta) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12);',
-        (0, import_crypto22.randomUUID)(),
+        (0, import_crypto21.randomUUID)(),
         userId,
         organizationId,
         type,
@@ -35817,7 +36078,7 @@ async function logAiUsage(params) {
       );
     });
   } catch (e) {
-    console.warn("\u26A0\uFE0F Log AI usage \xE9chou\xE9:", e.message);
+    logger.warn("\u26A0\uFE0F Log AI usage \xE9chou\xE9:", e.message);
   }
 }
 router39.post("/analyze-section", async (req2, res) => {
@@ -35849,7 +36110,7 @@ router39.post("/analyze-section", async (req2, res) => {
       error: serviceResp.error ? String(serviceResp.error) : null
     });
   } catch (error) {
-    console.error("\u274C Erreur route analyze-section:", error);
+    logger.error("\u274C Erreur route analyze-section:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de l'analyse de la section",
@@ -35898,7 +36159,7 @@ ${JSON.stringify(content, null, 2).slice(0, 3e3)}
       "changes": { 
         "<nomDuChamp>": "<valeurPropos\xE9e>",
         "// Exemple: title": "Nouveau titre optimis\xE9",
-        "// Exemple: backgroundColor": "#10b981"
+        "// Exemple: backgroundColor": WEBSITE_DEFAULTS.primaryColor
       },
       "preview": {
         "before": "<valeur actuelle dans CETTE section>",
@@ -36002,7 +36263,7 @@ function parseSectionAnalysis(content) {
     }
     return parsed;
   } catch (error) {
-    console.warn("\u26A0\uFE0F Impossible de parser la r\xE9ponse Gemini, utilisation du mock");
+    logger.warn("\u26A0\uFE0F Impossible de parser la r\xE9ponse Gemini, utilisation du mock");
     return generateMockSectionAnalysis("unknown", {});
   }
 }
@@ -36127,7 +36388,7 @@ function generateMockSectionAnalysis(sectionType, content) {
         changes: {
           buttonText: "Commencer maintenant",
           buttonSize: "large",
-          buttonColor: "#10b981"
+          buttonColor: WEBSITE_DEFAULTS.primaryColor
         },
         preview: {
           before: "Pas de bouton",
@@ -36146,7 +36407,7 @@ function generateMockSectionAnalysis(sectionType, content) {
         impact: "high",
         changes: {
           backgroundColor: "#f0fdf4",
-          borderColor: "#10b981",
+          borderColor: WEBSITE_DEFAULTS.primaryColor,
           borderWidth: "2px"
         },
         preview: {
@@ -36692,7 +36953,7 @@ async function handleChatLike(req2, res, endpoint) {
         }).join("\n");
       }
     } catch (memErr) {
-      console.warn("[AI] M\xE9moire syst\xE8me indisponible:", memErr.message);
+      logger.warn("[AI] M\xE9moire syst\xE8me indisponible:", memErr.message);
     }
     let internalFunctionalContext = "";
     try {
@@ -36716,7 +36977,7 @@ Checklist d'audit (prioriser concret et actionnable):
 Restitue: Points forts, Probl\xE8mes, Am\xE9liorations, Ajouts \xE0 envisager, \xC0 retirer, Quick wins (prioris\xE9s).`;
       }
     } catch (ctxErr) {
-      console.warn("[AI] Contexte fonctionnel Gmail non disponible:", ctxErr.message);
+      logger.warn("[AI] Contexte fonctionnel Gmail non disponible:", ctxErr.message);
     }
     let codeContext = "";
     try {
@@ -36727,11 +36988,11 @@ Restitue: Points forts, Probl\xE8mes, Am\xE9liorations, Ajouts \xE0 envisager, \
         }
       }
     } catch (e) {
-      console.warn("[AI] Contexte code \xE9chou\xE9:", e.message);
+      logger.warn("[AI] Contexte code \xE9chou\xE9:", e.message);
     }
     let autoAnalysis = null;
     try {
-      let resolvePageFile = function(name) {
+      let resolvePageFile2 = function(name) {
         if (!name) return null;
         const base = import_path4.default.join(process.cwd(), "src", "pages");
         if (name.endsWith(".tsx") && import_fs5.default.existsSync(import_path4.default.join(process.cwd(), "src", name))) return name;
@@ -36745,6 +37006,7 @@ Restitue: Points forts, Probl\xE8mes, Am\xE9liorations, Ajouts \xE0 envisager, \
         }
         return null;
       };
+      var resolvePageFile = resolvePageFile2;
       const ctxObj = context || {};
       const maybePage = ctxObj.currentPage;
       const maybeModule = ctxObj.currentModule;
@@ -36773,7 +37035,7 @@ Restitue: Points forts, Probl\xE8mes, Am\xE9liorations, Ajouts \xE0 envisager, \
         }
       }
       let pagePath = null;
-      if (maybePage) pagePath = resolvePageFile(maybePage);
+      if (maybePage) pagePath = resolvePageFile2(maybePage);
       if (!pagePath && /(page|mailpage|googlemailpage|inbox)/i.test(message)) {
         const guess = ["pages/GoogleMailPageFixed_New.tsx", "pages/GoogleMailPageFixed.tsx", "pages/GoogleMailPage.tsx", "pages/MailPage.tsx"];
         pagePath = guess.find((g) => import_fs5.default.existsSync(import_path4.default.join(process.cwd(), "src", g))) || null;
@@ -36813,7 +37075,7 @@ Restitue: Points forts, Probl\xE8mes, Am\xE9liorations, Ajouts \xE0 envisager, \
             score = Math.max(30, Math.min(95, score));
             autoAnalysis.page = { path: pagePath, lines: linesArr.length, hooks: { total: hooksCount, useEffect: useEffectCount, custom: Array.from(new Set(customHooks)).slice(0, 25) }, antd: antdComponents, i18n: hasI18n, tailwind: usesTailwind, complexity, suggestions: suggestions2.slice(0, 20), score };
           } catch (e) {
-            console.warn("[AI] Analyse page \xE9chou\xE9e:", e.message);
+            logger.warn("[AI] Analyse page \xE9chou\xE9e:", e.message);
           }
         }
         if (featureKey && featureMap && featureMap[featureKey]) {
@@ -36839,12 +37101,12 @@ Restitue: Points forts, Probl\xE8mes, Am\xE9liorations, Ajouts \xE0 envisager, \
               autoAnalysis.feature = { feature: featureKey, fileCount: count, totalLines, avgLines: Math.round(totalLines / count), totalHooks, i18nCoverage: i18nYes / count, antdUsageRate: antdYes / count, tailwindUsageRate: tailwindYes / count };
             }
           } catch (e) {
-            console.warn("[AI] Analyse feature \xE9chou\xE9e:", e.message);
+            logger.warn("[AI] Analyse feature \xE9chou\xE9e:", e.message);
           }
         }
       }
     } catch (e) {
-      console.warn("[AI] Auto-analysis failed:", e.message);
+      logger.warn("[AI] Auto-analysis failed:", e.message);
     }
     const memoryCombined = memoryString ? memoryString + (internalFunctionalContext ? "\n" + internalFunctionalContext : "") : internalFunctionalContext;
     const mergedAnalysis = (() => {
@@ -36861,7 +37123,7 @@ Restitue: Points forts, Probl\xE8mes, Am\xE9liorations, Ajouts \xE0 envisager, \
     try {
       suggestions = isLive ? deriveSuggestions(aiText) : defaultSuggestions();
     } catch (sugErr) {
-      console.warn("\u26A0\uFE0F [AI] Erreur g\xE9n\xE9ration suggestions:", sugErr);
+      logger.warn("\u26A0\uFE0F [AI] Erreur g\xE9n\xE9ration suggestions:", sugErr);
       suggestions = defaultSuggestions();
     }
     const latency = Date.now() - t0;
@@ -36920,7 +37182,7 @@ Restitue: Points forts, Probl\xE8mes, Am\xE9liorations, Ajouts \xE0 envisager, \
       }
     });
   } catch (error) {
-    console.error(`\u274C Erreur route ${endpoint}:`, error);
+    logger.error(`\u274C Erreur route ${endpoint}:`, error);
     res.status(500).json({ success: false, error: `Erreur IA (${endpoint})`, details: error.message });
     void logAiUsage({ req: req2, endpoint, success: false, latencyMs: Date.now() - t0, model: null, mode: null, error: error.message });
   }
@@ -36999,7 +37261,7 @@ router39.post("/schedule-recommendations", async (req2, res) => {
     });
     void logAiUsage({ req: req2, endpoint: "schedule-recommendations", success: true, latencyMs: latency, model: "mock", mode: "mock" });
   } catch (error) {
-    console.error("\u274C Erreur route schedule-recommendations:", error);
+    logger.error("\u274C Erreur route schedule-recommendations:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de la g\xE9n\xE9ration des recommandations",
@@ -37040,7 +37302,7 @@ R\xE9ponds en fran\xE7ais concis (<=110 mots).`;
     });
     void logAiUsage({ req: req2, endpoint: "schedule-explain", success: true, latencyMs: latency, model: serviceResp.mode === "live" ? process.env.GEMINI_MODEL || "gemini-1.5-flash" : "mock", mode: serviceResp.mode, error: serviceResp.error ? String(serviceResp.error) : null });
   } catch (error) {
-    console.error("\u274C Erreur route schedule-explain:", error);
+    logger.error("\u274C Erreur route schedule-explain:", error);
     res.status(500).json({ success: false, error: "Erreur explication planning", details: error.message });
     void logAiUsage({ req: req2, endpoint: "schedule-explain", success: false, latencyMs: Date.now() - t0, model: null, mode: null, error: error.message });
   }
@@ -37086,7 +37348,7 @@ router39.post("/analyze-conversation", async (req2, res) => {
     });
     void logAiUsage({ req: req2, endpoint: "analyze-conversation", success: true, latencyMs: latency, model: "mock", mode: "mock" });
   } catch (error) {
-    console.error("\u274C Erreur route analyze-conversation:", error);
+    logger.error("\u274C Erreur route analyze-conversation:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de l'analyse de la conversation",
@@ -37109,7 +37371,7 @@ router39.get("/test", async (req2, res) => {
       ]
     });
   } catch (error) {
-    console.error("\u274C Erreur test IA:", error);
+    logger.error("\u274C Erreur test IA:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors du test IA",
@@ -37204,7 +37466,7 @@ router39.get("/context/summary", async (req2, res) => {
     });
     void logAiUsage({ req: req2, endpoint: "context-summary", success: true, latencyMs: latency, model: "internal", mode: "context" });
   } catch (error) {
-    console.error("\u274C Erreur /api/ai/context/summary:", error);
+    logger.error("\u274C Erreur /api/ai/context/summary:", error);
     res.status(500).json({ success: false, error: "Erreur r\xE9cup\xE9ration contexte IA", details: error.message });
     void logAiUsage({ req: req2, endpoint: "context-summary", success: false, latencyMs: Date.now() - t0, model: null, mode: "context", error: error.message });
   }
@@ -37299,7 +37561,7 @@ router39.get("/context/lead/:id", async (req2, res) => {
     });
     void logAiUsage({ req: req2, endpoint: "context-lead", success: true, latencyMs: latency, model: "internal", mode: "context" });
   } catch (error) {
-    console.error("\u274C Erreur /api/ai/context/lead/:id", error);
+    logger.error("\u274C Erreur /api/ai/context/lead/:id", error);
     res.status(500).json({ success: false, error: "Erreur contexte lead", details: error.message });
     void logAiUsage({ req: req2, endpoint: "context-lead", success: false, latencyMs: Date.now() - t0, model: null, mode: "context", error: error.message });
   }
@@ -37333,7 +37595,7 @@ router39.get("/context/leads", async (req2, res) => {
     });
     void logAiUsage({ req: req2, endpoint: "context-leads-batch", success: true, latencyMs: latency, model: "internal", mode: "context" });
   } catch (error) {
-    console.error("\u274C Erreur /api/ai/context/leads (batch)", error);
+    logger.error("\u274C Erreur /api/ai/context/leads (batch)", error);
     res.status(500).json({ success: false, error: "Erreur contexte leads batch", details: error.message });
     void logAiUsage({ req: req2, endpoint: "context-leads-batch", success: false, latencyMs: Date.now() - t0, model: null, mode: "context", error: error.message });
   }
@@ -37415,7 +37677,7 @@ ${mockAnalysis.commercialWisdom.successFactors.join("\n\u2022 ")}
     });
     void logAiUsage({ req: req2, endpoint: "ultimate-recommendation", success: true, latencyMs: latency, model: "mock", mode: "analysis" });
   } catch (error) {
-    console.error("\u274C Erreur route ultimate-recommendation:", error);
+    logger.error("\u274C Erreur route ultimate-recommendation:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de l'analyse ultime",
@@ -37506,7 +37768,7 @@ router39.get("/usage/recent", async (req2, res) => {
         usedPrisma = true;
       }
     } catch (e) {
-      console.warn("\u26A0\uFE0F Lecture via Prisma aiUsageLog \xE9chou\xE9e, fallback SQL:", e.message);
+      logger.warn("\u26A0\uFE0F Lecture via Prisma aiUsageLog \xE9chou\xE9e, fallback SQL:", e.message);
     }
     if (!usedPrisma) {
       const conditions = [];
@@ -37555,7 +37817,7 @@ router39.get("/usage/recent", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\u274C Erreur /api/ai/usage/recent:", error);
+    logger.error("\u274C Erreur /api/ai/usage/recent:", error);
     res.status(500).json({ success: false, error: "Erreur r\xE9cup\xE9ration logs IA", details: error.message });
   }
 });
@@ -37565,7 +37827,7 @@ var ai_default = router39;
 var import_express41 = __toESM(require("express"), 1);
 var import_fs6 = __toESM(require("fs"), 1);
 var import_path5 = __toESM(require("path"), 1);
-var import_crypto23 = __toESM(require("crypto"), 1);
+var import_crypto22 = __toESM(require("crypto"), 1);
 var router40 = import_express41.default.Router();
 router40.use(authenticateToken);
 var ALLOWED_ROOTS = ["src", "prisma"];
@@ -37649,7 +37911,7 @@ router40.get("/code/file", (req2, res) => {
     const content = import_fs6.default.readFileSync(target, "utf8");
     const totalBytes = Buffer.byteLength(content, "utf8");
     const lines = content.split(/\r?\n/);
-    const etag = 'W/"' + import_crypto23.default.createHash("sha256").update(content).digest("hex").slice(0, 16) + '"';
+    const etag = 'W/"' + import_crypto22.default.createHash("sha256").update(content).digest("hex").slice(0, 16) + '"';
     const ifNoneMatch = req2.headers["if-none-match"];
     if (ifNoneMatch && ifNoneMatch === etag) {
       res.status(304).end();
@@ -37917,7 +38179,7 @@ router40.get("/code/feature/analyze", (req2, res) => {
   const fmapPath = abs("src/feature-map.json");
   if (!import_fs6.default.existsSync(fmapPath)) return res.status(500).json({ success: false, error: "feature-map.json manquant" });
   try {
-    let analyzeFile = function(rel) {
+    let analyzeFile2 = function(rel) {
       const target = abs(rel);
       if (!import_fs6.default.existsSync(target) || !import_fs6.default.statSync(target).isFile()) {
         errors.push({ path: rel, error: "introuvable" });
@@ -37947,13 +38209,14 @@ router40.get("/code/feature/analyze", (req2, res) => {
         importAntd
       });
     };
+    var analyzeFile = analyzeFile2;
     const fmap = JSON.parse(import_fs6.default.readFileSync(fmapPath, "utf8"));
     const def = fmap[feature];
     if (!def) return res.status(404).json({ success: false, error: "Feature inconnue" });
     const files = [...def.primaryPages || [], ...def.relatedServices || []].filter(Boolean);
     const analyses = [];
     const errors = [];
-    files.slice(0, 30).forEach((f) => analyzeFile(f));
+    files.slice(0, 30).forEach((f) => analyzeFile2(f));
     const totalLines = analyses.reduce((s, a) => s + a.lines, 0);
     const totalHooks = analyses.reduce((s, a) => s + a.hooks.total, 0);
     const pages = analyses.filter((a) => a.jsx);
@@ -38058,11 +38321,6 @@ var import_uuid4 = require("uuid");
 var prisma20 = db;
 var router41 = (0, import_express42.Router)({ mergeParams: true });
 router41.use((req2, _res, next) => {
-  console.log("[DEBUG FORMULAS] Request URL:", req2.originalUrl);
-  console.log("[DEBUG FORMULAS] Route Path:", req2.route?.path);
-  console.log("[DEBUG FORMULAS] Request Params:", req2.params);
-  console.log("[DEBUG FORMULAS] Parent Params ID:", req2.params.id);
-  console.log("[DEBUG FORMULAS] Request Body:", req2.body);
   next();
 });
 router41.use(authMiddleware, impersonationMiddleware);
@@ -38086,7 +38344,7 @@ router41.get("/all", requireRole2(["admin", "super_admin"]), async (_req, res) =
     }));
     res.json(formattedFormulas);
   } catch (error) {
-    console.error("Erreur lors de la r\xE9cup\xE9ration des formules:", error);
+    logger.error("Erreur lors de la r\xE9cup\xE9ration des formules:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des formules" });
   }
 });
@@ -38113,9 +38371,8 @@ router41.post("/", requireRole2(["admin", "super_admin"]), async (req2, res) => 
     const bodyFieldId = req2.body.fieldId;
     let { order } = req2.body;
     const effectiveFieldId = fieldId || bodyFieldId;
-    console.log("Creating formula for field:", effectiveFieldId);
+    logger.info("Creating formula for field:", effectiveFieldId);
     if (!effectiveFieldId) {
-      console.log("\u{1F9EA} Mode mock activ\xE9 pour la cr\xE9ation de formule - fieldId manquant");
       const mockId = (0, import_uuid4.v4)();
       const mockFormula = {
         id: mockId,
@@ -38135,7 +38392,7 @@ router41.post("/", requireRole2(["admin", "super_admin"]), async (req2, res) => 
         });
         order = lastFormula && typeof lastFormula.order === "number" ? lastFormula.order + 1 : 0;
       } catch (error) {
-        console.warn("Erreur lors de la recherche du dernier ordre:", error);
+        logger.warn("Erreur lors de la recherche du dernier ordre:", error);
         order = 0;
       }
     }
@@ -38162,7 +38419,7 @@ router41.post("/", requireRole2(["admin", "super_admin"]), async (req2, res) => 
       }));
       res.json(processedFormulas);
     } catch (prismaError) {
-      console.error("Erreur Prisma lors de la cr\xE9ation de formule:", prismaError);
+      logger.error("Erreur Prisma lors de la cr\xE9ation de formule:", prismaError);
       const mockFormula = {
         id: newFormulaId,
         fieldId: effectiveFieldId,
@@ -38174,7 +38431,7 @@ router41.post("/", requireRole2(["admin", "super_admin"]), async (req2, res) => 
       res.json([mockFormula]);
     }
   } catch (err) {
-    console.error(`Erreur API POST /api/fields/:fieldId/formulas:`, err);
+    logger.error(`Erreur API POST /api/fields/:fieldId/formulas:`, err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -38182,9 +38439,8 @@ router41.put("/:formulaId", requireRole2(["admin", "super_admin"]), async (req2,
   try {
     const { formulaId } = req2.params;
     const fieldId = req2.params.id;
-    console.log(`[DEBUG_FORMULA_PUT] V\xE9rification param\xE8tres - formulaId: ${formulaId}, fieldId: ${fieldId}`);
     if (!fieldId) {
-      console.error(`[DEBUG_FORMULA_PUT] Erreur: fieldId manquant`);
+      logger.error(`[DEBUG_FORMULA_PUT] Erreur: fieldId manquant`);
       return res.status(400).json({
         error: "ID du champ manquant",
         params: req2.params,
@@ -38192,12 +38448,6 @@ router41.put("/:formulaId", requireRole2(["admin", "super_admin"]), async (req2,
       });
     }
     const { name, sequence, order } = req2.body;
-    console.log(`[DEBUG_FORMULA_PUT] Mise \xE0 jour formule ${formulaId} pour champ ${fieldId}`);
-    console.log(`[DEBUG_FORMULA_PUT] Donn\xE9es re\xE7ues:`, {
-      name,
-      sequence: typeof sequence === "object" ? JSON.stringify(sequence) : sequence,
-      order
-    });
     const dataToUpdate = {};
     if (name !== void 0) {
       dataToUpdate.name = name;
@@ -38213,7 +38463,6 @@ router41.put("/:formulaId", requireRole2(["admin", "super_admin"]), async (req2,
         where: { id: formulaId }
       });
       if (!existingFormula) {
-        console.log(`[DEBUG_FORMULA_PUT] Formule non trouv\xE9e, on simule une r\xE9ponse`);
         return res.json([{
           id: formulaId,
           name: name || "Formule (simul\xE9e)",
@@ -38227,10 +38476,6 @@ router41.put("/:formulaId", requireRole2(["admin", "super_admin"]), async (req2,
         where: { id: formulaId },
         data: dataToUpdate
       });
-      console.log(`[DEBUG_FORMULA_PUT] Formule mise \xE0 jour avec succ\xE8s:`, {
-        id: updatedFormula.id,
-        name: updatedFormula.name
-      });
       const formulas = await prisma20.fieldFormula.findMany({
         where: { fieldId },
         orderBy: { order: "asc" }
@@ -38239,11 +38484,9 @@ router41.put("/:formulaId", requireRole2(["admin", "super_admin"]), async (req2,
         ...f,
         sequence: f.sequence ? JSON.parse(f.sequence) : []
       }));
-      console.log(`[DEBUG_FORMULA_PUT] Retour de ${processedFormulas.length} formules au client`);
       return res.json(processedFormulas);
     } catch (err) {
-      console.error(`[DEBUG_FORMULA_PUT] Erreur Prisma:`, err);
-      console.log(`[DEBUG_FORMULA_PUT] Mode d\xE9veloppement, simulation de r\xE9ponse`);
+      logger.error(`[DEBUG_FORMULA_PUT] Erreur Prisma:`, err);
       return res.json([{
         id: formulaId,
         name: name || "Formule (simul\xE9e)",
@@ -38254,7 +38497,7 @@ router41.put("/:formulaId", requireRole2(["admin", "super_admin"]), async (req2,
       }]);
     }
   } catch (err) {
-    console.error(`[DEBUG_FORMULA_PUT] Erreur g\xE9n\xE9rale:`, err);
+    logger.error(`[DEBUG_FORMULA_PUT] Erreur g\xE9n\xE9rale:`, err);
     return res.status(500).json({
       error: "Erreur lors de la mise \xE0 jour de la formule",
       details: err.message,
@@ -38266,23 +38509,16 @@ router41.put("/:formulaId", requireRole2(["admin", "super_admin"]), async (req2,
 router41.delete("/:formulaId", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const { formulaId, fieldId } = req2.params;
   try {
-    console.log(`[AUDIT_API_DELETE] Demande de suppression formule ${formulaId} pour champ ${fieldId}`);
     const formulaToDelete = await prisma20.fieldFormula.findFirst({
       where: { id: formulaId, fieldId }
     });
     if (!formulaToDelete) {
-      console.log(`[AUDIT_API_DELETE] Erreur: formule ${formulaId} non trouv\xE9e`);
       res.status(404).json({ error: "Formule non trouv\xE9e pour ce champ." });
       return;
     }
-    console.log(
-      `[AUDIT_API_DELETE] Formule trouv\xE9e, s\xE9quence avant suppression:`,
-      formulaToDelete.sequence ? JSON.parse(formulaToDelete.sequence) : []
-    );
     await prisma20.fieldFormula.delete({
       where: { id: formulaId }
     });
-    console.log(`[AUDIT_API_DELETE] Formule ${formulaId} supprim\xE9e avec succ\xE8s`);
     const formulas = await prisma20.fieldFormula.findMany({
       where: { fieldId },
       orderBy: { order: "asc" }
@@ -38291,10 +38527,9 @@ router41.delete("/:formulaId", requireRole2(["admin", "super_admin"]), async (re
       ...f,
       sequence: f.sequence ? JSON.parse(f.sequence) : []
     }));
-    console.log(`[AUDIT_API_DELETE] Retour de ${processedFormulas.length} formules au client apr\xE8s suppression`);
     res.status(200).json(processedFormulas);
   } catch (error) {
-    console.error(`Erreur lors de la suppression de la formule ${formulaId}:`, error);
+    logger.error(`Erreur lors de la suppression de la formule ${formulaId}:`, error);
     if (error.code === "P2025") {
       res.status(404).json({ error: "Formule non trouv\xE9e." });
     } else {
@@ -38310,31 +38545,24 @@ router41.delete("/:formulaId/sequence/:index", requireRole2(["admin", "super_adm
     return;
   }
   try {
-    console.log(`[AUDIT_API_DELETE_ITEM] Suppression de l'\xE9l\xE9ment \xE0 l'index ${index} de la formule ${formulaId}`);
     const formula = await prisma20.fieldFormula.findFirst({
       where: { id: formulaId, fieldId }
     });
     if (!formula) {
-      console.log(`[AUDIT_API_DELETE_ITEM] Formule ${formulaId} non trouv\xE9e`);
       res.status(404).json({ error: "Formule non trouv\xE9e" });
       return;
     }
     const currentSequence = formula.sequence ? JSON.parse(formula.sequence) : [];
-    console.log(`[AUDIT_API_DELETE_ITEM] S\xE9quence actuelle (${currentSequence.length} \xE9l\xE9ments):`, currentSequence);
     if (index >= currentSequence.length) {
-      console.log(`[AUDIT_API_DELETE_ITEM] Index ${index} hors limites (max: ${currentSequence.length - 1})`);
       res.status(400).json({ error: "Index hors limites" });
       return;
     }
     const elementToRemove = currentSequence[index];
     const newSequence = [...currentSequence.slice(0, index), ...currentSequence.slice(index + 1)];
-    console.log(`[AUDIT_API_DELETE_ITEM] \xC9l\xE9ment supprim\xE9: ${elementToRemove}`);
-    console.log(`[AUDIT_API_DELETE_ITEM] Nouvelle s\xE9quence (${newSequence.length} \xE9l\xE9ments):`, newSequence);
     await prisma20.fieldFormula.update({
       where: { id: formulaId },
       data: { sequence: JSON.stringify(newSequence) }
     });
-    console.log(`[AUDIT_API_DELETE_ITEM] Formule mise \xE0 jour avec succ\xE8s`);
     const formulas = await prisma20.fieldFormula.findMany({
       where: { fieldId },
       orderBy: { order: "asc" }
@@ -38343,10 +38571,9 @@ router41.delete("/:formulaId/sequence/:index", requireRole2(["admin", "super_adm
       ...f,
       sequence: f.sequence ? JSON.parse(f.sequence) : []
     }));
-    console.log(`[AUDIT_API_DELETE_ITEM] Retour de ${processedFormulas.length} formules au client`);
     res.status(200).json(processedFormulas);
   } catch (error) {
-    console.error(`[AUDIT_API_DELETE_ITEM] Erreur lors de la suppression de l'\xE9l\xE9ment \xE0 l'index ${index} de la formule ${formulaId}:`, error);
+    logger.error(`[AUDIT_API_DELETE_ITEM] Erreur lors de la suppression de l'\xE9l\xE9ment \xE0 l'index ${index} de la formule ${formulaId}:`, error);
     res.status(500).json({
       error: "Erreur lors de la suppression de l'\xE9l\xE9ment dans la s\xE9quence",
       details: error.message
@@ -38371,7 +38598,7 @@ router41.post("/reorder", requireRole2(["admin", "super_admin"]), async (req2, r
     );
     res.status(200).json({ success: true });
   } catch (error) {
-    console.error(`Erreur API POST /api/fields/${fieldId}/formulas/reorder:`, error);
+    logger.error(`Erreur API POST /api/fields/${fieldId}/formulas/reorder:`, error);
     res.status(500).json({ error: "Erreur lors de la mise \xE0 jour de l'ordre des formules.", details: error.message });
   }
 });
@@ -38407,7 +38634,7 @@ router42.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
     });
     res.json(processedDependencies);
   } catch (error) {
-    console.error(`[API] Erreur GET /api/fields/${fieldId}/dependencies:`, error);
+    logger.error(`[API] Erreur GET /api/fields/${fieldId}/dependencies:`, error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des d\xE9pendances", details: error.message });
   }
 });
@@ -38433,7 +38660,7 @@ router42.get("/read", async (req2, res) => {
     });
     res.json({ success: true, data: processed });
   } catch (error) {
-    console.error(`[API] Erreur GET /api/fields/${fieldId}/dependencies/read:`, error);
+    logger.error(`[API] Erreur GET /api/fields/${fieldId}/dependencies/read:`, error);
     res.status(500).json({ success: false, error: "Erreur lors de la r\xE9cup\xE9ration des d\xE9pendances", details: error.message });
   }
 });
@@ -38481,7 +38708,7 @@ router42.post("/", requireRole2(["admin", "super_admin"]), async (req2, res) => 
     }));
     res.json(processed);
   } catch (error) {
-    console.error(`[API] Erreur POST /api/fields/${fieldId}/dependencies:`, error);
+    logger.error(`[API] Erreur POST /api/fields/${fieldId}/dependencies:`, error);
     res.status(500).json({ error: "Erreur lors de la cr\xE9ation de la d\xE9pendance", details: error.message });
   }
 });
@@ -38503,7 +38730,7 @@ router42.post("/reorder", requireRole2(["admin", "super_admin"]), async (req2, r
     );
     res.status(200).json({ success: true });
   } catch (error) {
-    console.error(`[API] Erreur POST /api/fields/${fieldId}/dependencies/reorder:`, error);
+    logger.error(`[API] Erreur POST /api/fields/${fieldId}/dependencies/reorder:`, error);
     res.status(500).json({ error: "Erreur lors du r\xE9ordonnancement", details: error.message });
   }
 });
@@ -38535,7 +38762,7 @@ router42.put("/:dependencyId", requireRole2(["admin", "super_admin"]), async (re
     }));
     res.json(processed);
   } catch (error) {
-    console.error(`[API] Erreur PUT /api/fields/${req2.params.fieldId}/dependencies/${dependencyId}:`, error);
+    logger.error(`[API] Erreur PUT /api/fields/${req2.params.fieldId}/dependencies/${dependencyId}:`, error);
     res.status(500).json({ error: "Erreur lors de la mise \xE0 jour de la d\xE9pendance", details: error.message });
   }
 });
@@ -38545,7 +38772,7 @@ router42.delete("/:dependencyId", requireRole2(["admin", "super_admin"]), async 
     await db.fieldDependency.delete({ where: { id: dependencyId } });
     res.status(200).json({ id: dependencyId, success: true });
   } catch (error) {
-    console.error(`[API] Erreur DELETE /api/fields/${req2.params.fieldId}/dependencies/${dependencyId}:`, error);
+    logger.error(`[API] Erreur DELETE /api/fields/${req2.params.fieldId}/dependencies/${dependencyId}:`, error);
     const errObj = error;
     if (errObj.code === "P2025") {
       res.status(404).json({ error: "D\xE9pendance non trouv\xE9e." });
@@ -38698,18 +38925,19 @@ var deleteValidationById = async (validationId) => {
 
 // src/routes/validations.ts
 var router43 = import_express44.default.Router({ mergeParams: true });
+router43.use(authenticateToken);
 router43.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   const params = req2.params;
   const rawId = params.id || params.fieldId;
   if (!rawId) {
-    console.warn("[ValidationsRouter] ID de champ manquant, retour d'une liste vide");
+    logger.warn("[ValidationsRouter] ID de champ manquant, retour d'une liste vide");
     return res.json({ success: true, data: [] });
   }
   try {
     const validations = await getValidationsByFieldId(String(rawId));
     return res.json({ success: true, data: validations });
   } catch (error) {
-    console.error(`Erreur lors de la r\xE9cup\xE9ration des validations pour le champ ${rawId}:`, error);
+    logger.error(`Erreur lors de la r\xE9cup\xE9ration des validations pour le champ ${rawId}:`, error);
     return res.json({ success: true, data: [] });
   }
 });
@@ -38723,7 +38951,7 @@ router43.get("/read", async (req2, res) => {
     const validations = await getValidationsByFieldId(String(rawId));
     return res.json({ success: true, data: validations });
   } catch (error) {
-    console.error(`[ValidationsRouter] Erreur (read) pour le champ ${rawId}:`, error);
+    logger.error(`[ValidationsRouter] Erreur (read) pour le champ ${rawId}:`, error);
     return res.json({ success: true, data: [] });
   }
 });
@@ -38749,7 +38977,7 @@ router43.post("/", requireRole2(["admin", "super_admin"]), async (req2, res) => 
     const validation = await createValidation(id, validationData);
     res.status(201).json({ success: true, data: validation });
   } catch (error) {
-    console.error(`Erreur lors de la cr\xE9ation d'une validation pour le champ ${id}:`, error);
+    logger.error(`Erreur lors de la cr\xE9ation d'une validation pour le champ ${id}:`, error);
     if (process.env.NODE_ENV === "development") {
       return res.status(201).json({
         success: true,
@@ -38783,7 +39011,7 @@ router43.delete("/:id", async (req2, res) => {
     const deletedValidation = await deleteValidationById(id);
     res.status(200).json({ success: true, data: deletedValidation });
   } catch (error) {
-    console.error(`Erreur lors de la suppression de la validation ${id}:`, error);
+    logger.error(`Erreur lors de la suppression de la validation ${id}:`, error);
     res.status(200).json({
       success: true,
       data: {
@@ -38814,7 +39042,7 @@ router43.patch("/:id", async (req2, res) => {
     const updatedValidation = await updateValidation(id, validationData);
     res.status(200).json({ success: true, data: updatedValidation });
   } catch (error) {
-    console.error(`Erreur lors de la mise \xE0 jour de la validation ${id}:`, error);
+    logger.error(`Erreur lors de la mise \xE0 jour de la validation ${id}:`, error);
     if (process.env.NODE_ENV === "development") {
       return res.status(200).json({
         success: true,
@@ -38863,7 +39091,7 @@ router44.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
     });
     res.json(fields);
   } catch (error) {
-    console.error("Erreur lors de la r\xE9cup\xE9ration des champs:", error);
+    logger.error("Erreur lors de la r\xE9cup\xE9ration des champs:", error);
     res.status(500).json({ error: "Erreur interne du serveur" });
   }
 });
@@ -38884,7 +39112,7 @@ router44.post("/:id/reorder-dependencies", requireRole2(["admin", "super_admin"]
     );
     res.json({ success: true });
   } catch (error) {
-    console.error("[API] [POST /fields/:id/reorder-dependencies] Erreur:", error);
+    logger.error("[API] [POST /fields/:id/reorder-dependencies] Erreur:", error);
     res.status(500).json({ error: "Erreur lors du r\xE9ordonnancement des d\xE9pendances", details: error.message });
   }
 });
@@ -38905,7 +39133,7 @@ router44.put("/:id", requireRole2(["admin", "super_admin"]), async (req2, res) =
     });
     res.json(field);
   } catch (err) {
-    console.error("[fields.ts] PUT /:id - Erreur:", err);
+    logger.error("[fields.ts] PUT /:id - Erreur:", err);
     const errorMessage = err instanceof Error ? err.message : "Erreur inconnue";
     res.status(404).json({ error: "Champ non trouv\xE9 ou erreur lors de la mise \xE0 jour", details: errorMessage });
   }
@@ -38942,7 +39170,7 @@ router44.post("/:fieldId/options", requireRole2(["admin", "super_admin"]), async
     });
     res.json(mapFieldForFrontend(updatedField));
   } catch (err) {
-    console.error("[API] [POST /fields/:fieldId/options] Erreur cr\xE9ation option:", err);
+    logger.error("[API] [POST /fields/:fieldId/options] Erreur cr\xE9ation option:", err);
     res.status(400).json({ error: "Erreur lors de la cr\xE9ation de l'option", details: err.message });
   }
 });
@@ -38968,7 +39196,7 @@ router44.delete("/:fieldId/options/:optionId", requireRole2(["admin", "super_adm
     }
     res.json(mapFieldForFrontend(updatedField));
   } catch (err) {
-    console.error("[API] [DELETE /fields/:fieldId/options/:optionId] Erreur suppression option:", err);
+    logger.error("[API] [DELETE /fields/:fieldId/options/:optionId] Erreur suppression option:", err);
     res.status(400).json({ error: "Erreur lors de la suppression de l'option", details: err.message });
   }
 });
@@ -39010,7 +39238,7 @@ router44.post("/meta-counts", requireRole2(["admin", "super_admin"]), async (req
     }, {});
     res.json(result);
   } catch (err) {
-    console.error("[API] [POST /fields/meta-counts] Erreur:", err);
+    logger.error("[API] [POST /fields/meta-counts] Erreur:", err);
     res.status(500).json({ error: "Erreur serveur lors de la r\xE9cup\xE9ration des m\xE9tadonn\xE9es", details: err.message });
   }
 });
@@ -39033,7 +39261,7 @@ router44.patch("/:id/protection", requireRole2(["super_admin"]), async (req2, re
     });
     res.status(200).json(updated);
   } catch (error) {
-    console.error("[API] Erreur toggle protection champ:", error);
+    logger.error("[API] Erreur toggle protection champ:", error);
     res.status(500).json({ error: "Erreur lors de la mise \xE0 jour de la protection du champ" });
   }
 });
@@ -39094,7 +39322,7 @@ router44.delete("/:id", requireRole2(["admin", "super_admin"]), async (req2, res
     }
     res.status(200).json(updatedBlock);
   } catch (error) {
-    console.error("Error deleting field:", error);
+    logger.error("Error deleting field:", error);
     res.status(500).json({ error: "An error occurred while deleting the field" });
   }
 });
@@ -39159,7 +39387,7 @@ router44.put("/:id/move", requireRole2(["admin", "super_admin"]), async (req2, r
     const adaptedBlock = adaptBlockStructure(updatedBlock);
     res.json(adaptedBlock);
   } catch (err) {
-    console.error("[API] [PUT /fields/:id/move] Erreur:", err);
+    logger.error("[API] [PUT /fields/:id/move] Erreur:", err);
     res.status(500).json({ error: "Erreur lors du d\xE9placement du champ", details: err.message });
   }
 });
@@ -39205,7 +39433,7 @@ router44.put("/:id/reorder", requireRole2(["admin", "super_admin"]), async (req2
     });
     res.status(200).json(updatedSection);
   } catch (error) {
-    console.error("Error reordering field:", error);
+    logger.error("Error reordering field:", error);
     res.status(500).json({ error: "An error occurred while reordering the field" });
   }
 });
@@ -39716,7 +39944,7 @@ router45.get("/all", async (_req, res) => {
     }));
     res.json(formattedFormulas);
   } catch (error) {
-    console.error("Erreur lors de la r\xE9cup\xE9ration des formules:", error);
+    logger.error("Erreur lors de la r\xE9cup\xE9ration des formules:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des formules" });
   }
 });
@@ -39761,7 +39989,7 @@ router45.get("/field/:fieldId", async (req2, res) => {
     });
     res.json(formattedFormulas);
   } catch (error) {
-    console.error(`Erreur lors de la r\xE9cup\xE9ration des formules pour le champ ${req2.params.fieldId}:`, error);
+    logger.error(`Erreur lors de la r\xE9cup\xE9ration des formules pour le champ ${req2.params.fieldId}:`, error);
     res.status(500).json({ error: `Erreur lors de la r\xE9cup\xE9ration des formules pour le champ ${req2.params.fieldId}` });
   }
 });
@@ -39786,7 +40014,7 @@ router45.get("/:formulaId/debug", async (req2, res) => {
     const result = evaluateFormula({ id: f.id, name: f.name || f.id, sequence: Array.isArray(seq) ? seq : [], targetProperty: "" }, testValues, { rawValues: testValues });
     return res.json({ id: f.id, name: f.name, fieldId: f.fieldId, sequence: seq, evaluation: result });
   } catch (e) {
-    console.error("[API][FormulaDebug] Erreur", e);
+    logger.error("[API][FormulaDebug] Erreur", e);
     return res.status(500).json({ error: "Erreur debug formule", details: e.message });
   }
 });
@@ -39814,7 +40042,7 @@ router45.put("/:formulaId", async (req2, res) => {
         });
       }
     } catch (createError) {
-      console.error(`[API] Erreur lors de la cr\xE9ation de la formule:`, createError);
+      logger.error(`[API] Erreur lors de la cr\xE9ation de la formule:`, createError);
     }
     const dataToUpdate = {};
     if (name !== void 0) {
@@ -39833,7 +40061,7 @@ router45.put("/:formulaId", async (req2, res) => {
         data: dataToUpdate
       });
     } catch (updateError) {
-      console.error(`[API] Erreur lors de la mise \xE0 jour de la formule:`, updateError);
+      logger.error(`[API] Erreur lors de la mise \xE0 jour de la formule:`, updateError);
       updatedFormula = await prisma22.fieldFormula.create({
         data: {
           id: formulaId,
@@ -39856,7 +40084,7 @@ router45.put("/:formulaId", async (req2, res) => {
   } catch (err) {
     const { formulaId } = req2.params;
     const fieldId = req2.params.id || "";
-    console.error(`Erreur API PUT /api/fields/.../formulas/${formulaId}:`, err);
+    logger.error(`Erreur API PUT /api/fields/.../formulas/${formulaId}:`, err);
     if (process.env.NODE_ENV === "development") {
       const { sequence, name, order } = req2.body;
       updateFormula(fieldId, formulaId, {
@@ -39896,7 +40124,7 @@ router45.delete("/:formulaId", async (req2, res) => {
     }));
     return res.status(200).json(processedFormulas);
   } catch (err) {
-    console.error(`[API] Erreur lors de la suppression de la formule ${req2.params.formulaId}:`, err);
+    logger.error(`[API] Erreur lors de la suppression de la formule ${req2.params.formulaId}:`, err);
     const e = err;
     if (e.code === "P2025") {
       return res.status(404).json({ error: "Formule non trouv\xE9e" });
@@ -39939,7 +40167,7 @@ router46.put("/:dependencyId", async (req2, res) => {
     }));
     return res.json(processed);
   } catch (error) {
-    console.error(`[API] Erreur PUT /api/dependencies/${dependencyId}:`, error);
+    logger.error(`[API] Erreur PUT /api/dependencies/${dependencyId}:`, error);
     return res.status(500).json({ error: "Erreur lors de la mise \xE0 jour de la d\xE9pendance", details: error.message });
   }
 });
@@ -39959,7 +40187,7 @@ router46.delete("/:dependencyId", async (req2, res) => {
     }));
     return res.status(200).json(processed);
   } catch (error) {
-    console.error(`[API] Erreur DELETE /api/dependencies/${req2.params.dependencyId}:`, error);
+    logger.error(`[API] Erreur DELETE /api/dependencies/${req2.params.dependencyId}:`, error);
     const errObj = error;
     if (errObj?.code === "P2025") {
       return res.status(404).json({ error: "D\xE9pendance non trouv\xE9e" });
@@ -40000,7 +40228,7 @@ router47.get("/", async (req2, res) => {
     }));
     res.json(sectionsFormat);
   } catch (error) {
-    console.error("[SECTIONS\u2192CATEGORIES] Erreur GET:", error);
+    logger.error("[SECTIONS\u2192CATEGORIES] Erreur GET:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de la r\xE9cup\xE9ration des sections"
@@ -40039,7 +40267,7 @@ router47.post("/bulk", async (req2, res) => {
     }));
     res.json(sectionsFormat);
   } catch (error) {
-    console.error("[SECTIONS\u2192CATEGORIES] Erreur POST/bulk:", error);
+    logger.error("[SECTIONS\u2192CATEGORIES] Erreur POST/bulk:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de la cr\xE9ation des sections"
@@ -40075,7 +40303,7 @@ router47.post("/", async (req2, res) => {
     };
     res.json({ success: true, data: sectionFormat });
   } catch (error) {
-    console.error("[SECTIONS\u2192CATEGORIES] Erreur POST:", error);
+    logger.error("[SECTIONS\u2192CATEGORIES] Erreur POST:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de la cr\xE9ation de la section"
@@ -40111,7 +40339,7 @@ router47.patch("/:id", async (req2, res) => {
     };
     res.json(sectionFormat);
   } catch (error) {
-    console.error("[SECTIONS\u2192CATEGORIES] Erreur PATCH:", error);
+    logger.error("[SECTIONS\u2192CATEGORIES] Erreur PATCH:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de la mise \xE0 jour de la section"
@@ -40126,7 +40354,7 @@ router47.delete("/:id", async (req2, res) => {
     });
     res.json({ success: true });
   } catch (error) {
-    console.error("[SECTIONS\u2192CATEGORIES] Erreur DELETE:", error);
+    logger.error("[SECTIONS\u2192CATEGORIES] Erreur DELETE:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de la suppression de la section"
@@ -40222,7 +40450,7 @@ router48.get("/", async (req2, res) => {
     }));
     res.json(sections);
   } catch (error) {
-    console.error("[module-navigation] Erreur:", error);
+    logger.error("[module-navigation] Erreur:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des cat\xE9gories depuis la table Category" });
   }
 });
@@ -40232,6 +40460,7 @@ var module_navigation_default = router48;
 var import_express50 = require("express");
 init_database();
 var router49 = (0, import_express50.Router)();
+router49.use(authenticateToken);
 var prisma24 = db;
 router49.get("/:blockId", async (req2, res) => {
   const { blockId } = req2.params;
@@ -40257,7 +40486,7 @@ router49.get("/:blockId", async (req2, res) => {
     }));
     res.json(adaptedSections);
   } catch (e) {
-    console.error(`[API] Erreur r\xE9cup\xE9ration sections pour bloc ${blockId}:`, e);
+    logger.error(`[API] Erreur r\xE9cup\xE9ration sections pour bloc ${blockId}:`, e);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des sections", details: e });
   }
 });
@@ -40283,7 +40512,7 @@ router49.post("/", async (req2, res) => {
     });
     res.json({ success: true, data: section });
   } catch (error) {
-    console.error("[API] Erreur cr\xE9ation section:", error);
+    logger.error("[API] Erreur cr\xE9ation section:", error);
     res.status(500).json({ error: "Erreur lors de la cr\xE9ation de la section de formulaire" });
   }
 });
@@ -40305,7 +40534,7 @@ router49.put("/:sectionId", async (req2, res) => {
     });
     res.json({ success: true, data: section });
   } catch (error) {
-    console.error(`[API] Erreur modification section ${req2.params.sectionId}:`, error);
+    logger.error(`[API] Erreur modification section ${req2.params.sectionId}:`, error);
     res.status(500).json({ error: "Erreur lors de la modification de la section de formulaire" });
   }
 });
@@ -40317,7 +40546,7 @@ router49.delete("/:sectionId", async (req2, res) => {
     });
     res.json({ success: true, message: "Section de formulaire supprim\xE9e" });
   } catch (error) {
-    console.error(`[API] Erreur suppression section ${req2.params.sectionId}:`, error);
+    logger.error(`[API] Erreur suppression section ${req2.params.sectionId}:`, error);
     res.status(500).json({ error: "Erreur lors de la suppression de la section de formulaire" });
   }
 });
@@ -40336,7 +40565,7 @@ router50.get("/", async (_req, res) => {
     });
     res.json({ success: true, data: types });
   } catch (error) {
-    console.error("[API] Erreur GET /api/field-types:", error);
+    logger.error("[API] Erreur GET /api/field-types:", error);
     res.status(500).json({ success: false, message: "Erreur serveur lors de la r\xE9cup\xE9ration des types de champs" });
   }
 });
@@ -40373,7 +40602,7 @@ router51.get("/:id", async (req2, res) => {
     if (!node) return res.status(404).json({ success: false, message: "Not found" });
     return res.json({ success: true, data: node });
   } catch (e) {
-    console.error("[API] GET option-node detail error:", e);
+    logger.error("[API] GET option-node detail error:", e);
     return res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
@@ -40416,7 +40645,7 @@ router51.get("/field/:fieldId/tree", async (req2, res) => {
     const enriched = tree.map((r) => enrich(r, [], []));
     return res.json({ success: true, data: enriched, _v: 1 });
   } catch (e) {
-    console.error("[API] GET option-nodes tree error:", e);
+    logger.error("[API] GET option-nodes tree error:", e);
     return res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
@@ -40453,7 +40682,7 @@ router51.get("/search", async (req2, res) => {
     }));
     return res.json({ success: true, nodes: result });
   } catch (e) {
-    console.error("[API] GET option-nodes search error:", e);
+    logger.error("[API] GET option-nodes search error:", e);
     return res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
@@ -40465,7 +40694,7 @@ router51.get("/field/:fieldId/children", async (req2, res) => {
     const children = base.map((b) => ({ id: b.id, label: b.label, value: b.value ?? void 0 }));
     return res.json({ success: true, data: children });
   } catch (e) {
-    console.error("[API] GET option-nodes children error:", e);
+    logger.error("[API] GET option-nodes children error:", e);
     return res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
@@ -40486,7 +40715,7 @@ router51.post("/", async (req2, res) => {
     });
     return res.json({ success: true, data: created });
   } catch (e) {
-    console.error("[API] POST option-nodes create error:", e);
+    logger.error("[API] POST option-nodes create error:", e);
     return res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
@@ -40497,7 +40726,7 @@ router51.put("/:id", async (req2, res) => {
     const updated = await prisma26.fieldOptionNode.update({ where: { id }, data: { label: label ?? void 0, value: value === void 0 ? void 0 : value, order: order ?? void 0, data: data === void 0 ? void 0 : data, parentId: parentId === void 0 ? void 0 : parentId } });
     return res.json({ success: true, data: updated });
   } catch (e) {
-    console.error("[API] PUT option-nodes update error:", e);
+    logger.error("[API] PUT option-nodes update error:", e);
     return res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
@@ -40525,7 +40754,7 @@ router51.delete("/:id", async (req2, res) => {
     await prisma26.fieldOptionNode.deleteMany({ where: { id: { in: allIds } } });
     return res.json({ success: true });
   } catch (e) {
-    console.error("[API] DELETE option-nodes error:", e);
+    logger.error("[API] DELETE option-nodes error:", e);
     return res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
@@ -40536,7 +40765,7 @@ router51.post("/reorder", async (req2, res) => {
     await prisma26.$transaction(orderedIds.map((id, idx) => prisma26.fieldOptionNode.update({ where: { id }, data: { order: idx } })));
     return res.json({ success: true });
   } catch (e) {
-    console.error("[API] POST option-nodes reorder error:", e);
+    logger.error("[API] POST option-nodes reorder error:", e);
     return res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
@@ -40562,7 +40791,7 @@ router51.post("/import", async (req2, res) => {
     await Promise.all(inserts);
     return res.json({ success: true });
   } catch (e) {
-    console.error("[API] POST option-nodes import error:", e);
+    logger.error("[API] POST option-nodes import error:", e);
     return res.status(500).json({ success: false, message: e?.message || "Erreur serveur" });
   }
 });
@@ -40572,7 +40801,7 @@ router51.get("/export/:fieldId", async (req2, res) => {
     const nodes = await prisma26.fieldOptionNode.findMany({ where: { fieldId }, orderBy: [{ parentId: "asc" }, { order: "asc" }], select: { id: true, label: true, value: true, parentId: true, order: true, data: true } });
     return res.json({ success: true, data: buildTree(nodes) });
   } catch (e) {
-    console.error("[API] GET option-nodes export error:", e);
+    logger.error("[API] GET option-nodes export error:", e);
     return res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
@@ -41978,7 +42207,7 @@ router54.get("/stats", authMiddleware, async (req2, res) => {
       data: stats
     });
   } catch (error) {
-    console.error("\u274C [DASHBOARD] Erreur lors de la r\xE9cup\xE9ration des stats:", error);
+    logger.error("\u274C [DASHBOARD] Erreur lors de la r\xE9cup\xE9ration des stats:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la r\xE9cup\xE9ration des statistiques",
@@ -42138,7 +42367,7 @@ router54.get("/activities", authMiddleware, async (req2, res) => {
       data: sortedActivities
     });
   } catch (error) {
-    console.error("\u274C [DASHBOARD] Erreur lors de la r\xE9cup\xE9ration des activit\xE9s:", error);
+    logger.error("\u274C [DASHBOARD] Erreur lors de la r\xE9cup\xE9ration des activit\xE9s:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la r\xE9cup\xE9ration des activit\xE9s",
@@ -42252,7 +42481,7 @@ router54.get("/top-leads", authMiddleware, async (req2, res) => {
       data: sortedLeads
     });
   } catch (error) {
-    console.error("\u274C [DASHBOARD] Erreur lors de la r\xE9cup\xE9ration des top leads:", error);
+    logger.error("\u274C [DASHBOARD] Erreur lors de la r\xE9cup\xE9ration des top leads:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la r\xE9cup\xE9ration des meilleurs leads",
@@ -42320,7 +42549,7 @@ router54.get("/tasks", authMiddleware, async (req2, res) => {
       data: taskData
     });
   } catch (error) {
-    console.error("\u274C [DASHBOARD] Erreur lors de la r\xE9cup\xE9ration des t\xE2ches:", error);
+    logger.error("\u274C [DASHBOARD] Erreur lors de la r\xE9cup\xE9ration des t\xE2ches:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la r\xE9cup\xE9ration des t\xE2ches",
@@ -42554,7 +42783,7 @@ router54.get("/analytics", authMiddleware, async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\u274C [DASHBOARD] Erreur analytics:", error);
+    logger.error("\u274C [DASHBOARD] Erreur analytics:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la r\xE9cup\xE9ration des analytics",
@@ -42642,6 +42871,7 @@ function evaluateFormulaOrchestrated(opts) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/treebranchleaf-routes.ts
+var import_client7 = require("@prisma/client");
 init_database();
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/universal-linking-system.ts
@@ -43337,9 +43567,47 @@ function getValidationErrorMessage(parentType, parentSubType, childType, childSu
     }
   }
 }
+var NODE_THEMES = {
+  tree: {
+    backgroundColor: "#1f2937",
+    textColor: "#ffffff",
+    borderColor: "#374151",
+    icon: "\xAD\u0192\xEE\u2502"
+  },
+  branch: {
+    backgroundColor: SF.blue,
+    textColor: "#ffffff",
+    borderColor: "#2563eb",
+    icon: "\xAD\u0192\xEE\u2510"
+  },
+  leaf_field: {
+    backgroundColor: "#10b981",
+    textColor: "#ffffff",
+    borderColor: SF.emeraldDark,
+    icon: "\xAD\u0192\xF4\xD8"
+  },
+  leaf_option: {
+    backgroundColor: SF.amber,
+    textColor: "#ffffff",
+    borderColor: "#d97706",
+    icon: "\xD4\xDC\xAC"
+  },
+  leaf_option_field: {
+    backgroundColor: SF.violet,
+    textColor: "#ffffff",
+    borderColor: "#7c3aed",
+    icon: "\xAD\u0192\xC4\xBB"
+  },
+  section: {
+    backgroundColor: "#6b7280",
+    textColor: "#ffffff",
+    borderColor: "#4b5563",
+    icon: "\xAD\u0192\xF4\xEF"
+  }
+};
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/treebranchleaf-routes.ts
-var import_crypto27 = require("crypto");
+var import_crypto26 = require("crypto");
 init_operation_interpreter();
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/registry/repeat-id-registry.ts
@@ -43449,7 +43717,7 @@ function logCapacityEvent(payload) {
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/sum-display-field-routes.ts
 var import_client5 = require("@prisma/client");
 init_database();
-var import_crypto24 = require("crypto");
+var import_crypto23 = require("crypto");
 var prisma28 = db;
 function getOrgId2(req2) {
   const user = req2.user || {};
@@ -43505,7 +43773,7 @@ function registerSumDisplayFieldRoutes(router117) {
         }
       });
       if (!mainVariable) {
-        const newId = (0, import_crypto24.randomUUID)();
+        const newId = (0, import_crypto23.randomUUID)();
         const exposedKey = `var_${nodeId.slice(0, 4)}`;
         const existing = await prisma28.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey } });
         const finalExposedKey = existing ? `var_${nodeId.slice(0, 8)}` : exposedKey;
@@ -48544,7 +48812,7 @@ async function deepCopyNodeInternal(prisma50, req2, nodeId, opts) {
 // src/components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator.ts
 var import_express56 = require("express");
 init_database();
-var import_crypto25 = require("crypto");
+var import_crypto24 = require("crypto");
 init_operation_interpreter();
 function isSumTotalNodeId(nodeId) {
   return /-sum-total(-\d+)?$/.test(nodeId);
@@ -48696,7 +48964,7 @@ async function cloneCompletedSubmissionToDraft(params) {
         // (Prisma/Postgres) Empêche un crash si (submissionId,nodeId) existe déjà.
         skipDuplicates: true,
         data: uniqueOriginalRows.map((r) => ({
-          id: (0, import_crypto25.randomUUID)(),
+          id: (0, import_crypto24.randomUUID)(),
           submissionId: newSubmissionId,
           nodeId: r.nodeId,
           value: r.value,
@@ -51481,7 +51749,7 @@ var tbl_submission_evaluator_default = router55;
 var import_express57 = require("express");
 var import_client6 = require("@prisma/client");
 init_database();
-var import_crypto26 = require("crypto");
+var import_crypto25 = require("crypto");
 var router56 = (0, import_express57.Router)();
 var prisma30 = db;
 function toJsonSafe2(value) {
@@ -51604,7 +51872,7 @@ router56.post("/nodes/:nodeId/tables", async (req2, res) => {
       });
       finalName = `${name} (${existingCount + 1})`;
     }
-    const tableId = (0, import_crypto26.randomUUID)();
+    const tableId = (0, import_crypto25.randomUUID)();
     if (sourceTableId) {
       const sourceTable = await prisma30.treeBranchLeafNodeTable.findUnique({
         where: { id: sourceTableId },
@@ -51725,7 +51993,7 @@ router56.post("/nodes/:nodeId/tables", async (req2, res) => {
       const colFormat = typeof col === "object" && col !== null && col.format ? col.format : null;
       const colMetadata = typeof col === "object" && col !== null && col.metadata ? col.metadata : {};
       return {
-        id: (0, import_crypto26.randomUUID)(),
+        id: (0, import_crypto25.randomUUID)(),
         tableId,
         columnIndex: index,
         name: colName,
@@ -51736,7 +52004,7 @@ router56.post("/nodes/:nodeId/tables", async (req2, res) => {
       };
     });
     const tableRowsData = rows.map((row, index) => ({
-      id: (0, import_crypto26.randomUUID)(),
+      id: (0, import_crypto25.randomUUID)(),
       tableId,
       rowIndex: index,
       // IMPORTANT: Prisma JSON ne supporte pas undefined/NaN/BigInt/Date
@@ -51806,7 +52074,7 @@ router56.post("/nodes/:nodeId/tables", async (req2, res) => {
               if (!existingRowConfig) {
                 await prisma30.treeBranchLeafSelectConfig.create({
                   data: {
-                    id: (0, import_crypto26.randomUUID)(),
+                    id: (0, import_crypto25.randomUUID)(),
                     nodeId: rowSourceField,
                     options: [],
                     multiple: false,
@@ -51838,7 +52106,7 @@ router56.post("/nodes/:nodeId/tables", async (req2, res) => {
               if (!existingColConfig) {
                 await prisma30.treeBranchLeafSelectConfig.create({
                   data: {
-                    id: (0, import_crypto26.randomUUID)(),
+                    id: (0, import_crypto25.randomUUID)(),
                     nodeId: colSourceField,
                     options: [],
                     multiple: false,
@@ -51868,7 +52136,7 @@ router56.post("/nodes/:nodeId/tables", async (req2, res) => {
             if (!existingCompositeConfig) {
               await prisma30.treeBranchLeafSelectConfig.create({
                 data: {
-                  id: (0, import_crypto26.randomUUID)(),
+                  id: (0, import_crypto25.randomUUID)(),
                   nodeId,
                   options: [],
                   multiple: false,
@@ -52070,7 +52338,7 @@ router56.put("/tables/:id", async (req2, res) => {
         await tx.treeBranchLeafNodeTableColumn.deleteMany({ where: { tableId: id } });
         if (columns.length > 0) {
           const newColumnsData = columns.map((col, index) => ({
-            id: (0, import_crypto26.randomUUID)(),
+            id: (0, import_crypto25.randomUUID)(),
             tableId: id,
             columnIndex: index,
             name: typeof col === "string" ? col : col.name || `Colonne ${index + 1}`,
@@ -52086,7 +52354,7 @@ router56.put("/tables/:id", async (req2, res) => {
         await tx.treeBranchLeafNodeTableRow.deleteMany({ where: { tableId: id } });
         if (rows.length > 0) {
           const allRowsData = rows.map((row, index) => ({
-            id: (0, import_crypto26.randomUUID)(),
+            id: (0, import_crypto25.randomUUID)(),
             tableId: id,
             rowIndex: index,
             cells: toJsonSafe2(row)
@@ -52340,7 +52608,7 @@ router56.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
       if (Array.isArray(columns) && columns.length > 0) {
         await tx.treeBranchLeafNodeTableColumn.deleteMany({ where: { tableId: effectiveDataTableId } });
         const newColumnsData = columns.map((col, index) => ({
-          id: (0, import_crypto26.randomUUID)(),
+          id: (0, import_crypto25.randomUUID)(),
           tableId: effectiveDataTableId,
           columnIndex: index,
           name: typeof col === "string" ? col : col.name || `Colonne ${index + 1}`,
@@ -52365,7 +52633,7 @@ router56.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
             cellsValue = [rowLabel];
           }
           return {
-            id: (0, import_crypto26.randomUUID)(),
+            id: (0, import_crypto25.randomUUID)(),
             tableId: effectiveDataTableId,
             rowIndex: index,
             cells: toJsonSafe2(cellsValue)
@@ -52644,7 +52912,7 @@ var computeLogicVersion = () => {
     entries: stats.entries,
     parseCount: stats.parseCount
   });
-  const version = (0, import_crypto27.createHash)("sha1").update(seed).digest("hex").slice(0, 8);
+  const version = (0, import_crypto26.createHash)("sha1").update(seed).digest("hex").slice(0, 8);
   return { version, metrics, stats };
 };
 function getAuthCtx3(req2) {
@@ -53004,7 +53272,7 @@ router57.post("/trees", async (req2, res) => {
     if (!targetOrgId) {
       return res.status(400).json({ error: "organizationId requis (en-t\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAAte x-organization-id ou dans le corps)" });
     }
-    const id = (0, import_crypto27.randomUUID)();
+    const id = (0, import_crypto26.randomUUID)();
     const tree = await prisma31.treeBranchLeafTree.create({
       data: {
         id,
@@ -53043,7 +53311,7 @@ router57.post("/trees/:id/duplicate", async (req2, res) => {
     if (!sourceTree) {
       return res.status(404).json({ error: "Arbre source non trouv\xE9" });
     }
-    const newTreeId = (0, import_crypto27.randomUUID)();
+    const newTreeId = (0, import_crypto26.randomUUID)();
     const newTree = await prisma31.treeBranchLeafTree.create({
       data: {
         id: newTreeId,
@@ -53069,7 +53337,7 @@ router57.post("/trees/:id/duplicate", async (req2, res) => {
     }
     const idMap = /* @__PURE__ */ new Map();
     for (const node of sourceNodes) {
-      idMap.set(node.id, (0, import_crypto27.randomUUID)());
+      idMap.set(node.id, (0, import_crypto26.randomUUID)());
     }
     const now = /* @__PURE__ */ new Date();
     const nodeCreateData = sourceNodes.map((node) => {
@@ -53282,7 +53550,7 @@ router57.post("/trees/:id/duplicate", async (req2, res) => {
     });
     if (sourceVariables.length > 0) {
       const varCreateData = sourceVariables.map((v) => ({
-        id: (0, import_crypto27.randomUUID)(),
+        id: (0, import_crypto26.randomUUID)(),
         nodeId: idMap.get(v.nodeId) ?? v.nodeId,
         exposedKey: `${v.exposedKey}_${newTreeId.slice(0, 8)}`,
         displayName: v.displayName,
@@ -53307,7 +53575,7 @@ router57.post("/trees/:id/duplicate", async (req2, res) => {
     });
     if (sourceConditions.length > 0) {
       const condCreateData = sourceConditions.map((c) => ({
-        id: (0, import_crypto27.randomUUID)(),
+        id: (0, import_crypto26.randomUUID)(),
         nodeId: idMap.get(c.nodeId) ?? c.nodeId,
         organizationId: targetOrgId,
         name: c.name,
@@ -53325,7 +53593,7 @@ router57.post("/trees/:id/duplicate", async (req2, res) => {
     });
     if (sourceFormulas.length > 0) {
       const formulaCreateData = sourceFormulas.map((f) => ({
-        id: (0, import_crypto27.randomUUID)(),
+        id: (0, import_crypto26.randomUUID)(),
         nodeId: idMap.get(f.nodeId) ?? f.nodeId,
         organizationId: targetOrgId,
         name: f.name,
@@ -53345,7 +53613,7 @@ router57.post("/trees/:id/duplicate", async (req2, res) => {
       include: { tableColumns: true, tableRows: true }
     });
     for (const table of sourceTables) {
-      const newTableId = (0, import_crypto27.randomUUID)();
+      const newTableId = (0, import_crypto26.randomUUID)();
       await prisma31.treeBranchLeafNodeTable.create({
         data: {
           id: newTableId,
@@ -53368,7 +53636,7 @@ router57.post("/trees/:id/duplicate", async (req2, res) => {
       if (table.tableColumns.length > 0) {
         await prisma31.treeBranchLeafNodeTableColumn.createMany({
           data: table.tableColumns.map((col) => ({
-            id: (0, import_crypto27.randomUUID)(),
+            id: (0, import_crypto26.randomUUID)(),
             tableId: newTableId,
             columnIndex: col.columnIndex,
             name: col.name,
@@ -53382,7 +53650,7 @@ router57.post("/trees/:id/duplicate", async (req2, res) => {
       if (table.tableRows.length > 0) {
         await prisma31.treeBranchLeafNodeTableRow.createMany({
           data: table.tableRows.map((row) => ({
-            id: (0, import_crypto27.randomUUID)(),
+            id: (0, import_crypto26.randomUUID)(),
             tableId: newTableId,
             rowIndex: row.rowIndex,
             cells: row.cells
@@ -53395,7 +53663,7 @@ router57.post("/trees/:id/duplicate", async (req2, res) => {
     });
     if (sourceSelectConfigs.length > 0) {
       const selectCreateData = sourceSelectConfigs.map((sc) => ({
-        id: (0, import_crypto27.randomUUID)(),
+        id: (0, import_crypto26.randomUUID)(),
         nodeId: idMap.get(sc.nodeId) ?? sc.nodeId,
         options: sc.options,
         multiple: sc.multiple,
@@ -55561,12 +55829,11 @@ router57.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
       let totalOrphansDeleted = 0;
       while (orphanPassCount < maxOrphanPasses) {
         orphanPassCount++;
-        const orphanedNodes = await prisma31.$queryRawUnsafe(
-          `SELECT n.id FROM "TreeBranchLeafNode" n
-           WHERE n."treeId" = $1
+        const orphanedNodes = await prisma31.$queryRaw(
+          import_client7.Prisma.sql`SELECT n.id FROM "TreeBranchLeafNode" n
+           WHERE n."treeId" = ${treeId}
              AND n."parentId" IS NOT NULL
-             AND NOT EXISTS (SELECT 1 FROM "TreeBranchLeafNode" p WHERE p.id = n."parentId")`,
-          treeId
+             AND NOT EXISTS (SELECT 1 FROM "TreeBranchLeafNode" p WHERE p.id = n."parentId")`
         );
         if (orphanedNodes.length === 0) break;
         for (const orphan of orphanedNodes) {
@@ -55591,12 +55858,11 @@ router57.delete("/trees/:treeId/nodes/:nodeId", async (req2, res) => {
       });
       const submissionIds = treeSubmissions.map((s) => s.id);
       if (submissionIds.length > 0) {
-        const orphanedSD = await prisma31.$queryRawUnsafe(
-          `DELETE FROM "TreeBranchLeafSubmissionData" sd
-           WHERE sd."submissionId" = ANY($1::text[])
+        const orphanedSD = await prisma31.$queryRaw(
+          import_client7.Prisma.sql`DELETE FROM "TreeBranchLeafSubmissionData" sd
+           WHERE sd."submissionId" = ANY(${submissionIds}::text[])
              AND NOT EXISTS (SELECT 1 FROM "TreeBranchLeafNode" n WHERE n.id = sd."nodeId")
-           RETURNING 1 as count`,
-          submissionIds
+           RETURNING 1 as count`
         );
         if (orphanedSD.length > 0) {
           console.log(`[DELETE] \u{1F9F9} ${orphanedSD.length} SubmissionData orpheline(s) supprim\xE9e(s)`);
@@ -56275,7 +56541,7 @@ router57.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
           updatedAt: /* @__PURE__ */ new Date()
         },
         create: {
-          id: (0, import_crypto27.randomUUID)(),
+          id: (0, import_crypto26.randomUUID)(),
           nodeId: targetNodeId,
           exposedKey: safeExposedKey || `var_${String(nodeId).slice(0, 4)}`,
           displayName,
@@ -56724,7 +56990,7 @@ router57.post("/nodes/:nodeId/formulas", async (req2, res) => {
     }
     const formula = await prisma31.treeBranchLeafNodeFormula.create({
       data: {
-        id: (0, import_crypto27.randomUUID)(),
+        id: (0, import_crypto26.randomUUID)(),
         nodeId,
         organizationId: organizationId || null,
         name: uniqueName,
@@ -57145,7 +57411,7 @@ router57.post("/nodes/:nodeId/conditions", async (req2, res) => {
     }
     const condition = await prisma31.treeBranchLeafNodeCondition.create({
       data: {
-        id: (0, import_crypto27.randomUUID)(),
+        id: (0, import_crypto26.randomUUID)(),
         nodeId,
         organizationId: organizationId || null,
         name: uniqueName,
@@ -58181,7 +58447,7 @@ router57.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
     let insertOrder = siblingsCount;
     const now = /* @__PURE__ */ new Date();
     for (const item of toCreate) {
-      const newNodeId = (0, import_crypto27.randomUUID)();
+      const newNodeId = (0, import_crypto26.randomUUID)();
       const nodeMetadata = {
         generatedFrom: "table_lookup",
         tableNodeId: baseNode.id,
@@ -58220,7 +58486,7 @@ router57.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
       });
       await prisma31.treeBranchLeafSelectConfig.create({
         data: {
-          id: (0, import_crypto27.randomUUID)(),
+          id: (0, import_crypto26.randomUUID)(),
           nodeId: newNode.id,
           options: [],
           multiple: false,
@@ -59955,7 +60221,7 @@ router57.post("/submissions", async (req2, res) => {
       const now = /* @__PURE__ */ new Date();
       const created = await prisma31.treeBranchLeafSubmission.create({
         data: {
-          id: (0, import_crypto27.randomUUID)(),
+          id: (0, import_crypto26.randomUUID)(),
           treeId: normalizedTreeId,
           userId: safeUserId,
           leadId: normalizedLeadId,
@@ -59981,7 +60247,7 @@ router57.post("/submissions", async (req2, res) => {
           if (toCreate.length > 0) {
             await tx.treeBranchLeafSubmissionData.createMany({
               data: toCreate.map(({ nodeId, value: raw }) => ({
-                id: (0, import_crypto27.randomUUID)(),
+                id: (0, import_crypto26.randomUUID)(),
                 submissionId: created.id,
                 nodeId,
                 value: raw == null ? null : String(raw),
@@ -60211,7 +60477,7 @@ router57.get("/nodes/:fieldId/select-config", async (req2, res) => {
         if (isRowBased || isColumnBased) {
           selectConfig = await prisma31.treeBranchLeafSelectConfig.create({
             data: {
-              id: (0, import_crypto27.randomUUID)(),
+              id: (0, import_crypto26.randomUUID)(),
               nodeId: fieldId,
               options: [],
               multiple: false,
@@ -60263,7 +60529,7 @@ router57.post("/nodes/:fieldId/select-config", async (req2, res) => {
     const selectConfig = await prisma31.treeBranchLeafSelectConfig.upsert({
       where: { nodeId: fieldId },
       create: {
-        id: (0, import_crypto27.randomUUID)(),
+        id: (0, import_crypto26.randomUUID)(),
         nodeId: fieldId,
         options: [],
         multiple: false,
@@ -60354,7 +60620,7 @@ router57.post("/nodes/:nodeId/normalize-step4", async (req2, res) => {
     const sc = await prisma31.treeBranchLeafSelectConfig.upsert({
       where: { nodeId },
       create: {
-        id: (0, import_crypto27.randomUUID)(),
+        id: (0, import_crypto26.randomUUID)(),
         nodeId,
         options: [],
         multiple: false,
@@ -60436,7 +60702,7 @@ router57.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
         await prisma31.treeBranchLeafSelectConfig.upsert({
           where: { nodeId },
           create: {
-            id: (0, import_crypto27.randomUUID)(),
+            id: (0, import_crypto26.randomUUID)(),
             nodeId,
             options: [],
             multiple: false,
@@ -60695,7 +60961,7 @@ router57.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
           await prisma31.treeBranchLeafSelectConfig.upsert({
             where: { nodeId },
             create: {
-              id: (0, import_crypto27.randomUUID)(),
+              id: (0, import_crypto26.randomUUID)(),
               nodeId,
               options: [],
               multiple: false,
@@ -60824,7 +61090,7 @@ router57.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
         await prisma31.treeBranchLeafSelectConfig.upsert({
           where: { nodeId },
           create: {
-            id: (0, import_crypto27.randomUUID)(),
+            id: (0, import_crypto26.randomUUID)(),
             nodeId,
             options: [],
             multiple: false,
@@ -61170,7 +61436,7 @@ router57.put("/submissions/:id", async (req2, res) => {
               }
             }
             return {
-              id: (0, import_crypto27.randomUUID)(),
+              id: (0, import_crypto26.randomUUID)(),
               submissionId: id,
               nodeId,
               value: valueStr,
@@ -61320,7 +61586,7 @@ router57.put("/submissions/:id", async (req2, res) => {
         const allRows2 = await tx.treeBranchLeafSubmissionData.findMany({ where: { submissionId: id }, select: { nodeId: true, value: true } });
         const valuesMapTxAll = new Map(allRows2.map((r) => [r.nodeId, r.value == null ? null : String(r.value)]));
         const missingRows = await Promise.all(missingVars.map(async (v) => ({
-          id: (0, import_crypto27.randomUUID)(),
+          id: (0, import_crypto26.randomUUID)(),
           submissionId: id,
           nodeId: v.nodeId,
           value: null,
@@ -61762,7 +62028,7 @@ router57.post("/submissions/stage", async (req2, res) => {
       }
       stage = await prisma31.treeBranchLeafStage.create({
         data: {
-          id: (0, import_crypto27.randomUUID)(),
+          id: (0, import_crypto26.randomUUID)(),
           treeId,
           submissionId,
           leadId,
@@ -61938,7 +62204,7 @@ router57.post("/submissions/stage/commit", async (req2, res) => {
       const result = await prisma31.$transaction(async (tx) => {
         const submission = await tx.treeBranchLeafSubmission.create({
           data: {
-            id: (0, import_crypto27.randomUUID)(),
+            id: (0, import_crypto26.randomUUID)(),
             treeId: stage.treeId,
             userId: stage.userId,
             leadId: stage.leadId,
@@ -61952,7 +62218,7 @@ router57.post("/submissions/stage/commit", async (req2, res) => {
         if (results.length > 0) {
           await tx.treeBranchLeafSubmissionData.createMany({
             data: results.map((r) => ({
-              id: (0, import_crypto27.randomUUID)(),
+              id: (0, import_crypto26.randomUUID)(),
               submissionId: submission.id,
               nodeId: r.nodeId,
               value: String(r.operationResult || ""),
@@ -61967,7 +62233,7 @@ router57.post("/submissions/stage/commit", async (req2, res) => {
         }
         await tx.treeBranchLeafSubmissionVersion.create({
           data: {
-            id: (0, import_crypto27.randomUUID)(),
+            id: (0, import_crypto26.randomUUID)(),
             submissionId: submission.id,
             version: 1,
             formData: stage.formData,
@@ -62094,7 +62360,7 @@ router57.post("/submissions/stage/commit", async (req2, res) => {
         if (results.length > 0) {
           await tx.treeBranchLeafSubmissionData.createMany({
             data: results.map((r) => ({
-              id: (0, import_crypto27.randomUUID)(),
+              id: (0, import_crypto26.randomUUID)(),
               submissionId: updated.id,
               nodeId: r.nodeId,
               value: String(r.operationResult || ""),
@@ -62109,7 +62375,7 @@ router57.post("/submissions/stage/commit", async (req2, res) => {
         }
         await tx.treeBranchLeafSubmissionVersion.create({
           data: {
-            id: (0, import_crypto27.randomUUID)(),
+            id: (0, import_crypto26.randomUUID)(),
             submissionId: updated.id,
             version: nextVersion,
             formData: stage.formData,
@@ -62292,7 +62558,7 @@ router57.post("/submissions/:id/restore/:version", async (req2, res) => {
     }
     const stage = await prisma31.treeBranchLeafStage.create({
       data: {
-        id: (0, import_crypto27.randomUUID)(),
+        id: (0, import_crypto26.randomUUID)(),
         treeId: submission.treeId,
         submissionId: id,
         leadId: submission.leadId || "unknown",
@@ -62964,13 +63230,14 @@ router58.get("/variables", authMiddleware, requireRole(["user", "admin", "super_
 });
 router58.get(["/calculation-modes", "/modes"], authMiddleware, requireRole(["user", "admin", "super_admin"]), async (req2, res) => {
   try {
-    let detectCapacity = function(sourceRef) {
+    let detectCapacity2 = function(sourceRef) {
       if (!sourceRef) return "1";
       if (sourceRef.startsWith("formula:")) return "2";
       if (sourceRef.startsWith("condition:")) return "3";
       if (sourceRef.startsWith("table:")) return "4";
       return "1";
     };
+    var detectCapacity = detectCapacity2;
     const { isSuperAdmin: isSuperAdmin2, organizationId } = getAuthCtx4(req2);
     const existingNodes = await prisma32.treeBranchLeafNode.findMany({
       select: {
@@ -62991,7 +63258,7 @@ router58.get(["/calculation-modes", "/modes"], authMiddleware, requireRole(["use
     });
     const capacityBuckets = { "1": [], "2": [], "3": [], "4": [] };
     for (const v of accessible) {
-      const capacity = detectCapacity(v.sourceRef);
+      const capacity = detectCapacity2(v.sourceRef);
       const fieldType = (v.displayFormat || "").startsWith("number") ? "number" : "text";
       const f = {
         id: v.id,
@@ -65574,6 +65841,14 @@ router60.get("/capabilities", authenticateToken, async (req2, res) => {
     }
     const includeRaw = req2.query.raw === "1" || req2.query.raw === "true";
     const extractDeps = req2.query.deps === "1" || req2.query.deps === "true";
+    const user = req2.user;
+    const organizationId = user?.organizationId || null;
+    const isSuperAdmin2 = user?.isSuperAdmin || false;
+    const treeWhereFilter = isSuperAdmin2 || !organizationId ? { id: treeId } : { id: treeId, organizationId };
+    const tree = await prisma33.treeBranchLeafTree.findFirst({ where: treeWhereFilter });
+    if (!tree) {
+      return res.status(404).json({ error: "Arbre non trouv\xE9" });
+    }
     const data = await resolveCapabilities(treeId, { includeRaw, extractDependencies: extractDeps });
     res.json({
       treeId,
@@ -65588,7 +65863,7 @@ router60.get("/capabilities", authenticateToken, async (req2, res) => {
     });
   } catch (error) {
     const err = error;
-    console.error("\u274C [TBL Capabilities] Erreur:", err);
+    logger.error("\u274C [TBL Capabilities] Erreur:", err);
     res.status(500).json({ error: "Erreur serveur capabilities", details: err.message });
   }
 });
@@ -65722,7 +65997,7 @@ router61.get("/trees/:treeId/exposed", async (req2, res) => {
     }
     return res.json({ variables, tables, constants });
   } catch (error) {
-    console.error("[GESTIONNAIRE] Error fetching exposed items:", error);
+    logger.error("[GESTIONNAIRE] Error fetching exposed items:", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -65763,7 +66038,7 @@ router61.patch("/override/variable", async (req2, res) => {
     });
     return res.json({ success: true, override });
   } catch (error) {
-    console.error("[GESTIONNAIRE] Error saving variable override:", error);
+    logger.error("[GESTIONNAIRE] Error saving variable override:", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -65805,7 +66080,7 @@ var handleOverrideConstant = async (req2, res) => {
     });
     return res.json({ success: true, override });
   } catch (error) {
-    console.error("[GESTIONNAIRE] Error saving constant override:", error);
+    logger.error("[GESTIONNAIRE] Error saving constant override:", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -65848,7 +66123,7 @@ router61.patch("/override/table", async (req2, res) => {
     });
     return res.json({ success: true, override });
   } catch (error) {
-    console.error("[GESTIONNAIRE] Error saving table override:", error);
+    logger.error("[GESTIONNAIRE] Error saving table override:", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -65884,7 +66159,7 @@ router61.delete("/constant/:constId", async (req2, res) => {
     });
     return res.json({ success: true, updated });
   } catch (error) {
-    console.error("[GESTIONNAIRE] Error deleting constant:", error);
+    logger.error("[GESTIONNAIRE] Error deleting constant:", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -65904,7 +66179,7 @@ router61.delete("/override/:overrideId", async (req2, res) => {
     });
     return res.json({ success: true });
   } catch (error) {
-    console.error("[GESTIONNAIRE] Error deleting override:", error);
+    logger.error("[GESTIONNAIRE] Error deleting override:", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -65936,7 +66211,7 @@ var handleExpose = async (req2, res) => {
     }
     return res.status(400).json({ error: 'Invalid capabilityType. Must be "variable" or "table"' });
   } catch (error) {
-    console.error("[GESTIONNAIRE] Error toggling expose:", error);
+    logger.error("[GESTIONNAIRE] Error toggling expose:", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -65976,7 +66251,7 @@ router61.get("/exposed-tokens/:treeId", async (req2, res) => {
       tables: exposedTables
     });
   } catch (error) {
-    console.error("[GESTIONNAIRE] Error fetching exposed tokens:", error);
+    logger.error("[GESTIONNAIRE] Error fetching exposed tokens:", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -66023,6 +66298,7 @@ function shouldAutoCreateSelectConfig(input) {
 
 // src/routes/tbl-select-config-route.ts
 var router62 = (0, import_express63.Router)();
+router62.use(authenticateToken);
 router62.get("/nodes/:nodeId/select-config", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
@@ -66077,7 +66353,7 @@ router62.get("/nodes/:nodeId/select-config", async (req2, res) => {
     return res.status(404).json({ error: "Aucune configuration de type select trouv\xE9e pour ce n\u0153ud" });
   } catch (error) {
     const err = error;
-    console.error(`[API] Erreur sur GET /nodes/:nodeId/select-config:`, err.message);
+    logger.error(`[API] Erreur sur GET /nodes/:nodeId/select-config:`, err.message);
     res.status(500).json({ error: "Erreur interne du serveur", details: err.message });
   }
 });
@@ -66163,7 +66439,7 @@ router63.get("/campaigns", requireRole2(["admin", "super_admin"]), async (req2, 
     );
     res.json({ success: true, data: campaigns });
   } catch (error) {
-    console.error("\u274C [LEAD-GEN] Erreur r\xE9cup\xE9ration campagnes (LeadSource):", error);
+    logger.error("\u274C [LEAD-GEN] Erreur r\xE9cup\xE9ration campagnes (LeadSource):", error);
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration des campagnes" });
   }
 });
@@ -66178,7 +66454,7 @@ router63.post("/campaigns", requireRole2(["admin", "super_admin"]), async (req2,
     });
     res.json({ success: true, data: created, message: "Campagne cr\xE9\xE9e avec succ\xE8s" });
   } catch (error) {
-    console.error("\u274C [LEAD-GEN] Erreur cr\xE9ation campagne (LeadSource):", error);
+    logger.error("\u274C [LEAD-GEN] Erreur cr\xE9ation campagne (LeadSource):", error);
     res.status(500).json({ success: false, message: "Erreur lors de la cr\xE9ation de la campagne" });
   }
 });
@@ -66199,7 +66475,7 @@ router63.get("/stats", requireRole2(["admin", "super_admin"]), async (req2, res)
     ]);
     res.json({ success: true, data: { totalCampaigns, activeCampaigns, totalLeads, thisMonthLeads } });
   } catch (error) {
-    console.error("\u274C [LEAD-GEN] Erreur stats (LeadSource/Lead):", error);
+    logger.error("\u274C [LEAD-GEN] Erreur stats (LeadSource/Lead):", error);
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration des statistiques" });
   }
 });
@@ -66214,7 +66490,7 @@ router63.put("/campaigns/:id", requireRole2(["admin", "super_admin"]), async (re
     const updated = await prisma34.leadSource.update({ where: { id }, data: { name, description, isActive } });
     res.json({ success: true, data: updated, message: "Campagne modifi\xE9e avec succ\xE8s" });
   } catch (error) {
-    console.error("\u274C [LEAD-GEN] Erreur modification campagne (LeadSource):", error);
+    logger.error("\u274C [LEAD-GEN] Erreur modification campagne (LeadSource):", error);
     res.status(500).json({ success: false, message: "Erreur lors de la modification de la campagne" });
   }
 });
@@ -66227,7 +66503,7 @@ router63.delete("/campaigns/:id", requireRole2(["admin", "super_admin"]), async 
     if (deleted.count === 0) return res.status(404).json({ success: false, message: "Campagne non trouv\xE9e" });
     res.json({ success: true, message: "Campagne supprim\xE9e avec succ\xE8s" });
   } catch (error) {
-    console.error("\u274C [LEAD-GEN] Erreur suppression campagne (LeadSource):", error);
+    logger.error("\u274C [LEAD-GEN] Erreur suppression campagne (LeadSource):", error);
     res.status(500).json({ success: false, message: "Erreur lors de la suppression de la campagne" });
   }
 });
@@ -66243,7 +66519,7 @@ router63.patch("/campaigns/:id/status", requireRole2(["admin", "super_admin"]), 
     const updated = await prisma34.leadSource.update({ where: { id }, data: { isActive: status === "active" } });
     res.json({ success: true, data: updated, message: "Statut mis \xE0 jour" });
   } catch (error) {
-    console.error("\u274C [LEAD-GEN] Erreur MAJ statut (LeadSource):", error);
+    logger.error("\u274C [LEAD-GEN] Erreur MAJ statut (LeadSource):", error);
     res.status(500).json({ success: false, message: "Erreur lors de la mise \xE0 jour du statut" });
   }
 });
@@ -66266,7 +66542,7 @@ router63.post("/campaigns/:id/duplicate", requireRole2(["admin", "super_admin"])
     });
     res.json({ success: true, data: copy, message: "Campagne dupliqu\xE9e avec succ\xE8s" });
   } catch (error) {
-    console.error("\u274C [LEAD-GEN] Erreur duplication campagne (LeadSource):", error);
+    logger.error("\u274C [LEAD-GEN] Erreur duplication campagne (LeadSource):", error);
     res.status(500).json({ success: false, message: "Erreur lors de la duplication de la campagne" });
   }
 });
@@ -66304,7 +66580,7 @@ router63.get("/stats/timeseries", requireRole2(["admin", "super_admin"]), async 
     const series = Array.from(byDay.entries()).map(([date, v]) => ({ date, created: v.created, completed: v.completed }));
     res.json({ success: true, data: { start: start.toISOString(), days, series } });
   } catch (error) {
-    console.error("\u274C [LEAD-GEN] Erreur timeseries:", error);
+    logger.error("\u274C [LEAD-GEN] Erreur timeseries:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration des s\xE9ries temporelles" });
   }
 });
@@ -66433,7 +66709,7 @@ router64.get("/leads", requireRole2(["admin", "super_admin"]), async (req2, res)
       }
     });
   } catch (error) {
-    console.error("\u274C [MARKETPLACE] Erreur r\xE9cup\xE9ration leads:", error);
+    logger.error("\u274C [MARKETPLACE] Erreur r\xE9cup\xE9ration leads:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la r\xE9cup\xE9ration des leads marketplace",
@@ -66494,7 +66770,7 @@ router64.get("/stats", requireRole2(["admin", "super_admin"]), async (req2, res)
       }
     });
   } catch (error) {
-    console.error("\u274C [MARKETPLACE] Erreur stats:", error);
+    logger.error("\u274C [MARKETPLACE] Erreur stats:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la r\xE9cup\xE9ration des statistiques",
@@ -66516,7 +66792,7 @@ router64.get("/saved-searches", requireRole2(["admin", "super_admin"]), async (r
       data: []
     });
   } catch (error) {
-    console.error("\u274C [MARKETPLACE] Erreur recherches sauvegard\xE9es:", error);
+    logger.error("\u274C [MARKETPLACE] Erreur recherches sauvegard\xE9es:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la r\xE9cup\xE9ration des recherches sauvegard\xE9es",
@@ -66555,7 +66831,7 @@ router64.post("/purchase/:leadId", requireRole2(["admin", "super_admin"]), async
       }
     });
   } catch (error) {
-    console.error("\u274C [MARKETPLACE] Erreur achat lead:", error);
+    logger.error("\u274C [MARKETPLACE] Erreur achat lead:", error);
     res.status(500).json({
       success: false,
       message: error instanceof Error ? error.message : "Erreur lors de l'achat du lead",
@@ -66660,7 +66936,7 @@ router65.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, 
       }
     });
   } catch (error) {
-    console.error("\u274C [PARTNER] Erreur dashboard:", error);
+    logger.error("\u274C [PARTNER] Erreur dashboard:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la r\xE9cup\xE9ration du dashboard partenaire"
@@ -66722,7 +66998,7 @@ router65.get("/earnings", requireRole2(["admin", "super_admin"]), async (req2, r
       }
     });
   } catch (error) {
-    console.error("\u274C [PARTNER] Erreur earnings:", error);
+    logger.error("\u274C [PARTNER] Erreur earnings:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la r\xE9cup\xE9ration des revenus"
@@ -66801,7 +67077,7 @@ router65.get("/leads", requireRole2(["admin", "super_admin"]), async (req2, res)
       }
     });
   } catch (error) {
-    console.error("\u274C [PARTNER] Erreur r\xE9cup\xE9ration leads:", error);
+    logger.error("\u274C [PARTNER] Erreur r\xE9cup\xE9ration leads:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la r\xE9cup\xE9ration des leads partenaire"
@@ -66868,7 +67144,7 @@ router65.post("/register", requireRole2(["admin", "super_admin"]), async (req2, 
       message: "Demande de partenariat enregistr\xE9e avec succ\xE8s"
     });
   } catch (error) {
-    console.error("\u274C [PARTNER] Erreur enregistrement:", error);
+    logger.error("\u274C [PARTNER] Erreur enregistrement:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de l'enregistrement du partenariat"
@@ -67092,7 +67368,7 @@ var listFormsHandler = async (req2, res) => {
     });
     res.json(forms.map(mapFormToResponse));
   } catch (error) {
-    console.error("[PUBLIC-FORMS] Liste impossible:", error);
+    logger.error("[PUBLIC-FORMS] Liste impossible:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la recuperation des formulaires" });
   }
 };
@@ -67134,7 +67410,7 @@ var statsHandler = async (req2, res) => {
       topPerformingForm: topForm?.name ?? ""
     });
   } catch (error) {
-    console.error("[PUBLIC-FORMS] Statistiques impossibles:", error);
+    logger.error("[PUBLIC-FORMS] Statistiques impossibles:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la recuperation des statistiques" });
   }
 };
@@ -67159,7 +67435,7 @@ var submissionsHandler = async (req2, res) => {
     });
     res.json(submissions.map(mapSubmissionToResponse));
   } catch (error) {
-    console.error("[PUBLIC-FORMS] Soumissions impossibles:", error);
+    logger.error("[PUBLIC-FORMS] Soumissions impossibles:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la recuperation des soumissions" });
   }
 };
@@ -67202,7 +67478,7 @@ var createFormHandler = async (req2, res) => {
     });
     res.status(201).json(mapFormToResponse(created));
   } catch (error) {
-    console.error("[PUBLIC-FORMS] Creation impossible:", error);
+    logger.error("[PUBLIC-FORMS] Creation impossible:", error);
     if (error instanceof Error && "code" in error && error.code === "P2002") {
       res.status(409).json({
         success: false,
@@ -67260,7 +67536,7 @@ var updateFormHandler = async (req2, res) => {
     });
     res.json(mapFormToResponse(updated));
   } catch (error) {
-    console.error("[PUBLIC-FORMS] Mise \xE0 jour impossible:", error);
+    logger.error("[PUBLIC-FORMS] Mise \xE0 jour impossible:", error);
     if (error instanceof Error && "code" in error && error.code === "P2002") {
       res.status(409).json({
         success: false,
@@ -67296,7 +67572,7 @@ var toggleFormHandler = async (req2, res) => {
     });
     res.json(mapFormToResponse(updated));
   } catch (error) {
-    console.error("[PUBLIC-FORMS] Toggle impossible:", error);
+    logger.error("[PUBLIC-FORMS] Toggle impossible:", error);
     res.status(500).json({ success: false, message: "Erreur lors du changement de statut du formulaire" });
   }
 };
@@ -67326,7 +67602,7 @@ var deleteFormHandler = async (req2, res) => {
     });
     res.json({ success: true });
   } catch (error) {
-    console.error("[PUBLIC-FORMS] Suppression impossible:", error);
+    logger.error("[PUBLIC-FORMS] Suppression impossible:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la suppression du formulaire" });
   }
 };
@@ -67372,7 +67648,7 @@ router66.get(
       }
       res.json(form);
     } catch (error) {
-      console.error("[PUBLIC-FORMS] Erreur r\xE9cup\xE9ration formulaire:", error);
+      logger.error("[PUBLIC-FORMS] Erreur r\xE9cup\xE9ration formulaire:", error);
       res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration du formulaire" });
     }
   }
@@ -67460,7 +67736,7 @@ router66.get("/my-commercial-links", authMiddleware, async (req2, res) => {
       forms
     });
   } catch (error) {
-    console.error("[PUBLIC-FORMS] Erreur r\xE9cup\xE9ration liens commerciaux:", error);
+    logger.error("[PUBLIC-FORMS] Erreur r\xE9cup\xE9ration liens commerciaux:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration" });
   }
 });
@@ -67497,7 +67773,7 @@ router66.get("/public/:identifier/config", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("[PUBLIC-FORMS] Config publique impossible:", error);
+    logger.error("[PUBLIC-FORMS] Config publique impossible:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la recuperation de la configuration du formulaire" });
   }
 });
@@ -67595,7 +67871,7 @@ router66.post("/submit", submissionRateLimit, async (req2, res) => {
             leadData.assignedUserId = referrer.id;
             leadData.notes = `Lead cr\xE9\xE9 depuis le formulaire "${form.name}" via le lien de ${referrer.firstName} ${referrer.lastName}`;
           } else {
-            console.warn(`\u26A0\uFE0F [PUBLIC-FORMS] Utilisateur r\xE9f\xE9rent introuvable pour le slug: ${referredBy}`);
+            logger.warn(`\u26A0\uFE0F [PUBLIC-FORMS] Utilisateur r\xE9f\xE9rent introuvable pour le slug: ${referredBy}`);
           }
         }
         const lead = await db.lead.create({ data: leadData });
@@ -67604,7 +67880,7 @@ router66.post("/submit", submissionRateLimit, async (req2, res) => {
           data: { leadId: lead.id }
         });
       } catch (leadError) {
-        console.error("[PUBLIC-FORMS] Erreur lors de la cr\xE9ation du lead:", leadError);
+        logger.error("[PUBLIC-FORMS] Erreur lors de la cr\xE9ation du lead:", leadError);
       }
     }
     res.json({
@@ -67616,7 +67892,7 @@ router66.post("/submit", submissionRateLimit, async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("[PUBLIC-FORMS] Soumission impossible:", error);
+    logger.error("[PUBLIC-FORMS] Soumission impossible:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la soumission du formulaire" });
   }
 });
@@ -67725,7 +68001,7 @@ router67.get("/public/:slug", publicLandingRateLimit, async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("\u274C [LANDING-PAGES] Erreur affichage public:", error);
+    logger.error("\u274C [LANDING-PAGES] Erreur affichage public:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de l'affichage de la landing page"
@@ -67772,7 +68048,7 @@ router67.post("/public/:slug/track", publicLandingRateLimit, async (req2, res) =
       message: "\xC9v\xE9nement track\u0117 avec succ\xE8s"
     });
   } catch (error) {
-    console.error("\u274C [LANDING-PAGES] Erreur tracking:", error);
+    logger.error("\u274C [LANDING-PAGES] Erreur tracking:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors du tracking"
@@ -67827,7 +68103,7 @@ router67.get("/admin/list", requireRole2(["admin", "super_admin"]), async (req2,
     );
     res.json({ success: true, data });
   } catch (error) {
-    console.error("\u274C [LANDING-ADMIN] Erreur liste:", error);
+    logger.error("\u274C [LANDING-ADMIN] Erreur liste:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration des landing pages" });
   }
 });
@@ -67869,7 +68145,7 @@ router67.get("/", authMiddleware, adminLandingRateLimit, requireRole2(["admin", 
     );
     res.json({ success: true, data });
   } catch (error) {
-    console.error("\u274C [LANDING] Erreur / (list):", error);
+    logger.error("\u274C [LANDING] Erreur / (list):", error);
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration des landing pages" });
   }
 });
@@ -67887,7 +68163,7 @@ router67.get("/stats", authMiddleware, adminLandingRateLimit, requireRole2(["adm
     const avgConversionRate = totalViews > 0 ? Math.round(totalConversions / totalViews * 100) : 0;
     res.json({ success: true, data: { totalPages, publishedPages, draftPages, totalViews, totalConversions, avgConversionRate } });
   } catch (error) {
-    console.error("\u274C [LANDING] Erreur /stats:", error);
+    logger.error("\u274C [LANDING] Erreur /stats:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration des statistiques" });
   }
 });
@@ -67922,7 +68198,7 @@ router67.get("/stats/timeseries", authMiddleware, adminLandingRateLimit, require
     const series = Array.from(byDay.entries()).map(([date, v]) => ({ date, views: v.views, conversions: v.conversions }));
     res.json({ success: true, data: { start: start.toISOString(), days, series } });
   } catch (error) {
-    console.error("\u274C [LANDING] Erreur timeseries:", error);
+    logger.error("\u274C [LANDING] Erreur timeseries:", error);
     res.status(500).json({ success: false, message: "Erreur s\xE9ries temporelles landing" });
   }
 });
@@ -67945,7 +68221,7 @@ router67.post("/", authMiddleware, adminLandingRateLimit, requireRole2(["admin",
     });
     res.json({ success: true, data: { id: created.id } });
   } catch (error) {
-    console.error("\u274C [LANDING] Erreur cr\xE9ation:", error);
+    logger.error("\u274C [LANDING] Erreur cr\xE9ation:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la cr\xE9ation" });
   }
 });
@@ -67969,7 +68245,7 @@ router67.put("/:id", authMiddleware, adminLandingRateLimit, requireRole2(["admin
     });
     res.json({ success: true, data: { id: updated.id } });
   } catch (error) {
-    console.error("\u274C [LANDING] Erreur mise \xE0 jour:", error);
+    logger.error("\u274C [LANDING] Erreur mise \xE0 jour:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la mise \xE0 jour" });
   }
 });
@@ -67982,7 +68258,7 @@ router67.delete("/:id", authMiddleware, adminLandingRateLimit, requireRole2(["ad
     if (deleted.count === 0) return res.status(404).json({ success: false, message: "Landing page non trouv\xE9e" });
     res.json({ success: true });
   } catch (error) {
-    console.error("\u274C [LANDING] Erreur suppression:", error);
+    logger.error("\u274C [LANDING] Erreur suppression:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la suppression" });
   }
 });
@@ -67998,7 +68274,7 @@ router67.patch("/:id/publish", authMiddleware, adminLandingRateLimit, requireRol
     const updated = await db.treeBranchLeafTree.update({ where: { id }, data: { status: publish ? "published" : "draft", isPublic: !!publish } });
     res.json({ success: true, data: { id: updated.id, status: updated.status } });
   } catch (error) {
-    console.error("\u274C [LANDING] Erreur publish:", error);
+    logger.error("\u274C [LANDING] Erreur publish:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la publication" });
   }
 });
@@ -68038,7 +68314,7 @@ router67.get("/admin/:id", requireRole2(["admin", "super_admin"]), async (req2, 
       }
     });
   } catch (error) {
-    console.error("\u274C [LANDING-ADMIN] Erreur d\xE9tail:", error);
+    logger.error("\u274C [LANDING-ADMIN] Erreur d\xE9tail:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration du d\xE9tail" });
   }
 });
@@ -68064,7 +68340,7 @@ router67.post("/:id/duplicate", authMiddleware, adminLandingRateLimit, requireRo
     });
     res.json({ success: true, data: { id: copy.id } });
   } catch (error) {
-    console.error("\u274C [LANDING] Erreur duplication:", error);
+    logger.error("\u274C [LANDING] Erreur duplication:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la duplication" });
   }
 });
@@ -68093,7 +68369,7 @@ router67.post("/:id/snapshot", authMiddleware, adminLandingRateLimit, requireRol
     const updated = await db.treeBranchLeafTree.update({ where: { id }, data: { settings: updatedSettings } });
     res.json({ success: true, data: { id: updated.id, snapshotId } });
   } catch (error) {
-    console.error("\u274C [LANDING] Erreur snapshot:", error);
+    logger.error("\u274C [LANDING] Erreur snapshot:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la cr\xE9ation du snapshot" });
   }
 });
@@ -68115,7 +68391,7 @@ router67.get("/:id/versions", authMiddleware, adminLandingRateLimit, requireRole
       }))
     });
   } catch (error) {
-    console.error("\u274C [LANDING] Erreur versions:", error);
+    logger.error("\u274C [LANDING] Erreur versions:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration des versions" });
   }
 });
@@ -68141,7 +68417,7 @@ router67.post("/:id/restore", authMiddleware, adminLandingRateLimit, requireRole
     });
     res.json({ success: true, data: { id: updated.id } });
   } catch (error) {
-    console.error("\u274C [LANDING] Erreur restore:", error);
+    logger.error("\u274C [LANDING] Erreur restore:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la restauration" });
   }
 });
@@ -68152,7 +68428,7 @@ var import_express69 = require("express");
 init_database();
 init_PostalEmailService();
 var import_nodemailer4 = __toESM(require("nodemailer"), 1);
-var import_crypto28 = __toESM(require("crypto"), 1);
+var import_crypto27 = __toESM(require("crypto"), 1);
 var postalApiVerified = false;
 var postalApiChecked = false;
 async function isPostalApiConfigured() {
@@ -68171,11 +68447,11 @@ async function isPostalApiConfigured() {
     const contentType = resp.headers.get("content-type") || "";
     postalApiVerified = contentType.includes("application/json");
     if (!postalApiVerified) {
-      console.warn(`\u26A0\uFE0F [POSTAL] API REST non fonctionnelle (${resp.status}, content-type: ${contentType}) \u2014 utilisation SMTP direct`);
+      logger.warn(`\u26A0\uFE0F [POSTAL] API REST non fonctionnelle (${resp.status}, content-type: ${contentType}) \u2014 utilisation SMTP direct`);
     } else {
     }
   } catch {
-    console.warn("\u26A0\uFE0F [POSTAL] API REST inaccessible \u2014 utilisation SMTP direct");
+    logger.warn("\u26A0\uFE0F [POSTAL] API REST inaccessible \u2014 utilisation SMTP direct");
     postalApiVerified = false;
   }
   postalApiChecked = true;
@@ -68253,7 +68529,7 @@ router68.post("/send", authMiddleware, async (req2, res) => {
         ...isHtml ? { html: body2 } : { text: body2 },
         headers: {
           "X-Mailer": "ZhiiveMail/1.0",
-          "X-Entity-Ref-ID": import_crypto28.default.randomUUID(),
+          "X-Entity-Ref-ID": import_crypto27.default.randomUUID(),
           "List-Unsubscribe": `<mailto:unsubscribe@zhiive.com?subject=unsubscribe>`,
           "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
           "Feedback-ID": `zhiive:postal:${req2.user?.userId || "unknown"}`
@@ -68266,7 +68542,7 @@ router68.post("/send", authMiddleware, async (req2, res) => {
     }
     await db.email.create({
       data: {
-        id: import_crypto28.default.randomUUID(),
+        id: import_crypto27.default.randomUUID(),
         userId: req2.user.userId,
         from: fromEmail,
         to: Array.isArray(to) ? to.join(", ") : to,
@@ -68285,7 +68561,7 @@ router68.post("/send", authMiddleware, async (req2, res) => {
       messageId
     });
   } catch (error) {
-    console.error("\u274C [POSTAL] Erreur envoi:", error);
+    logger.error("\u274C [POSTAL] Erreur envoi:", error);
     res.status(500).json({
       error: "Erreur lors de l'envoi de l'email",
       details: error instanceof Error ? error.message : "Erreur inconnue"
@@ -68306,7 +68582,7 @@ router68.post("/sync", authMiddleware, async (req2, res) => {
       emailCount
     });
   } catch (error) {
-    console.error("\u274C [POSTAL] Erreur sync:", error);
+    logger.error("\u274C [POSTAL] Erreur sync:", error);
     res.status(500).json({
       error: "Erreur lors de la synchronisation",
       details: error instanceof Error ? error.message : "Erreur inconnue"
@@ -68337,7 +68613,7 @@ router68.post("/test", authMiddleware, async (req2, res) => {
         method = "SMTP";
       }
     } catch (e) {
-      console.warn(`\u26A0\uFE0F [POSTAL] Test connexion failed:`, e);
+      logger.warn(`\u26A0\uFE0F [POSTAL] Test connexion failed:`, e);
     }
     res.json({
       success: isConnected,
@@ -68345,7 +68621,7 @@ router68.post("/test", authMiddleware, async (req2, res) => {
       emailAddress: emailAccount?.emailAddress || null
     });
   } catch (error) {
-    console.error("\u274C [POSTAL] Erreur test:", error);
+    logger.error("\u274C [POSTAL] Erreur test:", error);
     res.status(500).json({
       error: "Erreur lors du test de connexion",
       details: error instanceof Error ? error.message : "Erreur inconnue"
@@ -68428,7 +68704,7 @@ router68.get("/emails", authMiddleware, async (req2, res) => {
       page: parseInt(page, 10) || 1
     });
   } catch (error) {
-    console.error("\u274C [POSTAL] Erreur listing emails:", error);
+    logger.error("\u274C [POSTAL] Erreur listing emails:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9cup\xE9ration des emails",
       details: error instanceof Error ? error.message : "Erreur inconnue"
@@ -68468,7 +68744,7 @@ router68.get("/emails/:id", authMiddleware, async (req2, res) => {
       createdAt: email.createdAt
     });
   } catch (error) {
-    console.error("\u274C [POSTAL] Erreur r\xE9cup\xE9ration email:", error);
+    logger.error("\u274C [POSTAL] Erreur r\xE9cup\xE9ration email:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9cup\xE9ration de l'email",
       details: error instanceof Error ? error.message : "Erreur inconnue"
@@ -68496,7 +68772,7 @@ router68.delete("/emails/:id", authMiddleware, async (req2, res) => {
     });
     res.json({ success: true, message: "Email d\xE9plac\xE9 dans la corbeille" });
   } catch (error) {
-    console.error("\u274C [POSTAL] Erreur suppression email:", error);
+    logger.error("\u274C [POSTAL] Erreur suppression email:", error);
     res.status(500).json({
       error: "Erreur lors de la suppression de l'email",
       details: error instanceof Error ? error.message : "Erreur inconnue"
@@ -68524,7 +68800,7 @@ router68.post("/emails/:id/star", authMiddleware, async (req2, res) => {
       message: updated.isStarred ? "Email ajout\xE9 aux favoris" : "Email retir\xE9 des favoris"
     });
   } catch (error) {
-    console.error("\u274C [POSTAL] Erreur toggle star:", error);
+    logger.error("\u274C [POSTAL] Erreur toggle star:", error);
     res.status(500).json({
       error: "Erreur lors de la modification du favori",
       details: error instanceof Error ? error.message : "Erreur inconnue"
@@ -68552,7 +68828,7 @@ router68.post("/emails/:id/read", authMiddleware, async (req2, res) => {
       isRead: updated.isRead
     });
   } catch (error) {
-    console.error("\u274C [POSTAL] Erreur toggle read:", error);
+    logger.error("\u274C [POSTAL] Erreur toggle read:", error);
     res.status(500).json({
       error: "Erreur lors de la modification de l'\xE9tat de lecture",
       details: error instanceof Error ? error.message : "Erreur inconnue"
@@ -68582,7 +68858,7 @@ router68.get("/folders", authMiddleware, async (req2, res) => {
     folders[0].messagesUnread = unreadCount;
     res.json(folders);
   } catch (error) {
-    console.error("\u274C [POSTAL] Erreur listing dossiers:", error);
+    logger.error("\u274C [POSTAL] Erreur listing dossiers:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9cup\xE9ration des dossiers",
       details: error instanceof Error ? error.message : "Erreur inconnue"
@@ -68605,7 +68881,7 @@ router68.post("/inbound", async (req2, res) => {
       emailId
     });
   } catch (error) {
-    console.error("\u274C [POSTAL] Erreur webhook inbound:", error);
+    logger.error("\u274C [POSTAL] Erreur webhook inbound:", error);
     res.status(200).json({
       success: false,
       error: error instanceof Error ? error.message : "Erreur inconnue"
@@ -68618,7 +68894,7 @@ var postal_mail_default = router68;
 var import_express70 = require("express");
 init_database();
 var import_nodemailer5 = __toESM(require("nodemailer"), 1);
-var import_crypto29 = __toESM(require("crypto"), 1);
+var import_crypto28 = __toESM(require("crypto"), 1);
 var import_child_process2 = require("child_process");
 var router69 = (0, import_express70.Router)();
 function requireSuperAdmin(req2, res, next) {
@@ -68672,7 +68948,7 @@ router69.get("/status", authMiddleware, requireSuperAdmin, async (req2, res) => 
       mode: postalConfigured ? "postal-api" : smtpConfigured ? "smtp" : "non-configur\xE9"
     });
   } catch (error) {
-    console.error("\u274C [ZHIIVEMAIL] Erreur status:", error);
+    logger.error("\u274C [ZHIIVEMAIL] Erreur status:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration du statut" });
   }
 });
@@ -68703,7 +68979,7 @@ router69.post("/test-smtp", authMiddleware, requireSuperAdmin, async (req2, res)
       subject: "\u2705 Test ZhiiveMail - Connexion SMTP OK",
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px;">
-          <h2 style="color: #6C5CE7;">\u{1F41D} ZhiiveMail - Test SMTP</h2>
+          <h2 style="color: ${SF.primary};">\u{1F41D} ZhiiveMail - Test SMTP</h2>
           <p>La connexion SMTP fonctionne correctement.</p>
           <ul>
             <li><strong>Serveur:</strong> ${smtpHost}:${smtpPort}</li>
@@ -68720,7 +68996,7 @@ router69.post("/test-smtp", authMiddleware, requireSuperAdmin, async (req2, res)
       recipient
     });
   } catch (error) {
-    console.error("\u274C [ZHIIVEMAIL] Test SMTP \xE9chou\xE9:", error);
+    logger.error("\u274C [ZHIIVEMAIL] Test SMTP \xE9chou\xE9:", error);
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : "Erreur SMTP inconnue"
@@ -68739,7 +69015,7 @@ router69.get("/accounts", authMiddleware, requireSuperAdmin, async (req2, res) =
     });
     res.json(accounts.map((a) => ({ ...a, user: a.User, User: void 0 })));
   } catch (error) {
-    console.error("\u274C [ZHIIVEMAIL] Erreur liste comptes:", error);
+    logger.error("\u274C [ZHIIVEMAIL] Erreur liste comptes:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des comptes" });
   }
 });
@@ -68763,7 +69039,7 @@ router69.post("/provision", authMiddleware, requireSuperAdmin, async (req2, res)
     const zhiiveEmail = generateZhiiveEmail(user.firstName, user.lastName, user.email);
     const account = await db.emailAccount.create({
       data: {
-        id: import_crypto29.default.randomUUID(),
+        id: import_crypto28.default.randomUUID(),
         emailAddress: zhiiveEmail,
         encryptedPassword: "",
         mailProvider: "postal",
@@ -68780,11 +69056,11 @@ router69.post("/provision", authMiddleware, requireSuperAdmin, async (req2, res)
       const postal = getPostalService2();
       await postal.createMailbox(zhiiveEmail, `${user.firstName || ""} ${user.lastName || ""}`.trim());
     } catch (postalErr) {
-      console.error(`\u26A0\uFE0F [ZHIIVEMAIL] Erreur provisionnement Postal (non bloquant):`, postalErr);
+      logger.error(`\u26A0\uFE0F [ZHIIVEMAIL] Erreur provisionnement Postal (non bloquant):`, postalErr);
     }
     res.json({ success: true, account: { ...account, user: account.User, User: void 0 } });
   } catch (error) {
-    console.error("\u274C [ZHIIVEMAIL] Erreur provisionnement:", error);
+    logger.error("\u274C [ZHIIVEMAIL] Erreur provisionnement:", error);
     res.status(500).json({ error: "Erreur lors du provisionnement" });
   }
 });
@@ -68803,7 +69079,7 @@ router69.post("/provision-all", authMiddleware, requireSuperAdmin, async (req2, 
         const zhiiveEmail = generateZhiiveEmail(user.firstName, user.lastName, user.email);
         await db.emailAccount.create({
           data: {
-            id: import_crypto29.default.randomUUID(),
+            id: import_crypto28.default.randomUUID(),
             emailAddress: zhiiveEmail,
             encryptedPassword: "",
             mailProvider: "postal",
@@ -68817,7 +69093,7 @@ router69.post("/provision-all", authMiddleware, requireSuperAdmin, async (req2, 
           const postal = getPostalService2();
           await postal.createMailbox(zhiiveEmail, `${user.firstName || ""} ${user.lastName || ""}`.trim());
         } catch (postalErr) {
-          console.error(`\u26A0\uFE0F [ZHIIVEMAIL] Erreur provisionnement Postal pour ${zhiiveEmail}:`, postalErr);
+          logger.error(`\u26A0\uFE0F [ZHIIVEMAIL] Erreur provisionnement Postal pour ${zhiiveEmail}:`, postalErr);
         }
         results.push({ userId: user.id, email: zhiiveEmail, status: "created" });
         created++;
@@ -68832,7 +69108,7 @@ router69.post("/provision-all", authMiddleware, requireSuperAdmin, async (req2, 
       results
     });
   } catch (error) {
-    console.error("\u274C [ZHIIVEMAIL] Erreur provisionnement masse:", error);
+    logger.error("\u274C [ZHIIVEMAIL] Erreur provisionnement masse:", error);
     res.status(500).json({ error: "Erreur lors du provisionnement en masse" });
   }
 });
@@ -68842,7 +69118,7 @@ router69.delete("/accounts/:id", authMiddleware, requireSuperAdmin, async (req2,
     await db.emailAccount.delete({ where: { id } });
     res.json({ success: true });
   } catch (error) {
-    console.error("\u274C [ZHIIVEMAIL] Erreur suppression:", error);
+    logger.error("\u274C [ZHIIVEMAIL] Erreur suppression:", error);
     res.status(500).json({ error: "Erreur lors de la suppression" });
   }
 });
@@ -68863,7 +69139,7 @@ router69.patch("/accounts/:id", authMiddleware, requireSuperAdmin, async (req2, 
     });
     res.json({ success: true, account: { ...updated, user: updated.User, User: void 0 } });
   } catch (error) {
-    console.error("\u274C [ZHIIVEMAIL] Erreur mise \xE0 jour:", error);
+    logger.error("\u274C [ZHIIVEMAIL] Erreur mise \xE0 jour:", error);
     res.status(500).json({ error: "Erreur lors de la mise \xE0 jour" });
   }
 });
@@ -69006,7 +69282,7 @@ router69.get("/server-overview", authMiddleware, requireSuperAdmin, async (_req,
       suppressions: suppressions[0]?.total ? parseInt(suppressions[0].total) : 0
     });
   } catch (error) {
-    console.error("\u274C [ZHIIVEMAIL] server-overview error:", error);
+    logger.error("\u274C [ZHIIVEMAIL] server-overview error:", error);
     res.status(500).json({ error: "Erreur r\xE9cup\xE9ration \xE9tat serveur" });
   }
 });
@@ -69040,7 +69316,7 @@ router69.get("/postal-stats", authMiddleware, requireSuperAdmin, async (_req, re
       hourly
     });
   } catch (error) {
-    console.error("\u274C [ZHIIVEMAIL] postal-stats error:", error);
+    logger.error("\u274C [ZHIIVEMAIL] postal-stats error:", error);
     res.status(500).json({ error: "Erreur r\xE9cup\xE9ration stats" });
   }
 });
@@ -69063,7 +69339,7 @@ router69.get("/postal-messages", authMiddleware, requireSuperAdmin, async (req2,
     }));
     res.json(messages);
   } catch (error) {
-    console.error("\u274C [ZHIIVEMAIL] postal-messages error:", error);
+    logger.error("\u274C [ZHIIVEMAIL] postal-messages error:", error);
     res.status(500).json({ error: "Erreur r\xE9cup\xE9ration messages" });
   }
 });
@@ -69083,7 +69359,7 @@ router69.get("/postal-domains", authMiddleware, requireSuperAdmin, async (_req, 
     }));
     res.json(domains);
   } catch (error) {
-    console.error("\u274C [ZHIIVEMAIL] postal-domains error:", error);
+    logger.error("\u274C [ZHIIVEMAIL] postal-domains error:", error);
     res.status(500).json({ error: "Erreur r\xE9cup\xE9ration domaines" });
   }
 });
@@ -69099,7 +69375,7 @@ router69.get("/postal-credentials", authMiddleware, requireSuperAdmin, async (_r
     }));
     res.json(credentials);
   } catch (error) {
-    console.error("\u274C [ZHIIVEMAIL] postal-credentials error:", error);
+    logger.error("\u274C [ZHIIVEMAIL] postal-credentials error:", error);
     res.status(500).json({ error: "Erreur r\xE9cup\xE9ration credentials" });
   }
 });
@@ -69109,7 +69385,7 @@ router69.get("/postal-routes", authMiddleware, requireSuperAdmin, async (_req, r
     const routes = parseMysqlResult(raw);
     res.json(routes);
   } catch (error) {
-    console.error("\u274C [ZHIIVEMAIL] postal-routes error:", error);
+    logger.error("\u274C [ZHIIVEMAIL] postal-routes error:", error);
     res.status(500).json({ error: "Erreur r\xE9cup\xE9ration routes" });
   }
 });
@@ -69121,7 +69397,7 @@ router69.post("/clear-suppressions", authMiddleware, requireSuperAdmin, async (_
     const remaining = result[0]?.total ? parseInt(result[0].total) : 0;
     res.json({ success: true, remaining });
   } catch (error) {
-    console.error("\u274C [ZHIIVEMAIL] clear-suppressions error:", error);
+    logger.error("\u274C [ZHIIVEMAIL] clear-suppressions error:", error);
     res.status(500).json({ error: "Erreur suppression" });
   }
 });
@@ -69136,7 +69412,7 @@ router69.post("/postal-restart", authMiddleware, requireSuperAdmin, async (_req,
     }) : [];
     res.json({ success: true, containers });
   } catch (error) {
-    console.error("\u274C [ZHIIVEMAIL] restart error:", error);
+    logger.error("\u274C [ZHIIVEMAIL] restart error:", error);
     res.status(500).json({ error: "Erreur red\xE9marrage" });
   }
 });
@@ -69144,7 +69420,7 @@ var zhiivemail_admin_default = router69;
 
 // src/routes/mail-provider.ts
 var import_express71 = require("express");
-var import_crypto30 = __toESM(require("crypto"), 1);
+var import_crypto29 = __toESM(require("crypto"), 1);
 init_database();
 var router70 = (0, import_express71.Router)();
 function generateZhiiveEmail2(firstName, lastName, fallbackEmail) {
@@ -69179,7 +69455,7 @@ router70.get("/provider", authMiddleware, async (req2, res) => {
       if (orgId) {
         emailAccount = await db.emailAccount.create({
           data: {
-            id: import_crypto30.default.randomUUID(),
+            id: import_crypto29.default.randomUUID(),
             emailAddress: zhiiveEmail,
             encryptedPassword: "",
             // Postal n'a pas besoin de mot de passe utilisateur
@@ -69195,7 +69471,7 @@ router70.get("/provider", authMiddleware, async (req2, res) => {
           const postal = getPostalService2();
           await postal.createMailbox(zhiiveEmail, `${user?.firstName || ""} ${user?.lastName || ""}`.trim());
         } catch (postalErr) {
-          console.error(`\u26A0\uFE0F [MAIL-PROVIDER] Erreur provisionnement Postal (non bloquant):`, postalErr);
+          logger.error(`\u26A0\uFE0F [MAIL-PROVIDER] Erreur provisionnement Postal (non bloquant):`, postalErr);
         }
       }
     } else if (emailAccount.mailProvider === "gmail" || emailAccount.mailProvider === "none") {
@@ -69214,7 +69490,7 @@ router70.get("/provider", authMiddleware, async (req2, res) => {
       email: emailAccount?.emailAddress || zhiiveEmail
     });
   } catch (error) {
-    console.error("\u274C [MAIL-PROVIDER] Erreur d\xE9tection provider:", error);
+    logger.error("\u274C [MAIL-PROVIDER] Erreur d\xE9tection provider:", error);
     return res.status(500).json({
       error: "Erreur lors de la d\xE9tection du fournisseur de messagerie",
       details: error instanceof Error ? error.message : "Erreur inconnue"
@@ -69359,7 +69635,7 @@ router71.get("/dashboard", requireRole2(["admin", "super_admin"]), async (req2, 
       }
     });
   } catch (error) {
-    console.error("\u274C [CAMPAIGN-ANALYTICS] Erreur dashboard:", error);
+    logger.error("\u274C [CAMPAIGN-ANALYTICS] Erreur dashboard:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la r\xE9cup\xE9ration du dashboard analytics"
@@ -69531,7 +69807,7 @@ router71.get("/campaign/:id", requireRole2(["admin", "super_admin"]), async (req
       }
     });
   } catch (error) {
-    console.error("\u274C [CAMPAIGN-ANALYTICS] Erreur campagne:", error);
+    logger.error("\u274C [CAMPAIGN-ANALYTICS] Erreur campagne:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la r\xE9cup\xE9ration des analytics de campagne"
@@ -69636,7 +69912,7 @@ router71.get("/ai-insights", requireRole2(["admin", "super_admin"]), async (req2
       }
     });
   } catch (error) {
-    console.error("\u274C [CAMPAIGN-ANALYTICS] Erreur AI insights:", error);
+    logger.error("\u274C [CAMPAIGN-ANALYTICS] Erreur AI insights:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de la r\xE9cup\xE9ration des insights IA"
@@ -69700,9 +69976,13 @@ router71.get("/export", requireRole2(["admin", "super_admin"]), async (req2, res
       }
     });
     if (format === "csv") {
-      res.setHeader("Content-Type", "text/csv");
+      const header = "id,prenom,nom,email,telephone,entreprise,statut,source,cree_le\n";
+      const rows = leads.map(
+        (l) => [l.id, l.firstName ?? "", l.lastName ?? "", l.email ?? "", l.phone ?? "", l.company ?? "", l.status ?? "", l.source ?? "", l.createdAt.toISOString()].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")
+      ).join("\n");
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
       res.setHeader("Content-Disposition", 'attachment; filename="leads-export.csv"');
-      res.send("CSV export \xE0 impl\xE9menter");
+      res.send(header + rows);
     } else {
       res.json({
         success: true,
@@ -69715,7 +69995,7 @@ router71.get("/export", requireRole2(["admin", "super_admin"]), async (req2, res
       });
     }
   } catch (error) {
-    console.error("\u274C [CAMPAIGN-ANALYTICS] Erreur export:", error);
+    logger.error("\u274C [CAMPAIGN-ANALYTICS] Erreur export:", error);
     res.status(500).json({
       success: false,
       message: "Erreur lors de l'export des donn\xE9es"
@@ -69747,7 +70027,7 @@ router72.get("/rules", requireRole2(["admin", "super_admin"]), async (req2, res)
     });
     res.json({ success: true, data: rules });
   } catch (error) {
-    console.error("\u274C [DISPATCH] Erreur liste:", error);
+    logger.error("\u274C [DISPATCH] Erreur liste:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration des r\xE8gles" });
   }
 });
@@ -69760,7 +70040,7 @@ router72.post("/rules", requireRole2(["admin", "super_admin"]), async (req2, res
     const created = await prisma37.automationRule.create({ data: { organizationId, event, action, params: params ?? {}, active: !!active } });
     res.json({ success: true, data: created, message: "R\xE8gle cr\xE9\xE9e" });
   } catch (error) {
-    console.error("\u274C [DISPATCH] Erreur cr\xE9ation:", error);
+    logger.error("\u274C [DISPATCH] Erreur cr\xE9ation:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la cr\xE9ation de la r\xE8gle" });
   }
 });
@@ -69775,7 +70055,7 @@ router72.put("/rules/:id", requireRole2(["admin", "super_admin"]), async (req2, 
     const updated = await prisma37.automationRule.update({ where: { id }, data: { event, action, params, active } });
     res.json({ success: true, data: updated, message: "R\xE8gle mise \xE0 jour" });
   } catch (error) {
-    console.error("\u274C [DISPATCH] Erreur mise \xE0 jour:", error);
+    logger.error("\u274C [DISPATCH] Erreur mise \xE0 jour:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la mise \xE0 jour de la r\xE8gle" });
   }
 });
@@ -69788,7 +70068,7 @@ router72.delete("/rules/:id", requireRole2(["admin", "super_admin"]), async (req
     if (!deleted.count) return res.status(404).json({ success: false, message: "R\xE8gle non trouv\xE9e" });
     res.json({ success: true, message: "R\xE8gle supprim\xE9e" });
   } catch (error) {
-    console.error("\u274C [DISPATCH] Erreur suppression:", error);
+    logger.error("\u274C [DISPATCH] Erreur suppression:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la suppression de la r\xE8gle" });
   }
 });
@@ -69816,7 +70096,7 @@ router72.post("/simulate", requireRole2(["admin", "super_admin"]), async (req2, 
     }
     res.json({ success: true, data: { matches } });
   } catch (error) {
-    console.error("\u274C [DISPATCH] Erreur simulate:", error);
+    logger.error("\u274C [DISPATCH] Erreur simulate:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la simulation" });
   }
 });
@@ -69824,7 +70104,7 @@ var dispatch_default = router72;
 
 // src/routes/integrationsStatus.ts
 var import_express74 = require("express");
-var import_crypto31 = require("crypto");
+var import_crypto30 = require("crypto");
 var import_express_rate_limit13 = __toESM(require("express-rate-limit"), 1);
 init_database();
 var router73 = (0, import_express74.Router)();
@@ -69860,7 +70140,7 @@ router73.get("/status", requireRole2(["admin", "super_admin"]), async (req2, res
     };
     res.json({ success: true, data: status });
   } catch (error) {
-    console.error("\u274C [INTEGRATIONS] Erreur status:", error);
+    logger.error("\u274C [INTEGRATIONS] Erreur status:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la r\xE9cup\xE9ration du statut des int\xE9grations" });
   }
 });
@@ -69887,7 +70167,7 @@ router73.post("/ad-platform/connect", requireRole2(["admin", "super_admin"]), as
     } else {
       rec = await prisma38.adPlatformIntegration.create({
         data: {
-          id: (0, import_crypto31.randomUUID)(),
+          id: (0, import_crypto30.randomUUID)(),
           organizationId,
           platform,
           name: name || platform,
@@ -69901,7 +70181,7 @@ router73.post("/ad-platform/connect", requireRole2(["admin", "super_admin"]), as
     }
     res.json({ success: true, data: { id: rec.id } });
   } catch (error) {
-    console.error("\u274C [INTEGRATIONS] Erreur connect:", error);
+    logger.error("\u274C [INTEGRATIONS] Erreur connect:", error);
     res.status(500).json({ success: false, message: "Erreur connexion plateforme" });
   }
 });
@@ -69919,7 +70199,7 @@ router73.post("/ad-platform/disconnect", requireRole2(["admin", "super_admin"]),
     });
     res.json({ success: true });
   } catch (error) {
-    console.error("\u274C [INTEGRATIONS] Erreur disconnect:", error);
+    logger.error("\u274C [INTEGRATIONS] Erreur disconnect:", error);
     res.status(500).json({ success: false, message: "Erreur d\xE9connexion plateforme" });
   }
 });
@@ -69934,7 +70214,7 @@ router73.post("/ad-platform/sync", requireRole2(["admin", "super_admin"]), async
     const rec = await prisma38.adPlatformIntegration.update({ where: { id: existing.id }, data: { lastSync: /* @__PURE__ */ new Date(), updatedAt: /* @__PURE__ */ new Date() } });
     res.json({ success: true, data: { id: rec.id, lastSync: rec.lastSync } });
   } catch (error) {
-    console.error("\u274C [INTEGRATIONS] Erreur sync:", error);
+    logger.error("\u274C [INTEGRATIONS] Erreur sync:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la synchronisation" });
   }
 });
@@ -69945,7 +70225,7 @@ var import_express75 = require("express");
 init_database();
 var import_axios3 = __toESM(require("axios"), 1);
 var import_googleapis7 = require("googleapis");
-var import_crypto32 = require("crypto");
+var import_crypto31 = require("crypto");
 init_googleConfig();
 
 // src/services/adPlatformService.ts
@@ -70745,7 +71025,7 @@ function sanitizeClientValue(raw) {
 function fingerprintSecret(secret) {
   if (!secret) return null;
   try {
-    const hex = (0, import_crypto32.createHash)("sha256").update(secret).digest("hex");
+    const hex = (0, import_crypto31.createHash)("sha256").update(secret).digest("hex");
     return hex.slice(0, 12);
   } catch {
     return null;
@@ -70784,7 +71064,7 @@ router74.get("/", async (req2, res) => {
         return res.redirect(redirectUrl);
       }
     } catch (e) {
-      console.error("Erreur parsing state Facebook:", e);
+      logger.error("Erreur parsing state Facebook:", e);
     }
   }
   res.send("CRM API Server - Facebook OAuth Callback Handler");
@@ -70805,7 +71085,7 @@ router74.get("/callback", async (req2, res) => {
         return res.redirect(redirectUrl);
       }
     } catch (e) {
-      console.error("Erreur parsing state:", e);
+      logger.error("Erreur parsing state:", e);
     }
   }
   res.status(400).send("Callback invalide");
@@ -70817,7 +71097,7 @@ router74.get("/advertising/oauth/:platform/callback", async (req2, res) => {
     const platform = req2.params.platform;
     const { code, state, error } = req2.query;
     if (error) {
-      console.warn("OAuth error from provider:", error);
+      logger.warn("OAuth error from provider:", error);
     }
     if (!code || !state) {
       res.status(400).send("Missing code/state");
@@ -70845,7 +71125,7 @@ router74.get("/advertising/oauth/:platform/callback", async (req2, res) => {
       }
       const created = await prisma39.adPlatformIntegration.create({
         data: {
-          id: (0, import_crypto32.randomUUID)(),
+          id: (0, import_crypto31.randomUUID)(),
           organizationId,
           platform,
           name: data.name || platform,
@@ -70870,12 +71150,12 @@ router74.get("/advertising/oauth/:platform/callback", async (req2, res) => {
         try {
           const oauth2 = new import_googleapis7.google.auth.OAuth2(clientId, clientSecret, redirectUri);
           const { tokens: tokens2 } = await oauth2.getToken(code);
-          console.log("\u2705 Google Ads OAuth tokens received successfully");
+          logger.info("\u2705 Google Ads OAuth tokens received successfully");
           await upsertIntegration({ name: "Google Ads OAuth", credentials: { tokens: tokens2, userId } });
         } catch (e) {
           const idSanMasked = clientId ? clientId.length > 8 ? clientId.slice(0, 4) + "..." + clientId.slice(-4) : "defined" : "MISSING";
           const secretFp = fingerprintSecret(clientSecret);
-          console.error(`Google Ads token exchange failed (clientId=${idSanMasked}, secretFp=${secretFp ?? "null"}):`, e);
+          logger.error(`Google Ads token exchange failed (clientId=${idSanMasked}, secretFp=${secretFp ?? "null"}):`, e);
           const errorMsg = e.message || e.code || "unknown_error";
           let userFriendlyError = "Erreur d'authentification";
           if (errorMsg.includes("invalid_client")) {
@@ -70911,7 +71191,7 @@ router74.get("/advertising/oauth/:platform/callback", async (req2, res) => {
           }
           await upsertIntegration({ name: "Meta Ads OAuth", credentials: { accessToken: longLived, userId } });
         } catch (e) {
-          console.error("Meta token exchange failed:", e);
+          logger.error("Meta token exchange failed:", e);
           await upsertIntegration({ name: "Meta Ads (OAuth error)", credentials: { authCode: code, error: "token_exchange_failed", userId } });
         }
       }
@@ -70922,7 +71202,7 @@ router74.get("/advertising/oauth/:platform/callback", async (req2, res) => {
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.send(`<!doctype html><html><body style="font-family:sans-serif; padding:16px">      <p>Authentification ${platform} termin\xE9e. Vous pouvez fermer cette fen\xEAtre.</p>      <script src="/api/integrations/advertising/oauth/callback-close.js?platform=${encodeURIComponent(platform)}"></script>    </body></html>`);
   } catch (error) {
-    console.error("Erreur oauth callback:", error);
+    logger.error("Erreur oauth callback:", error);
     res.status(500).send("OAuth callback error");
   }
 });
@@ -70978,7 +71258,7 @@ router74.get("/", async (req2, res) => {
     });
     res.json({ success: true, data: integrationsSettings });
   } catch (error) {
-    console.error("Failed to get integrations:", error);
+    logger.error("Failed to get integrations:", error);
     res.status(500).json({ success: false, message: "Failed to get integrations" });
   }
 });
@@ -71021,7 +71301,7 @@ router74.post("/", async (req2, res) => {
     });
     res.status(201).json({ success: true, data: upsertedIntegration });
   } catch (error) {
-    console.error("Failed to upsert integration:", error);
+    logger.error("Failed to upsert integration:", error);
     res.status(500).json({ success: false, message: "Failed to upsert integration" });
   }
 });
@@ -71052,7 +71332,7 @@ router74.delete("/:type", async (req2, res) => {
       res.status(404).json({ success: false, message: "Integration not found" });
       return;
     }
-    console.error("Failed to delete integration:", error);
+    logger.error("Failed to delete integration:", error);
     res.status(500).json({ success: false, message: "Failed to delete integration" });
   }
 });
@@ -71197,7 +71477,7 @@ router74.get("/advertising", async (req2, res) => {
       integrations
     });
   } catch (error) {
-    console.error("Erreur r\xE9cup\xE9ration int\xE9grations publicitaires:", error);
+    logger.error("Erreur r\xE9cup\xE9ration int\xE9grations publicitaires:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -71242,10 +71522,10 @@ router74.get("/advertising/oauth/:platform/url", async (req2, res) => {
         if (warning) warns.push(warning);
         if (idSan.sanitized || idSan.looksQuoted) warns.push("GOOGLE_ADS_CLIENT_ID semblait contenir des guillemets/espaces \u2014 valeur nettoy\xE9e");
         if (secretSan.sanitized || secretSan.looksQuoted) warns.push("GOOGLE_ADS_CLIENT_SECRET semblait contenir des guillemets/espaces \u2014 valeur nettoy\xE9e");
-        console.log(`[ADS OAUTH] G\xE9n\xE9ration URL Google Ads OAuth | clientId=${masked} | redirectUri=${redirectUri}`);
+        logger.info(`[ADS OAUTH] G\xE9n\xE9ration URL Google Ads OAuth | clientId=${masked} | redirectUri=${redirectUri}`);
         return res.json({ success: true, platform, authUrl, warnings: warns });
       } catch (err) {
-        console.error("Erreur g\xE9n\xE9ration URL OAuth Google Ads:", err);
+        logger.error("Erreur g\xE9n\xE9ration URL OAuth Google Ads:", err);
         return res.status(500).json({ success: false, message: "Erreur g\xE9n\xE9ration URL OAuth (Google Ads)" });
       }
     }
@@ -71276,7 +71556,7 @@ router74.get("/advertising/oauth/:platform/url", async (req2, res) => {
     }
     return res.status(400).json({ success: false, message: "Plateforme non support\xE9e" });
   } catch (error) {
-    console.error("Erreur oauth url:", error);
+    logger.error("Erreur oauth url:", error);
     res.status(500).json({ success: false, message: "Erreur g\xE9n\xE9ration URL OAuth" });
   }
 });
@@ -71330,7 +71610,7 @@ router74.get("/advertising/oauth/google_ads/debug", async (req2, res) => {
       warnings
     });
   } catch (error) {
-    console.error("Erreur debug OAuth Google Ads:", error);
+    logger.error("Erreur debug OAuth Google Ads:", error);
     res.status(500).json({ success: false, message: "Erreur serveur (debug OAuth)" });
   }
 });
@@ -71633,8 +71913,8 @@ router74.get("/advertising/:platform/accounts", async (req2, res) => {
             return { type: "success", payload, loginCustomerId: sanitizedLoginHeader ?? loginCustomerId, headerFormatUsed: loginHeaderSent ? headerFormat : "none", fromCache: false, cacheKeyBase, cacheKeyUsed: cacheKeyOk, apiVersion };
           } catch (error) {
             const { data, apiErrorSummary, apiStatus, errorCodeKeys } = extractGoogleAdsError(error);
-            console.error("Erreur Google Ads listAccessibleCustomers:", data || error);
-            console.error("Google Ads diagnostics (listAccessibleCustomers):", {
+            logger.error("Erreur Google Ads listAccessibleCustomers:", data || error);
+            logger.error("Google Ads diagnostics (listAccessibleCustomers):", {
               organizationId,
               apiStatus,
               loginHeader: {
@@ -71838,7 +72118,7 @@ router74.get("/advertising/:platform/accounts", async (req2, res) => {
           `Versions Google Ads non support\xE9es d\xE9tect\xE9es: ${unsupportedVersions.join(", ")}`
         ];
       }
-      console.log("[Google Ads] R\xE9sultat listAccessibleCustomers", {
+      logger.info("[Google Ads] R\xE9sultat listAccessibleCustomers", {
         organizationId,
         type: finalResult.type,
         apiVersion: finalResult.apiVersion,
@@ -72040,7 +72320,7 @@ router74.get("/advertising/:platform/accounts", async (req2, res) => {
     }
     return res.json({ success: true, platform, integration, accounts: [], note: "Int\xE9gration configur\xE9e", connectionState: "unknown" });
   } catch (error) {
-    console.error("Erreur listing comptes:", error);
+    logger.error("Erreur listing comptes:", error);
     res.status(500).json({ success: false, message: "Erreur listing comptes" });
   }
 });
@@ -72161,7 +72441,7 @@ router74.get("/advertising/google_ads/test/customers-get", async (req2, res) => 
       });
     }
   } catch (error) {
-    console.error("Erreur test customers.get:", error);
+    logger.error("Erreur test customers.get:", error);
     res.status(500).json({ success: false, message: "Erreur test customers.get" });
   }
 });
@@ -72190,7 +72470,7 @@ router74.delete("/advertising/:platform", async (req2, res) => {
     }
     res.status(200).json({ success: true, message: `Int\xE9gration ${platform} supprim\xE9e avec succ\xE8s` });
   } catch (error) {
-    console.error("Failed to delete platform integration:", error);
+    logger.error("Failed to delete platform integration:", error);
     res.status(500).json({ success: false, message: "Failed to delete integration" });
   }
 });
@@ -72218,7 +72498,7 @@ router74.post("/advertising/:platform/select-account", async (req2, res) => {
     });
     return res.json({ success: true, platform, selectedAccount: { id: account.id, name: account.name, currency: account.currency } });
   } catch (error) {
-    console.error("Erreur select account:", error);
+    logger.error("Erreur select account:", error);
     res.status(500).json({ success: false, message: "Erreur s\xE9lection compte" });
   }
 });
@@ -72251,7 +72531,7 @@ router74.post("/advertising", async (req2, res) => {
       integration
     });
   } catch (error) {
-    console.error("Erreur cr\xE9ation int\xE9gration publicitaire:", error);
+    logger.error("Erreur cr\xE9ation int\xE9gration publicitaire:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -72273,7 +72553,7 @@ router74.get("/ecommerce", async (req2, res) => {
       integrations
     });
   } catch (error) {
-    console.error("Erreur r\xE9cup\xE9ration int\xE9grations e-commerce:", error);
+    logger.error("Erreur r\xE9cup\xE9ration int\xE9grations e-commerce:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -72307,7 +72587,7 @@ router74.post("/ecommerce", async (req2, res) => {
       integration
     });
   } catch (error) {
-    console.error("Erreur cr\xE9ation int\xE9gration e-commerce:", error);
+    logger.error("Erreur cr\xE9ation int\xE9gration e-commerce:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -72391,7 +72671,7 @@ async function calculateLeadScore(leadData) {
     const score = parseInt(response.trim());
     return isNaN(score) ? 50 : Math.max(1, Math.min(100, score));
   } catch (error) {
-    console.error("[GEMINI-SCORE] Erreur calcul score:", error);
+    logger.error("[GEMINI-SCORE] Erreur calcul score:", error);
     return 50;
   }
 }
@@ -72434,7 +72714,7 @@ router75.get("/stats", publicRateLimit, async (req2, res) => {
     });
     res.json(stats);
   } catch (error) {
-    console.error("[PUBLIC-STATS] Erreur:", error);
+    logger.error("[PUBLIC-STATS] Erreur:", error);
     res.json({
       totalLeads: 1247,
       successRate: 92,
@@ -72571,7 +72851,7 @@ router75.post("/leads", leadCreationLimit, validateLead, async (req2, res) => {
     };
     res.status(201).json(response);
   } catch (error) {
-    console.error("[PUBLIC-LEAD] Erreur cr\xE9ation:", error);
+    logger.error("[PUBLIC-LEAD] Erreur cr\xE9ation:", error);
     res.status(500).json({
       success: false,
       error: "Erreur lors de l'envoi de votre demande",
@@ -72621,7 +72901,7 @@ router75.get("/lead-status/:id", publicRateLimit, async (req2, res) => {
       qualityScore: lead.qualityScore
     });
   } catch (error) {
-    console.error("[LEAD-STATUS] Erreur:", error);
+    logger.error("[LEAD-STATUS] Erreur:", error);
     res.status(500).json({
       error: "Erreur lors de la v\xE9rification du statut"
     });
@@ -72636,6 +72916,7 @@ var import_path6 = __toESM(require("path"), 1);
 var import_fs7 = __toESM(require("fs"), 1);
 init_storage();
 var router76 = (0, import_express77.Router)();
+router76.use(authenticateToken);
 function getUser(req2) {
   const headerUserId = req2.headers["x-user-id"];
   const headerOrgId = req2.headers["x-organization-id"];
@@ -72686,7 +72967,7 @@ router76.get("/fields", async (_req, res) => {
     })).sort((a, b) => a.label.localeCompare(b.label));
     res.json({ fields });
   } catch (error) {
-    console.error("[ProductDocuments] \u274C Erreur liste champs:", error);
+    logger.error("[ProductDocuments] \u274C Erreur liste champs:", error);
     res.status(500).json({ error: "Erreur liste des champs" });
   }
 });
@@ -72747,7 +73028,7 @@ router76.get("/fields/:id/options", async (req2, res) => {
     }
     res.json({ options: [], source: "none", parentNodeId: id });
   } catch (error) {
-    console.error("[ProductDocuments] \u274C Erreur options:", error);
+    logger.error("[ProductDocuments] \u274C Erreur options:", error);
     res.status(500).json({ error: "Erreur chargement options" });
   }
 });
@@ -72783,7 +73064,7 @@ router76.get("/provider", async (req2, res) => {
       mailProvider: emailAccount?.mailProvider || "none"
     });
   } catch (error) {
-    console.error("[ProductDocuments] \u274C Erreur d\xE9tection provider:", error);
+    logger.error("[ProductDocuments] \u274C Erreur d\xE9tection provider:", error);
     res.status(500).json({ error: "Erreur d\xE9tection du provider de stockage" });
   }
 });
@@ -72805,7 +73086,7 @@ router76.get("/node/:nodeId", async (req2, res) => {
     });
     res.json({ documents });
   } catch (error) {
-    console.error("[ProductDocuments] \u274C Erreur r\xE9cup\xE9ration documents:", error);
+    logger.error("[ProductDocuments] \u274C Erreur r\xE9cup\xE9ration documents:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des documents" });
   }
 });
@@ -72852,7 +73133,7 @@ router76.get("/search", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("[ProductDocuments] \u274C Erreur recherche:", error);
+    logger.error("[ProductDocuments] \u274C Erreur recherche:", error);
     res.status(500).json({ error: "Erreur lors de la recherche" });
   }
 });
@@ -72876,7 +73157,7 @@ router76.get("/:id", async (req2, res) => {
     }
     res.json({ document });
   } catch (error) {
-    console.error("[ProductDocuments] \u274C Erreur d\xE9tail document:", error);
+    logger.error("[ProductDocuments] \u274C Erreur d\xE9tail document:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration du document" });
   }
 });
@@ -72972,7 +73253,7 @@ router76.post("/upload", async (req2, res) => {
         } catch {
         }
       } catch (error) {
-        console.error("[ProductDocuments] \u274C Erreur upload Google Drive:", error);
+        logger.error("[ProductDocuments] \u274C Erreur upload Google Drive:", error);
         return res.status(500).json({
           error: "Erreur lors de l'upload vers Google Drive",
           details: error.message
@@ -73058,7 +73339,7 @@ router76.post("/upload", async (req2, res) => {
     }
     res.status(201).json({ document: documents[0], documents, count: documents.length });
   } catch (error) {
-    console.error("[ProductDocuments] \u274C Erreur upload:", error?.message);
+    logger.error("[ProductDocuments] \u274C Erreur upload:", error?.message);
     res.status(500).json({ error: "Erreur lors de l'upload du document" });
   }
 });
@@ -73159,7 +73440,7 @@ router76.post("/upload-url", async (req2, res) => {
     }
     res.status(201).json({ document: documents[0], documents, count: documents.length });
   } catch (error) {
-    console.error("[ProductDocuments] \u274C Erreur upload URL:", error);
+    logger.error("[ProductDocuments] \u274C Erreur upload URL:", error);
     res.status(500).json({ error: "Erreur lors de l'ajout du document" });
   }
 });
@@ -73190,7 +73471,7 @@ router76.get("/:id/download", async (req2, res) => {
     }
     res.status(404).json({ error: "Aucun fichier disponible pour le t\xE9l\xE9chargement" });
   } catch (error) {
-    console.error("[ProductDocuments] \u274C Erreur t\xE9l\xE9chargement:", error);
+    logger.error("[ProductDocuments] \u274C Erreur t\xE9l\xE9chargement:", error);
     res.status(500).json({ error: "Erreur lors du t\xE9l\xE9chargement" });
   }
 });
@@ -73219,7 +73500,7 @@ router76.get("/nodes/with-documents", async (req2, res) => {
     }));
     res.json({ nodesWithDocuments: result });
   } catch (error) {
-    console.error("[ProductDocuments] \u274C Erreur:", error);
+    logger.error("[ProductDocuments] \u274C Erreur:", error);
     res.status(500).json({ error: "Erreur" });
   }
 });
@@ -73240,7 +73521,7 @@ router76.delete("/:id", async (req2, res) => {
         const driveService = GoogleDriveService2.getInstance();
         await driveService.deleteFile(organizationId, document.driveFileId, user.id);
       } catch (error) {
-        console.warn("[ProductDocuments] \u26A0\uFE0F Impossible de supprimer le fichier Drive:", error);
+        logger.warn("[ProductDocuments] \u26A0\uFE0F Impossible de supprimer le fichier Drive:", error);
       }
     } else if (document.localPath) {
       const fullPath = import_path6.default.join(process.cwd(), "public", document.localPath);
@@ -73251,7 +73532,7 @@ router76.delete("/:id", async (req2, res) => {
     await db.productDocument.delete({ where: { id } });
     res.json({ success: true });
   } catch (error) {
-    console.error("[ProductDocuments] \u274C Erreur suppression:", error);
+    logger.error("[ProductDocuments] \u274C Erreur suppression:", error);
     res.status(500).json({ error: "Erreur lors de la suppression" });
   }
 });
@@ -73285,7 +73566,7 @@ router76.post("/for-devis", async (req2, res) => {
     }
     res.json({ documents, grouped });
   } catch (error) {
-    console.error("[ProductDocuments] \u274C Erreur for-devis:", error);
+    logger.error("[ProductDocuments] \u274C Erreur for-devis:", error);
     res.status(500).json({ error: "Erreur r\xE9cup\xE9ration documents devis" });
   }
 });
@@ -73295,6 +73576,7 @@ var product_documents_default = router76;
 var import_express78 = require("express");
 init_database();
 var router77 = (0, import_express78.Router)();
+router77.use(authenticateToken);
 var prisma41 = db;
 router77.post("/sync-documents", async (req2, res) => {
   const { secret } = req2.body;
@@ -73357,7 +73639,7 @@ router77.post("/sync-documents", async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("Sync error:", error);
+    logger.error("Sync error:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -73366,7 +73648,7 @@ var sync_temp_default = router77;
 // src/routes/join-requests.ts
 var import_express79 = require("express");
 init_database();
-var import_client7 = require("@prisma/client");
+var import_client8 = require("@prisma/client");
 var router78 = (0, import_express79.Router)();
 router78.post("/", authMiddleware, async (req2, res) => {
   try {
@@ -73408,7 +73690,7 @@ router78.post("/", authMiddleware, async (req2, res) => {
         userId,
         organizationId,
         message: message?.trim() || null,
-        status: import_client7.JoinRequestStatus.PENDING
+        status: import_client8.JoinRequestStatus.PENDING
       },
       include: {
         Organization: { select: { id: true, name: true } }
@@ -73425,7 +73707,7 @@ router78.post("/", authMiddleware, async (req2, res) => {
       message: "Demande d'adh\xE9sion envoy\xE9e avec succ\xE8s"
     });
   } catch (error) {
-    console.error("[JoinRequest] Erreur cr\xE9ation:", error);
+    logger.error("[JoinRequest] Erreur cr\xE9ation:", error);
     res.status(500).json({ success: false, error: "Erreur serveur" });
   }
 });
@@ -73444,7 +73726,7 @@ router78.get("/my-requests", authMiddleware, async (req2, res) => {
     });
     res.json({ success: true, data: requests });
   } catch (error) {
-    console.error("[JoinRequest] Erreur r\xE9cup\xE9ration:", error);
+    logger.error("[JoinRequest] Erreur r\xE9cup\xE9ration:", error);
     res.status(500).json({ success: false, error: "Erreur serveur" });
   }
 });
@@ -73452,7 +73734,7 @@ router78.get("/pending", authMiddleware, requireRole2(["admin", "super_admin"]),
   try {
     const organizationId = req2.user?.organizationId;
     const isSuperAdmin2 = req2.user?.role === "super_admin";
-    const whereClause = isSuperAdmin2 ? { status: import_client7.JoinRequestStatus.PENDING } : { organizationId, status: import_client7.JoinRequestStatus.PENDING };
+    const whereClause = isSuperAdmin2 ? { status: import_client8.JoinRequestStatus.PENDING } : { organizationId, status: import_client8.JoinRequestStatus.PENDING };
     if (!isSuperAdmin2 && !organizationId) {
       return res.status(403).json({ success: false, error: "Organisation requise" });
     }
@@ -73466,7 +73748,7 @@ router78.get("/pending", authMiddleware, requireRole2(["admin", "super_admin"]),
     });
     res.json({ success: true, data: requests });
   } catch (error) {
-    console.error("[JoinRequest] Erreur liste pending:", error);
+    logger.error("[JoinRequest] Erreur liste pending:", error);
     res.status(500).json({ success: false, error: "Erreur serveur" });
   }
 });
@@ -73487,7 +73769,7 @@ router78.post("/:id/approve", authMiddleware, requireRole2(["admin", "super_admi
     if (!isSuperAdmin2 && joinRequest.organizationId !== adminOrgId) {
       return res.status(403).json({ success: false, error: "Non autoris\xE9" });
     }
-    if (joinRequest.status !== import_client7.JoinRequestStatus.PENDING) {
+    if (joinRequest.status !== import_client8.JoinRequestStatus.PENDING) {
       return res.status(400).json({
         success: false,
         error: `Demande d\xE9j\xE0 trait\xE9e (${joinRequest.status})`
@@ -73514,7 +73796,7 @@ router78.post("/:id/approve", authMiddleware, requireRole2(["admin", "super_admi
       const updatedRequest = await tx.joinRequest.update({
         where: { id },
         data: {
-          status: import_client7.JoinRequestStatus.APPROVED,
+          status: import_client8.JoinRequestStatus.APPROVED,
           reviewedBy: adminId,
           reviewedAt: /* @__PURE__ */ new Date()
         }
@@ -73525,7 +73807,7 @@ router78.post("/:id/approve", authMiddleware, requireRole2(["admin", "super_admi
           userId: joinRequest.userId,
           organizationId: joinRequest.organizationId,
           roleId: finalRoleId,
-          status: import_client7.UserOrganizationStatus.ACTIVE,
+          status: import_client8.UserOrganizationStatus.ACTIVE,
           updatedAt: /* @__PURE__ */ new Date()
         }
       });
@@ -73542,7 +73824,7 @@ router78.post("/:id/approve", authMiddleware, requireRole2(["admin", "super_admi
       message: `Demande approuv\xE9e. ${joinRequest.User?.firstName} ${joinRequest.User?.lastName} est maintenant membre de ${joinRequest.Organization?.name}`
     });
   } catch (error) {
-    console.error("[JoinRequest] Erreur approbation:", error);
+    logger.error("[JoinRequest] Erreur approbation:", error);
     res.status(500).json({ success: false, error: "Erreur serveur" });
   }
 });
@@ -73562,7 +73844,7 @@ router78.post("/:id/reject", authMiddleware, requireRole2(["admin", "super_admin
     if (!isSuperAdmin2 && joinRequest.organizationId !== adminOrgId) {
       return res.status(403).json({ success: false, error: "Non autoris\xE9" });
     }
-    if (joinRequest.status !== import_client7.JoinRequestStatus.PENDING) {
+    if (joinRequest.status !== import_client8.JoinRequestStatus.PENDING) {
       return res.status(400).json({
         success: false,
         error: `Demande d\xE9j\xE0 trait\xE9e (${joinRequest.status})`
@@ -73571,7 +73853,7 @@ router78.post("/:id/reject", authMiddleware, requireRole2(["admin", "super_admin
     const updatedRequest = await db.joinRequest.update({
       where: { id },
       data: {
-        status: import_client7.JoinRequestStatus.REJECTED,
+        status: import_client8.JoinRequestStatus.REJECTED,
         reviewedBy: adminId,
         reviewedAt: /* @__PURE__ */ new Date()
       }
@@ -73587,7 +73869,7 @@ router78.post("/:id/reject", authMiddleware, requireRole2(["admin", "super_admin
       message: "Demande rejet\xE9e"
     });
   } catch (error) {
-    console.error("[JoinRequest] Erreur rejet:", error);
+    logger.error("[JoinRequest] Erreur rejet:", error);
     res.status(500).json({ success: false, error: "Erreur serveur" });
   }
 });
@@ -73604,7 +73886,7 @@ router78.delete("/:id", authMiddleware, async (req2, res) => {
     if (joinRequest.userId !== userId) {
       return res.status(403).json({ success: false, error: "Non autoris\xE9" });
     }
-    if (joinRequest.status !== import_client7.JoinRequestStatus.PENDING) {
+    if (joinRequest.status !== import_client8.JoinRequestStatus.PENDING) {
       return res.status(400).json({
         success: false,
         error: "Impossible d'annuler une demande d\xE9j\xE0 trait\xE9e"
@@ -73613,7 +73895,7 @@ router78.delete("/:id", authMiddleware, async (req2, res) => {
     await db.joinRequest.delete({ where: { id } });
     res.json({ success: true, message: "Demande annul\xE9e" });
   } catch (error) {
-    console.error("[JoinRequest] Erreur suppression:", error);
+    logger.error("[JoinRequest] Erreur suppression:", error);
     res.status(500).json({ success: false, error: "Erreur serveur" });
   }
 });
@@ -73684,11 +73966,11 @@ Si le contenu est acceptable, retourne : {"flagged": false, "categories": [], "c
 
 // src/constants/reactions.ts
 var REACTION_TYPES = [
-  { type: "LIKE", emoji: "\u{1F44D}", i18nKey: "reactions.pollen", fallback: "Pollen", color: "#1877f2" },
-  { type: "LOVE", emoji: "\u2764\uFE0F", i18nKey: "reactions.honey", fallback: "Honey", color: "#ff2d55" },
-  { type: "BRAVO", emoji: "\u{1F44F}", i18nKey: "reactions.waggle", fallback: "Waggle", color: "#FDCB6E" },
-  { type: "UTILE", emoji: "\u{1F4A1}", i18nKey: "reactions.propolis", fallback: "Propolis", color: "#00B894" },
-  { type: "WOW", emoji: "\u{1F62E}", i18nKey: "reactions.royal", fallback: "Royal", color: "#6C5CE7" }
+  { type: "LIKE", emoji: "\u{1F44D}", i18nKey: "reactions.pollen", fallback: "Pollen", color: SF.info },
+  { type: "LOVE", emoji: "\u2764\uFE0F", i18nKey: "reactions.honey", fallback: "Honey", color: SF.like },
+  { type: "BRAVO", emoji: "\u{1F44F}", i18nKey: "reactions.waggle", fallback: "Waggle", color: SF.gold },
+  { type: "UTILE", emoji: "\u{1F4A1}", i18nKey: "reactions.propolis", fallback: "Propolis", color: SF.success },
+  { type: "WOW", emoji: "\u{1F62E}", i18nKey: "reactions.royal", fallback: "Royal", color: SF.primary }
 ];
 var DEFAULT_REACTION = REACTION_TYPES[0];
 var REACTION_TYPE_VALUES = REACTION_TYPES.map((r) => r.type);
@@ -73808,7 +74090,7 @@ router79.get("/feed", authenticateToken, async (req2, res) => {
       nextCursor: posts.length === take ? posts[posts.length - 1].createdAt.toISOString() : null
     });
   } catch (error) {
-    console.error("[WALL] Erreur feed:", error);
+    logger.error("[WALL] Erreur feed:", error);
     res.status(500).json({ error: "Erreur lors du chargement du fil" });
   }
 });
@@ -73873,7 +74155,7 @@ router79.get("/my-feed", authenticateToken, async (req2, res) => {
       nextCursor: posts.length === take ? posts[posts.length - 1].createdAt.toISOString() : null
     });
   } catch (error) {
-    console.error("[WALL] Erreur my-feed:", error);
+    logger.error("[WALL] Erreur my-feed:", error);
     res.status(500).json({ error: "Erreur lors du chargement de votre mur" });
   }
 });
@@ -73926,7 +74208,7 @@ router79.get("/client-feed/:leadId", authenticateToken, async (req2, res) => {
       nextCursor: posts.length === take ? posts[posts.length - 1].createdAt.toISOString() : null
     });
   } catch (error) {
-    console.error("[WALL] Erreur client-feed:", error);
+    logger.error("[WALL] Erreur client-feed:", error);
     res.status(500).json({ error: "Erreur lors du chargement du mur client" });
   }
 });
@@ -73976,7 +74258,7 @@ router79.post("/posts", authenticateToken, async (req2, res) => {
           aiModerated = true;
         }
       } catch (modErr) {
-        console.error("[WALL] AI moderation error (non-blocking):", modErr);
+        logger.error("[WALL] AI moderation error (non-blocking):", modErr);
       }
     }
     const post = await db.wallPost.create({
@@ -74032,7 +74314,7 @@ router79.post("/posts", authenticateToken, async (req2, res) => {
     if (error instanceof import_zod14.z.ZodError) {
       return res.status(400).json({ error: "Donn\xE9es invalides", details: error.errors });
     }
-    console.error("[WALL] Erreur cr\xE9ation post:", error);
+    logger.error("[WALL] Erreur cr\xE9ation post:", error);
     res.status(500).json({ error: "Erreur lors de la cr\xE9ation du post" });
   }
 });
@@ -74048,7 +74330,7 @@ router79.delete("/posts/:id", authenticateToken, async (req2, res) => {
     await db.wallPost.delete({ where: { id } });
     res.json({ success: true });
   } catch (error) {
-    console.error("[WALL] Erreur suppression post:", error);
+    logger.error("[WALL] Erreur suppression post:", error);
     res.status(500).json({ error: "Erreur lors de la suppression" });
   }
 });
@@ -74104,7 +74386,7 @@ router79.post("/posts/:id/reactions", authenticateToken, async (req2, res) => {
     if (error instanceof import_zod14.z.ZodError) {
       return res.status(400).json({ error: "Type de r\xE9action invalide" });
     }
-    console.error("[WALL] Erreur r\xE9action:", error);
+    logger.error("[WALL] Erreur r\xE9action:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9action" });
   }
 });
@@ -74136,7 +74418,7 @@ router79.get("/posts/:id/comments", authenticateToken, async (req2, res) => {
     });
     res.json(comments);
   } catch (error) {
-    console.error("[WALL] Erreur commentaires:", error);
+    logger.error("[WALL] Erreur commentaires:", error);
     res.status(500).json({ error: "Erreur lors du chargement des commentaires" });
   }
 });
@@ -74203,7 +74485,7 @@ router79.post("/posts/:id/comments", authenticateToken, async (req2, res) => {
     if (error instanceof import_zod14.z.ZodError) {
       return res.status(400).json({ error: "Donn\xE9es invalides", details: error.errors });
     }
-    console.error("[WALL] Erreur commentaire:", error);
+    logger.error("[WALL] Erreur commentaire:", error);
     res.status(500).json({ error: "Erreur lors de la cr\xE9ation du commentaire" });
   }
 });
@@ -74223,7 +74505,7 @@ router79.delete("/comments/:id", authenticateToken, async (req2, res) => {
     await db.wallComment.delete({ where: { id } });
     res.json({ success: true });
   } catch (error) {
-    console.error("[WALL] Erreur suppression commentaire:", error);
+    logger.error("[WALL] Erreur suppression commentaire:", error);
     res.status(500).json({ error: "Erreur lors de la suppression" });
   }
 });
@@ -74249,8 +74531,44 @@ router79.post("/posts/:id/share", authenticateToken, async (req2, res) => {
     await db.wallPost.update({ where: { id }, data: { sharesCount: { increment: 1 } } });
     res.status(201).json(share);
   } catch (error) {
-    console.error("[WALL] Erreur partage:", error);
+    logger.error("[WALL] Erreur partage:", error);
     res.status(500).json({ error: "Erreur lors du partage" });
+  }
+});
+router79.get("/posts/:id/reactions", authenticateToken, async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const post = await db.wallPost.findUnique({ where: { id } });
+    if (!post) return res.status(404).json({ error: "Post non trouv\xE9" });
+    const reactions = await db.wallReaction.findMany({
+      where: { postId: id },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } }
+      },
+      orderBy: { createdAt: "asc" }
+    });
+    res.json(reactions);
+  } catch (error) {
+    logger.error("[WALL] Erreur liste r\xE9actions:", error);
+    res.status(500).json({ error: "Erreur lors du chargement des r\xE9actions" });
+  }
+});
+router79.get("/posts/:id/shares", authenticateToken, async (req2, res) => {
+  try {
+    const { id } = req2.params;
+    const post = await db.wallPost.findUnique({ where: { id } });
+    if (!post) return res.status(404).json({ error: "Post non trouv\xE9" });
+    const shares = await db.wallShare.findMany({
+      where: { postId: id },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } }
+      },
+      orderBy: { createdAt: "asc" }
+    });
+    res.json(shares);
+  } catch (error) {
+    logger.error("[WALL] Erreur liste partages:", error);
+    res.status(500).json({ error: "Erreur lors du chargement des partages" });
   }
 });
 router79.get("/stats", authenticateToken, async (req2, res) => {
@@ -74265,7 +74583,7 @@ router79.get("/stats", authenticateToken, async (req2, res) => {
     ]);
     res.json({ totalPosts, totalReactions, totalComments, totalShares });
   } catch (error) {
-    console.error("[WALL] Erreur stats:", error);
+    logger.error("[WALL] Erreur stats:", error);
     res.status(500).json({ error: "Erreur lors du chargement des stats" });
   }
 });
@@ -74275,12 +74593,19 @@ router79.post("/upload", authenticateToken, async (req2, res) => {
     if (!uploadedFiles || Object.keys(uploadedFiles).length === 0) {
       return res.status(400).json({ error: "Aucun fichier fourni" });
     }
+    const orgId = req2.user.organizationId || req2.headers["x-organization-id"];
+    const settings = await getOrgSocialSettings(orgId);
     const fileList = Array.isArray(uploadedFiles.files) ? uploadedFiles.files : uploadedFiles.files ? [uploadedFiles.files] : Object.values(uploadedFiles).flat();
     const allowedMime = /^(image|video)\//;
     const urls = [];
     for (const file of fileList) {
       if (!allowedMime.test(file.mimetype) && file.mimetype !== "application/pdf") {
         continue;
+      }
+      const maxBytes = file.mimetype.startsWith("video/") ? settings.maxVideoSizeMB * 1024 * 1024 : settings.maxImageSizeMB * 1024 * 1024;
+      if (file.size > maxBytes) {
+        const limitMB = file.mimetype.startsWith("video/") ? settings.maxVideoSizeMB : settings.maxImageSizeMB;
+        return res.status(400).json({ error: `Le fichier ${file.name} d\xE9passe la limite de ${limitMB} Mo` });
       }
       const safeName = file.name.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_.-]/g, "");
       const filename = `${Date.now()}_${safeName}`;
@@ -74293,7 +74618,7 @@ router79.post("/upload", authenticateToken, async (req2, res) => {
     }
     res.json({ urls });
   } catch (error) {
-    console.error("[WALL] Erreur upload:", error);
+    logger.error("[WALL] Erreur upload:", error);
     res.status(500).json({ error: "Erreur upload" });
   }
 });
@@ -74303,7 +74628,7 @@ var wall_default = router79;
 var import_express81 = require("express");
 init_database();
 var import_zod15 = require("zod");
-var import_crypto33 = require("crypto");
+var import_crypto32 = require("crypto");
 var router80 = (0, import_express81.Router)();
 function getUserContext(req2) {
   const user = req2.user;
@@ -74409,7 +74734,7 @@ router80.get("/all", authenticateToken, async (req2, res) => {
     });
     res.json({ settings: allSettings, orgsWithoutSettings });
   } catch (error) {
-    console.error("[SOCIAL-SETTINGS] Error fetching all:", error);
+    logger.error("[SOCIAL-SETTINGS] Error fetching all:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -74428,7 +74753,7 @@ router80.get("/context/me", authenticateToken, async (req2, res) => {
       settings: ctx.settings
     });
   } catch (error) {
-    console.error("[SOCIAL-CONTEXT] Error:", error);
+    logger.error("[SOCIAL-CONTEXT] Error:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -74444,7 +74769,7 @@ router80.get("/org-follow/my", authenticateToken, async (req2, res) => {
     });
     res.json(follows);
   } catch (error) {
-    console.error("[ORG-FOLLOW] Error fetching my follows:", error);
+    logger.error("[ORG-FOLLOW] Error fetching my follows:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -74460,7 +74785,7 @@ router80.get("/org-follow/followers/:orgId", authenticateToken, async (req2, res
     });
     res.json({ count: followers.length, followers });
   } catch (error) {
-    console.error("[ORG-FOLLOW] Error fetching followers:", error);
+    logger.error("[ORG-FOLLOW] Error fetching followers:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -74474,7 +74799,7 @@ router80.get("/org-follow/count/:orgId", authenticateToken, async (req2, res) =>
     });
     res.json({ count, isFollowing: !!isFollowing });
   } catch (error) {
-    console.error("[ORG-FOLLOW] Error counting:", error);
+    logger.error("[ORG-FOLLOW] Error counting:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -74492,14 +74817,14 @@ router80.post("/org-follow/:orgId", authenticateToken, async (req2, res) => {
       where: { userId_organizationId: { userId, organizationId: targetOrgId } },
       update: {},
       create: {
-        id: (0, import_crypto33.randomUUID)(),
+        id: (0, import_crypto32.randomUUID)(),
         userId,
         organizationId: targetOrgId
       }
     });
     res.json({ followed: true, follow });
   } catch (error) {
-    console.error("[ORG-FOLLOW] Error following:", error);
+    logger.error("[ORG-FOLLOW] Error following:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -74512,7 +74837,7 @@ router80.delete("/org-follow/:orgId", authenticateToken, async (req2, res) => {
     });
     res.json({ followed: false });
   } catch (error) {
-    console.error("[ORG-FOLLOW] Error unfollowing:", error);
+    logger.error("[ORG-FOLLOW] Error unfollowing:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -74526,7 +74851,7 @@ router80.get("/", authenticateToken, async (req2, res) => {
     if (!settings) {
       settings = await db.socialSettings.create({
         data: {
-          id: (0, import_crypto33.randomUUID)(),
+          id: (0, import_crypto32.randomUUID)(),
           organizationId: orgId,
           updatedAt: /* @__PURE__ */ new Date()
         }
@@ -74534,7 +74859,7 @@ router80.get("/", authenticateToken, async (req2, res) => {
     }
     res.json(settings);
   } catch (error) {
-    console.error("[SOCIAL-SETTINGS] Error fetching current:", error);
+    logger.error("[SOCIAL-SETTINGS] Error fetching current:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -74551,7 +74876,7 @@ router80.get("/:orgId", authenticateToken, async (req2, res) => {
     if (!settings) {
       settings = await db.socialSettings.create({
         data: {
-          id: (0, import_crypto33.randomUUID)(),
+          id: (0, import_crypto32.randomUUID)(),
           organizationId: targetOrgId,
           updatedAt: /* @__PURE__ */ new Date()
         }
@@ -74559,7 +74884,7 @@ router80.get("/:orgId", authenticateToken, async (req2, res) => {
     }
     res.json(settings);
   } catch (error) {
-    console.error("[SOCIAL-SETTINGS] Error fetching:", error);
+    logger.error("[SOCIAL-SETTINGS] Error fetching:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -74575,7 +74900,7 @@ router80.put("/", authenticateToken, async (req2, res) => {
       where: { organizationId: orgId },
       update: { ...parsed.data, updatedAt: /* @__PURE__ */ new Date() },
       create: {
-        id: (0, import_crypto33.randomUUID)(),
+        id: (0, import_crypto32.randomUUID)(),
         organizationId: orgId,
         ...parsed.data,
         updatedAt: /* @__PURE__ */ new Date()
@@ -74583,7 +74908,7 @@ router80.put("/", authenticateToken, async (req2, res) => {
     });
     res.json(settings);
   } catch (error) {
-    console.error("[SOCIAL-SETTINGS] Error updating current:", error);
+    logger.error("[SOCIAL-SETTINGS] Error updating current:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -74602,7 +74927,7 @@ router80.put("/:orgId", authenticateToken, async (req2, res) => {
       where: { organizationId: targetOrgId },
       update: { ...parsed.data, updatedAt: /* @__PURE__ */ new Date() },
       create: {
-        id: (0, import_crypto33.randomUUID)(),
+        id: (0, import_crypto32.randomUUID)(),
         organizationId: targetOrgId,
         ...parsed.data,
         updatedAt: /* @__PURE__ */ new Date()
@@ -74610,7 +74935,7 @@ router80.put("/:orgId", authenticateToken, async (req2, res) => {
     });
     res.json(settings);
   } catch (error) {
-    console.error("[SOCIAL-SETTINGS] Error updating:", error);
+    logger.error("[SOCIAL-SETTINGS] Error updating:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -74620,7 +74945,7 @@ var social_settings_default = router80;
 var import_express82 = require("express");
 init_database();
 var import_zod16 = require("zod");
-var import_crypto34 = require("crypto");
+var import_crypto33 = require("crypto");
 var router81 = (0, import_express82.Router)();
 var updatePrefsSchema = import_zod16.z.object({
   // Push
@@ -74673,14 +74998,14 @@ router81.get("/", authenticateToken, async (req2, res) => {
     if (!prefs) {
       prefs = await db.userNotificationPreference.create({
         data: {
-          id: (0, import_crypto34.randomUUID)(),
+          id: (0, import_crypto33.randomUUID)(),
           userId
         }
       });
     }
     res.json(prefs);
   } catch (error) {
-    console.error("[NOTIF-PREFS] Error fetching:", error);
+    logger.error("[NOTIF-PREFS] Error fetching:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -74695,14 +75020,14 @@ router81.put("/", authenticateToken, async (req2, res) => {
       where: { userId },
       update: { ...parsed.data, updatedAt: /* @__PURE__ */ new Date() },
       create: {
-        id: (0, import_crypto34.randomUUID)(),
+        id: (0, import_crypto33.randomUUID)(),
         userId,
         ...parsed.data
       }
     });
     res.json(prefs);
   } catch (error) {
-    console.error("[NOTIF-PREFS] Error updating:", error);
+    logger.error("[NOTIF-PREFS] Error updating:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -74833,13 +75158,13 @@ router82.get("/export", async (req2, res) => {
       // Notifications
       db.notification.findMany({
         where: { userId: user.id },
-        select: { id: true, type: true, data: true, read: true, createdAt: true },
+        select: { id: true, type: true, data: true, readAt: true, createdAt: true },
         orderBy: { createdAt: "desc" },
         take: 1e3
       }),
       // Calendar events created by user
       db.calendarEvent.findMany({
-        where: { userId: user.id },
+        where: { ownerId: user.id },
         select: { id: true, title: true, description: true, startDate: true, endDate: true, type: true, location: true },
         orderBy: { startDate: "desc" }
       }),
@@ -74891,7 +75216,7 @@ router82.get("/export", async (req2, res) => {
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.json(exportData);
   } catch (error) {
-    console.error("[RGPD] Export error:", error);
+    logger.error("[RGPD] Export error:", error);
     res.status(500).json({ success: false, message: "Erreur lors de l'export" });
   }
 });
@@ -74952,10 +75277,10 @@ router82.post("/delete-account", async (req2, res) => {
         isActive: false
       }
     });
-    console.log(`[RGPD] Account deleted/anonymized: ${userId}`);
+    logger.info(`[RGPD] Account deleted/anonymized: ${userId}`);
     res.json({ success: true, message: "Compte supprim\xE9 et donn\xE9es anonymis\xE9es conform\xE9ment au RGPD" });
   } catch (error) {
-    console.error("[RGPD] Delete account error:", error);
+    logger.error("[RGPD] Delete account error:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la suppression" });
   }
 });
@@ -74990,13 +75315,13 @@ router82.post("/retention-cleanup", async (req2, res) => {
         where: {
           organizationId: org.organizationId,
           createdAt: { lt: cutoffDate },
-          read: true
+          readAt: { not: null }
           // Only purge read notifications
         }
       });
       const orgTotal = deletedPosts.count + deletedStories.count + deletedNotifs.count;
       if (orgTotal > 0) {
-        console.log(`[RGPD] Retention cleanup for org ${org.organizationId}: ${orgTotal} items purged (${org.gdprRetentionDays}d retention)`);
+        logger.info(`[RGPD] Retention cleanup for org ${org.organizationId}: ${orgTotal} items purged (${org.gdprRetentionDays}d retention)`);
       }
       totalPurged += orgTotal;
     }
@@ -75006,7 +75331,7 @@ router82.post("/retention-cleanup", async (req2, res) => {
       totalPurged
     });
   } catch (error) {
-    console.error("[RGPD] Retention cleanup error:", error);
+    logger.error("[RGPD] Retention cleanup error:", error);
     res.status(500).json({ success: false, message: "Erreur lors du nettoyage" });
   }
 });
@@ -75077,7 +75402,7 @@ router83.get("/", async (req2, res) => {
       pendingSent: pendingSent.map((p) => ({ friendshipId: p.id, ...p.addressee }))
     });
   } catch (err) {
-    console.error("[FRIENDS] Error fetching friends:", err);
+    logger.error("[FRIENDS] Error fetching friends:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -75117,7 +75442,7 @@ router83.post("/sync-org", async (req2, res) => {
     }
     res.json({ success: true, added, total: orgMembers.length });
   } catch (err) {
-    console.error("[FRIENDS] Error syncing org:", err);
+    logger.error("[FRIENDS] Error syncing org:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -75133,6 +75458,14 @@ router83.post("/request", async (req2, res) => {
     return;
   }
   try {
+    const orgMember = await db.organizationMember.findFirst({ where: { userId: user.id }, select: { organizationId: true } });
+    if (orgMember?.organizationId) {
+      const settings = await db.socialSettings.findUnique({ where: { organizationId: orgMember.organizationId }, select: { friendRequestsEnabled: true } });
+      if (settings && !settings.friendRequestsEnabled) {
+        res.status(403).json({ error: "Les demandes d'amis sont d\xE9sactiv\xE9es pour cette Colony" });
+        return;
+      }
+    }
     const existing = await db.friendship.findFirst({
       where: {
         OR: [
@@ -75192,11 +75525,11 @@ router83.post("/request", async (req2, res) => {
       }).catch(() => {
       });
     } catch (notifErr) {
-      console.error("[FRIENDS] Notification error (non-blocking):", notifErr);
+      logger.error("[FRIENDS] Notification error (non-blocking):", notifErr);
     }
     res.json({ success: true, friendship });
   } catch (err) {
-    console.error("[FRIENDS] Error sending request:", err);
+    logger.error("[FRIENDS] Error sending request:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -75249,7 +75582,7 @@ router83.post("/block-user", async (req2, res) => {
       res.json({ success: true, friendshipId: friendship.id });
     }
   } catch (err) {
-    console.error("[FRIENDS] Error blocking user:", err);
+    logger.error("[FRIENDS] Error blocking user:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -75281,7 +75614,7 @@ router83.post("/unblock-user", async (req2, res) => {
     await db.friendship.delete({ where: { id: existing.id } });
     res.json({ success: true });
   } catch (err) {
-    console.error("[FRIENDS] Error unblocking user:", err);
+    logger.error("[FRIENDS] Error unblocking user:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -75311,7 +75644,7 @@ router83.get("/blocked", async (req2, res) => {
     });
     res.json({ blockedUsers });
   } catch (err) {
-    console.error("[FRIENDS] Error listing blocked:", err);
+    logger.error("[FRIENDS] Error listing blocked:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -75355,7 +75688,7 @@ router83.post("/:id/accept", async (req2, res) => {
         });
       }
     } catch (updateErr) {
-      console.error("[FRIENDS] Update original notif error (non-blocking):", updateErr);
+      logger.error("[FRIENDS] Update original notif error (non-blocking):", updateErr);
     }
     try {
       const acceptor = await db.user.findUnique({
@@ -75391,11 +75724,11 @@ router83.post("/:id/accept", async (req2, res) => {
       }).catch(() => {
       });
     } catch (notifErr) {
-      console.error("[FRIENDS] Notification error (non-blocking):", notifErr);
+      logger.error("[FRIENDS] Notification error (non-blocking):", notifErr);
     }
     res.json({ success: true });
   } catch (err) {
-    console.error("[FRIENDS] Error accepting:", err);
+    logger.error("[FRIENDS] Error accepting:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -75439,11 +75772,11 @@ router83.post("/:id/block", async (req2, res) => {
         });
       }
     } catch (updateErr) {
-      console.error("[FRIENDS] Update notif on block error (non-blocking):", updateErr);
+      logger.error("[FRIENDS] Update notif on block error (non-blocking):", updateErr);
     }
     res.json({ success: true });
   } catch (err) {
-    console.error("[FRIENDS] Error blocking:", err);
+    logger.error("[FRIENDS] Error blocking:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -75470,12 +75803,12 @@ router83.delete("/:id", async (req2, res) => {
         await db.notification.delete({ where: { id: notif.id } });
       }
     } catch (updateErr) {
-      console.error("[FRIENDS] Delete notif on cancel/reject error (non-blocking):", updateErr);
+      logger.error("[FRIENDS] Delete notif on cancel/reject error (non-blocking):", updateErr);
     }
     await db.friendship.delete({ where: { id: req2.params.id } });
     res.json({ success: true });
   } catch (err) {
-    console.error("[FRIENDS] Error removing:", err);
+    logger.error("[FRIENDS] Error removing:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -75507,7 +75840,7 @@ router83.get("/status/:userId", async (req2, res) => {
     const direction = friendship.requesterId === user.id ? "sent" : "received";
     res.json({ status: friendship.status, friendshipId: friendship.id, direction });
   } catch (err) {
-    console.error("[FRIENDS] Error checking status:", err);
+    logger.error("[FRIENDS] Error checking status:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -75555,7 +75888,7 @@ router83.get("/search", async (req2, res) => {
       friendshipId: friendshipMap.get(u.id)?.id || null
     })));
   } catch (err) {
-    console.error("[FRIENDS] Error searching:", err);
+    logger.error("[FRIENDS] Error searching:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -75587,7 +75920,7 @@ router83.post("/block-org", async (req2, res) => {
     });
     res.json({ success: true, block });
   } catch (err) {
-    console.error("[FRIENDS] Error blocking org:", err);
+    logger.error("[FRIENDS] Error blocking org:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -75613,7 +75946,7 @@ router83.post("/unblock-org", async (req2, res) => {
     await db.orgBlock.delete({ where: { id: existing.id } });
     res.json({ success: true });
   } catch (err) {
-    console.error("[FRIENDS] Error unblocking org:", err);
+    logger.error("[FRIENDS] Error unblocking org:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -75633,7 +75966,7 @@ router83.get("/blocked-orgs", async (req2, res) => {
     });
     res.json({ blockedOrgs: blocks.map((b) => ({ blockId: b.id, id: b.blockedOrg.id, name: b.blockedOrg.name, avatarUrl: b.blockedOrg.logoUrl, blockedAt: b.createdAt, reason: b.reason })) });
   } catch (err) {
-    console.error("[FRIENDS] Error listing blocked orgs:", err);
+    logger.error("[FRIENDS] Error listing blocked orgs:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -75920,7 +76253,7 @@ router84.get("/conversations", async (req2, res) => {
     }));
     res.json(conversations);
   } catch (err) {
-    console.error("[MESSENGER] Error listing conversations:", err);
+    logger.error("[MESSENGER] Error listing conversations:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -75975,7 +76308,7 @@ router84.post("/conversations", async (req2, res) => {
     });
     res.json(conv);
   } catch (err) {
-    console.error("[MESSENGER] Error creating conversation:", err);
+    logger.error("[MESSENGER] Error creating conversation:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -76034,7 +76367,7 @@ router84.get("/conversations/:id/messages", async (req2, res) => {
       nextCursor: messages.length > 0 ? messages[0].id : null
     });
   } catch (err) {
-    console.error("[MESSENGER] Error fetching messages:", err);
+    logger.error("[MESSENGER] Error fetching messages:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -76132,7 +76465,7 @@ router84.post("/conversations/:id/messages", async (req2, res) => {
     }
     res.json(message);
   } catch (err) {
-    console.error("[MESSENGER] Error sending message:", err);
+    logger.error("[MESSENGER] Error sending message:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -76149,7 +76482,7 @@ router84.post("/conversations/:id/read", async (req2, res) => {
     });
     res.json({ success: true });
   } catch (err) {
-    console.error("[MESSENGER] Error marking read:", err);
+    logger.error("[MESSENGER] Error marking read:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -76171,7 +76504,7 @@ router84.delete("/messages/:id", async (req2, res) => {
     });
     res.json({ success: true });
   } catch (err) {
-    console.error("[MESSENGER] Error deleting message:", err);
+    logger.error("[MESSENGER] Error deleting message:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -76209,7 +76542,7 @@ router84.post("/upload", async (req2, res) => {
     }
     res.json({ urls, mediaType: detectedMediaType });
   } catch (err) {
-    console.error("[MESSENGER] Error uploading files:", err);
+    logger.error("[MESSENGER] Error uploading files:", err);
     res.status(500).json({ error: "Erreur upload" });
   }
 });
@@ -76240,7 +76573,7 @@ router84.post("/messages/:id/view-ephemeral", async (req2, res) => {
     });
     res.json({ success: true, viewedAt });
   } catch (err) {
-    console.error("[MESSENGER] Error marking ephemeral viewed:", err);
+    logger.error("[MESSENGER] Error marking ephemeral viewed:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -76286,7 +76619,7 @@ router84.get("/unread", async (req2, res) => {
     }) : null;
     res.json({ unread, latestWizz: latestWizz || null });
   } catch (err) {
-    console.error("[MESSENGER] Error getting unread:", err);
+    logger.error("[MESSENGER] Error getting unread:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -76374,7 +76707,7 @@ router84.get("/telnyx-eligibility", async (req2, res) => {
       sipCredentials: eligible ? sipCredentials : null
     });
   } catch (err) {
-    console.error("[MESSENGER] Error checking Telnyx eligibility:", err);
+    logger.error("[MESSENGER] Error checking Telnyx eligibility:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -76430,7 +76763,7 @@ router84.post("/messages/:id/reactions", async (req2, res) => {
       res.json({ action: "added", reaction });
     }
   } catch (err) {
-    console.error("[MESSENGER] Error handling reaction:", err);
+    logger.error("[MESSENGER] Error handling reaction:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -76456,7 +76789,7 @@ router84.get("/messages/:id/reactions", async (req2, res) => {
     }
     res.json(Object.values(grouped));
   } catch (err) {
-    console.error("[MESSENGER] Error listing reactions:", err);
+    logger.error("[MESSENGER] Error listing reactions:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -76506,7 +76839,7 @@ router84.post("/messages/:id/pin", async (req2, res) => {
     });
     res.json({ isPinned: newPinned, message: updated });
   } catch (err) {
-    console.error("[MESSENGER] Error pinning message:", err);
+    logger.error("[MESSENGER] Error pinning message:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -76534,7 +76867,7 @@ router84.get("/conversations/:id/pinned", async (req2, res) => {
     });
     res.json(pinned);
   } catch (err) {
-    console.error("[MESSENGER] Error listing pinned:", err);
+    logger.error("[MESSENGER] Error listing pinned:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -76575,7 +76908,7 @@ router84.get("/conversations/:id/files", async (req2, res) => {
     });
     res.json(files);
   } catch (err) {
-    console.error("[MESSENGER] Error listing files:", err);
+    logger.error("[MESSENGER] Error listing files:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -76643,7 +76976,7 @@ router84.post("/messages/:id/task", async (req2, res) => {
     }
     res.json(task);
   } catch (err) {
-    console.error("[MESSENGER] Error creating task:", err);
+    logger.error("[MESSENGER] Error creating task:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -76673,7 +77006,7 @@ router84.get("/tasks", async (req2, res) => {
     });
     res.json(tasks);
   } catch (err) {
-    console.error("[MESSENGER] Error listing tasks:", err);
+    logger.error("[MESSENGER] Error listing tasks:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -76720,12 +77053,12 @@ router84.put("/tasks/:id", async (req2, res) => {
           eventType: "task_completed",
           entityId: updated.id,
           entityLabel: updated.title || "T\xE2che termin\xE9e"
-        }).catch((err) => console.error("[MESSENGER] Auto-post error:", err));
+        }).catch((err) => logger.error("[MESSENGER] Auto-post error:", err));
       }
     }
     res.json(updated);
   } catch (err) {
-    console.error("[MESSENGER] Error updating task:", err);
+    logger.error("[MESSENGER] Error updating task:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -76748,7 +77081,7 @@ router84.get("/templates", async (req2, res) => {
     });
     res.json(templates);
   } catch (err) {
-    console.error("[MESSENGER] Error listing templates:", err);
+    logger.error("[MESSENGER] Error listing templates:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -76777,7 +77110,7 @@ router84.post("/templates", async (req2, res) => {
     });
     res.json(template);
   } catch (err) {
-    console.error("[MESSENGER] Error creating template:", err);
+    logger.error("[MESSENGER] Error creating template:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -76800,7 +77133,7 @@ router84.delete("/templates/:id", async (req2, res) => {
     await db.quickReplyTemplate.delete({ where: { id: req2.params.id } });
     res.json({ success: true });
   } catch (err) {
-    console.error("[MESSENGER] Error deleting template:", err);
+    logger.error("[MESSENGER] Error deleting template:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -76834,7 +77167,7 @@ router84.put("/status", async (req2, res) => {
       customStatusExpiresAt: streak.customStatusExpiresAt
     });
   } catch (err) {
-    console.error("[MESSENGER] Error updating status:", err);
+    logger.error("[MESSENGER] Error updating status:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -76867,7 +77200,7 @@ router84.get("/online", async (req2, res) => {
     }));
     res.json(result);
   } catch (err) {
-    console.error("[MESSENGER] Error listing online users:", err);
+    logger.error("[MESSENGER] Error listing online users:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -76909,7 +77242,7 @@ router84.put("/conversations/:id/permissions", async (req2, res) => {
     });
     res.json(updated);
   } catch (err) {
-    console.error("[MESSENGER] Error updating permissions:", err);
+    logger.error("[MESSENGER] Error updating permissions:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -76967,7 +77300,7 @@ router84.post("/conversations/:id/members", async (req2, res) => {
     }
     res.json({ added });
   } catch (err) {
-    console.error("[MESSENGER] Error adding members:", err);
+    logger.error("[MESSENGER] Error adding members:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -77001,7 +77334,7 @@ router84.delete("/conversations/:id/members/:userId", async (req2, res) => {
     });
     res.json({ success: true });
   } catch (err) {
-    console.error("[MESSENGER] Error removing member:", err);
+    logger.error("[MESSENGER] Error removing member:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -77054,7 +77387,7 @@ router84.post("/messages/:id/transcribe", async (req2, res) => {
     });
     res.json({ transcript });
   } catch (err) {
-    console.error("[MESSENGER] Error transcribing voice:", err);
+    logger.error("[MESSENGER] Error transcribing voice:", err);
     res.status(500).json({ error: "Erreur de transcription" });
   }
 });
@@ -77087,7 +77420,7 @@ router85.post("/:id/leave-beacon", async (req2, res) => {
     }
     res.json({ success: true });
   } catch (err) {
-    console.error("[CALLS] Beacon leave error:", err);
+    logger.error("[CALLS] Beacon leave error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -77119,7 +77452,7 @@ router85.get("/ice-servers", async (_req, res) => {
     }
     res.json({ iceServers });
   } catch (err) {
-    console.error("[CALLS] Error generating ICE servers:", err);
+    logger.error("[CALLS] Error generating ICE servers:", err);
     res.json({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
   }
 });
@@ -77198,11 +77531,11 @@ router85.post("/start", async (req2, res) => {
           { action: "answer", title: "\u2705 R\xE9pondre" },
           { action: "reject", title: "\u274C Refuser" }
         ]
-      }).catch((err) => console.warn("[CALLS] Push notification error:", err));
+      }).catch((err) => logger.warn("[CALLS] Push notification error:", err));
     }
     res.json({ call, existing: false });
   } catch (err) {
-    console.error("[CALLS] Error starting call:", err);
+    logger.error("[CALLS] Error starting call:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -77230,7 +77563,7 @@ router85.post("/:id/join", async (req2, res) => {
     }
     res.json({ success: true });
   } catch (err) {
-    console.error("[CALLS] Error joining call:", err);
+    logger.error("[CALLS] Error joining call:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -77297,7 +77630,7 @@ router85.post("/:id/leave", async (req2, res) => {
       res.json({ success: true, callEnded: false });
     }
   } catch (err) {
-    console.error("[CALLS] Error leaving call:", err);
+    logger.error("[CALLS] Error leaving call:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -77330,7 +77663,7 @@ router85.post("/:id/reject", async (req2, res) => {
     }
     res.json({ success: true });
   } catch (err) {
-    console.error("[CALLS] Error rejecting call:", err);
+    logger.error("[CALLS] Error rejecting call:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -77356,7 +77689,7 @@ router85.get("/:id", async (req2, res) => {
     }
     res.json(call);
   } catch (err) {
-    console.error("[CALLS] Error fetching call:", err);
+    logger.error("[CALLS] Error fetching call:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -77386,7 +77719,7 @@ router85.get("/check/incoming", async (req2, res) => {
     });
     res.json({ incoming: incoming?.call || null });
   } catch (err) {
-    console.error("[CALLS] Error checking incoming:", err);
+    logger.error("[CALLS] Error checking incoming:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -77412,7 +77745,7 @@ router85.post("/:id/signal", async (req2, res) => {
   signalingBuffer.get(key2).push({ from: user.id, to, type, data, ts: Date.now() });
   const now = Date.now();
   const signals = signalingBuffer.get(key2);
-  const cleaned = signals.filter((s) => now - s.ts < 12e4);
+  const cleaned = signals.filter((s) => now - s.ts < SIGNAL_EXPIRY_MS);
   signalingBuffer.set(key2, cleaned);
   res.json({ success: true });
 });
@@ -77481,7 +77814,7 @@ Sois concis et professionnel.`;
     });
     res.json({ success: true, summary });
   } catch (err) {
-    console.error("[CALLS] Error transcribing:", err);
+    logger.error("[CALLS] Error transcribing:", err);
     res.status(500).json({ error: "Erreur lors de la transcription" });
   }
 });
@@ -77508,7 +77841,7 @@ router85.get("/history/list", async (req2, res) => {
     });
     res.json(calls);
   } catch (err) {
-    console.error("[CALLS] Error fetching history:", err);
+    logger.error("[CALLS] Error fetching history:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -77552,7 +77885,7 @@ setInterval(async () => {
       }
     }
   } catch (err) {
-    console.error("[CALLS] Ghost cleanup error:", err);
+    logger.error("[CALLS] Ghost cleanup error:", err);
   }
 }, 6e4);
 var calls_default = router85;
@@ -77703,7 +78036,7 @@ router86.post("/stories", authenticateToken, async (req2, res) => {
         }
       });
     } catch (linkErr) {
-      console.error("[ZHIIVE] Failed to create linked WallPost for story:", linkErr);
+      logger.error("[ZHIIVE] Failed to create linked WallPost for story:", linkErr);
     }
     res.json({ story });
   } catch (e) {
@@ -77713,7 +78046,10 @@ router86.post("/stories", authenticateToken, async (req2, res) => {
 router86.post("/stories/:storyId/view", authenticateToken, async (req2, res) => {
   try {
     const userId = req2.user.id;
+    const orgId = req2.user.organizationId;
     const storyId = req2.params.storyId;
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.storiesEnabled) return res.status(403).json({ error: "Stories disabled" });
     const existing = await db.storyView.findUnique({
       where: { storyId_viewerId: { storyId, viewerId: userId } }
     });
@@ -78314,7 +78650,10 @@ router86.post("/sparks/:sparkId/vote", authenticateToken, async (req2, res) => {
 router86.post("/sparks/:sparkId/dismiss", authenticateToken, async (req2, res) => {
   try {
     const userId = req2.user.id;
+    const orgId = req2.user.organizationId;
     const sparkId = req2.params.sparkId;
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.sparksEnabled) return res.status(403).json({ error: "Sparks disabled" });
     await db.sparkDismiss.upsert({
       where: { sparkId_userId: { sparkId, userId } },
       create: { sparkId, userId },
@@ -78559,8 +78898,11 @@ router86.post("/events", authenticateToken, async (req2, res) => {
 router86.post("/events/:eventId/rsvp", authenticateToken, async (req2, res) => {
   try {
     const userId = req2.user.id;
+    const orgId = req2.user.organizationId;
     const eventId = req2.params.eventId;
     const status = req2.body.status || "GOING";
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.eventsEnabled) return res.status(403).json({ error: "Events disabled" });
     const existing = await db.eventAttendee.findUnique({
       where: { eventId_userId: { eventId, userId } }
     });
@@ -78577,7 +78919,10 @@ router86.post("/events/:eventId/rsvp", authenticateToken, async (req2, res) => {
 router86.delete("/events/:eventId/rsvp", authenticateToken, async (req2, res) => {
   try {
     const userId = req2.user.id;
+    const orgId = req2.user.organizationId;
     const eventId = req2.params.eventId;
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.eventsEnabled) return res.status(403).json({ error: "Events disabled" });
     await db.eventAttendee.deleteMany({ where: { eventId, userId } });
     res.json({ success: true });
   } catch (e) {
@@ -78728,7 +79073,7 @@ router86.get("/gamification/me", authenticateToken, async (req2, res) => {
         include: { badge: true },
         orderBy: { earnedAt: "desc" }
       }),
-      db.badgeDefinition.findMany({ orderBy: { category: "asc" } })
+      db.badgeDefinition.findMany({ orderBy: { category: "asc" }, take: 200 })
     ]);
     res.json({
       streak: streak || { currentStreak: 0, longestStreak: 0, totalPoints: 0, level: 1 },
@@ -78769,7 +79114,10 @@ router86.get("/saved-reels", authenticateToken, async (req2, res) => {
 router86.post("/saved-reels/:postId", authenticateToken, async (req2, res) => {
   try {
     const userId = req2.user.id;
+    const orgId = req2.user.organizationId;
     const postId = req2.params.postId;
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.reelsEnabled) return res.status(403).json({ error: "Reels disabled" });
     await db.savedReel.upsert({
       where: { postId_userId: { postId, userId } },
       create: { postId, userId },
@@ -78783,7 +79131,10 @@ router86.post("/saved-reels/:postId", authenticateToken, async (req2, res) => {
 router86.delete("/saved-reels/:postId", authenticateToken, async (req2, res) => {
   try {
     const userId = req2.user.id;
+    const orgId = req2.user.organizationId;
     const postId = req2.params.postId;
+    const settings = await getOrgSocialSettings(orgId);
+    if (!settings.reelsEnabled) return res.status(403).json({ error: "Reels disabled" });
     await db.savedReel.deleteMany({
       where: { postId, userId }
     });
@@ -78899,7 +79250,7 @@ router87.get("/org/:orgId", authenticateToken, async (req2, res) => {
     });
     res.json(moments);
   } catch (error) {
-    console.error("[HIVE-LIVE] Error fetching org moments:", error);
+    logger.error("[HIVE-LIVE] Error fetching org moments:", error);
     res.status(500).json({ error: "Erreur lors du chargement de la lifeline Colony" });
   }
 });
@@ -78950,7 +79301,7 @@ router87.post("/", authenticateToken, async (req2, res) => {
     if (error instanceof import_zod18.z.ZodError) {
       return res.status(400).json({ error: "Donn\xE9es invalides", details: error.errors });
     }
-    console.error("[HIVE-LIVE] Error creating moment:", error);
+    logger.error("[HIVE-LIVE] Error creating moment:", error);
     res.status(500).json({ error: "Erreur lors de la cr\xE9ation du moment" });
   }
 });
@@ -78990,7 +79341,7 @@ router87.post("/from-post/:postId", authenticateToken, async (req2, res) => {
     });
     res.status(201).json(moment);
   } catch (error) {
-    console.error("[HIVE-LIVE] Error creating moment from post:", error);
+    logger.error("[HIVE-LIVE] Error creating moment from post:", error);
     res.status(500).json({ error: "Erreur lors de l'ajout au Hive Live" });
   }
 });
@@ -79038,7 +79389,7 @@ router87.put("/:id", authenticateToken, async (req2, res) => {
     if (error instanceof import_zod18.z.ZodError) {
       return res.status(400).json({ error: "Donn\xE9es invalides", details: error.errors });
     }
-    console.error("[HIVE-LIVE] Error updating moment:", error);
+    logger.error("[HIVE-LIVE] Error updating moment:", error);
     res.status(500).json({ error: "Erreur lors de la mise \xE0 jour" });
   }
 });
@@ -79052,7 +79403,7 @@ router87.delete("/:id", authenticateToken, async (req2, res) => {
     await db.hiveLiveMoment.delete({ where: { id } });
     res.json({ success: true });
   } catch (error) {
-    console.error("[HIVE-LIVE] Error deleting moment:", error);
+    logger.error("[HIVE-LIVE] Error deleting moment:", error);
     res.status(500).json({ error: "Erreur lors de la suppression" });
   }
 });
@@ -79093,7 +79444,7 @@ router87.get("/:userId", authenticateToken, async (req2, res) => {
     });
     res.json(moments);
   } catch (error) {
-    console.error("[HIVE-LIVE] Error fetching moments:", error);
+    logger.error("[HIVE-LIVE] Error fetching moments:", error);
     res.status(500).json({ error: "Erreur lors du chargement de la lifeline" });
   }
 });
@@ -79128,6 +79479,7 @@ var TABLE_META = {
   website_forms: { category: "forms", label: "Formulaire", icon: "form", routeFn: (id) => `/form/${id}`, labelCols: ["name"], descCols: ["description", "status"] },
   TreeBranchLeafTree: { category: "trees", label: "Formulaire", icon: "form", routeFn: (id) => `/tbl/${id}`, labelCols: ["name", "label"], descCols: ["description"] }
 };
+var ALLOWED_TABLES = new Set(Object.keys(TABLE_META));
 var EXCLUDED_TABLES = /* @__PURE__ */ new Set([
   "_prisma_migrations",
   "verification_checksums",
@@ -79265,7 +79617,7 @@ router88.get("/global", async (req2, res) => {
     }
     res.json({ results: grouped, query: q, total });
   } catch (err) {
-    console.error("[GLOBAL SEARCH] Error:", err);
+    logger.error("[GLOBAL SEARCH] Error:", err);
     res.status(500).json({ error: "Erreur lors de la recherche" });
   }
 });
@@ -79306,7 +79658,7 @@ router88.get("/web", async (req2, res) => {
     });
     clearTimeout(timeout);
     if (!response.ok) {
-      console.warn(`[ZHIIVE SEARCH] Status ${response.status}`);
+      logger.warn(`[ZHIIVE SEARCH] Status ${response.status}`);
       res.status(502).json({ error: "Recherche temporairement indisponible" });
       return;
     }
@@ -79329,10 +79681,10 @@ router88.get("/web", async (req2, res) => {
     res.json({ results, query: q });
   } catch (err) {
     if (err.name === "AbortError") {
-      console.warn("[ZHIIVE SEARCH] Timeout");
+      logger.warn("[ZHIIVE SEARCH] Timeout");
       res.status(504).json({ error: "Recherche expir\xE9e, r\xE9essayez" });
     } else {
-      console.warn("[ZHIIVE SEARCH] Error:", err.message);
+      logger.warn("[ZHIIVE SEARCH] Error:", err.message);
       res.status(503).json({ error: "Recherche indisponible" });
     }
   }
@@ -79665,10 +80017,10 @@ router88.get("/browse-proxy", async (req2, res) => {
     const csp = response.headers.get("content-security-policy") || "";
     const cspFrameAncestors = csp.includes("frame-ancestors") ? csp.match(/frame-ancestors[^;]*/)?.[0] : "none";
     const redirected = finalUrl !== targetUrl;
-    if (redirected) console.log(`[PROXY]   \u21AA Redirected to: ${finalUrl.length > 80 ? finalUrl.slice(0, 80) + "..." : finalUrl}`);
-    if (xfo !== "none") console.log(`[PROXY]   \u{1F6AB} X-Frame-Options: ${xfo}`);
-    if (cspFrameAncestors && cspFrameAncestors !== "none") console.log(`[PROXY]   \u{1F6AB} CSP: ${cspFrameAncestors}`);
-    if (setCookieHeaders.length) console.log(`[PROXY]   \u{1F36A} Received ${setCookieHeaders.length} Set-Cookie headers`);
+    if (redirected) logger.info(`[PROXY]   \u21AA Redirected to: ${finalUrl.length > 80 ? finalUrl.slice(0, 80) + "..." : finalUrl}`);
+    if (xfo !== "none") logger.info(`[PROXY]   \u{1F6AB} X-Frame-Options: ${xfo}`);
+    if (cspFrameAncestors && cspFrameAncestors !== "none") logger.info(`[PROXY]   \u{1F6AB} CSP: ${cspFrameAncestors}`);
+    if (setCookieHeaders.length) logger.info(`[PROXY]   \u{1F36A} Received ${setCookieHeaders.length} Set-Cookie headers`);
     const setProxyHeaders = () => {
       res.removeHeader("X-Frame-Options");
       res.removeHeader("Content-Security-Policy");
@@ -79681,7 +80033,7 @@ router88.get("/browse-proxy", async (req2, res) => {
       const isCaptcha = /captcha|robot|automated|bot.*detect|verify.*human/i.test(html.slice(0, 5e3));
       const titleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
       const pageTitle = titleMatch ? titleMatch[1].trim() : "(no title)";
-      if (isCaptcha) console.log(`[PROXY]   \u26A0\uFE0F CAPTCHA/BOT DETECTION detected in HTML!`);
+      if (isCaptcha) logger.info(`[PROXY]   \u26A0\uFE0F CAPTCHA/BOT DETECTION detected in HTML!`);
       const bodyMatch = html.match(/<body[^>]*>([\s\S]{0,300})/i);
       if (bodyMatch) {
         const bodyPreview = bodyMatch[1].replace(/\s+/g, " ").trim().slice(0, 150);
@@ -79691,7 +80043,7 @@ router88.get("/browse-proxy", async (req2, res) => {
       html = html.replace(/(?:window\.)?parent\.location\s*(?:\.href\s*)?=\s*[^;\n]+/gi, "/*z*/");
       html = html.replace(/if\s*\(\s*(?:window\.)?(?:top|self|parent)\s*!==?\s*(?:window\.)?(?:top|self)\s*\)[^}]*\{[^}]*\}/gi, "/*z*/");
       const stripped = originalSize - html.length;
-      if (stripped > 0) console.log(`[PROXY]   \u{1F9F9} Stripped ${stripped} chars of frame-busting code`);
+      if (stripped > 0) logger.info(`[PROXY]   \u{1F9F9} Stripped ${stripped} chars of frame-busting code`);
       const interceptor = buildInterceptorScript(finalUrl);
       if (/<head[\s>]/i.test(html)) {
         html = html.replace(/<head([\s>])/i, `<head$1${interceptor}`);
@@ -79735,10 +80087,10 @@ router88.get("/browse-proxy", async (req2, res) => {
     }
   } catch (err) {
     if (err.name === "AbortError") {
-      console.error(`[PROXY] \u23F1\uFE0F TIMEOUT (20s) | ${shortUrl}`);
+      logger.error(`[PROXY] \u23F1\uFE0F TIMEOUT (20s) | ${shortUrl}`);
       res.status(504).json({ error: "La page ne r\xE9pond pas" });
     } else {
-      console.error(`[PROXY] \u274C ERROR | ${shortUrl} | ${err.message}`);
+      logger.error(`[PROXY] \u274C ERROR | ${shortUrl} | ${err.message}`);
       res.status(502).json({ error: "Impossible de charger cette page" });
     }
   }
@@ -79925,7 +80277,7 @@ var ia_config_routes_default = router89;
 
 // src/controllers/calculatedValueController.ts
 var import_express92 = require("express");
-var import_crypto36 = require("crypto");
+var import_crypto35 = require("crypto");
 init_database();
 var router90 = (0, import_express92.Router)();
 var prisma42 = db;
@@ -80140,7 +80492,7 @@ router90.get("/:nodeId/calculated-value", async (req2, res) => {
               fieldLabel: node.label
             },
             create: {
-              id: (0, import_crypto36.randomUUID)(),
+              id: (0, import_crypto35.randomUUID)(),
               submissionId,
               nodeId,
               value: String(sum),
@@ -80264,7 +80616,7 @@ router90.get("/:nodeId/calculated-value", async (req2, res) => {
                   lastResolved: resolvedAt
                 },
                 create: {
-                  id: (0, import_crypto36.randomUUID)(),
+                  id: (0, import_crypto35.randomUUID)(),
                   submissionId,
                   nodeId,
                   value: persistedValue,
@@ -80435,7 +80787,7 @@ router90.get("/:nodeId/calculated-value", async (req2, res) => {
                 fieldLabel: node.label
               },
               create: {
-                id: (0, import_crypto36.randomUUID)(),
+                id: (0, import_crypto35.randomUUID)(),
                 submissionId,
                 nodeId,
                 value: stringValue,
@@ -80640,6 +80992,7 @@ var calculatedValueController_default = router90;
 var import_express93 = require("express");
 init_database();
 var router91 = (0, import_express93.Router)();
+router91.use(authenticateToken);
 function getAuthCtx6(req2) {
   const user = req2.user;
   return {
@@ -80680,7 +81033,7 @@ router91.get("/trees/:treeId/formulas", async (req2, res) => {
       formulasByNode
     });
   } catch (error) {
-    console.error("[TBL Batch API] Error batch fetching formulas:", error);
+    logger.error("[TBL Batch API] Error batch fetching formulas:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des formules" });
   }
 });
@@ -80750,7 +81103,7 @@ router91.get("/trees/:treeId/calculated-values", async (req2, res) => {
       valuesByNode
     });
   } catch (error) {
-    console.error("[TBL Batch API] Error batch fetching calculated values:", error);
+    logger.error("[TBL Batch API] Error batch fetching calculated values:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des valeurs calcul\xE9es" });
   }
 });
@@ -80812,7 +81165,7 @@ router91.get("/trees/:treeId/select-configs", async (req2, res) => {
       configsByNode
     });
   } catch (error) {
-    console.error("[TBL Batch API] Error batch fetching select configs:", error);
+    logger.error("[TBL Batch API] Error batch fetching select configs:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des configs select" });
   }
 });
@@ -80934,7 +81287,7 @@ router91.get("/trees/:treeId/all", async (req2, res) => {
       name: error instanceof Error ? error.name : "Unknown",
       stack: error instanceof Error ? error.stack : void 0
     };
-    console.error("[TBL Batch API] Error super batch fetching:", JSON.stringify(errorDetails, null, 2));
+    logger.error("[TBL Batch API] Error super batch fetching:", JSON.stringify(errorDetails, null, 2));
     res.status(500).json({
       error: "Erreur lors de la r\xE9cup\xE9ration batch compl\xE8te",
       details: errorDetails.message
@@ -81005,7 +81358,7 @@ router91.get("/trees/:treeId/node-data", async (req2, res) => {
       dataByNode
     });
   } catch (error) {
-    console.error("[TBL Batch API] Error batch fetching node data:", error);
+    logger.error("[TBL Batch API] Error batch fetching node data:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des donn\xE9es de noeuds" });
   }
 });
@@ -81059,7 +81412,7 @@ router91.get("/trees/:treeId/conditions", async (req2, res) => {
       activeConditionByNode
     });
   } catch (error) {
-    console.error("[TBL Batch API] Error batch fetching conditions:", error);
+    logger.error("[TBL Batch API] Error batch fetching conditions:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des conditions" });
   }
 });
@@ -81070,6 +81423,7 @@ var import_express94 = require("express");
 init_database();
 var import_googleapis8 = require("googleapis");
 var router92 = (0, import_express94.Router)();
+router92.use(authenticateToken);
 function getAuthCtx7(req2) {
   const user = req2.user;
   return {
@@ -81111,7 +81465,7 @@ router92.post("/gmail/modify", async (req2, res) => {
       message: `${messageIds.length} message(s) modifi\xE9(s)`
     });
   } catch (error) {
-    console.error("[BATCH] \u274C Gmail modify error:", error);
+    logger.error("[BATCH] \u274C Gmail modify error:", error);
     res.status(500).json({ error: error.message || "Erreur batch Gmail" });
   }
 });
@@ -81148,7 +81502,7 @@ router92.post("/gmail/trash", async (req2, res) => {
       message: `${messageIds.length} message(s) mis \xE0 la corbeille`
     });
   } catch (error) {
-    console.error("[BATCH] \u274C Gmail trash error:", error);
+    logger.error("[BATCH] \u274C Gmail trash error:", error);
     res.status(500).json({ error: error.message || "Erreur batch Gmail" });
   }
 });
@@ -81183,7 +81537,7 @@ router92.delete("/gmail/delete", async (req2, res) => {
       message: `${messageIds.length} message(s) supprim\xE9(s) d\xE9finitivement`
     });
   } catch (error) {
-    console.error("[BATCH] \u274C Gmail delete error:", error);
+    logger.error("[BATCH] \u274C Gmail delete error:", error);
     res.status(500).json({ error: error.message || "Erreur batch Gmail" });
   }
 });
@@ -81219,7 +81573,7 @@ router92.patch("/leads/status", async (req2, res) => {
       message: `${result.count} lead(s) mis \xE0 jour`
     });
   } catch (error) {
-    console.error("[BATCH] \u274C Leads status error:", error);
+    logger.error("[BATCH] \u274C Leads status error:", error);
     res.status(500).json({ error: error.message || "Erreur batch leads" });
   }
 });
@@ -81246,7 +81600,7 @@ router92.patch("/leads/assign", async (req2, res) => {
       message: `${result.count} lead(s) assign\xE9(s)`
     });
   } catch (error) {
-    console.error("[BATCH] \u274C Leads assign error:", error);
+    logger.error("[BATCH] \u274C Leads assign error:", error);
     res.status(500).json({ error: error.message || "Erreur batch leads" });
   }
 });
@@ -81269,7 +81623,7 @@ router92.delete("/leads", async (req2, res) => {
       message: `${result.count} lead(s) supprim\xE9(s)`
     });
   } catch (error) {
-    console.error("[BATCH] \u274C Leads delete error:", error);
+    logger.error("[BATCH] \u274C Leads delete error:", error);
     res.status(500).json({ error: error.message || "Erreur batch leads" });
   }
 });
@@ -81297,7 +81651,7 @@ router92.post("/fields/configs", async (req2, res) => {
       configs: configsByFieldId
     });
   } catch (error) {
-    console.error("[BATCH] \u274C Fields configs error:", error);
+    logger.error("[BATCH] \u274C Fields configs error:", error);
     res.status(500).json({ error: error.message || "Erreur batch fields" });
   }
 });
@@ -81327,7 +81681,7 @@ router92.patch("/modules/toggle", async (req2, res) => {
       message: `${result.count} module(s) ${enabled ? "activ\xE9(s)" : "d\xE9sactiv\xE9(s)"}`
     });
   } catch (error) {
-    console.error("[BATCH] \u274C Modules toggle error:", error);
+    logger.error("[BATCH] \u274C Modules toggle error:", error);
     res.status(500).json({ error: error.message || "Erreur batch modules" });
   }
 });
@@ -81357,7 +81711,7 @@ router92.get("/analytics/leads-by-status", async (req2, res) => {
     }));
     res.json({ success: true, data: result });
   } catch (error) {
-    console.error("[BATCH] \u274C Analytics leads-by-status error:", error);
+    logger.error("[BATCH] \u274C Analytics leads-by-status error:", error);
     res.status(500).json({ error: error.message || "Erreur analytics" });
   }
 });
@@ -81379,7 +81733,7 @@ router92.get("/analytics/leads-by-source", async (req2, res) => {
     }));
     res.json({ success: true, data: result });
   } catch (error) {
-    console.error("[BATCH] \u274C Analytics leads-by-source error:", error);
+    logger.error("[BATCH] \u274C Analytics leads-by-source error:", error);
     res.status(500).json({ error: error.message || "Erreur analytics" });
   }
 });
@@ -81408,7 +81762,7 @@ router92.get("/analytics/leads-by-assignee", async (req2, res) => {
     }));
     res.json({ success: true, data: result });
   } catch (error) {
-    console.error("[BATCH] \u274C Analytics leads-by-assignee error:", error);
+    logger.error("[BATCH] \u274C Analytics leads-by-assignee error:", error);
     res.status(500).json({ error: error.message || "Erreur analytics" });
   }
 });
@@ -84198,7 +84552,7 @@ var QualityAnalyzer = class {
       };
       return response;
     } catch (error) {
-      console.error("\u274C [QualityAnalyzer] Erreur analyse:", error);
+      logger.error("\u274C [QualityAnalyzer] Erreur analyse:", error);
       return response;
     }
   }
@@ -84221,7 +84575,7 @@ router103.post("/generate-field", async (req2, res) => {
         details: "aiContext.sectionType est requis"
       });
     }
-    console.log("\u{1F916} [AI] G\xE9n\xE9ration pour:", {
+    logger.info("\u{1F916} [AI] G\xE9n\xE9ration pour:", {
       fieldId,
       fieldType,
       fieldLabel,
@@ -84234,12 +84588,12 @@ router103.post("/generate-field", async (req2, res) => {
       currentValue,
       aiContext
     });
-    console.log("\u{1F4DD} [AI] Prompt construit, appel \xE0 Gemini...");
+    logger.info("\u{1F4DD} [AI] Prompt construit, appel \xE0 Gemini...");
     const geminiResult = await geminiService3.chat({ prompt, raw: true });
     if (!geminiResult.success || !geminiResult.content) {
       throw new Error(geminiResult.error || "Erreur lors de l'appel \xE0 Gemini");
     }
-    console.log("\u2705 [AI] R\xE9ponse brute re\xE7ue:", geminiResult.content.substring(0, 200));
+    logger.info("\u2705 [AI] R\xE9ponse brute re\xE7ue:", geminiResult.content.substring(0, 200));
     const jsonMatch = geminiResult.content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error("Format de r\xE9ponse invalide: JSON non trouv\xE9 dans la r\xE9ponse IA");
@@ -84248,7 +84602,7 @@ router103.post("/generate-field", async (req2, res) => {
     parsedResponse = QualityAnalyzer.analyzeSuggestions(parsedResponse, fieldType);
     const duration = Date.now() - startTime;
     const modelUsed = geminiResult.model || geminiService3.getStatus().model;
-    console.log(`\u2705 [AI] G\xE9n\xE9ration r\xE9ussie en ${duration}ms, score moyen: ${parsedResponse.analysis.avgScore}/100`);
+    logger.info(`\u2705 [AI] G\xE9n\xE9ration r\xE9ussie en ${duration}ms, score moyen: ${parsedResponse.analysis.avgScore}/100`);
     return res.json({
       success: true,
       content: parsedResponse.suggestions[0]?.content,
@@ -84265,7 +84619,7 @@ router103.post("/generate-field", async (req2, res) => {
     });
   } catch (error) {
     const duration = Date.now() - startTime;
-    console.error("\u274C [AI] Erreur g\xE9n\xE9ration:", error);
+    logger.error("\u274C [AI] Erreur g\xE9n\xE9ration:", error);
     if (error.message?.includes("API key")) {
       return res.status(500).json({
         success: false,
@@ -84796,7 +85150,7 @@ async function executeRepeatDuplication(prisma50, repeaterNodeId, options = {}) 
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-executor.ts
-var import_client8 = require("@prisma/client");
+var import_client9 = require("@prisma/client");
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-variable-with-capacities.ts
 function parseSourceRef2(sourceRef) {
@@ -85732,7 +86086,7 @@ async function batchPostDuplicationProcessing(prisma50, copiedNodeIds) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/table-lookup-duplication-service.ts
-var import_crypto37 = require("crypto");
+var import_crypto36 = require("crypto");
 var TableLookupDuplicationService = class {
   /**
    * Duplique complÃƒÂ¨tement les tables TBL et leurs configurations SELECT associÃƒÂ©es
@@ -85772,7 +86126,7 @@ var TableLookupDuplicationService = class {
             const displayCol = firstColName;
             await prisma50.treeBranchLeafSelectConfig.create({
               data: {
-                id: (0, import_crypto37.randomUUID)(),
+                id: (0, import_crypto36.randomUUID)(),
                 nodeId: copiedNodeId,
                 tableReference: copiedTableId,
                 // 🔥 CRITICAL: Remplir TOUS les champs nécessaires (pas juste displayColumn)
@@ -85957,7 +86311,7 @@ var TableLookupDuplicationService = class {
                 const baseName = String(col.name ?? "");
                 const newName = baseName;
                 return {
-                  id: col.id ? `${col.id}${suffix}` : (0, import_crypto37.randomUUID)(),
+                  id: col.id ? `${col.id}${suffix}` : (0, import_crypto36.randomUUID)(),
                   // ✅ FIX 11/01/2026: NE PAS inclure tableId dans nested create - Prisma le remplit automatiquement
                   columnIndex: idx,
                   // ✅ FIX: Réassigner en séquence au lieu de copier
@@ -85973,7 +86327,7 @@ var TableLookupDuplicationService = class {
             // ✅ FIX 07/01/2026: Réassigner aussi les rowIndex en séquence pour préserver l'ordre
             tableRows: {
               create: originalTable.tableRows.map((row, idx) => ({
-                id: row.id ? `${row.id}${suffix}` : (0, import_crypto37.randomUUID)(),
+                id: row.id ? `${row.id}${suffix}` : (0, import_crypto36.randomUUID)(),
                 // ✅ FIX 11/01/2026: NE PAS inclure tableId dans nested create - Prisma le remplit automatiquement
                 rowIndex: idx,
                 // ✅ FIX: Réassigner en séquence
@@ -85990,7 +86344,7 @@ var TableLookupDuplicationService = class {
           const baseName = String(col.name ?? "");
           const newName = baseName;
           return {
-            id: col.id ? `${col.id}${suffix}` : (0, import_crypto37.randomUUID)(),
+            id: col.id ? `${col.id}${suffix}` : (0, import_crypto36.randomUUID)(),
             tableId: copiedTableId,
             columnIndex: idx,
             name: newName,
@@ -86017,7 +86371,7 @@ var TableLookupDuplicationService = class {
       if (!existingSelectConfig) {
         await prisma50.treeBranchLeafSelectConfig.create({
           data: {
-            id: (0, import_crypto37.randomUUID)(),
+            id: (0, import_crypto36.randomUUID)(),
             // 🔧 FIX: Générer l'id manuellement
             nodeId: copiedNodeId,
             tableReference: copiedTableId,
@@ -87031,7 +87385,7 @@ function normalizeNodeBase2(value) {
   return value.replace(/-\d+(?:-\d+)*$/, "");
 }
 function isUniqueConstraintError(error) {
-  return error instanceof import_client8.Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+  return error instanceof import_client9.Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 }
 async function reassignCopiedNodesToDuplicatedParents(prisma50, copiedNodeIds, originalNodeIdByCopyId) {
   if (!copiedNodeIds.size) {
@@ -89304,7 +89658,7 @@ router107.get("/", authMiddleware, async (req2, res) => {
     const moduleKeys = favorites.map((f) => f.moduleKey);
     res.json({ favorites: moduleKeys });
   } catch (error) {
-    console.error("[UserFavorites] \u274C Erreur GET /favorites:", error);
+    logger.error("[UserFavorites] \u274C Erreur GET /favorites:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9cup\xE9ration des favoris",
       details: error instanceof Error ? error.message : "Erreur inconnue"
@@ -89343,7 +89697,7 @@ router107.post("/", authMiddleware, async (req2, res) => {
     });
     res.status(201).json({ favorite: favorite.moduleKey });
   } catch (error) {
-    console.error("[UserFavorites] \u274C Erreur POST /favorites:", error);
+    logger.error("[UserFavorites] \u274C Erreur POST /favorites:", error);
     res.status(500).json({
       error: "Erreur lors de l'ajout du favori",
       details: error instanceof Error ? error.message : "Erreur inconnue"
@@ -89373,7 +89727,7 @@ router107.delete("/:moduleKey", authMiddleware, async (req2, res) => {
     }
     res.json({ message: "Favori supprim\xE9 avec succ\xE8s" });
   } catch (error) {
-    console.error("[UserFavorites] \u274C Erreur DELETE /favorites/:moduleKey:", error);
+    logger.error("[UserFavorites] \u274C Erreur DELETE /favorites/:moduleKey:", error);
     res.status(500).json({
       error: "Erreur lors de la suppression du favori",
       details: error instanceof Error ? error.message : "Erreur inconnue"
@@ -89396,7 +89750,7 @@ router108.get("/", authMiddleware, async (req2, res) => {
     });
     res.json({ bookmarks });
   } catch (error) {
-    console.error("[UserBookmarks] \u274C Erreur GET /bookmarks:", error);
+    logger.error("[UserBookmarks] \u274C Erreur GET /bookmarks:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des bookmarks" });
   }
 });
@@ -89435,7 +89789,7 @@ router108.post("/", authMiddleware, async (req2, res) => {
     });
     res.status(201).json({ bookmark });
   } catch (error) {
-    console.error("[UserBookmarks] \u274C Erreur POST /bookmarks:", error);
+    logger.error("[UserBookmarks] \u274C Erreur POST /bookmarks:", error);
     res.status(500).json({ error: "Erreur lors de l'ajout du bookmark" });
   }
 });
@@ -89451,7 +89805,7 @@ router108.delete("/:id", authMiddleware, async (req2, res) => {
     await db.userBookmark.delete({ where: { id } });
     res.json({ success: true });
   } catch (error) {
-    console.error("[UserBookmarks] \u274C Erreur DELETE /bookmarks:", error);
+    logger.error("[UserBookmarks] \u274C Erreur DELETE /bookmarks:", error);
     res.status(500).json({ error: "Erreur lors de la suppression du bookmark" });
   }
 });
@@ -89470,7 +89824,7 @@ router108.post("/remove-by-url", authMiddleware, async (req2, res) => {
     await db.userBookmark.delete({ where: { id: bookmark.id } });
     res.json({ success: true });
   } catch (error) {
-    console.error("[UserBookmarks] \u274C Erreur remove-by-url:", error);
+    logger.error("[UserBookmarks] \u274C Erreur remove-by-url:", error);
     res.status(500).json({ error: "Erreur lors de la suppression du bookmark" });
   }
 });
@@ -89492,7 +89846,7 @@ router108.put("/reorder", authMiddleware, async (req2, res) => {
     );
     res.json({ success: true });
   } catch (error) {
-    console.error("[UserBookmarks] \u274C Erreur PUT /reorder:", error);
+    logger.error("[UserBookmarks] \u274C Erreur PUT /reorder:", error);
     res.status(500).json({ error: "Erreur lors du r\xE9ordonnement" });
   }
 });
@@ -89626,7 +89980,7 @@ function parseJsonFeed(body2, siteUrl) {
     }).filter((item) => item.title && item.title.length > 3);
     return { title: feedTitle, items };
   } catch (e) {
-    console.log(`[Honeycomb] \u26A0\uFE0F JSON Feed parse error:`, e);
+    logger.info(`[Honeycomb] \u26A0\uFE0F JSON Feed parse error:`, e);
     return { items: [] };
   }
 }
@@ -89666,7 +90020,7 @@ async function discoverFeedUrl(siteUrl, prefetchedHtml) {
             const body2 = await feedResp.text();
             const feedType = detectFeedType(ct, body2);
             if (feedType) {
-              console.log(`[Honeycomb] \u2705 Found ${feedType} feed via HTML <link>: ${feedUrl}`);
+              logger.info(`[Honeycomb] \u2705 Found ${feedType} feed via HTML <link>: ${feedUrl}`);
               return { url: feedUrl, type: feedType };
             }
           }
@@ -89683,7 +90037,7 @@ async function discoverFeedUrl(siteUrl, prefetchedHtml) {
             const body2 = await feedResp.text();
             const feedType = detectFeedType(ct, body2);
             if (feedType) {
-              console.log(`[Honeycomb] \u2705 Found ${feedType} feed via <a> link: ${feedUrl}`);
+              logger.info(`[Honeycomb] \u2705 Found ${feedType} feed via <a> link: ${feedUrl}`);
               return { url: feedUrl, type: feedType };
             }
           }
@@ -89694,7 +90048,7 @@ async function discoverFeedUrl(siteUrl, prefetchedHtml) {
   } catch {
   }
   if (prefetchedHtml) {
-    console.log(`[Honeycomb] \u23ED\uFE0F HTML analyzed, no feed advertised \u2014 skipping probes for: ${siteUrl}`);
+    logger.info(`[Honeycomb] \u23ED\uFE0F HTML analyzed, no feed advertised \u2014 skipping probes for: ${siteUrl}`);
     return null;
   }
   for (const path10 of COMMON_FEED_PATHS) {
@@ -89706,7 +90060,7 @@ async function discoverFeedUrl(siteUrl, prefetchedHtml) {
         const body2 = await resp.text();
         const feedType = detectFeedType(ct, body2);
         if (feedType) {
-          console.log(`[Honeycomb] \u2705 Found ${feedType} feed via probe: ${feedUrl}`);
+          logger.info(`[Honeycomb] \u2705 Found ${feedType} feed via probe: ${feedUrl}`);
           return { url: feedUrl, type: feedType };
         }
       }
@@ -89721,14 +90075,14 @@ async function discoverFeedUrl(siteUrl, prefetchedHtml) {
         const ct = resp.headers.get("content-type") || "";
         const body2 = await resp.text();
         if (looksLikeJsonFeed(ct, body2)) {
-          console.log(`[Honeycomb] \u2705 Found JSON feed via probe: ${feedUrl}`);
+          logger.info(`[Honeycomb] \u2705 Found JSON feed via probe: ${feedUrl}`);
           return { url: feedUrl, type: "json" };
         }
         if (ct.includes("json")) {
           try {
             const parsed = JSON.parse(body2);
             if (Array.isArray(parsed) && parsed.length > 0 && (parsed[0].title || parsed[0].name)) {
-              console.log(`[Honeycomb] \u2705 Found JSON API via probe: ${feedUrl}`);
+              logger.info(`[Honeycomb] \u2705 Found JSON API via probe: ${feedUrl}`);
               return { url: feedUrl, type: "json" };
             }
           } catch {
@@ -89741,12 +90095,12 @@ async function discoverFeedUrl(siteUrl, prefetchedHtml) {
   try {
     const feed = await rssParser.parseURL(siteUrl);
     if (feed && feed.items && feed.items.length > 0) {
-      console.log(`[Honeycomb] \u2705 Site URL is itself an RSS feed: ${siteUrl}`);
+      logger.info(`[Honeycomb] \u2705 Site URL is itself an RSS feed: ${siteUrl}`);
       return { url: siteUrl, type: "rss" };
     }
   } catch {
   }
-  console.log(`[Honeycomb] \u26A0\uFE0F No feed found for: ${siteUrl}`);
+  logger.info(`[Honeycomb] \u26A0\uFE0F No feed found for: ${siteUrl}`);
   return null;
 }
 var MIN_HTML_SIZE_FOR_SCRAPING = 2e4;
@@ -89759,7 +90113,7 @@ async function scrapeArticlesFromHtml(siteUrl, prefetchedHtml) {
     })();
     if (!html) return [];
     if (html.length < MIN_HTML_SIZE_FOR_SCRAPING) {
-      console.log(`[Honeycomb] \u26A0\uFE0F Tiny HTML (${html.length} bytes) \u2014 likely anti-bot: ${siteUrl}`);
+      logger.info(`[Honeycomb] \u26A0\uFE0F Tiny HTML (${html.length} bytes) \u2014 likely anti-bot: ${siteUrl}`);
       const navItems = [];
       const navSeenUrls = /* @__PURE__ */ new Set();
       const baseUrl2 = new URL(siteUrl).origin;
@@ -89810,7 +90164,7 @@ async function scrapeArticlesFromHtml(siteUrl, prefetchedHtml) {
       const withImages = navItems.filter((i) => !!i.imageUrl);
       const withoutImages = navItems.filter((i) => !i.imageUrl);
       const finalItems = [...withImages, ...withoutImages].slice(0, MAX_ITEMS_PER_FEED);
-      console.log(`[Honeycomb] \u{1F517} Anti-bot fallback: extracted ${finalItems.length} nav items from ${siteUrl}`);
+      logger.info(`[Honeycomb] \u{1F517} Anti-bot fallback: extracted ${finalItems.length} nav items from ${siteUrl}`);
       return finalItems;
     }
     const items = [];
@@ -89954,15 +90308,15 @@ async function scrapeArticlesFromHtml(siteUrl, prefetchedHtml) {
         items.push({ title: decodeHtmlEntities(text), link: href });
       }
       if (items.length > 0) {
-        console.log(`[Honeycomb] \u{1F517} Nav-link fallback: ${items.length} items from ${siteUrl}`);
+        logger.info(`[Honeycomb] \u{1F517} Nav-link fallback: ${items.length} items from ${siteUrl}`);
       }
     }
     if (items.length > 0) {
-      console.log(`[Honeycomb] \u2705 Scraped ${items.length} items from HTML: ${siteUrl}`);
+      logger.info(`[Honeycomb] \u2705 Scraped ${items.length} items from HTML: ${siteUrl}`);
     }
     return items;
   } catch {
-    console.log(`[Honeycomb] \u26A0\uFE0F HTML scraping failed for: ${siteUrl}`);
+    logger.info(`[Honeycomb] \u26A0\uFE0F HTML scraping failed for: ${siteUrl}`);
     return [];
   }
 }
@@ -90069,22 +90423,22 @@ async function fetchFeedForBookmark(bookmark) {
         const csp = (mainResp.headers.get("content-security-policy") || "").toLowerCase();
         if (xfo === "deny" || xfo === "sameorigin") {
           iframeBlocked = true;
-          console.log(`[Honeycomb] \u{1F50D} ${bookmark.url} blocks iframes (X-Frame-Options: ${xfo})`);
+          logger.info(`[Honeycomb] \u{1F50D} ${bookmark.url} blocks iframes (X-Frame-Options: ${xfo})`);
         } else if (csp.includes("frame-ancestors") && !csp.includes("frame-ancestors *") && !csp.includes("frame-ancestors *;")) {
           iframeBlocked = true;
-          console.log(`[Honeycomb] \u{1F50D} ${bookmark.url} blocks iframes (CSP frame-ancestors)`);
+          logger.info(`[Honeycomb] \u{1F50D} ${bookmark.url} blocks iframes (CSP frame-ancestors)`);
         }
         if (mainResp.ok) {
           siteHtml = await mainResp.text();
-          console.log(`[Honeycomb] \u{1F4E5} ${bookmark.url} HTML size: ${siteHtml.length} bytes`);
+          logger.info(`[Honeycomb] \u{1F4E5} ${bookmark.url} HTML size: ${siteHtml.length} bytes`);
           if (siteHtml.length < MIN_HTML_SIZE_FOR_SCRAPING) {
             antiBotDetected = true;
-            console.log(`[Honeycomb] \u{1F916} ${bookmark.url} anti-bot detected (${siteHtml.length} bytes) \u2192 will open externally`);
+            logger.info(`[Honeycomb] \u{1F916} ${bookmark.url} anti-bot detected (${siteHtml.length} bytes) \u2192 will open externally`);
           }
         }
       }
     } catch (e) {
-      console.log(`[Honeycomb] \u26A0\uFE0F Fetch error for ${bookmark.url}:`, e);
+      logger.info(`[Honeycomb] \u26A0\uFE0F Fetch error for ${bookmark.url}:`, e);
     }
     const discovered = await discoverFeedUrl(bookmark.url, siteHtml || void 0);
     let hasRealFeed = false;
@@ -90111,9 +90465,9 @@ async function fetchFeedForBookmark(bookmark) {
         if (feed.title) result.title = feed.title;
       }
     } else {
-      console.log(`[Honeycomb] \u{1F504} No feed for ${bookmark.url}, trying visual HTML scraping (HTML: ${(siteHtml || "").length} bytes)...`);
+      logger.info(`[Honeycomb] \u{1F504} No feed for ${bookmark.url}, trying visual HTML scraping (HTML: ${(siteHtml || "").length} bytes)...`);
       const scrapedItems = await scrapeArticlesFromHtml(bookmark.url, siteHtml || void 0);
-      console.log(`[Honeycomb] \u{1F4CA} Scraping result for ${bookmark.url}: ${scrapedItems.length} items${scrapedItems.length > 0 ? " \u2014 " + scrapedItems.map((i) => i.title).join(", ") : ""}`);
+      logger.info(`[Honeycomb] \u{1F4CA} Scraping result for ${bookmark.url}: ${scrapedItems.length} items${scrapedItems.length > 0 ? " \u2014 " + scrapedItems.map((i) => i.title).join(", ") : ""}`);
       if (scrapedItems.length > 0) {
         result.items = scrapedItems;
         result.feedUrl = "scraped";
@@ -90131,12 +90485,12 @@ async function fetchFeedForBookmark(bookmark) {
     if (shouldOpenExternal) {
       result.openExternal = true;
       const reason = iframeBlocked ? "iframe blocked" : "anti-bot";
-      console.log(`[Honeycomb] \u{1F6AB} ${bookmark.url} \u2192 openExternal (${reason} + no feed)`);
+      logger.info(`[Honeycomb] \u{1F6AB} ${bookmark.url} \u2192 openExternal (${reason} + no feed)`);
     } else if (iframeBlocked && hasRealFeed) {
-      console.log(`[Honeycomb] \u2705 ${bookmark.url} \u2192 stays in Hive (has feed, article pages likely OK)`);
+      logger.info(`[Honeycomb] \u2705 ${bookmark.url} \u2192 stays in Hive (has feed, article pages likely OK)`);
     }
     if (antiBotDetected && result.items.length === 0 && cached?.data?.items && cached.data.items.length > 0) {
-      console.log(`[Honeycomb] \u{1F6E1}\uFE0F ${bookmark.url} anti-bot returned empty \u2014 keeping cached data (${cached.data.items.length} items)`);
+      logger.info(`[Honeycomb] \u{1F6E1}\uFE0F ${bookmark.url} anti-bot returned empty \u2014 keeping cached data (${cached.data.items.length} items)`);
       cached.data.openExternal = true;
       cached.expiry = Date.now() + CACHE_SUCCESS_LONG_TTL_MS;
       return cached.data;
@@ -90151,7 +90505,7 @@ async function fetchFeedForBookmark(bookmark) {
       }];
       result.feedUrl = "anti-bot-fallback";
       delete result.error;
-      console.log(`[Honeycomb] \u{1F3A8} ${bookmark.url} anti-bot fallback: generated visual item with favicon`);
+      logger.info(`[Honeycomb] \u{1F3A8} ${bookmark.url} anti-bot fallback: generated visual item with favicon`);
     }
     const ttl = hasRealFeed ? CACHE_SUCCESS_TTL_MS : CACHE_SUCCESS_LONG_TTL_MS;
     feedCache.set(bookmark.url, { data: result, expiry: Date.now() + ttl });
@@ -90207,7 +90561,7 @@ router109.get("/feeds", authMiddleware, async (req2, res) => {
           items: []
         };
       });
-      console.log(`[Honeycomb] \u23F1\uFE0F /feeds timeout (${FEEDS_ENDPOINT_TIMEOUT_MS}ms), returning ${results.filter((r) => r.items.length > 0).length}/${bookmarks.length} cached`);
+      logger.info(`[Honeycomb] \u23F1\uFE0F /feeds timeout (${FEEDS_ENDPOINT_TIMEOUT_MS}ms), returning ${results.filter((r) => r.items.length > 0).length}/${bookmarks.length} cached`);
     } else {
       results = settled.map(
         (s, i) => s.status === "fulfilled" ? s.value : {
@@ -90224,7 +90578,7 @@ router109.get("/feeds", authMiddleware, async (req2, res) => {
     }
     res.json({ feeds: results });
   } catch (error) {
-    console.error("[Honeycomb] \u274C Error fetching feeds:", error);
+    logger.error("[Honeycomb] \u274C Error fetching feeds:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des flux" });
   }
 });
@@ -90243,7 +90597,7 @@ router109.get("/feeds/:bookmarkId", authMiddleware, async (req2, res) => {
     const feed = await fetchFeedForBookmark(bookmark);
     res.json({ feed });
   } catch (error) {
-    console.error("[Honeycomb] \u274C Error fetching single feed:", error);
+    logger.error("[Honeycomb] \u274C Error fetching single feed:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration du flux" });
   }
 });
@@ -90267,7 +90621,7 @@ router110.get("/", authMiddleware, async (req2, res) => {
     }
     res.json(result);
   } catch (error) {
-    console.error("[UserPreferences] \u274C GET /:", error);
+    logger.error("[UserPreferences] \u274C GET /:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -90283,7 +90637,7 @@ router110.get("/:key", authMiddleware, async (req2, res) => {
     if (!pref) return res.json({ value: null });
     res.json({ value: pref.value });
   } catch (error) {
-    console.error("[UserPreferences] \u274C GET /:key:", error);
+    logger.error("[UserPreferences] \u274C GET /:key:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -90303,7 +90657,7 @@ router110.put("/:key", authMiddleware, async (req2, res) => {
     });
     res.json({ key: pref.key, value: pref.value });
   } catch (error) {
-    console.error("[UserPreferences] \u274C PUT /:key:", error);
+    logger.error("[UserPreferences] \u274C PUT /:key:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -90315,7 +90669,7 @@ router110.delete("/:key", authMiddleware, async (req2, res) => {
     await db.userPreference.deleteMany({ where: { userId, key: key2 } });
     res.json({ deleted: true });
   } catch (error) {
-    console.error("[UserPreferences] \u274C DELETE /:key:", error);
+    logger.error("[UserPreferences] \u274C DELETE /:key:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -90342,7 +90696,7 @@ router110.post("/batch", authMiddleware, async (req2, res) => {
     );
     res.json({ saved: entries.length });
   } catch (error) {
-    console.error("[UserPreferences] \u274C POST /batch:", error);
+    logger.error("[UserPreferences] \u274C POST /batch:", error);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -90461,7 +90815,7 @@ router111.get("/locations", async (req2, res) => {
       }
     });
   } catch (e) {
-    console.error("[wax] GET /locations error:", e);
+    logger.error("[wax] GET /locations error:", e);
     res.status(500).json({ success: false, message: "Error fetching locations" });
   }
 });
@@ -90482,7 +90836,7 @@ router111.post("/location", async (req2, res) => {
     });
     res.json({ success: true, data: location });
   } catch (e) {
-    console.error("[wax] POST /location error:", e);
+    logger.error("[wax] POST /location error:", e);
     res.status(500).json({ success: false, message: "Error updating location" });
   }
 });
@@ -90501,7 +90855,7 @@ router111.put("/ghost-mode", async (req2, res) => {
     });
     res.json({ success: true, data: { ghostMode: location.ghostMode } });
   } catch (e) {
-    console.error("[wax] PUT /ghost-mode error:", e);
+    logger.error("[wax] PUT /ghost-mode error:", e);
     res.status(500).json({ success: false, message: "Error updating ghost mode" });
   }
 });
@@ -90546,7 +90900,7 @@ router111.get("/pins", async (req2, res) => {
       }))
     });
   } catch (e) {
-    console.error("[wax] GET /pins error:", e);
+    logger.error("[wax] GET /pins error:", e);
     res.status(500).json({ success: false, message: "Error fetching pins" });
   }
 });
@@ -90577,10 +90931,10 @@ router111.post("/pins", async (req2, res) => {
     });
     res.json({ success: true, data: pin });
     notifyNearbyUsers(pin, user).catch(
-      (err) => console.error("[wax] proximity alert error:", err)
+      (err) => logger.error("[wax] proximity alert error:", err)
     );
   } catch (e) {
-    console.error("[wax] POST /pins error:", e);
+    logger.error("[wax] POST /pins error:", e);
     res.status(500).json({ success: false, message: "Error creating pin" });
   }
 });
@@ -90606,7 +90960,7 @@ router111.delete("/pins/:id", async (req2, res) => {
     await db.waxPin.delete({ where: { id: req2.params.id } });
     res.json({ success: true });
   } catch (e) {
-    console.error("[wax] DELETE /pins error:", e);
+    logger.error("[wax] DELETE /pins error:", e);
     res.status(500).json({ success: false, message: "Error deleting pin" });
   }
 });
@@ -90634,10 +90988,10 @@ router111.post("/cleanup", async (_req, res) => {
       },
       data: { isExpired: true, content: null, mediaUrls: null }
     });
-    console.log(`[wax/cleanup] Deleted ${deletedPins.count} pins, expired ${expiredMessages.count} messages`);
+    logger.info(`[wax/cleanup] Deleted ${deletedPins.count} pins, expired ${expiredMessages.count} messages`);
     res.json({ success: true, deletedPins: deletedPins.count, expiredMessages: expiredMessages.count });
   } catch (e) {
-    console.error("[wax] POST /cleanup error:", e);
+    logger.error("[wax] POST /cleanup error:", e);
     res.status(500).json({ success: false, message: "Cleanup error" });
   }
 });
@@ -90706,7 +91060,7 @@ router111.get("/route", async (req2, res) => {
       }
     });
   } catch (e) {
-    console.error("[wax] GET /route error:", e);
+    logger.error("[wax] GET /route error:", e);
     res.status(500).json({ success: false, message: "Error computing route" });
   }
 });
@@ -90767,7 +91121,7 @@ router111.get("/geocode", async (req2, res) => {
       data: data.slice(0, 8)
     });
   } catch (e) {
-    console.error("[wax] GET /geocode error:", e);
+    logger.error("[wax] GET /geocode error:", e);
     res.status(500).json({ success: false, message: "Geocoding error" });
   }
 });
@@ -90837,7 +91191,7 @@ async function notifyNearbyUsers(pin, creator) {
     }
   }
   if (sent > 0) {
-    console.log(`[wax] Proximity alerts: ${sent} user(s) notified for pin ${pin.id}`);
+    logger.info(`[wax] Proximity alerts: ${sent} user(s) notified for pin ${pin.id}`);
   }
 }
 var wax_default = router111;
@@ -90888,7 +91242,7 @@ router112.get("/", async (req2, res) => {
     });
     res.json(forms);
   } catch (error) {
-    console.error("\u274C [WebsiteForms] Error fetching forms:", error);
+    logger.error("\u274C [WebsiteForms] Error fetching forms:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9cup\xE9ration des formulaires",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -90930,7 +91284,7 @@ router112.get("/by-website/:websiteId", async (req2, res) => {
     });
     res.json(forms);
   } catch (error) {
-    console.error("\u274C [WebsiteForms] Error fetching forms by website:", error);
+    logger.error("\u274C [WebsiteForms] Error fetching forms by website:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9cup\xE9ration des formulaires",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -91002,7 +91356,7 @@ router112.get("/my-commercial-links", authMiddleware, async (req2, res) => {
       forms: formattedForms
     });
   } catch (error) {
-    console.error("\u274C [WebsiteForms] Error getting commercial links:", error);
+    logger.error("\u274C [WebsiteForms] Error getting commercial links:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9cup\xE9ration des liens commerciaux",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -91044,7 +91398,7 @@ router112.get("/:id", async (req2, res) => {
     }
     res.json(form);
   } catch (error) {
-    console.error("\u274C [WebsiteForms] Error fetching form:", error);
+    logger.error("\u274C [WebsiteForms] Error fetching form:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9cup\xE9ration du formulaire",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -91082,7 +91436,7 @@ router112.post("/", async (req2, res) => {
     });
     res.status(201).json(form);
   } catch (error) {
-    console.error("\u274C [WebsiteForms] Error creating form:", error);
+    logger.error("\u274C [WebsiteForms] Error creating form:", error);
     res.status(500).json({
       error: "Erreur lors de la cr\xE9ation du formulaire",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -91134,7 +91488,7 @@ router112.put("/:id", async (req2, res) => {
     });
     res.json(form);
   } catch (error) {
-    console.error("\u274C [WebsiteForms] Error updating form:", error);
+    logger.error("\u274C [WebsiteForms] Error updating form:", error);
     res.status(500).json({
       error: "Erreur lors de la mise \xE0 jour du formulaire",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -91156,7 +91510,7 @@ router112.delete("/:id", async (req2, res) => {
     });
     res.json({ success: true, message: "Formulaire supprim\xE9" });
   } catch (error) {
-    console.error("\u274C [WebsiteForms] Error deleting form:", error);
+    logger.error("\u274C [WebsiteForms] Error deleting form:", error);
     res.status(500).json({
       error: "Erreur lors de la suppression du formulaire",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -91192,7 +91546,7 @@ router112.post("/:id/steps", async (req2, res) => {
     });
     res.status(201).json(step);
   } catch (error) {
-    console.error("\u274C [WebsiteForms] Error creating step:", error);
+    logger.error("\u274C [WebsiteForms] Error creating step:", error);
     res.status(500).json({
       error: "Erreur lors de la cr\xE9ation de l'\xE9tape",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -91219,7 +91573,7 @@ router112.put("/steps/:stepId", async (req2, res) => {
     });
     res.json(step);
   } catch (error) {
-    console.error("\u274C [WebsiteForms] Error updating step:", error);
+    logger.error("\u274C [WebsiteForms] Error updating step:", error);
     res.status(500).json({
       error: "Erreur lors de la mise \xE0 jour de l'\xE9tape",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -91234,7 +91588,7 @@ router112.delete("/steps/:stepId", async (req2, res) => {
     });
     res.json({ success: true, message: "\xC9tape supprim\xE9e" });
   } catch (error) {
-    console.error("\u274C [WebsiteForms] Error deleting step:", error);
+    logger.error("\u274C [WebsiteForms] Error deleting step:", error);
     res.status(500).json({
       error: "Erreur lors de la suppression de l'\xE9tape",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -91254,7 +91608,7 @@ router112.put("/:id/steps/reorder", async (req2, res) => {
     await Promise.all(updates);
     res.json({ success: true });
   } catch (error) {
-    console.error("\u274C [WebsiteForms] Error reordering steps:", error);
+    logger.error("\u274C [WebsiteForms] Error reordering steps:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9organisation",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -91310,7 +91664,7 @@ router112.post("/steps/:stepId/fields", async (req2, res) => {
     });
     res.status(201).json(field);
   } catch (error) {
-    console.error("\u274C [WebsiteForms] Error creating field:", error);
+    logger.error("\u274C [WebsiteForms] Error creating field:", error);
     res.status(500).json({
       error: "Erreur lors de la cr\xE9ation du champ",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -91359,7 +91713,7 @@ router112.put("/fields/:fieldId", async (req2, res) => {
     });
     res.json(field);
   } catch (error) {
-    console.error("\u274C [WebsiteForms] Error updating field:", error);
+    logger.error("\u274C [WebsiteForms] Error updating field:", error);
     res.status(500).json({
       error: "Erreur lors de la mise \xE0 jour du champ",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -91374,7 +91728,7 @@ router112.delete("/fields/:fieldId", async (req2, res) => {
     });
     res.json({ success: true, message: "Champ supprim\xE9" });
   } catch (error) {
-    console.error("\u274C [WebsiteForms] Error deleting field:", error);
+    logger.error("\u274C [WebsiteForms] Error deleting field:", error);
     res.status(500).json({
       error: "Erreur lors de la suppression du champ",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -91394,7 +91748,7 @@ router112.put("/steps/:stepId/fields/reorder", async (req2, res) => {
     await Promise.all(updates);
     res.json({ success: true });
   } catch (error) {
-    console.error("\u274C [WebsiteForms] Error reordering fields:", error);
+    logger.error("\u274C [WebsiteForms] Error reordering fields:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9organisation",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -91425,7 +91779,7 @@ router112.post("/:id/link-website", async (req2, res) => {
     });
     res.status(201).json(link);
   } catch (error) {
-    console.error("\u274C [WebsiteForms] Error linking:", error);
+    logger.error("\u274C [WebsiteForms] Error linking:", error);
     res.status(500).json({
       error: "Erreur lors de la liaison",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -91443,7 +91797,7 @@ router112.delete("/:id/unlink-website/:websiteId", async (req2, res) => {
     });
     res.json({ success: true, message: "Liaison supprim\xE9e" });
   } catch (error) {
-    console.error("\u274C [WebsiteForms] Error unlinking:", error);
+    logger.error("\u274C [WebsiteForms] Error unlinking:", error);
     res.status(500).json({
       error: "Erreur lors de la suppression de la liaison",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -91480,7 +91834,7 @@ router112.get("/:id/stats", async (req2, res) => {
       recentSubmissions: recent
     });
   } catch (error) {
-    console.error("\u274C [WebsiteForms] Error fetching stats:", error);
+    logger.error("\u274C [WebsiteForms] Error fetching stats:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9cup\xE9ration des statistiques",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -91521,7 +91875,7 @@ router112.get("/:id/submissions", async (req2, res) => {
     }));
     res.json(mapped);
   } catch (error) {
-    console.error("\u274C [WebsiteForms] Error fetching submissions:", error);
+    logger.error("\u274C [WebsiteForms] Error fetching submissions:", error);
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des soumissions" });
   }
 });
@@ -91541,7 +91895,7 @@ router112.get("/:id/questions", async (req2, res) => {
     });
     res.json(questions);
   } catch (error) {
-    console.error("\u274C [WebsiteForms] Error fetching questions:", error);
+    logger.error("\u274C [WebsiteForms] Error fetching questions:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9cup\xE9ration des questions",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -91597,7 +91951,7 @@ router112.post("/:id/questions", async (req2, res) => {
     });
     res.status(201).json(question);
   } catch (error) {
-    console.error("\u274C [WebsiteForms] Error creating question:", error);
+    logger.error("\u274C [WebsiteForms] Error creating question:", error);
     res.status(500).json({
       error: "Erreur lors de la cr\xE9ation de la question",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -91646,7 +92000,7 @@ router112.put("/questions/:questionId", async (req2, res) => {
     });
     res.json(question);
   } catch (error) {
-    console.error("\u274C [WebsiteForms] Error updating question:", error);
+    logger.error("\u274C [WebsiteForms] Error updating question:", error);
     res.status(500).json({
       error: "Erreur lors de la mise \xE0 jour de la question",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -91669,7 +92023,7 @@ router112.delete("/questions/:questionId", async (req2, res) => {
     });
     res.json({ success: true, message: "Question supprim\xE9e" });
   } catch (error) {
-    console.error("\u274C [WebsiteForms] Error deleting question:", error);
+    logger.error("\u274C [WebsiteForms] Error deleting question:", error);
     res.status(500).json({
       error: "Erreur lors de la suppression de la question",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -91731,7 +92085,7 @@ async function sendSmsInternal(organizationId, to, text) {
       }
     }
     if (!apiKey) {
-      console.warn("\u26A0\uFE0F [SMS] Pas de cl\xE9 API Telnyx configur\xE9e");
+      logger.warn("\u26A0\uFE0F [SMS] Pas de cl\xE9 API Telnyx configur\xE9e");
       return false;
     }
     apiKey = apiKey.replace(/^Bearer\s+/i, "").trim();
@@ -91740,7 +92094,7 @@ async function sendSmsInternal(organizationId, to, text) {
     }).catch(() => null);
     const fromNumber = phoneNumber?.phoneNumber || process.env.TELNYX_FROM_NUMBER;
     if (!fromNumber) {
-      console.warn("\u26A0\uFE0F [SMS] Pas de num\xE9ro Telnyx configur\xE9 pour l'envoi");
+      logger.warn("\u26A0\uFE0F [SMS] Pas de num\xE9ro Telnyx configur\xE9 pour l'envoi");
       return false;
     }
     let toNorm = to.replace(/[\s\-\.]/g, "");
@@ -91756,7 +92110,7 @@ async function sendSmsInternal(organizationId, to, text) {
     });
     return true;
   } catch (error) {
-    console.error("\u274C [SMS] \xC9chec envoi:", error instanceof Error ? error.message : error);
+    logger.error("\u274C [SMS] \xC9chec envoi:", error instanceof Error ? error.message : error);
     return false;
   }
 }
@@ -91862,7 +92216,7 @@ router113.get("/:slug", async (req2, res) => {
       }))
     });
   } catch (error) {
-    console.error("\u274C [PublicForms] Error fetching form:", error);
+    logger.error("\u274C [PublicForms] Error fetching form:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9cup\xE9ration du formulaire",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -91923,7 +92277,7 @@ router113.get("/:slug/questions", async (req2, res) => {
       }))
     });
   } catch (error) {
-    console.error("\u274C [PublicForms] Error fetching form questions:", error);
+    logger.error("\u274C [PublicForms] Error fetching form questions:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9cup\xE9ration du formulaire",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -91996,7 +92350,7 @@ router113.get("/by-website/:websiteSlug", async (req2, res) => {
       }))
     });
   } catch (error) {
-    console.error("\u274C [PublicForms] Error fetching form by website:", error);
+    logger.error("\u274C [PublicForms] Error fetching form by website:", error);
     res.status(500).json({
       error: "Erreur lors de la r\xE9cup\xE9ration du formulaire",
       message: error instanceof Error ? error.message : "Erreur inconnue"
@@ -92120,7 +92474,7 @@ router113.post("/:slug/submit", async (req2, res) => {
           if (referringUser) {
             assignedToId = referringUser.id;
           } else {
-            console.warn(`\u26A0\uFE0F [PublicForms] Commercial non trouv\xE9 pour le slug: ${referredBy}`);
+            logger.warn(`\u26A0\uFE0F [PublicForms] Commercial non trouv\xE9 pour le slug: ${referredBy}`);
           }
         }
         await db.lead.create({
@@ -92227,11 +92581,11 @@ router113.post("/:slug/submit", async (req2, res) => {
               } else {
               }
             } else {
-              console.warn(`\u26A0\uFE0F [PublicForms] Impossible de cr\xE9er l'invitation: r\xF4le "${roleName}" ou admin non trouv\xE9`);
+              logger.warn(`\u26A0\uFE0F [PublicForms] Impossible de cr\xE9er l'invitation: r\xF4le "${roleName}" ou admin non trouv\xE9`);
             }
           }
         } catch (inviteError) {
-          console.error("\u26A0\uFE0F [PublicForms] Auto-invitation failed (non-blocking):", inviteError);
+          logger.error("\u26A0\uFE0F [PublicForms] Auto-invitation failed (non-blocking):", inviteError);
         }
       }
     }
@@ -92370,7 +92724,7 @@ router113.post("/:slug/submit", async (req2, res) => {
         });
       }
     } catch (pdfError) {
-      console.error("\u26A0\uFE0F [PublicForms] PDF generation failed (non-blocking):", pdfError);
+      logger.error("\u26A0\uFE0F [PublicForms] PDF generation failed (non-blocking):", pdfError);
     }
     if (form.settings && typeof form.settings === "object" && form.settings.smsConfirmation && normalizedContact.phone) {
       try {
@@ -92388,7 +92742,7 @@ router113.post("/:slug/submit", async (req2, res) => {
         }
         await sendSmsInternal(form.organizationId, normalizedContact.phone, smsText);
       } catch (smsError) {
-        console.error("\u26A0\uFE0F [PublicForms] SMS confirmation failed (non-blocking):", smsError);
+        logger.error("\u26A0\uFE0F [PublicForms] SMS confirmation failed (non-blocking):", smsError);
       }
     }
     notify.formSubmission(
@@ -92413,7 +92767,7 @@ router113.post("/:slug/submit", async (req2, res) => {
       pdfUrl
     });
   } catch (error) {
-    console.error("\u274C [PublicForms] Error submitting form:", error);
+    logger.error("\u274C [PublicForms] Error submitting form:", error);
     try {
       const { slug } = req2.params;
       const form = await db.website_forms.findFirst({ where: { slug } });
@@ -92429,7 +92783,7 @@ router113.post("/:slug/submit", async (req2, res) => {
         });
       }
     } catch (e) {
-      console.error("\u274C [PublicForms] Failed to log error submission:", e);
+      logger.error("\u274C [PublicForms] Failed to log error submission:", e);
     }
     res.status(500).json({
       error: "Erreur lors de la soumission du formulaire",
@@ -92461,7 +92815,7 @@ router113.post("/:slug/partial", async (req2, res) => {
     });
     res.json({ success: true, message: "Progression sauvegard\xE9e" });
   } catch (error) {
-    console.error("\u274C [PublicForms] Error saving partial:", error);
+    logger.error("\u274C [PublicForms] Error saving partial:", error);
     res.status(500).json({ error: "Erreur" });
   }
 });
@@ -92488,7 +92842,7 @@ router113.get("/:slug/qrcode", async (req2, res) => {
     res.setHeader("Content-Disposition", `inline; filename="qr-${slug}.png"`);
     return res.send(buffer);
   } catch (error) {
-    console.error("\u274C [PublicForms] QR code error:", error);
+    logger.error("\u274C [PublicForms] QR code error:", error);
     res.status(500).json({ error: "Erreur g\xE9n\xE9ration QR code" });
   }
 });
@@ -93417,7 +93771,7 @@ router114.get("/stats", authenticateToken, async (req2, res) => {
       data: { totalEmises, totalRecues, totalPaid, totalPending, totalOverdue, totalAmount, totalDrafts }
     });
   } catch (error) {
-    console.error("[INVOICES] Stats error:", error);
+    logger.error("[INVOICES] Stats error:", error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
@@ -93550,7 +93904,7 @@ router114.get("/", authenticateToken, async (req2, res) => {
     results.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return res.json({ success: true, data: results });
   } catch (error) {
-    console.error("[INVOICES] List error:", error);
+    logger.error("[INVOICES] List error:", error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
@@ -93614,7 +93968,7 @@ router114.post("/clients/save", authenticateToken, async (req2, res) => {
     }
     return res.json({ success: true, data: client });
   } catch (error) {
-    console.error("[INVOICES] Client save error:", error);
+    logger.error("[INVOICES] Client save error:", error);
     return res.status(500).json({ success: false, message: "Erreur interne" });
   }
 });
@@ -93639,7 +93993,7 @@ router114.get("/clients/search", authenticateToken, async (req2, res) => {
     });
     return res.json({ success: true, data: clients });
   } catch (error) {
-    console.error("[INVOICES] Client search error:", error);
+    logger.error("[INVOICES] Client search error:", error);
     return res.status(500).json({ success: false, message: "Erreur interne" });
   }
 });
@@ -93686,7 +94040,7 @@ router114.get("/next-number", authenticateToken, async (req2, res) => {
     const result = await getNextInvoiceNumber(organizationId);
     return res.json({ success: true, data: result });
   } catch (error) {
-    console.error("[INVOICES] Next number error:", error);
+    logger.error("[INVOICES] Next number error:", error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
@@ -93809,11 +94163,11 @@ router114.post("/", authenticateToken, async (req2, res) => {
         }
       }
     } catch (clientErr) {
-      console.warn("[INVOICES] Auto-save client warning:", clientErr);
+      logger.warn("[INVOICES] Auto-save client warning:", clientErr);
     }
     return res.status(201).json({ success: true, data: invoice });
   } catch (error) {
-    console.error("[INVOICES] Create error:", error);
+    logger.error("[INVOICES] Create error:", error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
@@ -93827,7 +94181,7 @@ router114.get("/:id", authenticateToken, async (req2, res) => {
     if (!invoice) return res.status(404).json({ success: false, message: "Facture introuvable" });
     return res.json({ success: true, data: invoice });
   } catch (error) {
-    console.error("[INVOICES] Get error:", error);
+    logger.error("[INVOICES] Get error:", error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
@@ -93896,7 +94250,7 @@ router114.put("/:id", authenticateToken, async (req2, res) => {
     });
     return res.json({ success: true, data: invoice });
   } catch (error) {
-    console.error("[INVOICES] Update error:", error);
+    logger.error("[INVOICES] Update error:", error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
@@ -93914,7 +94268,7 @@ router114.delete("/:id", authenticateToken, async (req2, res) => {
     await db.standaloneInvoice.delete({ where: { id: req2.params.id } });
     return res.json({ success: true, message: "Facture supprim\xE9e" });
   } catch (error) {
-    console.error("[INVOICES] Delete error:", error);
+    logger.error("[INVOICES] Delete error:", error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
@@ -93944,7 +94298,7 @@ router114.post("/:id/mark-paid", authenticateToken, async (req2, res) => {
     }
     return res.status(404).json({ success: false, message: "Facture introuvable" });
   } catch (error) {
-    console.error("[INVOICES] Mark-paid error:", error);
+    logger.error("[INVOICES] Mark-paid error:", error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
@@ -93967,7 +94321,7 @@ router114.post("/:id/mark-sent", authenticateToken, async (req2, res) => {
     }
     return res.status(404).json({ success: false, message: "Facture introuvable" });
   } catch (error) {
-    console.error("[INVOICES] Mark-sent error:", error);
+    logger.error("[INVOICES] Mark-sent error:", error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
@@ -94008,7 +94362,7 @@ router114.post("/:id/mark-peppol-sent", authenticateToken, async (req2, res) => 
     }
     return res.status(404).json({ success: false, message: "Facture introuvable" });
   } catch (error) {
-    console.error("[INVOICES] Mark-peppol-sent error:", error);
+    logger.error("[INVOICES] Mark-peppol-sent error:", error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
@@ -94269,7 +94623,7 @@ router114.get("/:id/pdf", authenticateToken, async (req2, res) => {
     res.setHeader("Content-Disposition", `inline; filename="${invoice.invoiceNumber.replace(/\s+/g, "_")}.pdf"`);
     return res.send(pdfBuffer);
   } catch (error) {
-    console.error("[INVOICES] PDF error:", error);
+    logger.error("[INVOICES] PDF error:", error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
@@ -94318,7 +94672,7 @@ router114.post("/:id/send-email", authenticateToken, async (req2, res) => {
           attachments: [{ filename: pdfFilename, content: pdfBuffer, contentType: "application/pdf" }]
         });
       } catch (err) {
-        console.error(`[INVOICES] Email send failed to ${recipient}:`, err);
+        logger.error(`[INVOICES] Email send failed to ${recipient}:`, err);
         errors.push(recipient);
       }
     }
@@ -94333,7 +94687,7 @@ router114.post("/:id/send-email", authenticateToken, async (req2, res) => {
     }
     return res.json({ success: true, message: `Facture envoy\xE9e \xE0 ${to.length} destinataire(s)` });
   } catch (error) {
-    console.error("[INVOICES] Send-email error:", error);
+    logger.error("[INVOICES] Send-email error:", error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
@@ -94382,7 +94736,7 @@ async function notifyIncomingInvoices(organizationId, invoices, _triggeredByUser
         actionUrl: "/facture?tab=incoming",
         tags: ["peppol", "incoming"],
         metadata: { count, invoices: invoices.map((i) => i.invoiceNumber) }
-      }).catch((err) => console.error("[Peppol-Notify] Erreur notification in-app:", err.message));
+      }).catch((err) => logger.error("[Peppol-Notify] Erreur notification in-app:", err.message));
     }
     for (const admin of orgAdmins) {
       await sendPushToUser(admin.userId, {
@@ -94392,12 +94746,12 @@ async function notifyIncomingInvoices(organizationId, invoices, _triggeredByUser
         tag: `peppol-incoming-${Date.now()}`,
         url: "/facture?tab=incoming",
         type: "peppol_incoming"
-      }).catch((err) => console.error("[Peppol-Notify] Erreur push:", err.message));
+      }).catch((err) => logger.error("[Peppol-Notify] Erreur push:", err.message));
     }
     const postal = getPostalService();
     const htmlBody = `
       <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <div style="background: linear-gradient(135deg, #6C5CE7, #a855f7); padding: 20px; border-radius: 12px 12px 0 0; color: white;">
+        <div style="background: linear-gradient(135deg, ${SF.primary}, #a855f7); padding: 20px; border-radius: 12px 12px 0 0; color: white;">
           <h2 style="margin: 0;">\u{1F9FE} ${title}</h2>
           <p style="margin: 5px 0 0; opacity: 0.9;">${orgName} \u2014 Peppol e-Invoicing</p>
         </div>
@@ -94421,7 +94775,7 @@ async function notifyIncomingInvoices(organizationId, invoices, _triggeredByUser
             </tbody>
           </table>
           <p style="margin-top: 16px; color: #666; font-size: 13px;">
-            Connectez-vous \xE0 <a href="https://app.2thier.be/facture?tab=incoming" style="color: #6C5CE7; text-decoration: none;">Zhiive</a> pour examiner et accepter ces factures.
+            Connectez-vous \xE0 <a href="https://app.2thier.be/facture?tab=incoming" style="color: ${SF.primary}; text-decoration: none;">Zhiive</a> pour examiner et accepter ces factures.
           </p>
         </div>
       </div>
@@ -94435,7 +94789,7 @@ async function notifyIncomingInvoices(organizationId, invoices, _triggeredByUser
           subject: `${title} \u2014 ${orgName}`,
           body: htmlBody,
           isHtml: true
-        }).catch((err) => console.error(`[Peppol-Notify] Erreur email zhiive ${zhiiveEmail}:`, err.message));
+        }).catch((err) => logger.error(`[Peppol-Notify] Erreur email zhiive ${zhiiveEmail}:`, err.message));
       }
     }
     if (org?.email) {
@@ -94445,10 +94799,10 @@ async function notifyIncomingInvoices(organizationId, invoices, _triggeredByUser
         subject: `${title} \u2014 ${orgName}`,
         body: htmlBody,
         isHtml: true
-      }).catch((err) => console.error(`[Peppol-Notify] Erreur email colony ${org.email}:`, err.message));
+      }).catch((err) => logger.error(`[Peppol-Notify] Erreur email colony ${org.email}:`, err.message));
     }
   } catch (err) {
-    console.error("[Peppol-Notify] \u274C Erreur envoi notifications:", err.message);
+    logger.error("[Peppol-Notify] \u274C Erreur envoi notifications:", err.message);
   }
 }
 router115.get("/config", authenticateToken, async (req2, res) => {
@@ -94481,7 +94835,7 @@ router115.get("/config", authenticateToken, async (req2, res) => {
     }
     res.json({ success: true, data: config });
   } catch (error) {
-    console.error("[Peppol] Erreur GET /config:", error);
+    logger.error("[Peppol] Erreur GET /config:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -94529,7 +94883,7 @@ router115.put("/config", authenticateToken, isAdmin, async (req2, res) => {
     });
     res.json({ success: true, data: config });
   } catch (error) {
-    console.error("[Peppol] Erreur PUT /config:", error);
+    logger.error("[Peppol] Erreur PUT /config:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -94609,7 +94963,7 @@ router115.post("/register", authenticateToken, isAdmin, async (req2, res) => {
       data: { registrationStatus: finalStatus, odooCompanyId }
     });
   } catch (error) {
-    console.error("[Peppol] Erreur POST /register:", error);
+    logger.error("[Peppol] Erreur POST /register:", error);
     res.status(500).json({ success: false, message: `Erreur d'enregistrement Peppol: ${error.message}` });
   }
 });
@@ -94682,7 +95036,7 @@ router115.get("/status", authenticateToken, async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("[Peppol] Erreur GET /status:", error);
+    logger.error("[Peppol] Erreur GET /status:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -94704,7 +95058,7 @@ router115.post("/send-verification-code", authenticateToken, isAdmin, async (req
     });
     res.json({ success: true, message: "SMS de v\xE9rification envoy\xE9" });
   } catch (error) {
-    console.error("[Peppol] Erreur POST /send-verification-code:", error);
+    logger.error("[Peppol] Erreur POST /send-verification-code:", error);
     res.status(500).json({ success: false, message: `Erreur d'envoi SMS: ${error.message}` });
   }
 });
@@ -94744,7 +95098,7 @@ router115.post("/verify-code", authenticateToken, isAdmin, async (req2, res) => 
       message: finalStatus === "PENDING" ? "Code v\xE9rifi\xE9 ! Activation en cours sur le r\xE9seau Peppol..." : finalStatus === "ACTIVE" ? "Peppol activ\xE9 avec succ\xE8s !" : "Code v\xE9rifi\xE9"
     });
   } catch (error) {
-    console.error("[Peppol] Erreur POST /verify-code:", error);
+    logger.error("[Peppol] Erreur POST /verify-code:", error);
     res.status(500).json({ success: false, message: `Erreur de v\xE9rification: ${error.message}` });
   }
 });
@@ -94914,12 +95268,12 @@ router115.post("/send/:invoiceId", authenticateToken, isAdmin, async (req2, res)
       const clientName = invoiceData.clientName || "destinataire";
       const emailHtml = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #1877f2;">Facture envoy\xE9e via Peppol</h2>
+          <h2 style="color: ${SF.primary};">Facture envoy\xE9e via Peppol</h2>
           <p>La facture <strong>${invoiceNum}</strong> a \xE9t\xE9 transmise au r\xE9seau Peppol.</p>
           <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
             <tr><td style="padding: 8px; color: #666;">Destinataire</td><td style="padding: 8px; font-weight: 600;">${clientName}</td></tr>
             <tr><td style="padding: 8px; color: #666;">Montant</td><td style="padding: 8px; font-weight: 600;">&euro;${invoiceData.amount.toFixed(2)}</td></tr>
-            <tr><td style="padding: 8px; color: #666;">Statut</td><td style="padding: 8px; font-weight: 600; color: #1877f2;">En cours de livraison Peppol</td></tr>
+            <tr><td style="padding: 8px; color: #666;">Statut</td><td style="padding: 8px; font-weight: 600; color: ${SF.primary};">En cours de livraison Peppol</td></tr>
           </table>
           <p style="font-size: 13px; color: #888;">Une confirmation sera envoy\xE9e d\xE8s que la facture sera d\xE9livr\xE9e au destinataire.</p>
           <p style="font-size: 12px; color: #aaa;">\u2014 ${orgName} via Zhiive</p>
@@ -94943,7 +95297,7 @@ router115.post("/send/:invoiceId", authenticateToken, isAdmin, async (req2, res)
             organizationId
           });
         } catch (err) {
-          console.warn(`[Peppol] Erreur copie email vers ${recipient}:`, err.message);
+          logger.warn(`[Peppol] Erreur copie email vers ${recipient}:`, err.message);
         }
       }
       const clientEmail = invoiceData.clientEmail;
@@ -94977,11 +95331,11 @@ router115.post("/send/:invoiceId", authenticateToken, isAdmin, async (req2, res)
             });
           }
         } catch (clientErr) {
-          console.warn(`[Peppol] Erreur envoi facture au client ${clientEmail}:`, clientErr.message);
+          logger.warn(`[Peppol] Erreur envoi facture au client ${clientEmail}:`, clientErr.message);
         }
       }
     } catch (emailErr) {
-      console.warn("[Peppol] Erreur envoi copie email:", emailErr.message);
+      logger.warn("[Peppol] Erreur envoi copie email:", emailErr.message);
     }
     res.json({
       success: true,
@@ -94992,7 +95346,7 @@ router115.post("/send/:invoiceId", authenticateToken, isAdmin, async (req2, res)
       }
     });
   } catch (error) {
-    console.error("[Peppol] Erreur POST /send/:invoiceId:", error);
+    logger.error("[Peppol] Erreur POST /send/:invoiceId:", error);
     if (invoiceId) {
       if (invoiceSource === "chantier") {
         await db.chantierInvoice.update({
@@ -95032,7 +95386,7 @@ router115.get("/send/:invoiceId/status", authenticateToken, async (req2, res) =>
     }
     res.json({ success: true, data: invoice });
   } catch (error) {
-    console.error("[Peppol] Erreur GET /send/:id/status:", error);
+    logger.error("[Peppol] Erreur GET /send/:id/status:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -95104,7 +95458,7 @@ router115.post("/retry/:invoiceId", authenticateToken, isAdmin, async (req2, res
     }
     const wizardSuccess = await bridge.sendViaWizard(invoice.peppolOdooInvoiceId, config.odooCompanyId);
     if (!wizardSuccess) {
-      console.warn(`[Peppol] Retry wizard partiel pour invoice ${invoiceId}`);
+      logger.warn(`[Peppol] Retry wizard partiel pour invoice ${invoiceId}`);
     }
     const retryData = {
       peppolStatus: "PROCESSING",
@@ -95125,7 +95479,7 @@ router115.post("/retry/:invoiceId", authenticateToken, isAdmin, async (req2, res
       }
     });
   } catch (error) {
-    console.error("[Peppol] Erreur POST /retry/:invoiceId:", error);
+    logger.error("[Peppol] Erreur POST /retry/:invoiceId:", error);
     res.status(500).json({ success: false, message: `Erreur de retry: ${error.message}` });
   }
 });
@@ -95192,7 +95546,7 @@ router115.post("/fetch-incoming", authenticateToken, isAdmin, async (req2, res) 
       message: imported > 0 ? `${imported} nouvelle(s) facture(s) import\xE9e(s)` : incomingBills.length > 0 ? "Aucune nouvelle facture (d\xE9j\xE0 import\xE9es)" : "Aucune facture entrante trouv\xE9e"
     });
   } catch (error) {
-    console.error("[Peppol] Erreur POST /fetch-incoming:", error);
+    logger.error("[Peppol] Erreur POST /fetch-incoming:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -95212,7 +95566,7 @@ router115.get("/incoming", authenticateToken, async (req2, res) => {
     });
     res.json({ success: true, data: invoices });
   } catch (error) {
-    console.error("[Peppol] Erreur GET /incoming:", error);
+    logger.error("[Peppol] Erreur GET /incoming:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -95249,7 +95603,7 @@ router115.put("/incoming/:id", authenticateToken, isAdmin, async (req2, res) => 
     });
     res.json({ success: true, data: updated });
   } catch (error) {
-    console.error("[Peppol] Erreur PUT /incoming/:id:", error);
+    logger.error("[Peppol] Erreur PUT /incoming/:id:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -95294,7 +95648,7 @@ router115.post("/incoming/:id/accept", authenticateToken, isAdmin, async (req2, 
     }
     res.json({ success: true, data: { incoming: updated, expense } });
   } catch (error) {
-    console.error("[Peppol] Erreur POST /incoming/:id/accept:", error);
+    logger.error("[Peppol] Erreur POST /incoming/:id/accept:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -95312,7 +95666,7 @@ router115.post("/verify-endpoint", authenticateToken, async (req2, res) => {
     const isValid = await bridge.verifyPeppolEndpoint(validation.data.eas, validation.data.endpoint);
     res.json({ success: true, data: { valid: isValid } });
   } catch (error) {
-    console.error("[Peppol] Erreur POST /verify-endpoint:", error);
+    logger.error("[Peppol] Erreur POST /verify-endpoint:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -95322,7 +95676,7 @@ router115.get("/health", authenticateToken, async (_req, res) => {
     const health = await bridge.healthCheck();
     res.json({ success: true, data: health });
   } catch (error) {
-    console.error("[Peppol] Erreur GET /health:", error);
+    logger.error("[Peppol] Erreur GET /health:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
@@ -95354,12 +95708,12 @@ router115.post("/vat-lookup", authenticateToken, async (req2, res) => {
           }
         });
       } catch (e) {
-        console.warn("[Peppol] Impossible de sauvegarder previousAccessPoint:", e);
+        logger.warn("[Peppol] Impossible de sauvegarder previousAccessPoint:", e);
       }
     }
     res.json({ success: true, data: result });
   } catch (error) {
-    console.error("[Peppol] Erreur POST /vat-lookup:", error);
+    logger.error("[Peppol] Erreur POST /vat-lookup:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la recherche" });
   }
 });
@@ -95372,7 +95726,7 @@ router115.post("/peppol-check", authenticateToken, async (req2, res) => {
     const peppol = await checkPeppolStatus(validation.data.vatNumber);
     res.json({ success: true, data: peppol });
   } catch (error) {
-    console.error("[Peppol] Erreur POST /peppol-check:", error);
+    logger.error("[Peppol] Erreur POST /peppol-check:", error);
     res.status(500).json({ success: false, message: "Erreur lors de la v\xE9rification Peppol" });
   }
 });
@@ -95483,7 +95837,7 @@ router115.post("/auto-register", authenticateToken, isAdmin, async (req2, res) =
       }
     });
   } catch (error) {
-    console.error("[Peppol] Erreur POST /auto-register:", error);
+    logger.error("[Peppol] Erreur POST /auto-register:", error);
     res.status(500).json({ success: false, message: `Erreur d'enregistrement: ${error.message}` });
   }
 });
@@ -95516,7 +95870,7 @@ router115.post("/deregister", authenticateToken, isAdmin, async (req2, res) => {
       const bridge = getPeppolBridge();
       const result = await bridge.deregisterPeppol(config.odooCompanyId);
       if (!result.success) {
-        console.warn(`[Peppol] D\xE9sinscription Odoo partielle pour org ${organizationId}`);
+        logger.warn(`[Peppol] D\xE9sinscription Odoo partielle pour org ${organizationId}`);
       }
     }
     await db.peppolConfig.update({
@@ -95529,14 +95883,14 @@ router115.post("/deregister", authenticateToken, isAdmin, async (req2, res) => {
       }
     });
     const userId = getUserId2(req2);
-    console.log(`[Peppol] Organisation ${organizationId} d\xE9sinscrite de Peppol par utilisateur ${userId}`);
+    logger.info(`[Peppol] Organisation ${organizationId} d\xE9sinscrite de Peppol par utilisateur ${userId}`);
     res.json({
       success: true,
       data: { registrationStatus: "DEREGISTERED" },
       message: "D\xE9sinscription Peppol effectu\xE9e. Vous ne recevrez plus de factures via Peppol."
     });
   } catch (error) {
-    console.error("[Peppol] Erreur POST /deregister:", error);
+    logger.error("[Peppol] Erreur POST /deregister:", error);
     res.status(500).json({ success: false, message: `Erreur de d\xE9sinscription: ${error.message}` });
   }
 });
@@ -95594,7 +95948,7 @@ router115.post("/complete-migration", authenticateToken, isAdmin, async (req2, r
       }
     });
   } catch (error) {
-    console.error("[Peppol] Erreur POST /complete-migration:", error);
+    logger.error("[Peppol] Erreur POST /complete-migration:", error);
     res.status(500).json({ success: false, message: `Erreur de migration: ${error.message}` });
   }
 });
@@ -95670,7 +96024,7 @@ router116.get("/stats", authenticateToken, async (req2, res) => {
       }
     });
   } catch (error) {
-    console.error("[EXPENSES] Stats error:", error);
+    logger.error("[EXPENSES] Stats error:", error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
@@ -95704,7 +96058,7 @@ router116.get("/monthly", authenticateToken, async (req2, res) => {
     }
     return res.json({ success: true, data: Object.values(monthlyMap) });
   } catch (error) {
-    console.error("[EXPENSES] Monthly stats error:", error);
+    logger.error("[EXPENSES] Monthly stats error:", error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
@@ -95752,7 +96106,7 @@ router116.get("/export/csv", authenticateToken, async (req2, res) => {
     res.setHeader("Content-Disposition", `attachment; filename="depenses-${(/* @__PURE__ */ new Date()).toISOString().split("T")[0]}.csv"`);
     return res.send(csv);
   } catch (error) {
-    console.error("[EXPENSES] CSV export error:", error);
+    logger.error("[EXPENSES] CSV export error:", error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
@@ -95777,7 +96131,7 @@ router116.get("/overdue", authenticateToken, async (req2, res) => {
       totalOverdue: overdue.reduce((s, e) => s + (e.totalAmount || 0), 0)
     });
   } catch (error) {
-    console.error("[EXPENSES] Overdue error:", error);
+    logger.error("[EXPENSES] Overdue error:", error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
@@ -95803,7 +96157,7 @@ router116.get("/", authenticateToken, async (req2, res) => {
     });
     return res.json({ success: true, data: expenses });
   } catch (error) {
-    console.error("[EXPENSES] List error:", error);
+    logger.error("[EXPENSES] List error:", error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
@@ -95852,7 +96206,7 @@ R\xC8GLES:
 - Retourne UNIQUEMENT le JSON, rien d'autre`;
     const result = await gemini.callVisionAPIPublic(imageBase64, mimeType, prompt);
     if (!result.success || !result.content) {
-      console.error("[EXPENSES] \u274C Scan Vision \xE9chou\xE9:", result.error, "| Mod\xE8le:", result.modelUsed);
+      logger.error("[EXPENSES] \u274C Scan Vision \xE9chou\xE9:", result.error, "| Mod\xE8le:", result.modelUsed);
       return res.json({
         success: false,
         message: `Impossible d'analyser l'image (${result.error || "erreur inconnue"}). Veuillez saisir les donn\xE9es manuellement.`,
@@ -95875,7 +96229,7 @@ R\xC8GLES:
       }
       extracted = JSON.parse(jsonStr);
     } catch {
-      console.warn("[EXPENSES] Gemini returned non-JSON:", result.content?.substring(0, 500));
+      logger.warn("[EXPENSES] Gemini returned non-JSON:", result.content?.substring(0, 500));
       return res.json({
         success: false,
         message: "L'IA n'a pas pu structurer les donn\xE9es. Veuillez saisir manuellement.",
@@ -95902,7 +96256,7 @@ R\xC8GLES:
       }
     });
   } catch (error) {
-    console.error("[EXPENSES] Scan error:", error);
+    logger.error("[EXPENSES] Scan error:", error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
@@ -95968,7 +96322,7 @@ router116.post("/", authenticateToken, async (req2, res) => {
     });
     return res.json({ success: true, data: expense });
   } catch (error) {
-    console.error("[EXPENSES] Create error:", error);
+    logger.error("[EXPENSES] Create error:", error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
@@ -95989,7 +96343,7 @@ router116.put("/:id", authenticateToken, async (req2, res) => {
     });
     return res.json({ success: true, data: updated });
   } catch (error) {
-    console.error("[EXPENSES] Update error:", error);
+    logger.error("[EXPENSES] Update error:", error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
@@ -96004,7 +96358,7 @@ router116.delete("/:id", authenticateToken, async (req2, res) => {
     await db.expense.delete({ where: { id: req2.params.id } });
     return res.json({ success: true, message: "D\xE9pense supprim\xE9e" });
   } catch (error) {
-    console.error("[EXPENSES] Delete error:", error);
+    logger.error("[EXPENSES] Delete error:", error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
@@ -96023,7 +96377,7 @@ router116.post("/:id/mark-paid", authenticateToken, async (req2, res) => {
     });
     return res.json({ success: true, data: updated });
   } catch (error) {
-    console.error("[EXPENSES] Mark paid error:", error);
+    logger.error("[EXPENSES] Mark paid error:", error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
@@ -96353,13 +96707,13 @@ function websiteInterceptor(req2, res, next) {
 
 // src/security/securityMiddleware.ts
 var import_express_rate_limit15 = __toESM(require("express-rate-limit"), 1);
-var import_crypto39 = __toESM(require("crypto"), 1);
+var import_crypto38 = __toESM(require("crypto"), 1);
 var isCodespaces = process.env.CODESPACES === "true" || typeof process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN === "string";
 var isRateLimitEnabled = process.env.NODE_ENV === "production" && !isCodespaces;
 var noopMiddleware = (_req, _res, next) => next();
 var securityMonitoring = (req2, res, next) => {
   const startTime = Date.now();
-  const requestId = import_crypto39.default.randomUUID();
+  const requestId = import_crypto38.default.randomUUID();
   req2.requestId = requestId;
   const suspiciousPatterns = [
     /(\<script\>)/gi,
@@ -96551,6 +96905,59 @@ var inputSanitization = (req2, res, next) => {
   }
   next();
 };
+var sqlInjectionDetection = (req2, res, next) => {
+  const sqlPatterns = [
+    /(\%27)|(\')|(\-\-)|(\%23)|(#)/i,
+    /((\%3D)|(=))[^\n]*((\%27)|(\')|(\-\-)|(\%3B)|(;))/i,
+    /\w*((\%27)|(\'))((\%6F)|o|(\%4F))((\%72)|r|(\%52))/i,
+    /((\%27)|(\'))union/i,
+    /exec(\s|\+)+(s|x)p\w+/i
+  ];
+  const checkForSQLInjection = (data) => {
+    if (typeof data === "string") {
+      return sqlPatterns.some((pattern) => pattern.test(data));
+    }
+    if (typeof data === "object" && data !== null) {
+      return Object.values(data).some(checkForSQLInjection);
+    }
+    return false;
+  };
+  const requestData = {
+    ...req2.query,
+    ...req2.body,
+    ...req2.params,
+    url: req2.url
+  };
+  if (checkForSQLInjection(requestData)) {
+    logSecurityEvent("SQL_INJECTION_ATTEMPT", {
+      ip: req2.ip,
+      method: req2.method,
+      url: req2.url,
+      userAgent: req2.headers["user-agent"],
+      suspiciousData: requestData
+    }, "error");
+    return res.status(400).json({
+      error: "Requ\xEAte invalide d\xE9tect\xE9e"
+    });
+  }
+  next();
+};
+var aiRateLimit = isRateLimitEnabled ? (0, import_express_rate_limit15.default)({
+  windowMs: 60 * 1e3,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  trustProxy: 1,
+  message: { error: "Trop de requ\xEAtes AI, r\xE9essayez plus tard." }
+}) : noopMiddleware;
+var uploadRateLimit = isRateLimitEnabled ? (0, import_express_rate_limit15.default)({
+  windowMs: 60 * 1e3,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  trustProxy: 1,
+  message: { error: "Trop de fichiers t\xE9l\xE9charg\xE9s, r\xE9essayez plus tard." }
+}) : noopMiddleware;
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/sync-variable-hook.ts
 init_database();
@@ -96896,7 +97303,7 @@ var fetchIncomingInvoices = import_node_cron.default.schedule("0 */1 * * *", asy
               const zhiiveEmail = admin.User?.EmailAccount?.emailAddress;
               if (zhiiveEmail) {
                 const postal = getPostalService();
-                const htmlEmail = `<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;"><div style="background:linear-gradient(135deg,#6C5CE7,#a855f7);padding:20px;border-radius:12px 12px 0 0;color:white;"><h2 style="margin:0;">${title}</h2><p style="margin:5px 0 0;opacity:0.9;">${orgName} \u2014 Peppol e-Invoicing</p></div><div style="background:#f8f9fa;padding:20px;border-radius:0 0 12px 12px;"><p>${shortBody}</p><p style="margin-top:16px;"><a href="https://app.2thier.be/facture?tab=incoming" style="background:#6C5CE7;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block;">Voir les factures</a></p></div></div>`;
+                const htmlEmail = `<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;"><div style="background:linear-gradient(135deg,${SF.primary},#a855f7);padding:20px;border-radius:12px 12px 0 0;color:white;"><h2 style="margin:0;">${title}</h2><p style="margin:5px 0 0;opacity:0.9;">${orgName} \u2014 Peppol e-Invoicing</p></div><div style="background:#f8f9fa;padding:20px;border-radius:0 0 12px 12px;"><p>${shortBody}</p><p style="margin-top:16px;"><a href="https://app.2thier.be/facture?tab=incoming" style="background:${SF.primary};color:white;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block;">Voir les factures</a></p></div></div>`;
                 postal.sendEmail({
                   from: "comptabilite@zhiive.com",
                   to: zhiiveEmail,
@@ -96908,7 +97315,7 @@ var fetchIncomingInvoices = import_node_cron.default.schedule("0 */1 * * *", asy
             }
             if (org?.email) {
               const postal = getPostalService();
-              const htmlEmail = `<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;"><div style="background:linear-gradient(135deg,#6C5CE7,#a855f7);padding:20px;border-radius:12px 12px 0 0;color:white;"><h2 style="margin:0;">${title}</h2><p style="margin:5px 0 0;opacity:0.9;">${orgName} \u2014 Peppol e-Invoicing</p></div><div style="background:#f8f9fa;padding:20px;border-radius:0 0 12px 12px;"><p>${shortBody}</p><p style="margin-top:16px;"><a href="https://app.2thier.be/facture?tab=incoming" style="background:#6C5CE7;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block;">Voir les factures</a></p></div></div>`;
+              const htmlEmail = `<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;"><div style="background:linear-gradient(135deg,${SF.primary},#a855f7);padding:20px;border-radius:12px 12px 0 0;color:white;"><h2 style="margin:0;">${title}</h2><p style="margin:5px 0 0;opacity:0.9;">${orgName} \u2014 Peppol e-Invoicing</p></div><div style="background:#f8f9fa;padding:20px;border-radius:0 0 12px 12px;"><p>${shortBody}</p><p style="margin-top:16px;"><a href="https://app.2thier.be/facture?tab=incoming" style="background:${SF.primary};color:white;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block;">Voir les factures</a></p></div></div>`;
               postal.sendEmail({
                 from: "comptabilite@zhiive.com",
                 to: org.email,
@@ -97209,6 +97616,13 @@ function startPeppolCronJobs() {
 
 // src/api-server-clean.ts
 import_dotenv.default.config();
+if (process.env.NODE_ENV === "production") {
+  const noop = () => {
+  };
+  console.log = noop;
+  console.debug = noop;
+  console.info = noop;
+}
 console.log("\u{1F3AC} [BOOTSTRAP] api-server-clean.cjs loaded at", (/* @__PURE__ */ new Date()).toISOString());
 console.log("\u{1F3AC} [BOOTSTRAP] PORT env:", process.env.PORT || "(not set, using 8080)");
 console.log("\u{1F3AC} [BOOTSTRAP] NODE_ENV:", process.env.NODE_ENV || "development");
@@ -97266,7 +97680,7 @@ app.use((0, import_helmet.default)({
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "fonts.googleapis.com", "https:"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "maps.googleapis.com", "*.googleapis.com"],
+      scriptSrc: ["'self'", "'nonce-{RANDOM}'", "maps.googleapis.com", "*.googleapis.com"],
       fontSrc: ["'self'", "fonts.gstatic.com", "data:"],
       imgSrc: ["'self'", "data:", "https:", "blob:", "maps.gstatic.com", "*.googleapis.com", "*.ggpht.com"],
       connectSrc: ["'self'", "https:", "wss:", "maps.googleapis.com", "*.googleapis.com"],
@@ -97293,6 +97707,8 @@ app.use((0, import_compression.default)({
 }));
 app.use(advancedRateLimit);
 app.use(anomalyDetection);
+app.use(sqlInjectionDetection);
+app.use(inputSanitization);
 var FRONTEND_URL = process.env.FRONTEND_URL;
 var prodOrigins = [
   FRONTEND_URL || "https://www.zhiive.com",
@@ -97779,7 +98195,33 @@ async function startServer() {
     process.exit(1);
   }
 }
-startServer().catch((err) => {
+async function gracefulShutdown(signal) {
+  console.log(`
+\u{1F6D1} [SHUTDOWN] Signal ${signal} re\xE7u. Fermeture propre en cours...`);
+  try {
+    if (globalServer) {
+      globalServer.close(() => console.log("\u2705 [SHUTDOWN] Serveur HTTP ferm\xE9 (plus de nouvelles connexions)"));
+    }
+    const { db: db2 } = await Promise.resolve().then(() => (init_database(), database_exports));
+    await db2.$disconnect();
+    console.log("\u2705 [SHUTDOWN] Connexion base de donn\xE9es ferm\xE9e");
+    console.log("\u{1F44B} [SHUTDOWN] Arr\xEAt propre termin\xE9.");
+    process.exit(0);
+  } catch (err) {
+    console.error("\u274C [SHUTDOWN] Erreur:", err);
+    process.exit(1);
+  }
+}
+var globalServer = null;
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+process.on("uncaughtException", (err) => {
+  console.error("\u{1F4A5} [UNCAUGHT] Exception non g\xE9r\xE9e:", err);
+  gracefulShutdown("uncaughtException");
+});
+startServer().then((server) => {
+  globalServer = server;
+}).catch((err) => {
   console.error("\u274C [FATAL] Impossible de d\xE9marrer le serveur:", err);
   process.exit(1);
 });
